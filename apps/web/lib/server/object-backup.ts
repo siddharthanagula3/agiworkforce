@@ -241,6 +241,21 @@ export async function replicasDueForReconciliation(limit: number): Promise<strin
   return rows.map((row) => row.object_key);
 }
 
+/**
+ * Marks every tracked replica due again. A point-in-time restore rolls this
+ * table back to a moment when deleted objects were still tracked as verified,
+ * so without this the next sweeps re-check the wrong keys for weeks and erased
+ * objects keep sitting in the backup bucket.
+ */
+export async function requeueReplicasAfterRestore(): Promise<number> {
+  const rows = await getNeonDb().query<{ object_key: string }>(
+    `update public.${REPLICA_TABLE}
+        set verified_at = 'epoch'::timestamptz
+      returning object_key`,
+  );
+  return rows.length;
+}
+
 export async function markReplicaVerified(key: string): Promise<void> {
   await getNeonDb().execute(
     `update public.${REPLICA_TABLE} set verified_at = now() where object_key = $1`,

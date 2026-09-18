@@ -423,7 +423,9 @@ export default function CloudBillingScreen() {
                       key={product.key}
                       label={`${pricing.label} · ${product.interval}`}
                       value={
-                        busy ? 'Opening store…' : (storeProduct?.displayPrice ?? 'Unavailable')
+                        busy
+                          ? 'Opening store…'
+                          : (nativeIap.priceFor(product.key).label ?? 'Unavailable')
                       }
                       icon={CreditCard}
                       onPress={
@@ -462,7 +464,9 @@ export default function CloudBillingScreen() {
                         key={product.key}
                         label={formatCredits(product.units)}
                         value={
-                          busy ? 'Opening store…' : (storeProduct?.displayPrice ?? 'Unavailable')
+                          busy
+                            ? 'Opening store…'
+                            : (nativeIap.priceFor(product.key).label ?? 'Unavailable')
                         }
                         icon={ShoppingBag}
                         onPress={

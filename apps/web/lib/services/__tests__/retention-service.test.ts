@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  createLegalHold,
   isSwept,
   listLegalHolds,
   readRetentionBacklog,
@@ -45,6 +46,8 @@ function hold(over: Record<string, unknown> = {}) {
 function harness(fixture: Fixture = {}) {
   const sweepInserts: unknown[][] = [];
   const deletes: string[] = [];
+  const custodianInserts: unknown[][] = [];
+  const holdInserts: unknown[][] = [];
 
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     const text = String(sql);
@@ -86,6 +89,8 @@ function harness(fixture: Fixture = {}) {
     query,
     sweepInserts,
     deletes,
+    custodianInserts,
+    holdInserts,
   };
 }
 
@@ -163,6 +168,49 @@ describe('sweepOrganizationRetention', () => {
       .map((call) => call[1] as unknown[])
       .find((params) => Array.isArray(params?.[2]));
     expect(heldParam?.[2]).toEqual(['user-held']);
+  });
+
+  it('holds every custodian a custodian-scoped hold names', async () => {
+    const h = harness({
+      holds: [
+        hold({ scope: 'custodian', subject_user_id: null, custodian_user_ids: ['ann', 'bo'] }),
+      ],
+    });
+    await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    const heldParam = h.query.mock.calls
+      .map((call) => call[1] as unknown[])
+      .find((params) => Array.isArray(params?.[2]));
+    expect(heldParam?.[2]).toEqual(['ann', 'bo']);
+  });
+
+  it('does not suspend the conversation sweep for a hold narrowed to files', async () => {
+    const h = harness({
+      holds: [hold({ scope: 'organization', subject_user_id: null, resource_types: ['file'] })],
+    });
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(isSwept(result) && result.outcome).toBe('deleted');
+    const heldParam = h.query.mock.calls
+      .map((call) => call[1] as unknown[])
+      .find((params) => Array.isArray(params?.[2]));
+    expect(heldParam?.[2]).toEqual([]);
+  });
+
+  it('suspends the conversation sweep for a hold that names conversations', async () => {
+    const h = harness({
+      holds: [
+        hold({
+          scope: 'organization',
+          subject_user_id: null,
+          resource_types: ['conversation', 'file'],
+        }),
+      ],
+    });
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(result.outcome).toBe('held');
+    expect(h.deletes).toEqual([]);
   });
 
   it('measures retention from last activity, not from creation', async () => {
@@ -311,6 +359,61 @@ describe('legal holds', () => {
     const h = harness();
     await releaseLegalHold(h.db, ORG, 'some-id', 'user-admin');
     expect(String(h.query.mock.calls[0]?.[0])).toContain('released_at is null');
+  });
+
+  it('reads custodians with the hold rather than in a second round trip', async () => {
+    const h = harness();
+    await listLegalHolds(h.db, ORG);
+    expect(String(h.query.mock.calls[0]?.[0])).toContain('legal_hold_custodians');
+  });
+
+  it('refuses a custodian hold that names nobody', async () => {
+    const h = harness();
+    await expect(
+      createLegalHold(h.db, {
+        organizationId: ORG,
+        name: 'Matter 41',
+        reason: null,
+        scope: 'custodian',
+        subjectUserId: null,
+        custodianUserIds: [],
+        createdByUserId: 'user-admin',
+      }),
+    ).rejects.toThrow(/at least one custodian/i);
+    expect(h.query).not.toHaveBeenCalled();
+  });
+
+  it('writes one custodian row per named person and drops duplicates', async () => {
+    const h = harness({
+      holds: [hold({ scope: 'custodian', subject_user_id: null, custodian_user_ids: ['a', 'b'] })],
+    });
+    h.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const text = String(sql);
+      if (/insert into public\.legal_hold_custodians/i.test(text)) {
+        h.custodianInserts.push(params ?? []);
+        return [];
+      }
+      if (/insert into public\.legal_holds/i.test(text)) {
+        h.holdInserts.push(params ?? []);
+        return [{ id: 'hold-1' }];
+      }
+      return [hold({ scope: 'custodian', subject_user_id: null, custodian_user_ids: ['a', 'b'] })];
+    });
+
+    const created = await createLegalHold(h.db, {
+      organizationId: ORG,
+      name: 'Matter 41',
+      reason: null,
+      scope: 'custodian',
+      subjectUserId: null,
+      custodianUserIds: ['a', 'b', 'a'],
+      resourceTypes: ['conversation', 'file'],
+      createdByUserId: 'user-admin',
+    });
+
+    expect(h.custodianInserts.map((params) => params[1])).toEqual(['a', 'b']);
+    expect(h.holdInserts[0]?.[5]).toEqual(['conversation', 'file']);
+    expect(created.custodianUserIds).toEqual(['a', 'b']);
   });
 });
 

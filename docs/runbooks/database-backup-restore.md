@@ -92,6 +92,50 @@ below has passed against a branch made the first way.
    here. Decide whether to apply forward migrations to the restored branch or
    to pick a later recovery point before promoting anything.
 
+5. **Replay the erasure ledger. This step is not optional and it gates
+   promotion.** See the next section.
+
+## Replaying erased accounts before the database serves traffic
+
+A restore to a point before an erasure brings that account's data back.
+`public.erasure_tombstones` (0103) is the suppression list that would normally
+re-erase it, but it is a table in the same database, so the restore rolls it
+back too and the account stays resurrected.
+
+The suppression list is therefore mirrored outside the Postgres timeline, into
+the object backup bucket at `erasure-ledger/tombstones.ndjson`. That copy is
+not part of the restore, so it still names every subject erased before the
+recovery point.
+
+Run the replay against the restored branch, on the owner connection:
+
+```
+replayErasureTombstones(privilegedDb)   // apps/web/lib/server/erasure-tombstones.ts
+```
+
+It reads the ledger, compares it with the restored `erasure_tombstones`, and
+re-inserts a tombstone with a null `erased_at` for every subject the restore
+rolled back. Then:
+
+- `isSafeToPromote(report)` is false while any subject was re-armed or any
+  erasure is still open. **Do not promote while it is false.** Run
+  `GET /api/cron/purge-deleted-accounts` against the restored branch until the
+  report comes back clean; that cron is what actually deletes the resurrected
+  rows and their objects.
+- Record the run with `recordErasureReplay` so `erasure_ledger_replays` (0264)
+  carries the ledger digest, the counts, and who ran it. Two replays of one
+  restore that read different digests mean the ledger changed between them.
+- `ErasureLedgerUnavailableError` means the ledger could not be read, either
+  because the object backup is unconfigured or because the object is gone. It
+  fails closed on purpose: an unreadable ledger and an empty one are
+  indistinguishable, and promoting on the second reading of that ambiguity
+  resurrects every erased account.
+- Call `requeueReplicasAfterRestore()` (`lib/server/object-backup.ts`) once the
+  cron is clean. The restore also rolled `object_backup_replicas` back to a
+  moment when erased objects were still tracked as freshly verified, so without
+  it the hourly reconciliation re-checks the wrong keys for weeks and the
+  erased objects sit in the backup bucket.
+
 ## Promotion or rollback decision
 
 Verification passing on a disposable branch is not itself a promotion. The
@@ -284,11 +328,12 @@ not a disaster-recovery copy. With no backup configured the route answers
 `{"replicated":0,"reason":"unconfigured"}` and writes nothing, the same way the
 pager seam reports an unset webhook rather than pretending someone was paged.
 
-Two properties this does **not** give you, and the reason each is open below:
+One property this does **not** give you, and the reason it is open below:
 object versioning is a bucket setting on the storage provider, not something
-the application can set per write, and deletions are deliberately not
-replicated, so the backup is a copy of what existed, not a mirror that follows
-a delete.
+the application can set per write. Deletions do reach the backup, by
+reconciliation rather than by a delete notification; the "Deletes ARE
+replicated" note below says how, and the erasure replay above says what a
+restore does to it.
 
 ## Open gaps
 
@@ -321,6 +366,16 @@ a delete.
   is built per request and streamed, so neither is a stored object. Adding a
   third class is a row in `BACKUP_SOURCES` in
   `apps/web/app/api/cron/replicate-object-backups/route.ts`.
+- **The erasure ledger sync has no caller yet.** `syncErasureLedger` mirrors
+  `erasure_tombstones` into the backup bucket and is covered by its own tests,
+  but nothing schedules it: it belongs in
+  `apps/web/app/api/cron/purge-deleted-accounts/route.ts` after the sweep, one
+  call. Until it runs, the ledger the replay reads is whatever was last written,
+  and the replay's protection extends only to subjects in it. The weekly
+  logical-restore CI job should likewise assert the replay re-arms a subject
+  erased before the recovery point; the unit coverage in
+  `apps/web/lib/server/erasure-tombstones.test.ts` proves the logic but not the
+  wiring.
 - No third-party uptime monitor calls `/api/health`, so an outage that
   triggers a restore may be detected only by `docs/runbooks/incident-response.md`'s
   existing daily cron, not sooner.

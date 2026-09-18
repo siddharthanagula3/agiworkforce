@@ -15,6 +15,7 @@ import type {
 } from '@agiworkforce/types';
 import { useTierStore } from './store';
 import { fetchMobileIapCatalog, verifyMobileIapPurchase } from './mobileIapService';
+import { UNPRICED, storePrice, type StorePrice } from './storePricing';
 
 type StoreProduct = Product | ProductSubscription;
 type FinishTransaction = (input: { purchase: Purchase; isConsumable?: boolean }) => Promise<void>;
@@ -26,6 +27,8 @@ export interface MobileIapState {
   purchasingKey: MobileIapProductKey | null;
   catalog: MobileIapCatalogResponse | null;
   storeProducts: ReadonlyMap<string, StoreProduct>;
+  /** The store's own localized price for a product, and the offer it belongs to. */
+  priceFor: (key: MobileIapProductKey) => StorePrice;
   error: string | null;
   lastResult: MobileIapVerifyResponse | null;
   purchase: (key: MobileIapProductKey) => Promise<void>;
@@ -42,6 +45,10 @@ function purchaseErrorMessage(error: PurchaseError | Error): string {
     return 'Purchase canceled.';
   }
   return message || 'The store could not complete this purchase.';
+}
+
+function awaitingStoreAcknowledgement(purchase: Purchase): boolean {
+  return 'isAcknowledgedAndroid' in purchase && purchase.isAcknowledgedAndroid === false;
 }
 
 function nativeBillingErrorMessage(error: unknown, fallback: string): string {
@@ -67,7 +74,31 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
   const [lastResult, setLastResult] = useState<MobileIapVerifyResponse | null>(null);
   const catalogRef = useRef<MobileIapCatalogResponse | null>(null);
   const processingTokens = useRef(new Set<string>());
+  const verifiedTokens = useRef(new Set<string>());
+  const acknowledgedTokens = useRef(new Set<string>());
+  const unacknowledgedTokens = useRef(new Set<string>());
   const finishTransactionRef = useRef<FinishTransaction | null>(null);
+
+  const acknowledgeOnce = useCallback(
+    async (
+      token: string,
+      purchase: Purchase,
+      isConsumable: boolean,
+      finishTransaction: FinishTransaction,
+    ): Promise<boolean> => {
+      if (acknowledgedTokens.current.has(token)) return true;
+      try {
+        await finishTransaction({ purchase, isConsumable });
+        acknowledgedTokens.current.add(token);
+        unacknowledgedTokens.current.delete(token);
+        return true;
+      } catch {
+        unacknowledgedTokens.current.add(token);
+        return false;
+      }
+    },
+    [],
+  );
 
   const processPurchase = useCallback(
     async (purchase: Purchase, finishTransaction: FinishTransaction) => {
@@ -88,13 +119,27 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       processingTokens.current.add(token);
       setError(null);
       try {
-        const result = await verifyMobileIapPurchase({
-          platform: currentCatalog.platform,
-          productId: product.productId,
-          purchaseToken: token,
-        });
-        await finishTransaction({ purchase, isConsumable: product.kind === 'top_up' });
-        setLastResult(result);
+        // The purchase token is the idempotency key: a replay is answered from the
+        // server ledger as already_processed and is never credited a second time.
+        if (!verifiedTokens.current.has(token)) {
+          const result = await verifyMobileIapPurchase({
+            platform: currentCatalog.platform,
+            productId: product.productId,
+            purchaseToken: token,
+          });
+          verifiedTokens.current.add(token);
+          setLastResult(result);
+        }
+        const acknowledged = await acknowledgeOnce(
+          token,
+          purchase,
+          product.kind === 'top_up',
+          finishTransaction,
+        );
+        if (!acknowledged) {
+          setError('The store has not confirmed this purchase yet. AGI will confirm it again.');
+          return;
+        }
         await refreshTier();
       } catch (purchaseError) {
         setError(
@@ -108,7 +153,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
         setRestoring(false);
       }
     },
-    [refreshTier],
+    [acknowledgeOnce, refreshTier],
   );
 
   const iap = useIAP({
@@ -178,12 +223,17 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
   }, [catalog, fetchStoreProducts, getStoreAvailablePurchases, storeConnected]);
 
   useEffect(() => {
-    if (!restoring) return;
+    if (!catalog?.enabled) return;
     for (const purchase of iap.availablePurchases) {
+      const token = purchase.purchaseToken?.trim();
+      if (!token || acknowledgedTokens.current.has(token)) continue;
+      const stranded =
+        awaitingStoreAcknowledgement(purchase) || unacknowledgedTokens.current.has(token);
+      if (!restoring && !stranded) continue;
       void processPurchase(purchase, iap.finishTransaction);
     }
-    if (iap.availablePurchases.length === 0) setRestoring(false);
-  }, [iap.availablePurchases, iap.finishTransaction, processPurchase, restoring]);
+    if (restoring && iap.availablePurchases.length === 0) setRestoring(false);
+  }, [catalog, iap.availablePurchases, iap.finishTransaction, processPurchase, restoring]);
 
   const storeProducts = useMemo(
     () =>
@@ -191,6 +241,15 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
         [...iap.products, ...iap.subscriptions].map((product) => [product.id, product]),
       ),
     [iap.products, iap.subscriptions],
+  );
+
+  const priceFor = useCallback(
+    (key: MobileIapProductKey): StorePrice => {
+      const product = catalogRef.current?.products.find((candidate) => candidate.key === key);
+      if (!product) return UNPRICED;
+      return storePrice(storeProducts.get(product.productId));
+    },
+    [storeProducts],
   );
 
   const purchase = useCallback(
@@ -233,11 +292,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
           return;
         }
 
-        const androidProduct =
-          storeProduct.type === 'subs' && storeProduct.platform === 'android' ? storeProduct : null;
-        const offerToken = androidProduct?.subscriptionOffers.find(
-          (offer) => typeof offer.offerTokenAndroid === 'string',
-        )?.offerTokenAndroid;
+        const offerToken = storePrice(storeProduct).offerToken;
         const existingAndroidSubscription =
           Platform.OS === 'android'
             ? iap.availablePurchases.find((candidate) =>
@@ -315,6 +370,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     purchasingKey,
     catalog,
     storeProducts,
+    priceFor,
     error,
     lastResult,
     purchase,

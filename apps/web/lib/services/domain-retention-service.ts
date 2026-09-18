@@ -10,7 +10,27 @@ import {
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
-import { listLegalHolds, type LegalHold, type RetentionSweepOutcome } from './retention-service';
+import {
+  holdCovers,
+  listLegalHolds,
+  type LegalHold,
+  type LegalHoldResourceType,
+  type RetentionSweepOutcome,
+} from './retention-service';
+
+// A hold names resource types; a domain with no such type stays held by every hold.
+const DOMAIN_HOLD_RESOURCE: Partial<Record<RetentionDomain, LegalHoldResourceType>> = {
+  projects: 'project',
+  work: 'work_run',
+  files: 'file',
+  artifacts: 'artifact',
+  research: 'conversation',
+};
+
+function holdAppliesTo(hold: LegalHold, domain: RetentionDomain): boolean {
+  const resource = DOMAIN_HOLD_RESOURCE[domain];
+  return resource === undefined || holdCovers(hold, resource);
+}
 
 export const DOMAIN_RETENTION_BATCH = 200;
 export const DOMAIN_RETENTION_MAX_BATCHES = 10;
@@ -417,7 +437,9 @@ export async function sweepOrganizationDomain(
 
   let holds: LegalHold[];
   try {
-    holds = await readHolds(db, policy.organizationId);
+    holds = (await readHolds(db, policy.organizationId)).filter((hold) =>
+      holdAppliesTo(hold, policy.domain),
+    );
   } catch (error) {
     const result: DomainSweepResult = {
       ...base,

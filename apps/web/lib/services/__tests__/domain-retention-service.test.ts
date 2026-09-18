@@ -57,6 +57,8 @@ function hold(scope: 'organization' | 'member', subjectUserId: string | null = n
     releasedAt: null,
     releasedByUserId: null,
     createdAt: NOW.toISOString(),
+    custodianUserIds: [],
+    resourceTypes: null,
   };
 }
 
