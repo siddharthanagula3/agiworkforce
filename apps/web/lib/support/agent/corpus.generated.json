@@ -1,8 +1,8 @@
 {
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
-  "documentCount": 40,
-  "chunkCount": 209,
+  "documentCount": 41,
+  "chunkCount": 215,
   "documents": [
     {
       "id": "account-security",
@@ -332,6 +332,7 @@
         "add key",
         "encrypted"
       ],
+      "platforms": ["cli", "desktop"],
       "updated": "2026-08-05",
       "source": "content/support/byok-provider-keys.md",
       "chunks": [
@@ -471,6 +472,7 @@
         "browser automation",
         "computer use"
       ],
+      "platforms": ["chrome"],
       "updated": "2026-09-17",
       "source": "content/support/chrome-extension.md",
       "chunks": [
@@ -634,6 +636,7 @@
         "agi install",
         "command line"
       ],
+      "platforms": ["cli", "desktop", "linux", "macos", "windows"],
       "updated": "2026-08-13",
       "source": "content/support/desktop-and-cli.md",
       "chunks": [
@@ -886,6 +889,81 @@
       ]
     },
     {
+      "id": "glossary",
+      "title": "Glossary of AGI terms",
+      "path": "/docs",
+      "category": "getting-started",
+      "tags": [
+        "glossary",
+        "terminology",
+        "definitions",
+        "what does mean",
+        "jargon",
+        "terms",
+        "vocabulary",
+        "acronym"
+      ],
+      "platforms": [
+        "android",
+        "chrome",
+        "cli",
+        "desktop",
+        "ios",
+        "linux",
+        "macos",
+        "mobile",
+        "vscode",
+        "web",
+        "windows"
+      ],
+      "updated": "2026-09-18",
+      "source": "content/support/glossary.md",
+      "chunks": [
+        {
+          "id": "glossary#0",
+          "ordinal": 0,
+          "heading": "How to read this glossary",
+          "headingPath": "Glossary of AGI terms › How to read this glossary",
+          "text": "Each entry gives the term as the product uses it. Where a term has a fuller\narticle, that article is the authority on the detail; this page exists so a\nquestion phrased with the word alone still finds the right place."
+        },
+        {
+          "id": "glossary#1",
+          "ordinal": 1,
+          "heading": "Trust modes",
+          "headingPath": "Glossary of AGI terms › Trust modes",
+          "text": "**Trust mode** is which machine and which provider account runs your request.\nAGI runs three and never silently moves work between them.\n\n**Local** runs models on your own hardware through a runtime you install. It is\nfree, and inference can run offline once the runtime and model are installed.\n\n**BYOK**, \"bring your own key\", means you supply a provider API key and AGI\nsends your requests directly to that provider with it. Keys are encrypted at\nrest on your machine. Your provider bills the usage, and AGI adds no markup.\nBYOK is free.\n\n**Managed cloud** runs on AGI-operated provider access. It is metered, and it\nrefuses BYOK credentials by design so the two trust boundaries stay separate."
+        },
+        {
+          "id": "glossary#2",
+          "ordinal": 2,
+          "heading": "Usage and billing terms",
+          "headingPath": "Glossary of AGI terms › Usage and billing terms",
+          "text": "**Allowance** is the metered capacity a plan carries for managed cloud. When it\nruns out, managed requests stop until it resets; Local and BYOK are unaffected.\n\n**Credits** are a prepaid balance, separate from the allowance, that managed\nusage can draw on once the allowance is exhausted.\n\n**Top-up** is a credit purchase for a custom amount in whole dollars.\n\n**Concurrency** is how many responses may be generating at once. Reaching that\nceiling is not the same as exhausting an allowance: it clears as soon as an\nin-flight response finishes.\n\n**Auto** is the routing choice that picks a model for you. The free lane is\noffered as Auto (free), whose capacity is not guaranteed."
+        },
+        {
+          "id": "glossary#3",
+          "ordinal": 3,
+          "heading": "Chat terms",
+          "headingPath": "Glossary of AGI terms › Chat terms",
+          "text": "**Conversation** is a single thread of messages.\n\n**Project** groups conversations around shared context: written instructions,\nuploaded knowledge files, and its own memory scope.\n\n**Artifact** is a document, a piece of code or a rendered page that an answer\nproduces, opened in a panel beside the conversation and versioned as you edit.\n\n**Library** is where past conversations and artifacts are listed.\n\n**Temporary chat** is a conversation that neither reads memory nor writes to\nit, and that ignores saved approval verdicts.\n\n**Memory** is what AGI carries between conversations. Persistent memory stores\nfacts; search past chats instead reads your history at answer time."
+        },
+        {
+          "id": "glossary#4",
+          "ordinal": 4,
+          "heading": "Tools and connectors",
+          "headingPath": "Glossary of AGI terms › Tools and connectors",
+          "text": "**Connector** lets AGI call an external system on your behalf. Every connector\nis scoped to your own account.\n\n**MCP**, the Model Context Protocol, is the open protocol a connector can use to\nexpose tools. Custom MCP endpoints can be added with their own URL.\n\n**Tool approval** is the verdict that decides whether a tool may run without\nasking. The default is to ask before every action, including reads.\n\n**AGI Work** is the mode for a multi-step task rather than a question: the\nsession plans, works, and produces files."
+        },
+        {
+          "id": "glossary#5",
+          "ordinal": 5,
+          "heading": "Platform and surface names",
+          "headingPath": "Glossary of AGI terms › Platform and surface names",
+          "text": "**Surface** is one of the six places AGI runs: Web, Desktop, CLI, Mobile, VS\nCode, and Chrome. A feature can be available on one surface and not another, so\narticles name the surface rather than assuming it.\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app, published for macOS, Windows and\nLinux as those releases become available.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to, so a question about one platform does not answer with another."
+        }
+      ]
+    },
+    {
       "id": "install-desktop-and-mobile",
       "title": "Installing the desktop and mobile apps",
       "path": "/download",
@@ -907,6 +985,7 @@
         "notarized",
         "get notified"
       ],
+      "platforms": ["android", "desktop", "ios", "linux", "macos", "mobile", "windows"],
       "updated": "2026-09-17",
       "source": "content/support/install-desktop-and-mobile.md",
       "chunks": [
@@ -976,6 +1055,7 @@
         "cargo",
         "checksum"
       ],
+      "platforms": ["cli", "linux", "macos", "windows"],
       "updated": "2026-09-17",
       "source": "content/support/install-the-cli.md",
       "chunks": [
@@ -1151,6 +1231,7 @@
         "privacy",
         "free"
       ],
+      "platforms": ["cli", "desktop"],
       "updated": "2026-08-13",
       "source": "content/support/local-mode.md",
       "chunks": [
@@ -2180,6 +2261,7 @@
         "sign in to cloud",
         "local runtime"
       ],
+      "platforms": ["vscode"],
       "updated": "2026-09-17",
       "source": "content/support/vscode-extension.md",
       "chunks": [

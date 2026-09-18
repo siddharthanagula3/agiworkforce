@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { redactSecrets } from '@/lib/support/handoff/transcript';
+import { redactSecrets } from '@/lib/redaction';
+import { redactSecrets as redactLeakPatterns } from '@/lib/support/handoff/transcript';
 import {
   DIAGNOSTIC_SURFACES,
   MAX_DIAGNOSTIC_EVENTS,
@@ -50,8 +51,10 @@ export const supportDiagnosticsSchema = z
   })
   .strict();
 
+// Two passes because the two pattern sets are not a superset of each other:
+// lib/redaction covers addresses and vendor tokens, leak-detector covers database URLs.
 function clampMessage(message: string): string {
-  const redacted = redactSecrets(message);
+  const redacted = redactLeakPatterns(redactSecrets(message));
   return redacted.length <= MAX_DIAGNOSTIC_MESSAGE_CHARS
     ? redacted
     : `${redacted.slice(0, MAX_DIAGNOSTIC_MESSAGE_CHARS)}… [truncated]`;

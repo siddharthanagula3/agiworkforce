@@ -4,6 +4,7 @@ title: Install and set up the CLI
 path: /cli
 category: surfaces
 tags: cli, install cli, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, homebrew, npm, cargo, checksum
+platforms: cli, macos, windows, linux
 updated: 2026-09-17
 scope: public
 ---

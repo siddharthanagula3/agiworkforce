@@ -4,6 +4,7 @@ title: The Chrome extension
 path: /chrome-extension
 category: surfaces
 tags: chrome, browser extension, browser companion, side panel, capture page, screenshot, tabs, browser automation, computer use
+platforms: chrome
 updated: 2026-09-17
 scope: public
 ---

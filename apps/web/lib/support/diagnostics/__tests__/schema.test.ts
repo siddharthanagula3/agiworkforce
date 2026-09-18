@@ -75,7 +75,23 @@ describe('normalizeDiagnostics', () => {
     );
 
     expect(result?.recentEvents[0]?.message).not.toContain('abcdefghijklmnopqrstuvwxyz');
-    expect(result?.recentEvents[0]?.message).toContain('[redacted:');
+    expect(result?.recentEvents[0]?.message).toMatch(/\[redacted/u);
+  });
+
+  it('redacts an address the leak-detector patterns alone would leave in place', () => {
+    const result = normalizeDiagnostics(
+      bundle({
+        recentEvents: [
+          {
+            at: '2026-09-17T10:00:00.000Z',
+            kind: 'error',
+            message: 'sync failed for owner@example.com',
+          },
+        ],
+      }),
+    );
+
+    expect(result?.recentEvents[0]?.message).not.toContain('owner@example.com');
   });
 
   it('truncates an oversized event message instead of refusing the bundle', () => {

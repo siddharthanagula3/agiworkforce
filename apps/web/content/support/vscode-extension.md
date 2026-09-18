@@ -4,6 +4,7 @@ title: The VS Code extension
 path: /vscode-extension
 category: surfaces
 tags: vs code, vscode, editor, extension, ide, explain selection, refactor, generate tests, fix issue, agent mode, sign in to cloud, local runtime
+platforms: vscode
 updated: 2026-09-17
 scope: public
 ---

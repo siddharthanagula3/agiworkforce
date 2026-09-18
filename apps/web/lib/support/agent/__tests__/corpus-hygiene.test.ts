@@ -1,9 +1,11 @@
-
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getSupportCorpus } from '../corpus';
+import { corpusArtifactSchema, SUPPORT_PLATFORMS, SUPPORT_PLATFORM_LABELS } from '../corpus/schema';
+import rawCorpus from '../corpus.generated.json';
 import { STATIC_FAQS } from '@/lib/support/static-data';
+import { ALL_DOC_PLATFORMS, docMetadataFor } from '@/lib/support/doc-metadata';
 
 const AGENT_DIR = join(__dirname, '..');
 
@@ -113,5 +115,93 @@ describe('corpus content', () => {
     if (!corpus.available) throw new Error('corpus unavailable');
     const ids = corpus.chunks.map((chunk) => chunk.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('glossary document', () => {
+  const corpus = getSupportCorpus();
+
+  function glossaryText(): string {
+    if (!corpus.available) throw new Error('corpus unavailable');
+    const chunks = corpus.chunks.filter((chunk) => chunk.docId === 'glossary');
+    expect(chunks.length).toBeGreaterThan(3);
+    return chunks.map((chunk) => `${chunk.headingPath}\n${chunk.text}`).join('\n');
+  }
+
+  it.each([
+    'Trust mode',
+    'BYOK',
+    'Managed cloud',
+    'Allowance',
+    'Credits',
+    'Artifact',
+    'Connector',
+    'MCP',
+    'Tool approval',
+    'Temporary chat',
+    'Surface',
+  ])('defines %s', (term) => {
+    expect(glossaryText()).toContain(`**${term}**`);
+  });
+
+  it('names every platform label so a platform-only question retrieves it', () => {
+    const text = glossaryText();
+    for (const platform of SUPPORT_PLATFORMS) {
+      expect(text, `glossary omits ${platform}`).toContain(SUPPORT_PLATFORM_LABELS[platform]);
+    }
+  });
+});
+
+describe('platform index', () => {
+  const artifact = corpusArtifactSchema.parse(rawCorpus);
+
+  it('gives every known platform slug a label', () => {
+    for (const platform of SUPPORT_PLATFORMS) {
+      expect(SUPPORT_PLATFORM_LABELS[platform]).toBeTruthy();
+    }
+  });
+
+  it('declares platforms deduped and sorted, so the artifact is order-stable', () => {
+    for (const document of artifact.documents) {
+      if (!document.platforms) continue;
+      expect(new Set(document.platforms).size, `${document.id} repeats a platform`).toBe(
+        document.platforms.length,
+      );
+      expect(document.platforms, `${document.id} is unsorted`).toEqual(
+        [...document.platforms].sort(),
+      );
+    }
+  });
+
+  it('indexes every platform on at least one document', () => {
+    const declared = new Set(artifact.documents.flatMap((document) => document.platforms ?? []));
+    for (const platform of SUPPORT_PLATFORMS) {
+      expect(declared.has(platform), `no document declares ${platform}`).toBe(true);
+    }
+  });
+
+  it('never claims a surface that doc metadata says the document does not cover', () => {
+    for (const document of artifact.documents) {
+      const applicable = docMetadataFor(document.id)?.applicability.platforms;
+      if (!applicable) continue;
+      for (const platform of document.platforms ?? []) {
+        if (!(ALL_DOC_PLATFORMS as readonly string[]).includes(platform)) continue;
+        expect(
+          (applicable as readonly string[]).includes(platform),
+          `${document.source} declares ${platform}, doc metadata does not`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('declares a platform on every surfaces-category document', () => {
+    const surfaceDocs = artifact.documents.filter((document) => document.category === 'surfaces');
+    expect(surfaceDocs.length).toBeGreaterThan(0);
+    for (const document of surfaceDocs) {
+      expect(
+        document.platforms?.length ?? 0,
+        `${document.source} has no platforms`,
+      ).toBeGreaterThan(0);
+    }
   });
 });

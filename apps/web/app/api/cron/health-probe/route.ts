@@ -4,7 +4,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
-import { runHealthChecks, type HealthCheckResult } from '@/lib/server/health-check';
+import {
+  runHealthChecks,
+  type CapabilityCheck,
+  type HealthCheckResult,
+} from '@/lib/server/health-check';
 import { clearIncident, notifyIncident } from '@/lib/server/incident/dispatch';
 import type { AlertSeverity, PageOutcome } from '@/lib/server/incident/pager';
 
@@ -37,6 +41,8 @@ async function recordFailureStreak(healthy: boolean): Promise<number | null> {
 }
 
 const TIMED_OUT = Symbol('health-check-timeout');
+
+const NOT_MEASURED: CapabilityCheck = { status: 'unhealthy', message: 'not measured' };
 
 export type { AlertSeverity };
 
@@ -165,6 +171,10 @@ async function pageProbeFailure(cause: string): Promise<NextResponse> {
         database: { status: 'unhealthy', message: 'not measured' },
         stripe: { status: 'unhealthy', message: 'not measured' },
         environment: { status: 'unhealthy' },
+        chat: NOT_MEASURED,
+        work: NOT_MEASURED,
+        voice: NOT_MEASURED,
+        search: NOT_MEASURED,
       },
     },
     [`health-probe (${cause})`],

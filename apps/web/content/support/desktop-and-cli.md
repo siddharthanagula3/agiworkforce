@@ -4,6 +4,7 @@ title: Desktop app and CLI
 path: /cli
 category: surfaces
 tags: desktop, cli, terminal, install, download, macos, windows, linux, agi install, command line
+platforms: desktop, cli, macos, windows, linux
 updated: 2026-08-13
 scope: public
 ---

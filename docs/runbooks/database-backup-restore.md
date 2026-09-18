@@ -269,13 +269,13 @@ object store from its own variables and `apps/web/app/api/cron/replicate-object-
 copies newly stored objects into it hourly, resuming from a cursor and skipping
 anything the backup already holds at the same size.
 
-| Variable                              | Meaning                                       |
-| ------------------------------------- | --------------------------------------------- |
-| `AGI_STORAGE_BACKUP_ENDPOINT`         | S3-compatible endpoint for the backup bucket   |
-| `AGI_STORAGE_BACKUP_REGION`           | Region the backup bucket lives in              |
-| `AGI_STORAGE_BACKUP_BUCKET`           | Backup bucket name                             |
-| `AGI_STORAGE_BACKUP_ACCESS_KEY_ID`    | Credential for the backup bucket only          |
-| `AGI_STORAGE_BACKUP_SECRET_ACCESS_KEY`| Its secret                                     |
+| Variable                               | Meaning                                      |
+| -------------------------------------- | -------------------------------------------- |
+| `AGI_STORAGE_BACKUP_ENDPOINT`          | S3-compatible endpoint for the backup bucket |
+| `AGI_STORAGE_BACKUP_REGION`            | Region the backup bucket lives in            |
+| `AGI_STORAGE_BACKUP_BUCKET`            | Backup bucket name                           |
+| `AGI_STORAGE_BACKUP_ACCESS_KEY_ID`     | Credential for the backup bucket only        |
+| `AGI_STORAGE_BACKUP_SECRET_ACCESS_KEY` | Its secret                                   |
 
 **Cross-region is a configuration fact, not a claim.** The replication report
 carries `crossRegion`, which is true only when the backup endpoint or region
@@ -301,15 +301,26 @@ a delete.
   objective requires a real drill against a production-sized copy, which is
   blocked on the same Neon credential as the Neon drill.
 - **Object versioning and the backup bucket are not provisioned.** The
-  replication code path exists and is inert until the five
-  `AGI_STORAGE_BACKUP_*` variables are set, and object versioning has to be
-  enabled on both buckets in the storage provider's console or API. Both are
-  founder actions; no further code is needed.
-- Deletes are not replicated, by design. Restoring an object from the backup
-  after an erasure request would reintroduce data the account asked to have
-  removed, so the erasure path in `apps/web/lib/server/account-erasure.ts`
-  must be extended to the backup bucket before the backup is treated as a
-  live mirror.
+  replication code path is complete and runs hourly, but it replicates nothing
+  until the five `AGI_STORAGE_BACKUP_*` variables are set, and object
+  versioning has to be enabled on both buckets in the storage provider's
+  console or API. Both are founder actions; no further code is needed. Until
+  the variables are set the cron logs an error and answers 503 naming them, so
+  an unconfigured backup shows up as a failing scheduled job rather than a
+  silent success.
+- Deletes ARE replicated. `object_backup_replicas` records every key the sweep
+  copied, and each run asks the primary about the oldest-verified tracked keys
+  and deletes the backup copy of any key the primary no longer holds, which
+  covers media purge, retention sweeps and erasure alike without relying on a
+  delete notification no path guarantees. `apps/web/lib/server/account-erasure.ts`
+  additionally deletes the backup copies of the objects it erased and drops
+  their ledger rows, so a GDPR erasure does not wait a round of the sweep.
+- What is replicated: `media_assets` and `project_knowledge_files`, the two
+  tables that hold object-storage keys. Published artifacts are a Postgres
+  column and are covered by the database's own recovery; a GDPR export package
+  is built per request and streamed, so neither is a stored object. Adding a
+  third class is a row in `BACKUP_SOURCES` in
+  `apps/web/app/api/cron/replicate-object-backups/route.ts`.
 - No third-party uptime monitor calls `/api/health`, so an outage that
   triggers a restore may be detected only by `docs/runbooks/incident-response.md`'s
   existing daily cron, not sooner.
