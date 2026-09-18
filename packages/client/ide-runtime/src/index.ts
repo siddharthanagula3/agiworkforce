@@ -47,6 +47,47 @@ export type {
 } from './diff';
 
 export {
+  BINARY_SNIFF_BYTES,
+  globToRegExp,
+  grepLines,
+  GREP_PREVIEW_LIMIT,
+  isSkippedDirectory,
+  joinWorkspacePath,
+  looksBinary,
+  matchesGlob,
+  MAX_WORKSPACE_WALK_DEPTH,
+  SKIPPED_WORKSPACE_DIRECTORIES,
+  toPosixPath,
+} from './workspace';
+export type { GrepOptions, WorkspaceGrepMatch } from './workspace';
+
+export {
+  countPorcelainStatus,
+  describeGitHead,
+  GIT_OPERATION_PROBES,
+  GIT_OPERATIONS,
+  isDetachedHead,
+  parseAheadBehind,
+  SHORT_SHA_LENGTH,
+} from './git';
+export type { GitHead, GitOperation, GitStatusCounts } from './git';
+
+export {
+  CODE_DOCTOR_STATUSES,
+  doctorReportIsHealthy,
+  formatDoctorReport,
+  parseDoctorReport,
+  parseDoctorStatus,
+  summarizeDoctorChecks,
+} from './doctor';
+export type {
+  CodeDoctorCheck,
+  CodeDoctorReport,
+  CodeDoctorStatus,
+  CodeDoctorSummary,
+} from './doctor';
+
+export {
   appendTerminalOutput,
   describeTerminalOutsideWorkspace,
   emptyTerminalCapture,

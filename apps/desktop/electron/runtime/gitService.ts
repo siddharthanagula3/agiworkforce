@@ -1,6 +1,13 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { WorkspaceGitState, WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import {
+  countPorcelainStatus,
+  describeGitHead,
+  GIT_OPERATION_PROBES,
+  isDetachedHead,
+  parseAheadBehind,
+} from '@agiworkforce/ide-runtime/git';
 
 const run = promisify(execFile);
 
@@ -41,49 +48,13 @@ export async function findRepositoryRoot(directory: string): Promise<string | nu
   return gitOrNull(directory, ['rev-parse', '--show-toplevel']);
 }
 
-function countPorcelain(
-  lines: string[],
-): Pick<WorkspaceGitState, 'staged' | 'unstaged' | 'untracked'> {
-  let staged = 0;
-  let unstaged = 0;
-  let untracked = 0;
-
-  for (const line of lines) {
-    if (line.length < 2) continue;
-    const index = line[0];
-    const worktree = line[1];
-    if (index === '?' && worktree === '?') {
-      untracked += 1;
-      continue;
-    }
-    if (index && index !== ' ') staged += 1;
-    if (worktree && worktree !== ' ') unstaged += 1;
-  }
-
-  return { staged, unstaged, untracked };
-}
-
-function parseAheadBehind(raw: string | null): { ahead: number; behind: number } {
-  if (!raw) return { ahead: 0, behind: 0 };
-  const [behindRaw, aheadRaw] = raw.split(/\s+/);
-  return {
-    ahead: Number.parseInt(aheadRaw ?? '0', 10) || 0,
-    behind: Number.parseInt(behindRaw ?? '0', 10) || 0,
-  };
-}
-
 async function detectOperation(cwd: string): Promise<WorkspaceGitState['operation']> {
   const gitDir = await gitOrNull(cwd, ['rev-parse', '--git-dir']);
   if (!gitDir) return 'none';
 
-  const probes: Array<[string, WorkspaceGitState['operation']]> = [
-    ['MERGE_HEAD', 'merge'],
-    ['REBASE_HEAD', 'rebase'],
-    ['CHERRY_PICK_HEAD', 'cherry-pick'],
-    ['BISECT_LOG', 'bisect'],
-  ];
-
-  for (const [ref, operation] of probes) {
+  for (const [ref, operation] of GIT_OPERATION_PROBES) {
+    // The workspace contract has no `revert` state, so a revert reads as none.
+    if (operation === 'revert') continue;
     const found = await gitOrNull(cwd, ['rev-parse', '--verify', '--quiet', ref]);
     if (found) return operation;
   }
@@ -109,29 +80,39 @@ export async function readGitState(directory: string): Promise<WorkspaceGitState
     : null;
   const worktree = (await gitOrNull(root, ['rev-parse', '--show-toplevel'])) ?? root;
 
-  const counts = countPorcelain(statusRaw ? statusRaw.split('\n').filter(Boolean) : []);
+  const counts = countPorcelainStatus(statusRaw ? statusRaw.split('\n').filter(Boolean) : []);
   const { ahead, behind } = parseAheadBehind(aheadBehindRaw);
 
   return {
     root,
     branch,
-    detachedHead: branch === null,
+    detachedHead: isDetachedHead({ branch, headSha }),
     headSha,
     upstream,
     remotes: remotesRaw ? remotesRaw.split('\n').filter(Boolean) : [],
     ahead,
     behind,
-    ...counts,
+    staged: counts.staged,
+    unstaged: counts.unstaged,
+    untracked: counts.untracked,
     operation: await detectOperation(root),
     worktree,
   };
 }
 
+/** The head label the CLI and the VS Code extension show for the same checkout. */
+export async function readGitHeadLabel(directory: string): Promise<string | null> {
+  const root = await findRepositoryRoot(directory);
+  if (!root) return null;
+  return describeGitHead({
+    branch: await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']),
+    headSha: await gitOrNull(root, ['rev-parse', 'HEAD']),
+  });
+}
+
 export async function readWorkspaceGit(root: WorkspaceRoot): Promise<WorkspaceGitState | null> {
   return readGitState(root.path);
 }
-
-export { countPorcelain, parseAheadBehind };
 
 export async function readWorkingTreeDiff(
   directory: string,
