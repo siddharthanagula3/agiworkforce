@@ -15,6 +15,12 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { moderateManagedPrompt } from '@/lib/moderation';
+import {
+  MEDIA_DIAGNOSTIC_HEADER,
+  recordMediaSafety,
+  withMediaJobSpan,
+} from '@/lib/observability/media-telemetry';
+import { annotateActiveSpan } from '@/lib/observability/span';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import {
   getModelMetadataById,
@@ -938,6 +944,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     surface: 'managed-video',
   });
   if (!moderation.allowed) {
+    recordMediaSafety({ media: 'video', decision: 'blocked', reason: 'prompt_moderation' });
     return NextResponse.json(
       {
         error: {
@@ -954,6 +961,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   }
 
   const { provider, model } = resolveVideoModel(requestedProvider, requestedModelId);
+  annotateActiveSpan({ 'media.provider': provider, 'media.model': model });
 
   // Checked on the RESOLVED model: a provider default must not be a way past a
   // rule the workspace administrator wrote.
@@ -1630,7 +1638,13 @@ async function submitVideoCandidate(
   return { kind: 'job', job };
 }
 
-export const POST = withErrorHandler(handleVideoGeneration);
+export const POST = withErrorHandler((request: NextRequest) =>
+  withMediaJobSpan({ media: 'video' }, async (span) => {
+    const response = await handleVideoGeneration(request);
+    response.headers.set(MEDIA_DIAGNOSTIC_HEADER, span.traceId);
+    return response;
+  }),
+);
 
 export function OPTIONS(request: NextRequest) {
   return (

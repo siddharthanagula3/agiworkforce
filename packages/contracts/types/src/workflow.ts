@@ -1,3 +1,4 @@
+import type { LifecycleProjection, LifecycleStatus, WorkLifecycleStatus } from './lifecycle-status';
 
 export interface WorkflowDefinition {
   id: string;
@@ -13,13 +14,7 @@ export interface WorkflowDefinition {
 }
 
 export type WorkflowNode =
-  | AgentNode
-  | DecisionNode
-  | LoopNode
-  | ParallelNode
-  | WaitNode
-  | ScriptNode
-  | ToolNode;
+  AgentNode | DecisionNode | LoopNode | ParallelNode | WaitNode | ScriptNode | ToolNode;
 
 export interface NodePosition {
   x: number;
@@ -173,13 +168,21 @@ export interface WebhookTrigger {
   auth_token?: string;
 }
 
-export type WorkflowStatus =
-  | 'pending'
-  | 'running'
-  | 'paused'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+export type WorkflowStatus = WorkLifecycleStatus | 'paused';
+
+export const LIFECYCLE_STATUS_BY_WORKFLOW_STATUS: LifecycleProjection<WorkflowStatus> =
+  Object.freeze({
+    pending: 'pending',
+    running: 'running',
+    paused: 'awaiting_input',
+    completed: 'completed',
+    failed: 'failed',
+    cancelled: 'cancelled',
+  });
+
+export function lifecycleStatusForWorkflow(status: WorkflowStatus): LifecycleStatus {
+  return LIFECYCLE_STATUS_BY_WORKFLOW_STATUS[status];
+}
 
 export interface WorkflowExecution {
   id: string;

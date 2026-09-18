@@ -3,6 +3,14 @@ import 'server-only';
 import JSZip from 'jszip';
 import mammoth from 'mammoth';
 
+import {
+  DecompressionLimitError,
+  declaredMemberSize,
+  decompressionBudget,
+  readArchiveMember,
+  type DecompressionBudget,
+} from '@/lib/security/archive-bounds';
+
 export const MAX_OFFICE_TEXT_CHARS = 200_000;
 
 const MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
@@ -107,27 +115,43 @@ function htmlToText(html: string): string {
   return lines.join('\n');
 }
 
-async function readZip(data: Buffer, filename: string): Promise<JSZip> {
+interface BoundedZip {
+  zip: JSZip;
+  budget: DecompressionBudget;
+}
+
+async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(data);
   } catch {
     throw new OfficeDocumentUnreadableError(filename);
   }
-  let uncompressed = 0;
+
+  const budget = decompressionBudget(data.byteLength, MAX_UNCOMPRESSED_BYTES);
+  const entries: JSZip.JSZipObject[] = [];
   zip.forEach((_, entry) => {
-    const size = (entry as unknown as { _data?: { uncompressedSize?: number } })._data
-      ?.uncompressedSize;
-    if (typeof size === 'number') uncompressed += size;
+    if (!entry.dir) entries.push(entry);
   });
-  if (uncompressed > MAX_UNCOMPRESSED_BYTES) throw new OfficeDocumentUnreadableError(filename);
-  return zip;
+
+  try {
+    budget.admitMembers(entries.length);
+    let declared = 0;
+    for (const entry of entries) declared += declaredMemberSize(entry);
+    if (declared > budget.ceiling) throw new DecompressionLimitError('total_bytes');
+  } catch (error) {
+    if (error instanceof DecompressionLimitError) throw new OfficeDocumentUnreadableError(filename);
+    throw error;
+  }
+
+  return { zip, budget };
 }
 
-async function entryText(zip: JSZip, path: string): Promise<string | null> {
-  const entry = zip.file(path);
+async function entryText(bounded: BoundedZip, path: string): Promise<string | null> {
+  const entry = bounded.zip.file(path);
   if (!entry) return null;
-  return entry.async('string');
+  const bytes = await readArchiveMember(entry, bounded.budget);
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 }
 
 function xmlTextRuns(xml: string, tag: string): string {
@@ -156,11 +180,11 @@ function rowNumber(reference: string): number {
 }
 
 async function extractXlsx(data: Buffer, filename: string): Promise<string> {
-  const zip = await readZip(data, filename);
-  const workbook = await entryText(zip, 'xl/workbook.xml');
+  const bounded = await readZip(data, filename);
+  const workbook = await entryText(bounded, 'xl/workbook.xml');
   if (!workbook) throw new OfficeDocumentUnreadableError(filename);
 
-  const relationships = (await entryText(zip, 'xl/_rels/workbook.xml.rels')) ?? '';
+  const relationships = (await entryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
   const targetByRelationshipId = new Map<string, string>();
   for (const match of relationships.matchAll(/<Relationship\b[^>]*>/g)) {
     const id = /Id="([^"]+)"/.exec(match[0])?.[1];
@@ -168,7 +192,7 @@ async function extractXlsx(data: Buffer, filename: string): Promise<string> {
     if (id && target) targetByRelationshipId.set(id, target.replace(/^\/?xl\//, ''));
   }
 
-  const sharedStringsXml = (await entryText(zip, 'xl/sharedStrings.xml')) ?? '';
+  const sharedStringsXml = (await entryText(bounded, 'xl/sharedStrings.xml')) ?? '';
   const sharedStrings = [...sharedStringsXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((match) =>
     xmlTextRuns(match[1] ?? '', 't'),
   );
@@ -183,8 +207,8 @@ async function extractXlsx(data: Buffer, filename: string): Promise<string> {
     const relationshipId = /r:id="([^"]+)"/.exec(sheetMatch[0])?.[1];
     const target = relationshipId ? targetByRelationshipId.get(relationshipId) : undefined;
     const sheetXml =
-      (target ? await entryText(zip, `xl/${target}`) : null) ??
-      (await entryText(zip, `xl/worksheets/sheet${sheetIndex}.xml`));
+      (target ? await entryText(bounded, `xl/${target}`) : null) ??
+      (await entryText(bounded, `xl/worksheets/sheet${sheetIndex}.xml`));
     if (!sheetXml) continue;
 
     const rows: string[] = [];
@@ -232,8 +256,8 @@ async function extractXlsx(data: Buffer, filename: string): Promise<string> {
 }
 
 async function extractPptx(data: Buffer, filename: string): Promise<string> {
-  const zip = await readZip(data, filename);
-  const slidePaths = Object.keys(zip.files)
+  const bounded = await readZip(data, filename);
+  const slidePaths = Object.keys(bounded.zip.files)
     .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
     .sort((a, b) => rowNumber(a) - rowNumber(b))
     .slice(0, MAX_SLIDES);
@@ -241,7 +265,7 @@ async function extractPptx(data: Buffer, filename: string): Promise<string> {
 
   const sections: string[] = [];
   for (const [index, path] of slidePaths.entries()) {
-    const slideXml = (await entryText(zip, path)) ?? '';
+    const slideXml = (await entryText(bounded, path)) ?? '';
     const lines = [...slideXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
       .map((match) =>
         xmlTextRuns(match[1] ?? '', 'a:t')
@@ -250,7 +274,8 @@ async function extractPptx(data: Buffer, filename: string): Promise<string> {
       )
       .filter(Boolean);
     const slideNumber = rowNumber(path);
-    const notesXml = (await entryText(zip, `ppt/notesSlides/notesSlide${slideNumber}.xml`)) ?? '';
+    const notesXml =
+      (await entryText(bounded, `ppt/notesSlides/notesSlide${slideNumber}.xml`)) ?? '';
     const notes = [...notesXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
       .map((match) =>
         xmlTextRuns(match[1] ?? '', 'a:t')
@@ -274,11 +299,16 @@ export async function extractOfficeDocumentText(
   fileName: string,
   kind: OfficeDocumentKind,
 ): Promise<string> {
-  const text =
-    kind === 'docx'
-      ? await extractDocx(data, fileName)
-      : kind === 'xlsx'
-        ? await extractXlsx(data, fileName)
-        : await extractPptx(data, fileName);
-  return boundText(text);
+  try {
+    const text =
+      kind === 'docx'
+        ? await extractDocx(data, fileName)
+        : kind === 'xlsx'
+          ? await extractXlsx(data, fileName)
+          : await extractPptx(data, fileName);
+    return boundText(text);
+  } catch (error) {
+    if (error instanceof DecompressionLimitError) throw new OfficeDocumentUnreadableError(fileName);
+    throw error;
+  }
 }

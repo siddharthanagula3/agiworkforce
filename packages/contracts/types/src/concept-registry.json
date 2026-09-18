@@ -30,8 +30,14 @@
         "column": "server_version",
         "why": "the optimistic-concurrency token an If-Match precondition quotes"
       },
-      "createdAt": { "column": "created_at", "why": "when the row came into existence" },
-      "updatedAt": { "column": "updated_at", "why": "when the row was last written" },
+      "createdAt": {
+        "column": "created_at",
+        "why": "when the row came into existence"
+      },
+      "updatedAt": {
+        "column": "updated_at",
+        "why": "when the row was last written"
+      },
       "deletedAt": {
         "column": "deleted_at",
         "why": "when the row was soft deleted, null while it is alive"
@@ -384,7 +390,10 @@
       "why": "both spell free/pro/max, one as what the account pays for and one as what a model requires. Every predicate in billing-catalog.ts already refuses to answer for the second, which is why scripts/check-plan-tier-predicates.mjs has to exempt six files."
     },
     {
-      "first": { "file": "packages/contracts/types/src/design-system/effort.ts", "name": "Effort" },
+      "first": {
+        "file": "packages/contracts/types/src/design-system/effort.ts",
+        "name": "Effort"
+      },
       "second": {
         "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
         "name": "WORKSPACE_REASONING_EFFORTS"
@@ -394,7 +403,10 @@
       "why": "the workspace policy list is the composer's Effort vocabulary retyped; a value added to one is silently unenforceable in the other."
     },
     {
-      "first": { "file": "packages/contracts/types/src/design-system/effort.ts", "name": "Effort" },
+      "first": {
+        "file": "packages/contracts/types/src/design-system/effort.ts",
+        "name": "Effort"
+      },
       "second": {
         "file": "packages/contracts/types/src/suite-contracts.ts",
         "name": "ChatReasoningEffort"
@@ -428,49 +440,6 @@
       "resolution": "merge",
       "migrateBy": "2026-12-01",
       "why": "analytics names the product surfaces a second time, so a new surface reports under no name until both lists are edited."
-    },
-    {
-      "first": {
-        "file": "packages/contracts/types/src/agent-status.ts",
-        "name": "AgentSessionStatus"
-      },
-      "second": { "file": "packages/contracts/types/src/workflow.ts", "name": "WorkflowStatus" },
-      "resolution": "keep-distinct",
-      "migrateBy": "2026-12-01",
-      "why": "an agent session and a durable workflow run reach the same five terminal states but are separate objects with separate owners; the pair is registered so a divergence is a decision rather than a drift."
-    },
-    {
-      "first": {
-        "file": "packages/contracts/types/src/database.ts",
-        "name": "WorkforceTaskStatus"
-      },
-      "second": {
-        "file": "packages/contracts/types/src/runtime.ts",
-        "name": "RuntimeActivityStatus"
-      },
-      "resolution": "merge",
-      "migrateBy": "2026-12-01",
-      "why": "identical member sets for the same lifecycle, one named for the row and one for the activity rendered from it."
-    },
-    {
-      "first": {
-        "file": "packages/contracts/types/src/database.ts",
-        "name": "WorkforceTaskStatus"
-      },
-      "second": { "file": "packages/contracts/types/src/workflow.ts", "name": "WorkflowStatus" },
-      "resolution": "keep-distinct",
-      "migrateBy": "2026-12-01",
-      "why": "the stored task row and the durable run are different objects; registered so the overlap stays deliberate."
-    },
-    {
-      "first": {
-        "file": "packages/contracts/types/src/runtime.ts",
-        "name": "RuntimeActivityStatus"
-      },
-      "second": { "file": "packages/contracts/types/src/workflow.ts", "name": "WorkflowStatus" },
-      "resolution": "keep-distinct",
-      "migrateBy": "2026-12-01",
-      "why": "the third corner of the status triangle, kept only until the task and activity vocabularies above merge."
     }
   ],
   "columnExemptions": []

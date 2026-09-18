@@ -12,9 +12,24 @@
  * @packageDocumentation
  */
 
-export type AgentSessionStatus = 'running' | 'completed' | 'failed' | 'paused' | 'cancelled';
+import type { LifecycleProjection, LifecycleStatus, WorkLifecycleStatus } from './lifecycle-status';
+
+export type AgentSessionStatus = Exclude<WorkLifecycleStatus, 'pending'> | 'paused';
 
 export type AgentStatus = 'idle' | 'thinking' | 'working' | 'error';
+
+export const LIFECYCLE_STATUS_BY_AGENT_SESSION_STATUS: LifecycleProjection<AgentSessionStatus> =
+  Object.freeze({
+    running: 'running',
+    completed: 'completed',
+    failed: 'failed',
+    paused: 'awaiting_input',
+    cancelled: 'cancelled',
+  });
+
+export function lifecycleStatusForAgentSessionStatus(status: AgentSessionStatus): LifecycleStatus {
+  return LIFECYCLE_STATUS_BY_AGENT_SESSION_STATUS[status];
+}
 
 /**
  * Represents a single agent execution session.

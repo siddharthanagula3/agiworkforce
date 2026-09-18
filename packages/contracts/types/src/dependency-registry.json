@@ -1,0 +1,189 @@
+{
+  "upstreams": [
+    {
+      "id": "model-providers",
+      "kind": "model-provider",
+      "label": "LLM providers",
+      "module": "packages/ai/providers",
+      "envVars": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
+      "owner": "@siddhartha",
+      "failover": "routed",
+      "failureMode": "Routing falls through to the next eligible route; a turn fails only when every candidate is exhausted."
+    },
+    {
+      "id": "model-gateway",
+      "kind": "model-provider",
+      "label": "Aggregator gateway (OpenRouter)",
+      "module": "packages/ai/routing",
+      "envVars": ["OPENROUTER_API_KEY"],
+      "owner": "@siddhartha",
+      "failover": "routed",
+      "failureMode": "Routes served through the gateway become ineligible; direct provider routes remain."
+    },
+    {
+      "id": "stripe",
+      "kind": "payments",
+      "label": "Stripe",
+      "module": "apps/web/lib/billing",
+      "envVars": ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Checkout and subscription changes fail closed; existing entitlements keep serving from the database."
+    },
+    {
+      "id": "neon-postgres",
+      "kind": "database",
+      "label": "Neon Postgres",
+      "module": "packages/platform/data-layer",
+      "envVars": ["DATABASE_URL"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Every persisted read and write fails; there is no second store to fall back to."
+    },
+    {
+      "id": "upstash-redis",
+      "kind": "cache",
+      "label": "Upstash Redis",
+      "module": "packages/platform/key-value",
+      "envVars": ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Rate limiting and idempotency fail closed, which stops completions rather than letting them through unmetered."
+    },
+    {
+      "id": "clerk",
+      "kind": "auth",
+      "label": "Clerk",
+      "module": "packages/platform/identity",
+      "envVars": ["CLERK_SECRET_KEY"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Sign-in and session verification fail closed; no route serves an unauthenticated caller instead."
+    },
+    {
+      "id": "e2b-sandbox",
+      "kind": "sandbox",
+      "label": "E2B sandboxes",
+      "module": "apps/web/lib/e2b",
+      "envVars": ["E2B_API_KEY"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Code execution is refused with a stated reason; the turn continues without the tool."
+    },
+    {
+      "id": "browser-infrastructure",
+      "kind": "browser",
+      "label": "Hosted browser sessions",
+      "module": "apps/web/lib/e2b",
+      "envVars": ["E2B_API_KEY"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Browser tooling is refused. It shares the sandbox vendor today, so a sandbox outage takes browsing with it, which is why it is tracked as its own dependency rather than folded into the sandbox row.",
+      "sharesVendorWith": "e2b-sandbox"
+    },
+    {
+      "id": "object-storage",
+      "kind": "object-storage",
+      "label": "Blob storage",
+      "module": "packages/platform/object-storage",
+      "envVars": ["AGI_STORAGE_PROVIDER", "AGI_STORAGE_BUCKET"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Uploads and generated media fail; rows that address bytes are not written, so nothing is orphaned."
+    },
+    {
+      "id": "resend",
+      "kind": "email",
+      "label": "Resend",
+      "module": "apps/web/lib/services/notification-email-service.ts",
+      "envVars": ["RESEND_API_KEY"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Notification email is dropped; the in-product notification is unaffected."
+    },
+    {
+      "id": "sentry",
+      "kind": "observability",
+      "label": "Sentry",
+      "module": "apps/web/lib/observability",
+      "envVars": ["NEXT_PUBLIC_SENTRY_DSN"],
+      "owner": "@siddhartha",
+      "failover": "none",
+      "failureMode": "Error reporting is lost. No product behaviour depends on it, which is why it is the only optional upstream here."
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "chat-completions",
+      "label": "Chat and tool calling",
+      "domainPath": "apps/web/app/api/llm",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["model-providers", "model-gateway", "neon-postgres", "upstash-redis", "clerk"]
+    },
+    {
+      "id": "code-execution",
+      "label": "Code execution",
+      "domainPath": "apps/web/lib/code-execution",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["e2b-sandbox", "browser-infrastructure", "neon-postgres", "clerk"]
+    },
+    {
+      "id": "billing",
+      "label": "Billing and credits",
+      "domainPath": "apps/web/lib/billing",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["stripe", "neon-postgres", "clerk"]
+    },
+    {
+      "id": "media-generation",
+      "label": "Image and video generation",
+      "domainPath": "apps/web/app/api/media",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["model-providers", "object-storage", "neon-postgres", "clerk"]
+    },
+    {
+      "id": "connectors",
+      "label": "Connectors",
+      "domainPath": "apps/web/lib/connectors",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["neon-postgres", "clerk", "upstash-redis"]
+    },
+    {
+      "id": "schedules",
+      "label": "Scheduled tasks",
+      "domainPath": "apps/web/lib/schedules",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["neon-postgres", "resend", "model-providers"]
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "domainPath": "apps/web/lib/memory",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["neon-postgres", "model-providers"]
+    },
+    {
+      "id": "sync",
+      "label": "Cross-device sync",
+      "domainPath": "packages/client/sync",
+      "runtime": "shared",
+      "owner": "@siddhartha",
+      "upstreams": ["neon-postgres", "clerk"]
+    },
+    {
+      "id": "observability",
+      "label": "Tracing and error reporting",
+      "domainPath": "apps/web/lib/observability",
+      "runtime": "web",
+      "owner": "@siddhartha",
+      "upstreams": ["sentry"]
+    }
+  ]
+}

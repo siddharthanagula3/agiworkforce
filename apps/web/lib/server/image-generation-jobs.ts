@@ -6,6 +6,16 @@ import type {
   ManagedMediaImageOperation,
 } from '@agiworkforce/cloud-contracts';
 
+import {
+  mediaJobDiagnostics,
+  recordMediaAttempt,
+  recordMediaGeneration,
+  recordMediaPoll,
+  type MediaAttemptOutcome,
+  type MediaGenerationOutcome,
+  type MediaJobDiagnosticsRecord,
+} from '@/lib/observability/media-telemetry';
+
 export type ImageJobProvider = 'openai' | 'google';
 export type ImageJobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';
 export type ImageJobSourceSurface = 'web' | 'mobile' | 'desktop' | 'cli';
@@ -75,6 +85,53 @@ export const IMAGE_JOB_LEASE_SECONDS = 3600;
 
 function timestamp(value: unknown): string {
   return new Date(value as string | number | Date).toISOString();
+}
+
+function epoch(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function imageJobDiagnostics(job: ImageGenerationJob): MediaJobDiagnosticsRecord {
+  return mediaJobDiagnostics({
+    media: 'image',
+    jobId: job.id,
+    status: job.status,
+    provider: job.provider,
+    model: job.model,
+    attempt: job.attempts,
+    maxAttempts: job.maxAttempts,
+    ...(epoch(job.createdAt) === undefined ? {} : { createdAtMs: epoch(job.createdAt) }),
+    ...(epoch(job.terminalAt) === undefined ? {} : { settledAtMs: epoch(job.terminalAt) }),
+  });
+}
+
+function reportImageAttempt(job: ImageGenerationJob, outcome: MediaAttemptOutcome): void {
+  const startedAt = epoch(job.attemptStartedAt);
+  recordMediaAttempt({
+    media: 'image',
+    outcome,
+    attempt: job.attempts,
+    provider: job.provider,
+    model: job.model,
+    ...(outcome === 'started' || startedAt === undefined
+      ? {}
+      : { latencyMs: Date.now() - startedAt }),
+  });
+}
+
+function reportImageGeneration(job: ImageGenerationJob, outcome: MediaGenerationOutcome): void {
+  const diagnostics = imageJobDiagnostics(job);
+  recordMediaGeneration({
+    media: 'image',
+    outcome,
+    provider: job.provider,
+    model: job.model,
+    surface: job.sourceSurface,
+    mode: job.plan.sourceAssetId ? 'edit' : 'async',
+    ...(diagnostics.latencyMs === undefined ? {} : { latencyMs: diagnostics.latencyMs }),
+  });
 }
 
 function nullableTimestamp(value: unknown): string | null {
@@ -222,6 +279,7 @@ export async function createImageGenerationJob(input: {
     ],
   );
   if (!job) throw new Error('Image generation job was not persisted.');
+  reportImageGeneration(job, 'accepted');
   return job;
 }
 
@@ -276,14 +334,14 @@ export async function listImageGenerationJobAssetIds(
  * poll pick up work an interrupted request abandoned, and a live claim is what
  * stops two of them running the same paid attempt at once.
  */
-export function claimImageGenerationJobAttempt(input: {
+export async function claimImageGenerationJobAttempt(input: {
   db: DatabaseAdapter;
   jobId: string;
   userId: string;
   claimToken: string;
   claimSeconds?: number;
 }): Promise<ImageGenerationJob | null> {
-  return queryJob(
+  const claimed = await queryJob(
     input.db,
     `update public.image_generation_jobs
         set status = 'processing',
@@ -309,6 +367,9 @@ export function claimImageGenerationJobAttempt(input: {
       Math.max(30, Math.min(Math.trunc(input.claimSeconds ?? IMAGE_JOB_CLAIM_SECONDS), 600)),
     ],
   );
+  recordMediaPoll({ media: 'image', outcome: claimed ? 'claimed' : 'pending' });
+  if (claimed) reportImageAttempt(claimed, 'started');
+  return claimed;
 }
 
 // Parks the attempt without settling the reservation, so the next attempt costs nothing.
@@ -343,6 +404,7 @@ export async function deferImageGenerationJobFailure(input: {
     ],
   );
   if (!job) throw new Error('Image attempt claim was lost before it could be deferred.');
+  reportImageAttempt(job, 'deferred');
   return job;
 }
 
@@ -380,6 +442,8 @@ export async function failImageGenerationJob(input: {
     ],
   );
   if (!job) throw new Error('Image attempt claim was lost before the failure was recorded.');
+  reportImageAttempt(job, 'failed');
+  reportImageGeneration(job, 'failed');
   return job;
 }
 
@@ -433,6 +497,8 @@ export async function completeImageGenerationJob(input: {
     return closed;
   });
   if (!job) throw new Error('Image job completion was not persisted.');
+  reportImageAttempt(job, 'completed');
+  reportImageGeneration(job, 'completed');
   return job;
 }
 
@@ -489,14 +555,14 @@ export function requestImageGenerationCancellation(input: {
  * keeps its claim; the executor sees cancel_requested_at and closes it itself,
  * because the provider call it already paid for cannot be un-made from here.
  */
-export function closeCancelledImageGenerationJob(input: {
+export async function closeCancelledImageGenerationJob(input: {
   db: DatabaseAdapter;
   jobId: string;
   userId: string;
   billingOutcome: 'released' | null;
   billingSettlementStatus: 'succeeded' | 'pending' | 'terminal' | null;
 }): Promise<ImageGenerationJob | null> {
-  return queryJob(
+  const job = await queryJob(
     input.db,
     `update public.image_generation_jobs
         set status = 'canceled',
@@ -515,6 +581,8 @@ export function closeCancelledImageGenerationJob(input: {
       returning ${JOB_COLUMNS}`,
     [input.jobId, input.userId, input.billingOutcome, input.billingSettlementStatus],
   );
+  if (job) reportImageGeneration(job, 'canceled');
+  return job;
 }
 
 export async function listDueImageGenerationJobIds(
