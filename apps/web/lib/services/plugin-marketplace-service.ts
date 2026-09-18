@@ -1,6 +1,11 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
+import {
+  createHash,
+  createPublicKey,
+  timingSafeEqual,
+  verify as verifySignature,
+} from 'node:crypto';
 import { ZodError } from 'zod';
 import {
   parseClaudeMarketplaceManifest,
@@ -27,6 +32,21 @@ import {
   type PluginMarketplaceSourceSummary,
 } from '@agiworkforce/cloud-contracts';
 
+import {
+  describePluginScan,
+  diffPluginPermissions,
+  isPluginSha256,
+  isPluginSignatureAlgorithm,
+  normalizePluginPermissions,
+  pluginIntegrityVerdict,
+  pluginSignaturePayload,
+  scanPluginPackage,
+  type PluginIntegrityVerdict,
+  type PluginScanFile,
+  type PluginScanResult,
+} from '@agiworkforce/client-runtime/plugins';
+
+import { AppError, ErrorCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { isKnownConnectorId } from '@/lib/connectors/catalog';
 
@@ -47,6 +67,232 @@ const PG_UNDEFINED_TABLE = '42P01';
 export function isMissingPluginMarketplaceSchema(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE;
+}
+
+export const PLUGIN_SIGNING_PUBLIC_KEYS_ENV = 'PLUGIN_SIGNING_PUBLIC_KEYS';
+
+/**
+ * PUBLIC keys only; the private key lives with the release process, off this
+ * system. No configured key means no trusted publisher, so verification refuses.
+ */
+export function trustedPluginPublisherKeys(): ReturnType<typeof createPublicKey>[] {
+  const raw = process.env[PLUGIN_SIGNING_PUBLIC_KEYS_ENV]?.trim();
+  if (!raw) return [];
+  const blocks = raw
+    .split(/(?=-----BEGIN )/)
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0);
+  const keys: ReturnType<typeof createPublicKey>[] = [];
+  for (const block of blocks) {
+    try {
+      keys.push(createPublicKey(block.replace(/\\n/g, '\n')));
+    } catch (error) {
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        '[plugin-signing] a configured publisher key could not be parsed and was ignored',
+      );
+    }
+  }
+  return keys;
+}
+
+export interface PluginPackageClaim {
+  pluginId: string;
+  version: string;
+  sha256: string | null;
+  signature: string | null;
+  signatureAlgorithm: string | null;
+}
+
+function hashesMatch(expected: string, actual: string): boolean {
+  const left = Buffer.from(expected, 'utf8');
+  const right = Buffer.from(actual, 'utf8');
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+/**
+ * Fails closed at every branch: a missing digest, a missing signature, an
+ * unaccepted algorithm and an untrusted key all refuse. No "unsigned but allowed".
+ */
+export function verifyPluginPackage(
+  claim: PluginPackageClaim,
+  artifactSha256?: string | null,
+): PluginIntegrityVerdict {
+  if (!isPluginSha256(claim.sha256)) {
+    return pluginIntegrityVerdict('hash_missing', claim.pluginId);
+  }
+  if (artifactSha256 !== undefined && artifactSha256 !== null) {
+    if (!isPluginSha256(artifactSha256) || !hashesMatch(claim.sha256, artifactSha256)) {
+      return pluginIntegrityVerdict('hash_mismatch', claim.pluginId);
+    }
+  }
+  if (typeof claim.signature !== 'string' || claim.signature.trim().length === 0) {
+    return pluginIntegrityVerdict('signature_missing', claim.pluginId);
+  }
+  if (!isPluginSignatureAlgorithm(claim.signatureAlgorithm)) {
+    return pluginIntegrityVerdict('signature_algorithm_unsupported', claim.pluginId);
+  }
+
+  const payload = Buffer.from(
+    pluginSignaturePayload({
+      pluginId: claim.pluginId,
+      version: claim.version,
+      sha256: claim.sha256,
+    }),
+    'utf8',
+  );
+  let signature: Buffer;
+  try {
+    signature = Buffer.from(claim.signature, 'base64');
+  } catch {
+    return pluginIntegrityVerdict('signature_invalid', claim.pluginId);
+  }
+  if (signature.length === 0) return pluginIntegrityVerdict('signature_invalid', claim.pluginId);
+
+  for (const key of trustedPluginPublisherKeys()) {
+    try {
+      if (verifySignature(null, payload, key, signature)) {
+        return pluginIntegrityVerdict('verified', claim.pluginId);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return pluginIntegrityVerdict('signature_invalid', claim.pluginId);
+}
+
+export function sha256OfText(text: string): string {
+  return createHash('sha256').update(text).digest('hex');
+}
+
+export interface PluginPackageScanRecord {
+  contentHash: string;
+  pluginKey: string;
+  verdict: PluginScanResult['verdict'];
+  rulesVersion: number;
+  findings: PluginScanResult['findings'];
+  scannedAt: string;
+}
+
+interface PluginPackageScanRow {
+  content_hash: string;
+  plugin_key: string;
+  verdict: PluginScanResult['verdict'];
+  rules_version: number;
+  findings: unknown;
+  scanned_at: string | Date;
+}
+
+export async function readPluginPackageScan(
+  db: DatabaseAdapter,
+  contentHash: string,
+): Promise<PluginPackageScanRecord | null> {
+  if (!isPluginSha256(contentHash)) return null;
+  const rows = await db.query<PluginPackageScanRow>(
+    `select content_hash, plugin_key, verdict, rules_version, findings, scanned_at
+       from public.plugin_package_scans
+      where content_hash = $1
+      limit 1`,
+    [contentHash],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    contentHash: row.content_hash,
+    pluginKey: row.plugin_key,
+    verdict: row.verdict,
+    rulesVersion: row.rules_version,
+    findings: Array.isArray(row.findings) ? (row.findings as PluginScanResult['findings']) : [],
+    scannedAt: toIso(row.scanned_at) ?? new Date(0).toISOString(),
+  };
+}
+
+/**
+ * Keyed by content hash, not by plugin, so a republished artifact is a new row
+ * and can never inherit the previous version's pass.
+ */
+export async function scanAndRecordPluginPackage(
+  db: DatabaseAdapter,
+  pluginKey: string,
+  contentHash: string,
+  files: readonly PluginScanFile[],
+): Promise<PluginScanResult> {
+  const result = scanPluginPackage(files);
+  if (isPluginSha256(contentHash)) {
+    await db.execute(
+      `insert into public.plugin_package_scans
+         (content_hash, plugin_key, verdict, rules_version, findings, scanned_files, scanned_at)
+       values ($1, $2, $3, $4, $5::jsonb, $6, now())
+       on conflict (content_hash) do update
+         set plugin_key = excluded.plugin_key,
+             verdict = excluded.verdict,
+             rules_version = excluded.rules_version,
+             findings = excluded.findings,
+             scanned_files = excluded.scanned_files,
+             scanned_at = now()`,
+      [
+        contentHash,
+        pluginKey.slice(0, 200),
+        result.verdict,
+        result.rulesVersion,
+        JSON.stringify(result.findings),
+        result.scannedFiles,
+      ],
+    );
+  }
+  if (result.verdict !== 'pass') {
+    logger.warn(
+      { pluginKey, contentHash, verdict: result.verdict, findings: result.findings.length },
+      '[plugin-scan] package did not pass the content scanner',
+    );
+  }
+  return result;
+}
+
+/** An `AppError`, so the route boundary answers 409 rather than an opaque 500. */
+export class PluginPackageRefusedError extends AppError {
+  readonly refusal: string;
+
+  constructor(refusal: string, message: string) {
+    super(ErrorCode.CONFLICT, message, 409);
+    Object.setPrototypeOf(this, PluginPackageRefusedError.prototype);
+    this.name = 'PluginPackageRefusedError';
+    this.refusal = refusal;
+    this.asUserSafe();
+  }
+}
+
+/**
+ * A package with no recorded scan is refused, not installed: absence of a
+ * verdict is not a pass.
+ */
+export async function assertPluginPackageInstallable(
+  db: DatabaseAdapter,
+  claim: PluginPackageClaim,
+  artifactSha256?: string | null,
+): Promise<void> {
+  const integrity = verifyPluginPackage(claim, artifactSha256);
+  if (!integrity.ok) throw new PluginPackageRefusedError(integrity.code, integrity.reason);
+
+  const scan = await readPluginPackageScan(db, claim.sha256 ?? '');
+  if (!scan) {
+    throw new PluginPackageRefusedError(
+      'scan_missing',
+      `The ${claim.pluginId} package has not been scanned, so it cannot be installed yet.`,
+    );
+  }
+  if (scan.verdict !== 'pass') {
+    throw new PluginPackageRefusedError(
+      scan.verdict === 'block' ? 'scan_blocked' : 'scan_review_required',
+      describePluginScan({
+        verdict: scan.verdict,
+        findings: scan.findings,
+        rulesVersion: scan.rulesVersion,
+        scannedFiles: 0,
+        scannedBytes: 0,
+      }),
+    );
+  }
 }
 
 export class PluginMarketplaceValidationError extends Error {
@@ -224,6 +470,8 @@ interface FetchedManifest {
   manifest: PluginMarketplaceManifest;
   contentHash: string;
   resolvedRef: string;
+  manifestPath: string;
+  rawText: string;
 }
 
 export async function fetchMarketplaceManifest(
@@ -305,8 +553,8 @@ export async function fetchMarketplaceManifest(
     ]);
   }
 
-  const contentHash = createHash('sha256').update(rawText).digest('hex');
-  return { manifest, contentHash, resolvedRef };
+  const contentHash = sha256OfText(rawText);
+  return { manifest, contentHash, resolvedRef, manifestPath, rawText };
 }
 
 export async function validateManifestAgainstCatalog(
@@ -378,6 +626,88 @@ async function replaceSourceEntries(
   }
 }
 
+/**
+ * The entry still moves to the published version; the installation is disabled
+ * and marked for review, so an expanded permission is never exercised unapproved.
+ */
+async function reviewPermissionChanges(
+  tx: DatabaseAdapter,
+  userId: string,
+  sourceId: string,
+  plugins: readonly PluginMarketplaceManifestPlugin[],
+): Promise<void> {
+  for (const plugin of plugins) {
+    const permissions = normalizePluginPermissions(plugin.permissions);
+    await tx.execute(
+      `update public.plugin_marketplace_installations installation
+          set review_required = true,
+              enabled = false,
+              pending_permissions = $4::jsonb,
+              updated_at = now()
+         from public.plugin_marketplace_entries entries
+        where entries.id = installation.entry_id
+          and installation.user_id = $1
+          and entries.source_id = $2
+          and entries.plugin_key = $3
+          and exists (
+            select 1
+              from jsonb_array_elements_text($4::jsonb) as required(permission)
+             where not (installation.approved_permissions @> to_jsonb(required.permission))
+          )`,
+      [userId, sourceId, plugin.id, JSON.stringify(permissions)],
+    );
+    await tx.execute(
+      `update public.plugin_marketplace_installations installation
+          set review_required = false,
+              pending_permissions = null,
+              updated_at = now()
+         from public.plugin_marketplace_entries entries
+        where entries.id = installation.entry_id
+          and installation.user_id = $1
+          and entries.source_id = $2
+          and entries.plugin_key = $3
+          and installation.review_required = true
+          and not exists (
+            select 1
+              from jsonb_array_elements_text($4::jsonb) as required(permission)
+             where not (installation.approved_permissions @> to_jsonb(required.permission))
+          )`,
+      [userId, sourceId, plugin.id, JSON.stringify(permissions)],
+    );
+  }
+}
+
+/**
+ * Called at install; without it every declared permission reads as new on the
+ * next refresh.
+ */
+export async function approveMarketplaceInstallationPermissions(
+  db: DatabaseAdapter,
+  userId: string,
+  installationId: string,
+  permissions: readonly string[],
+): Promise<string[]> {
+  const approved = normalizePluginPermissions(permissions);
+  await db.execute(
+    `update public.plugin_marketplace_installations
+        set approved_permissions = $3::jsonb,
+            pending_permissions = null,
+            review_required = false,
+            updated_at = now()
+      where id = $1 and user_id = $2`,
+    [installationId, userId, JSON.stringify(approved)],
+  );
+  return approved;
+}
+
+export function marketplacePermissionReview(
+  approved: readonly string[] | null | undefined,
+  declared: readonly string[] | null | undefined,
+): { reviewRequired: boolean; added: string[]; removed: string[] } {
+  const diff = diffPluginPermissions(approved, declared);
+  return { reviewRequired: diff.expands, added: diff.added, removed: diff.removed };
+}
+
 export function canonicalRepositoryUrl(repositoryUrl: string): string {
   const parsed = parseGithubRepositoryUrl(repositoryUrl);
   return parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : repositoryUrl.trim();
@@ -411,13 +741,17 @@ export async function registerMarketplaceSource(
   }
   const requestedRef = input.ref?.trim() || null;
 
-  const { manifest, contentHash, resolvedRef } = await fetchMarketplaceManifest(
-    input.repositoryUrl,
-    requestedRef,
-  );
+  const { manifest, contentHash, resolvedRef, manifestPath, rawText } =
+    await fetchMarketplaceManifest(input.repositoryUrl, requestedRef);
   const catalogIssues = await validateManifestAgainstCatalog(manifest);
   if (catalogIssues.length > 0) {
     throw new PluginMarketplaceValidationError(catalogIssues);
+  }
+  const scan = await scanAndRecordPluginPackage(db, manifest.name, contentHash, [
+    { path: manifestPath, content: rawText },
+  ]);
+  if (scan.verdict === 'block') {
+    throw new PluginMarketplaceValidationError([describePluginScan(scan)]);
   }
 
   const sourceName = input.name?.trim() || manifest.name;
@@ -449,6 +783,7 @@ export async function registerMarketplaceSource(
       id = inserted.id;
     }
     await replaceSourceEntries(tx, id, manifest.plugins, contentHash);
+    await reviewPermissionChanges(tx, userId, id, manifest.plugins);
     return id;
   });
 
@@ -479,10 +814,19 @@ export async function refreshMarketplaceSource(
   if (!row.repository_url) return mapSourceRow(row);
 
   try {
-    const { manifest, contentHash } = await fetchMarketplaceManifest(row.repository_url, row.ref);
+    const { manifest, contentHash, manifestPath, rawText } = await fetchMarketplaceManifest(
+      row.repository_url,
+      row.ref,
+    );
     const catalogIssues = await validateManifestAgainstCatalog(manifest);
     if (catalogIssues.length > 0) {
       throw new PluginMarketplaceValidationError(catalogIssues);
+    }
+    const scan = await scanAndRecordPluginPackage(db, manifest.name, contentHash, [
+      { path: manifestPath, content: rawText },
+    ]);
+    if (scan.verdict === 'block') {
+      throw new PluginMarketplaceValidationError([describePluginScan(scan)]);
     }
 
     if (contentHash === row.content_hash) {
@@ -502,6 +846,7 @@ export async function refreshMarketplaceSource(
           [sourceId, contentHash],
         );
         await replaceSourceEntries(tx, sourceId, manifest.plugins, contentHash);
+        await reviewPermissionChanges(tx, userId, sourceId, manifest.plugins);
       });
     }
   } catch (error) {

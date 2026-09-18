@@ -1,0 +1,28 @@
+{
+  "surfaces": ["web", "mobile", "desktop", "cli", "extension"],
+  "accessCodes": [
+    "allowed",
+    "ungoverned",
+    "connector_blocked",
+    "connector_not_allowed",
+    "custom_connectors_disabled",
+    "mcp_host_not_allowed",
+    "plugin_blocked",
+    "plugin_not_allowed"
+  ],
+  "healthStates": [
+    "connected",
+    "connectable",
+    "needs-reauthorization",
+    "not-responding",
+    "not-configured",
+    "unsupported-here"
+  ],
+  "policyPath": "/api/settings/organization/connector-policy",
+  "policyPrecedence": [
+    "custom_connectors_disabled",
+    "mcp_host_not_allowed",
+    "connector_blocked",
+    "connector_not_allowed"
+  ]
+}

@@ -1,10 +1,66 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import {
+  ConnectorPolicyError,
+  connectorEndpoints,
+  createConnectorRuntime,
+  type ConnectorAccessDecision,
+} from '@agiworkforce/client-runtime';
+import {
+  CONNECTOR_OAUTH_START_PATH,
+  MANAGED_CLOUD_CONNECTORS_PATH,
+} from '@agiworkforce/cloud-contracts';
 import { McpClient } from '@/api/mcp';
+import { CLOUD_API_BASE_URL } from '@/api/cloudApi';
+import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 import { CONNECTORS } from '../features/connectors/connectorDefinitions';
 
 const OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Desktop runs connectors through the local MCP host, but the policy governing
+ * them lives in the account, so the shared runtime reads it like every surface.
+ */
+async function cloudJson(method: string, path: string, body?: unknown): Promise<unknown> {
+  const request = createManagedCloudRequestContext('Cloud connector policy');
+  const headers = await request.getHeaders();
+  const response = await request.fetch(`${CLOUD_API_BASE_URL}${path}`, {
+    method,
+    headers,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) {
+    request.assertBoundary();
+    throw new Error(`Cloud request failed: HTTP ${response.status}`);
+  }
+  const payload: unknown = await response.json();
+  request.assertBoundary();
+  return payload;
+}
+
+const connectorRuntime = createConnectorRuntime({
+  surface: 'desktop',
+  endpoints: connectorEndpoints({
+    connectors: MANAGED_CLOUD_CONNECTORS_PATH,
+    oauthStart: CONNECTOR_OAUTH_START_PATH,
+  }),
+  http: {
+    get: (path) => cloudJson('GET', path),
+    post: (path, payload) => cloudJson('POST', path, payload),
+    put: (path, payload) => cloudJson('PUT', path, payload),
+    delete: (path) => cloudJson('DELETE', path),
+  },
+  local: {
+    list: () => McpClient.listConnectedProviders(),
+    connect: async (connectorId) => {
+      await McpClient.connectConnector(connectorId);
+    },
+    disconnect: (connectorId) => McpClient.oauthDisconnectRaw(connectorId),
+  },
+});
+
+export { connectorRuntime };
 
 export const FALLBACK_SUPPORTED_CONNECTOR_IDS: string[] = [
   'github',
@@ -53,7 +109,10 @@ interface ConnectorsState {
   oauthStartedAt: Record<string, number>;
   _oauthTimers: Record<string, ReturnType<typeof setTimeout>>;
   supportedConnectorIds: string[];
+  access: Record<string, ConnectorAccessDecision>;
 
+  refreshAccess: (id: string) => Promise<ConnectorAccessDecision>;
+  isBlockedByWorkspace: (id: string) => boolean;
   connect: (id: string) => Promise<void>;
   connectWithApiKey: (id: string, apiKey: string) => Promise<void>;
   disconnect: (id: string) => Promise<void>;
@@ -80,6 +139,15 @@ export const useConnectorsStore = create<ConnectorsState>()(
         oauthStartedAt: {},
         _oauthTimers: {},
         supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
+        access: {},
+
+        refreshAccess: async (id: string) => {
+          const decision = await connectorRuntime.checkConnector(id);
+          set((state) => ({ access: { ...state.access, [id]: decision } }));
+          return decision;
+        },
+
+        isBlockedByWorkspace: (id: string) => get().access[id]?.allowed === false,
 
         connect: async (id: string) => {
           set((state) => ({
@@ -87,6 +155,9 @@ export const useConnectorsStore = create<ConnectorsState>()(
             error: { ...state.error, [id]: null },
           }));
           try {
+            const decision = await get().refreshAccess(id);
+            if (!decision.allowed) throw new ConnectorPolicyError(decision, id);
+
             const connector = CONNECTORS.find((c) => c.id === id);
             const authType = connector?.authType ?? 'oauth';
 
@@ -140,6 +211,9 @@ export const useConnectorsStore = create<ConnectorsState>()(
             error: { ...state.error, [id]: null },
           }));
           try {
+            const decision = await get().refreshAccess(id);
+            if (!decision.allowed) throw new ConnectorPolicyError(decision, id);
+
             await McpClient.saveApiKey(id, apiKey);
             await McpClient.connectConnector(id);
             const verifiedProviders = await McpClient.listConnectedProviders();
@@ -187,6 +261,10 @@ export const useConnectorsStore = create<ConnectorsState>()(
           try {
             const providers = await McpClient.listConnectedProviders();
             set({ connectedIds: providers });
+            const decisions = await Promise.all(
+              providers.map(async (id) => [id, await connectorRuntime.checkConnector(id)] as const),
+            );
+            set((state) => ({ access: { ...state.access, ...Object.fromEntries(decisions) } }));
           } catch (err) {
             const message =
               err instanceof Error ? err.message : 'Failed to load connected providers';
@@ -222,6 +300,9 @@ export const useConnectorsStore = create<ConnectorsState>()(
             },
           }));
           try {
+            const decision = await get().refreshAccess(id);
+            if (!decision.allowed) throw new ConnectorPolicyError(decision, id);
+
             await McpClient.connectConnector(id);
             const providers = await McpClient.listConnectedProviders();
             if (!providers.includes(id)) {
@@ -284,6 +365,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
 
         resetOnLogout: () => {
           get().clearAllTimers();
+          connectorRuntime.invalidatePolicy();
           set({
             connectedIds: [],
             loading: {},
@@ -292,6 +374,7 @@ export const useConnectorsStore = create<ConnectorsState>()(
             oauthStartedAt: {},
             _oauthTimers: {},
             supportedConnectorIds: FALLBACK_SUPPORTED_CONNECTOR_IDS,
+            access: {},
           });
         },
       }),
