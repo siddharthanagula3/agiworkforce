@@ -5,6 +5,14 @@ import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { BrowserSessionPicker } from './BrowserSessionPicker';
 import { decideViewerStart } from './browserSelection';
+import {
+  PROFILE_ENDED_THIS_SESSION,
+  desktopViewerScope,
+  sessionProfileStillHolds,
+  startViewerSession,
+  useBrowserProfileStore,
+} from './permissionProfiles';
+import { useAuthStore } from '../../stores/auth';
 import { Button } from '@/ui/Button';
 import {
   Play,
@@ -94,6 +102,12 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
+
+  const endedByRevocation = useRef<string | null>(null);
+
+  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const viewerScope = useMemo(() => desktopViewerScope(userId), [userId]);
+  const profiles = useBrowserProfileStore((s) => s.profiles);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const activeTab = activeSession?.tabs.find((t) => t.active);
@@ -292,14 +306,29 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     setRuntimeBusy(true);
     setRuntimeError(null);
     try {
-      await launchBrowser('Chromium', false);
+      const sessionId = await launchBrowser('Chromium', false);
       await openTab('about:blank');
+      bindSessionToProfile(sessionId);
     } catch (error) {
       console.error('Failed to start the browser-control runtime:', error);
       setRuntimeError(describeRuntimeError(error));
     } finally {
       setRuntimeBusy(false);
     }
+  };
+
+  // A session references a profile; it does not carry its own grant. Without a
+  // profile there is nothing to revoke, so nothing is bound.
+  const bindSessionToProfile = (sessionId: string | null | undefined): void => {
+    if (!sessionId || !viewerScope) return;
+    const live = profiles.find(
+      (profile) =>
+        profile.userId === viewerScope.userId &&
+        profile.workspaceId === viewerScope.workspaceId &&
+        profile.revokedAtMs === null,
+    );
+    if (!live) return;
+    startViewerSession({ sessionId, profileId: live.id, kind: 'built-in' });
   };
 
   const handleStopRuntime = async () => {
@@ -318,6 +347,20 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
       setRuntimeBusy(false);
     }
   };
+
+  // Revoking a profile ends every session on it, including this window. The
+  // store is the trigger; the expiry is why the running session is re-checked.
+  useEffect(() => {
+    if (!activeSessionId || endedByRevocation.current === activeSessionId) return;
+    if (sessionProfileStillHolds(activeSessionId)) return;
+    if (!useBrowserProfileStore.getState().sessions.some((s) => s.sessionId === activeSessionId)) {
+      return;
+    }
+    endedByRevocation.current = activeSessionId;
+    setRuntimeError(PROFILE_ENDED_THIS_SESSION);
+    if (isStreaming) stopStreaming();
+    void closeBrowser(activeSessionId).catch(() => undefined);
+  }, [activeSessionId, profiles, closeBrowser, isStreaming, stopStreaming]);
 
   const handleCopyUrl = () => {
     if (urlBarValue) {

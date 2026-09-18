@@ -25,6 +25,18 @@ interface RemoveConnectionMetadata {
 export const DEVICE_REVOKED_CLOSE_CODE = 1008;
 export const DEVICE_REVOKED_REASON = 'device_revoked';
 
+/**
+ * How long a bound device may go quiet before the relay stops calling it
+ * online. Shorter than the idle timeout on purpose: a device is stale well
+ * before its socket is closed, and a caller must see that gap rather than
+ * discover it by sending into a dead connection.
+ */
+export const DEVICE_STALE_AFTER_MS = 60_000;
+
+export const DEVICE_FRESHNESS = ['online', 'stale', 'offline'] as const;
+
+export type DeviceFreshness = (typeof DEVICE_FRESHNESS)[number];
+
 class ConnectionManager {
   private connections = new Map<WebSocket, ConnectionInfo>();
   private ipConnectionCounts = new Map<string, number>();
@@ -184,6 +196,48 @@ class ConnectionManager {
 
   getDeviceConnectionCount(deviceId: string): number {
     return this.deviceSockets.get(deviceId)?.size ?? 0;
+  }
+
+  /** The most recent activity across every socket this device holds. */
+  getDeviceLastActivity(deviceId: string): number | null {
+    const sockets = this.deviceSockets.get(deviceId);
+    if (!sockets || sockets.size === 0) return null;
+
+    let latest: number | null = null;
+    for (const socket of sockets) {
+      const info = this.connections.get(socket);
+      if (!info) continue;
+      if (latest === null || info.lastActivity > latest) latest = info.lastActivity;
+    }
+    return latest;
+  }
+
+  /**
+   * What the relay may honestly say about a device. A revoked device is offline
+   * whatever its sockets are doing, and a device that has gone quiet is stale
+   * rather than online, so a caller refuses instead of sending into silence.
+   */
+  getDeviceFreshness(
+    deviceId: string,
+    now: number = Date.now(),
+    staleAfterMs: number = DEVICE_STALE_AFTER_MS,
+  ): DeviceFreshness {
+    if (!deviceId || this.revokedDevices.has(deviceId)) return 'offline';
+    const lastActivity = this.getDeviceLastActivity(deviceId);
+    if (lastActivity === null) return 'offline';
+    return now - lastActivity <= staleAfterMs ? 'online' : 'stale';
+  }
+
+  /** The device-status counts a metrics pipeline reads off the relay. */
+  getDeviceStatusCounts(
+    now: number = Date.now(),
+    staleAfterMs: number = DEVICE_STALE_AFTER_MS,
+  ): Record<DeviceFreshness, number> {
+    const counts: Record<DeviceFreshness, number> = { online: 0, stale: 0, offline: 0 };
+    for (const deviceId of this.deviceSockets.keys()) {
+      counts[this.getDeviceFreshness(deviceId, now, staleAfterMs)] += 1;
+    }
+    return counts;
   }
 
   private closeRevoked(socket: WebSocket, reason: string): void {

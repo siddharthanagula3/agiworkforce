@@ -22,14 +22,25 @@ const ROUTED_RESULT_SEPARATOR: &str = ": ";
 const UNAVAILABLE_STEP_SEPARATOR: &str = ": ";
 const WARNING_SEPARATOR: &str = ", ";
 const MAX_STEPS_PER_ITERATION: usize = 5;
+const NO_EXECUTABLE_ACTION: &str = "The step carried no action any driver could take.";
+const CONFIRMATION_DENIED: &str = "The user declined this step.";
+const CONFIRMATION_TIMED_OUT: &str = "The confirmation was not answered in time.";
+const INPUT_WAS_DELIVERED: &str = "the input was delivered to the target display";
+const UNKNOWN_FOREGROUND: &str = "unknown";
+const COMPUTER_USE_CAPABILITY: &str = "automation";
 use tauri::AppHandle;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
 
 use super::confirmation::{self, ConfirmationOutcome};
+use super::control::{self, ObservationStamp};
 use super::step_routing::{self, PlannedStep, StepExecution};
 use crate::automation::action_router::{
     ActionIntent, ActionRouter, DispatchError, RoutedCall, TierDispatch,
+};
+use crate::automation::audit::{
+    authorize_automation_action, AutomationAuthority, AutomationDecision, AutomationGates,
+    AutomationRequest, AutomationSurface,
 };
 use crate::automation::input::{
     KeyboardSimulator, MouseButton as InputMouseButton, MouseSimulator,
@@ -79,6 +90,9 @@ pub struct ComputerUseConfig {
     pub session: SessionConfig,
     /// Window manager configuration.
     pub window: WindowManagerConfig,
+    /// How long a screenshot may be used as the basis for a pointer coordinate
+    /// before the screen is observed again.
+    pub observation_max_age: Duration,
     /// Stream 2: explicit model override for the planning vision LLM.
     /// `None` lets the router pick (typically the user's default vision
     /// model). Setting this to any vision-capable catalog model lets the user choose
@@ -107,6 +121,7 @@ impl Default for ComputerUseConfig {
             max_consecutive_failures: 3,
             planning_timeout: Duration::from_secs(30),
             verify_after_action: true,
+            observation_max_age: control::DEFAULT_OBSERVATION_MAX_AGE,
             verification_interval: 5, // Verify every 5 actions
             safety: SafetyConfig::default(),
             visual: VisualReasonerConfig::default(),
@@ -216,6 +231,14 @@ pub enum CompletionReason {
 }
 
 /// The Computer Use Agent that drives autonomous task execution.
+/// Who the audit trail names for a run. Empty until the caller that knows the
+/// signed-in account and the registered device supplies them.
+#[derive(Debug, Clone, Default)]
+pub struct AuditIdentity {
+    pub actor: String,
+    pub device_id: String,
+}
+
 pub struct ComputerUseAgent {
     llm_router: Arc<RwLock<LLMRouter>>,
     config: ComputerUseConfig,
@@ -223,6 +246,7 @@ pub struct ComputerUseAgent {
     safety_layer: ComputerUseSafetyLayer,
     window_coordinator: WindowCoordinator,
     app_handle: Option<AppHandle>,
+    audit_identity: AuditIdentity,
 }
 
 impl ComputerUseAgent {
@@ -244,6 +268,7 @@ impl ComputerUseAgent {
             safety_layer,
             window_coordinator,
             app_handle: None,
+            audit_identity: AuditIdentity::default(),
         })
     }
 
@@ -272,6 +297,7 @@ impl ComputerUseAgent {
             safety_layer,
             window_coordinator,
             app_handle: None,
+            audit_identity: AuditIdentity::default(),
         })
     }
 
@@ -280,9 +306,64 @@ impl ComputerUseAgent {
         Self::new(llm_router, ComputerUseConfig::default())
     }
 
+    /// The guard every step passes, and the row it leaves. The app in front is
+    /// the authority here: a site profile governs a browser, the permission the
+    /// user gave an app governs the desktop.
+    fn authorize_step(
+        &self,
+        run_id: &str,
+        action: &str,
+        foreground: &Option<super::window_manager::ActiveWindow>,
+    ) -> AutomationDecision {
+        let app = foreground
+            .as_ref()
+            .map(|window| {
+                window
+                    .bundle_id
+                    .clone()
+                    .unwrap_or_else(|| window.app_name.clone())
+            })
+            .unwrap_or_else(|| UNKNOWN_FOREGROUND.to_string());
+
+        authorize_automation_action(
+            AutomationRequest {
+                run_id: run_id.to_string(),
+                actor: self.audit_identity.actor.clone(),
+                device_id: self.audit_identity.device_id.clone(),
+                surface: AutomationSurface::ComputerUse,
+                target: app.clone(),
+                action: action.to_string(),
+                capability: COMPUTER_USE_CAPABILITY.to_string(),
+            },
+            AutomationGates {
+                consent_accepted: super::consent::consent_is_live(),
+                permission_prompt_on_screen: super::consent::consent_prompt_is_on_screen(),
+                authority: Some(AutomationAuthority::AppPermission {
+                    app: &app,
+                    granted: true,
+                }),
+                now: chrono::Utc::now(),
+            },
+        )
+    }
+
     /// Sets the app handle for event emission.
     pub fn with_app_handle(mut self, app_handle: AppHandle) -> Self {
         self.app_handle = Some(app_handle);
+        self
+    }
+
+    /// Names the account and device every audit row this agent writes belongs
+    /// to. Without it the trail still records what happened, but not to whom.
+    pub fn with_audit_identity(
+        mut self,
+        actor: impl Into<String>,
+        device_id: impl Into<String>,
+    ) -> Self {
+        self.audit_identity = AuditIdentity {
+            actor: actor.into(),
+            device_id: device_id.into(),
+        };
         self
     }
 
@@ -538,7 +619,9 @@ impl ComputerUseAgent {
                 return self.complete_task(&mut session, state, CompletionReason::UserCancelled);
             }
 
-            // OBSERVE: Capture and analyze screen
+            // OBSERVE: Capture and analyze screen. The stamp is minted before
+            // the capture, so its age is an upper bound on the picture's age.
+            let observed_at = ObservationStamp::now();
             let observation = match self.visual_reasoner.observe_screen().await {
                 Ok(obs) => obs,
                 Err(e) => {
@@ -598,12 +681,30 @@ impl ComputerUseAgent {
             for (index, step) in plan.steps.iter().enumerate() {
                 let step_index = index as u32;
 
+                // Coordinates only mean something against the screen they were
+                // read from, so a takeover or a stale snapshot sends the loop
+                // back to observe rather than clicking where something used to be.
+                if let Err(stale) = control::observation_is_actionable(
+                    &observed_at,
+                    self.config.observation_max_age,
+                ) {
+                    tracing::info!("Observing again before the next step: {}", stale.message());
+                    state.last_action = Some(stale.message().to_string());
+                    break;
+                }
+
+                let foreground = WindowCoordinator::get_active_window();
+
                 // Per-app permission check: consult `WindowCoordinator::
                 // get_active_window` and the app_permissions registry. Refuses
                 // any action targeting an app on the always-blocked list
                 // (investment / crypto / banking) and any app the user has
                 // denied. Apps not yet decided trigger an approval request.
-                if let Some(reason) = self.safety_layer.check_app_permission().await {
+                if let Some(reason) = self
+                    .safety_layer
+                    .check_foreground_app(foreground.clone())
+                    .await
+                {
                     tracing::warn!("Action blocked by per-app permission: {:?}", reason);
                     let refusal = describe_safety_block(&reason);
                     if let Some(action) = step.raw() {
@@ -653,8 +754,22 @@ impl ComputerUseAgent {
                     );
                 }
 
+                // The one gate: consent, the permission prompt, the kill switch
+                // and whatever grants this app, and a trail row either way.
+                let ticket = match self.authorize_step(&session.id, &step.label(), &foreground) {
+                    AutomationDecision::Allowed(ticket) => ticket,
+                    AutomationDecision::Refused { reason } => {
+                        return self.complete_task(
+                            &mut session,
+                            state,
+                            CompletionReason::SafetyBlocked { reason },
+                        );
+                    }
+                };
+
                 match self.route_step(step, step_index, &task, &session.id).await {
                     StepOutcome::Handled { summary } => {
+                        ticket.succeeded(summary.as_str(), true, None);
                         state.actions_executed += 1;
                         state.consecutive_failures = 0;
                         state.last_action = Some(summary);
@@ -662,6 +777,7 @@ impl ComputerUseAgent {
                         continue;
                     }
                     StepOutcome::Refused { reason } => {
+                        ticket.refused(reason.as_str());
                         return self.complete_task(
                             &mut session,
                             state,
@@ -669,6 +785,7 @@ impl ComputerUseAgent {
                         );
                     }
                     StepOutcome::Unavailable { detail } => {
+                        ticket.failed(detail.as_str());
                         tracing::warn!("No driver took step {}: {}", step_index, detail);
                         state.consecutive_failures += 1;
                         state.last_action = Some(unavailable_step_summary(&step.label(), &detail));
@@ -679,6 +796,7 @@ impl ComputerUseAgent {
                 }
 
                 let Some(action) = step.raw() else {
+                    ticket.failed(NO_EXECUTABLE_ACTION);
                     continue;
                 };
 
@@ -693,6 +811,7 @@ impl ComputerUseAgent {
                     {
                         ConfirmationOutcome::Approved => {}
                         ConfirmationOutcome::Denied => {
+                            ticket.refused(CONFIRMATION_DENIED);
                             return self.complete_task(
                                 &mut session,
                                 state,
@@ -702,6 +821,7 @@ impl ComputerUseAgent {
                             );
                         }
                         ConfirmationOutcome::Expired => {
+                            ticket.refused(CONFIRMATION_TIMED_OUT);
                             return self.complete_task(
                                 &mut session,
                                 state,
@@ -727,6 +847,11 @@ impl ComputerUseAgent {
                     Ok(()) => (true, None),
                     Err(e) => (false, Some(e.to_string())),
                 };
+
+                match &error {
+                    None => ticket.succeeded(INPUT_WAS_DELIVERED, true, None),
+                    Some(reason) => ticket.failed(reason.as_str()),
+                }
 
                 session.record_action(
                     action.clone(),

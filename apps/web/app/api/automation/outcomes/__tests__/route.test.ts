@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockGetUserScopedDb, mockLogger, mockRecord } = vi.hoisted(() => ({
+const { mockGetUserScopedDb, mockLogger, mockRecord, mockQuery, mockAudit } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
   mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   mockRecord: vi.fn((outcomes: unknown[]) => outcomes.length),
+  mockQuery: vi.fn(async () => []),
+  mockAudit: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -14,6 +16,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockAudit }));
 
 vi.mock('@/lib/observability/automation-telemetry', async () => {
   const actual = await vi.importActual<typeof import('@/lib/observability/automation-telemetry')>(
@@ -50,7 +53,12 @@ function post(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockRecord.mockImplementation((outcomes: unknown[]) => outcomes.length);
-  mockGetUserScopedDb.mockResolvedValue({ userId: 'user-1', organizationId: null });
+  mockQuery.mockResolvedValue([]);
+  mockGetUserScopedDb.mockResolvedValue({
+    db: { query: mockQuery },
+    userId: 'user-1',
+    organizationId: null,
+  });
 });
 
 describe('automation outcome ingest', () => {
@@ -129,5 +137,120 @@ describe('automation outcome ingest', () => {
       }),
     );
     expect(response.status).toBe(400);
+  });
+});
+
+describe('automation receipts and the audit stream', () => {
+  function receiptRows(): Record<string, unknown>[] {
+    const call = mockQuery.mock.calls.at(-1) as unknown as [string, unknown[]];
+    return JSON.parse(call[1][2] as string) as Record<string, unknown>[];
+  }
+
+  it('writes one durable receipt per action, scoped to the caller', async () => {
+    await POST(post({ outcomes: [report({ target: 'https://shop.example/cart?token=abc' })] }));
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockQuery.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain('insert into automation_audit_events');
+    expect(params[0]).toBe('user-1');
+    expect(params[1]).toBeNull();
+
+    expect(receiptRows()).toEqual([
+      expect.objectContaining({
+        run_id: 'run_1',
+        device_id: 'device_1',
+        surface: 'extension',
+        action: 'browser.click',
+        session_kind: 'user-chrome',
+        status: 'succeeded',
+        verified: true,
+        verification_check: 'the cart shows one item',
+        verification_passed: true,
+        duration_ms: 400,
+      }),
+    ]);
+  });
+
+  /** A receipt records where the run went, never what was on the page. */
+  it('keeps the path and query out of the recorded target', async () => {
+    await POST(post({ outcomes: [report({ target: 'https://shop.example/cart?token=abc' })] }));
+    expect(receiptRows()[0]?.['target']).toBe('https://shop.example');
+
+    await POST(post({ outcomes: [report({ target: 'com.example.notes' })] }));
+    expect(receiptRows()[0]?.['target']).toBe('com.example.notes');
+  });
+
+  it('records an unverified success as failed in the trail as well as in the summary', async () => {
+    await POST(post({ outcomes: [report({ verification: undefined })] }));
+
+    expect(receiptRows()[0]).toMatchObject({
+      status: 'failed',
+      verified: false,
+      verification_passed: false,
+    });
+  });
+
+  it('refuses the batch when the trail cannot be written', async () => {
+    mockQuery.mockRejectedValueOnce(new Error('relation does not exist'));
+
+    expect((await POST(post({ outcomes: [report()] }))).status).toBe(500);
+    expect(mockRecord).not.toHaveBeenCalled();
+    expect(mockAudit).not.toHaveBeenCalled();
+  });
+
+  /** L73624: the SIEM stream gets one event per run, not one per pointer move. */
+  it('streams one audit event per run into the enterprise pipeline', async () => {
+    mockGetUserScopedDb.mockResolvedValue({
+      db: { query: mockQuery },
+      userId: 'user-1',
+      organizationId: 'f1f2f3f4-1111-4222-8333-444455556666',
+    });
+
+    await POST(
+      post({
+        outcomes: [
+          report(),
+          report(),
+          report({ runId: 'run_2', claim: 'failed', reason: 'timeout', verification: undefined }),
+        ],
+      }),
+    );
+
+    expect(mockAudit).toHaveBeenCalledTimes(2);
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'browser_action',
+        organizationId: 'f1f2f3f4-1111-4222-8333-444455556666',
+        outcome: 'success',
+        detail: expect.objectContaining({ resourceType: 'automation_run', resourceId: 'run_1' }),
+      }),
+    );
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'failure',
+        severity: 'warning',
+        detail: expect.objectContaining({ resourceId: 'run_2', reason: 'timeout' }),
+      }),
+    );
+  });
+
+  it('names a desktop run as computer use and a refusal as denied', async () => {
+    await POST(
+      post({
+        outcomes: [
+          report({
+            surface: 'desktop',
+            runId: 'run_3',
+            claim: 'refused',
+            reason: 'the kill switch is engaged',
+            verification: undefined,
+          }),
+        ],
+      }),
+    );
+
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'computer_use_action', outcome: 'denied' }),
+    );
   });
 });
