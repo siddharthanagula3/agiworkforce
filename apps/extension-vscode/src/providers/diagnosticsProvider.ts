@@ -1,11 +1,61 @@
 import * as vscode from 'vscode';
+import {
+  buildCodeReviewPrompt,
+  parseCodeReview,
+  type CodeDiagnostic,
+  type CodeDiagnosticSeverity,
+  type CodeDiagnosticsSession,
+  type CodeEditorSession,
+  type CodeRange,
+  type CodeSelection,
+} from '@agiworkforce/ide-runtime';
 import { describeOutboundRefusal } from '../core/outboundContentGuard';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 
-const DIAGNOSTIC_SOURCE = 'AGI Workforce';
+export function toCodeSelection(editor: vscode.TextEditor): CodeSelection {
+  const selection = editor.selection;
+  return {
+    document: {
+      path: editor.document.uri.fsPath,
+      languageId: editor.document.languageId,
+      text: editor.document.getText(),
+    },
+    range: toCodeRange(selection),
+    isEmpty: selection.isEmpty,
+    text: editor.document.getText(selection.isEmpty ? undefined : selection),
+  };
+}
 
-export class AgiDiagnosticsProvider implements vscode.Disposable {
+function toCodeRange(range: vscode.Range): CodeRange {
+  return {
+    start: { line: range.start.line, character: range.start.character },
+    end: { line: range.end.line, character: range.end.character },
+  };
+}
+
+function toVscodeSeverity(severity: CodeDiagnosticSeverity): vscode.DiagnosticSeverity {
+  switch (severity) {
+    case 'error':
+      return vscode.DiagnosticSeverity.Error;
+    case 'warning':
+      return vscode.DiagnosticSeverity.Warning;
+    case 'hint':
+      return vscode.DiagnosticSeverity.Hint;
+    case 'info':
+      return vscode.DiagnosticSeverity.Information;
+  }
+}
+
+export class AgiDiagnosticsProvider
+  implements vscode.Disposable, CodeEditorSession, CodeDiagnosticsSession
+{
+  readonly ide = 'vscode' as const;
   private readonly _diagnosticCollection: vscode.DiagnosticCollection;
+  /**
+   * The URI each reviewed path came in as. An untitled or virtual buffer has no
+   * file: URI, so recovering one from the path would name a document that is not open.
+   */
+  private readonly _reviewedUris = new Map<string, vscode.Uri>();
 
   constructor() {
     this._diagnosticCollection = vscode.languages.createDiagnosticCollection('agiWorkforce');
@@ -13,6 +63,49 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
 
   get collection(): vscode.DiagnosticCollection {
     return this._diagnosticCollection;
+  }
+
+  activeSelection(): CodeSelection | null {
+    const editor = vscode.window.activeTextEditor;
+    return editor === undefined ? null : toCodeSelection(editor);
+  }
+
+  publishDiagnostics(path: string, diagnostics: readonly CodeDiagnostic[]): void {
+    const uri = this._uriForPath(path);
+    this._diagnosticCollection.delete(uri);
+    if (diagnostics.length === 0) return;
+    this._diagnosticCollection.set(
+      uri,
+      diagnostics.map((diagnostic) => {
+        const range = new vscode.Range(
+          diagnostic.range.start.line,
+          diagnostic.range.start.character,
+          diagnostic.range.end.line,
+          diagnostic.range.end.character,
+        );
+        const mapped = new vscode.Diagnostic(
+          range,
+          diagnostic.message,
+          toVscodeSeverity(diagnostic.severity),
+        );
+        mapped.source = diagnostic.source;
+        return mapped;
+      }),
+    );
+  }
+
+  clearDiagnostics(path?: string): void {
+    if (path !== undefined) {
+      this._diagnosticCollection.delete(this._uriForPath(path));
+      this._reviewedUris.delete(path);
+    } else {
+      this._diagnosticCollection.clear();
+      this._reviewedUris.clear();
+    }
+  }
+
+  private _uriForPath(path: string): vscode.Uri {
+    return this._reviewedUris.get(path) ?? vscode.Uri.file(path);
   }
 
   async reviewCode(
@@ -25,46 +118,22 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
       return { diagnosticCount: 0, summary: refusal };
     }
 
-    const selection = editor.selection;
-    const selectedText = editor.document.getText(selection.isEmpty ? undefined : selection);
-
-    if (selectedText.trim() === '') {
+    const selection = toCodeSelection(editor);
+    if (selection.text.trim() === '') {
       return { diagnosticCount: 0, summary: 'No code to review.' };
     }
 
-    const lang = editor.document.languageId;
-    const startLine = selection.isEmpty ? 0 : selection.start.line;
-
+    const prompt = buildCodeReviewPrompt(selection);
     const messages: LlmChatMessage[] = [
-      {
-        role: 'system',
-        content:
-          'You are a senior code reviewer. Analyze the given code and report issues.\n' +
-          'For each issue, output EXACTLY this format on its own line:\n' +
-          'ISSUE|<line_offset>|<severity>|<message>\n\n' +
-          'Where:\n' +
-          '- line_offset is the 0-based line number relative to the start of the code snippet\n' +
-          '- severity is one of: error, warning, info, hint\n' +
-          '- message is a concise description of the issue\n\n' +
-          'After all ISSUE lines, write a brief summary paragraph.\n' +
-          'If the code looks good, output no ISSUE lines and just the summary.',
-      },
-      {
-        role: 'user',
-        content:
-          `Review this ${lang} code for bugs, security issues, performance problems, and style issues:\n\n` +
-          `\`\`\`${lang}\n${selectedText}\n\`\`\``,
-      },
+      { role: 'system', content: prompt.system },
+      { role: 'user', content: prompt.user },
     ];
 
     const response = await chatCompletion(secrets, messages, cancellationToken);
+    const { diagnostics, summary } = parseCodeReview(response, selection);
 
-    const { diagnostics, summary } = parseReviewResponse(response, editor.document.uri, startLine);
-
-    this._diagnosticCollection.delete(editor.document.uri);
-    if (diagnostics.length > 0) {
-      this._diagnosticCollection.set(editor.document.uri, diagnostics);
-    }
+    this._reviewedUris.set(selection.document.path, editor.document.uri);
+    this.publishDiagnostics(selection.document.path, diagnostics);
 
     return { diagnosticCount: diagnostics.length, summary };
   }
@@ -72,8 +141,9 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
   clear(uri?: vscode.Uri): void {
     if (uri !== undefined) {
       this._diagnosticCollection.delete(uri);
+      this._reviewedUris.delete(uri.fsPath);
     } else {
-      this._diagnosticCollection.clear();
+      this.clearDiagnostics();
     }
   }
 
@@ -85,70 +155,4 @@ export class AgiDiagnosticsProvider implements vscode.Disposable {
 export interface ReviewResult {
   diagnosticCount: number;
   summary: string;
-}
-
-interface ParsedIssue {
-  lineOffset: number;
-  severity: vscode.DiagnosticSeverity;
-  message: string;
-}
-
-function parseReviewResponse(
-  response: string,
-  uri: vscode.Uri,
-  baseLineOffset: number,
-): { diagnostics: vscode.Diagnostic[]; summary: string } {
-  const lines = response.split('\n');
-  const issues: ParsedIssue[] = [];
-  const summaryLines: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed.startsWith('ISSUE|')) {
-      const parts = trimmed.split('|');
-      if (parts.length >= 4) {
-        const lineOffset = parseInt(parts[1] ?? '0', 10);
-        const severityStr = (parts[2] ?? 'warning').toLowerCase();
-        const message = parts.slice(3).join('|').trim();
-
-        if (!isNaN(lineOffset) && message !== '') {
-          issues.push({
-            lineOffset,
-            severity: parseSeverity(severityStr),
-            message,
-          });
-        }
-      }
-    } else if (trimmed !== '') {
-      summaryLines.push(trimmed);
-    }
-  }
-
-  const diagnostics: vscode.Diagnostic[] = issues.map((issue) => {
-    const line = Math.max(0, baseLineOffset + issue.lineOffset);
-    const range = new vscode.Range(line, 0, line, Number.MAX_SAFE_INTEGER);
-    const diagnostic = new vscode.Diagnostic(range, issue.message, issue.severity);
-    diagnostic.source = DIAGNOSTIC_SOURCE;
-    return diagnostic;
-  });
-
-  return {
-    diagnostics,
-    summary: summaryLines.join('\n'),
-  };
-}
-
-function parseSeverity(s: string): vscode.DiagnosticSeverity {
-  switch (s) {
-    case 'error':
-      return vscode.DiagnosticSeverity.Error;
-    case 'warning':
-      return vscode.DiagnosticSeverity.Warning;
-    case 'hint':
-      return vscode.DiagnosticSeverity.Hint;
-    case 'info':
-    default:
-      return vscode.DiagnosticSeverity.Information;
-  }
 }
