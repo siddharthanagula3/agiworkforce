@@ -16,6 +16,9 @@ import {
   permissionStatusLabel,
 } from './registry';
 import type { MobilePermissionKind } from './types';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
+
+const PERMISSIONS_HELP_URL = 'https://agiworkforce.com/help?q=permissions+microphone+camera';
 
 interface PermissionRowProps {
   kind: MobilePermissionKind;
@@ -182,8 +185,21 @@ export default function PermissionsScreen() {
         }}
       >
         <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>
-          Permissions are managed by your device. Changing a permission may open Settings.
+          Permissions are managed by your device. Changing a permission may open Settings. AGI asks
+          only when a feature you started needs one: the microphone for voice, the camera and photos
+          for what you attach, notifications for a reply that arrives after you leave. Nothing is
+          read in the background, and denying one disables that feature rather than the app.
         </Text>
+        <Pressable
+          onPress={() => void openInAppBrowser(PERMISSIONS_HELP_URL)}
+          accessibilityRole="link"
+          accessibilityLabel="Get help with permissions, opens the help centre"
+          style={{ minHeight: 44, justifyContent: 'center', marginTop: 6 }}
+        >
+          <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+            Get help with permissions
+          </Text>
+        </Pressable>
       </View>
     </SettingsScreenShell>
   );

@@ -1,7 +1,16 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
+import { Ledger, Stack } from '@/features/marketing/components/system';
 import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
+import {
+  DOC_AUDIENCE_LABELS,
+  DOC_MATURITY_LABELS,
+  describePlans,
+  describePlatforms,
+  describeSegments,
+} from '@/lib/support/doc-metadata';
+import { documentationIndex, type DocIndexEntry } from './doc-index';
 
 export const metadata = buildMetadata({
   title: 'Documentation',
@@ -59,6 +68,7 @@ const SIDEBAR: { heading: string; icon: string; links: { label: string; href: st
     heading: 'Reference',
     icon: '◈',
     links: [
+      { label: 'Documentation index', href: '/docs#index' },
       { label: 'API Reference', href: '/api-docs' },
       { label: 'Providers', href: '/providers' },
       { label: 'Integrations', href: '/integrations' },
@@ -71,10 +81,23 @@ const SIDEBAR: { heading: string; icon: string; links: { label: string; href: st
     links: [
       { label: 'Security', href: '/security' },
       { label: 'Privacy', href: '/privacy' },
-      { label: 'Changelog', href: '/changelog' },
+      { label: 'Release notes', href: '/release-notes' },
     ],
   },
 ];
+
+function applicabilityLines(entry: DocIndexEntry): readonly string[] {
+  const metadata = entry.metadata;
+  if (!metadata) return [`Updated ${entry.updated}`];
+  const { platforms, plans, apiVersions } = metadata.applicability;
+  const first = [
+    DOC_MATURITY_LABELS[metadata.maturity],
+    DOC_AUDIENCE_LABELS[metadata.audience],
+    describePlatforms(platforms),
+    ...(apiVersions ? [`API ${apiVersions.join(', ')}`] : []),
+  ].join(' · ');
+  return [first, `${describePlans(plans)} · ${describeSegments(plans)} · Updated ${entry.updated}`];
+}
 
 const SURFACE_TABS = [
   { label: 'Get Started', href: '/docs', active: true },
@@ -220,6 +243,8 @@ const REFERENCE_CARDS = [
 ];
 
 export default function DocsPage() {
+  const { groups, documentCount, newestUpdate } = documentationIndex();
+
   return (
     <div data-design="agi">
       <div className="agi-docs-wrap">
@@ -321,6 +346,47 @@ export default function DocsPage() {
                   </Link>
                 ))}
               </div>
+            </div>
+
+            <div className="agi-docs-section" id="index">
+              <p className="agi-docs-section-eyebrow">Documentation index</p>
+              <h2 className="agi-docs-section-title">
+                Every page, what it applies to, and when it was last checked.
+              </h2>
+              {groups.length > 0 ? (
+                <>
+                  <p className="agi-docs-lead">
+                    {`${documentCount} pages. Each row states its maturity, who it is written for, which surfaces and plans it applies to, and the date its claims were last read back against the code${newestUpdate ? `. Newest: ${newestUpdate}` : ''}.`}
+                  </p>
+                  {groups.map((group) => (
+                    <div key={group.id} className="agi-docs-sidebar-group">
+                      <h3 className="agi-docs-sidebar-heading">{group.label}</h3>
+                      <Ledger
+                        caption={`${group.label} documentation`}
+                        rows={group.entries.map((entry) => ({
+                          label: (
+                            <Link href={entry.href} className="agi-docs-tabnav-link">
+                              {entry.title}
+                            </Link>
+                          ),
+                          value: (
+                            <Stack gap="tight">
+                              {applicabilityLines(entry).map((line) => (
+                                <span key={line}>{line}</span>
+                              ))}
+                            </Stack>
+                          ),
+                        }))}
+                      />
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <p className="agi-docs-lead">
+                  The documentation index is not loading right now. The pages above still work, and
+                  the help centre search at /help reaches the same content.
+                </p>
+              )}
             </div>
           </main>
         </div>

@@ -1,4 +1,3 @@
-
 import { STATIC_ARTICLES, STATIC_FAQS } from '@/lib/support/static-data';
 import type { CorpusChunk } from '../types';
 
@@ -41,6 +40,7 @@ export function buildStaticDataChunks(): CorpusChunk[] {
       heading: faq.question,
       headingPath: `FAQ › ${faq.question}`,
       text: `${faq.question}\n\n${faq.answer}`,
+      updated: faq.updated,
       origin: 'static-data',
     });
   }
@@ -56,6 +56,7 @@ export function buildStaticDataChunks(): CorpusChunk[] {
       heading: article.title,
       headingPath: `Support article › ${article.title}`,
       text: `${article.excerpt}\n\n${flattenMarkdown(article.content)}`,
+      updated: article.updated,
       origin: 'static-data',
     });
   }

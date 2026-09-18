@@ -1,4 +1,3 @@
-
 import { MARKETING, POSITIONING } from '@/lib/marketing-constants';
 import type { CorpusChunk } from '../types';
 import { buildStaticDataChunks } from './static-data-source';
@@ -63,6 +62,7 @@ function buildMarkdownChunks(): CorpusChunk[] {
         heading: chunk.heading,
         headingPath: interpolateFacts(chunk.headingPath, document.id),
         text: interpolateFacts(chunk.text, document.id),
+        updated: document.updated,
         origin: 'markdown',
       });
     }
