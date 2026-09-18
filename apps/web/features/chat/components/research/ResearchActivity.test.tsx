@@ -187,14 +187,22 @@ describe('ResearchActivity plan approval', () => {
       <ResearchActivity isStreaming={false} research={paused()} onPlanDecision={onPlanDecision} />,
     );
 
-    expect(screen.getByText('alpha query')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('alpha query')).toBeInTheDocument();
     await userEvent.click(screen.getByTestId('research-plan-start'));
-    expect(onPlanDecision).toHaveBeenCalledWith('start', {
-      files: false,
-      allowDomains: [],
-      denyDomains: [],
-      connectors: [],
-    });
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({
+        files: false,
+        allowDomains: [],
+        denyDomains: [],
+        connectors: [],
+        steps: [
+          expect.objectContaining({ description: 'alpha query' }),
+          expect.objectContaining({ description: 'beta query' }),
+        ],
+        deliverable: expect.objectContaining({ depth: 'full-report' }),
+      }),
+    );
 
     await userEvent.click(screen.getByTestId('research-plan-cancel'));
     expect(onPlanDecision).toHaveBeenCalledWith('cancel');

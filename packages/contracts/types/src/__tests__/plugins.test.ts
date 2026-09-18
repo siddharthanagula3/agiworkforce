@@ -49,7 +49,14 @@ function entry(overrides: Partial<PluginRegistryEntry> = {}): PluginRegistryEntr
 
 describe('plugin registry enums', () => {
   it('enumerates every lifecycle status', () => {
-    expect(PLUGIN_REGISTRY_STATUSES).toEqual(['preview', 'published', 'deprecated']);
+    expect(PLUGIN_REGISTRY_STATUSES).toEqual([
+      'draft',
+      'in_review',
+      'preview',
+      'published',
+      'deprecated',
+      'suspended',
+    ]);
     for (const status of PLUGIN_REGISTRY_STATUSES) {
       expect(isPluginRegistryStatus(status)).toBe(true);
     }

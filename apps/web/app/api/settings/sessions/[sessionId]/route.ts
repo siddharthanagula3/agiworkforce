@@ -7,9 +7,10 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { recordAuditEvent } from '@/lib/security-audit';
 import { resolveSessionsPrincipal } from '../session-principal';
 import { getIdentityProvider } from '@/lib/server/identity';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { handleIdentitySecurityEvent } from '@/lib/services/identity-events';
 import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 
 const PROVIDER_SESSION_ID = /^sess_[A-Za-z0-9]+$/;
@@ -49,12 +50,12 @@ async function handleRevoke(
   const isCurrent = currentSessionId !== null && target.id === currentSessionId;
   logger.info({ userId, sessionId: target.id, isCurrent }, 'Account session revoked');
 
-  await recordAuditEvent({
+  await handleIdentitySecurityEvent(getNeonDb(), identity, {
     userId,
-    eventType: 'session_revoked',
+    event: 'session_revoked',
     request,
+    subjectRef: target.id,
     detail: {
-      resourceType: 'session',
       isCurrent,
       status: target.status === SESSION_STATUS_ACTIVE ? 'revoked' : 'already_inactive',
     },

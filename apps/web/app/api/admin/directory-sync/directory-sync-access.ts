@@ -3,17 +3,18 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
-import { getClerkAuthUser } from '@/lib/api-auth';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementPlan } from '@/lib/server/scim/scim-auth';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 
 export type DirectorySyncAccessFailure = { response: NextResponse };
 
 export interface DirectorySyncAccess {
+  db: DatabaseAdapter;
   userId: string;
   organizationId: string;
   role: 'owner' | 'admin';
@@ -44,9 +45,10 @@ export async function requireDirectorySyncAdmin(
   request: NextRequest,
   requestedOrganizationId: string | null,
 ): Promise<DirectorySyncAccess | DirectorySyncAccessFailure> {
+  let db: DatabaseAdapter;
   let userId: string;
   try {
-    ({ userId } = await getClerkAuthUser(request));
+    ({ db, userId } = await getUserScopedDb(request, { resolveOrganization: false }));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return { response: unauthorizedResponseFor(authError) };
@@ -57,8 +59,6 @@ export async function requireDirectorySyncAdmin(
   if (requestedOrganizationId !== null && !UUID_PATTERN.test(requestedOrganizationId)) {
     return failure(400, 'organizationId must be a UUID');
   }
-
-  const db = getNeonDb();
 
   let memberships: Array<Pick<OrganizationMemberRow, 'organization_id' | 'role'>>;
   try {
@@ -111,6 +111,7 @@ export async function requireDirectorySyncAdmin(
   }
 
   return {
+    db,
     userId,
     organizationId: membership.organization_id,
     role: membership.role as 'owner' | 'admin',

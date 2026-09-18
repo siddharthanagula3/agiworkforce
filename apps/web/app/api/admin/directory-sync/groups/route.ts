@@ -6,7 +6,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { AppError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { readJsonBody } from '@/lib/read-json-body';
 import type { ScimGroupRow } from '@/lib/server/neon-types';
 import {
@@ -36,8 +36,8 @@ interface GroupSummaryRow {
   updated_at: string;
 }
 
-async function listGroups(organizationId: string): Promise<GroupSummaryRow[]> {
-  return getNeonDb().query<GroupSummaryRow>(
+async function listGroups(db: DatabaseAdapter, organizationId: string): Promise<GroupSummaryRow[]> {
+  return db.query<GroupSummaryRow>(
     `select g.id, g.connection_id, g.external_id, g.display_name, g.mapped_role, g.updated_at,
             (select count(*)::int
                from scim_group_members m
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
     );
     if (isDirectorySyncAccessFailure(access)) return access.response;
 
-    const groups = await listGroups(access.organizationId);
+    const groups = await listGroups(access.db, access.organizationId);
 
     return NextResponse.json({
       groups: groups.map(serializeGroup),
@@ -133,7 +133,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const nextRole = (mappedRole as ProvisionedRole | null) ?? null;
-    const db = getNeonDb();
+    const db = access.db;
 
     const existing = await db
       .query<Pick<ScimGroupRow, 'id' | 'connection_id' | 'display_name' | 'mapped_role'>>(
@@ -214,7 +214,7 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    const groups = await listGroups(access.organizationId);
+    const groups = await listGroups(access.db, access.organizationId);
     const updated = groups.find((row) => row.id === groupId);
 
     return NextResponse.json({

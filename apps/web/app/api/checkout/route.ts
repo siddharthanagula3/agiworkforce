@@ -12,7 +12,12 @@ import { BILLING_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
+import {
+  CheckoutRequestSchema,
+  PlanTierSchema,
+  resolveCheckoutQuantity,
+} from '@/lib/validations/checkout';
+import { resolveCheckoutPlan } from '@/lib/services/plan-catalog-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
@@ -156,8 +161,15 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(`Invalid request: ${errorMessages}`);
   }
 
-  const { plan, billingInterval } = validationResult.data;
-  const quantity = resolveCheckoutQuantity(validationResult.data);
+  const { plan: requestedPlan, billingInterval } = validationResult.data;
+  const purchasable = PlanTierSchema.safeParse(resolveCheckoutPlan(requestedPlan));
+  if (!purchasable.success) {
+    throw createError.validation(
+      `${requestedPlan} is no longer sold self-serve. Contact sales to buy it.`,
+    );
+  }
+  const plan = purchasable.data;
+  const quantity = resolveCheckoutQuantity({ ...validationResult.data, plan });
   const requestIdempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() || null;
   const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
   const priceSelection = await getCheckoutPriceSelection(plan, billingInterval, country);

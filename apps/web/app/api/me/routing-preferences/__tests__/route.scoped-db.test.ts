@@ -8,16 +8,13 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 
-const mockGetClerkAuthUser = vi.hoisted(() => vi.fn(async () => ({ userId: 'user_123' })));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetClerkAuthUser }));
-
-const tx = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
-const db = vi.hoisted(() => ({
-  query: vi.fn(),
-  execute: vi.fn(),
-  transaction: vi.fn(async (callback: (transaction: typeof tx) => unknown) => callback(tx)),
-}));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
+const scopedDb = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
+const ownerDb = vi.hoisted(() => vi.fn());
+const getUserScopedDb = vi.hoisted(() =>
+  vi.fn(async () => ({ db: scopedDb, userId: 'user_123', organizationId: null })),
+);
+vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: ownerDb }));
 
 import { GET, PUT } from '../route';
 
@@ -29,50 +26,43 @@ function jsonRequest(body: unknown): NextRequest {
   });
 }
 
-describe('routing-preferences route uses the claimed user scope', () => {
+describe('routing-preferences route reads and writes under row-level security', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_123' });
-    tx.execute.mockResolvedValue(1);
+    getUserScopedDb.mockResolvedValue({ db: scopedDb, userId: 'user_123', organizationId: null });
+    scopedDb.execute.mockResolvedValue(1);
   });
 
-  it('GET binds the caller before reading routing_preferences', async () => {
-    tx.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('select routing_preferences from profiles')) {
-        return [{ routing_preferences: { us_only: true } }];
-      }
-      return [];
-    });
+  it('GET reads routing_preferences through the policy-scoped client', async () => {
+    scopedDb.query.mockResolvedValue([{ routing_preferences: { us_only: true } }]);
 
     const response = await GET(
       new NextRequest('https://agiworkforce.com/api/me/routing-preferences'),
     );
 
     expect(response.status).toBe(200);
-    expect(tx.execute).toHaveBeenCalledWith('set local role app_rls');
-    expect(tx.query).toHaveBeenCalledWith(
-      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
-      ['user_123', ''],
+    expect(await response.json()).toEqual({ us_only: true });
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      resolveOrganization: false,
+    });
+    expect(scopedDb.query).toHaveBeenCalledWith(
+      'select routing_preferences from profiles where id = $1 limit 1',
+      ['user_123'],
     );
+    expect(ownerDb).not.toHaveBeenCalled();
   });
 
-  it('PUT binds the caller before writing routing_preferences', async () => {
-    tx.execute.mockImplementation(async (sql: string) => {
-      if (sql.includes('update profiles set routing_preferences')) return 1;
-      return 0;
-    });
-
+  it('PUT writes routing_preferences through the policy-scoped client', async () => {
     const response = await PUT(jsonRequest({ us_only: true }));
 
     expect(response.status).toBe(200);
-    expect(tx.execute).toHaveBeenCalledWith('set local role app_rls');
-    expect(tx.query).toHaveBeenCalledWith(
-      expect.stringContaining("set_config('request.jwt.claim.sub', $1, true)"),
-      ['user_123', ''],
-    );
-    expect(tx.execute).toHaveBeenCalledWith(
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
+      resolveOrganization: false,
+    });
+    expect(scopedDb.execute).toHaveBeenCalledWith(
       'update profiles set routing_preferences = $1::jsonb, updated_at = now() where id = $2',
       [JSON.stringify({ us_only: true }), 'user_123'],
     );
+    expect(ownerDb).not.toHaveBeenCalled();
   });
 });

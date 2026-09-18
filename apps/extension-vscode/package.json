@@ -368,6 +368,11 @@
         "category": "AGI"
       },
       {
+        "command": "agi-workforce.exportDiagnostics",
+        "title": "AGI Workforce: Export Diagnostics",
+        "icon": "$(save)"
+      },
+      {
         "command": "agi-workforce.showTierStatus",
         "title": "AGI Workforce: Show Tier Status",
         "icon": "$(account)"

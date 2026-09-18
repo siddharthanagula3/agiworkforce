@@ -141,6 +141,11 @@ function Divider() {
   return <div className="my-1 h-px bg-[var(--chat-border)]" />;
 }
 
+// A full-resolution PNG of a 4K webcam frame runs past the 12 MiB attachment
+// ceiling; JPEG is also what the mobile camera writes, so the two surfaces match.
+const CAPTURE_IMAGE_MIME_TYPE = 'image/jpeg';
+const CAPTURE_JPEG_QUALITY = 0.85;
+
 type CameraState = 'starting' | 'ready' | 'denied' | 'busy' | 'unavailable';
 
 type CameraFacing = 'user' | 'environment';
@@ -240,11 +245,15 @@ function CameraCaptureOverlay({
     const context = canvas.getContext('2d');
     if (!context) return;
     context.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      onCapture(new File([blob], `photo-${Date.now()}.png`, { type: 'image/png' }));
-      onClose();
-    }, 'image/png');
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        onCapture(new File([blob], `photo-${Date.now()}.jpg`, { type: CAPTURE_IMAGE_MIME_TYPE }));
+        onClose();
+      },
+      CAPTURE_IMAGE_MIME_TYPE,
+      CAPTURE_JPEG_QUALITY,
+    );
   };
 
   return (

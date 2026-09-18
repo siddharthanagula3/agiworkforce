@@ -8,7 +8,9 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { TWO_FACTOR_SCOPE } from './lib/scope';
 import { logger } from '@/lib/logger';
 import { requireStepUp } from '@/lib/server/step-up-auth';
-import { recordAuditEvent } from '@/lib/security-audit';
+import { getIdentityProvider } from '@/lib/server/identity';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { handleIdentitySecurityEvent } from '@/lib/services/identity-events';
 
 const ENDPOINT = '/api/settings/2fa';
 
@@ -87,13 +89,12 @@ async function handleDisable2FA(request: NextRequest) {
 
   logger.info({ userId }, '2FA disabled successfully');
 
-  await recordAuditEvent({
+  await handleIdentitySecurityEvent(getNeonDb(), getIdentityProvider(), {
     userId,
-    eventType: 'two_factor_disabled',
-    severity: 'warning',
+    event: 'two_factor_disabled',
     request,
     organizationId,
-    detail: { resourceType: 'two_factor', source: grant.method },
+    detail: { source: grant.method },
   });
 
   return NextResponse.json({ success: true });

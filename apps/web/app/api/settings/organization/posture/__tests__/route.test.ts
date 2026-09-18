@@ -23,6 +23,18 @@ vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }))
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
+vi.mock('@/lib/server/admin-data-access', () => ({ logAdminDataAccess: vi.fn(async () => {}) }));
+vi.mock('@/lib/services/org-entitlements', () => ({
+  resolveOrganizationEntitlementPlan: vi.fn(async () => 'enterprise'),
+}));
+vi.mock('@/lib/server/organization-encryption-keys', () => ({
+  readOrganizationKeyStatus: vi.fn(async () => ({
+    availability: { state: 'platform_derived', keyId: 'platform-1' },
+    status: null,
+    lastRotatedAt: null,
+    revokedAt: null,
+  })),
+}));
 
 import { AppError, type ErrorCodeValue } from '@/lib/errors';
 import { GET } from '../route';

@@ -9,8 +9,11 @@ import type {
   SettingsNavBadge,
 } from '@agiworkforce/ui';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { ConnectorAccountSelector } from '@/features/connectors/components/ConnectorAccountSelector';
 import { ConnectorApiKeyForm } from '@/features/connectors/components/ConnectorApiKeyForm';
 import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/ConnectorCapabilitiesPanel';
+import { ConnectorHealthDashboard } from '@/features/connectors/components/ConnectorHealthDashboard';
+import { McpResourceList } from '@/features/chat/components/mcp/McpResourceList';
 import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
 import { ConnectorScopeList } from '@/features/connectors/components/ConnectorScopeList';
 import {
@@ -779,7 +782,9 @@ export function useConnectorsSettingsAdapter({
         ) : null}
         {detail.connected ? (
           <>
+            <ConnectorAccountSelector connectorId={connectorId} connectorName={detail.name} />
             <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
+            <McpResourceList connectorId={connectorId} />
             {connectorId === 'github' && githubInstallations.length > 0 ? (
               <div
                 className="rounded-lg border border-border px-3 py-2"
@@ -836,6 +841,7 @@ export function useConnectorsSettingsAdapter({
             <ConnectorScopeList connectorId={connectorId} />
           </>
         )}
+        <ConnectorHealthDashboard />
       </div>
     ),
     onRetryConnectors: loadConnectors,

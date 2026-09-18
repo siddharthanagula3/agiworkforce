@@ -28,6 +28,7 @@ import {
   Share2,
   SlidersHorizontal,
   Sparkles,
+  Stethoscope,
   SunMoon,
   UserRound,
   Users,
@@ -47,6 +48,7 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { shareMobileDiagnostics } from '@/src/features/settings/diagnostics';
 
 type RowTone = 'default' | 'cloud' | 'danger';
 
@@ -390,6 +392,17 @@ export default function SettingsTabScreen() {
     ]);
   }, [signOut]);
 
+  const handleExportDiagnostics = useCallback(() => {
+    void shareMobileDiagnostics()
+      .then((summary) => Alert.alert('Diagnostics exported', summary))
+      .catch((cause: unknown) =>
+        Alert.alert(
+          'Diagnostics export failed',
+          cause instanceof Error ? cause.message : 'Could not prepare the bundle.',
+        ),
+      );
+  }, []);
+
   const cloudAccessTag = !isClerkLoaded ? 'Checking' : isClerkSignedIn ? 'Cloud' : 'Sign in';
   const accountValue = !isClerkLoaded ? 'Checking…' : isClerkSignedIn ? undefined : 'Sign in';
   // One account state, one style. Three of the five Account rows drew it as a
@@ -601,6 +614,12 @@ export default function SettingsTabScreen() {
             },
           },
           {
+            key: 'diagnostics',
+            label: 'Export Diagnostics',
+            icon: Stethoscope,
+            onPress: handleExportDiagnostics,
+          },
+          {
             key: 'about',
             label: 'About',
             icon: Info,
@@ -631,6 +650,7 @@ export default function SettingsTabScreen() {
       accountValue,
       appVersion,
       cloudAccessTag,
+      handleExportDiagnostics,
       handleSignOut,
       isClerkLoaded,
       isClerkSignedIn,

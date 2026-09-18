@@ -7,6 +7,8 @@ import {
   MAX_PERSISTED_TURN_SOURCES,
 } from './assistant-turn-sources';
 
+const RETRIEVED_AT = '2026-09-18T12:00:00.000Z';
+
 function searchResultsEvent(content: unknown): Record<string, unknown> {
   return { choices: [{ delta: { x_search_results: { content } } }] };
 }
@@ -50,7 +52,7 @@ describe('AssistantTurnSourceCollector', () => {
       searchResultsEvent([webResult('https://a.example'), webResult('https://b.example')]),
     );
 
-    expect(collector.snapshot()).toEqual([
+    expect(collector.snapshot()).toMatchObject([
       { url: 'https://a.example', title: 'Title for https://a.example', snippet: 'a snippet' },
       { url: 'https://b.example', title: 'Title for https://b.example', snippet: 'a snippet' },
     ]);
@@ -71,7 +73,7 @@ describe('AssistantTurnSourceCollector', () => {
       searchResultsEvent([{ type: 'web_search_result', url: 'https://a.example' }]),
     );
 
-    expect(collector.snapshot()?.[0]).toEqual({
+    expect(collector.snapshot()?.[0]).toMatchObject({
       url: 'https://a.example',
       title: 'https://a.example',
       snippet: '',
@@ -137,7 +139,7 @@ describe('AssistantTurnSourceCollector', () => {
     collector.ingestWireEvent(citationEvent('https://cited.example', 'Cited Outlet'));
     collector.ingestWireEvent(citationEvent('https://searched.example', 'Searched Outlet'));
 
-    expect(collector.citationSnapshot()).toEqual([
+    expect(collector.citationSnapshot()).toMatchObject([
       { type: 'url_citation', url: 'https://cited.example', title: 'Cited Outlet' },
       { type: 'url_citation', url: 'https://searched.example', title: 'Searched Outlet' },
     ]);
@@ -169,9 +171,59 @@ describe('AssistantTurnSourceCollector', () => {
       ),
     );
 
-    expect(collector.citationSnapshot()).toEqual([
+    expect(collector.citationSnapshot()).toMatchObject([
       { type: 'url_citation', url: 'https://a.example', title: 'A' },
     ]);
+  });
+
+  it('gives every persisted citation a stable id and a delivery tag', () => {
+    const collector = new AssistantTurnSourceCollector({ now: () => new Date(RETRIEVED_AT) });
+    collector.ingestWireEvent(searchResultsEvent([webResult('https://a.example')]));
+    collector.ingestWireEvent(citationEvent('https://a.example', 'A'));
+
+    const source = collector.snapshot()![0]!;
+    const citation = collector.citationSnapshot()![0]!;
+    expect(source.id).toMatch(/^src_[0-9a-f]{16}$/);
+    expect(citation.id).toBe(source.id);
+    expect(citation.provenance).toEqual({
+      providerId: 'provider_native_search',
+      retrievedAt: RETRIEVED_AT,
+      indexedAt: null,
+      delivery: 'indexed',
+      freshness: { publishedAt: null, ageDays: null, class: 'unknown' },
+    });
+  });
+
+  it('never calls a provider-served result live, and records what the frame declares', () => {
+    const collector = new AssistantTurnSourceCollector({ now: () => new Date(RETRIEVED_AT) });
+    collector.ingestWireEvent(
+      searchResultsEvent([
+        {
+          type: 'web_search_result',
+          url: 'https://a.example',
+          title: 'A',
+          delivery: 'cached',
+          provider_id: 'some-backend',
+          date: '2026-09-16T00:00:00.000Z',
+          last_updated: '2026-09-17T00:00:00.000Z',
+        },
+      ]),
+    );
+
+    expect(collector.snapshot()![0]!.provenance).toMatchObject({
+      providerId: 'some-backend',
+      delivery: 'cached',
+      indexedAt: '2026-09-17T00:00:00.000Z',
+    });
+    expect(collector.snapshot()![0]!.provenance.freshness.class).toBe('fresh');
+  });
+
+  it('treats the same page arriving under two links as one citation', () => {
+    const collector = new AssistantTurnSourceCollector();
+    collector.ingestWireEvent(citationEvent('https://www.a.example/story/', 'First'));
+    collector.ingestWireEvent(citationEvent('http://a.example/story?utm_source=x', 'Second'));
+
+    expect(collector.citationSnapshot()).toHaveLength(1);
   });
 
   /**
@@ -389,5 +441,18 @@ describe('AssistantTurnSourceCollector', () => {
     const collector = new AssistantTurnSourceCollector();
     expect(() => collector.ingestWireEvent(event)).not.toThrow();
     expect(collector.snapshot()).toBeUndefined();
+  });
+});
+
+describe('persisted source versions', () => {
+  it('moves the content version when the cited text changes, keeping the id', () => {
+    const first = new AssistantTurnSourceCollector();
+    first.ingestWireEvent(searchResultsEvent([webResult('https://a.example', 'T', 'first text')]));
+    const second = new AssistantTurnSourceCollector();
+    second.ingestWireEvent(searchResultsEvent([webResult('https://a.example', 'T', 'later text')]));
+
+    expect(second.snapshot()![0]!.id).toBe(first.snapshot()![0]!.id);
+    expect(second.snapshot()![0]!.contentVersion).not.toBe(first.snapshot()![0]!.contentVersion);
+    expect(first.snapshot()![0]!.contentVersion).toMatch(/^v1_[0-9a-f]{16}$/);
   });
 });

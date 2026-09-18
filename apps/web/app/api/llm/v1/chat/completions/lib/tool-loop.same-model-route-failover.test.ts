@@ -14,6 +14,9 @@ const receipts = vi.hoisted(() => ({
   fail: vi.fn(),
 }));
 
+vi.mock('@/lib/services/cloud-agent-budget', () => ({
+  authorizeCloudAgentOperation: async () => ({ allowed: true }),
+}));
 vi.mock('@/lib/services/cloud-agent-execution-service', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('@/lib/services/cloud-agent-execution-service')>();
@@ -243,6 +246,37 @@ describe('runToolLoop, a gateway that refuses a pinned model before it says anyt
 
     const secondAttempt = mockBuildToolLoopStream.mock.calls[1]?.[2] as { model: string };
     expect(secondAttempt.model).toBe(PINNED_MODEL);
+  });
+
+  it('keeps one operation id across the rotated attempt and mints a new attempt id', async () => {
+    mockBuildToolLoopStream
+      .mockRejectedValueOnce(gatewayRejection())
+      .mockResolvedValueOnce(textStream('Answered on the direct route.'));
+
+    const identities: ToolLoopProviderExecution['identity'][] = [];
+    const processed = pinnedOnGateway();
+    await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        failover: realFailoverPlan(processed),
+        providerExecutor: (input: ToolLoopProviderExecution) => {
+          identities.push(input.identity);
+          return input.execute();
+        },
+      }),
+    );
+
+    expect(identities).toHaveLength(2);
+    const [first, second] = identities as [
+      ToolLoopProviderExecution['identity'],
+      ToolLoopProviderExecution['identity'],
+    ];
+    expect(second.operationId).toBe(first.operationId);
+    expect(second.attemptId).not.toBe(first.attemptId);
+    expect(second.attempt).toBe(first.attempt + 1);
+    expect(second.parentTaskId).toBe(first.parentTaskId);
+    expect(first.parentTaskId).toBeTruthy();
+    expect(first.requestId).toBe(processed.requestId);
   });
 
   it('does not retry once a text delta has already reached the client', async () => {

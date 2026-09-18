@@ -54,4 +54,12 @@ describe('desktop Help menu actions', () => {
       expect(menu, `window_menu.rs no longer emits ${id}`).toContain(id);
     }
   });
+
+  it('offers a diagnostics export from the Help menu on both sides', () => {
+    const menu = readFileSync(resolve(APP_ROOT, 'src-tauri/src/ui/window_menu.rs'), 'utf8');
+    expect(menu).toContain('menu_export_diagnostics');
+    const source = readFileSync(resolve(APP_ROOT, 'src/App.tsx'), 'utf8');
+    expect(source).toContain("case 'menu_export_diagnostics':");
+    expect(source).toContain("from './features/diagnostics'");
+  });
 });
