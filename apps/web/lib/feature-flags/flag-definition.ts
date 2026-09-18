@@ -1,7 +1,64 @@
+import type { CapabilityDenialReason } from '@agiworkforce/types';
 import { z } from 'zod';
 
 export const FLAG_OFF_VARIANT = 'off';
 export const FLAG_ON_VARIANT = 'on';
+
+/**
+ * How finished a feature is, for every surface. Distinct from the release
+ * channel, which is how far a build has been handed out, and from the rollout
+ * ring in `./rollout-rings`, which is the mechanism that hands it out.
+ */
+export const FEATURE_MATURITIES = [
+  'experimental',
+  'beta',
+  'general_availability',
+  'deprecated',
+] as const;
+
+export type FeatureMaturity = (typeof FEATURE_MATURITIES)[number];
+
+/**
+ * The canonical channel vocabulary. `@/lib/releases/github-desktop-releases`
+ * derives the desktop feed's channels from this, so the desktop release feed
+ * and a flag's channel can never name different sets.
+ */
+export const RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const;
+
+export type ReleaseChannel = (typeof RELEASE_CHANNELS)[number];
+
+/** The narrowest channel a feature at each maturity may reach. */
+const MATURITY_MINIMUM_CHANNEL: Readonly<Record<FeatureMaturity, ReleaseChannel>> = {
+  experimental: 'nightly',
+  beta: 'beta',
+  general_availability: 'stable',
+  deprecated: 'stable',
+};
+
+const CHANNEL_WIDTH: Readonly<Record<ReleaseChannel, number>> = { nightly: 0, beta: 1, stable: 2 };
+
+export function channelCarriesMaturity(
+  channel: ReleaseChannel,
+  maturity: FeatureMaturity,
+): boolean {
+  return CHANNEL_WIDTH[channel] <= CHANNEL_WIDTH[MATURITY_MINIMUM_CHANNEL[maturity]];
+}
+
+/** Why a feature at this maturity refuses an account it has not been opened to. */
+export const MATURITY_DENIAL_REASONS: Readonly<
+  Record<FeatureMaturity, CapabilityDenialReason | null>
+> = {
+  experimental: 'feature_experimental',
+  beta: 'feature_closed_beta',
+  general_availability: null,
+  deprecated: 'feature_deprecated',
+};
+
+export const FEATURE_MATURITY_DEFAULT: FeatureMaturity = 'experimental';
+export const RELEASE_CHANNEL_DEFAULT: ReleaseChannel = 'stable';
+
+export const FeatureMaturitySchema = z.enum(FEATURE_MATURITIES);
+export const ReleaseChannelSchema = z.enum(RELEASE_CHANNELS);
 
 const FLAG_KEY_PATTERN = /^[a-z][a-z0-9_]*([.:-][a-z0-9_]+)*$/;
 const VARIANT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -30,6 +87,8 @@ export const FlagConditionsSchema = z
     regions: TargetValues.optional(),
     countries: z.array(z.string().regex(COUNTRY_PATTERN)).max(250).optional(),
     surfaces: TargetValues.optional(),
+    /** Staff of this deployment, as its own dimension: a role list is the customer's, not ours. */
+    internalStaffOnly: z.boolean().optional(),
     clientVersion: z
       .object({
         min: z.string().regex(CLIENT_VERSION_PATTERN).optional(),
@@ -106,9 +165,22 @@ export const FlagDefinitionInputSchema = z
     defaultVariant: FlagVariantSchema.default(FLAG_OFF_VARIANT),
     rules: z.array(FlagRuleSchema).max(MAX_RULES).default([]),
     expiresAt: z.string().datetime({ offset: true }).nullable().default(null),
+    maturity: FeatureMaturitySchema.optional(),
+    channel: ReleaseChannelSchema.optional(),
+    /** Who answers for this flag, and who removes it when it expires. */
+    owner: z.string().trim().min(1).max(120).optional(),
   })
   .strict()
   .superRefine((definition, context) => {
+    const maturity = definition.maturity ?? FEATURE_MATURITY_DEFAULT;
+    const channel = definition.channel ?? RELEASE_CHANNEL_DEFAULT;
+    if (definition.maturity !== undefined && !channelCarriesMaturity(channel, maturity)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['channel'],
+        message: `A ${maturity} feature may not be handed to the ${channel} channel`,
+      });
+    }
     const variants = new Set(definition.variants);
     if (variants.size !== definition.variants.length) {
       context.addIssue({ code: 'custom', path: ['variants'], message: 'Variants must be unique' });
@@ -151,6 +223,47 @@ export const FlagDefinitionInputSchema = z
   });
 
 export type FlagDefinitionInput = z.infer<typeof FlagDefinitionInputSchema>;
+
+export function flagMaturity(definition: Pick<FlagDefinitionInput, 'maturity'>): FeatureMaturity {
+  return definition.maturity ?? FEATURE_MATURITY_DEFAULT;
+}
+
+export function flagChannel(definition: Pick<FlagDefinitionInput, 'channel'>): ReleaseChannel {
+  return definition.channel ?? RELEASE_CHANNEL_DEFAULT;
+}
+
+/**
+ * The denial a flag-gated feature reports when it refuses. A generally
+ * available feature that is off is a plain rollout decision, not a maturity
+ * one, so it has no maturity reason.
+ */
+export function flagDenialReason(
+  definition: Pick<FlagDefinitionInput, 'maturity'>,
+): CapabilityDenialReason | null {
+  return MATURITY_DENIAL_REASONS[flagMaturity(definition)];
+}
+
+/**
+ * What this flag has not said about itself. An expiry nobody owns is a flag
+ * that outlives whoever added it, which is how a temporary gate becomes
+ * permanent branching.
+ */
+export function flagGovernanceGaps(
+  definition: Pick<FlagDefinitionInput, 'key' | 'expiresAt' | 'maturity' | 'owner'>,
+): string[] {
+  const gaps: string[] = [];
+  if (definition.expiresAt !== null && !definition.owner) {
+    gaps.push(
+      `${definition.key} expires on ${definition.expiresAt} but names no owner to remove it`,
+    );
+  }
+  if (definition.maturity === undefined) {
+    gaps.push(
+      `${definition.key} declares no maturity, so it is treated as ${FEATURE_MATURITY_DEFAULT}`,
+    );
+  }
+  return gaps;
+}
 
 export interface FlagDefinition extends FlagDefinitionInput {
   version: number;

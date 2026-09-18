@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertDatabaseEnvironmentIsolation,
+  checkConfigKeys,
+  defineConfigKeys,
   isLoopbackConnectionString,
+  RUNTIME_ENVIRONMENTS,
   resolveRuntimeEnvironment,
   REMOTE_DATABASE_OVERRIDE_VALUE,
   REMOTE_DATABASE_OVERRIDE_VAR,
@@ -134,5 +137,58 @@ describe('assertDatabaseEnvironmentIsolation', () => {
 
   it('leaves an unparseable connection string to the adapter to report', () => {
     expect(() => assertIn({ NODE_ENV: 'development' }, 'not-a-connection-string')).not.toThrow();
+  });
+});
+
+describe('config key registry', () => {
+  const registry = defineConfigKeys([
+    { key: 'STRIPE_SECRET_KEY', secrecy: 'secret', allowedEnvironments: RUNTIME_ENVIRONMENTS },
+    { key: 'AGI_ALLOW_REMOTE_DATABASE', secrecy: 'public', allowedEnvironments: ['development'] },
+    {
+      key: 'NEXT_PUBLIC_SESSION_SIGNING_KEY',
+      secrecy: 'secret',
+      allowedEnvironments: RUNTIME_ENVIRONMENTS,
+    },
+  ]);
+
+  it('says nothing about a key set where it is allowed', () => {
+    const violations = checkConfigKeys(registry, {
+      NODE_ENV: 'development',
+      STRIPE_SECRET_KEY: 'sk_test_x',
+      AGI_ALLOW_REMOTE_DATABASE: 'no',
+    });
+    expect(violations.map((violation) => violation.key)).toEqual([
+      'NEXT_PUBLIC_SESSION_SIGNING_KEY',
+    ]);
+  });
+
+  it('names a key set in an environment it is not allowed in', () => {
+    const violations = checkConfigKeys(registry, {
+      NODE_ENV: 'production',
+      AGI_ALLOW_REMOTE_DATABASE: 'yes',
+    });
+    expect(violations).toContainEqual(
+      expect.objectContaining({
+        key: 'AGI_ALLOW_REMOTE_DATABASE',
+        environment: 'production',
+        reason: 'environment_not_allowed',
+      }),
+    );
+  });
+
+  it('refuses a secret whose name ships it to the browser, set or not', () => {
+    const violations = checkConfigKeys(registry, { NODE_ENV: 'production' });
+    expect(violations).toEqual([
+      expect.objectContaining({
+        key: 'NEXT_PUBLIC_SESSION_SIGNING_KEY',
+        reason: 'secret_exposed_to_client',
+      }),
+    ]);
+  });
+
+  it('ignores a key nothing registered', () => {
+    expect(
+      checkConfigKeys(defineConfigKeys([]), { NODE_ENV: 'test', SOMETHING_ELSE: 'x' }),
+    ).toEqual([]);
   });
 });

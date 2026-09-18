@@ -2,8 +2,57 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { recordNotification } from './notification-service';
+import {
+  identitySecurityEventSpec,
+  type IdentitySecurityEventKey,
+} from './identity-events/catalogue';
 
 const DEVICES_SETTINGS_SECTION = 'account';
+
+export interface IdentitySecurityNotificationInput {
+  userId: string;
+  event: IdentitySecurityEventKey;
+  /** Distinguishes two notices of the same event; without one they collapse. */
+  subjectRef?: string | null;
+  /** A whole sentence the call site owns, naming the device, place or key. */
+  context?: string | null;
+}
+
+export async function notifyIdentitySecurityEvent(
+  db: DatabaseAdapter,
+  input: IdentitySecurityNotificationInput,
+): Promise<void> {
+  const spec = identitySecurityEventSpec(input.event);
+  const context = input.context?.trim();
+  const subjectRef = input.subjectRef?.trim();
+  await recordNotification(db, {
+    userId: input.userId,
+    category: spec.category,
+    severity: spec.severity,
+    title: spec.title,
+    message: context ? `${spec.message} ${context}` : spec.message,
+    target: { kind: 'settings', id: spec.settingsSection },
+    dedupeKey: `identity:${input.event}:${subjectRef || 'account'}`,
+  });
+}
+
+export async function notifyAccountCompromiseContained(
+  db: DatabaseAdapter,
+  input: { userId: string; responseId: string; sessionsRevoked: number },
+): Promise<void> {
+  await recordNotification(db, {
+    userId: input.userId,
+    category: 'security',
+    severity: 'error',
+    title: 'Your account was secured',
+    message:
+      `We signed out ${input.sessionsRevoked} other session${input.sessionsRevoked === 1 ? '' : 's'} ` +
+      'because your account looked compromised. Set a new password before signing in anywhere else, ' +
+      'and contact support if you did not expect this.',
+    target: { kind: 'settings', id: 'security' },
+    dedupeKey: `account-compromise:${input.responseId}`,
+  });
+}
 
 export async function notifyDeviceSignInApproved(
   db: DatabaseAdapter,

@@ -59,6 +59,7 @@
  */
 
 import type { PlatformCapability } from '../capabilities';
+import type { CapabilityDenialReason } from '../reason-codes';
 
 export type { PlatformCapability };
 
@@ -75,10 +76,27 @@ export function isCapabilityLayer(value: string): value is CapabilityLayer {
   return (CAPABILITY_LAYERS as readonly string[]).includes(value);
 }
 
+/**
+ * What a layer means when it omits a capability. A layer that says nothing
+ * falls back to the reason its position implies, never to a generic refusal.
+ */
+export const CAPABILITY_LAYER_DENIAL_REASONS: Readonly<
+  Record<CapabilityLayer, CapabilityDenialReason>
+> = {
+  model: 'unsupported_by_provider',
+  tier: 'requires_upgrade',
+  surface: 'unsupported_by_surface',
+  settings: 'disabled_by_user',
+};
+
 export interface CapabilityLayerGrant {
   layer: CapabilityLayer;
   sourceId: string;
   granted: ReadonlySet<PlatformCapability>;
+  /** Overrides `CAPABILITY_LAYER_DENIAL_REASONS` for everything this layer denies. */
+  denialReason?: CapabilityDenialReason;
+  /** Per-capability override, for a layer that denies two capabilities for different reasons. */
+  denialReasons?: Readonly<Partial<Record<PlatformCapability, CapabilityDenialReason>>>;
 }
 
 export interface CapabilityDocumentRef {
@@ -122,5 +140,7 @@ export interface EffectiveCapabilityDocument extends CapabilityDocumentRef {
   sources: Readonly<Record<CapabilityLayer, string>>;
   granted: readonly PlatformCapability[];
   deniedBy: Readonly<Partial<Record<PlatformCapability, readonly CapabilityLayer[]>>>;
+  /** The reason the first denying layer gave, for every capability in `deniedBy`. */
+  denialReasons?: Readonly<Partial<Record<PlatformCapability, CapabilityDenialReason>>>;
   limits: readonly CapabilityLimit[];
 }

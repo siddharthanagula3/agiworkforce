@@ -2,14 +2,14 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  effectivePlanTier,
   getBillingPlanProductLimits,
   normalizeBillingPlanTier,
   toEnforceableBillingPlanLimit,
   type BillingPlanTier,
+  type CapabilityDenialReason,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/effective-subscription-service';
 
 export interface OrganizationEntitlements {
   organizationId: string;
@@ -27,13 +27,17 @@ export interface OrganizationEntitlements {
  * to an organization (before that member holds any role in it, such as an
  * ownership-transfer candidate) call it directly with the same connection
  * they already hold, so the two paths cannot drift apart.
+ *
+ * It resolves through `resolveEntitlementBundle`, the single entitlement entry
+ * point, with seats off: a seat in the very organization being asked about must
+ * never be the thing that entitles its holder to own it.
  */
 export async function resolveUserPersonalPlanTier(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<BillingPlanTier> {
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  return normalizeBillingPlanTier(effectivePlanTier(subscription?.plan_tier, subscription?.status));
+  const bundle = await resolveEntitlementBundle(db, userId, { includeSeats: false });
+  return bundle.plan;
 }
 
 /**
@@ -137,18 +141,65 @@ export function isOrgResourceLimitError(error: unknown): boolean {
   );
 }
 
-export function getSharedProjectLimitErrorMessage(limit: number | null): string {
-  if (limit === null) return 'Your organization cannot share more projects right now.';
-  if (limit === 0) {
-    return 'Your organization’s plan does not include shared projects. Upgrade to share a project with your members.';
+export interface OrganizationLimitDenial {
+  reason: CapabilityDenialReason;
+  message: string;
+}
+
+/**
+ * A limit of zero is the plan not including the feature at all, which is an
+ * upgrade; a limit already spent is a quota. They read the same to a caller
+ * that only has the sentence.
+ */
+function limitDenialReason(limit: number | null): CapabilityDenialReason {
+  if (limit === null) return 'entitlement_missing';
+  return limit === 0 ? 'requires_upgrade' : 'quota_exceeded';
+}
+
+export function getSharedProjectLimitDenial(limit: number | null): OrganizationLimitDenial {
+  if (limit === null) {
+    return {
+      reason: limitDenialReason(limit),
+      message: 'Your organization cannot share more projects right now.',
+    };
   }
-  return `Your organization can share up to ${limit} ${limit === 1 ? 'project' : 'projects'}. Un-share one to share another.`;
+  if (limit === 0) {
+    return {
+      reason: limitDenialReason(limit),
+      message:
+        'Your organization’s plan does not include shared projects. Upgrade to share a project with your members.',
+    };
+  }
+  return {
+    reason: limitDenialReason(limit),
+    message: `Your organization can share up to ${limit} ${limit === 1 ? 'project' : 'projects'}. Un-share one to share another.`,
+  };
+}
+
+export function getSharedConnectorLimitDenial(limit: number | null): OrganizationLimitDenial {
+  if (limit === null) {
+    return {
+      reason: limitDenialReason(limit),
+      message: 'Your organization cannot share more connectors right now.',
+    };
+  }
+  if (limit === 0) {
+    return {
+      reason: limitDenialReason(limit),
+      message:
+        'Your organization’s plan does not include shared connectors. Upgrade to share a connector with your members.',
+    };
+  }
+  return {
+    reason: limitDenialReason(limit),
+    message: `Your organization can share up to ${limit} custom ${limit === 1 ? 'connector' : 'connectors'}. Un-share one to share another.`,
+  };
+}
+
+export function getSharedProjectLimitErrorMessage(limit: number | null): string {
+  return getSharedProjectLimitDenial(limit).message;
 }
 
 export function getSharedConnectorLimitErrorMessage(limit: number | null): string {
-  if (limit === null) return 'Your organization cannot share more connectors right now.';
-  if (limit === 0) {
-    return 'Your organization’s plan does not include shared connectors. Upgrade to share a connector with your members.';
-  }
-  return `Your organization can share up to ${limit} custom ${limit === 1 ? 'connector' : 'connectors'}. Un-share one to share another.`;
+  return getSharedConnectorLimitDenial(limit).message;
 }

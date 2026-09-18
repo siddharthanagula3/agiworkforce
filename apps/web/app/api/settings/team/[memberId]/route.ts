@@ -18,6 +18,7 @@ import { withSeatAccountingErrors } from '@/lib/services/organization-seat-servi
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { requireTeamAdminAccess } from '../team-admin-access';
 import { getIdentityProvider } from '@/lib/server/identity';
+import { assertOwnerProtection, type OwnerAction } from '@/lib/services/organization-delegation';
 
 const MEMBER_ID_RE = /^([0-9a-f-]{36}):(.+)$/;
 
@@ -58,9 +59,15 @@ async function requireAdminAccess(
   return row;
 }
 
-async function requireAnotherOwnerBeforeDemotion(
+/**
+ * The owner invariant for both flows. The advisory lock the caller already
+ * holds is what makes the count trustworthy: two simultaneous demotions
+ * serialize on it, so the second one sees the first one's result.
+ */
+async function assertOwnerInvariant(
   db: ReturnType<typeof getNeonDb>,
   organizationId: string,
+  requester: Pick<OrganizationMemberRow, 'role'>,
   target: Pick<OrganizationMemberRow, 'role'>,
   nextRole: OrganizationMemberRow['role'] | null,
 ): Promise<void> {
@@ -75,9 +82,13 @@ async function requireAnotherOwnerBeforeDemotion(
     [organizationId],
   );
 
-  if (Number.parseInt(countRow?.owner_count ?? '0', 10) <= 1) {
-    throw createError.conflict('Assign another owner before removing or changing the last owner');
-  }
+  const action: OwnerAction = nextRole === null ? 'remove' : 'demote';
+  assertOwnerProtection({
+    actorRole: requester.role,
+    targetRole: target.role,
+    ownerCount: Number.parseInt(countRow?.owner_count ?? '0', 10),
+    action,
+  });
 }
 
 async function handleRemove(
@@ -123,11 +134,7 @@ async function handleRemove(
         throw createError.notFound('Member not found in this organization');
       }
 
-      if (targetRow.role === 'owner' && requester.role !== 'owner') {
-        throw createError.forbidden('Only owners can remove other owners');
-      }
-
-      await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, null);
+      await assertOwnerInvariant(tx, organizationId, requester, targetRow, null);
 
       await tx.execute(
         `delete from public.organization_members
@@ -235,11 +242,7 @@ async function handleUpdateRole(
         throw createError.notFound('Member not found in this organization');
       }
 
-      if (targetRow.role === 'owner' && requester.role !== 'owner') {
-        throw createError.forbidden('Only owners can change the role of another owner');
-      }
-
-      await requireAnotherOwnerBeforeDemotion(tx, organizationId, targetRow, newRole);
+      await assertOwnerInvariant(tx, organizationId, requester, targetRow, newRole);
 
       await tx.execute(
         `update public.organization_members

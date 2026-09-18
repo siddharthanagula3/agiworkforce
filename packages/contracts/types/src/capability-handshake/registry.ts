@@ -8,13 +8,26 @@
  */
 
 import type { PlatformCapability } from '../capabilities';
+import type { CapabilityDenialReason } from '../reason-codes';
 import {
+  CAPABILITY_LAYER_DENIAL_REASONS,
   CAPABILITY_LAYERS,
   type CapabilityLayer,
   type CapabilityLayerGrant,
   type CapabilityLimit,
   type EffectiveCapabilityDocument,
 } from './types';
+
+export function layerDenialReason(
+  grant: CapabilityLayerGrant,
+  capabilityId: PlatformCapability,
+): CapabilityDenialReason {
+  return (
+    grant.denialReasons?.[capabilityId] ??
+    grant.denialReason ??
+    CAPABILITY_LAYER_DENIAL_REASONS[grant.layer]
+  );
+}
 
 export interface BuildEffectiveCapabilityDocumentInput {
   sessionId: string;
@@ -36,6 +49,7 @@ export function buildEffectiveCapabilityDocument(
 
   const granted: PlatformCapability[] = [];
   const deniedBy: Partial<Record<PlatformCapability, CapabilityLayer[]>> = {};
+  const denialReasons: Partial<Record<PlatformCapability, CapabilityDenialReason>> = {};
 
   for (const capabilityId of union) {
     const missingLayers = CAPABILITY_LAYERS.filter(
@@ -45,6 +59,7 @@ export function buildEffectiveCapabilityDocument(
       granted.push(capabilityId);
     } else {
       deniedBy[capabilityId] = missingLayers;
+      denialReasons[capabilityId] = layerDenialReason(layers[missingLayers[0]!], capabilityId);
     }
   }
 
@@ -59,6 +74,7 @@ export function buildEffectiveCapabilityDocument(
     sources,
     granted,
     deniedBy,
+    denialReasons,
     limits: [...(input.limits ?? [])].sort((a, b) => a.id.localeCompare(b.id)),
   };
 }
