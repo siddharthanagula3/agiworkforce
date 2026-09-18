@@ -91,11 +91,16 @@ export default function EnterprisePage() {
           mechanism, so those rows stay cut. SSO/OIDC, SCIM directory sync, org
           audit read + JSONL export, audit streaming, and per-workspace
           retention are live, gated on the `enterprise_controls` /
-          `audit_export` capabilities; retention enforcement is opt-in per
+          `audit_export` capabilities. Retention enforcement is opt-in per
           workspace and fails closed, so do not restore "you set them" phrasing
-          that implied it is unconditional. The four-hour SLA is a PLANNED
-          target on /sla, not a binding promise; defer to /sla rather than
-          restating it. Re-verify each row against the code before editing.
+          that implied it is unconditional; on a plan carrying
+          `enterprise_controls` the window is a contractual commitment and the
+          workspace console reports it as required and not yet enforced
+          (lib/server/retention/enforcement.ts), which is not the same as
+          deleting against it. The four-hour first response is a current
+          support commitment and nothing measures attainment; the uptime
+          numbers are PLANNED targets on /sla. Defer to /sla rather than
+          restating either. Re-verify each row against the code before editing.
         */}
         <Section id="contract-coverage" labelledBy="agi-enterprise-contract-title" rule>
           <Stack gap="loose">
@@ -141,13 +146,17 @@ export default function EnterprisePage() {
                   Which routes the workspace allows, whether managed cloud may be used at all, and
                   which client surfaces may sync. Your workspace owner sets a retention window
                   between 1 and 3650 days and decides whether it is enforced; until enforcement is
-                  on, the window is recorded, nothing is deleted. Legal holds exempt any thread.
+                  on, the window is recorded, nothing is deleted. On a plan that carries the
+                  enterprise controls entitlement that window is a contractual commitment, so the
+                  console reports it as required and says plainly when it is not yet being deleted
+                  against. Legal holds exempt any thread.
                 </p>
               }
               points={[
                 'Local, BYOK and AGI Cloud allowed per workspace',
                 'Public share links and phone sync switch off server side',
                 'Retention enforced only when the owner turns it on',
+                'A plan-required window that is not enforced is reported as a gap, not as a control',
               ]}
               visual={<ConsoleWindow view="policy" />}
             />

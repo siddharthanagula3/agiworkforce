@@ -91,6 +91,11 @@ const NOT_YET: readonly LedgerRow[] = [
       'Support requests arrive in a single email queue and are triaged by hand against the commitment above. There is no automated, plan-derived routing system.',
   },
   {
+    label: 'First response is not measured yet',
+    value:
+      'Tickets and their replies are stored in public.support_tickets and public.support_ticket_replies, so the elapsed time to a first staff reply is recorded per ticket. Nothing computes attainment from it and nothing on /status reports it, so treat the response commitment above as a policy we hold ourselves to, not as a number you can read back.',
+  },
+  {
     label: 'No 24/7 coverage',
     value:
       'Alerts route through an on-call rotation with escalation, but the rotation is small and there is no round-the-clock coverage. We do not claim 24/7 support because a small team could not staff it honestly; response follows the business-hours and business-day targets above.',
