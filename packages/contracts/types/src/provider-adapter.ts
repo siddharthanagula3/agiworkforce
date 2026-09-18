@@ -364,6 +364,74 @@ export interface StreamChunkStop {
   providerFinishReason?: string;
 }
 
+export const STREAM_STOP_REASONS = [
+  'end_turn',
+  'max_tokens',
+  'tool_use',
+  'stop_sequence',
+  'refusal',
+  'pause_turn',
+  'error',
+  'cancel',
+] as const;
+
+export type StreamStopReason = StreamChunkStop['reason'];
+
+export function isStreamStopReason(value: unknown): value is StreamStopReason {
+  return typeof value === 'string' && (STREAM_STOP_REASONS as readonly string[]).includes(value);
+}
+
+/**
+ * The tolerance rule for every adapter: an enum member this build does not
+ * know maps onto the nearest canonical one and keeps the vendor string, so a
+ * provider adding a value never turns into a dropped or failed turn.
+ */
+export function normalizeStopReason(
+  vendorReason: string | null | undefined,
+  mapping: Readonly<Record<string, StreamStopReason>>,
+  fallback: StreamStopReason = 'end_turn',
+): StreamChunkStop {
+  const raw = vendorReason?.trim();
+  if (!raw) return { type: 'stop', reason: fallback };
+  const mapped = mapping[raw] ?? mapping[raw.toLowerCase()];
+  return {
+    type: 'stop',
+    reason: mapped ?? (isStreamStopReason(raw) ? raw : fallback),
+    providerFinishReason: raw,
+  };
+}
+
+export const CONTENT_BLOCK_TYPES = [
+  'text',
+  'image',
+  'file',
+  'tool_use',
+  'tool_result',
+  'thinking',
+] as const;
+
+export type ContentBlockType = ContentBlock['type'];
+
+export function isContentBlockType(value: unknown): value is ContentBlockType {
+  return typeof value === 'string' && (CONTENT_BLOCK_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * The counterpart rule for content: a block type this build does not model is
+ * carried through as `vendor-raw` rather than dropped or coerced into text.
+ */
+export function isKnownContentBlock(block: unknown): block is ContentBlock {
+  return (
+    typeof block === 'object' &&
+    block !== null &&
+    isContentBlockType((block as { type?: unknown }).type)
+  );
+}
+
+export function vendorRawChunk(payload: unknown): StreamChunkVendorRaw {
+  return { type: 'vendor-raw', payload };
+}
+
 export type StreamChunk =
   | StreamChunkText
   | StreamChunkThinking

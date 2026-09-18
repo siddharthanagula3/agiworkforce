@@ -67,3 +67,25 @@ export {
 } from './sliding-window';
 
 export { parseWindowMilliseconds } from './window';
+
+export {
+  createWorkspaceKeyValueStore,
+  isWorkspaceScopedKey,
+  PERSONAL_WORKSPACE_SEGMENT,
+  purgeWorkspaceCache,
+  readWorkspaceScopedKey,
+  workspaceCacheKey,
+  workspaceCacheMatch,
+  workspaceCacheNamespace,
+  WORKSPACE_NAMESPACE_PREFIX,
+  type PurgeWorkspaceCacheOptions,
+  type WorkspaceCacheScope,
+} from './workspace-namespace';
+
+export {
+  defineCacheRegistry,
+  type CacheDescriptor,
+  type CacheInvalidationTrigger,
+  type CacheRegistry,
+  type CacheSourceOfTruth,
+} from './cache-registry';
