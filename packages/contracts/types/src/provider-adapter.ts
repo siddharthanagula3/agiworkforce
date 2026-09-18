@@ -486,3 +486,50 @@ export interface ProviderAdapter {
 }
 
 export type ProviderAdapterFactory = (config: ProviderAdapterConfig) => ProviderAdapter;
+
+/**
+ * Where a cancellation signal actually reaches. `external-side-effect` is the
+ * boundary nothing crosses: a request already accepted by a third party is not
+ * recalled by aborting the caller.
+ */
+export type CancellationScope =
+  'provider-stream' | 'background-worker' | 'external-side-effect' | 'device-runtime';
+
+/**
+ * The five questions a cancellable operation has to answer, as a value rather
+ * than as prose, so a surface can render the truth instead of guessing at it.
+ * A caller that shows "stopped" while an external write is still landing has
+ * told the user something false.
+ */
+export interface CancellationSemantics {
+  /** Torn down the moment the signal fires. */
+  immediatelyStopped: readonly string[];
+  /** Already committed elsewhere; the signal cannot recall it. */
+  cannotBeStopped: readonly string[];
+  /** Whether output produced before the stop is kept rather than discarded. */
+  partialOutputRetained: boolean;
+  /** Whether the stopped work resumes from where it stopped, or restarts. */
+  resumable: boolean;
+  propagatesTo: readonly CancellationScope[];
+}
+
+/**
+ * What `AbortSignal` on `ProviderAdapter.stream` buys. The socket closes and no
+ * further chunk is read, but tokens the provider already billed are billed, and
+ * a tool call the model asked for that a consumer already dispatched runs to
+ * completion on its own path.
+ */
+export const PROVIDER_STREAM_CANCELLATION: CancellationSemantics = {
+  immediatelyStopped: [
+    'the HTTP response body is closed and no further chunk is read',
+    'no further tool call is dispatched from this stream',
+  ],
+  cannotBeStopped: [
+    'tokens the provider has already generated and billed',
+    'a tool call already handed to its executor',
+    'a write a tool already committed to a third party',
+  ],
+  partialOutputRetained: true,
+  resumable: false,
+  propagatesTo: ['provider-stream'],
+};
