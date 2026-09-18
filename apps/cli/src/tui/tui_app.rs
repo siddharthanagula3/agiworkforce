@@ -3514,20 +3514,38 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/copy" => {
-            if let Some(last) = app.chat_messages.iter().rev().find(|m| m.role == ChatRole::Assistant) {
-                // Try to copy to clipboard
-                #[cfg(not(target_os = "android"))]
-                {
-                    match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(&last.text)) {
-                        Ok(()) => SlashResult::SystemMessage("Copied last response to clipboard.".to_string()),
-                        Err(_) => SlashResult::SystemMessage("Clipboard not available. Response:\n".to_string() + &last.text),
-                    }
+            let Some(target) = crate::claude_parity::CopyTarget::parse(arg) else {
+                return SlashResult::SystemMessage(format!(
+                    "Unknown /copy target: {arg}. Use one of: (nothing) | code | diff"
+                ));
+            };
+            let Some(last) = app
+                .chat_messages
+                .iter()
+                .rev()
+                .find(|m| m.role == ChatRole::Assistant)
+            else {
+                return SlashResult::SystemMessage("No assistant response to copy.".to_string());
+            };
+            let payload = match target.extract(&last.text) {
+                Ok(payload) => payload,
+                Err(message) => return SlashResult::SystemMessage(message.to_string()),
+            };
+            #[cfg(not(target_os = "android"))]
+            {
+                match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(&payload)) {
+                    Ok(()) => SlashResult::SystemMessage(format!(
+                        "Copied {} to clipboard ({} lines).",
+                        target.label(),
+                        payload.lines().count()
+                    )),
+                    Err(_) => SlashResult::SystemMessage(
+                        "Clipboard not available. Contents:\n".to_string() + &payload,
+                    ),
                 }
-                #[cfg(target_os = "android")]
-                SlashResult::SystemMessage("Clipboard not available on this platform.".to_string())
-            } else {
-                SlashResult::SystemMessage("No assistant response to copy.".to_string())
             }
+            #[cfg(target_os = "android")]
+            SlashResult::SystemMessage("Clipboard not available on this platform.".to_string())
         }
 
         "/login" => SlashResult::RunLogin,
@@ -4002,40 +4020,29 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     return SlashResult::SystemMessage(format!("Could not run git: {error}"));
                 }
             };
-            let changed_paths: Vec<String> = status_out
+            // Untracked files have no HEAD revision to diff against, so they
+            // are listed from the porcelain status and shown as additions.
+            let untracked: Vec<String> = status_out
                 .lines()
-                .filter_map(|line| {
-                    let path = line.get(3..)?;
-                    if path.is_empty() { None } else { Some(path.to_string()) }
-                })
+                .filter_map(|line| line.strip_prefix("?? "))
+                .map(str::to_string)
                 .collect();
-            if changed_paths.is_empty() {
+            let tracked_diff = std::process::Command::new("git")
+                .args(["diff", "HEAD"])
+                .output()
+                .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                .unwrap_or_default();
+            let parsed = crate::diff_model::Diff::parse(&tracked_diff);
+            let mut files: Vec<FileDiff> =
+                parsed.files.iter().map(FileDiff::from_model).collect();
+            files.extend(untracked.iter().map(|path| {
+                let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
+                file.kind = crate::diff_model::FileChangeKind::Added;
+                file
+            }));
+            if files.is_empty() {
                 SlashResult::SystemMessage("No changed files (working tree clean).".into())
             } else {
-                // For each changed file, run `git diff HEAD -- <path>` to get real hunks.
-                // Untracked files use an empty diff body (no HEAD revision to compare).
-                let files: Vec<FileDiff> = changed_paths.iter().map(|path| {
-                    let diff_text = std::process::Command::new("git")
-                        .args(["diff", "HEAD", "--", path])
-                        .output()
-                        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                        .unwrap_or_default();
-                    let mut additions = 0usize;
-                    let mut deletions = 0usize;
-                    let mut hunks: Vec<String> = Vec::new();
-                    for line in diff_text.lines() {
-                        if line.starts_with('+') && !line.starts_with("+++") {
-                            additions += 1;
-                            hunks.push(line.to_string());
-                        } else if line.starts_with('-') && !line.starts_with("---") {
-                            deletions += 1;
-                            hunks.push(line.to_string());
-                        } else if line.starts_with("@@") {
-                            hunks.push(line.to_string());
-                        }
-                    }
-                    FileDiff::new(path.as_str(), hunks, additions, deletions)
-                }).collect();
                 let view = DiffReviewView::new(files);
                 app.open_overlay(Box::new(view));
                 SlashResult::SystemMessage(

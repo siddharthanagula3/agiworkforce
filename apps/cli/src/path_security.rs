@@ -483,6 +483,87 @@ mod tests {
 }
 
 #[cfg(test)]
+mod repo_relative_tests {
+    use super::*;
+
+    #[test]
+    fn four_spellings_of_one_file_collapse_to_one_key() {
+        let workspace = tempfile::tempdir().expect("workspace tempdir");
+        let root = workspace.path().canonicalize().expect("canonical root");
+        std::fs::create_dir(root.join("src")).expect("create src");
+        let file = root.join("src").join("main.rs");
+        std::fs::write(&file, "fn main() {}").expect("write fixture");
+
+        let expected = PathBuf::from("src").join("main.rs");
+        for spelling in [
+            file.clone(),
+            PathBuf::from("src/main.rs"),
+            PathBuf::from("./src/main.rs"),
+            PathBuf::from("src/../src/main.rs"),
+        ] {
+            assert_eq!(
+                repo_relative_to(&spelling, &root),
+                expected,
+                "spelling {} did not normalize",
+                spelling.display()
+            );
+        }
+    }
+
+    /// One assertion for either filesystem: two casings of one file give one
+    /// key, two distinct files stay apart.
+    #[test]
+    fn casing_follows_the_filesystem_the_test_is_running_on() {
+        let workspace = tempfile::tempdir().expect("workspace tempdir");
+        let root = workspace.path().canonicalize().expect("canonical root");
+        std::fs::create_dir(root.join("src")).expect("create src");
+        std::fs::write(root.join("src").join("Main.rs"), "fn main() {}").expect("write fixture");
+
+        let lower = repo_relative_to(Path::new("SRC/MAIN.RS"), &root);
+        let exact = repo_relative_to(Path::new("src/Main.rs"), &root);
+
+        if filesystem_is_case_insensitive(&root) {
+            assert_eq!(
+                lower, exact,
+                "one file reached by two casings must give one key"
+            );
+        } else {
+            assert_ne!(
+                lower, exact,
+                "distinct files must not collapse onto one key"
+            );
+        }
+    }
+
+    /// A path that does not exist yet still has to be nameable.
+    #[test]
+    fn an_absent_path_is_still_relative_to_the_root() {
+        let workspace = tempfile::tempdir().expect("workspace tempdir");
+        let root = workspace.path().canonicalize().expect("canonical root");
+
+        assert_eq!(
+            repo_relative_to(Path::new("does/not/exist.rs"), &root),
+            PathBuf::from("does").join("not").join("exist.rs")
+        );
+    }
+
+    #[test]
+    fn a_path_outside_the_root_keeps_its_absolute_form() {
+        let workspace = tempfile::tempdir().expect("workspace tempdir");
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        let root = workspace.path().canonicalize().expect("canonical root");
+        let file = outside
+            .path()
+            .canonicalize()
+            .expect("canonical outside")
+            .join("x.txt");
+        std::fs::write(&file, "x").expect("write fixture");
+
+        assert_eq!(repo_relative_to(&file, &root), file);
+    }
+}
+
+#[cfg(test)]
 mod agent_instruction_denylist_tests {
     use super::*;
     use std::fs;
@@ -670,6 +751,100 @@ mod agent_instruction_denylist_tests {
                 .is_ok()
         );
     }
+}
+
+/// True when `dir`'s filesystem folds case. Probed, not assumed from
+/// `cfg!(target_os)`: one machine can host both kinds.
+pub fn filesystem_is_case_insensitive(dir: &Path) -> bool {
+    let probe = dir.join(".agi-case-probe");
+    if std::fs::write(&probe, b"").is_err() {
+        return cfg!(any(target_os = "macos", target_os = "windows"));
+    }
+    let upper = dir.join(".AGI-CASE-PROBE");
+    let insensitive = upper.exists();
+    let _ = std::fs::remove_file(&probe);
+    insensitive
+}
+
+/// The one internal spelling of a path: canonical, then relative to the
+/// workspace root, so routes to the same file give one key.
+pub fn repo_relative(path: &Path) -> PathBuf {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    repo_relative_to(path, &cwd)
+}
+
+pub fn repo_relative_to(path: &Path, root: &Path) -> PathBuf {
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        canonical_root.join(path)
+    };
+    let resolved = resolve_existing_prefix(&absolute);
+    resolved
+        .strip_prefix(&canonical_root)
+        .map(Path::to_path_buf)
+        .unwrap_or(resolved)
+}
+
+/// Existing paths close to one that does not exist, read from the deepest real
+/// ancestor, so a refusal can name what is actually there.
+pub fn nearest_existing_paths(path: &Path, limit: usize) -> Vec<PathBuf> {
+    let Some(parent) = deepest_existing_ancestor(path) else {
+        return Vec::new();
+    };
+    let Some(missing) = path
+        .strip_prefix(&parent)
+        .ok()
+        .and_then(|rest| rest.components().next())
+        .map(|c| c.as_os_str().to_string_lossy().to_lowercase())
+    else {
+        return Vec::new();
+    };
+
+    let Ok(entries) = std::fs::read_dir(&parent) else {
+        return Vec::new();
+    };
+    let mut scored: Vec<(usize, PathBuf)> = entries
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            let score = name_similarity(&missing, &name)?;
+            Some((score, entry.path()))
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    scored
+        .into_iter()
+        .take(limit)
+        .map(|(_, path)| path)
+        .collect()
+}
+
+fn deepest_existing_ancestor(path: &Path) -> Option<PathBuf> {
+    path.ancestors()
+        .find(|ancestor| ancestor.is_dir())
+        .map(Path::to_path_buf)
+}
+
+/// Higher is closer. `None` means not close enough to be worth naming.
+fn name_similarity(wanted: &str, candidate: &str) -> Option<usize> {
+    if wanted == candidate {
+        return Some(1000);
+    }
+    let stem = |name: &str| name.rsplit_once('.').map(|(s, _)| s.to_string());
+    if stem(wanted).is_some_and(|s| stem(candidate).is_some_and(|c| s == c)) {
+        return Some(900);
+    }
+    if candidate.starts_with(wanted) || wanted.starts_with(candidate) {
+        return Some(500 + wanted.len().min(candidate.len()));
+    }
+    let shared = wanted
+        .chars()
+        .zip(candidate.chars())
+        .take_while(|(a, b)| a == b)
+        .count();
+    (shared >= 3).then_some(shared)
 }
 
 /// The path as the user reads it: relative to the working directory when the

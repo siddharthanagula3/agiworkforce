@@ -405,48 +405,33 @@ pub(super) async fn execute_advisor(
 // Todo tools
 // ---------------------------------------------------------------------------
 
-static TODO_STORE: std::sync::LazyLock<tokio::sync::Mutex<Vec<TodoItem>>> =
-    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(Vec::new()));
+use crate::features::plan::plan_mode::{TodoItem, TodoList};
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-struct TodoItem {
-    content: String,
-    status: String,
-    priority: String,
+/// Keyed by workspace, never a process global: the app-server hosts concurrent
+/// sessions whose workspaces differ from the process cwd.
+fn todo_scope(workspace_root: Option<&std::path::Path>) -> std::path::PathBuf {
+    workspace_root
+        .map(|root| root.to_path_buf())
+        .unwrap_or_else(|| {
+            std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
+        })
 }
 
-pub(super) async fn execute_todo_read() -> Result<ToolResult> {
-    let todos = TODO_STORE.lock().await;
-    if todos.is_empty() {
-        return Ok(ToolResult {
-            tool_name: "todo_read".into(),
-            success: true,
-            output: "No todos. Use todo_write to create a task list.".into(),
-        });
-    }
-    let mut lines = Vec::new();
-    for (i, todo) in todos.iter().enumerate() {
-        let marker = match todo.status.as_str() {
-            "completed" => "[x]",
-            "in_progress" => "[~]",
-            _ => "[ ]",
-        };
-        lines.push(format!(
-            "{} {}. [{}] {}",
-            marker,
-            i + 1,
-            todo.priority,
-            todo.content
-        ));
-    }
+pub(super) async fn execute_todo_read(
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ToolResult> {
+    let todos = TodoList::load_for_workspace(&todo_scope(workspace_root));
     Ok(ToolResult {
         tool_name: "todo_read".into(),
         success: true,
-        output: lines.join("\n"),
+        output: todos.render(),
     })
 }
 
-pub(super) async fn execute_todo_write(args: &HashMap<String, String>) -> Result<ToolResult> {
+pub(super) async fn execute_todo_write(
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ToolResult> {
     let todos_json = match args.get("todos") {
         Some(j) => j,
         None => {
@@ -457,15 +442,25 @@ pub(super) async fn execute_todo_write(args: &HashMap<String, String>) -> Result
             });
         }
     };
-    let new_todos: Vec<TodoItem> = serde_json::from_str(todos_json)
+    let items: Vec<TodoItem> = serde_json::from_str(todos_json)
         .map_err(|e| anyhow::anyhow!("Invalid todos JSON: {}", e))?;
-    let count = new_todos.len();
-    let mut store = TODO_STORE.lock().await;
-    *store = new_todos;
+    let list = TodoList { items };
+    let scope = todo_scope(workspace_root);
+    if let Err(error) = list.save_for_workspace(&scope) {
+        return Ok(ToolResult {
+            tool_name: "todo_write".into(),
+            success: false,
+            output: format!("Could not persist the todo list: {error}"),
+        });
+    }
     Ok(ToolResult {
         tool_name: "todo_write".into(),
         success: true,
-        output: format!("Updated todo list ({} items)", count),
+        output: format!(
+            "Updated todo list ({} items)\n{}",
+            list.items.len(),
+            list.render()
+        ),
     })
 }
 
