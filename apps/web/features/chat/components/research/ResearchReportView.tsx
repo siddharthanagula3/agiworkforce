@@ -22,6 +22,7 @@ import {
   ExternalLink,
   FileCode,
   FolderPlus,
+  Library,
   Globe,
   List,
   SendHorizontal,
@@ -299,6 +300,13 @@ interface ResearchReportViewProps {
    */
   onAskFollowUp?: (prompt: string) => void;
   /**
+   * Host-injected save into the account's library, which is a different place
+   * from the artifacts panel and from a project's sources: the report becomes
+   * a file of its own that outlives this conversation. Supplied only by hosts
+   * that can write to the library.
+   */
+  onSaveToLibrary?: (file: File) => Promise<void>;
+  /**
    * Injected in tests; defaults to the project-sources upload the Library and
    * the artifact panel already use, so a report saved into a project becomes
    * one of that project's sources rather than a second kind of attachment.
@@ -312,6 +320,7 @@ export function ResearchReportView({
   exportService,
   onCreateArtifact,
   onAskFollowUp,
+  onSaveToLibrary,
   saveToProject,
 }: ResearchReportViewProps) {
   const [exportingFormat, setExportingFormat] = useState<DocumentFormat | null>(null);
@@ -320,6 +329,8 @@ export function ResearchReportView({
   const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedProjectName, setSavedProjectName] = useState<string | null>(null);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
   const projects = useChatProjectStore((s) => s.projects);
   const service = exportService ?? documentExportService;
   const saveReport = saveToProject ?? defaultSaveReportToProject;
@@ -401,6 +412,23 @@ export function ResearchReportView({
     [markdown, report, saveReport],
   );
 
+  const handleSaveToLibrary = useCallback(async () => {
+    if (!onSaveToLibrary) return;
+    setSavingToLibrary(true);
+    setSaveError(null);
+    setSavedToLibrary(false);
+    try {
+      await onSaveToLibrary(
+        new File([markdown], `${researchReportFilename(report)}.md`, { type: 'text/markdown' }),
+      );
+      setSavedToLibrary(true);
+    } catch (error) {
+      setSaveError(toUserMessage(error, 'That report could not be saved to your library'));
+    } finally {
+      setSavingToLibrary(false);
+    }
+  }, [markdown, onSaveToLibrary, report]);
+
   const askFollowUp = useCallback(() => {
     const question = followUp.trim();
     if (!question || !onAskFollowUp) return;
@@ -443,6 +471,20 @@ export function ResearchReportView({
             >
               <FileCode className="h-3 w-3" aria-hidden="true" />
               Artifact
+            </Button>
+          )}
+          {onSaveToLibrary && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              disabled={savingToLibrary}
+              onClick={() => void handleSaveToLibrary()}
+              data-testid="research-report-save-to-library"
+              aria-label="Save this report to your library"
+            >
+              <Library className="h-3 w-3" aria-hidden="true" />
+              {savingToLibrary ? 'Saving…' : savedToLibrary ? 'In your library' : 'Library'}
             </Button>
           )}
           {projects.length > 0 && (
@@ -526,6 +568,16 @@ export function ResearchReportView({
           className="border-b border-border/30 bg-muted/30 px-4 py-2 text-xs text-muted-foreground"
         >
           Saved to {savedProjectName}. It is one of that project&rsquo;s sources now.
+        </p>
+      )}
+
+      {savedToLibrary && (
+        <p
+          role="status"
+          data-testid="research-report-saved-to-library"
+          className="border-b border-border/30 bg-muted/30 px-4 py-2 text-xs text-muted-foreground"
+        >
+          Saved to your library. It is a file of its own now, and it outlives this conversation.
         </p>
       )}
 

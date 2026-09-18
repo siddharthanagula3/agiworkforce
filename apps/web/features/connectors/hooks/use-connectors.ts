@@ -23,6 +23,7 @@ export interface ConnectorStatus {
   toolConnectorIds: Record<string, string>;
   grantedScopes: Record<string, string[]>;
   needsReauthorizationIds: Set<string>;
+  notRespondingIds: Set<string>;
   availableIds: Set<string>;
   setupRequirements: Record<string, ConnectorSetupRequirementView>;
   loading: boolean;
@@ -43,6 +44,7 @@ interface ConnectorsResponse {
     name?: string;
     scopes?: string[];
     needsReauthorization?: boolean;
+    health?: string;
   }>;
   available?: string[];
   setup?: Record<string, ConnectorSetupRequirementView>;
@@ -174,7 +176,7 @@ interface ConnectorIdentity {
   documentationUrl: string | null;
 }
 
-function connectorDisplayName(id: string): string {
+export function connectorDisplayName(id: string): string {
   return CONNECTORS.find((c) => c.id === id)?.name ?? FALLBACK_CONNECTOR_NAME;
 }
 
@@ -303,6 +305,7 @@ export function useConnectors(): ConnectorStatus {
   const [toolConnectorIds, setToolConnectorIds] = useState<Record<string, string>>({});
   const [grantedScopes, setGrantedScopes] = useState<Record<string, string[]>>({});
   const [needsReauthorizationIds, setNeedsReauthorizationIds] = useState<Set<string>>(new Set());
+  const [notRespondingIds, setNotRespondingIds] = useState<Set<string>>(new Set());
   const [availableIds, setAvailableIds] = useState<Set<string>>(new Set());
   const [setupRequirements, setSetupRequirements] = useState<
     Record<string, ConnectorSetupRequirementView>
@@ -329,6 +332,7 @@ export function useConnectors(): ConnectorStatus {
       setToolConnectorIds({});
       setGrantedScopes({});
       setNeedsReauthorizationIds(new Set());
+      setNotRespondingIds(new Set());
       setAvailableIds(new Set());
       setSetupRequirements({});
       setLoading(false);
@@ -351,12 +355,16 @@ export function useConnectors(): ConnectorStatus {
           const scopeMap: Record<string, string[]> = {};
           const toolIdMap: Record<string, string> = {};
           const staleIds = new Set<string>();
+          const downIds = new Set<string>();
           for (const c of json.connectors) {
             if (c.connectedAt) atMap[c.connectorId] = c.connectedAt;
             sourceMap[c.connectorId] = c.source ?? 'user';
             if (c.source === 'custom' && c.name) nameMap[c.connectorId] = c.name;
             if (c.scopes) scopeMap[c.connectorId] = c.scopes;
-            if (c.needsReauthorization) staleIds.add(c.connectorId);
+            if (c.needsReauthorization || c.health === 'needs-reauthorization') {
+              staleIds.add(c.connectorId);
+            }
+            if (c.health === 'not-responding') downIds.add(c.connectorId);
             toolIdMap[c.connectorId] = c.toolConnectorId ?? c.connectorId;
           }
           setConnectedAtMap(atMap);
@@ -365,6 +373,7 @@ export function useConnectors(): ConnectorStatus {
           setToolConnectorIds(toolIdMap);
           setGrantedScopes(scopeMap);
           setNeedsReauthorizationIds(staleIds);
+          setNotRespondingIds(downIds);
           setAvailableIds(new Set(json.available ?? []));
           setSetupRequirements(json.setup ?? {});
           setError(null);
@@ -526,6 +535,7 @@ export function useConnectors(): ConnectorStatus {
     toolConnectorIds,
     grantedScopes,
     needsReauthorizationIds,
+    notRespondingIds,
     availableIds,
     setupRequirements,
     loading,

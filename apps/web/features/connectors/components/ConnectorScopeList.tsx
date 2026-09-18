@@ -1,7 +1,10 @@
 'use client';
 
 import { cn } from '@shared/lib/utils';
-import { getConnectorScopeDescriptions } from '@/lib/connectors/scope-descriptions';
+import {
+  getConnectorScopeDescriptions,
+  summarizeConnectorScopes,
+} from '@/lib/connectors/scope-descriptions';
 
 const ACCESS_BADGE_LABEL: Record<'read' | 'write', string> = { read: 'Read', write: 'Write' };
 
@@ -12,6 +15,7 @@ const ACCESS_BADGE_CLASS: Record<'read' | 'write', string> = {
 
 export function ConnectorScopeList({ connectorId }: { connectorId: string }) {
   const descriptions = getConnectorScopeDescriptions(connectorId);
+  const summary = summarizeConnectorScopes(connectorId);
 
   if (descriptions.status === 'none') return null;
 
@@ -45,6 +49,7 @@ export function ConnectorScopeList({ connectorId }: { connectorId: string }) {
       aria-label="Permissions requested"
     >
       <h4 className="text-xs font-semibold text-foreground">Permissions requested</h4>
+      {summary ? <p className="text-xs text-muted-foreground">{summary.sentence}</p> : null}
       <ul className="space-y-1.5">
         {descriptions.entries.map((entry) => (
           <li key={entry.scope} className="flex items-start justify-between gap-2 text-xs">

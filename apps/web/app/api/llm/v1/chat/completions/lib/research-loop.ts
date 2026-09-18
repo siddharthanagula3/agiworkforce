@@ -47,10 +47,13 @@ import 'server-only';
 
 import type {
   Citation,
+  ResearchDeliverableSpec,
+  ResearchGap,
   ResearchReportStatus,
   ResearchStep,
   ThinkingBlock,
 } from '@agiworkforce/types';
+import { DEFAULT_RESEARCH_DELIVERABLE } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
 import { publisherFromTitle, rankSources } from '@agiworkforce/search';
@@ -191,6 +194,8 @@ export interface ResearchRunReport {
   citations: Citation[];
   steps: ResearchStep[];
   keyFindings: string[];
+  gaps: ResearchGap[];
+  deliverable: ResearchDeliverableSpec;
   status: ResearchReportStatus;
   sourcesConsulted: number;
   durationMs: number;
@@ -265,6 +270,12 @@ export interface ResearchLoopOptions {
    * handle of its own, the same reason `persistReport` is injected.
    */
   fileSources?: readonly ResearchFileSource[];
+  /**
+   * What the run must produce, chosen before it starts. It carries the run's
+   * explicit completion criteria (how many sources are enough, whether an
+   * unproductive round ends the gathering phase) as well as the report's shape.
+   */
+  deliverable?: ResearchDeliverableSpec;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -363,6 +374,89 @@ export function researchPlanEvent(steps: ResearchStep[], responseModel: string):
     ],
     model: responseModel,
   });
+}
+
+/**
+ * Build the additive `x_research_gaps` SSE event. Same last-write-wins contract
+ * as the plan event: the whole list every time.
+ */
+export function researchGapsEvent(gaps: readonly ResearchGap[], responseModel: string): string {
+  return sseData({
+    choices: [
+      {
+        delta: {
+          x_research_gaps: {
+            gaps: gaps.map((gap) => ({
+              id: gap.id,
+              question: gap.question,
+              status: gap.status,
+              reason: gap.reason,
+            })),
+          },
+        },
+        index: 0,
+      },
+    ],
+    model: responseModel,
+  });
+}
+
+/** A planned question counts as answered when this much of it reaches the report. */
+export const GAP_COVERAGE_THRESHOLD = 0.5;
+
+/**
+ * The gap list is the plan measured against the report that was actually
+ * written, so it cannot flatter the run: a step nobody searched is open, and so
+ * is a step that was searched but left no trace in the report.
+ */
+export function deriveResearchGaps(
+  plan: readonly ResearchStep[],
+  reportContent: string,
+): ResearchGap[] {
+  const reportTokens = queryTokens(reportContent);
+  const gaps: ResearchGap[] = [];
+  for (const step of plan) {
+    if (step.type !== 'search') continue;
+    if (step.status === 'dropped' || step.status === 'pending' || step.status === 'failed') {
+      gaps.push({
+        id: step.id,
+        question: step.description,
+        status: 'open',
+        reason: step.note ?? `This planned search ended as ${step.status} and was never answered.`,
+      });
+      continue;
+    }
+    const tokens = [...queryTokens(step.description)];
+    const covered = tokens.filter((token) => reportTokens.has(token)).length;
+    const coverage = tokens.length === 0 ? 1 : covered / tokens.length;
+    gaps.push(
+      coverage >= GAP_COVERAGE_THRESHOLD
+        ? {
+            id: step.id,
+            question: step.description,
+            status: 'closed',
+            reason: 'Answered in the report.',
+          }
+        : {
+            id: step.id,
+            question: step.description,
+            status: 'open',
+            reason: 'Searched, but the report does not answer it.',
+          },
+    );
+  }
+  return gaps;
+}
+
+/**
+ * A gathering round that brought back nothing the run did not already have is
+ * the point where another identical round buys nothing. This is the
+ * diminishing-returns rule the stop condition uses, and it is measured, not
+ * declared by the model.
+ */
+export function hasDiminishingReturns(newSourcesPerRound: readonly number[]): boolean {
+  const latest = newSourcesPerRound.at(-1);
+  return newSourcesPerRound.length > 0 && latest === 0;
 }
 
 /**
@@ -972,10 +1066,26 @@ function gatheringDirective(
   );
 }
 
+const DELIVERABLE_DEPTH_DIRECTIVE: Record<ResearchDeliverableSpec['depth'], string> = {
+  'executive-summary':
+    ' Deliverable: an executive summary. Open with the answer in no more than 200 words, then at most three short sections carrying only what changes a decision. Do not write a long report.',
+  'full-report':
+    ' Deliverable: a full report. Structure it with a brief executive summary and clearly labeled sections.',
+};
+
+const DELIVERABLE_FORMAT_DIRECTIVE: Record<ResearchDeliverableSpec['format'], string> = {
+  prose: '',
+  'prose-with-tables':
+    ' Every comparison of three or more options, figures or dates goes in a markdown table, with one column citing the source for each row.',
+  'bullet-brief':
+    ' Write it as bullets, one claim per bullet, each with its citation. No paragraphs.',
+};
+
 function synthesisDirective(
   sources: SourceAggregator,
   cutShortReason: string | null,
   droppedSteps: readonly ResearchStep[] = [],
+  deliverable: ResearchDeliverableSpec = DEFAULT_RESEARCH_DELIVERABLE,
 ): string {
   const sourceList =
     sources.size > 0 ? `\n\nSources gathered (cite as [n]):\n${sources.toPromptList()}` : '';
@@ -993,7 +1103,8 @@ function synthesisDirective(
       : '';
   return (
     'Synthesis phase: write the final research report now, based on your research notes above.' +
-    ' Structure it with a brief executive summary and clearly labeled sections.' +
+    DELIVERABLE_DEPTH_DIRECTIVE[deliverable.depth] +
+    DELIVERABLE_FORMAT_DIRECTIVE[deliverable.format] +
     ' Inline-cite every factual claim with a bracketed number, e.g. [1], matching the numbered source list below when present.' +
     ' Do not end with a Sources or References list and never paste a raw URL into the report:' +
     ' the app renders the numbered sources beside the report from the numbers you cite.' +
@@ -1296,6 +1407,7 @@ export async function* runResearchLoop(
    * The live research plan (CAP-045 slice 2). Completed steps carried in from a
    * retry are restored verbatim; new steps come from this run's planning turn.
    */
+  const deliverable: ResearchDeliverableSpec = options.deliverable ?? DEFAULT_RESEARCH_DELIVERABLE;
   const plan: ResearchStep[] = (options.priorSteps ?? [])
     .filter((step) => step.status === 'completed')
     .map((step) => ({ ...step }));
@@ -1316,6 +1428,8 @@ export async function* runResearchLoop(
     }));
   plan.push(...approvedPlan);
   const planEvent = (): Uint8Array => encoder.encode(researchPlanEvent(plan, responseModel));
+  const gapEvent = (content: string): Uint8Array =>
+    encoder.encode(researchGapsEvent(deriveResearchGaps(plan, content), responseModel));
 
   /** Move every step in `ids` to `status`, stamping honest timing. */
   const markPlanSteps = (ids: string[], status: ResearchStep['status']): void => {
@@ -1383,6 +1497,8 @@ export async function* runResearchLoop(
         citations: sources.toCitations(new Date(now()).toISOString()),
         steps: plan.map((step) => ({ ...step })),
         keyFindings: outline.keyFindings,
+        gaps: deriveResearchGaps(plan, content),
+        deliverable,
         status,
         sourcesConsulted: sources.size,
         durationMs: Math.max(0, now() - startedAt),
@@ -1928,9 +2044,13 @@ export async function* runResearchLoop(
      */
     let lastTurnError: string | null = null;
 
+    /** Sources this round added that the run did not already hold. */
+    const newSourcesPerRound: number[] = [];
+
     // ── Gathering rounds ──
     for (let round = 1; round <= maxGatherRounds; round++) {
       iteration = planningTurnEnabled ? round + 1 : round;
+      const sourcesBeforeRound = sources.size;
 
       // Plan bookkeeping. Round 1 executes the planned queries as one batch:
       // provider-native search does not attribute results back to an individual
@@ -2067,6 +2187,7 @@ export async function* runResearchLoop(
       }
 
       totalSearches += roundSearchEvents;
+      newSourcesPerRound.push(Math.max(0, sources.size - sourcesBeforeRound));
       await sources.enrichTitles();
       yield encoder.encode(toolStatusEvent('completed', responseModel, round));
 
@@ -2114,13 +2235,29 @@ export async function* runResearchLoop(
       // model family emitted the marker after a single round and the loop
       // stopped there while another ran three, which made coverage a property
       // of the provider rather than of the question.
-      if (turn.canonicalText.includes(READY_MARKER) && pendingPlannedQueries().length === 0) break;
+      if (
+        turn.canonicalText.includes(READY_MARKER) &&
+        pendingPlannedQueries().length === 0 &&
+        sources.size >= deliverable.minSources
+      ) {
+        break;
+      }
       if (totalSearches >= maxSearches) {
         cutShortReason = 'the search budget was reached';
         break;
       }
       if (now() - startedAt >= budgetMs) {
         cutShortReason = 'the time budget was reached';
+        break;
+      }
+      // Diminishing returns, measured: a round that added no source the run did
+      // not already hold means another round of the same searching buys nothing.
+      if (
+        deliverable.stopWhenNoNewSources &&
+        pendingPlannedQueries().length === 0 &&
+        hasDiminishingReturns(newSourcesPerRound)
+      ) {
+        cutShortReason = 'a further round of searching stopped finding new sources';
         break;
       }
     }
@@ -2165,6 +2302,7 @@ export async function* runResearchLoop(
               sources,
               cutShortReason,
               plan.filter((step) => step.status === 'dropped'),
+              deliverable,
             ),
           },
         ],
@@ -2226,6 +2364,7 @@ export async function* runResearchLoop(
       }
       markPlanSteps([synthesisStepId], 'completed');
       yield planEvent();
+      yield gapEvent(synthesis.canonicalText);
       await persistRun('completed', synthesis.canonicalText);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

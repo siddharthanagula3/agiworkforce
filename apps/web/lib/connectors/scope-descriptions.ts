@@ -268,18 +268,51 @@ export function describeConnectorScope(scope: string): ScopeDescription | null {
   return SCOPE_DESCRIPTIONS[canonicalConnectorScope(scope)] ?? null;
 }
 
-const UNDESCRIBED_SCOPE_FALLBACK: ScopeDescription = {
-  sentence: 'This permission has not been described yet.',
-  access: WRITE,
-};
+/**
+ * An undescribed scope names itself and is counted as write. A reader cannot
+ * weigh "this permission has not been described yet"; the raw scope is at least
+ * something they can look up at the provider.
+ */
+function undescribedScope(scope: string): ScopeDescription {
+  return {
+    sentence: `Grants the permission the provider calls "${scope}". It has no plain-language description here yet, so treat it as able to change things.`,
+    access: WRITE,
+  };
+}
 
 export function getConnectorScopeDescriptions(connectorId: string): ConnectorScopeDescriptions {
   const ceiling = getConnectorScopeCeiling(connectorId);
   if (ceiling === null) return { status: 'none' };
   if (ceiling === SCOPE_REVIEW_PENDING) return { status: 'pending' };
   const entries = ceiling.map((scope) => {
-    const description = describeConnectorScope(scope) ?? UNDESCRIBED_SCOPE_FALLBACK;
+    const description = describeConnectorScope(scope) ?? undescribedScope(scope);
     return { scope, ...description };
   });
   return { status: 'known', entries };
+}
+
+export interface ConnectorScopeSummary {
+  readonly readCount: number;
+  readonly writeCount: number;
+  readonly sentence: string;
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/**
+ * The one line a reader needs before the list: how much of this is reading and
+ * how much of it can change their account.
+ */
+export function summarizeConnectorScopes(connectorId: string): ConnectorScopeSummary | null {
+  const descriptions = getConnectorScopeDescriptions(connectorId);
+  if (descriptions.status !== 'known' || descriptions.entries.length === 0) return null;
+  const readCount = descriptions.entries.filter((entry) => entry.access === READ).length;
+  const writeCount = descriptions.entries.length - readCount;
+  const sentence =
+    writeCount === 0
+      ? `Read-only: ${plural(readCount, 'permission')}, none of which can change anything in your account.`
+      : `${plural(readCount, 'read permission')} and ${plural(writeCount, 'permission')} that can change things in your account. Nothing outside this list is granted.`;
+  return { readCount, writeCount, sentence };
 }
