@@ -6,6 +6,7 @@ import type {
   ToolApprovalDecisionWire,
 } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
+import type { SiteToolEffect } from './features/tools/siteToolRegistry';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
@@ -685,6 +686,7 @@ export interface WebMCPToolInfo {
   description: string;
   inputSchema?: Record<string, unknown>;
   source: 'imperative' | 'declarative';
+  effect: SiteToolEffect;
 }
 
 export interface WebMCPDiscoverToolsMessage extends BaseMessage {

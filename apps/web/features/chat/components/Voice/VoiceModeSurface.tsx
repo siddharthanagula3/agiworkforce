@@ -12,8 +12,11 @@ import {
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
+import { VoiceCaptions } from './VoiceCaptions';
 import { VoiceChatDock } from './VoiceChatDock';
 import { VoiceComposer } from './VoiceComposer';
+import { voiceStatusAnnouncement } from './voice-announcements';
+import { appendVoiceCaption, type VoiceCaptionLine } from './voice-captions';
 import { VoiceOrb } from './VoiceOrb';
 import { VoiceSettingsModal } from './VoiceSettingsModal';
 
@@ -59,12 +62,20 @@ export function VoiceModeSurface({
   onOpenConnectors,
   onIntelligenceChange,
 }: VoiceModeSurfaceProps) {
+  const handleTranscript = useCallback(
+    (id: string, turn: VoiceTranscriptTurn) => {
+      setCaptions((lines) => appendVoiceCaption(lines, turn));
+      onTranscript(id, turn);
+    },
+    [onTranscript],
+  );
+
   const session = useVoiceSession({
     turnActive,
     conversationId,
     onSend,
     onEnsureConversation,
-    onTranscript,
+    onTranscript: handleTranscript,
   });
   const focusMode = useVoiceSessionStore((store) => store.focusMode);
   const toggleFocusMode = useVoiceSessionStore((store) => store.toggleFocusMode);
@@ -80,9 +91,16 @@ export function VoiceModeSurface({
   const setVoice = useVoiceSessionStore((store) => store.setVoice);
 
   const [typed, setTyped] = useState('');
+  const [captionsOpen, setCaptionsOpen] = useState(false);
+  const [captions, setCaptions] = useState<readonly VoiceCaptionLine[]>([]);
 
   const { state, exit, toggleMute, cancelPending, submitTyped, retry } = session;
   const { status, muted, pendingUtterance, error } = state;
+  const announcement = voiceStatusAnnouncement({
+    status,
+    muted,
+    backendBusy: session.backendBusy,
+  });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -195,17 +213,24 @@ export function VoiceModeSurface({
         {orb}
       </div>
 
+      <p className="sr-only" role="status" aria-live="polite" data-testid="voice-live-status">
+        {announcement}
+      </p>
+
       {notice}
       {sendingChip}
+      {captionsOpen ? <VoiceCaptions lines={captions} /> : null}
 
       <VoiceComposer
         value={typed}
         muted={muted}
+        captionsOpen={captionsOpen}
         deviceName={session.deviceName}
         dockOpen={dockOpen}
         onChange={setTyped}
         onSubmit={handleSubmitTyped}
         onToggleMute={toggleMute}
+        onToggleCaptions={() => setCaptionsOpen((open) => !open)}
         onToggleDock={() => setDockOpen(!dockOpen)}
         onExit={exit}
       />

@@ -44,3 +44,15 @@
 /docs/security/ @siddhartha
 /packages/contracts/compliance/ @siddhartha
 /packages/contracts/licensing/ @siddhartha
+
+# Upstream dependency integrations. Each path is the only module allowed to talk
+# to that vendor; packages/contracts/types/src/dependency-registry.json names the
+# same owner, what depends on it, and what fails when it is down.
+/packages/platform/data-layer/ @siddhartha
+/packages/platform/key-value/ @siddhartha
+/packages/platform/identity/ @siddhartha
+/packages/platform/object-storage/ @siddhartha
+/apps/web/lib/billing/ @siddhartha
+/apps/web/lib/e2b/ @siddhartha
+/apps/web/lib/observability/ @siddhartha
+/apps/web/lib/services/notification-email-service.ts @siddhartha

@@ -6,7 +6,12 @@ import {
   creditsFromMicrousd,
   microusdFromCents,
   resolveFeatureRate,
+  visualUsageCharge,
+  visualUsageLines,
+  VISUAL_USAGE_FEATURE,
+  VISUAL_USAGE_OPERATION,
   type RateCardFeature,
+  type VisualSessionUsage,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
@@ -36,6 +41,7 @@ export const COGS_CAPABILITIES = [
   'code_compute',
   'connector',
   'artifact',
+  'visual',
 ] as const;
 
 export const COGS_UNIT_BASES = [
@@ -175,6 +181,7 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   code_compute: 'code_compute',
   connector: 'connector',
   artifact: 'artifact',
+  [VISUAL_USAGE_OPERATION]: 'visual',
 };
 
 const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
@@ -197,6 +204,7 @@ const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
   code_compute: 'minute',
   connector: 'request',
   artifact: 'gibibyte_month',
+  visual: 'minute',
 };
 
 /**
@@ -285,6 +293,8 @@ export function resolveCogsUnits(
     case 'work_compute':
     case 'code_compute':
       return { unitBasis, units: numeric(usage['computeMinutes']) ?? 0 };
+    case 'visual':
+      return { unitBasis, units: numeric(usage['visualMinutes']) ?? 0 };
     default: {
       const input = numeric(usage['promptTokens']) ?? numeric(usage['inputTokens']) ?? 0;
       const output = numeric(usage['completionTokens']) ?? numeric(usage['outputTokens']) ?? 0;
@@ -837,6 +847,62 @@ export async function importStripeCogsAdjustments(input: {
     adjustmentsRecorded,
     discountsRecorded,
   };
+}
+
+export const VISUAL_SESSION_COST_SOURCE = 'visual_session';
+
+/**
+ * Settles a live camera or screen-share session on its own per-minute lines.
+ * Frames sent into a turn are priced with that turn's tokens; these rows carry
+ * the session itself, which no token count measures.
+ */
+export async function recordVisualSessionCost(input: {
+  userId: string;
+  organizationId?: string | null;
+  workspaceId?: string | null;
+  sessionId: string;
+  provider: string;
+  model?: string | null;
+  surface?: string | null;
+  usages: readonly VisualSessionUsage[];
+  db?: DatabaseAdapter;
+}): Promise<void> {
+  for (const line of visualUsageLines(input.usages)) {
+    const charge = visualUsageCharge(line);
+    await recordSettledProviderCost({
+      userId: input.userId,
+      organizationId: input.organizationId ?? null,
+      workspaceId: input.workspaceId ?? null,
+      provider: input.provider,
+      model: input.model ?? null,
+      actualCostCents:
+        charge.providerCogsMicrousd === null
+          ? 0
+          : centsFromMicrousdCeil(charge.providerCogsMicrousd),
+      // Keyed on the session and the source, so a retried close collides rather
+      // than counting the same minutes twice.
+      sourceRef: `${VISUAL_SESSION_COST_SOURCE}:${input.sessionId}:${line.source}`,
+      taskOutcome: 'delivered',
+      taskRef: `${VISUAL_SESSION_COST_SOURCE}:${input.sessionId}`,
+      feature: line.feature,
+      sessionId: input.sessionId,
+      surface: input.surface ?? null,
+      customerCanonicalMicrousd: charge.customerMicrousd,
+      usage: {
+        operation: VISUAL_USAGE_OPERATION,
+        visualSource: line.source,
+        visualMinutes: line.minutes,
+        sampledFrames: line.sampledFrames,
+        sentFrames: line.sentFrames,
+      },
+      ...(input.db ? { db: input.db } : {}),
+    });
+  }
+}
+
+/** Every minute of camera and screen share a usage limit must count. */
+export function visualUsageFeatures(): readonly RateCardFeature[] {
+  return [VISUAL_USAGE_FEATURE.camera, VISUAL_USAGE_FEATURE.screen];
 }
 
 export function getServedRouteIdFromCostEventMetadata(

@@ -57,7 +57,9 @@ export type MessageInsert = Omit<MessageRow, 'id' | 'created_at'> & {
   id?: string;
 };
 
-export type WorkforceTaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+import type { WorkLifecycleStatus } from './lifecycle-status';
+
+export type WorkforceTaskStatus = WorkLifecycleStatus;
 
 export interface WorkforceTaskRow {
   id: string;
@@ -75,7 +77,7 @@ export interface WorkforceTaskRow {
   error: string | null;
 }
 
-export type WorkforceExecutionStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+export type WorkforceExecutionStatus = Exclude<WorkLifecycleStatus, 'pending'>;
 
 export interface WorkforceExecutionRow {
   id: string;

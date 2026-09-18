@@ -41,10 +41,24 @@ describe('policy, WebMCP native metadata boundary', () => {
           name: 'search_users',
           description: 'Search users',
           source: 'declarative',
+          effect: 'write',
           inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
         },
       ],
     });
+  });
+
+  it('takes a declared read effect and treats anything else as a write', () => {
+    const normalized = normalizeWebMCPToolsUpdate(
+      [
+        { name: 'read_cart', description: '', source: 'imperative', effect: 'read' },
+        { name: 'place_order', description: '', source: 'imperative', effect: 'anything' },
+      ],
+      'https://example.com/tools',
+      'https://example.com/tools',
+    );
+
+    expect(normalized?.tools.map((tool) => tool.effect)).toEqual(['read', 'write']);
   });
 
   it('rejects forged URLs, duplicate names, oversized lists, and oversized schemas', () => {

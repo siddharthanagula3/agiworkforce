@@ -3,21 +3,29 @@ import {
   AUTHORIZATION_PRECEDENCE,
   AUTHORIZATION_STAGES,
   BUILT_IN_ORGANIZATION_ROLES,
+  DEFAULT_WORKSPACE_CODE_CONTROLS,
   DEFAULT_WORKSPACE_CONTROLS,
   ENTERPRISE_DENIAL_STAGE,
   GRANTABLE_ORGANIZATION_PERMISSIONS,
   PRIMARY_OWNER_ONLY_PERMISSIONS,
+  WORKSPACE_CODE_CONTROL_HINTS,
+  WORKSPACE_CODE_CONTROL_KEYS,
+  WORKSPACE_CODE_CONTROL_LABELS,
+  WORKSPACE_CODE_TOGGLE_KEYS,
   WORKSPACE_POLICY_OVERRIDE_SUBJECTS,
   WORKSPACE_POLICY_SCOPES,
   builtInRoleKeyForMembershipRole,
   clampReasoningEffort,
   evaluateAuthorization,
+  isCodeHostAllowed,
   isGrantableOrganizationPermission,
   missingOrganizationPermissions,
   resolveDefaultModelId,
   resolveEffectivePermissions,
+  resolveWorkspaceCodeControls,
   resolveWorkspaceControls,
   type AuthorizationSubject,
+  type WorkspaceCodeControls,
   type WorkspaceControls,
   type WorkspacePolicyOverride,
   type WorkspacePolicyOverrideSubject,
@@ -412,5 +420,81 @@ describe('effective permissions', () => {
     });
     expect(effective.permissions.has('content.share')).toBe(false);
     expect(effective.withheld['content.share']).toBe('policy_denied');
+  });
+});
+
+describe('organization Code controls', () => {
+  const codeGoverned: WorkspaceCodeControls = {
+    ...DEFAULT_WORKSPACE_CODE_CONTROLS,
+    allowGithubConnection: false,
+    allowedEgressHosts: ['api.example.com', 'git.example.com'],
+    sessionRetentionDays: 90,
+  };
+
+  it('defaults every Code connection to allowed, so an ungoverned workspace is unchanged', () => {
+    const resolved = resolveWorkspaceCodeControls(DEFAULT_WORKSPACE_CODE_CONTROLS, []);
+    for (const key of WORKSPACE_CODE_TOGGLE_KEYS) expect(resolved[key]).toBe(true);
+    expect(resolved.sessionRetentionDays).toBeNull();
+    expect(resolved.blockingRules).toEqual([]);
+  });
+
+  it('names the workspace layer that turned a connection off', () => {
+    const resolved = resolveWorkspaceCodeControls(codeGoverned, [], 7);
+    expect(resolved.allowGithubConnection).toBe(false);
+    expect(resolved.revision).toBe(7);
+    expect(resolved.blockingRules).toContainEqual({
+      control: 'code',
+      scope: 'workspace',
+      overrideId: null,
+      subjectId: null,
+      codeControl: 'allowGithubConnection',
+      reason: 'code_control_disabled',
+    });
+  });
+
+  it('lets a group exception take desktop sync and MCP away but never give GitHub back', () => {
+    const resolved = resolveWorkspaceCodeControls(codeGoverned, [
+      override('group', 'g-1', { code: { allowDesktopCloudSync: false, allowMcpServers: false } }),
+      override('user', 'u-1', { code: { allowGithubConnection: true } }),
+    ]);
+    expect(resolved.allowDesktopCloudSync).toBe(false);
+    expect(resolved.allowMcpServers).toBe(false);
+    expect(resolved.allowGithubConnection).toBe(false);
+    expect(resolved.appliedOverrideIds).toEqual(['group-g-1', 'user-u-1']);
+  });
+
+  it('intersects host lists and only ever shortens retention', () => {
+    const resolved = resolveWorkspaceCodeControls(codeGoverned, [
+      override('role', 'r-1', {
+        code: {
+          allowedEgressHosts: ['api.example.com', 'other.example.com'],
+          sessionRetentionDays: 30,
+        },
+      }),
+      override('user', 'u-1', { code: { sessionRetentionDays: 365 } }),
+    ]);
+    expect(resolved.allowedEgressHosts).toEqual(['api.example.com']);
+    expect(resolved.sessionRetentionDays).toBe(30);
+    expect(
+      resolved.blockingRules.filter((rule) => rule.codeControl === 'sessionRetentionDays'),
+    ).toHaveLength(2);
+  });
+
+  it('reads an empty allow list as no rule and a populated one as exhaustive', () => {
+    expect(isCodeHostAllowed([], 'anything.example.com')).toBe(true);
+    expect(isCodeHostAllowed([], null)).toBe(true);
+    expect(isCodeHostAllowed(['api.example.com'], 'API.Example.com')).toBe(true);
+    expect(isCodeHostAllowed(['api.example.com'], 'evil.com')).toBe(false);
+    expect(isCodeHostAllowed(['api.example.com'], null)).toBe(false);
+    expect(isCodeHostAllowed(['*.example.com'], 'mcp.example.com')).toBe(true);
+    expect(isCodeHostAllowed(['*.example.com'], 'example.com')).toBe(true);
+    expect(isCodeHostAllowed(['*.example.com'], 'notexample.com')).toBe(false);
+  });
+
+  it('gives every Code control a label and a hint an administrator can read', () => {
+    for (const key of WORKSPACE_CODE_CONTROL_KEYS) {
+      expect(WORKSPACE_CODE_CONTROL_LABELS[key]).toBeTruthy();
+      expect(WORKSPACE_CODE_CONTROL_HINTS[key]).toBeTruthy();
+    }
   });
 });

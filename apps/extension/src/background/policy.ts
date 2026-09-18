@@ -274,6 +274,8 @@ export function normalizeWebMCPToolsUpdate(
       name,
       description,
       source,
+      // The page reports its own effect, so anything but an explicit read is a write.
+      effect: record['effect'] === 'read' ? 'read' : 'write',
       ...(inputSchema ? { inputSchema } : {}),
     });
   }

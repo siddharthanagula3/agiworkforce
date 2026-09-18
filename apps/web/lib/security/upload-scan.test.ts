@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { inspectUploadBytes, scanUploadBytes, scanUploadForCredentials } from './upload-scan';
+import {
+  inspectUploadBytes,
+  scanUploadBytes,
+  scanUploadForCredentials,
+  uploadScannerStatus,
+} from './upload-scan';
 
 /**
  * Uploads reached a publicly-servable URL after only three checks, path
@@ -236,5 +241,57 @@ describe('credential material in an upload', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
     expect(scanUploadForCredentials(png, 'image/png', 'a.png')).toEqual([]);
+  });
+});
+
+describe('a file name that carries a path', () => {
+  it('rejects the upload rather than storing it under a rewritten name', async () => {
+    const result = await scanUploadBytes(utf8('notes'), 'text/plain', '../../etc/passwd');
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('unsafe_filename');
+  });
+
+  it('matches a credential file name through the traversal that hid it', async () => {
+    const result = await scanUploadBytes(utf8('nothing'), 'text/plain', 'a/b/../.env.production');
+
+    expect(result.findings.map((finding) => finding.code)).toContain('sensitive_filename');
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('external scanner requirement', () => {
+  it('requires a scanner in production when the operator has said nothing', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', '');
+    vi.stubEnv('UPLOAD_SCAN_REQUIRED', '');
+
+    expect(uploadScannerStatus()).toEqual({ configured: false, required: true });
+    const result = await scanUploadBytes(utf8('ordinary note'), 'text/plain', 'a.txt');
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('external_scanner');
+
+    vi.unstubAllEnvs();
+  });
+
+  it('admits the file only when an operator opts out explicitly', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', '');
+    vi.stubEnv('UPLOAD_SCAN_REQUIRED', 'false');
+
+    expect(uploadScannerStatus()).toEqual({ configured: false, required: false });
+    expect((await scanUploadBytes(utf8('ordinary note'), 'text/plain', 'a.txt')).ok).toBe(true);
+
+    vi.unstubAllEnvs();
+  });
+
+  it('leaves development unblocked', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', '');
+    vi.stubEnv('UPLOAD_SCAN_REQUIRED', '');
+
+    expect(uploadScannerStatus()).toEqual({ configured: false, required: false });
+
+    vi.unstubAllEnvs();
   });
 });

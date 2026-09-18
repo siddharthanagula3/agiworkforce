@@ -3,10 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { DEFAULT_WORKSPACE_CODE_CONTROLS } from '@agiworkforce/types';
 import {
   defaultAdminPolicyFor,
   formatAdminPolicy,
+  parseWorkspaceControlsLayer,
+  readWorkspaceCodeControls,
   upsertOrganizationPolicy,
+  withWorkspaceCodeControls,
 } from '../organization-policy-service';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -292,5 +296,50 @@ describe('upsertOrganizationPolicy, allowMemory', () => {
     expect(params[13]).toBe(true);
     const writtenMetadata = JSON.parse(params[14] as string);
     expect(writtenMetadata['allowMemory']).toBeUndefined();
+  });
+});
+
+describe('Code controls in policy metadata', () => {
+  it('returns the defaults when the organization has never saved any', () => {
+    expect(readWorkspaceCodeControls(null)).toEqual(DEFAULT_WORKSPACE_CODE_CONTROLS);
+    expect(readWorkspaceCodeControls({ codeControls: 'nonsense' })).toEqual(
+      DEFAULT_WORKSPACE_CODE_CONTROLS,
+    );
+  });
+
+  it('reads a saved control and drops a value that is not of its type', () => {
+    const controls = readWorkspaceCodeControls({
+      codeControls: {
+        allowGithubConnection: false,
+        allowMcpServers: 'no',
+        sessionRetentionDays: 0,
+        allowedEgressHosts: ['API.Example.com', 'not a host', 'api.example.com'],
+      },
+    });
+    expect(controls.allowGithubConnection).toBe(false);
+    expect(controls.allowMcpServers).toBe(true);
+    expect(controls.sessionRetentionDays).toBeNull();
+    expect(controls.allowedEgressHosts).toEqual(['api.example.com']);
+  });
+
+  it('keeps Code controls beside the workspace controls, so a controls rewrite cannot drop them', () => {
+    const metadata = withWorkspaceCodeControls(
+      { controls: { featureAccess: { code: false } }, requireMfa: true },
+      { ...DEFAULT_WORKSPACE_CODE_CONTROLS, allowDesktopCloudSync: false },
+    );
+    expect(metadata['requireMfa']).toBe(true);
+    expect(metadata['controls']).toEqual({ featureAccess: { code: false } });
+    expect(readWorkspaceCodeControls(metadata).allowDesktopCloudSync).toBe(false);
+  });
+
+  it('carries a Code layer on a policy override so an exception can only narrow', () => {
+    const layer = parseWorkspaceControlsLayer({
+      featureAccess: { code: false },
+      code: { allowMcpServers: false, allowedMcpServers: ['mcp.example.com'] },
+    });
+    expect(layer.code).toEqual({
+      allowMcpServers: false,
+      allowedMcpServers: ['mcp.example.com'],
+    });
   });
 });

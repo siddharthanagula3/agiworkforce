@@ -285,16 +285,18 @@ API calls each scope covers.
 5. **`CONNECTOR_TOOLS` in `features/connectors/config/connector-logos.ts`** lists
    tool names for connectors with no runtime implementation. Only the `github`
    entry (L564) mirrors real wire names.
-6. **Uploads get no malware scanning until an operator configures a scanner.**
+6. **Production requires an external malware scanner.**
    `apps/web/lib/security/upload-scan.ts` runs structural checks on every chat
    attachment and project source, and calls the external scanner at
-   `UPLOAD_SCAN_WEBHOOK_URL` (bearer `UPLOAD_SCAN_WEBHOOK_TOKEN`) when one is set,
-   failing closed on any error or unsafe verdict. Founder action: contract a
+   `UPLOAD_SCAN_WEBHOOK_URL` (bearer `UPLOAD_SCAN_WEBHOOK_TOKEN`), failing closed
+   on any error or unsafe verdict. With `UPLOAD_SCAN_REQUIRED` unset, production
+   now treats the scanner as required, so a deployment with no scanner refuses
+   every upload rather than admitting unscanned bytes. Founder action: contract a
    scanning vendor that accepts `POST application/octet-stream` and answers
-   `{ "safe": boolean, "detail"?: string }`, set both variables in production,
-   then set `UPLOAD_SCAN_REQUIRED=true` so an unconfigured scanner refuses uploads
-   instead of admitting them. Until then production logs
-   `upload_scanner_unconfigured` once per instance.
+   `{ "safe": boolean, "detail"?: string }` and set both variables in production,
+   or set `UPLOAD_SCAN_REQUIRED=false` to accept structural scanning only, which
+   logs `upload_scanner_unconfigured` once per instance. See
+   docs/security/upload-scanning.md.
 
 ---
 

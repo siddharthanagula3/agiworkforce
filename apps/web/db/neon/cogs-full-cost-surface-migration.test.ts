@@ -20,6 +20,10 @@ const capabilityWideningReversal = fs.readFileSync(
   path.resolve(import.meta.dirname, 'down/0221_connector_and_artifact_cost_capabilities.down.sql'),
   'utf8',
 );
+const visualCapabilityReversal = fs.readFileSync(
+  path.resolve(import.meta.dirname, 'down/0246_visual_session_cost_capability.down.sql'),
+  'utf8',
+);
 const mediaHash = fs.readFileSync(
   path.resolve(import.meta.dirname, '0216_media_assets_content_hash.sql'),
   'utf8',
@@ -37,9 +41,24 @@ function constraintValues(source: string, column: string): string[] {
   return [...(body ?? '').matchAll(/'([a-z_]+)'/g)].map((match) => match[1] ?? '');
 }
 
+/** The newest migration that rewrites the constraint is what the schema enforces. */
+function latestCapabilityWidening(): string {
+  const directory = import.meta.dirname;
+  const files = fs
+    .readdirSync(directory)
+    .filter((name) => name.endsWith('.sql'))
+    .sort()
+    .reverse();
+  for (const name of files) {
+    const sql = fs.readFileSync(path.resolve(directory, name), 'utf8');
+    if (/add constraint provider_cost_events_capability_check/.test(sql)) return sql;
+  }
+  throw new Error('No migration defines provider_cost_events_capability_check');
+}
+
 describe('cogs full cost surface migration', () => {
-  it('accepts every capability the ledger writes once 0221 has widened it', () => {
-    expect(constraintValues(capabilityWidening, 'capability').sort()).toEqual(
+  it('accepts every capability the ledger writes once the newest widening is applied', () => {
+    expect(constraintValues(latestCapabilityWidening(), 'capability').sort()).toEqual(
       [...COGS_CAPABILITIES].sort(),
     );
   });
@@ -74,6 +93,14 @@ describe('cogs full cost surface migration', () => {
   it('names connector calls and generated-file storage as capabilities of their own', () => {
     expect(constraintValues(capabilityWidening, 'capability')).toEqual(
       expect.arrayContaining(['connector', 'artifact']),
+    );
+  });
+
+  it('names a live camera or screen share as a capability of its own', () => {
+    expect(constraintValues(latestCapabilityWidening(), 'capability')).toContain('visual');
+    expect(constraintValues(visualCapabilityReversal, 'capability')).not.toContain('visual');
+    expect(visualCapabilityReversal.indexOf("where capability = 'visual'")).toBeLessThan(
+      visualCapabilityReversal.indexOf('add constraint provider_cost_events_capability_check'),
     );
   });
 

@@ -40,6 +40,7 @@
  * ```
  */
 import type { AgentTaskState } from './generated/protocol/AgentTaskState';
+import type { LifecycleProjection, LifecycleStatus } from './lifecycle-status';
 
 export interface CrossDeviceThread {
   id: string;
@@ -268,6 +269,51 @@ export function agentTaskStateForDispatchStatus(
   status: DispatchTaskLifecycleStatus,
 ): AgentTaskState {
   return DISPATCH_STATUS_AGENT_TASK_STATES[status];
+}
+
+/**
+ * `archived` and `ready_for_review` project onto `completed`: the work ended,
+ * and what happens to the record afterwards is a resource lifecycle question.
+ */
+export const LIFECYCLE_STATUS_BY_AGENT_TASK_STATE: LifecycleProjection<AgentTaskState> =
+  Object.freeze({
+    queued: 'queued',
+    planning: 'running',
+    running: 'running',
+    resuming: 'running',
+    awaiting_input: 'awaiting_input',
+    awaiting_approval: 'awaiting_input',
+    paused: 'awaiting_input',
+    ready_for_review: 'completed',
+    completed: 'completed',
+    archived: 'completed',
+    partial: 'failed',
+    failed: 'failed',
+    timed_out: 'failed',
+    cancelled: 'cancelled',
+  });
+
+export const LIFECYCLE_STATUS_BY_DISPATCH_STATUS: LifecycleProjection<DispatchTaskLifecycleStatus> =
+  Object.freeze({
+    accepted: 'pending',
+    queued: 'queued',
+    running: 'running',
+    awaiting_input: 'awaiting_input',
+    ready_for_review: 'completed',
+    completed: 'completed',
+    failed: 'failed',
+    cancelled: 'cancelled',
+    rejected: 'failed',
+  });
+
+export function lifecycleStatusForAgentTaskState(state: AgentTaskState): LifecycleStatus {
+  return LIFECYCLE_STATUS_BY_AGENT_TASK_STATE[state];
+}
+
+export function lifecycleStatusForDispatchStatus(
+  status: DispatchTaskLifecycleStatus,
+): LifecycleStatus {
+  return LIFECYCLE_STATUS_BY_DISPATCH_STATUS[status];
 }
 
 export interface DispatchTaskStatusEvent {
