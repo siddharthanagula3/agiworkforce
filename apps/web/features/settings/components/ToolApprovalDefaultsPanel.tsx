@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   fetchPreferenceNamespace,
+  readAutonomousToolApprovalsAllowed,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
   DEFAULT_TOOL_APPROVAL_PREFERENCES,
   TOOL_APPROVAL_POLICY_OPTIONS,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
@@ -14,10 +16,14 @@ import {
 } from '@shared/types/toolApprovalPolicy';
 import { toUserMessage } from '@/lib/user-error-message';
 
+const WORKSPACE_BLOCKS_AUTONOMY =
+  'Your workspace does not allow skipping approvals, so this option is unavailable.';
+
 export function ToolApprovalDefaultsPanel() {
   const [policy, setPolicy] = useState<ToolApprovalPolicy>(
     DEFAULT_TOOL_APPROVAL_PREFERENCES.defaultPolicy,
   );
+  const [autonomyAvailable, setAutonomyAvailable] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -38,6 +44,22 @@ export function ToolApprovalDefaultsPanel() {
         if (!cancelled) {
           setLoadError(toUserMessage(error, 'Failed to load tool approvals'));
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The workspace decides this, never the client. An unreadable answer leaves
+  // the option off, which matches what the tool gate would do with it anyway.
+  useEffect(() => {
+    let cancelled = false;
+    readAutonomousToolApprovalsAllowed()
+      .then((allowed) => {
+        if (!cancelled) setAutonomyAvailable(allowed);
+      })
+      .catch(() => {
+        if (!cancelled) setAutonomyAvailable(false);
       });
     return () => {
       cancelled = true;
@@ -95,26 +117,41 @@ export function ToolApprovalDefaultsPanel() {
       </div>
 
       <div role="radiogroup" aria-label="Default approval for tool actions" className="space-y-2">
-        {TOOL_APPROVAL_POLICY_OPTIONS.map((option) => (
-          <label
-            key={option.policy}
-            className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/40 p-4"
-          >
-            <input
-              type="radio"
-              name="tool-approval-default"
-              value={option.policy}
-              checked={policy === option.policy}
-              disabled={loadError !== null || saving}
-              onChange={() => void persist(option.policy)}
-              className="mt-1"
-            />
-            <span>
-              <span className="block text-sm font-medium text-foreground">{option.label}</span>
-              <span className="block text-xs text-muted-foreground">{option.description}</span>
-            </span>
-          </label>
-        ))}
+        {TOOL_APPROVAL_POLICY_OPTIONS.map((option) => {
+          const unavailable = option.policy === 'autonomous' && !autonomyAvailable;
+          return (
+            <label
+              key={option.policy}
+              className={`flex items-start gap-3 rounded-lg border border-border/40 p-4 ${
+                unavailable ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              }`}
+            >
+              <input
+                type="radio"
+                name="tool-approval-default"
+                value={option.policy}
+                checked={policy === option.policy}
+                disabled={loadError !== null || saving || unavailable}
+                onChange={() => void persist(option.policy)}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-medium text-foreground">
+                  {option.label}
+                  {option.policy === DEFAULT_TOOL_APPROVAL_POLICY ? (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">Default</span>
+                  ) : null}
+                </span>
+                <span className="block text-xs text-muted-foreground">{option.description}</span>
+                {unavailable ? (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {WORKSPACE_BLOCKS_AUTONOMY}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+          );
+        })}
       </div>
     </section>
   );

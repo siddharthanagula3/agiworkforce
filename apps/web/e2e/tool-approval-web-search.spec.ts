@@ -1,16 +1,24 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { signIn } from './qa-capability-harness';
+import {
+  collectEvidence,
+  invokedToolNames,
+  runtimeToolEvents,
+  signIn,
+  type RuntimeEvidence,
+} from './qa-capability-harness';
 
 /**
- * The Tool Approvals setting has to govern web search, because it names it.
+ * The Tool Approvals setting has to govern web search, because it names it, and
+ * each of the three policies has to mean something different for it.
  *
- * It did not. A provider-native search runs inside the provider's own turn and
- * never becomes a tool call, so the loop's gate was structurally unreachable
- * for it; and even our own `web_search` function tool ran unattended, because
- * `approvalMode` was `hasMcpTools ? 'manual' : 'auto'` and 'auto' short-circuits
- * the gate before the account policy is read. A user who chose "Ask before
- * every action" watched web search execute unprompted, two attempts out of two.
+ * It once meant nothing. A provider-native search runs inside the provider's own
+ * turn and never becomes a tool call, so the loop's gate was structurally
+ * unreachable for it; and even our own `web_search` function tool ran
+ * unattended, because `approvalMode` was `hasMcpTools ? 'manual' : 'auto'` and
+ * 'auto' short-circuits the gate before the account policy is read. A user who
+ * chose "Ask before every action" watched web search execute unprompted, two
+ * attempts out of two.
  *
  * This drives the setting itself and then a search-triggering prompt, which is
  * the only way to observe both halves: the substitution happens on the server
@@ -22,17 +30,20 @@ const COMPOSER_LABEL = /message input/i;
 const CONSENT_DISMISS_LABEL = 'Close and reject non-essential cookies';
 const ASK_EVERY_TIME = /Ask before every action/i;
 const AUTO_APPROVE_READ_ONLY = /Run read-only actions without asking/i;
+const SKIP_APPROVALS = /Skip approvals/i;
 const REVIEW_ROW = /Review Web Search action/i;
 const APPROVALS_BADGE = /Approvals/i;
 
 const LOAD_TIMEOUT_MS = 30_000;
 const APPROVAL_TIMEOUT_MS = 120_000;
+const SEARCH_TIMEOUT_MS = 120_000;
 
 async function setToolApprovalPolicy(page: Page, option: RegExp): Promise<void> {
   await page.goto(SETTINGS_ROUTE, { waitUntil: 'domcontentloaded' });
   await dismissConsent(page);
   const radio = page.getByRole('radio', { name: option });
   await expect(radio).toBeVisible({ timeout: LOAD_TIMEOUT_MS });
+  await expect(radio).toBeEnabled();
   await radio.check();
   await expect(radio).toBeChecked();
   // The choice is persisted through the preferences API; sending before it
@@ -56,6 +67,16 @@ async function dismissConsent(page: Page): Promise<void> {
     .catch(() => undefined);
 }
 
+async function expectSearchRanUnasked(page: Page, evidence: RuntimeEvidence): Promise<void> {
+  await expect
+    .poll(() => invokedToolNames(runtimeToolEvents(evidence)), { timeout: SEARCH_TIMEOUT_MS })
+    .toContain('web_search');
+  expect(runtimeToolEvents(evidence).map((event) => event.event)).not.toContain(
+    'x_tool_approval_request',
+  );
+  await expect(page.getByText(REVIEW_ROW)).toHaveCount(0);
+}
+
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Tool Approvals governs web search', () => {
@@ -74,15 +95,24 @@ test.describe('Tool Approvals governs web search', () => {
     await expect(page.getByRole('button', { name: APPROVALS_BADGE }).first()).toBeVisible();
   });
 
-  test('it still stops when the account auto-approves read-only work', async ({ page }) => {
-    // The option's own copy: web search "still asks first", because it moves
-    // the query outside AGI. This is the mode the browser QA ran in.
+  test('it runs unasked when the account auto-approves read-only work', async ({ page }) => {
+    // D-2026-09-15-01: search, page fetch and sandboxed code are the leaders'
+    // automatic tools, so this policy runs them without asking. The option's
+    // copy says so; it used to claim web search "still asks first".
     await signIn(page);
+    const evidence = collectEvidence(page);
     await setToolApprovalPolicy(page, AUTO_APPROVE_READ_ONLY);
     await sendSearchPrompt(page);
 
-    await expect(page.getByText(REVIEW_ROW).first()).toBeVisible({
-      timeout: APPROVAL_TIMEOUT_MS,
-    });
+    await expectSearchRanUnasked(page, evidence);
+  });
+
+  test('it runs unasked when the account skips approvals', async ({ page }) => {
+    await signIn(page);
+    const evidence = collectEvidence(page);
+    await setToolApprovalPolicy(page, SKIP_APPROVALS);
+    await sendSearchPrompt(page);
+
+    await expectSearchRanUnasked(page, evidence);
   });
 });
