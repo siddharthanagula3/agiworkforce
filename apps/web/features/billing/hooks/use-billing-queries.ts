@@ -73,8 +73,7 @@ const SUBSCRIPTION_STATUSES = new Set<SubscriptionStatus>([
 ]);
 
 function normalizeManagedBillingPlan(plan: string): BillingPlan {
-  const legacyNormalized = plan === 'pro_plus' ? 'max' : plan === 'hobby' ? 'basic' : plan;
-  const normalized = normalizeBillingPlanTier(legacyNormalized);
+  const normalized = normalizeBillingPlanTier(plan);
   return isValidPlan(normalized) ? normalized : 'free';
 }
 

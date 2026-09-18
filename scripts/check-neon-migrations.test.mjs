@@ -2,8 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { quotingErrors } from './check-neon-migrations.mjs';
+import {
+  loadRegistry,
+  missingContractColumns,
+  readSchemaInventory,
+} from './check-concept-registry.mjs';
 
 const path = 'apps/web/db/neon/0000_probe.sql';
+
+function columnsOf(sql, table) {
+  const inventory = readSchemaInventory([{ name: '0999_probe.sql', ordinal: 999, sql }]);
+  return inventory.tables.get(table)?.columns ?? new Set();
+}
 
 test('a doubled apostrophe inside a literal is valid', () => {
   assert.deepEqual(quotingErrors(path, "insert into t values ('quarter''s numbers');"), []);
@@ -41,4 +51,58 @@ test('an unterminated block comment is reported', () => {
   const errors = quotingErrors(path, '/* never closed\nselect 1;');
   assert.equal(errors.length, 1);
   assert.match(errors[0], /block comment/);
+});
+
+test('a new persistent-object table without the column contract is reported', () => {
+  const { roles } = loadRegistry().columnContract;
+  const columns = columnsOf(
+    'create table if not exists public.probe_notes (\n' +
+      '  id uuid primary key default gen_random_uuid(),\n' +
+      '  body text not null\n' +
+      ');',
+    'probe_notes',
+  );
+
+  assert.deepEqual(missingContractColumns({ columns, roles }).sort(), [
+    'createdAt',
+    'createdBy',
+    'owner',
+    'updatedAt',
+    'version',
+  ]);
+});
+
+test('a new table carrying the column contract is accepted', () => {
+  const { roles } = loadRegistry().columnContract;
+  const columns = columnsOf(
+    'create table if not exists public.probe_notes (\n' +
+      '  id uuid primary key default gen_random_uuid(),\n' +
+      '  user_id text not null,\n' +
+      '  created_by text,\n' +
+      '  server_version bigint not null,\n' +
+      '  created_at timestamptz not null default now(),\n' +
+      '  updated_at timestamptz not null default now()\n' +
+      ');',
+    'probe_notes',
+  );
+
+  assert.deepEqual(missingContractColumns({ columns, roles }), []);
+});
+
+test('an exempted role is not demanded of a new table', () => {
+  const { roles } = loadRegistry().columnContract;
+  const columns = columnsOf(
+    'create table if not exists public.probe_events (\n' +
+      '  id uuid primary key default gen_random_uuid(),\n' +
+      '  user_id text not null,\n' +
+      '  created_by text,\n' +
+      '  created_at timestamptz not null default now()\n' +
+      ');',
+    'probe_events',
+  );
+
+  assert.deepEqual(
+    missingContractColumns({ columns, roles, exempt: ['updatedAt', 'version'] }),
+    [],
+  );
 });

@@ -393,6 +393,41 @@ export interface ModelInfo {
   outputCostPerMillion?: number;
 }
 
+/**
+ * What a provider can do, so business logic can ask that instead of asking who
+ * the provider is. Every `provider === 'openai'` branch outside an adapter is a
+ * trait that was never named; scripts/check-capability-boundaries.mjs tracks
+ * the remaining ones.
+ */
+export const PROVIDER_TRAITS = [
+  'adaptive-thinking',
+  'native-web-fetch',
+  'native-web-search',
+  'server-side-file-store',
+  'audio-transcription',
+  'image-generation',
+  'video-generation',
+  'strict-tool-schemas',
+] as const;
+
+export type ProviderTrait = (typeof PROVIDER_TRAITS)[number];
+
+export function isProviderTrait(value: string | null | undefined): value is ProviderTrait {
+  return typeof value === 'string' && (PROVIDER_TRAITS as readonly string[]).includes(value);
+}
+
+/**
+ * Absent traits mean the adapter has not declared any, which reads as "does
+ * not do this". A caller that needs a trait an adapter cannot state must treat
+ * it as unsupported rather than guessing from the vendor name.
+ */
+export function providerAdapterHasTrait(
+  adapter: Pick<ProviderAdapter, 'traits'>,
+  trait: ProviderTrait,
+): boolean {
+  return adapter.traits?.includes(trait) ?? false;
+}
+
 export interface ProviderCatalogContext {
   apiKey?: string;
   baseUrl?: string;
@@ -434,6 +469,7 @@ export interface ProviderAdapter {
   readonly label: string;
   readonly auth: readonly AuthMethod[];
   readonly config: ProviderAdapterConfig;
+  readonly traits?: readonly ProviderTrait[];
 
   catalog(ctx?: ProviderCatalogContext): Promise<ModelInfo[]>;
 

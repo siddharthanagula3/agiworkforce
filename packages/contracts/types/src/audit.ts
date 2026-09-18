@@ -13,7 +13,16 @@
  * @packageDocumentation
  */
 
-export type AuditSurface = 'desktop' | 'mobile' | 'web' | 'cli' | 'vscode';
+import type { ConceptName } from './concept-registry';
+import type { SourceSurface } from './suite-contracts';
+
+export type { ConceptName };
+
+/**
+ * The surfaces are the product's surfaces. A second list here drifted from
+ * `SourceSurface` the moment the Chrome extension shipped.
+ */
+export type AuditSurface = SourceSurface;
 
 export type AuditAction =
   | 'auth_login'
@@ -50,6 +59,13 @@ export interface AuditEvent {
   action: AuditAction;
 
   resource: string;
+
+  /**
+   * Which domain concept `resource` identifies, drawn from the concept
+   * registry. `enterprise_audit_events.resource_type` stores free text today,
+   * so a reader cannot group events by object without one vocabulary.
+   */
+  resourceType?: ConceptName;
 
   outcome: AuditOutcome;
 
@@ -105,6 +121,10 @@ export function createAuditEvent(
     resource: params.resource,
     outcome: params.outcome,
   };
+
+  if (params.resourceType !== undefined) {
+    event.resourceType = params.resourceType;
+  }
 
   if (params.metadata !== undefined) {
     event.metadata = params.metadata;
