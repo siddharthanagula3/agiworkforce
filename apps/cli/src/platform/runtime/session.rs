@@ -1,5 +1,11 @@
 use agiworkforce_model_registry::TrustMode;
-use agiworkforce_protocol::developer_session::DeveloperRoutingTaskType;
+use agiworkforce_protocol::code_domain::{
+    CodeSession, CodeSessionId, PermissionProfileId, RepositoryId, RepositorySnapshot,
+    SessionClient,
+};
+use agiworkforce_protocol::developer_session::{
+    DeveloperRoutingTaskType, DeveloperSessionSource, DeveloperSessionTrustMode,
+};
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -96,7 +102,11 @@ fn quarantine_conflicting_session(path: &Path) -> Option<PathBuf> {
 /// v5: adds canonical provider + privacy routing authority. Older sessions
 ///     remain listable, but callers must not resume them without an explicit
 ///     authority migration.
-pub const MANAGED_SESSION_VERSION: u32 = 5;
+/// v6: embeds the canonical `CodeSession`. A file written before v6 has none,
+///     and [`ManagedSession::code_session`] derives one from the legacy
+///     fields, so every persisted session reads as one domain record whether
+///     or not it was written as one.
+pub const MANAGED_SESSION_VERSION: u32 = 6;
 
 pub const MANAGED_SESSION_ID_MAX_ENCODED_UNITS: usize = 200;
 pub const MANAGED_SESSION_TITLE_MAX_UTF16: usize = 500;
@@ -389,6 +399,11 @@ pub struct ManagedSession {
     pub auto_routing: Option<ManagedSessionAutoRouting>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routing_authority: Option<ManagedSessionRoutingAuthority>,
+    /// The canonical domain record this file is a persistence of. Absent on
+    /// files written before v6; [`ManagedSession::code_session`] derives one
+    /// for those rather than making callers branch on the file's age.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<Box<CodeSession>>,
 }
 
 /// The header record's payload, boxed by the record enum below.
@@ -445,6 +460,8 @@ struct ManagedSessionJsonlHeader {
     auto_routing: Option<Box<ManagedSessionAutoRouting>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     routing_authority: Option<Box<ManagedSessionRoutingAuthority>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    code: Option<Box<CodeSession>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -484,6 +501,7 @@ impl ManagedSession {
             fallback_model_ids: None,
             auto_routing: None,
             routing_authority: None,
+            code: None,
         }
     }
 
@@ -573,6 +591,7 @@ impl ManagedSession {
             fallback_model_ids: None,
             auto_routing: source.auto_routing.clone(),
             routing_authority: source.routing_authority.clone(),
+            code: None,
         }
     }
 
@@ -621,6 +640,117 @@ impl ManagedSession {
     /// Refresh the `updated_at` timestamp.
     pub fn touch(&mut self) {
         self.updated_at = Utc::now();
+    }
+
+    fn developer_source(&self) -> DeveloperSessionSource {
+        match self
+            .created_by
+            .as_deref()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "cli" | "terminal" => DeveloperSessionSource::Cli,
+            "vscode" | "vs-code" | "vs_code" => DeveloperSessionSource::Vscode,
+            "desktop" => DeveloperSessionSource::Desktop,
+            _ => DeveloperSessionSource::Unknown,
+        }
+    }
+
+    fn developer_trust_mode(&self) -> DeveloperSessionTrustMode {
+        match self
+            .routing_authority
+            .as_ref()
+            .map(|authority| authority.privacy_mode)
+        {
+            Some(PrivacyMode::Local) => DeveloperSessionTrustMode::Local,
+            Some(PrivacyMode::Byok) => DeveloperSessionTrustMode::Byok,
+            Some(PrivacyMode::Managed) => DeveloperSessionTrustMode::Managed,
+            None => DeveloperSessionTrustMode::Unknown,
+        }
+    }
+
+    fn repository_id(&self) -> Option<RepositoryId> {
+        if let Some(remote) = self
+            .repository
+            .as_deref()
+            .filter(|url| !url.trim().is_empty())
+        {
+            return Some(crate::context::repository_identity_from_remote(remote));
+        }
+        self.worktree_root
+            .as_ref()
+            .or(self.workspace_root.as_ref())
+            .map(|root| RepositoryId::new(root.display().to_string()))
+    }
+
+    /// The canonical [`CodeSession`] this file persists.
+    ///
+    /// A file written at v6 or later carries the record; one written earlier
+    /// has its record derived from the legacy fields here, so a caller reads
+    /// one domain type either way and never branches on a file's age.
+    pub fn code_session(&self) -> CodeSession {
+        if let Some(code) = self.code.as_deref() {
+            return code.clone();
+        }
+
+        let repository_id = self.repository_id();
+        let mut session = CodeSession::new(
+            self.session_id.as_str(),
+            self.developer_source(),
+            self.developer_trust_mode(),
+            self.created_at,
+        );
+        session.updated_at = self.updated_at;
+        session.title = self.title.clone();
+        session.model = self.model.clone();
+        session.provider = self
+            .routing_authority
+            .as_ref()
+            .map(|authority| authority.provider.clone());
+        session.archived_at = self.archived_at;
+        session.permission_profile_id =
+            crate::permissions::permission_profile_id(self.permission_mode);
+        session.environment.working_directory = self
+            .workspace_root
+            .clone()
+            .or_else(|| self.worktree_root.clone());
+        session.primary_repository_id = repository_id.clone();
+        session.client = self.client.as_ref().map(|name| SessionClient {
+            name: name.clone(),
+            source: session.source,
+            attached_at: self.updated_at,
+        });
+        if let (Some(branch), Some(repository_id)) = (self.git_branch.clone(), repository_id) {
+            session.git =
+                Some(RepositorySnapshot::new(repository_id, self.updated_at).on_branch(branch));
+        }
+        session
+    }
+
+    pub fn session_identity(&self) -> CodeSessionId {
+        CodeSessionId::new(self.session_id.as_str())
+    }
+
+    pub fn permission_profile(&self) -> PermissionProfileId {
+        self.code_session().permission_profile_id
+    }
+
+    /// Store the canonical record, keeping the legacy fields the rest of the
+    /// CLI still reads in step with it.
+    pub fn set_code_session(&mut self, session: CodeSession) {
+        self.title = session.title.clone();
+        self.model = session.model.clone();
+        self.git_branch = session
+            .git
+            .as_ref()
+            .and_then(|snapshot| snapshot.branch.clone());
+        self.archived_at = session.archived_at;
+        if let Some(directory) = session.environment.working_directory.clone() {
+            self.workspace_root = Some(directory);
+        }
+        self.client = session.client.as_ref().map(|client| client.name.clone());
+        self.code = Some(Box::new(session));
     }
 
     /// Persist the session to a file atomically (tempfile + rename).
@@ -790,6 +920,7 @@ impl ManagedSession {
                         fallback_model_ids: *record.fallback_model_ids,
                         auto_routing: record.auto_routing.map(|routing| *routing),
                         routing_authority: record.routing_authority.map(|authority| *authority),
+                        code: record.code,
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -959,6 +1090,7 @@ impl ManagedSession {
             fallback_model_ids: Box::new(self.fallback_model_ids.clone()),
             auto_routing: self.auto_routing.clone().map(Box::new),
             routing_authority: self.routing_authority.clone().map(Box::new),
+            code: self.code.clone(),
         }));
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -988,8 +1120,11 @@ mod tests {
         ManagedSession, ManagedSessionAutoRouting, ManagedSessionRoutingAuthority, PrivacyMode,
     };
     use crate::models::{ContentBlock, Message, MessageContent};
+    use agiworkforce_protocol::developer_session::{
+        DeveloperSessionSource, DeveloperSessionTrustMode,
+    };
     use chrono::{TimeZone, Utc};
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
     /// The config value (`label`) and the person-facing word (`trust_word`)
@@ -1040,6 +1175,68 @@ mod tests {
 
         assert_eq!(restored.auto_routing, session.auto_routing);
         assert_eq!(restored.routing_authority, session.routing_authority);
+    }
+
+    #[test]
+    fn a_session_written_before_v6_still_reads_as_one_code_session() {
+        let mut session = ManagedSession::new("session-legacy", Utc::now());
+        session.version = 5;
+        session.code = None;
+        session.title = Some("Fix the parser".to_string());
+        session.model = Some("registry/model-key".to_string());
+        session.created_by = Some("vscode".to_string());
+        session.client = Some("agi-vscode".to_string());
+        session.git_branch = Some("main".to_string());
+        session.workspace_root = Some(PathBuf::from("/work/repo"));
+        session.repository = Some("https://github.com/acme/widgets.git".to_string());
+        session.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Byok,
+            provider: "fixture-provider".to_string(),
+        });
+
+        let code = session.code_session();
+
+        assert_eq!(code.id.as_str(), "session-legacy");
+        assert_eq!(code.title.as_deref(), Some("Fix the parser"));
+        assert_eq!(code.source, DeveloperSessionSource::Vscode);
+        assert_eq!(code.trust_mode, DeveloperSessionTrustMode::Byok);
+        assert_eq!(code.provider.as_deref(), Some("fixture-provider"));
+        assert_eq!(
+            code.primary_repository_id.as_ref().map(|id| id.as_str()),
+            Some("github.com/acme/widgets")
+        );
+        assert_eq!(
+            code.environment.working_directory.as_deref(),
+            Some(Path::new("/work/repo"))
+        );
+        assert_eq!(code.git.as_ref().unwrap().branch.as_deref(), Some("main"));
+        assert_eq!(code.client.as_ref().unwrap().name, "agi-vscode");
+        assert_eq!(code.permission_profile_id.as_str(), "standard");
+    }
+
+    #[test]
+    fn an_embedded_code_session_survives_a_save_and_load() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("session.jsonl");
+        let mut session = ManagedSession::new("session-embedded", Utc::now());
+        let mut code = session.code_session();
+        code.title = Some("Named by the domain record".to_string());
+        code.push_task(agiworkforce_protocol::code_domain::CodeTask::new(
+            "t-1",
+            "session-embedded",
+            "Build",
+            agiworkforce_protocol::code_domain::ExecutionLocation::Cloud,
+            session.created_at,
+        ));
+        session.set_code_session(code.clone());
+
+        session.save_to_path(&path).unwrap();
+        let loaded = ManagedSession::load_from_path(&path).unwrap();
+
+        assert_eq!(loaded.code_session(), code);
+        assert_eq!(loaded.code_session().tasks.len(), 1);
+        assert_eq!(loaded.title.as_deref(), Some("Named by the domain record"));
+        assert_eq!(loaded.session_identity().as_str(), "session-embedded");
     }
 
     fn null_state_fields() -> (
@@ -1101,6 +1298,7 @@ mod tests {
             fallback_model_ids,
             auto_routing: None,
             routing_authority: None,
+            code: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -1152,6 +1350,7 @@ mod tests {
             fallback_model_ids,
             auto_routing: None,
             routing_authority: None,
+            code: None,
         };
 
         session.save_to_path(&path).unwrap();

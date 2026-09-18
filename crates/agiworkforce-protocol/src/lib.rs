@@ -11,6 +11,7 @@ pub use tool_name::ToolName;
 pub mod agent_events;
 pub mod approvals;
 pub mod async_utils;
+pub mod code_domain;
 pub mod config_types;
 pub mod developer_session;
 pub mod dynamic_tools;

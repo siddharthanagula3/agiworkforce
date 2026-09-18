@@ -1,4 +1,3 @@
-
 import * as vscode from 'vscode';
 import * as http from 'http';
 import * as https from 'https';
@@ -230,11 +229,20 @@ export function tryOpenDeviceAuthorizationUrl(
   });
 }
 
-export async function signInToAgiCloud(secrets: vscode.SecretStorage): Promise<boolean> {
+/// `post` and `openExternal` are injectable for the same reason the lower-level
+/// functions take them: the approved token has to be observed going into
+/// SecretStorage and nowhere else, and that cannot be asserted through a real
+/// network round trip.
+export async function signInToAgiCloud(
+  secrets: vscode.SecretStorage,
+  post: DeviceAuthPost = postJson,
+  openExternal: DeviceAuthOpenExternal = (target) =>
+    vscode.env.openExternal(vscode.Uri.parse(target)),
+): Promise<boolean> {
   const origin = getCloudWebOrigin();
   let authorization: DeviceAuthorizationRequest;
   try {
-    authorization = await requestDeviceAuthorization(origin);
+    authorization = await requestDeviceAuthorization(origin, post);
   } catch (error) {
     vscode.window.showErrorMessage(
       error instanceof Error ? error.message : 'Could not start AGI Cloud sign-in.',
@@ -242,7 +250,10 @@ export async function signInToAgiCloud(secrets: vscode.SecretStorage): Promise<b
     return false;
   }
 
-  const browserOpenResult = await tryOpenDeviceAuthorizationUrl(authorization.verificationUrl);
+  const browserOpenResult = await tryOpenDeviceAuthorizationUrl(
+    authorization.verificationUrl,
+    openExternal,
+  );
   if (browserOpenResult === 'rejected') {
     vscode.window.showErrorMessage(
       `Open ${authorization.verificationUrl} and enter ${authorization.userCode}.`,
@@ -282,7 +293,7 @@ export async function signInToAgiCloud(secrets: vscode.SecretStorage): Promise<b
         await new Promise((resolve) => setTimeout(resolve, authorization.pollIntervalMs));
         if (cancelToken.isCancellationRequested) return false;
 
-        const result = await pollDeviceAuthorization(origin, authorization.deviceCode);
+        const result = await pollDeviceAuthorization(origin, authorization.deviceCode, post);
         if (result.kind === 'approved') {
           await setAccountToken(secrets, result.token, result.expiresAt);
           vscode.window.showInformationMessage('Signed in to AGI Cloud.');
@@ -308,10 +319,15 @@ export async function signInToAgiCloud(secrets: vscode.SecretStorage): Promise<b
   );
 }
 
-export async function signOutOfAgiCloud(secrets: vscode.SecretStorage): Promise<boolean> {
+export async function signOutOfAgiCloud(
+  secrets: vscode.SecretStorage,
+  post: DeviceAuthPost = postJson,
+): Promise<boolean> {
   const token = await getAccountToken(secrets);
   const revoked =
-    token === undefined ? true : await revokeDeviceAuthorization(getCloudGatewayOrigin(), token);
+    token === undefined
+      ? true
+      : await revokeDeviceAuthorization(getCloudGatewayOrigin(), token, post);
 
   await clearAccountToken(secrets);
 

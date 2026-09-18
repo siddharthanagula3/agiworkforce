@@ -1,6 +1,18 @@
+use std::collections::BTreeSet;
 use std::fmt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+use agiworkforce_protocol::code_domain::{
+    redact_remote_credentials, ChangeKind, CodeEnvironment, ContainerState, CredentialRef,
+    CredentialSource, DiscoveredBinary, ExecutionLocation, NetworkCapability, Repository,
+    RepositoryChange, RepositoryId, RepositoryPolicy, RepositoryRemote, RepositorySnapshot,
+    ShellInfo,
+};
+use chrono::{DateTime, Utc};
+
+use crate::safety::network_target::{is_internal_host, INTERNAL_HOST_NAMES};
+use crate::sandbox::NetworkPolicy;
 
 /// System context about the current working directory and environment.
 #[derive(Debug, Clone)]
@@ -382,6 +394,516 @@ pub fn detect_editor_configs(cwd: &str) -> Vec<String> {
     }
 
     editors
+}
+
+// ---------------------------------------------------------------------------
+// Canonical domain records (agiworkforce_protocol::code_domain)
+//
+// `SystemContext` is the prompt-facing rendering. These build the records the
+// rest of the product stores, sends and decides on.
+// ---------------------------------------------------------------------------
+
+/// Names that make an environment variable a credential reference rather than
+/// configuration. Matched on the name, so no value is ever inspected to
+/// classify one.
+const CREDENTIAL_NAME_MARKERS: &[&str] = &[
+    "API_KEY",
+    "APIKEY",
+    "ACCESS_KEY",
+    "AUTH",
+    "CREDENTIAL",
+    "PASSWD",
+    "PASSWORD",
+    "PRIVATE_KEY",
+    "SECRET",
+    "SESSION_KEY",
+    "TOKEN",
+];
+
+const MAX_DISCOVERED_BINARIES: usize = 4_096;
+const MAX_VERSION_LINE_CHARS: usize = 120;
+
+fn git_output(dir: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Parse `git remote -v`. A repository may have any number of remotes, and
+/// fetch and push are separate directions on each.
+pub fn parse_git_remotes(text: &str) -> Vec<RepositoryRemote> {
+    let mut remotes: Vec<RepositoryRemote> = Vec::new();
+    for line in text.lines() {
+        let mut parts = line.split_whitespace();
+        let (Some(name), Some(url)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let direction = parts.next().unwrap_or("(fetch)");
+        if !remotes.iter().any(|remote| remote.name == name) {
+            let mut remote = RepositoryRemote::new(name, url);
+            remote.fetch = false;
+            remote.push = false;
+            remotes.push(remote);
+        }
+        let Some(remote) = remotes.iter_mut().find(|remote| remote.name == name) else {
+            continue;
+        };
+        if direction.contains("push") {
+            remote.push = true;
+        } else {
+            remote.fetch = true;
+        }
+    }
+    remotes
+}
+
+fn normalize_remote_identity(url: &str) -> String {
+    let without_scheme = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let without_user = without_scheme
+        .rsplit_once('@')
+        .map_or(without_scheme, |(_, rest)| rest);
+    without_user
+        .replace(':', "/")
+        .trim_end_matches(".git")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// A repository's identity from a remote URL alone, for callers that persisted
+/// the remote and not the whole record.
+pub fn repository_identity_from_remote(url: &str) -> RepositoryId {
+    RepositoryId::new(normalize_remote_identity(&redact_remote_credentials(url)))
+}
+
+/// A repository's identity: its primary remote when it has one, so the same
+/// repository cloned twice on one machine is one repository, and its root
+/// otherwise.
+pub fn repository_identity(remotes: &[RepositoryRemote], root: &Path) -> RepositoryId {
+    remotes
+        .iter()
+        .find(|remote| remote.name == "origin")
+        .or_else(|| remotes.first())
+        .map_or_else(
+            || RepositoryId::new(root.display().to_string()),
+            |remote| RepositoryId::new(normalize_remote_identity(&remote.url)),
+        )
+}
+
+/// Build the [`Repository`] the working directory belongs to, or `None` when
+/// it is not inside one.
+pub fn gather_repository(cwd: &Path) -> Option<Repository> {
+    let root = git_output(cwd, &["rev-parse", "--show-toplevel"])?
+        .trim()
+        .to_string();
+    if root.is_empty() {
+        return None;
+    }
+    let root = PathBuf::from(root);
+    let remotes = git_output(cwd, &["remote", "-v"])
+        .map(|text| parse_git_remotes(&text))
+        .unwrap_or_default();
+    let id = repository_identity(&remotes, &root);
+    let name = root
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| id.as_str().to_string());
+    let default_branch = git_output(
+        cwd,
+        &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+    )
+    .map(|text| text.trim().trim_start_matches("origin/").to_string())
+    .filter(|branch| !branch.is_empty());
+
+    let mut repository = Repository::local(id, name, root);
+    for remote in remotes {
+        repository = repository.with_remote(remote);
+    }
+    Some(repository.with_policy(RepositoryPolicy {
+        default_branch,
+        ..RepositoryPolicy::default()
+    }))
+}
+
+fn status_kind(code: char) -> Option<ChangeKind> {
+    match code {
+        'A' => Some(ChangeKind::Added),
+        'M' | 'T' | 'U' => Some(ChangeKind::Modified),
+        'D' => Some(ChangeKind::Deleted),
+        'R' | 'C' => Some(ChangeKind::Renamed),
+        _ => None,
+    }
+}
+
+/// Parse `git status --porcelain` into typed changes. The index column and the
+/// worktree column are distinct changes to the same path, which is what makes
+/// the staged state readable instead of guessed.
+pub fn parse_porcelain_status(text: &str) -> Vec<RepositoryChange> {
+    let mut changes = Vec::new();
+    for line in text.lines() {
+        if line.len() < 4 || !line.is_char_boundary(3) {
+            continue;
+        }
+        let mut columns = line.chars();
+        let index = columns.next().unwrap_or(' ');
+        let worktree = columns.next().unwrap_or(' ');
+        let path = line[3..].trim();
+        let path = path.rsplit(" -> ").next().unwrap_or(path).trim_matches('"');
+        if path.is_empty() {
+            continue;
+        }
+        if index == '?' && worktree == '?' {
+            changes.push(RepositoryChange::new(path, ChangeKind::Untracked, false));
+            continue;
+        }
+        if let Some(kind) = status_kind(index) {
+            changes.push(RepositoryChange::new(path, kind, true));
+        }
+        if let Some(kind) = status_kind(worktree) {
+            changes.push(RepositoryChange::new(path, kind, false));
+        }
+    }
+    changes
+}
+
+/// Capture what the repository holds right now. Every change starts attributed
+/// to the user; call [`RepositorySnapshot::attribute_against`] with the
+/// session's opening snapshot to tell later agent work apart from it.
+pub fn capture_repository_snapshot(
+    cwd: &Path,
+    repository_id: RepositoryId,
+    captured_at: DateTime<Utc>,
+) -> Option<RepositorySnapshot> {
+    let branch = git_output(cwd, &["rev-parse", "--abbrev-ref", "HEAD"])?
+        .trim()
+        .to_string();
+    let mut snapshot = RepositorySnapshot::new(repository_id, captured_at);
+    snapshot.detached_head = branch == "HEAD";
+    if !branch.is_empty() && !snapshot.detached_head {
+        snapshot.branch = Some(branch);
+    }
+    snapshot.head_commit = git_output(cwd, &["rev-parse", "HEAD"])
+        .map(|text| text.trim().to_string())
+        .filter(|commit| !commit.is_empty());
+    snapshot.changes = git_output(cwd, &["status", "--porcelain"])
+        .map(|text| parse_porcelain_status(&text))
+        .unwrap_or_default();
+    Some(snapshot)
+}
+
+fn is_executable(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn executable_candidates(name: &str) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        let mut candidates = vec![name.to_string()];
+        if let Ok(extensions) = std::env::var("PATHEXT") {
+            for extension in extensions.split(';').filter(|value| !value.is_empty()) {
+                candidates.push(format!("{name}{extension}"));
+            }
+        }
+        candidates
+    }
+    #[cfg(not(windows))]
+    {
+        vec![name.to_string()]
+    }
+}
+
+fn binary_path(name: &str) -> Option<PathBuf> {
+    if name.contains(std::path::MAIN_SEPARATOR) {
+        let direct = PathBuf::from(name);
+        return is_executable(&direct).then_some(direct);
+    }
+    let path_var = std::env::var_os("PATH")?;
+    let candidates = executable_candidates(name);
+    std::env::split_paths(&path_var).find_map(|dir| {
+        candidates
+            .iter()
+            .map(|candidate| dir.join(candidate))
+            .find(|path| is_executable(path))
+    })
+}
+
+fn binary_version(path: &Path) -> Option<String> {
+    let output = Command::new(path).arg("--version").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let line: String = text
+        .lines()
+        .next()?
+        .trim()
+        .chars()
+        .take(MAX_VERSION_LINE_CHARS)
+        .collect();
+    (!line.is_empty()).then_some(line)
+}
+
+/// Resolve any binary by name against `PATH`, with its self-reported version.
+/// Not a fixed list: the caller names what it wants to know about.
+pub fn discover_binary(name: &str) -> Option<DiscoveredBinary> {
+    let path = binary_path(name)?;
+    let binary = DiscoveredBinary::new(name, &path);
+    Some(match binary_version(&path) {
+        Some(version) => binary.versioned(version),
+        None => binary,
+    })
+}
+
+pub fn discover_binaries<I, S>(names: I) -> Vec<DiscoveredBinary>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    names
+        .into_iter()
+        .filter_map(|name| discover_binary(name.as_ref()))
+        .collect()
+}
+
+/// Every executable name reachable on `PATH`, in `PATH` precedence order.
+/// Versions are not probed here: running several thousand binaries to ask them
+/// would cost more than the answer is worth.
+pub fn discover_path_binaries() -> Vec<DiscoveredBinary> {
+    let Some(path_var) = std::env::var_os("PATH") else {
+        return Vec::new();
+    };
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    let mut binaries = Vec::new();
+    for dir in std::env::split_paths(&path_var) {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if binaries.len() >= MAX_DISCOVERED_BINARIES {
+                return binaries;
+            }
+            let path = entry.path();
+            if !is_executable(&path) {
+                continue;
+            }
+            let Some(name) = path
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+            else {
+                continue;
+            };
+            if seen.insert(name.clone()) {
+                binaries.push(DiscoveredBinary::new(name, path));
+            }
+        }
+    }
+    binaries
+}
+
+/// The interactive shell, with the version it reports rather than the name of
+/// whatever `$SHELL` points at.
+pub fn detect_shell() -> ShellInfo {
+    let path = std::env::var_os("SHELL")
+        .or_else(|| std::env::var_os("COMSPEC"))
+        .map(PathBuf::from);
+    let name = path
+        .as_ref()
+        .and_then(|path| path.file_name())
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "unknown".to_string());
+    let mut shell = ShellInfo::new(name);
+    if let Some(path) = path {
+        if let Some(version) = binary_version(&path) {
+            shell = shell.versioned(version);
+        }
+        shell = shell.at(path);
+    }
+    shell
+}
+
+/// Containers the session is actually inside, plus the ones the project merely
+/// configures. Presence of a `Dockerfile` is configuration; a running
+/// devcontainer is state, and only the second changes what a command can do.
+pub fn detect_container_states(cwd: &str) -> Vec<ContainerState> {
+    let mut states = Vec::new();
+    if Path::new("/.dockerenv").exists() {
+        states.push(ContainerState::running(
+            "docker",
+            std::env::var("HOSTNAME").unwrap_or_else(|_| "container".to_string()),
+        ));
+    }
+    for marker in ["REMOTE_CONTAINERS", "DEVCONTAINER", "CODESPACES"] {
+        if std::env::var_os(marker).is_some() {
+            states.push(ContainerState::running("devcontainer", marker));
+            break;
+        }
+    }
+    if std::env::var_os("KUBERNETES_SERVICE_HOST").is_some() {
+        states.push(ContainerState::running(
+            "kubernetes",
+            std::env::var("KUBERNETES_SERVICE_HOST").unwrap_or_else(|_| "cluster".to_string()),
+        ));
+    }
+    for kind in detect_containerization(cwd) {
+        if !states.iter().any(|state| state.kind == kind) {
+            states.push(ContainerState::configured(kind));
+        }
+    }
+    states
+}
+
+/// `NetworkCapability::except` compares host strings literally, so the record
+/// names the internal hosts a user reads; `denies_host` answers the rest.
+pub fn network_capability(policy: NetworkPolicy) -> NetworkCapability {
+    match policy {
+        NetworkPolicy::Deny => NetworkCapability::Offline,
+        NetworkPolicy::AllowExternal => NetworkCapability::except(
+            INTERNAL_HOST_NAMES
+                .iter()
+                .map(|host| (*host).to_string())
+                .collect(),
+        ),
+        NetworkPolicy::Allow => NetworkCapability::Full,
+    }
+}
+
+/// Whether `host` is refused under `policy`, covering the ranges and alternate
+/// spellings no displayed list can enumerate.
+pub fn network_denies_host(policy: NetworkPolicy, host: &str) -> bool {
+    match policy {
+        NetworkPolicy::Deny => true,
+        NetworkPolicy::AllowExternal => is_internal_host(host),
+        NetworkPolicy::Allow => false,
+    }
+}
+
+pub fn is_credential_env_name(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    CREDENTIAL_NAME_MARKERS
+        .iter()
+        .any(|marker| upper.contains(marker))
+}
+
+/// Credential *references* for the credential-shaped names among `vars`: the
+/// name and whether it is set. The value is consulted for emptiness and then
+/// dropped, so an environment is never represented as a raw `.env` dump.
+pub fn credential_refs_from<I, N, V>(vars: I) -> Vec<CredentialRef>
+where
+    I: IntoIterator<Item = (N, V)>,
+    N: AsRef<str>,
+    V: AsRef<str>,
+{
+    let mut refs: Vec<CredentialRef> = vars
+        .into_iter()
+        .filter_map(|(name, value)| {
+            let name = name.as_ref();
+            if !is_credential_env_name(name) {
+                return None;
+            }
+            Some(CredentialRef::new(
+                name,
+                CredentialSource::Environment,
+                !value.as_ref().is_empty(),
+            ))
+        })
+        .collect();
+    refs.sort_by(|left, right| left.name.cmp(&right.name));
+    refs.dedup_by(|left, right| left.name == right.name);
+    refs
+}
+
+pub fn credential_refs_from_env() -> Vec<CredentialRef> {
+    credential_refs_from(std::env::vars_os().map(|(key, value)| {
+        (
+            key.to_string_lossy().into_owned(),
+            value.to_string_lossy().into_owned(),
+        )
+    }))
+}
+
+/// Binaries worth resolving for this project, derived from what the project
+/// actually is rather than from a list of every tool the product knows.
+fn toolchain_binary_names(cwd: &str) -> Vec<String> {
+    let mut names = vec!["git".to_string()];
+    if let Some(project) = detect_project_type(cwd) {
+        let binary = match project.as_str() {
+            "rust" => "cargo",
+            "go" => "go",
+            "elixir" => "mix",
+            "ruby" => "ruby",
+            "java" => "java",
+            "dotnet" => "dotnet",
+            "python" => "python3",
+            "node" => "node",
+            "make" => "make",
+            other => other,
+        };
+        names.push(binary.to_string());
+    }
+    for label in detect_package_manager(cwd)
+        .into_iter()
+        .chain(detect_monorepo_type(cwd))
+    {
+        if let Some(first) = label.split_whitespace().next() {
+            names.push(first.to_string());
+        }
+    }
+    for tool in detect_containerization(cwd) {
+        names.push(match tool.as_str() {
+            "kubernetes" => "kubectl".to_string(),
+            "devcontainer" => "devcontainer".to_string(),
+            other => other.to_string(),
+        });
+    }
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Build the [`CodeEnvironment`] the session runs in.
+pub fn gather_code_environment(cwd: &Path, network: NetworkPolicy) -> CodeEnvironment {
+    let cwd_display = cwd.display().to_string();
+    let mut environment = CodeEnvironment::new(
+        ExecutionLocation::Local,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    );
+    environment.working_directory = Some(cwd.to_path_buf());
+    environment.shell = detect_shell();
+    environment.binaries = discover_binaries(toolchain_binary_names(&cwd_display));
+    environment.containers = detect_container_states(&cwd_display);
+    environment.network = network_capability(network);
+    environment.credentials = credential_refs_from_env();
+    if let Some(helper) = git_output(cwd, &["config", "--get", "credential.helper"])
+        .map(|text| text.trim().to_string())
+        .filter(|helper| !helper.is_empty())
+    {
+        environment.credentials.push(CredentialRef::new(
+            helper,
+            CredentialSource::GitCredentialHelper,
+            true,
+        ));
+    }
+    environment
 }
 
 impl fmt::Display for SystemContext {
@@ -1188,5 +1710,219 @@ mod tests {
     #[test]
     fn test_git_branch_parsing_runs() {
         let _result = detect_git_branch();
+    }
+
+    // -----------------------------------------------------------------------
+    // Canonical domain records
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn remotes_are_enumerated_not_reduced_to_origin() {
+        let remotes = parse_git_remotes(
+            "origin\thttps://github.com/acme/widgets.git (fetch)\n\
+             origin\thttps://github.com/acme/widgets.git (push)\n\
+             upstream\thttps://github.com/upstream/widgets.git (fetch)\n",
+        );
+
+        assert_eq!(remotes.len(), 2);
+        assert_eq!(remotes[0].name, "origin");
+        assert!(remotes[0].fetch && remotes[0].push);
+        assert_eq!(remotes[1].name, "upstream");
+        assert!(remotes[1].fetch && !remotes[1].push);
+    }
+
+    #[test]
+    fn a_remote_credential_never_reaches_the_repository_record() {
+        let remotes =
+            parse_git_remotes("origin\thttps://user:ghp_secret@github.com/acme/w.git (fetch)\n");
+
+        assert_eq!(remotes[0].url, "https://github.com/acme/w.git");
+        assert_eq!(
+            repository_identity(&remotes, Path::new("/work/w")).as_str(),
+            "github.com/acme/w"
+        );
+    }
+
+    #[test]
+    fn repository_identity_falls_back_to_the_root_without_a_remote() {
+        assert_eq!(
+            repository_identity(&[], Path::new("/work/w")).as_str(),
+            "/work/w"
+        );
+    }
+
+    #[test]
+    fn porcelain_status_separates_the_index_from_the_worktree() {
+        let changes = parse_porcelain_status(
+            "MM src/both.rs\n\
+             A  src/staged.rs\n\
+             ?? src/new.rs\n\
+             R  src/old.rs -> src/renamed.rs\n\
+             D  src/gone.rs\n",
+        );
+
+        let staged: Vec<_> = changes
+            .iter()
+            .filter(|change| change.staged)
+            .map(|change| change.path.display().to_string())
+            .collect();
+        assert_eq!(
+            staged,
+            vec![
+                "src/both.rs",
+                "src/staged.rs",
+                "src/renamed.rs",
+                "src/gone.rs"
+            ]
+        );
+
+        let unstaged: Vec<_> = changes
+            .iter()
+            .filter(|change| !change.staged)
+            .map(|change| change.path.display().to_string())
+            .collect();
+        assert_eq!(unstaged, vec!["src/both.rs", "src/new.rs"]);
+
+        assert!(changes
+            .iter()
+            .any(|change| change.kind == ChangeKind::Untracked));
+        assert!(changes
+            .iter()
+            .any(|change| change.kind == ChangeKind::Renamed));
+    }
+
+    #[test]
+    fn a_snapshot_of_a_real_repository_reads_branch_and_staged_state() {
+        let (_dir, path) = tmp_project_dir();
+        let root = Path::new(&path);
+        let run = |args: &[&str]| {
+            Command::new("git")
+                .current_dir(root)
+                .args(args)
+                .output()
+                .expect("git available");
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.email", "test@example.invalid"]);
+        run(&["config", "user.name", "Test"]);
+        fs::write(root.join("README.md"), "hello").unwrap();
+        run(&["add", "README.md"]);
+        run(&["commit", "-q", "-m", "init"]);
+        fs::write(root.join("staged.txt"), "staged").unwrap();
+        run(&["add", "staged.txt"]);
+        fs::write(root.join("loose.txt"), "loose").unwrap();
+
+        let repository = gather_repository(root).expect("inside a repository");
+        assert!(repository.remotes.is_empty());
+        assert!(!repository.is_remote_only());
+
+        let snapshot =
+            capture_repository_snapshot(root, repository.id.clone(), Utc::now()).expect("snapshot");
+        assert_eq!(snapshot.branch.as_deref(), Some("main"));
+        assert!(!snapshot.detached_head);
+        assert!(snapshot.head_commit.is_some());
+        assert_eq!(snapshot.staged().count(), 1);
+        assert_eq!(snapshot.unstaged().count(), 1);
+    }
+
+    #[test]
+    fn credential_names_are_matched_by_name_alone() {
+        assert!(is_credential_env_name("ANTHROPIC_API_KEY"));
+        assert!(is_credential_env_name("github_token"));
+        assert!(is_credential_env_name("DB_PASSWORD"));
+        assert!(!is_credential_env_name("PATH"));
+        assert!(!is_credential_env_name("HOME"));
+    }
+
+    #[test]
+    fn a_credential_reference_records_the_name_and_never_the_value() {
+        let refs = credential_refs_from([
+            ("ANTHROPIC_API_KEY", "sk-not-a-real-value"),
+            ("EMPTY_TOKEN", ""),
+            ("PATH", "/usr/bin"),
+        ]);
+
+        let serialized = serde_json::to_string(&refs).unwrap();
+        assert!(serialized.contains("ANTHROPIC_API_KEY"));
+        assert!(!serialized.contains("sk-not-a-real-value"));
+        assert!(!serialized.contains("/usr/bin"));
+        assert_eq!(refs.len(), 2);
+        assert!(refs
+            .iter()
+            .any(|entry| entry.name == "EMPTY_TOKEN" && !entry.present));
+    }
+
+    #[test]
+    fn a_gathered_environment_describes_where_code_runs() {
+        let (_dir, path) = tmp_project_dir();
+        fs::write(Path::new(&path).join("Cargo.toml"), "[package]").unwrap();
+
+        let environment = gather_code_environment(Path::new(&path), NetworkPolicy::AllowExternal);
+
+        assert_eq!(environment.location, ExecutionLocation::Local);
+        assert_eq!(environment.os, std::env::consts::OS);
+        assert!(!environment.shell.name.is_empty());
+        assert!(environment.has_binary("git"));
+        assert!(!serde_json::to_string(&environment).unwrap().is_empty());
+    }
+
+    #[test]
+    fn network_capability_keeps_internal_hosts_out_of_a_general_approval() {
+        assert_eq!(
+            network_capability(NetworkPolicy::Deny),
+            NetworkCapability::Offline
+        );
+        assert_eq!(
+            network_capability(NetworkPolicy::Allow),
+            NetworkCapability::Full
+        );
+        let external = network_capability(NetworkPolicy::AllowExternal);
+        assert!(external.allows("github.com"));
+        for name in INTERNAL_HOST_NAMES {
+            assert!(!external.allows(name), "displayed but allowed: {name}");
+        }
+        assert!(!external.allows("169.254.169.254"));
+    }
+
+    #[test]
+    fn a_general_approval_refuses_internal_spellings_no_list_enumerates() {
+        for host in ["127.1.2.3", "api.localhost", "fd00:ec2::254", "2130706433"] {
+            assert!(
+                network_denies_host(NetworkPolicy::AllowExternal, host),
+                "should be refused: {host}"
+            );
+        }
+        assert!(!network_denies_host(
+            NetworkPolicy::AllowExternal,
+            "github.com"
+        ));
+        assert!(network_denies_host(NetworkPolicy::Deny, "github.com"));
+        assert!(!network_denies_host(NetworkPolicy::Allow, "127.0.0.1"));
+    }
+
+    #[test]
+    fn binaries_are_discovered_by_name_against_the_real_path() {
+        let git = discover_binary("git").expect("git is on PATH for the test suite");
+        assert!(is_executable(&git.path));
+        assert!(git.version.is_some());
+        assert!(discover_binary("agi-binary-that-does-not-exist").is_none());
+
+        let all = discover_path_binaries();
+        assert!(all.iter().any(|binary| binary.name.starts_with("git")));
+        assert!(all.len() <= MAX_DISCOVERED_BINARIES);
+    }
+
+    #[test]
+    fn a_configured_container_is_not_reported_as_a_running_one() {
+        let (_dir, path) = tmp_project_dir();
+        fs::write(Path::new(&path).join("Dockerfile"), "FROM alpine").unwrap();
+
+        let states = detect_container_states(&path);
+
+        let docker = states
+            .iter()
+            .find(|state| state.kind == "docker")
+            .expect("docker configured");
+        assert!(!docker.is_running() || Path::new("/.dockerenv").exists());
     }
 }

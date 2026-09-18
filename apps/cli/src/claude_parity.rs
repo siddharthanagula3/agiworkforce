@@ -203,6 +203,7 @@ pub fn handle_shared_command(
         "/mobile" | "/ios" | "/android" => {
             ParityCommandResult::SystemMessage(render_companion("Mobile"))
         }
+        "/connectors" => ParityCommandResult::SystemMessage(connectors::render_policy()),
         "/install-github-app" => {
             ParityCommandResult::SystemMessage(render_install_app("GitHub"))
         }
@@ -624,22 +625,29 @@ pub fn handle_tag(session: &mut AgentSession, arg: &str) -> String {
 }
 
 pub fn render_install_app(app_name: &str) -> String {
-    let url = match app_name {
-        "GitHub" | "github" | "install-github-app" => {
-            Some("https://github.com/apps/agiworkforce/installations/new")
+    let (connector_id, url) = match app_name {
+        "GitHub" | "github" | "install-github-app" => (
+            Some("github"),
+            Some("https://github.com/apps/agiworkforce/installations/new"),
+        ),
+        "Slack" | "slack" | "install-slack-app" => {
+            (Some("slack"), Some("https://api.slack.com/apps?new_app=1"))
         }
-        "Slack" | "slack" | "install-slack-app" => Some("https://api.slack.com/apps?new_app=1"),
-        _ => None,
+        _ => (None, None),
     };
 
+    if let Some(connector_id) = connector_id {
+        let policy = connectors::cached_policy();
+        let decision =
+            connectors::evaluate_connector_access(policy.as_ref(), connector_id, false, None);
+        if !decision.allowed {
+            return format!("{app_name} app installation\n  {}", decision.reason);
+        }
+    }
+
     if let Some(install_url) = url {
-        // Do NOT auto-launch a browser here. This helper runs from a slash-command
-        // dispatch table that is also exercised by tests and command-palette
-        // enumeration, so opening a tab here fired GitHub/Slack install pages
-        // unprompted (the connector OAuth flow is cloud-deferred and not yet
-        // wired). Print the URL instead; the user opens it themselves. When the
-        // connector flow ships, route an explicit open through
-        // `crate::oauth::open_external_url(.., UserActionContext::user_initiated())`.
+        // Never auto-launch a browser: this dispatch table is also walked by tests
+        // and the command palette, which opened install pages unprompted.
         format!(
             "{app_name} app installation\n  Visit: {install_url}\n  Complete the authorization flow and then reconnect via /plugin."
         )
@@ -1160,6 +1168,356 @@ pub fn split_shell_words(input: &str) -> Vec<String> {
         words.push(current);
     }
     words
+}
+
+/// A contract match with `packages/client/client-runtime/src/connectors`, not a
+/// second implementation; the test module below fails if the two drift.
+pub mod connectors {
+    use std::sync::{Mutex, OnceLock};
+
+    use serde::Deserialize;
+
+    use crate::cloud::{CloudClient, CloudError};
+    use crate::platform::runtime::session::PrivacyMode;
+
+    pub const CONNECTOR_POLICY_PATH: &str = "/api/settings/organization/connector-policy";
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum AccessCode {
+        Allowed,
+        Ungoverned,
+        ConnectorBlocked,
+        ConnectorNotAllowed,
+        CustomConnectorsDisabled,
+        McpHostNotAllowed,
+        PluginBlocked,
+        PluginNotAllowed,
+    }
+
+    impl AccessCode {
+        pub fn as_str(self) -> &'static str {
+            match self {
+                AccessCode::Allowed => "allowed",
+                AccessCode::Ungoverned => "ungoverned",
+                AccessCode::ConnectorBlocked => "connector_blocked",
+                AccessCode::ConnectorNotAllowed => "connector_not_allowed",
+                AccessCode::CustomConnectorsDisabled => "custom_connectors_disabled",
+                AccessCode::McpHostNotAllowed => "mcp_host_not_allowed",
+                AccessCode::PluginBlocked => "plugin_blocked",
+                AccessCode::PluginNotAllowed => "plugin_not_allowed",
+            }
+        }
+
+        pub const ALL: [AccessCode; 8] = [
+            AccessCode::Allowed,
+            AccessCode::Ungoverned,
+            AccessCode::ConnectorBlocked,
+            AccessCode::ConnectorNotAllowed,
+            AccessCode::CustomConnectorsDisabled,
+            AccessCode::McpHostNotAllowed,
+            AccessCode::PluginBlocked,
+            AccessCode::PluginNotAllowed,
+        ];
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct AccessDecision {
+        pub allowed: bool,
+        pub code: AccessCode,
+        pub reason: String,
+    }
+
+    fn allowed() -> AccessDecision {
+        AccessDecision {
+            allowed: true,
+            code: AccessCode::Allowed,
+            reason: "Permitted by workspace connector policy.".to_string(),
+        }
+    }
+
+    fn ungoverned() -> AccessDecision {
+        AccessDecision {
+            allowed: true,
+            code: AccessCode::Ungoverned,
+            reason: "No workspace connector policy applies.".to_string(),
+        }
+    }
+
+    #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+    #[serde(rename_all = "camelCase")]
+    pub struct ConnectorAccessPolicy {
+        #[serde(default)]
+        pub allowed_connectors: Vec<String>,
+        #[serde(default)]
+        pub blocked_connectors: Vec<String>,
+        #[serde(default = "default_true")]
+        pub allow_custom_connectors: bool,
+        #[serde(default)]
+        pub allowed_plugins: Vec<String>,
+        #[serde(default)]
+        pub blocked_plugins: Vec<String>,
+        #[serde(default)]
+        pub allowed_mcp_hosts: Vec<String>,
+    }
+
+    fn default_true() -> bool {
+        true
+    }
+
+    /// An empty policy is unrestricted, not deny-all, as in the evaluator.
+    impl Default for ConnectorAccessPolicy {
+        fn default() -> Self {
+            Self {
+                allowed_connectors: Vec::new(),
+                blocked_connectors: Vec::new(),
+                allow_custom_connectors: true,
+                allowed_plugins: Vec::new(),
+                blocked_plugins: Vec::new(),
+                allowed_mcp_hosts: Vec::new(),
+            }
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct PolicyResponse {
+        #[serde(default)]
+        configured: bool,
+        #[serde(default)]
+        policy: Option<ConnectorAccessPolicy>,
+    }
+
+    fn normalize(value: &str) -> String {
+        value.trim().to_lowercase()
+    }
+
+    fn has(list: &[String], value: &str) -> bool {
+        !value.is_empty() && list.iter().any(|entry| normalize(entry) == value)
+    }
+
+    pub fn mcp_host_matches(pattern: &str, hostname: &str) -> bool {
+        let rule = normalize(pattern);
+        let host = hostname.trim().to_lowercase();
+        let host = host.strip_suffix('.').unwrap_or(&host);
+        if rule.is_empty() || host.is_empty() {
+            return false;
+        }
+        if rule.starts_with("*.") {
+            let suffix = &rule[1..];
+            return host.ends_with(suffix) && host.len() > suffix.len();
+        }
+        host == rule
+    }
+
+    fn hostname_of(url: &str) -> String {
+        let without_scheme = match url.split_once("://") {
+            Some((scheme, rest)) if !scheme.is_empty() && !rest.is_empty() => rest,
+            _ => return String::new(),
+        };
+        let authority = without_scheme
+            .split(['/', '?', '#'])
+            .next()
+            .unwrap_or_default();
+        let authority = authority.rsplit('@').next().unwrap_or_default();
+        let host = match authority.strip_prefix('[') {
+            Some(rest) => rest.split(']').next().unwrap_or_default(),
+            None => authority.split(':').next().unwrap_or_default(),
+        };
+        host.to_lowercase()
+    }
+
+    pub fn evaluate_mcp_host_access(
+        policy: Option<&ConnectorAccessPolicy>,
+        url: &str,
+    ) -> AccessDecision {
+        let Some(policy) = policy else {
+            return ungoverned();
+        };
+        if policy.allowed_mcp_hosts.is_empty() {
+            return allowed();
+        }
+        let hostname = hostname_of(url);
+        if !hostname.is_empty()
+            && policy
+                .allowed_mcp_hosts
+                .iter()
+                .any(|pattern| mcp_host_matches(pattern, &hostname))
+        {
+            return allowed();
+        }
+        AccessDecision {
+            allowed: false,
+            code: AccessCode::McpHostNotAllowed,
+            reason: if hostname.is_empty() {
+                "Your workspace administrator only allows MCP servers on approved hosts."
+                    .to_string()
+            } else {
+                format!(
+                    "Your workspace administrator only allows MCP servers on approved hosts, and \
+                     \"{hostname}\" is not one of them."
+                )
+            },
+        }
+    }
+
+    pub fn evaluate_connector_access(
+        policy: Option<&ConnectorAccessPolicy>,
+        connector_id: &str,
+        is_custom: bool,
+        url: Option<&str>,
+    ) -> AccessDecision {
+        let Some(policy) = policy else {
+            return ungoverned();
+        };
+        let connector = normalize(connector_id);
+
+        if is_custom && !policy.allow_custom_connectors {
+            return AccessDecision {
+                allowed: false,
+                code: AccessCode::CustomConnectorsDisabled,
+                reason: "Your workspace administrator does not allow custom connectors. Use an \
+                         approved integration from the catalog instead."
+                    .to_string(),
+            };
+        }
+
+        if is_custom {
+            if let Some(url) = url.filter(|value| !value.is_empty()) {
+                let host = evaluate_mcp_host_access(Some(policy), url);
+                if !host.allowed {
+                    return host;
+                }
+            }
+        }
+
+        if has(&policy.blocked_connectors, &connector) {
+            return AccessDecision {
+                allowed: false,
+                code: AccessCode::ConnectorBlocked,
+                reason: format!(
+                    "Your workspace administrator has blocked the \"{connector_id}\" connector."
+                ),
+            };
+        }
+
+        if has(&policy.allowed_connectors, &connector) {
+            return allowed();
+        }
+
+        if !policy.allowed_connectors.is_empty() {
+            return AccessDecision {
+                allowed: false,
+                code: AccessCode::ConnectorNotAllowed,
+                reason: format!(
+                    "Your workspace administrator restricts which connectors may be used, and \
+                     \"{connector_id}\" is not on the approved list."
+                ),
+            };
+        }
+
+        allowed()
+    }
+
+    pub fn evaluate_plugin_access(
+        policy: Option<&ConnectorAccessPolicy>,
+        plugin_key: &str,
+    ) -> AccessDecision {
+        let Some(policy) = policy else {
+            return ungoverned();
+        };
+        let plugin = normalize(plugin_key);
+        if has(&policy.blocked_plugins, &plugin) {
+            return AccessDecision {
+                allowed: false,
+                code: AccessCode::PluginBlocked,
+                reason: format!(
+                    "Your workspace administrator has blocked the \"{plugin_key}\" plugin."
+                ),
+            };
+        }
+        if has(&policy.allowed_plugins, &plugin) {
+            return allowed();
+        }
+        if !policy.allowed_plugins.is_empty() {
+            return AccessDecision {
+                allowed: false,
+                code: AccessCode::PluginNotAllowed,
+                reason: format!(
+                    "Your workspace administrator restricts which plugins may be installed, and \
+                     \"{plugin_key}\" is not on the approved list."
+                ),
+            };
+        }
+        allowed()
+    }
+
+    fn cache() -> &'static Mutex<Option<Option<ConnectorAccessPolicy>>> {
+        static CACHE: OnceLock<Mutex<Option<Option<ConnectorAccessPolicy>>>> = OnceLock::new();
+        CACHE.get_or_init(|| Mutex::new(None))
+    }
+
+    /// Fail-open as the web gate is: an unread policy must not stop a member
+    /// whose workspace permits everything. The server gate is authoritative.
+    pub fn cached_policy() -> Option<ConnectorAccessPolicy> {
+        cache().lock().ok()?.clone().flatten()
+    }
+
+    pub fn set_cached_policy(policy: Option<ConnectorAccessPolicy>) {
+        if let Ok(mut slot) = cache().lock() {
+            *slot = Some(policy);
+        }
+    }
+
+    pub fn clear_cached_policy() {
+        if let Ok(mut slot) = cache().lock() {
+            *slot = None;
+        }
+    }
+
+    /// Reads the workspace policy from the same endpoint every other surface
+    /// reads, and remembers it for this process.
+    pub async fn fetch_workspace_policy(
+        privacy: PrivacyMode,
+    ) -> Result<Option<ConnectorAccessPolicy>, CloudError> {
+        let client = CloudClient::connect(privacy)?;
+        let response: PolicyResponse = client.get(CONNECTOR_POLICY_PATH, &[]).await?;
+        let policy = if response.configured {
+            response.policy
+        } else {
+            None
+        };
+        set_cached_policy(policy.clone());
+        Ok(policy)
+    }
+
+    pub fn render_policy() -> String {
+        let Some(policy) = cached_policy() else {
+            return "Workspace connectors\n  No workspace connector policy has been read in this \
+                    session. Sign in with /login on a Managed session to load it."
+                .to_string();
+        };
+        let list = |values: &[String]| {
+            if values.is_empty() {
+                "(none)".to_string()
+            } else {
+                values.join(", ")
+            }
+        };
+        format!(
+            "Workspace connectors\n  approved: {}\n  blocked: {}\n  custom endpoints: {}\n  \
+             approved MCP hosts: {}\n  approved plugins: {}\n  blocked plugins: {}",
+            list(&policy.allowed_connectors),
+            list(&policy.blocked_connectors),
+            if policy.allow_custom_connectors {
+                "allowed"
+            } else {
+                "not allowed"
+            },
+            list(&policy.allowed_mcp_hosts),
+            list(&policy.allowed_plugins),
+            list(&policy.blocked_plugins),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -1825,5 +2183,154 @@ mod chrome_state_tests {
                 "{availability:?} still claims the CLI cannot drive Chrome"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod connector_contract_tests {
+    use super::connectors::{
+        clear_cached_policy, evaluate_connector_access, evaluate_mcp_host_access,
+        evaluate_plugin_access, mcp_host_matches, set_cached_policy, AccessCode,
+        ConnectorAccessPolicy, CONNECTOR_POLICY_PATH,
+    };
+    use super::render_install_app;
+
+    fn contract() -> serde_json::Value {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../packages/client/client-runtime/src/connectors/connector-contract.json");
+        let raw = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("shared connector contract unreadable: {error}"));
+        serde_json::from_str(&raw).expect("shared connector contract is not valid JSON")
+    }
+
+    fn policy() -> ConnectorAccessPolicy {
+        ConnectorAccessPolicy {
+            allowed_connectors: vec![],
+            blocked_connectors: vec!["Slack".to_string()],
+            allow_custom_connectors: false,
+            allowed_plugins: vec![],
+            blocked_plugins: vec!["payroll-pack".to_string()],
+            allowed_mcp_hosts: vec![
+                "mcp.example.com".to_string(),
+                "*.internal.example".to_string(),
+            ],
+        }
+    }
+
+    #[test]
+    fn every_shared_access_code_has_a_rust_variant_and_no_more() {
+        let contract = contract();
+        let shared: Vec<String> = contract["accessCodes"]
+            .as_array()
+            .expect("accessCodes")
+            .iter()
+            .map(|value| value.as_str().expect("access code is a string").to_string())
+            .collect();
+        let mut ours: Vec<String> = AccessCode::ALL
+            .iter()
+            .map(|code| code.as_str().to_string())
+            .collect();
+        let mut theirs = shared.clone();
+        ours.sort();
+        theirs.sort();
+        assert_eq!(
+            ours, theirs,
+            "Rust access codes drifted from the shared contract"
+        );
+        assert_eq!(
+            contract["policyPath"].as_str(),
+            Some(CONNECTOR_POLICY_PATH),
+            "the CLI reads a different policy endpoint than the other surfaces"
+        );
+    }
+
+    #[test]
+    fn refusals_carry_the_same_sentence_every_surface_shows() {
+        let policy = policy();
+        let blocked = evaluate_connector_access(Some(&policy), "slack", false, None);
+        assert!(!blocked.allowed);
+        assert_eq!(blocked.code, AccessCode::ConnectorBlocked);
+        assert_eq!(
+            blocked.reason,
+            "Your workspace administrator has blocked the \"slack\" connector."
+        );
+
+        let restricted = ConnectorAccessPolicy {
+            allowed_connectors: vec!["github".to_string()],
+            ..policy.clone()
+        };
+        let not_allowed = evaluate_connector_access(Some(&restricted), "linear", false, None);
+        assert_eq!(not_allowed.code, AccessCode::ConnectorNotAllowed);
+        assert_eq!(
+            not_allowed.reason,
+            "Your workspace administrator restricts which connectors may be used, and \"linear\" \
+             is not on the approved list."
+        );
+
+        let custom = evaluate_connector_access(Some(&policy), "internal", true, None);
+        assert_eq!(custom.code, AccessCode::CustomConnectorsDisabled);
+
+        let plugin = evaluate_plugin_access(Some(&policy), "payroll-pack");
+        assert_eq!(plugin.code, AccessCode::PluginBlocked);
+        assert_eq!(
+            plugin.reason,
+            "Your workspace administrator has blocked the \"payroll-pack\" plugin."
+        );
+    }
+
+    #[test]
+    fn an_explicit_block_beats_an_explicit_allow() {
+        let both = ConnectorAccessPolicy {
+            allowed_connectors: vec!["github".to_string()],
+            blocked_connectors: vec!["github".to_string()],
+            allow_custom_connectors: true,
+            ..ConnectorAccessPolicy::default()
+        };
+        assert_eq!(
+            evaluate_connector_access(Some(&both), "github", false, None).code,
+            AccessCode::ConnectorBlocked
+        );
+    }
+
+    #[test]
+    fn an_empty_allowlist_means_unrestricted_and_no_policy_means_ungoverned() {
+        let empty = ConnectorAccessPolicy::default();
+        assert!(evaluate_connector_access(Some(&empty), "anything", false, None).allowed);
+        assert!(evaluate_connector_access(Some(&empty), "anything", true, None).allowed);
+        let decision = evaluate_connector_access(None, "anything", false, None);
+        assert!(decision.allowed);
+        assert_eq!(decision.code, AccessCode::Ungoverned);
+    }
+
+    #[test]
+    fn mcp_hosts_match_exactly_or_by_suffix() {
+        assert!(mcp_host_matches("mcp.example.com", "MCP.example.com."));
+        assert!(mcp_host_matches("*.internal.example", "a.internal.example"));
+        assert!(!mcp_host_matches("*.internal.example", "internal.example"));
+        assert!(!mcp_host_matches("", "internal.example"));
+
+        let policy = policy();
+        assert!(evaluate_mcp_host_access(Some(&policy), "https://mcp.example.com/sse").allowed);
+        let refused = evaluate_mcp_host_access(Some(&policy), "https://elsewhere.example/sse");
+        assert_eq!(refused.code, AccessCode::McpHostNotAllowed);
+        assert!(refused.reason.contains("elsewhere.example"));
+        assert!(!evaluate_mcp_host_access(Some(&policy), "not a url").allowed);
+    }
+
+    #[test]
+    fn a_blocked_connector_stops_the_cli_install_flow() {
+        clear_cached_policy();
+        assert!(render_install_app("Slack").contains("https://api.slack.com"));
+
+        set_cached_policy(Some(policy()));
+        let rendered = render_install_app("Slack");
+        assert!(
+            !rendered.contains("https://api.slack.com"),
+            "the CLI still offered an install URL the workspace blocked: {rendered}"
+        );
+        assert!(rendered.contains("has blocked the \"slack\" connector"));
+
+        assert!(render_install_app("GitHub").contains("https://github.com/apps"));
+        clear_cached_policy();
     }
 }

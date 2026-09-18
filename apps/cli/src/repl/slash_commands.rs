@@ -533,7 +533,7 @@ pub(super) async fn handle_slash_command(
                     eprintln!("{}", ts::accent_header("Auth Status:"));
                     for s in &statuses {
                         eprintln!(
-                            "  {:<18} {:<10} {}{}",
+                            "  {:<18} {:<10} {}{} [{}]",
                             s.provider,
                             s.auth_type,
                             s.status,
@@ -541,6 +541,7 @@ pub(super) async fn handle_slash_command(
                                 .as_ref()
                                 .map(|e| format!(" (expires: {})", e))
                                 .unwrap_or_default(),
+                            s.last_used.as_deref().unwrap_or("never used"),
                         );
                     }
                 }

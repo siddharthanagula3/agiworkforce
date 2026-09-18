@@ -89,11 +89,19 @@ pub fn missing_sandbox_message(os: &str) -> String {
 /// Network access opt-in flag for sandboxed execution.
 ///
 /// Default: network is denied. Callers that legitimately need outbound access
-/// (npm install, git clone, curl APIs) must pass `NetworkPolicy::Allow` explicitly.
+/// (npm install, git clone, curl APIs) must pass an allowing policy explicitly.
+///
+/// `AllowExternal` is the policy a general network approval grants. It keeps
+/// the loopback interface blocked, so an approved `curl` cannot turn into a
+/// request against a service bound to the developer's own machine. Seatbelt
+/// enforces that in the profile; Bubblewrap has no address filter, so on Linux
+/// the enforcement is the caller-side destination check that refuses an
+/// internal target before any approval is offered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NetworkPolicy {
     #[default]
     Deny,
+    AllowExternal,
     Allow,
 }
 
@@ -238,6 +246,21 @@ fn apply_environment_policy(command: &mut tokio::process::Command, scrub: bool) 
     }
 }
 
+/// Create the private scratch directory a Seatbelt-wrapped program writes its
+/// temporary files to.
+///
+/// The directory is not dropped here: the process this argv belongs to is
+/// spawned by the caller and outlives this call, so the OS temp sweep reclaims
+/// it rather than a `TempDir` guard.
+fn program_scratch_dir() -> Result<PathBuf> {
+    let scratch = tempfile::Builder::new()
+        .prefix("agi-sandbox-program-")
+        .tempdir()
+        .map_err(|error| anyhow::anyhow!("failed to create sandbox scratch directory: {error}"))?
+        .keep();
+    Ok(scratch.canonicalize().unwrap_or(scratch))
+}
+
 /// Rewrite a program and its arguments so the sandbox backend launches it.
 /// The program is exec'd directly, without a shell in between.
 pub fn sandboxed_program(
@@ -247,7 +270,21 @@ pub fn sandboxed_program(
 ) -> Result<(String, Vec<String>)> {
     match manager.sandbox_type {
         SandboxType::MacosSeatbelt => {
-            let mut wrapped = vec!["-p".to_string(), seatbelt_profile(manager, None)?];
+            let scratch_dir = program_scratch_dir()?;
+            let mut wrapped = vec![
+                "-p".to_string(),
+                seatbelt_profile(manager, Some(&scratch_dir))?,
+            ];
+            // The caller spawns this argv later, so TMPDIR travels through `env`
+            // rather than on a Command this function does not own.
+            let scratch_path = scratch_dir.to_str().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "sandbox scratch directory is not valid UTF-8: {:?}",
+                    scratch_dir
+                )
+            })?;
+            wrapped.push("/usr/bin/env".to_string());
+            wrapped.push(format!("TMPDIR={scratch_path}"));
             wrapped.push(program.to_string());
             wrapped.extend(args.iter().cloned());
             Ok(("sandbox-exec".to_string(), wrapped))
@@ -402,17 +439,25 @@ fn writable_roots(manager: &SandboxManager) -> Result<Vec<PathBuf>> {
 fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Result<String> {
     let ws = validate_and_escape_seatbelt_path(&manager.workspace_dir)?;
 
+    // SBPL is last-match-wins, so the loopback denial has to follow the allow.
     let network_rules = match manager.network_policy {
         NetworkPolicy::Allow => "(allow network-outbound)\n(allow network-inbound)\n",
+        NetworkPolicy::AllowExternal => {
+            "(allow network-outbound)\n(allow network-inbound)\n(deny network-outbound (remote ip \"localhost:*\"))\n"
+        }
         NetworkPolicy::Deny => "",
     };
 
     let mut scratch_read_rules = String::new();
     let mut write_rules = String::from("(allow file-write* (literal \"/dev/null\"))\n");
     match &manager.policy {
-        SandboxPolicy::ReadOnly => {
+        // Both write policies get one private scratch directory rather than the
+        // whole of /tmp: a blanket `/tmp` write let a sandboxed command reach
+        // every other session's temporary files, and the tempfile crate,
+        // mktemp, python and node all honour TMPDIR.
+        SandboxPolicy::ReadOnly | SandboxPolicy::WorkspaceWrite { .. } => {
             let scratch_dir = scratch_dir.ok_or_else(|| {
-                anyhow::anyhow!("read-only Seatbelt execution requires a private scratch directory")
+                anyhow::anyhow!("Seatbelt execution requires a private scratch directory")
             })?;
             let scratch_dir = validate_and_escape_seatbelt_path(scratch_dir)?;
             scratch_read_rules
@@ -420,10 +465,6 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
             write_rules.push_str(&format!(
                 "(allow file-write* (subpath \"{scratch_dir}\"))\n"
             ));
-        }
-        SandboxPolicy::WorkspaceWrite { .. } => {
-            write_rules
-                .push_str("(allow file-write* (subpath \"/tmp\") (subpath \"/private/tmp\"))\n");
             for root in writable_roots(manager)? {
                 let root = validate_and_escape_seatbelt_path(&root)?;
                 write_rules.push_str(&format!("(allow file-write* (subpath \"{root}\"))\n"));
@@ -459,10 +500,37 @@ fn seatbelt_profile(manager: &SandboxManager, scratch_dir: Option<&Path>) -> Res
     ))
 }
 
-fn bubblewrap_args(manager: &SandboxManager, command: &str) -> Result<Vec<String>> {
+fn bubblewrap_args(manager: &SandboxManager, invocation: &Invocation<'_>) -> Result<Vec<String>> {
     let mut args = bubblewrap_prefix(manager)?;
-    args.extend(["sh".to_string(), "-c".to_string(), command.to_string()]);
+    args.extend(invocation.argv());
     Ok(args)
+}
+
+/// How a sandboxed execution reaches the kernel.
+///
+/// `Program` skips the shell entirely, so nothing in an argument can be read as
+/// a separator, redirection or expansion. `Shell` stays for command strings
+/// that genuinely need shell semantics (pipes, chains, redirection, expansion).
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Invocation<'a> {
+    Shell(&'a str),
+    Program {
+        program: &'a str,
+        args: &'a [String],
+    },
+}
+
+impl Invocation<'_> {
+    fn argv(&self) -> Vec<String> {
+        match self {
+            Invocation::Shell(command) => {
+                vec!["sh".to_string(), "-c".to_string(), (*command).to_string()]
+            }
+            Invocation::Program { program, args } => std::iter::once((*program).to_string())
+                .chain(args.iter().cloned())
+                .collect(),
+        }
+    }
 }
 
 fn bubblewrap_prefix(manager: &SandboxManager) -> Result<Vec<String>> {
@@ -549,7 +617,7 @@ pub(crate) async fn execute_sandboxed_with_input(
 ) -> Result<std::process::Output> {
     execute_sandboxed_in_environment(
         manager,
-        command,
+        Invocation::Shell(command),
         cwd,
         stdin,
         timeout,
@@ -558,20 +626,41 @@ pub(crate) async fn execute_sandboxed_with_input(
     .await
 }
 
+/// Run one program under the sandbox with its arguments passed through as argv,
+/// so no shell parses them.
+pub(crate) async fn execute_sandboxed_program_with_timeout(
+    manager: &SandboxManager,
+    program: &str,
+    args: &[String],
+    cwd: Option<&Path>,
+    timeout: Option<std::time::Duration>,
+) -> Result<std::process::Output> {
+    execute_sandboxed_in_environment(
+        manager,
+        Invocation::Program { program, args },
+        cwd,
+        None,
+        timeout,
+        sandbox_settings().scrub_environment,
+    )
+    .await
+}
+
 async fn execute_sandboxed_in_environment(
     manager: &SandboxManager,
-    command: &str,
+    invocation: Invocation<'_>,
     cwd: Option<&Path>,
     stdin: Option<Vec<u8>>,
     timeout: Option<std::time::Duration>,
     scrub_environment: bool,
 ) -> Result<std::process::Output> {
-    let mut cmd = tokio::process::Command::new("sh");
-    cmd.arg("-c").arg(command);
-    if let Some(dir) = cwd {
-        cmd.current_dir(dir);
-    }
+    let argv = invocation.argv();
     if matches!(manager.policy, SandboxPolicy::DangerFullAccess) {
+        let mut cmd = tokio::process::Command::new(&argv[0]);
+        cmd.args(&argv[1..]);
+        if let Some(dir) = cwd {
+            cmd.current_dir(dir);
+        }
         return crate::process_tree::output(cmd, stdin, timeout)
             .await
             .map_err(anyhow::Error::new)
@@ -579,36 +668,21 @@ async fn execute_sandboxed_in_environment(
     }
     match manager.sandbox_type {
         SandboxType::MacosSeatbelt => {
-            let scratch_dir = if manager.policy == SandboxPolicy::ReadOnly {
-                Some(
-                    tempfile::Builder::new()
-                        .prefix("agi-sandbox-scratch-")
-                        .tempdir()
-                        .map_err(|error| {
-                            anyhow::anyhow!(
-                                "failed to create read-only sandbox scratch directory: {error}"
-                            )
-                        })?,
-                )
-            } else {
-                None
-            };
-            let profile =
-                seatbelt_profile(manager, scratch_dir.as_ref().map(tempfile::TempDir::path))?;
+            let scratch_dir = tempfile::Builder::new()
+                .prefix("agi-sandbox-scratch-")
+                .tempdir()
+                .map_err(|error| {
+                    anyhow::anyhow!("failed to create sandbox scratch directory: {error}")
+                })?;
+            let profile = seatbelt_profile(manager, Some(scratch_dir.path()))?;
             let mut scmd = tokio::process::Command::new("sandbox-exec");
             apply_environment_policy(&mut scmd, scrub_environment);
-            scmd.arg("-p")
-                .arg(&profile)
-                .arg("sh")
-                .arg("-c")
-                .arg(command);
-            if let Some(scratch_dir) = scratch_dir.as_ref() {
-                let scratch_path = scratch_dir
-                    .path()
-                    .canonicalize()
-                    .unwrap_or_else(|_| scratch_dir.path().to_path_buf());
-                scmd.env("TMPDIR", scratch_path);
-            }
+            scmd.arg("-p").arg(&profile).args(&argv);
+            let scratch_path = scratch_dir
+                .path()
+                .canonicalize()
+                .unwrap_or_else(|_| scratch_dir.path().to_path_buf());
+            scmd.env("TMPDIR", scratch_path);
             if let Some(dir) = cwd {
                 scmd.current_dir(dir);
             }
@@ -620,7 +694,7 @@ async fn execute_sandboxed_in_environment(
         SandboxType::LinuxBubblewrap => {
             let mut bcmd = tokio::process::Command::new("bwrap");
             apply_environment_policy(&mut bcmd, scrub_environment);
-            let bwrap_args = bubblewrap_args(manager, command)?;
+            let bwrap_args = bubblewrap_args(manager, &invocation)?;
             bcmd.args(&bwrap_args);
             if let Some(dir) = cwd {
                 bcmd.current_dir(dir);
@@ -728,7 +802,14 @@ mod environment_and_policy_tests {
         assert_eq!(program, "sandbox-exec");
         assert_eq!(wrapped[0], "-p");
         assert!(wrapped[1].contains("(deny default)"));
-        assert_eq!(&wrapped[2..], &["npx", "--stdio", "a b"]);
+        assert_eq!(wrapped[2], "/usr/bin/env");
+        let scratch = wrapped[3].strip_prefix("TMPDIR=").expect("TMPDIR argument");
+        assert!(
+            Path::new(scratch).is_dir(),
+            "scratch dir missing: {scratch}"
+        );
+        assert!(wrapped[1].contains(&format!("(allow file-write* (subpath \"{scratch}\"))")));
+        assert_eq!(&wrapped[4..], &["npx", "--stdio", "a b"]);
 
         manager.sandbox_type = SandboxType::LinuxBubblewrap;
         let (program, wrapped) = sandboxed_program(&manager, "npx", &args).unwrap();
@@ -738,6 +819,54 @@ mod environment_and_policy_tests {
 
         manager.sandbox_type = SandboxType::None;
         assert!(sandboxed_program(&manager, "npx", &args).is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_wrapped_program_launches_and_keeps_a_writable_scratch_under_every_policy() {
+        if SandboxType::detect() == SandboxType::None {
+            return;
+        }
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_path = workspace.path().canonicalize().expect("workspace path");
+        let run = |policy: &SandboxPolicy, script: &str| {
+            let mut manager = SandboxManager::new(policy.clone(), workspace_path.clone());
+            manager.sandbox_type = SandboxType::MacosSeatbelt;
+            let (program, args) =
+                sandboxed_program(&manager, "/bin/sh", &["-c".to_string(), script.to_string()])
+                    .unwrap_or_else(|error| panic!("{policy:?} could not be wrapped: {error}"));
+            let output = std::process::Command::new(&program)
+                .args(&args)
+                .output()
+                .expect("launch sandbox-exec");
+            assert!(
+                output.status.success(),
+                "{policy:?} failed to launch: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).into_owned()
+        };
+
+        let scratch_policies = [
+            SandboxPolicy::ReadOnly,
+            SandboxPolicy::WorkspaceWrite {
+                writable_roots: Vec::new(),
+            },
+        ];
+        for policy in &scratch_policies {
+            assert_eq!(run(policy, "printf launched"), "launched");
+            assert_eq!(
+                run(
+                    policy,
+                    r#"printf scratch-ok > "$TMPDIR/probe" && cat "$TMPDIR/probe""#
+                ),
+                "scratch-ok"
+            );
+        }
+        assert_eq!(
+            run(&SandboxPolicy::DangerFullAccess, "printf launched"),
+            "launched"
+        );
     }
 
     #[cfg(target_os = "macos")]
@@ -755,7 +884,7 @@ mod environment_and_policy_tests {
                 .unwrap();
         let scrubbed = execute_sandboxed_in_environment(
             &manager,
-            "env",
+            Invocation::Shell("env"),
             Some(&workspace_path),
             None,
             None,
@@ -769,7 +898,7 @@ mod environment_and_policy_tests {
 
         let inherited = execute_sandboxed_in_environment(
             &manager,
-            "env",
+            Invocation::Shell("env"),
             Some(&workspace_path),
             None,
             None,
@@ -1067,7 +1196,7 @@ mod tests {
             SandboxPolicy::ReadOnly,
             PathBuf::from("/tmp/developer-workspace"),
         );
-        let args = bubblewrap_args(&mgr, "true").expect("args");
+        let args = bubblewrap_args(&mgr, &Invocation::Shell("true")).expect("args");
         assert!(!args.windows(3).any(|window| {
             window
                 == [
@@ -1163,6 +1292,90 @@ mod tests {
         assert_eq!(String::from_utf8_lossy(&output.stdout), "scratch-ok");
     }
 
+    #[cfg(target_os = "macos")]
+    #[tokio::test]
+    async fn workspace_write_keeps_temporary_files_out_of_the_shared_tmp() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let mgr = SandboxManager::full_auto(workspace.path().to_path_buf());
+        if mgr.sandbox_type == SandboxType::None {
+            return;
+        }
+        let marker =
+            std::path::PathBuf::from(format!("/tmp/agi-sandbox-escape-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+
+        let escape = execute_sandboxed(
+            &mgr,
+            &format!("printf escaped > {}", marker.display()),
+            Some(workspace.path()),
+        )
+        .await
+        .expect("sandbox should launch");
+
+        assert!(
+            !escape.status.success(),
+            "a workspace-write sandbox wrote into the shared /tmp"
+        );
+        assert!(!marker.exists(), "shared /tmp file was created: {marker:?}");
+
+        let scratch = execute_sandboxed(
+            &mgr,
+            "printf scratch-ok > \"$TMPDIR/agi-scratch\"; cat \"$TMPDIR/agi-scratch\"",
+            Some(workspace.path()),
+        )
+        .await
+        .expect("sandbox should launch");
+        assert!(
+            scratch.status.success(),
+            "the private scratch dir must stay writable: {}",
+            String::from_utf8_lossy(&scratch.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&scratch.stdout), "scratch-ok");
+    }
+
+    /// The network-disabled profile has to block a real connection, not just
+    /// omit a rule. The target is a listener this test owns, so the assertion
+    /// does not depend on the host having internet access.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[tokio::test]
+    async fn network_disabled_profile_blocks_a_real_outbound_connection() {
+        if SandboxType::detect() == SandboxType::None
+            || !crate::process_tree::executable_exists("curl")
+        {
+            return;
+        }
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listener");
+        let port = listener.local_addr().expect("listener addr").port();
+        assert!(
+            std::net::TcpStream::connect(("127.0.0.1", port)).is_ok(),
+            "the fixture's own listener must be reachable outside the sandbox"
+        );
+
+        let workspace = tempfile::tempdir().expect("workspace");
+        let workspace_path = workspace
+            .path()
+            .canonicalize()
+            .unwrap_or_else(|_| workspace.path().to_path_buf());
+        let manager =
+            SandboxManager::for_command_execution(workspace_path.clone(), NetworkPolicy::Deny)
+                .expect("manager");
+
+        let output = execute_sandboxed_with_timeout(
+            &manager,
+            &format!("curl -sS --max-time 5 http://127.0.0.1:{port}/"),
+            Some(&workspace_path),
+            Some(std::time::Duration::from_secs(30)),
+        )
+        .await
+        .expect("sandbox should launch");
+
+        assert!(
+            !output.status.success(),
+            "the network-disabled profile allowed an outbound connection: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+
     #[test]
     fn command_execution_manager_uses_explicit_network_policy_or_fails_closed() {
         let detected = SandboxType::detect();
@@ -1188,64 +1401,111 @@ mod tests {
         set_sandbox_disabled(false);
     }
 
+    /// The profile the real execution path would hand to `sandbox-exec`, for a
+    /// workspace-write manager on the given network policy.
+    fn profile_for(network: NetworkPolicy) -> (tempfile::TempDir, tempfile::TempDir, String) {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let scratch = tempfile::tempdir().expect("scratch");
+        let manager = SandboxManager {
+            sandbox_type: SandboxType::MacosSeatbelt,
+            policy: SandboxPolicy::default(),
+            workspace_dir: workspace.path().to_path_buf(),
+            network_policy: network,
+        };
+        let profile = seatbelt_profile(&manager, Some(scratch.path())).expect("profile");
+        (workspace, scratch, profile)
+    }
+
     #[test]
     fn seatbelt_profile_deny_omits_network_outbound_rule() {
-        // Simulate the profile generation logic from execute_sandboxed.
-        let network_rules = match NetworkPolicy::Deny {
-            NetworkPolicy::Allow => "(allow network-outbound)\n",
-            NetworkPolicy::Deny => "",
-        };
-        let profile = format!(
-            "(version 1)\n(deny default)\n{network_rules}(allow file-read*)\n",
-            network_rules = network_rules
-        );
+        let (_workspace, _scratch, profile) = profile_for(NetworkPolicy::Deny);
         assert!(
             !profile.contains("allow network-outbound"),
-            "deny-network profile must not contain allow network-outbound"
+            "deny-network profile must not contain allow network-outbound:\n{profile}"
         );
     }
 
     #[test]
     fn seatbelt_profile_allow_includes_network_outbound_rule() {
-        let network_rules = match NetworkPolicy::Allow {
-            NetworkPolicy::Allow => "(allow network-outbound)\n",
-            NetworkPolicy::Deny => "",
-        };
-        let profile = format!(
-            "(version 1)\n(deny default)\n{network_rules}(allow file-read*)\n",
-            network_rules = network_rules
+        let (_workspace, _scratch, profile) = profile_for(NetworkPolicy::Allow);
+        assert!(
+            profile.contains("(allow network-outbound)"),
+            "allow-network profile must contain allow network-outbound:\n{profile}"
         );
         assert!(
-            profile.contains("allow network-outbound"),
-            "allow-network profile must contain allow network-outbound"
+            !profile.contains("(deny network-outbound"),
+            "full allow must not deny loopback:\n{profile}"
+        );
+    }
+
+    #[test]
+    fn seatbelt_external_only_allows_the_network_but_denies_loopback_last() {
+        let (_workspace, _scratch, profile) = profile_for(NetworkPolicy::AllowExternal);
+        let allow = profile
+            .find("(allow network-outbound)")
+            .expect("external policy must allow outbound");
+        let deny = profile
+            .find("(deny network-outbound (remote ip \"localhost:*\"))")
+            .expect("external policy must deny loopback");
+        // SBPL is last-match-wins, so the order is the enforcement.
+        assert!(
+            deny > allow,
+            "loopback denial must follow the allow:\n{profile}"
+        );
+    }
+
+    #[test]
+    fn seatbelt_workspace_write_scopes_temporary_writes_to_a_private_scratch_dir() {
+        let (_workspace, scratch, profile) = profile_for(NetworkPolicy::Deny);
+        let scratch_path = scratch
+            .path()
+            .canonicalize()
+            .unwrap_or_else(|_| scratch.path().to_path_buf());
+        assert!(
+            profile.contains(&format!(
+                "(allow file-write* (subpath \"{}\"))",
+                scratch_path.display()
+            )),
+            "the private scratch dir must be writable:\n{profile}"
+        );
+        assert!(
+            !profile.contains("(allow file-write* (subpath \"/tmp\")"),
+            "the whole of /tmp must not be writable:\n{profile}"
         );
     }
 
     #[test]
     fn bwrap_deny_args_include_unshare_net() {
-        // Simulate the bwrap argument construction.
-        let network_policy = NetworkPolicy::Deny;
-        let mut args: Vec<&str> = vec!["--die-with-parent", "--unshare-pid", "--unshare-uts"];
-        if network_policy == NetworkPolicy::Deny {
-            args.push("--unshare-net");
-        }
+        let workspace = tempfile::tempdir().expect("workspace");
+        let manager = SandboxManager {
+            sandbox_type: SandboxType::LinuxBubblewrap,
+            policy: SandboxPolicy::default(),
+            workspace_dir: workspace.path().to_path_buf(),
+            network_policy: NetworkPolicy::Deny,
+        };
+        let args = bubblewrap_prefix(&manager).expect("bwrap args");
         assert!(
-            args.contains(&"--unshare-net"),
-            "bwrap deny-network args must include --unshare-net"
+            args.contains(&"--unshare-net".to_string()),
+            "bwrap deny-network args must include --unshare-net: {args:?}"
         );
     }
 
     #[test]
     fn bwrap_allow_args_exclude_unshare_net() {
-        let network_policy = NetworkPolicy::Allow;
-        let mut args: Vec<&str> = vec!["--die-with-parent", "--unshare-pid", "--unshare-uts"];
-        if network_policy == NetworkPolicy::Deny {
-            args.push("--unshare-net");
+        let workspace = tempfile::tempdir().expect("workspace");
+        for network in [NetworkPolicy::Allow, NetworkPolicy::AllowExternal] {
+            let manager = SandboxManager {
+                sandbox_type: SandboxType::LinuxBubblewrap,
+                policy: SandboxPolicy::default(),
+                workspace_dir: workspace.path().to_path_buf(),
+                network_policy: network,
+            };
+            let args = bubblewrap_prefix(&manager).expect("bwrap args");
+            assert!(
+                !args.contains(&"--unshare-net".to_string()),
+                "{network:?} args must NOT include --unshare-net: {args:?}"
+            );
         }
-        assert!(
-            !args.contains(&"--unshare-net"),
-            "bwrap allow-network args must NOT include --unshare-net"
-        );
     }
 
     #[test]
