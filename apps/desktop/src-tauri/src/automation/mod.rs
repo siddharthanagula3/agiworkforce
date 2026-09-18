@@ -1,4 +1,5 @@
 pub mod action_router;
+pub mod audit;
 pub mod browser;
 pub mod codegen;
 pub mod computer_use;
