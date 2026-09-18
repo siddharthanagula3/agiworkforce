@@ -3,12 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   deleteMarketplaceSource,
   isMissingPluginMarketplaceSchema,
@@ -23,7 +22,7 @@ const ParamsSchema = z.object({ id: z.string().uuid() });
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleDelete(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -39,7 +38,7 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
 
   let removed: boolean;
   try {
-    removed = await deleteMarketplaceSource(getNeonDb(), userId, params.data.id);
+    removed = await deleteMarketplaceSource(db, userId, params.data.id);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) {
       throw marketplaceUnavailableError();

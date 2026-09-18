@@ -126,6 +126,48 @@ pub fn dollars_for_completions(completions: &[CompletionUsage]) -> f64 {
     completions.iter().map(CompletionUsage::dollars).sum()
 }
 
+/// A spend cap and what has been charged against it. The cloud Work runtime
+/// enforces the same shape, so a refusal means the same thing on either engine.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CostBudget {
+    pub cap_usd: f64,
+    pub spent_usd: f64,
+}
+
+impl CostBudget {
+    pub fn new(cap_usd: f64, spent_usd: f64) -> Self {
+        let sane = |value: f64| {
+            if value.is_finite() {
+                value.max(0.0)
+            } else {
+                0.0
+            }
+        };
+        Self {
+            cap_usd: sane(cap_usd),
+            spent_usd: sane(spent_usd),
+        }
+    }
+
+    pub fn remaining_usd(&self) -> f64 {
+        (self.cap_usd - self.spent_usd).max(0.0)
+    }
+
+    pub fn is_exhausted(&self) -> bool {
+        self.remaining_usd() <= 0.0
+    }
+
+    /// One child's even share of what is left, so `slots` children together
+    /// cannot outspend the parent's remaining budget. `None` once nothing is
+    /// left to share, which is a refusal rather than an unbounded child.
+    pub fn child_cap_usd(&self, slots: usize) -> Option<f64> {
+        if slots == 0 || self.is_exhausted() {
+            return None;
+        }
+        Some(self.remaining_usd() / slots as f64)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct CostLedger {
     /// Total accumulated cost across all turns this session.
@@ -192,6 +234,42 @@ impl CostLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_budget_reports_what_is_left_and_refuses_once_it_is_spent() {
+        let budget = CostBudget::new(1.0, 0.25);
+        assert!((budget.remaining_usd() - 0.75).abs() < 1e-12);
+        assert!(!budget.is_exhausted());
+
+        let spent = CostBudget::new(1.0, 1.0);
+        assert!(spent.is_exhausted());
+        assert_eq!(spent.remaining_usd(), 0.0);
+        assert_eq!(spent.child_cap_usd(7), None);
+
+        let overrun = CostBudget::new(1.0, 4.0);
+        assert!(overrun.is_exhausted());
+        assert_eq!(overrun.remaining_usd(), 0.0);
+    }
+
+    #[test]
+    fn children_share_the_parent_remaining_budget_and_never_exceed_it() {
+        let budget = CostBudget::new(2.0, 0.5);
+        let slots = 3usize;
+        let child = budget
+            .child_cap_usd(slots)
+            .expect("a budget with headroom must yield a child cap");
+        assert!((child * slots as f64 - budget.remaining_usd()).abs() < 1e-12);
+        assert_eq!(budget.child_cap_usd(0), None);
+    }
+
+    #[test]
+    fn a_budget_never_reports_a_negative_or_nonfinite_cap() {
+        let budget = CostBudget::new(f64::NAN, f64::INFINITY);
+        assert_eq!(budget.cap_usd, 0.0);
+        assert_eq!(budget.spent_usd, 0.0);
+        assert!(budget.is_exhausted());
+        assert_eq!(CostBudget::new(-5.0, -1.0).cap_usd, 0.0);
+    }
 
     #[test]
     fn a_subagent_run_adds_to_session_cost_without_counting_as_a_turn() {

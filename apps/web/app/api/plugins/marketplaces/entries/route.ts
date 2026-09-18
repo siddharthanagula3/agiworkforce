@@ -2,11 +2,10 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   isMissingPluginMarketplaceSchema,
   listMarketplaceEntriesForUser,
@@ -20,7 +19,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
@@ -28,8 +27,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   let sources;
   try {
     [entries, sources] = await Promise.all([
-      listMarketplaceEntriesForUser(getNeonDb(), userId),
-      listMarketplaceSources(getNeonDb(), userId),
+      listMarketplaceEntriesForUser(db, userId),
+      listMarketplaceSources(db, userId),
     ]);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) {

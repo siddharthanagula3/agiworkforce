@@ -3,12 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   PluginMarketplaceFetchError,
   PluginMarketplaceValidationError,
@@ -32,13 +31,13 @@ const RegisterMarketplaceBodySchema = z
   .strict();
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'model-catalog', `user:${userId}`);
   if (limited) return limited;
 
   let sources;
   try {
-    sources = await listMarketplaceSources(getNeonDb(), userId);
+    sources = await listMarketplaceSources(db, userId);
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) {
       throw marketplaceUnavailableError();
@@ -53,7 +52,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getClerkAuthUser(request);
+  const { db, userId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -73,7 +72,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const source = await registerMarketplaceSource(getNeonDb(), userId, {
+    const source = await registerMarketplaceSource(db, userId, {
       repositoryUrl: parsed.data.repositoryUrl,
       ref: parsed.data.ref ?? null,
       name: parsed.data.name ?? null,
