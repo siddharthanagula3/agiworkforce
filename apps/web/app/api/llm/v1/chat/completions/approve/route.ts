@@ -47,8 +47,10 @@ import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
-import { loadToolApprovalPolicy } from '../lib/tool-approval-policy';
+import { loadToolApprovalPolicy, policyAutoApprovesTool } from '../lib/tool-approval-policy';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
+import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
+import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 
 const SECRET_IN_GUIDANCE_MESSAGE =
   'This guidance was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.';
@@ -299,6 +301,13 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
   }
 
   const toolApprovalPolicy = await loadToolApprovalPolicy(db, userId);
+
+  // The checkpoint froze the client's pre-substitution tool list, so a native
+  // search the first leg withdrew returns unless it is withdrawn again here.
+  processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
+    approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+    genericBackendConfigured: webSearchBackendConfigured(),
+  });
 
   // Transport, not authorization. Every gate above still stands, auth, managed
   // compute, organization policy, spend limit, the tenant-scoped checkpoint
