@@ -14,7 +14,12 @@ import {
   copyPrivateObjectIfUnchanged,
   type BoundedStoredObject,
 } from '@/lib/server/object-storage';
-import { scanUploadBytes } from '@/lib/security/upload-scan';
+import { scanUploadBytes, uploadFindingRejects } from '@/lib/security/upload-scan';
+import {
+  inspectOutboundContent,
+  type OutboundFinding,
+} from '@/lib/security/outbound-content-inspection';
+import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { matchDenylistedUpload, recordModerationEvent } from '@/lib/moderation';
 import { logger } from '@/lib/logger';
 import {
@@ -78,6 +83,29 @@ async function isTemporaryChatUpload(
     );
     return input.temporary === true;
   }
+}
+
+const UPLOAD_INSPECTION_BYTES = 256_000;
+
+// Everything the upload scanner reported without refusing the file: the
+// workspace policy, not the scanner, decides what happens to those.
+function reportedUploadFindings(
+  findings: Awaited<ReturnType<typeof scanUploadBytes>>['findings'],
+): OutboundFinding[] {
+  const counts = new Map<string, OutboundFinding>();
+  for (const finding of findings) {
+    if (uploadFindingRejects(finding)) continue;
+    const existing = counts.get(finding.code);
+    if (existing) existing.count += 1;
+    else
+      counts.set(finding.code, {
+        scanner: 'upload_scan',
+        name: finding.code,
+        severity: 'medium',
+        count: 1,
+      });
+  }
+  return [...counts.values()];
 }
 
 async function purgeRejectedUpload(userId: string, storageKey: string): Promise<void> {
@@ -234,6 +262,33 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(
       'This file could not be attached because its contents failed a safety check.',
     );
+  }
+
+  const dlp = await inspectOutboundContent({
+    channel: 'upload',
+    value: {
+      fileName,
+      mimeType,
+      content: object.data.subarray(0, UPLOAD_INSPECTION_BYTES),
+    },
+    userId,
+    organizationId,
+    resourceId: scannedKey,
+    priorFindings: reportedUploadFindings(scan.findings),
+    // An attachment is stored as the bytes that were uploaded, and a document
+    // format cannot be rewritten in place, so a redacting workspace refuses it.
+    resolveMode: async () => {
+      const policy = await resolveSecretHandlingPolicy(db, userId);
+      return policy.mode === 'redact' ? { ...policy, mode: 'block' } : policy;
+    },
+  });
+  if (dlp.action === 'blocked') {
+    logger.warn(
+      { userId, storageKey, fileName },
+      '[uploads] rejected an attachment that the workspace data policy blocks',
+    );
+    await purgeRejectedUpload(userId, storageKey);
+    throw createError.validation(dlp.message);
   }
 
   // The presigned PUT for `storageKey` stays valid for minutes after this check, so the

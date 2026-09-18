@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -43,7 +45,10 @@ import {
   signPayload,
   upsertAuditDestination,
   verifySignature,
+  AUDIT_STREAM_MAX_BODY_BYTES,
 } from '../audit-streaming-service';
+import { AUDIT_SIGNATURE_HEADER, AUDIT_TIMESTAMP_HEADER } from '../audit-streaming-proxy';
+import { formatAuditEvent } from '../enterprise-audit-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const NOW = new Date('2026-08-23T12:00:00.000Z');
@@ -583,5 +588,75 @@ describe('audit continuity through a SIEM outage', () => {
     expect(result.status).toBe('failed');
     expect(result.buffered).toBe(3);
     expect(result.delivered).toBe(0);
+  });
+});
+
+const SCHEMA_DOC = readFileSync(
+  path.resolve(__dirname, '../../../../../docs/compliance/siem-event-schema.md'),
+  'utf8',
+);
+
+const STREAM_EVENT_FIELDS = [
+  'schema_version',
+  'id',
+  'organization_id',
+  'actor_user_id',
+  'surface',
+  'action',
+  'resource_type',
+  'resource_id',
+  'outcome',
+  'severity',
+  'metadata',
+  'created_at',
+];
+
+describe('the published schema document', () => {
+  it('names every field the streamed envelope actually carries', async () => {
+    const h = harness();
+    await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
+    const sent = JSON.parse(
+      String((h.fetchImpl as unknown as Mock).mock.calls[0]?.[1]?.body),
+    ) as Record<string, unknown> & { events: Record<string, unknown>[] };
+
+    for (const field of Object.keys(sent)) {
+      expect(SCHEMA_DOC, field).toContain(`\`${field}\``);
+    }
+    expect(Object.keys(sent.events[0]!).sort()).toEqual([...STREAM_EVENT_FIELDS].sort());
+    for (const field of STREAM_EVENT_FIELDS) {
+      expect(SCHEMA_DOC, field).toContain(`\`${field}\``);
+    }
+  });
+
+  it('names every field the JSONL export carries, separately from the stream', () => {
+    const exported = formatAuditEvent({
+      id: 'id',
+      organization_id: ORG,
+      actor_user_id: null,
+      surface: 'web',
+      action: 'admin_policy_changed',
+      resource_type: 'organization_admin_policy',
+      resource_id: null,
+      outcome: 'success',
+      severity: 'info',
+      metadata: null,
+      created_at: '2026-08-23T10:00:00.000Z',
+    });
+
+    for (const field of Object.keys(exported)) {
+      expect(SCHEMA_DOC, field).toContain(`\`${field}\``);
+    }
+    expect(SCHEMA_DOC).toContain('application/x-ndjson');
+  });
+
+  it('states the delivery limits that are declared in code', () => {
+    expect(SCHEMA_DOC).toContain(AUDIT_STREAM_SCHEMA);
+    expect(SCHEMA_DOC).toContain(`\`${AUDIT_STREAM_SCHEMA_VERSION}\``);
+    expect(SCHEMA_DOC).toContain(String(AUDIT_STREAM_BATCH));
+    expect(SCHEMA_DOC).toContain(String(AUDIT_STREAM_MAX_BODY_BYTES));
+    expect(SCHEMA_DOC).toContain(String(AUDIT_STREAM_FAILURE_CEILING));
+    expect(SCHEMA_DOC).toContain(String(AUDIT_STREAM_CONTINUITY_ALERT_MINUTES));
+    expect(SCHEMA_DOC).toContain(AUDIT_TIMESTAMP_HEADER);
+    expect(SCHEMA_DOC).toContain(AUDIT_SIGNATURE_HEADER);
   });
 });
