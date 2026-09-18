@@ -327,6 +327,12 @@
       "purpose": "Vendor-neutral database and identity data-layer boundary for AGI Workforce"
     },
     {
+      "name": "@agiworkforce/files",
+      "path": "packages/platform/files",
+      "kind": "package",
+      "purpose": "Canonical File service: one file identity, version chain, lineage graph, ingestion routing and Library domain shared by web, desktop and mobile."
+    },
+    {
       "name": "@agiworkforce/identity",
       "path": "packages/platform/identity",
       "kind": "package",
