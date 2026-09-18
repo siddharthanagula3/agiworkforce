@@ -765,8 +765,11 @@ pub struct ThreadForkParams {
 
 /// Per-turn permission posture selected by an interactive developer surface.
 ///
-/// These values intentionally mirror the CLI's existing `PermissionMode`
-/// vocabulary without importing an application-layer type into the protocol.
+/// This is the one permission-mode vocabulary for every developer surface. The
+/// CLI, VS Code, the desktop shell and the Chrome bridge each spell it their
+/// own way in their own settings; [`DeveloperAgentMode::from_client_spelling`]
+/// is where those spellings become one value, so a session opened on one
+/// surface and resumed on another runs under the same posture.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
@@ -775,6 +778,100 @@ pub enum DeveloperAgentMode {
     Auto,
     Plan,
     Bypass,
+}
+
+/// Every posture on the wire, weakest first. A surface that offers a choice
+/// offers exactly these.
+pub const DEVELOPER_AGENT_MODES: &[DeveloperAgentMode] = &[
+    DeveloperAgentMode::Plan,
+    DeveloperAgentMode::Ask,
+    DeveloperAgentMode::Auto,
+    DeveloperAgentMode::Bypass,
+];
+
+impl DeveloperAgentMode {
+    /// The value as it appears on the wire and in every persisted setting.
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::Ask => "ask",
+            Self::Auto => "auto",
+            Self::Plan => "plan",
+            Self::Bypass => "bypass",
+        }
+    }
+
+    /// Read a posture out of any surface's own spelling.
+    ///
+    /// Separators and case are ignored, so `acceptEdits`, `accept-edits` and
+    /// `accept_edits` are one value. An unknown word returns `None` rather than
+    /// a default, because a vocabulary this does not know must never widen a
+    /// posture by accident.
+    pub fn from_client_spelling(raw: &str) -> Option<Self> {
+        match raw
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['-', '_', ' '], "")
+            .as_str()
+        {
+            // `default` is the CLI's name for the posture that prompts, and
+            // `dontask` is its headless refusal to prompt: neither may approve
+            // anything on its own, so both are `Ask` on the wire.
+            "ask" | "default" | "dontask" => Some(Self::Ask),
+            "auto" | "acceptedits" => Some(Self::Auto),
+            "plan" => Some(Self::Plan),
+            "bypass" | "bypasspermissions" => Some(Self::Bypass),
+            _ => None,
+        }
+    }
+
+    /// Whether a turn in this posture may act without asking first.
+    pub const fn approves_without_asking(self) -> bool {
+        matches!(self, Self::Auto | Self::Bypass)
+    }
+
+    /// Whether this posture leaves the workspace untouched.
+    pub const fn is_read_only(self) -> bool {
+        matches!(self, Self::Plan)
+    }
+}
+
+/// Outcome of the `initialize` version handshake, identical for every surface
+/// pairing: CLI to app server, VS Code to app server, desktop shell to the CLI
+/// it spawned, and the Chrome bridge to the local client.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeveloperSessionNegotiation {
+    /// The client named a version this server answers.
+    Agreed(u32),
+    /// The client named none, so it predates negotiation and pins an exact
+    /// equality check against [`LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION`].
+    Legacy(u32),
+    /// Refused at `initialize` with
+    /// [`PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE`].
+    Unsupported(ProtocolVersionUnsupportedData),
+}
+
+/// The single compatibility rule behind every developer-surface handshake.
+///
+/// A newer server keeps answering an older client for as long as its version
+/// stays in [`SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS`]: the added
+/// methods are additive and an older client never calls them, which is how a
+/// new backend feature degrades gracefully instead of dropping the session.
+pub fn negotiate_developer_session_protocol(
+    requested: Option<u32>,
+) -> DeveloperSessionNegotiation {
+    match requested {
+        None => DeveloperSessionNegotiation::Legacy(LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION),
+        Some(version) if SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.contains(&version) => {
+            DeveloperSessionNegotiation::Agreed(version)
+        }
+        Some(version) => {
+            DeveloperSessionNegotiation::Unsupported(ProtocolVersionUnsupportedData {
+                requested_protocol_version: version,
+                supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+                minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            })
+        }
+    }
 }
 
 /// Reasoning control supported by the current CLI developer runtime.
@@ -1603,5 +1700,173 @@ mod tests {
                 .as_i64()
                 .is_some_and(|value| value > 0)
         );
+    }
+
+    fn repo_file(relative: &str) -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(relative);
+        std::fs::read_to_string(&path).unwrap_or_else(|error| {
+            panic!("{relative} is the surface this contract covers: {error}")
+        })
+    }
+
+    /// Every spelling inside `text` between `open` and the next `close`.
+    fn quoted_between(text: &str, open: &str, close: &str) -> Vec<String> {
+        let start = text.find(open).unwrap_or_else(|| panic!("{open} is present"));
+        let rest = &text[start + open.len()..];
+        let end = rest.find(close).unwrap_or_else(|| panic!("{close} closes it"));
+        rest[..end]
+            .split('\'')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn cli_permission_mode_vocabulary() -> Vec<String> {
+        let source = repo_file("apps/cli/src/cli_options.rs");
+        let start = source
+            .find("pub enum PermissionMode {")
+            .expect("the CLI still declares PermissionMode");
+        let body = &source[start..];
+        let end = body.find("\n}").expect("the enum closes");
+        body[..end]
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                if let Some(rest) = line.strip_prefix("#[value(name = \"") {
+                    return rest.split('"').next().map(str::to_string);
+                }
+                let ident = line.trim_end_matches(',');
+                if !ident.is_empty()
+                    && ident.chars().all(|c| c.is_ascii_alphanumeric())
+                    && ident.starts_with(char::is_uppercase)
+                {
+                    return Some(ident.to_string());
+                }
+                None
+            })
+            .collect()
+    }
+
+    #[test]
+    fn one_permission_mode_vocabulary_covers_every_developer_surface() {
+        let cli = cli_permission_mode_vocabulary();
+        assert!(
+            cli.len() >= 5,
+            "expected the CLI's full PermissionMode vocabulary, read {cli:?}"
+        );
+
+        let vscode = quoted_between(
+            &repo_file("apps/extension-vscode/src/features/permissions/agentModeConsent.ts"),
+            "export type ExtensionAgentMode =",
+            ";",
+        );
+        assert_eq!(vscode.len(), 4, "read the VS Code vocabulary: {vscode:?}");
+
+        let shared = quoted_between(
+            &repo_file("packages/contracts/local-runtime/src/developer-session.ts"),
+            "export const DEVELOPER_AGENT_MODES =",
+            "]",
+        );
+        assert_eq!(shared.len(), DEVELOPER_AGENT_MODES.len());
+
+        for spelling in cli.iter().chain(vscode.iter()).chain(shared.iter()) {
+            assert!(
+                DeveloperAgentMode::from_client_spelling(spelling).is_some(),
+                "{spelling} is a surface's own name for a posture and must land on the shared enum"
+            );
+        }
+
+        // The shared contract is the wire enum itself, not a fifth vocabulary.
+        let mut wire: Vec<&str> = DEVELOPER_AGENT_MODES.iter().map(|m| m.wire_name()).collect();
+        wire.sort_unstable();
+        let mut mirrored: Vec<&str> = shared.iter().map(String::as_str).collect();
+        mirrored.sort_unstable();
+        assert_eq!(wire, mirrored);
+        let mut editor: Vec<&str> = vscode.iter().map(String::as_str).collect();
+        editor.sort_unstable();
+        assert_eq!(wire, editor);
+    }
+
+    #[test]
+    fn a_posture_means_the_same_thing_on_every_surface() {
+        for mode in DEVELOPER_AGENT_MODES {
+            assert_eq!(
+                DeveloperAgentMode::from_client_spelling(mode.wire_name()),
+                Some(*mode)
+            );
+        }
+        assert_eq!(
+            DeveloperAgentMode::from_client_spelling("acceptEdits"),
+            Some(DeveloperAgentMode::Auto)
+        );
+        assert_eq!(
+            DeveloperAgentMode::from_client_spelling("accept-edits"),
+            DeveloperAgentMode::from_client_spelling("accept_edits")
+        );
+        assert_eq!(
+            DeveloperAgentMode::from_client_spelling("bypassPermissions"),
+            Some(DeveloperAgentMode::Bypass)
+        );
+        // Headless refuses to prompt; it never gains the right to approve.
+        assert_eq!(
+            DeveloperAgentMode::from_client_spelling("dontAsk"),
+            Some(DeveloperAgentMode::Ask)
+        );
+        assert_eq!(DeveloperAgentMode::from_client_spelling("yolo"), None);
+        assert_eq!(DeveloperAgentMode::from_client_spelling(""), None);
+
+        assert!(DeveloperAgentMode::Plan.is_read_only());
+        assert!(!DeveloperAgentMode::Ask.approves_without_asking());
+        assert!(DeveloperAgentMode::Auto.approves_without_asking());
+        assert!(DeveloperAgentMode::Bypass.approves_without_asking());
+    }
+
+    #[test]
+    fn every_surface_pairing_negotiates_by_the_same_rule() {
+        let pairings = [
+            DeveloperSessionSource::Cli,
+            DeveloperSessionSource::Vscode,
+            DeveloperSessionSource::Desktop,
+            // The Chrome bridge reaches the CLI through the local client and
+            // has no source of its own yet, so it handshakes as Unknown.
+            DeveloperSessionSource::Unknown,
+        ];
+        for surface in pairings {
+            assert_eq!(
+                negotiate_developer_session_protocol(Some(DEVELOPER_SESSION_PROTOCOL_VERSION)),
+                DeveloperSessionNegotiation::Agreed(DEVELOPER_SESSION_PROTOCOL_VERSION),
+                "{surface:?} speaking the current version"
+            );
+            assert_eq!(
+                negotiate_developer_session_protocol(Some(
+                    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION
+                )),
+                DeveloperSessionNegotiation::Agreed(MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION),
+                "{surface:?} one version behind still runs"
+            );
+            assert_eq!(
+                negotiate_developer_session_protocol(None),
+                DeveloperSessionNegotiation::Legacy(LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION),
+                "{surface:?} predating negotiation"
+            );
+        }
+
+        let too_old =
+            negotiate_developer_session_protocol(Some(MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION - 1));
+        assert_eq!(
+            too_old,
+            DeveloperSessionNegotiation::Unsupported(ProtocolVersionUnsupportedData {
+                requested_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION - 1,
+                supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+                minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            })
+        );
+        assert!(matches!(
+            negotiate_developer_session_protocol(Some(DEVELOPER_SESSION_PROTOCOL_VERSION + 1)),
+            DeveloperSessionNegotiation::Unsupported(_)
+        ));
     }
 }
