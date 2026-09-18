@@ -151,12 +151,11 @@ describe('pausing a ring', () => {
 
   it('keeps the people it already had, which setting the percentage to zero does not', () => {
     const definitions = [definitionFor(DESKTOP_RING, plan({ ramp }), NOW)];
-    const admitted = Array.from({ length: 400 }, (unused, index) => `user_${index}`).filter(
-      (userId) =>
-        ringIncluded(
-          evaluateFlags(definitions, subject({ userId, surface: 'desktop' }), [], NOW),
-          DESKTOP_RING,
-        ),
+    const admitted = Array.from({ length: 400 }, (_, index) => `user_${index}`).filter((userId) =>
+      ringIncluded(
+        evaluateFlags(definitions, subject({ userId, surface: 'desktop' }), [], NOW),
+        DESKTOP_RING,
+      ),
     );
     expect(admitted.length).toBeGreaterThan(0);
 
