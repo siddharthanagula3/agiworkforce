@@ -462,6 +462,11 @@
         "icon": "$(x)"
       },
       {
+        "command": "agi-workforce.pullCloudTaskIntoWorkspace",
+        "title": "AGI Workforce: Pull Cloud Task Into Workspace",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "agi-workforce.showSchedules",
         "title": "AGI Workforce: Show Schedules",
         "icon": "$(watch)"
@@ -894,6 +899,10 @@
         },
         {
           "command": "agi-workforce.rejectCloudTask",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.pullCloudTaskIntoWorkspace",
           "when": "false"
         },
         {

@@ -6,6 +6,8 @@ export type GitHubWebhookRoute =
       event: string;
       action: string | null;
       payload: Record<string, unknown>;
+      /** Set when this delivery reports CI that finished badly on a branch. */
+      checkFailure: GitHubCheckFailure | null;
     }
   | { kind: 'installation-deleted'; installationId: number }
   | {
@@ -74,6 +76,76 @@ const AUTOMATION_EVENT_ACTIONS: Readonly<Record<string, readonly string[] | null
   workflow_run: ['completed'],
 };
 
+/**
+ * A finished check that did not pass, named so the agent that opened the
+ * branch can react to its own CI rather than waiting for a reader to notice.
+ */
+export interface GitHubCheckFailure {
+  event: 'check_run' | 'workflow_run';
+  name: string;
+  conclusion: string;
+  headSha: string;
+  headBranch: string | null;
+  repositoryFullName: string;
+  installationId: number | null;
+  pullRequestNumbers: number[];
+}
+
+const PASSING_CHECK_CONCLUSIONS: ReadonlySet<string> = new Set(['success', 'neutral', 'skipped']);
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function pullRequestNumbers(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => record(entry)?.['number'])
+    .filter((number): number is number => Number.isSafeInteger(number) && Number(number) > 0);
+}
+
+/**
+ * Reads a completed check_run or workflow_run delivery. Anything still running,
+ * or finished with a conclusion GitHub counts as passing, is not a failure.
+ */
+export function readGitHubCheckFailure(
+  event: string,
+  action: string | null,
+  payload: Record<string, unknown>,
+): GitHubCheckFailure | null {
+  if (action !== 'completed') return null;
+  if (event !== 'check_run' && event !== 'workflow_run') return null;
+  const run = record(payload[event]);
+  if (!run) return null;
+  const conclusion = run['conclusion'];
+  if (typeof conclusion !== 'string' || PASSING_CHECK_CONCLUSIONS.has(conclusion)) return null;
+  const headSha = run['head_sha'];
+  if (typeof headSha !== 'string' || headSha.length === 0) return null;
+  const fullName = record(payload['repository'])?.['full_name'];
+  if (typeof fullName !== 'string') return null;
+  const installationId = record(payload['installation'])?.['id'];
+  const name = run['name'];
+  const headBranch = run['head_branch'];
+  const branchFromCheck = record(run['check_suite'])?.['head_branch'];
+  return {
+    event,
+    name: typeof name === 'string' && name.length > 0 ? name : event,
+    conclusion,
+    headSha,
+    headBranch:
+      typeof headBranch === 'string'
+        ? headBranch
+        : typeof branchFromCheck === 'string'
+          ? branchFromCheck
+          : null,
+    repositoryFullName: fullName,
+    installationId: Number.isSafeInteger(installationId) ? Number(installationId) : null,
+    pullRequestNumbers: pullRequestNumbers(run['pull_requests']),
+  };
+}
+
 function routeAutomationEvent(event: string): EventRouter {
   const allowedActions = AUTOMATION_EVENT_ACTIONS[event] ?? null;
   return (payload) => {
@@ -88,7 +160,13 @@ function routeAutomationEvent(event: string): EventRouter {
     if (typeof (repository as Record<string, unknown>)['full_name'] !== 'string') {
       return { kind: 'invalid', reason: 'invalid-payload' };
     }
-    return { kind: 'automation-event', event, action, payload };
+    return {
+      kind: 'automation-event',
+      event,
+      action,
+      payload,
+      checkFailure: readGitHubCheckFailure(event, action, payload),
+    };
   };
 }
 

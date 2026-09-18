@@ -8,6 +8,7 @@ const {
   mockE2bReady,
   mockBetaEnabled,
   mockCommitAndPush,
+  mockSessionResult,
   mockGetSubscription,
   mockEvaluateAccess,
 } = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const {
   mockE2bReady: vi.fn(),
   mockBetaEnabled: vi.fn(),
   mockCommitAndPush: vi.fn(),
+  mockSessionResult: vi.fn(),
   mockGetSubscription: vi.fn(),
   mockEvaluateAccess: vi.fn(),
 }));
@@ -45,7 +47,11 @@ vi.mock('@/lib/services/managed-compute-access', async (importOriginal) => {
 });
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/cloud-code-session-service')>();
-  return { ...actual, commitAndPushCloudCodeSession: mockCommitAndPush };
+  return {
+    ...actual,
+    commitAndPushCloudCodeSession: mockCommitAndPush,
+    readCloudCodeSessionResult: mockSessionResult,
+  };
 });
 
 import {
@@ -79,6 +85,17 @@ beforeEach(() => {
     session: { id: SESSION_ID, state: 'ready', workingBranch: 'agi/fix-the-flaky-test-11111111' },
     push: { ok: true, output: 'pushed', stdout: 'pushed', stderr: '', exitCode: 0 },
   });
+  mockSessionResult.mockResolvedValue({
+    goal: 'fix the flaky test',
+    summary: {
+      checks: [{ kind: 'tests', command: 'pnpm test', exitCode: 1, outcome: 'failed' }],
+      commandsRun: 1,
+      commandsFailed: 1,
+      filesChanged: ['tests/clock.ts'],
+    },
+    verdict: { complete: false, blockers: ['Tests failed: `pnpm test` exited 1.'] },
+    metrics: { turns: 1, steps: 2, commandsRun: 1, commandsFailed: 1, filesChanged: 1 },
+  });
 });
 
 describe('POST /api/code/sessions/[sessionId]/commit', () => {
@@ -96,6 +113,18 @@ describe('POST /api/code/sessions/[sessionId]/commit', () => {
       'pro',
       'fix the flaky test',
     );
+  });
+
+  it('answers with what the session can prove, not with a bare success', async () => {
+    const response = await POST(commitRequest(), context);
+
+    await expect(response.json()).resolves.toMatchObject({
+      push: { ok: true },
+      validation: {
+        verdict: { complete: false },
+        summary: { checks: [{ kind: 'tests', outcome: 'failed' }] },
+      },
+    });
   });
 
   it('refuses when managed Code is not enabled for this deployment', async () => {
