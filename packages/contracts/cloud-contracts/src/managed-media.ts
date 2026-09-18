@@ -98,6 +98,14 @@ export const ManagedMediaImageGenerationRequestSchema = z
     source_image: ManagedMediaImageRefSchema.optional(),
     mask_image: ManagedMediaImageRefSchema.optional(),
     transparent_background: z.boolean().optional().default(false),
+    /**
+     * Return the durable job handle instead of the finished images. Every
+     * request creates the same durable job either way; this decides whether the
+     * caller waits for the first attempt on the open connection or polls
+     * `/api/media/image/status`. Absent means wait, which is what every client
+     * written before the durable job did.
+     */
+    async: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -133,6 +141,8 @@ export const ManagedMediaImageGenerationRequestSchema = z
     }
   });
 
+export const MANAGED_MEDIA_MAX_VIDEO_CANDIDATES = 4;
+
 export const ManagedMediaVideoGenerationRequestSchema = z
   .object({
     prompt: z.string().min(1).max(2000),
@@ -142,6 +152,12 @@ export const ManagedMediaVideoGenerationRequestSchema = z
     generate_audio: z.boolean().optional(),
     provider: ManagedMediaVideoProviderSchema.optional(),
     model: z.string().trim().min(1).max(200).optional(),
+    /**
+     * How many candidates to generate, matching the image contract. Each one is
+     * its own durable job with its own reservation and its own settlement, so
+     * asking for four costs four videos. Absent means one.
+     */
+    n: z.number().int().min(1).max(MANAGED_MEDIA_MAX_VIDEO_CANDIDATES).optional(),
   })
   .strict();
 

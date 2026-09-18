@@ -1,20 +1,12 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
-import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
+import { NextRequest, NextResponse, after } from 'next/server';
 import {
   ManagedMediaImageGenerationRequestSchema,
   supportsManagedMediaImageEdit,
-  type ManagedMediaImageAspectRatio,
-  type ManagedMediaImageOperation,
-  type ManagedMediaImageProvider,
 } from '@agiworkforce/cloud-contracts';
-import { getOptionalEnv, requireEnv } from '@shared/utils/env';
-import {
-  getActiveWorkspaceMediaAssetById,
-  isMediaAssetStoreReady,
-} from '@/lib/server/media-assets';
-import { providerApiUrl } from '@/lib/server/provider-endpoints';
+import { isMediaAssetStoreReady } from '@/lib/server/media-assets';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -36,69 +28,55 @@ import {
   recordModerationEvent,
   PLATFORM_POLICY_REFUSAL,
 } from '@/lib/moderation';
-import {
-  canUseBillingPlanCapability,
-  customerChargeMicrousd,
-  getModelMetadataById,
-  getModelsForProvider,
-  getProviderDefaultModelId,
-  isExecutableImageModel,
-  type ExecutableImageModel,
-  type ModelMetadata,
-  type RateCardFeature,
-} from '@agiworkforce/types';
-import {
-  classifyError,
-  parseRetryAfter,
-  SPENDING_CAP_PROVIDER_HINT,
-  type ClassifiedError,
-  type ErrorCategory,
-} from '@agiworkforce/provider-runtime';
-import { markProviderDegraded } from '@/lib/services/provider-availability-service';
-import { IMAGE_GENERATION_PROVIDER_DEADLINE_MS } from '@/lib/deadline-policy';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey, type ManagedMediaSurface } from '@agiworkforce/utils';
-import {
-  aiGeneratedHeaders,
-  buildAiGeneratedProvenance,
-  type AiGeneratedProvenance,
-} from '@/lib/compliance/ai-act';
-import {
-  authenticatedMediaUrl,
-  deleteStoredMedia,
-  isImageStorageConfigured,
-  readStoredMedia,
-  storeMedia,
-  bytesFromBase64,
-  bytesFromUrl,
-} from '@/lib/server/media-storage';
-import { insertMediaAssetsAtomically } from '@/lib/server/media-assets';
+import { aiGeneratedHeaders, type AiGeneratedProvenance } from '@/lib/compliance/ai-act';
+import { isImageStorageConfigured } from '@/lib/server/media-storage';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
-  finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
   markManagedUsageClientDelivered,
-  markManagedUsageProviderStarted,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
+import {
+  createImageGenerationJob,
+  getImageGenerationJobByIdempotencyKey,
+  isImageJobStoreReady,
+  IMAGE_JOB_LEASE_SECONDS,
+  type ImageGenerationJob,
+  type ImageGenerationPlan,
+  type ImageJobProvider,
+} from '@/lib/server/image-generation-jobs';
+import {
+  estimateImageCostMicrousd,
+  getDefaultProvider,
+  IMAGE_ASPECT_RATIOS_BY_API,
+  isProviderAvailable,
+  resolveImageCatalogModel,
+  resolveImageProviderFromCatalogModel,
+  resolveImageRefBytes,
+  resolveProviderImageAspectRatio,
+  sha256HexFromBytes,
+  type ImageProvider,
+} from '../lib/image-generation-provider';
+import {
+  imageJobDeliveredImages,
+  publicImageJobSnapshot,
+  reservationForImageJob,
+  runImageGenerationJobAttempt,
+  type ImageJobInlineEdit,
+} from '../lib/image-job-executor';
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
 
-type ImageProvider = ManagedMediaImageProvider;
-
-interface GeneratedImage {
-  url?: string;
-  b64_json?: string;
-  contentType?: 'image/jpeg' | 'image/png' | 'image/webp';
-}
-
 interface ImageGenerationResponse {
   success: boolean;
-  images: GeneratedImage[];
+  images: Array<{ url?: string; b64_json?: string }>;
   provider: ImageProvider;
   model: string;
   catalog_model?: string;
@@ -107,232 +85,8 @@ interface ImageGenerationResponse {
   retry_after_seconds?: number;
   persisted?: boolean;
   provenance?: AiGeneratedProvenance[];
-}
-
-/**
- * The rate card publishes microUSD, which is the unit the ledger settles in
- * since 0182. centsFromMicrousdCeil is kept only for the surfaces that report
- * a whole-cent figure.
- */
-function rateCardMicrousd(feature: RateCardFeature): number {
-  return customerChargeMicrousd(feature);
-}
-
-const MICROUSD_PER_USD = 1_000_000;
-
-const OPENAI_IMAGE_ESTIMATE_MICROUSD_BY_QUALITY = {
-  medium: rateCardMicrousd('image_generation_openai_medium'),
-  high: rateCardMicrousd('image_generation_openai_high'),
-} as const;
-
-const FALLBACK_IMAGE_ESTIMATE_MICROUSD_BY_PROVIDER: Record<ImageProvider, number> = {
-  openai: OPENAI_IMAGE_ESTIMATE_MICROUSD_BY_QUALITY.high,
-  google: rateCardMicrousd('image_generation_google'),
-  stability: 0,
-};
-
-type ImageApi = NonNullable<ModelMetadata['imageApi']>;
-
-const MAX_IMAGE_RETRY_AFTER_SECONDS = 5 * 60;
-
-class ImageProviderHttpError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly retryAfterSeconds?: number,
-  ) {
-    super(message);
-    this.name = 'ImageProviderHttpError';
-  }
-}
-
-function boundedImageRetryAfterSeconds(response: Response): number | undefined {
-  if (response.status !== 429) return undefined;
-  const retryAfterSeconds = parseRetryAfter(response.headers);
-  if (retryAfterSeconds === undefined) return undefined;
-  return Math.min(retryAfterSeconds, MAX_IMAGE_RETRY_AFTER_SECONDS);
-}
-
-async function throwImageProviderHttpError(response: Response, fallback: string): Promise<never> {
-  const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  const errorObj = errorData['error'] as Record<string, unknown> | undefined;
-  const message = (errorObj?.['message'] as string) || fallback;
-  throw new ImageProviderHttpError(
-    message,
-    response.status,
-    boundedImageRetryAfterSeconds(response),
-  );
-}
-
-const IMAGE_FAILURE_COPY_BY_CATEGORY: Partial<
-  Record<ErrorCategory, (providerLabel: string) => string>
-> = {
-  api_timeout: () =>
-    'The image provider did not respond before the request deadline. Please try again.',
-  connection: (providerLabel) =>
-    `${providerLabel} could not be reached for image generation. Please try again in a moment.`,
-  rate_limit: () =>
-    'The image generation service is temporarily busy. Please try again in a few moments.',
-  safety: () =>
-    'Your prompt was flagged by our content safety filters. Please try a different prompt.',
-  content_blocked: () =>
-    'Your prompt was flagged by our content safety filters. Please try a different prompt.',
-  billing_exhausted: () =>
-    'There was a billing issue with the image generation service. Please contact support.',
-  auth: (providerLabel) =>
-    `${providerLabel} rejected this deployment's image generation credentials. Choose a different image model.`,
-  invalid_input: (providerLabel) =>
-    `${providerLabel} rejected this image request. Adjust the prompt, size or reference image and try again.`,
-  media_too_large: (providerLabel) =>
-    `${providerLabel} rejected the reference image as too large. Use a smaller image and try again.`,
-  invalid_model: () => 'The requested image model is not available for this provider.',
-  empty_response: (providerLabel) => `${providerLabel} returned no image. Please try again.`,
-  server_error: (providerLabel) =>
-    `${providerLabel} image generation failed on the provider side. Try again, or choose a different image model.`,
-};
-
-function describeImageFailure(
-  classified: ClassifiedError | undefined,
-  providerLabel: string,
-): string {
-  const copy = classified ? IMAGE_FAILURE_COPY_BY_CATEGORY[classified.category] : undefined;
-  return copy
-    ? copy(providerLabel)
-    : `${providerLabel} could not generate the image. Try again, or choose a different image model.`;
-}
-
-const IMAGE_ASPECT_RATIOS_BY_API: Record<ImageApi, ReadonlySet<ManagedMediaImageAspectRatio>> = {
-  gemini: new Set([
-    '1:1',
-    '1:4',
-    '1:8',
-    '2:3',
-    '3:2',
-    '3:4',
-    '4:1',
-    '4:3',
-    '4:5',
-    '5:4',
-    '8:1',
-    '9:16',
-    '16:9',
-    '21:9',
-  ]),
-  imagen: new Set(['1:1', '3:4', '4:3', '9:16', '16:9']),
-  openai: new Set(['1:1', '2:3', '3:2']),
-  stability: new Set(['1:1', '2:3', '3:2', '4:5', '5:4', '9:16', '16:9', '21:9', '9:21']),
-};
-
-function legacyAspectRatioForSize(size: string, imageApi: ImageApi): ManagedMediaImageAspectRatio {
-  const [width = 1024, height = 1024] = size.split('x').map(Number);
-  if (width === height) return '1:1';
-
-  if (imageApi === 'openai') return width > height ? '3:2' : '2:3';
-  if (imageApi === 'gemini' || imageApi === 'imagen') return width > height ? '16:9' : '9:16';
-
-  const ratio = Math.max(width, height) / Math.min(width, height);
-  if (width > height) {
-    if (ratio >= 1.7) return '16:9';
-    if (ratio >= 1.4) return '3:2';
-    return '5:4';
-  }
-  if (ratio >= 1.7) return '9:16';
-  if (ratio >= 1.4) return '2:3';
-  return '4:5';
-}
-
-function resolveProviderImageAspectRatio(
-  model: ExecutableImageModel,
-  explicitAspectRatio: ManagedMediaImageAspectRatio | undefined,
-  legacySize: string,
-): ManagedMediaImageAspectRatio | null {
-  if (!explicitAspectRatio) return legacyAspectRatioForSize(legacySize, model.imageApi);
-  return IMAGE_ASPECT_RATIOS_BY_API[model.imageApi].has(explicitAspectRatio)
-    ? explicitAspectRatio
-    : null;
-}
-
-function openAIImageSizeForAspectRatio(aspectRatio: ManagedMediaImageAspectRatio): string {
-  if (aspectRatio === '2:3') return '1024x1536';
-  if (aspectRatio === '3:2') return '1536x1024';
-  return '1024x1024';
-}
-
-function resolveRequestedCatalogModel<T extends ModelMetadata>(
-  models: readonly T[],
-  requestedModelId?: string,
-): T | undefined {
-  if (!requestedModelId) return undefined;
-  const canonicalModelId = getModelMetadataById(requestedModelId)?.id;
-  return canonicalModelId ? models.find((model) => model.id === canonicalModelId) : undefined;
-}
-
-const GOOGLE_PROVIDER_ID = 'google';
-const OPENAI_PROVIDER_ID = 'openai';
-const IMAGE_OUTPUT_CAPABILITY = 'imageOutput';
-
-function resolveDeclaredProviderDefault(
-  models: ExecutableImageModel[],
-  provider: string,
-): ExecutableImageModel | null {
-  const declared = getProviderDefaultModelId(provider, IMAGE_OUTPUT_CAPABILITY);
-  const declaredModel = declared ? models.find((model) => model.id === declared) : undefined;
-  if (declaredModel) return declaredModel;
-  return models.length === 1 ? (models[0] ?? null) : null;
-}
-
-function resolveGoogleImageModel(requestedModelId?: string): ExecutableImageModel | null {
-  const googleImageModels = getModelsForProvider('google', {
-    includeDeprecated: false,
-    modelTypes: ['image'],
-  }).filter(isExecutableImageModel);
-
-  const requested = resolveRequestedCatalogModel(googleImageModels, requestedModelId);
-  if (requested) return requested;
-
-  return resolveDeclaredProviderDefault(googleImageModels, GOOGLE_PROVIDER_ID);
-}
-
-function resolveOpenAIImageModel(requestedModelId?: string): ExecutableImageModel | null {
-  const openaiImageModels = getModelsForProvider('openai', {
-    includeDeprecated: false,
-    modelTypes: ['image'],
-  }).filter(isExecutableImageModel);
-
-  const requested = resolveRequestedCatalogModel(openaiImageModels, requestedModelId);
-  if (requested) return requested;
-
-  return resolveDeclaredProviderDefault(openaiImageModels, OPENAI_PROVIDER_ID);
-}
-
-function resolveImageCatalogModel(
-  provider: ImageProvider,
-  requestedModelId?: string,
-): ExecutableImageModel | null {
-  const selected =
-    provider === 'openai'
-      ? resolveOpenAIImageModel(requestedModelId)
-      : provider === 'google'
-        ? resolveGoogleImageModel(requestedModelId)
-        : null;
-  if (!selected) return null;
-  if (!requestedModelId) return selected;
-  return getModelMetadataById(requestedModelId)?.id === selected.id ? selected : null;
-}
-
-function resolveImageProviderFromCatalogModel(modelId: string): ImageProvider | null {
-  const model = getModelMetadataById(modelId);
-  if (!isExecutableImageModel(model)) return null;
-
-  switch (model.imageApi) {
-    case 'gemini':
-    case 'imagen':
-      return 'google';
-    case 'openai':
-      return 'openai';
-    default:
-      return null;
-  }
+  job_id?: string;
+  retryable?: boolean;
 }
 
 function managedUsageErrorResponse(
@@ -349,483 +103,6 @@ function managedUsageErrorResponse(
       headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
     },
   );
-}
-
-/** The published per-image price, charged exactly rather than rounded up. */
-function estimateImageCostMicrousd(
-  provider: ImageProvider,
-  imageCount: number,
-  quality: string | undefined,
-  requestedModelId?: string,
-): number {
-  if (provider === 'openai') {
-    const qualityKey = quality === 'hd' ? 'high' : 'medium';
-    return OPENAI_IMAGE_ESTIMATE_MICROUSD_BY_QUALITY[qualityKey] * imageCount;
-  }
-
-  if (provider === 'google') {
-    const perImageUsd = resolveGoogleImageModel(requestedModelId)?.imagePerImageCost;
-    if (typeof perImageUsd === 'number' && perImageUsd > 0) {
-      return Math.ceil(perImageUsd * MICROUSD_PER_USD) * imageCount;
-    }
-  }
-
-  return FALLBACK_IMAGE_ESTIMATE_MICROUSD_BY_PROVIDER[provider] * imageCount;
-}
-
-const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;
-
-function getGoogleApiKey(): string | undefined {
-  for (const key of GOOGLE_API_KEY_ENV_KEYS) {
-    const value = getOptionalEnv(key);
-    if (value) return value;
-  }
-  return undefined;
-}
-
-function getDefaultProvider(): ImageProvider {
-  if (getGoogleApiKey()) {
-    return 'google';
-  }
-  if (getOptionalEnv('OPENAI_API_KEY')) {
-    return 'openai';
-  }
-  throw new Error('No image generation API keys configured');
-}
-
-function getApiKey(provider: ImageProvider): string {
-  switch (provider) {
-    case 'openai':
-      return requireEnv('OPENAI_API_KEY');
-    case 'google': {
-      const key = getGoogleApiKey();
-      if (!key) {
-        throw new Error(
-          `Missing Google credential. Set one of: ${GOOGLE_API_KEY_ENV_KEYS.join(', ')}.`,
-        );
-      }
-      return key;
-    }
-    case 'stability':
-      throw new Error('The Stability image adapter is not supported');
-  }
-}
-
-function isProviderAvailable(provider: ImageProvider): boolean {
-  switch (provider) {
-    case 'openai':
-      return !!getOptionalEnv('OPENAI_API_KEY');
-    case 'google':
-      return !!getGoogleApiKey();
-    case 'stability':
-      return false;
-  }
-}
-
-async function resolveImageRefBytes(
-  ref: { asset_id: string } | { b64_json: string },
-  userId: string,
-  db?: Parameters<typeof getActiveWorkspaceMediaAssetById>[2],
-): Promise<Uint8Array> {
-  if ('b64_json' in ref) {
-    const base64 = ref.b64_json.includes(',') ? ref.b64_json.split(',').pop()! : ref.b64_json;
-    return Uint8Array.from(Buffer.from(base64, 'base64'));
-  }
-
-  // Only an asset_id ref reaches the database, so the caller opens a scoped
-  // connection only for that branch and inline bytes cost none.
-  if (!db) throw new Error('Source image could not be read');
-  const asset = await getActiveWorkspaceMediaAssetById(userId, ref.asset_id, db);
-  if (
-    !asset ||
-    asset.deletedAt ||
-    asset.kind !== 'image' ||
-    !asset.mimeType.toLowerCase().startsWith('image/')
-  ) {
-    throw new Error('Source image not found');
-  }
-
-  if (!asset.storagePathname) {
-    throw new Error('Source image could not be read');
-  }
-  const object = await readStoredMedia(asset.storagePathname);
-  if (!object) throw new Error('Source image could not be read');
-  return new Uint8Array(object.data);
-}
-
-async function generateWithOpenAIImage(
-  prompt: string,
-  aspectRatio: ManagedMediaImageAspectRatio,
-  quality: string,
-  n: number,
-  requestedModelId?: string,
-  edit?: {
-    operation: ManagedMediaImageOperation;
-    sourceBytes: Uint8Array;
-    maskBytes?: Uint8Array;
-    transparentBackground: boolean;
-  },
-): Promise<{ images: GeneratedImage[]; model: string }> {
-  const apiKey = getApiKey('openai');
-  const catalogModel = resolveOpenAIImageModel(requestedModelId);
-  if (!catalogModel) {
-    throw new Error('No active OpenAI image model is configured in the catalog');
-  }
-  const model = catalogModel.apiModelId ?? catalogModel.id;
-  const imageSize = openAIImageSizeForAspectRatio(aspectRatio);
-  const imageQuality = quality === 'hd' ? 'high' : 'medium';
-
-  if (edit) {
-    const form = new FormData();
-    form.append('model', model);
-    form.append('prompt', prompt);
-    form.append('size', imageSize);
-    form.append('n', String(Math.min(n, 4)));
-    if (edit.transparentBackground) form.append('background', 'transparent');
-    form.append(
-      'image',
-      new Blob([edit.sourceBytes as BlobPart], { type: 'image/png' }),
-      'source.png',
-    );
-    if (edit.maskBytes) {
-      form.append(
-        'mask',
-        new Blob([edit.maskBytes as BlobPart], { type: 'image/png' }),
-        'mask.png',
-      );
-    }
-
-    const editResponse = await fetch(providerApiUrl('openai', 'images/edits'), {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
-      body: form,
-      signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
-    });
-
-    if (!editResponse.ok) {
-      await throwImageProviderHttpError(
-        editResponse,
-        `OpenAI image edit API error: ${editResponse.status} ${editResponse.statusText}`,
-      );
-    }
-
-    const editData = (await editResponse.json()) as {
-      data?: Array<{ b64_json?: string; url?: string }>;
-    };
-    return {
-      images: (editData.data ?? [])
-        .map((item) => ({ b64_json: item.b64_json, url: item.url }))
-        .filter((item) => item.b64_json || item.url),
-      model: `${model}-${edit.operation}`,
-    };
-  }
-
-  const response = await fetch(providerApiUrl('openai', 'images/generations'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      prompt,
-      size: imageSize,
-      quality: imageQuality,
-      n: Math.min(n, 4),
-      ...(edit === undefined ? {} : {}),
-    }),
-    signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
-  });
-
-  if (!response.ok) {
-    await throwImageProviderHttpError(
-      response,
-      `OpenAI image API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const data = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
-  const images = (data.data ?? [])
-    .map((item) => ({ b64_json: item.b64_json, url: item.url }))
-    .filter((item) => item.b64_json || item.url);
-
-  return {
-    images,
-    model: `${model}-${imageQuality}`,
-  };
-}
-
-async function generateWithImagen(
-  prompt: string,
-  aspectRatio: ManagedMediaImageAspectRatio,
-  _style: string | undefined,
-  n: number,
-  catalogModel: ExecutableImageModel,
-  negativePrompt?: string,
-): Promise<{ images: GeneratedImage[]; model: string }> {
-  const apiKey = getApiKey('google');
-  const model = catalogModel.apiModelId ?? catalogModel.id;
-
-  if (catalogModel.imageApi === 'gemini') {
-    const outputMimeType = catalogModel.imageOutputMimeType;
-    if (!outputMimeType) {
-      throw new Error('The selected Gemini image model has no catalog output MIME contract');
-    }
-    return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n, outputMimeType);
-  }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        instances: [
-          {
-            prompt,
-            ...(negativePrompt && { negativePrompt }),
-          },
-        ],
-        parameters: {
-          sampleCount: Math.min(n, 4),
-          aspectRatio,
-        },
-      }),
-      signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
-    },
-  );
-
-  if (!response.ok) {
-    await throwImageProviderHttpError(
-      response,
-      `Imagen API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const data = (await response.json()) as { predictions?: Array<{ bytesBase64Encoded?: string }> };
-
-  const images: GeneratedImage[] = [];
-  if (data.predictions) {
-    for (const prediction of data.predictions) {
-      if (prediction.bytesBase64Encoded) {
-        images.push({ b64_json: prediction.bytesBase64Encoded });
-      }
-    }
-  }
-
-  return {
-    images,
-    model,
-  };
-}
-
-async function generateWithGeminiImage(
-  apiKey: string,
-  model: string,
-  prompt: string,
-  aspectRatio: string,
-  _n: number,
-  outputMimeType: NonNullable<ModelMetadata['imageOutputMimeType']>,
-): Promise<{ images: GeneratedImage[]; model: string }> {
-  const response = await fetch(providerApiUrl('google', 'interactions'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      model,
-      input: prompt,
-      response_format: {
-        type: 'image',
-        mime_type: outputMimeType,
-        aspect_ratio: aspectRatio,
-        image_size: '1K',
-      },
-    }),
-    signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
-  });
-
-  if (!response.ok) {
-    await throwImageProviderHttpError(
-      response,
-      `Gemini image API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    output_image?: unknown;
-    steps?: unknown;
-  };
-
-  const candidates: unknown[] = [data.output_image];
-  if (Array.isArray(data.steps)) {
-    for (const step of data.steps) {
-      if (
-        step &&
-        typeof step === 'object' &&
-        (step as { type?: unknown }).type === 'model_output' &&
-        Array.isArray((step as { content?: unknown }).content)
-      ) {
-        candidates.push(...((step as { content: unknown[] }).content ?? []));
-      }
-    }
-  }
-
-  const imagesByDigest = new Map<string, GeneratedImage>();
-  let sawUriImage = false;
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== 'object') continue;
-    const image = candidate as {
-      type?: unknown;
-      mime_type?: unknown;
-      data?: unknown;
-      uri?: unknown;
-    };
-    const isImageBlock = image.type === undefined || image.type === 'image';
-    if (!isImageBlock) continue;
-    if (image.mime_type !== outputMimeType) {
-      throw new Error('Gemini image API returned an image outside the catalog MIME contract');
-    }
-    if (typeof image.uri === 'string' && image.uri.length > 0) sawUriImage = true;
-    if (typeof image.data !== 'string' || image.data.length === 0) continue;
-
-    if (
-      image.data.length % 4 !== 0 ||
-      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(image.data)
-    ) {
-      throw new Error('Gemini image API returned malformed base64 image data');
-    }
-    const bytes = Buffer.from(image.data, 'base64');
-    const canonicalBase64 = bytes.toString('base64');
-    if (canonicalBase64 !== image.data || !hasValidGeneratedImageStructure(bytes, outputMimeType)) {
-      throw new Error(
-        'Gemini image API returned bytes that do not match the catalog MIME contract',
-      );
-    }
-
-    const digest = createHash('sha256').update(bytes).digest('hex');
-    imagesByDigest.set(digest, { b64_json: image.data, contentType: outputMimeType });
-  }
-
-  if (imagesByDigest.size === 0) {
-    if (sawUriImage) {
-      throw new Error(
-        'Gemini image API returned a URI without inline image bytes; URI delivery is not supported',
-      );
-    }
-    throw new Error('Gemini image API returned no image data (response may have been text-only)');
-  }
-  if (imagesByDigest.size !== 1) {
-    throw new Error('Gemini image API returned more than the single requested image');
-  }
-
-  return { images: [...imagesByDigest.values()], model };
-}
-
-const MAX_INLINE_GENERATED_IMAGE_BYTES = 25 * 1024 * 1024;
-
-function hasValidJpegStructure(bytes: Buffer): boolean {
-  if (
-    bytes.length < 12 ||
-    bytes[0] !== 0xff ||
-    bytes[1] !== 0xd8 ||
-    bytes[bytes.length - 2] !== 0xff ||
-    bytes[bytes.length - 1] !== 0xd9
-  ) {
-    return false;
-  }
-
-  let offset = 2;
-  let sawFrame = false;
-  while (offset < bytes.length - 2) {
-    if (bytes[offset] !== 0xff) return false;
-    while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
-    const marker = bytes[offset++];
-    if (marker === undefined || marker === 0x00 || marker === 0xd8 || marker === 0xd9) return false;
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
-    if (offset + 2 > bytes.length) return false;
-    const segmentLength = bytes.readUInt16BE(offset);
-    if (segmentLength < 2 || offset + segmentLength > bytes.length) return false;
-
-    const isStartOfFrame =
-      marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
-    if (isStartOfFrame) {
-      if (segmentLength < 8) return false;
-      const height = bytes.readUInt16BE(offset + 3);
-      const width = bytes.readUInt16BE(offset + 5);
-      if (width === 0 || height === 0) return false;
-      sawFrame = true;
-    }
-
-    if (marker === 0xda) {
-      return sawFrame && offset + segmentLength < bytes.length - 2;
-    }
-    offset += segmentLength;
-  }
-  return false;
-}
-
-function hasValidPngStructure(bytes: Buffer): boolean {
-  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  if (bytes.length < 45 || !bytes.subarray(0, 8).equals(signature)) return false;
-
-  let offset = 8;
-  let sawHeader = false;
-  let sawImageData = false;
-  while (offset + 12 <= bytes.length) {
-    const length = bytes.readUInt32BE(offset);
-    const type = bytes.subarray(offset + 4, offset + 8).toString('ascii');
-    const end = offset + 12 + length;
-    if (end > bytes.length) return false;
-    if (!sawHeader) {
-      if (type !== 'IHDR' || length !== 13) return false;
-      if (bytes.readUInt32BE(offset + 8) === 0 || bytes.readUInt32BE(offset + 12) === 0)
-        return false;
-      sawHeader = true;
-    }
-    if (type === 'IDAT' && length > 0) sawImageData = true;
-    if (type === 'IEND') return length === 0 && end === bytes.length && sawHeader && sawImageData;
-    offset = end;
-  }
-  return false;
-}
-
-function hasValidWebpStructure(bytes: Buffer): boolean {
-  if (
-    bytes.length < 20 ||
-    bytes.subarray(0, 4).toString('ascii') !== 'RIFF' ||
-    bytes.subarray(8, 12).toString('ascii') !== 'WEBP' ||
-    bytes.readUInt32LE(4) !== bytes.length - 8
-  ) {
-    return false;
-  }
-  const chunkType = bytes.subarray(12, 16).toString('ascii');
-  const chunkLength = bytes.readUInt32LE(16);
-  const paddedLength = chunkLength + (chunkLength % 2);
-  return (
-    ['VP8 ', 'VP8L', 'VP8X'].includes(chunkType) &&
-    chunkLength > 0 &&
-    20 + paddedLength <= bytes.length
-  );
-}
-
-function hasValidGeneratedImageStructure(
-  bytes: Buffer,
-  mimeType: NonNullable<ModelMetadata['imageOutputMimeType']>,
-): boolean {
-  if (bytes.length === 0 || bytes.length > MAX_INLINE_GENERATED_IMAGE_BYTES) return false;
-  if (mimeType === 'image/jpeg') return hasValidJpegStructure(bytes);
-  if (mimeType === 'image/png') return hasValidPngStructure(bytes);
-  return hasValidWebpStructure(bytes);
-}
-
-function sha256HexFromBase64(b64: string): string {
-  const payload = b64.includes(',') ? (b64.split(',').pop() ?? '') : b64;
-  return createHash('sha256').update(Buffer.from(payload, 'base64')).digest('hex');
 }
 
 async function handleImageGeneration(request: NextRequest): Promise<NextResponse> {
@@ -1016,6 +293,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     source_image,
     mask_image,
     transparent_background,
+    async: wantsAsync,
   } = validationResult.data;
 
   // Always-on platform safety floor, ahead of model resolution, billing
@@ -1293,14 +571,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   // endpoints, so both refs are resolved and hash-checked here, ahead of the
   // billing reservation and every provider call, and a refused upload is
   // therefore never charged for and never leaves this process.
-  let editContext:
-    | {
-        operation: ManagedMediaImageOperation;
-        sourceBytes: Uint8Array;
-        maskBytes?: Uint8Array;
-        transparentBackground: boolean;
-      }
-    | undefined;
+  let inlineEdit: ImageJobInlineEdit | undefined;
+  let sourceImageSha256: string | undefined;
+  let maskImageSha256: string | undefined;
   if (operation !== 'generate' && source_image) {
     let sourceBytes: Uint8Array;
     let maskBytes: Uint8Array | undefined;
@@ -1375,19 +648,16 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       );
     }
 
-    editContext = {
-      operation,
-      sourceBytes,
-      ...(maskBytes ? { maskBytes } : {}),
-      transparentBackground: transparent_background,
-    };
+    inlineEdit = { sourceBytes, ...(maskBytes ? { maskBytes } : {}) };
+    sourceImageSha256 = sha256HexFromBytes(sourceBytes);
+    maskImageSha256 = maskBytes ? sha256HexFromBytes(maskBytes) : undefined;
   }
 
   // Refused before the reservation rather than inside the provider call, so a
   // model that cannot take a source image costs the caller nothing. The catalog
   // entry's image API decides it, which is the same evidence the availability
   // endpoint publishes as `supports_edit`.
-  if (editContext && !supportsManagedMediaImageEdit(catalogModel.imageApi)) {
+  if (inlineEdit && !supportsManagedMediaImageEdit(catalogModel.imageApi)) {
     return NextResponse.json(
       {
         success: false,
@@ -1408,7 +678,8 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   let reservation: ManagedUsageRequestReservation;
   let sourceSurface: ManagedMediaSurface;
   let organizationId: string | null;
-  let scopedDb: Awaited<ReturnType<typeof getUserScopedDb>>['db'] | undefined;
+  let scopedDb: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
+  let jobStoreReady = false;
   try {
     const idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('Idempotency-Key'));
     const mediaIdentity = parseManagedMediaIdempotencyKey(idempotencyKey);
@@ -1442,6 +713,19 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
         );
       }
     }
+
+    jobStoreReady = await isImageJobStoreReady(scoped.db).catch(() => false);
+    if (wantsAsync && !jobStoreReady) {
+      throw new ManagedUsageRequestError(
+        'Durable image jobs are not available on this deployment yet. Retry without "async".',
+        503,
+        'image_job_store_unavailable',
+      );
+    }
+
+    // The durable job holds one reservation across every attempt, which is what
+    // makes a retry free, so the lease has to outlive the attempt schedule
+    // rather than a single provider call.
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
       userId,
@@ -1452,6 +736,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       estimatedCostMicrousd,
       planTier: subscription.plan_tier,
       isFlagship: false,
+      leaseSeconds: IMAGE_JOB_LEASE_SECONDS,
     });
   } catch (error) {
     const managedError =
@@ -1465,378 +750,192 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     return managedUsageErrorResponse(request, managedError);
   }
 
-  let result: { images: GeneratedImage[]; model: string };
-  try {
-    logger.info(
-      {
-        userId: userId,
-        provider,
-        prompt: prompt.substring(0, 100),
-        size,
-        aspectRatio: providerAspectRatio,
-        style,
-        n,
-      },
-      'Starting image generation',
-    );
-    await markManagedUsageProviderStarted(reservation);
-
-    switch (provider) {
-      case 'openai':
-        result = await generateWithOpenAIImage(
-          prompt,
-          providerAspectRatio,
-          quality,
-          n,
-          catalogModel.id,
-          editContext,
-        );
-        break;
-      case 'google':
-        result = await generateWithImagen(
-          prompt,
-          providerAspectRatio,
-          style,
-          n,
-          catalogModel,
-          negative_prompt,
-        );
-        break;
-      case 'stability':
-        throw new Error('The Stability image adapter is not supported');
-    }
-
-    if (result.images.length === 0) {
-      throw new Error(`${provider} image provider returned no usable image output`);
-    }
-
-    logger.info(
-      {
-        userId: userId,
-        provider,
-        model: result.model,
-        imageCount: result.images.length,
-      },
-      'Image generation completed',
-    );
-  } catch (error) {
-    try {
-      await finalizeManagedUsageRequest({
-        ...reservation,
-        outcome: 'failed',
-        actualCostMicrousd: 0,
-        usage: {
-          operation: 'image',
-          sourceSurface,
-          provider,
-          model: catalogModel.id,
-          reason: 'provider_failed',
-        },
-      });
-    } catch (settlementError) {
-      logger.error(
-        {
-          event: 'image_refund_settlement_unrecorded',
-          error: settlementError,
-          userId,
-          provider,
-          idempotencyKey: reservation.idempotencyKey,
-        },
-        'Image generation failure settlement could not be persisted',
-      );
-    }
-
-    logger.error(
-      {
-        error: error instanceof Error ? error.message : String(error),
-        userId: userId,
-        provider,
-      },
-      'Image generation failed',
-    );
-
-    const providerHttpError = error instanceof ImageProviderHttpError ? error : null;
-    const errorMessage = error instanceof Error ? error.message : 'Image generation failed';
-    const classified = error instanceof Error ? classifyError(error) : undefined;
-    const providerLabel = provider === 'google' ? 'Google' : provider;
-
-    let friendlyMessage = describeImageFailure(classified, providerLabel);
-    let suppressRetryAfter = false;
-    if (classified?.category === 'quota_exhausted') {
-      markProviderDegraded(provider, classified.category);
-      suppressRetryAfter = true;
-      friendlyMessage =
-        classified.providerHint === SPENDING_CAP_PROVIDER_HINT
-          ? `${providerLabel}'s spending cap for this project is exceeded, so image generation is unavailable right now. Choose a different image model.`
-          : `${providerLabel} has exhausted its image generation quota for now. Choose a different image model, or try again later.`;
-    } else if (classified?.category === 'billing_exhausted') {
-      // Degraded like a spent quota, but `describeImageFailure` already has the
-      // right words for it, so the mark is the only thing added here.
-      markProviderDegraded(provider, classified.category);
-    } else if (
-      classified?.category === 'server_overload' ||
-      classified?.category === 'capacity_off_switch'
-    ) {
-      markProviderDegraded(provider, classified.category);
-      friendlyMessage = `${providerLabel} image generation is overloaded right now. Try again in a moment, or choose a different image model.`;
-    } else if (providerHttpError?.status === 429) {
-      friendlyMessage =
-        'The image generation service is temporarily busy. Use Try again after the wait shown below.';
-    } else if (errorMessage.includes('content policy') || errorMessage.includes('safety')) {
-      friendlyMessage =
-        'Your prompt was flagged by our content safety filters. Please try a different prompt.';
-    } else if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
-      friendlyMessage =
-        'The image generation service is temporarily busy. Please try again in a few moments.';
-    } else if (errorMessage.includes('billing') || errorMessage.includes('payment')) {
-      friendlyMessage =
-        'There was a billing issue with the image generation service. Please contact support.';
-    } else if (
-      errorMessage.includes('timeout') ||
-      errorMessage.includes('ETIMEDOUT') ||
-      errorMessage.includes('TimeoutError')
-    ) {
-      friendlyMessage =
-        'The image provider did not respond before the request deadline. Please try again.';
-    }
-
-    const retryAfterSeconds = suppressRetryAfter ? undefined : providerHttpError?.retryAfterSeconds;
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: friendlyMessage,
-        images: [],
-        provider,
-        model: 'unknown',
-        latency_ms: Date.now() - startTime,
-        ...(retryAfterSeconds !== undefined ? { retry_after_seconds: retryAfterSeconds } : {}),
-      } satisfies ImageGenerationResponse,
-      {
-        status: providerHttpError?.status === 429 ? 429 : 422,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-          ...(retryAfterSeconds !== undefined ? { 'Retry-After': String(retryAfterSeconds) } : {}),
-        },
-      },
-    );
-  }
-
-  const generatedAt = new Date().toISOString();
-  const provenance: AiGeneratedProvenance[] = result.images.map((img) => {
-    const hash = img.b64_json ? sha256HexFromBase64(img.b64_json) : undefined;
-    return buildAiGeneratedProvenance({
-      kind: 'image',
-      provider,
-      model: catalogModel.id,
-      generatedAt,
-      ...(hash ? { contentHashSha256: hash } : {}),
-    });
-  });
-
-  const persistenceFailures: string[] = [];
-
-  if (storageConfigured) {
-    type StagedImage = {
-      idx: number;
-      pathname: string;
-      byteSize: number;
-      contentType: string;
-    };
-    const stagedOutcomes = await Promise.all(
-      result.images.map(
-        async (img, idx): Promise<{ staged?: StagedImage; idx: number; error?: string }> => {
-          let storedPathname: string | null = null;
-          try {
-            let bytes: Buffer | null = null;
-            let contentType: string = img.contentType ?? 'image/png';
-            if (img.b64_json) {
-              bytes = bytesFromBase64(img.b64_json);
-            } else if (img.url) {
-              const fetched = await bytesFromUrl(img.url);
-              bytes = fetched.data;
-              contentType = fetched.contentType;
-            }
-            if (!bytes) {
-              return { idx, error: 'provider returned neither image bytes nor a URL' };
-            }
-
-            const existingClaim = provenance[idx];
-            if (existingClaim && !existingClaim.content_hash_sha256) {
-              provenance[idx] = buildAiGeneratedProvenance({
-                kind: 'image',
-                provider,
-                model: catalogModel.id,
-                generatedAt,
-                contentHashSha256: createHash('sha256').update(bytes).digest('hex'),
-              });
-            }
-
-            const stored = await storeMedia({ userId, kind: 'image', data: bytes, contentType });
-            storedPathname = stored.pathname;
-            return {
-              idx,
-              staged: {
-                idx,
-                pathname: stored.pathname,
-                byteSize: stored.byteSize,
-                contentType,
-              },
-            };
-          } catch (err) {
-            if (storedPathname) {
-              await deleteStoredMedia(storedPathname).catch(() => undefined);
-            }
-            return { idx, error: err instanceof Error ? err.message : String(err) };
-          }
-        },
-      ),
-    );
-
-    const stagedImages: StagedImage[] = [];
-    for (const outcome of stagedOutcomes) {
-      if (outcome.staged) {
-        stagedImages.push(outcome.staged);
-      } else {
-        persistenceFailures.push(`image ${outcome.idx}: ${outcome.error ?? 'unknown error'}`);
-      }
-    }
-
-    if (persistenceFailures.length === 0) {
-      try {
-        const assetIds = await insertMediaAssetsAtomically(
-          stagedImages.map((staged) => ({
-            userId,
-            organizationId,
-            kind: 'image',
-            mimeType: staged.contentType,
-            byteSize: staged.byteSize,
-            storageUrl: staged.pathname,
-            storagePathname: staged.pathname,
-            prompt,
-            provider,
-            model: catalogModel.id,
-            sourceSurface,
-            conversationId,
-            metadata: { aiAct: provenance[staged.idx] },
-          })),
-          scopedDb,
-        );
-        if (!assetIds || assetIds.length !== stagedImages.length) {
-          persistenceFailures.push('media catalog is unavailable for the generated image batch');
-        } else {
-          stagedImages.forEach((staged, position) => {
-            result.images[staged.idx] = { url: authenticatedMediaUrl(assetIds[position]!) };
-          });
-        }
-      } catch (error) {
-        persistenceFailures.push(
-          error instanceof Error ? error.message : 'generated image catalog transaction failed',
-        );
-      }
-    }
-
-    if (persistenceFailures.length > 0) {
-      const cleanupResults = await Promise.allSettled(
-        stagedImages.map((staged) => deleteStoredMedia(staged.pathname)),
-      );
-      cleanupResults.forEach((cleanup, index) => {
-        if (cleanup.status === 'rejected') {
-          logger.error(
-            {
-              err: cleanup.reason,
-              userId,
-              pathname: stagedImages[index]?.pathname,
-              event: 'generated_image_batch_object_cleanup_failed',
-            },
-            'Generated image batch object cleanup failed after catalog rollback',
-          );
-        }
-      });
-    }
-  }
-
-  if (persistenceFailures.length > 0) {
-    logger.error(
-      { userId, provider, model: result.model, failures: persistenceFailures },
-      'Generated image persistence failed; refunding the reservation',
-    );
-    await finalizeManagedUsageRequest({
-      ...reservation,
-      outcome: 'failed',
-      actualCostMicrousd: 0,
-      usage: {
-        operation: 'image',
-        sourceSurface,
-        provider,
-        model: catalogModel.id,
-        outputCount: 0,
-        failure: 'image_persistence_failed',
-      },
-    });
-
-    return NextResponse.json(
-      {
-        success: false,
-        error:
-          'The image was generated but could not be saved to your library, so it was not charged. Please try again; if this keeps happening, contact support.',
-        images: [],
-        provider,
-        model: result.model,
-        latency_ms: Date.now() - startTime,
-        persisted: false,
-      } satisfies ImageGenerationResponse,
-      {
-        status: 502,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
-  }
-
-  const costEstimateMicrousd = estimateImageCostMicrousd(
-    provider,
-    result.images.length,
+  const plan: ImageGenerationPlan = {
+    aspectRatio: providerAspectRatio,
     quality,
-    catalogModel.id,
-  );
-  await finalizeManagedUsageRequest({
-    ...reservation,
-    outcome: 'completed',
-    actualCostMicrousd: costEstimateMicrousd,
-    usage: {
-      operation: 'image',
-      sourceSurface,
-      provider,
-      model: catalogModel.id,
-      outputCount: result.images.length,
-    },
-  });
-
-  logger.info(
-    { userId: userId, provider, model: result.model, costEstimateMicrousd, estimatedCostMicrousd },
-    'Image generation credits deducted',
-  );
-
-  const response: ImageGenerationResponse = {
-    success: true,
-    images: result.images.map(({ url, b64_json }) => ({
-      ...(url ? { url } : {}),
-      ...(b64_json ? { b64_json } : {}),
-    })),
-    provider,
-    model: result.model,
-    catalog_model: catalogModel.id,
-    latency_ms: Date.now() - startTime,
-    persisted: storageConfigured,
-    provenance,
+    legacySize: size,
+    transparentBackground: transparent_background,
+    ...(style ? { style } : {}),
+    ...(negative_prompt ? { negativePrompt: negative_prompt } : {}),
+    ...(source_image && 'asset_id' in source_image ? { sourceAssetId: source_image.asset_id } : {}),
+    ...(mask_image && 'asset_id' in mask_image ? { maskAssetId: mask_image.asset_id } : {}),
   };
 
+  // Narrowed rather than asserted: only the two providers with an executable
+  // catalog image model reach this point, and the job row's own check
+  // constraint names the same two.
+  const jobProvider: ImageJobProvider | null =
+    provider === 'openai' || provider === 'google' ? provider : null;
+  if (!jobProvider) {
+    return managedUsageErrorResponse(
+      request,
+      new ManagedUsageRequestError(
+        `The ${provider} provider cannot generate images on this deployment.`,
+        400,
+        'provider_unavailable',
+      ),
+    );
+  }
+
+  let job: ImageGenerationJob;
+  if (jobStoreReady) {
+    try {
+      job = await createImageGenerationJob({
+        db: scopedDb,
+        id: randomUUID(),
+        userId,
+        organizationId,
+        conversationId,
+        idempotencyKey: reservation.idempotencyKey,
+        requestHash: reservation.requestHash,
+        billingLeaseToken: reservation.leaseToken,
+        provider: jobProvider,
+        model: catalogModel.id,
+        operation,
+        prompt,
+        plan,
+        ...(sourceImageSha256 ? { sourceImageSha256 } : {}),
+        ...(maskImageSha256 ? { maskImageSha256 } : {}),
+        imageCount: n,
+        sourceSurface,
+        estimatedCostMicrousd,
+      });
+    } catch (error) {
+      const existing = await getImageGenerationJobByIdempotencyKey(
+        scopedDb,
+        userId,
+        reservation.idempotencyKey,
+      ).catch(() => null);
+      if (!existing) {
+        logger.error({ error, userId }, 'Durable image job could not be persisted');
+        return managedUsageErrorResponse(
+          request,
+          new ManagedUsageRequestError(
+            'Image generation is temporarily unavailable. Please try again later.',
+            503,
+            'image_job_unavailable',
+          ),
+        );
+      }
+      job = existing;
+    }
+  } else {
+    // 0226 is not applied on this deployment. The same executor runs, with no
+    // durable row behind it, so image generation keeps working and only the
+    // job handle is missing.
+    job = {
+      id: randomUUID(),
+      userId,
+      organizationId,
+      conversationId: conversationId ?? null,
+      idempotencyKey: reservation.idempotencyKey,
+      requestHash: reservation.requestHash,
+      billingLeaseToken: reservation.leaseToken,
+      provider: jobProvider,
+      model: catalogModel.id,
+      operation,
+      prompt,
+      plan,
+      sourceImageSha256: sourceImageSha256 ?? null,
+      maskImageSha256: maskImageSha256 ?? null,
+      imageCount: n,
+      sourceSurface,
+      estimatedCostMicrousd,
+      actualCostMicrousd: null,
+      status: 'queued',
+      attempts: 0,
+      maxAttempts: 1,
+      attemptStartedAt: null,
+      retryable: false,
+      publicError: null,
+      cancelRequestedAt: null,
+      billingOutcome: null,
+      billingSettlementStatus: null,
+      nextAttemptAt: new Date().toISOString(),
+      claimToken: null,
+      claimExpiresAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      terminalAt: null,
+    };
+  }
+
+  const corsHeaders = { ...getCorsHeaders(request), ...getSecurityHeaders() };
+
+  if (wantsAsync) {
+    const detachedJob = job;
+    after(async () => {
+      try {
+        await runImageGenerationJobAttempt({ db: scopedDb, job: detachedJob, inlineEdit });
+      } catch (error) {
+        logger.error(
+          { error, jobId: detachedJob.id, userId },
+          'Durable image job attempt failed outside the request',
+        );
+      }
+    });
+
+    logger.info(
+      { userId, provider, model: catalogModel.id, jobId: job.id, n },
+      'Durable image job queued',
+    );
+    return NextResponse.json(
+      {
+        ...publicImageJobSnapshot(job, []),
+        status: 'queued' as const,
+        latency_ms: Date.now() - startTime,
+      },
+      { status: 202, headers: corsHeaders },
+    );
+  }
+
+  const outcome = await runImageGenerationJobAttempt({
+    db: scopedDb,
+    job,
+    inlineEdit,
+    detached: !jobStoreReady,
+  });
+
+  if (outcome.job.status !== 'completed') {
+    const status =
+      outcome.failureKind === 'persistence'
+        ? 502
+        : outcome.retryAfterSeconds !== undefined
+          ? 429
+          : 422;
+    return NextResponse.json(
+      {
+        success: false,
+        error: outcome.job.publicError ?? 'Image generation failed',
+        images: [],
+        provider,
+        model: outcome.providerModel ?? 'unknown',
+        latency_ms: Date.now() - startTime,
+        ...(jobStoreReady ? { job_id: outcome.job.id, retryable: outcome.job.retryable } : {}),
+        ...(outcome.failureKind === 'persistence' ? { persisted: false } : {}),
+        ...(outcome.retryAfterSeconds !== undefined
+          ? { retry_after_seconds: outcome.retryAfterSeconds }
+          : {}),
+      } satisfies ImageGenerationResponse,
+      {
+        status,
+        headers: {
+          ...corsHeaders,
+          ...(outcome.retryAfterSeconds !== undefined
+            ? { 'Retry-After': String(outcome.retryAfterSeconds) }
+            : {}),
+        },
+      },
+    );
+  }
+
+  const images =
+    outcome.images.length > 0
+      ? outcome.images
+      : await imageJobDeliveredImages(scopedDb, outcome.job);
+
   try {
-    await markManagedUsageClientDelivered(reservation);
+    await markManagedUsageClientDelivered(reservationForImageJob(scopedDb, outcome.job));
   } catch (error) {
     logger.warn(
       { error, userId, idempotencyKey: reservation.idempotencyKey },
@@ -1844,13 +943,28 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  return NextResponse.json(response, {
-    headers: {
-      ...getCorsHeaders(request),
-      ...getSecurityHeaders(),
-      ...aiGeneratedHeaders(),
+  return NextResponse.json(
+    {
+      success: true,
+      images: images.map(({ url, b64_json }) => ({
+        ...(url ? { url } : {}),
+        ...(b64_json ? { b64_json } : {}),
+      })),
+      provider,
+      model: outcome.providerModel ?? catalogModel.id,
+      catalog_model: catalogModel.id,
+      latency_ms: Date.now() - startTime,
+      persisted: storageConfigured,
+      provenance: outcome.provenance,
+      ...(jobStoreReady ? { job_id: outcome.job.id } : {}),
     },
-  });
+    {
+      headers: {
+        ...corsHeaders,
+        ...aiGeneratedHeaders(),
+      },
+    },
+  );
 }
 
 export const POST = withErrorHandler(handleImageGeneration);
