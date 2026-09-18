@@ -159,6 +159,43 @@ describe('GET /api/me, evaluated rollout flags', () => {
     expect(typeof body.feature_flags.code_execution).toBe('boolean');
   });
 
+  function ringFlag(key: string, surface: string) {
+    return flag(key, [
+      {
+        id: 'ring',
+        conditions: { surfaces: [surface] },
+        rollout: { percentage: 100 },
+        bucketBy: 'user',
+        variant: 'on',
+      },
+    ]);
+  }
+
+  it('offers a staged ring only to its own surface and channel', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      ringFlag('rollout.desktop.beta.new_composer', 'desktop'),
+      ringFlag('rollout.mobile.beta.new_composer', 'mobile'),
+    ]);
+
+    const response = await GET(
+      new Request('http://localhost:3000/api/me?surface=desktop&channel=beta') as never,
+    );
+    const body = await response.json();
+
+    expect(body.feature_flags['rollout.desktop.beta.new_composer']).toBe(true);
+    expect(body.feature_flags).not.toHaveProperty('rollout.mobile.beta.new_composer');
+  });
+
+  it('hands a client on an unnamed channel none of the staged rings', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      ringFlag('rollout.desktop.beta.new_composer', 'desktop'),
+    ]);
+
+    const body = await (await GET(makeGetRequest())).json();
+
+    expect(body.feature_flags).not.toHaveProperty('rollout.desktop.beta.new_composer');
+  });
+
   it('serves the existing keys when the flag store has nothing to evaluate', async () => {
     flagMocks.getActiveFlagDefinitions.mockResolvedValue([]);
     flagMocks.resolveOrgMembership.mockRejectedValue(new Error('membership read failed'));

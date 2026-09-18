@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
+import type { VisualFrame } from '@agiworkforce/types';
 
 import { cn } from '@shared/lib/utils';
 import { useVoiceSession, type VoiceTranscriptTurn } from '@features/chat/hooks/use-voice-session';
@@ -12,6 +13,7 @@ import {
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
 import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
+import { useVisualSession } from '@/lib/visual/use-visual-session';
 import { VoiceCaptions } from './VoiceCaptions';
 import { VoiceChatDock } from './VoiceChatDock';
 import { VoiceComposer } from './VoiceComposer';
@@ -25,6 +27,10 @@ const LABEL = {
   cancelSending: 'Do not send that',
   retry: 'Try again',
   reconnecting: 'Reconnecting, attempt',
+  shareCamera: 'Share your camera',
+  stopCamera: 'Stop sharing your camera',
+  cameraPreview: 'Preview of what your camera is sharing',
+  cameraSharing: 'Your camera is being shared with this call.',
 } as const;
 
 const ESCAPE = 'Escape';
@@ -48,6 +54,8 @@ export interface VoiceModeSurfaceProps {
   onOpenLibrary: () => void;
   onOpenConnectors: () => void;
   onIntelligenceChange: (intelligence: VoiceIntelligence) => void;
+  /** Where a live camera frame goes. Without a sink the control is not offered. */
+  onVisualFrame?: (frame: VisualFrame) => void;
 }
 
 export function VoiceModeSurface({
@@ -61,6 +69,7 @@ export function VoiceModeSurface({
   onOpenLibrary,
   onOpenConnectors,
   onIntelligenceChange,
+  onVisualFrame,
 }: VoiceModeSurfaceProps) {
   const handleTranscript = useCallback(
     (id: string, turn: VoiceTranscriptTurn) => {
@@ -112,6 +121,31 @@ export function VoiceModeSurface({
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [exit]);
+
+  const visual = useVisualSession({
+    source: 'camera',
+    voiceActive: status !== VOICE_SESSION_STATUS.exited,
+    onFrame: onVisualFrame,
+  });
+  const previewRef = useRef<HTMLVideoElement | null>(null);
+  const visualStream = visual.mediaStream;
+
+  useEffect(() => {
+    const node = previewRef.current;
+    if (!node) return;
+    node.srcObject = visualStream;
+    return () => {
+      node.srcObject = null;
+    };
+  }, [visualStream]);
+
+  const toggleCamera = useCallback(() => {
+    if (visual.capturing) {
+      visual.stop();
+      return;
+    }
+    void visual.start();
+  }, [visual]);
 
   const handleSubmitTyped = useCallback(() => {
     if (!typed.trim()) return;
@@ -220,6 +254,41 @@ export function VoiceModeSurface({
       {notice}
       {sendingChip}
       {captionsOpen ? <VoiceCaptions lines={captions} /> : null}
+
+      {onVisualFrame ? (
+        <div className="flex flex-col items-center gap-2">
+          <button
+            type="button"
+            data-testid="voice-camera-toggle"
+            onClick={toggleCamera}
+            aria-pressed={visual.capturing}
+            className="min-h-11 rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+          >
+            {visual.capturing ? LABEL.stopCamera : LABEL.shareCamera}
+          </button>
+          {visual.status.error ? (
+            <p role="alert" className="text-sm text-[var(--chat-destructive-text)]">
+              {visual.status.error}
+            </p>
+          ) : null}
+          {visual.capturing ? (
+            <>
+              <p className="sr-only" role="status" aria-live="polite">
+                {LABEL.cameraSharing}
+              </p>
+              <video
+                ref={previewRef}
+                autoPlay
+                muted
+                playsInline
+                aria-label={LABEL.cameraPreview}
+                data-testid="voice-camera-preview"
+                className="h-24 w-32 rounded-lg border border-[var(--chat-border-strong)] object-cover"
+              />
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       <VoiceComposer
         value={typed}

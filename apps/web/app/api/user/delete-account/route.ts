@@ -12,6 +12,11 @@ import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
+import {
+  accountErasureProgress,
+  resolveDeletionStatus,
+  scheduledDeletionProgress,
+} from '@/lib/services/deletion-manifest';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
@@ -257,6 +262,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
+  const scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
   try {
     try {
@@ -265,11 +271,7 @@ export async function DELETE(request: NextRequest) {
          set deletion_requested_at = $1,
              deletion_scheduled_for = $2
          where id = $3`,
-        [
-          new Date().toISOString(),
-          new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          userId,
-        ],
+        [new Date().toISOString(), scheduledFor, userId],
       );
 
       if (scheduledRows === 0) {
@@ -299,10 +301,15 @@ export async function DELETE(request: NextRequest) {
         'Deletion columns are not provisioned; attempting immediate delete',
       );
 
+      let outcome = resolveDeletionStatus(scheduledDeletionProgress(null));
       try {
         const erasure = await eraseUserAccountData(userId);
+        outcome = resolveDeletionStatus(accountErasureProgress(erasure));
         if (!erasure.complete) {
-          logger.error({ userId, erasure }, 'Immediate account erasure was incomplete');
+          logger.error(
+            { userId, status: outcome.status, reason: outcome.reason },
+            'Immediate account erasure was incomplete',
+          );
           return NextResponse.json(
             {
               error: `Account deletion did not finish. Some of your data has already been removed and the rest is still stored; your sign-in still works. Please contact ${CONTACT_EMAIL} so the erasure can be completed.`,
@@ -327,7 +334,12 @@ export async function DELETE(request: NextRequest) {
         eventType: 'account_deletion_requested',
         severity: 'warning',
         request,
-        detail: { resourceType: 'account', subjectRef, status: 'erased_immediately' },
+        detail: {
+          resourceType: 'account',
+          subjectRef,
+          status: outcome.status,
+          reason: outcome.reason,
+        },
       });
 
       return NextResponse.json(
@@ -338,18 +350,24 @@ export async function DELETE(request: NextRequest) {
 
     logger.info({ userId }, 'Account deletion scheduled');
 
+    const scheduledOutcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
     await recordAuditEvent({
       userId: null,
       eventType: 'account_deletion_requested',
       severity: 'warning',
       request,
-      detail: { resourceType: 'account', subjectRef, status: 'scheduled' },
+      detail: {
+        resourceType: 'account',
+        subjectRef,
+        status: scheduledOutcome.status,
+        reason: scheduledOutcome.reason,
+      },
     });
 
     return NextResponse.json(
       {
         message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
-        scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        scheduledFor,
       },
       { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
     );
