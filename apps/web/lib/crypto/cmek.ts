@@ -18,19 +18,26 @@ import {
  * is the entire point: revoking our grant on the KEK ends our ability to read
  * their data without us having to be trusted to delete anything.
  *
- * WHAT IS NOT BUILT HERE: provisioning. `AwsKmsProvider` and `GcpKmsProvider`
- * are the interface only; standing up a real key, a cross-account grant and the
- * credentials to assume it is a founder action against real vendor accounts.
- * `createLocalCmekProvider` is a test double that implements the same interface
- * against local material, so every behaviour below, including the fail-closed
- * ones, is exercised without either vendor.
+ * WHAT IS NOT BUILT HERE: provisioning. `kms-providers.ts` speaks AWS KMS, GCP
+ * KMS and Azure Key Vault for real; standing up a key, a cross-account grant
+ * and the credentials to assume it is a founder action against real vendor
+ * accounts. `createLocalCmekProvider` is a test double that implements the same
+ * interface against local material, so every behaviour below, including the
+ * fail-closed ones, is exercised without any vendor.
  *
  * Tenants without CMEK keep the path they have always had: the platform root
  * key with an HKDF derivation per organization, which binds a tenant's
- * ciphertext to that tenant without a second vendor in the request path.
+ * ciphertext to that tenant without a second vendor in the request path. A
+ * support principal resolving any ring, customer-managed or platform-derived,
+ * passes `assertSupportAccess` first, and a deployment wiring no gate refuses.
  */
 
-export const CMEK_PROVIDER_IDS = Object.freeze(['aws_kms', 'gcp_kms', 'local'] as const);
+export const CMEK_PROVIDER_IDS = Object.freeze([
+  'aws_kms',
+  'gcp_kms',
+  'azure_key_vault',
+  'local',
+] as const);
 
 export type CmekProviderId = (typeof CMEK_PROVIDER_IDS)[number];
 
@@ -38,7 +45,7 @@ export type CmekKeyStatus = 'active' | 'rotating' | 'revoked';
 
 export interface CmekKeyDescriptor {
   provider: CmekProviderId;
-  /** The key's own name in the customer's KMS: an ARN, or a GCP resource path. */
+  /** The key's own name in the customer's KMS: an ARN, a GCP or Azure key id. */
   keyUri: string;
   region: string;
 }
@@ -106,7 +113,10 @@ export class CmekProviderUnconfiguredError extends Error {
   }
 }
 
-const DATA_KEY_LENGTH = 32;
+/** The size of a data key, which every provider must produce and unwrap. */
+export const CMEK_DATA_KEY_LENGTH = 32;
+
+const DATA_KEY_LENGTH = CMEK_DATA_KEY_LENGTH;
 const LOCAL_WRAP_IV_LENGTH = 12;
 const LOCAL_WRAP_TAG_LENGTH = 16;
 const LOCAL_WRAP_ALGORITHM = 'aes-256-gcm';
@@ -282,11 +292,37 @@ export function platformTenantKeyRing(
   return resolveTenantKeyRing(envKeyProvider, envName, organizationId, options);
 }
 
+/**
+ * An operator has no standing here on its own: the platform root key it can
+ * read from the environment is the bypass CMEK closes, so support is gated.
+ */
+export type KeyRingPrincipal =
+  { kind: 'tenant' } | { kind: 'support'; userId: string; scope: string };
+
+export class SupportAccessRequiredError extends Error {
+  readonly organizationId: string;
+
+  constructor(organizationId: string) {
+    super(
+      `Resolving workspace ${organizationId}'s keys as support requires an approved, unexpired ` +
+        'break-glass grant, and this deployment wired no gate to check one. The request is ' +
+        'refused rather than served with the platform key.',
+    );
+    this.name = 'SupportAccessRequiredError';
+    this.organizationId = organizationId;
+  }
+}
+
 export interface OrganizationKeyRingDeps {
   loadRecord: (organizationId: string) => Promise<OrganizationKeyRecord | null>;
   resolveCustomerRing: (record: OrganizationKeyRecord) => Promise<KeyRing>;
   platformEnvName: string;
   env?: Record<string, string | undefined>;
+  /** Throws unless a live grant covers the read. Absent, support is refused. */
+  assertSupportAccess?: (
+    organizationId: string,
+    principal: { userId: string; scope: string },
+  ) => Promise<void>;
 }
 
 export type OrganizationKeySource = 'customer_managed' | 'platform_derived';
@@ -301,7 +337,15 @@ export interface OrganizationKeyRing {
 export async function resolveOrganizationKeyRing(
   organizationId: string,
   deps: OrganizationKeyRingDeps,
+  principal: KeyRingPrincipal = { kind: 'tenant' },
 ): Promise<OrganizationKeyRing> {
+  if (principal.kind === 'support') {
+    if (!deps.assertSupportAccess) throw new SupportAccessRequiredError(organizationId);
+    await deps.assertSupportAccess(organizationId, {
+      userId: principal.userId,
+      scope: principal.scope,
+    });
+  }
   const record = await deps.loadRecord(organizationId);
   if (!record) {
     const ring = platformTenantKeyRing(deps.platformEnvName, organizationId, {

@@ -188,6 +188,21 @@ const ACCESS: { label: string; value: string }[] = [
     value:
       'Limits are enforced per endpoint through Upstash Redis, which is required at production runtime. The module throws on start if it is not configured. Security-sensitive endpoints are marked fail-closed and reject requests when the limiter is unreachable; a few business-critical paths such as checkout are deliberately fail-open, and are marked as such in the code.',
   },
+  {
+    label: 'Support access to your workspace',
+    value:
+      'Holding our production credentials is not access. Reading a workspace as support requires a grant naming that workspace, the scopes, a ticket and a written reason, requested by one operator and approved by a different one, and it expires: one hour by default and never more than eight, enforced by a database constraint rather than by a code path. Every grant, every read taken under one, and every read refused for want of one is appended to a log your owners and admins can read for themselves.',
+  },
+  {
+    label: 'Whether that log can be edited',
+    value:
+      'The application role holds no write privilege on it, a trigger refuses updates and deletes for every role including the connection an operator holds, and each entry carries the hash of the entry before it for that workspace. A row removed or rewritten by someone who disabled the trigger still leaves a break, and a verification endpoint recomputes the chain and names the first entry that does not reconcile.',
+  },
+  {
+    label: 'Whether support can read around encryption',
+    value:
+      'A workspace holding its own key in its own KMS is unreadable to us without that KMS answering. A workspace on our platform key used to be the gap, because we hold that key: resolving any workspace’s keys as a support principal now passes the same grant check, for both kinds, and a deployment with no grant check wired refuses support resolution outright rather than falling back to the platform key.',
+  },
 ];
 
 const ISOLATION: { label: string; value: string }[] = [
@@ -288,7 +303,7 @@ const DELETION: { label: string; value: string }[] = [
   {
     label: 'The list is enumerated, not implied',
     value:
-      'Erasure walks a hardcoded, foreign-key-ordered list of 82 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
+      'Erasure walks a hardcoded, foreign-key-ordered list of 84 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
   },
   {
     label: 'Bytes before rows',
@@ -375,7 +390,7 @@ const NOT_DONE: { label: string; value: string }[] = [
   {
     label: 'Production access controls',
     value:
-      'Production database credentials exist and are held by the operator. There is no just-in-time access approval workflow, no periodic access review, and no separate break-glass procedure. For a company this size that is the honest state, and it is what a reviewer should assume.',
+      'The break-glass mechanism described under access is built and audited, and the offboarding steps are written down as a runbook. Two things remain: there is no periodic access review on a schedule, and the platform key is currently held in the deployment environment rather than in a key-management service, so unsealing it leaves a record only in our own trail and not in a vendor’s. Assume both until this row says otherwise.',
   },
   {
     label: 'Availability commitments',

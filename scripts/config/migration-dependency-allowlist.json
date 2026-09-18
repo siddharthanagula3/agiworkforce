@@ -392,6 +392,16 @@
       "reason": "the background job model lives entirely in background_jobs, which 0208 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0208 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0208 is applied."
     },
     {
+      "file": "apps/web/lib/jobs/job-service.ts",
+      "migration": 220,
+      "reason": "enqueueJob stamps a job's origin_region from the workspace's own organizations.data_region, which 0220 adds, rather than trusting the caller to pass a region; 0193-0224 are applied in production as of 2026-09-17 and the NOT YET APPLIED header is the boilerplate this repo never re-edits after an apply."
+    },
+    {
+      "file": "apps/web/lib/jobs/job-service.ts",
+      "migration": 230,
+      "reason": "0230 adds background_jobs.origin_region, which enqueueJob writes and claimJobs filters on so a regional drain claims only its own jurisdiction's work; the deploy runbook applies it before this code reaches production, and until it does the insert names a column that does not exist."
+    },
+    {
       "file": "apps/web/lib/memory/import-store.ts",
       "migration": 47,
       "reason": "production is at migration 0158 per the 2026-09-05 billing-boundary audit; this migration shipped before that baseline and its header text is stale, migrations are checksummed not re-edited after apply (see migrations-0153-0156-applied-production)."
@@ -500,6 +510,11 @@
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 223,
       "reason": "account erasure names connector_call_events so the export inventory has to answer for it; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0223 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0223 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 229,
+      "reason": "the erasure inventory fences support_access_events, the append-only break-glass trail 0229 creates, so an erasure cannot quietly remove the record of what support read; the trail is classified rather than deleted and the classification has to name the table. The deploy runbook applies 0229 before this code reaches production."
     },
     {
       "file": "apps/web/lib/server/admin-api-keys.ts",
@@ -627,6 +642,11 @@
       "reason": "the workspace erasure inventory classifies the connector_call_events table 0223 creates; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0223 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0223 is applied."
     },
     {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 229,
+      "reason": "workspace erasure sweeps support_access_grants by organization_id and classifies support_access_events as retained, both created by 0229; the trail outlives the workspace it names because it is the evidence for what support did there. The deploy runbook applies 0229 before this code reaches production."
+    },
+    {
       "file": "apps/web/lib/server/product-analytics.ts",
       "migration": 213,
       "reason": "the event writer and the derived account milestones insert into and read the product_analytics_events table 0213 adds; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0213 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0213 is applied."
@@ -660,6 +680,11 @@
       "file": "apps/web/lib/server/sso/jit-provisioning.ts",
       "migration": 204,
       "reason": "first single sign-on provisioning reads jit_provisioning_enabled and jit_default_role, which 0204 adds to sso_connections; deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while migration 0204 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted before 0204 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/support-access-service.ts",
+      "migration": 229,
+      "reason": "0229 creates support_access_grants and support_access_events, which are this module's only tables; the deploy runbook applies it before this code reaches production, and until it does every break-glass call fails closed on a missing relation, which is the safe direction for a gate."
     },
     {
       "file": "apps/web/lib/server/two-factor-replay.ts",
@@ -877,6 +902,11 @@
       "reason": "plugin installation settings are founder-gated; the deploy runbook applies migration 0160 before this code reaches production."
     },
     {
+      "file": "apps/web/lib/services/plugin-installation-service.ts",
+      "migration": 232,
+      "reason": "0232 adds approved_permissions, pending_permissions and review_required to plugin_installations so an update that expands a plugin's permissions is disabled for review instead of applying silently; the deploy runbook applies 0232 before this code reaches production, and deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while 0232 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted ahead of it."
+    },
+    {
       "file": "apps/web/lib/services/plugin-marketplace-installation-service.ts",
       "migration": 159,
       "reason": "plugin marketplace sources are founder-gated; the deploy runbook applies migration 0159 before this code reaches production."
@@ -890,6 +920,11 @@
       "file": "apps/web/lib/services/plugin-marketplace-service.ts",
       "migration": 175,
       "reason": "migration 0175 was applied to production on 2026-09-07 and recorded against 129c33946; its header text stays as written because migrations are checksummed, not re-edited after apply (see migration-0175-applied-production)."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-marketplace-service.ts",
+      "migration": 232,
+      "reason": "0232 creates plugin_package_scans and adds the approved/pending permission columns to plugin_marketplace_installations, which the install gate and the refresh review read; the deploy runbook applies 0232 before this code reaches production, and deploy-production.yml runs `pnpm db:migrate -- verify`, which throws while 0232 is pending (scripts/lib/neon-migrations.mjs verifyMigrations), so this code cannot be promoted ahead of it."
     },
     {
       "file": "apps/web/lib/services/plugin-owned-source-service.ts",
