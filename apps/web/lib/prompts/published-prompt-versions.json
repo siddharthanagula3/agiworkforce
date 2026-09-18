@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "digests": {
+    "chat.system@1": "sha256:34a7363b3b175f4834dc5f00e7188aeab244d71ab0f5ad13d301bdc26378cb2e",
+    "chat.system@2": "sha256:b230d332e3e47ac9a6022137902dd8d3d8f4d27b5ff172ae6c48f35387b556a9",
+    "support.system@1": "sha256:65f97f2a7d975c6f1b0bcca82bcde0396f2dcbd5e8a032d34bb1ce3c89b12db5",
+    "research.system@1": "sha256:42400f39a3b99f51cc283288da94a45a5d6d0b200c0785aacdb15f26f1d91763",
+    "voice.live_instructions@1": "sha256:e2383fc0f6236ee64a26be6ca1f8c384bd2e4469918743526e0ae3c0ac61509b",
+    "voice.live_backend_instructions@1": "sha256:bdebcf1ebf7e63202bc23ae7ccd57a8ee333b6f25f26916598e23ad7b47eb708",
+    "voice.live_context_rules@1": "sha256:bed863e47debe970820ea7f3846a9b911efc634a5dd8dafd919c1c8e24a0d55a",
+    "product.memory_fact_extraction@1": "sha256:efe64ca58c9d7222a007ef00467865646b4cd5cc0773549f36045c1c004d7a85",
+    "agent.cloud_code_system@1": "sha256:e3a1fd2053fe4debebe6df4a3476a6e8419f3f7ab5363519e39c25ccd3f1f87a",
+    "tool.url_fetch_description@1": "sha256:948239e4f02f23340b6c35cf437f9b700a24a3cce3c1ba3a535993f23b117554",
+    "tool.places_search_description@1": "sha256:3843724a46bc0b0b2ede1f94449536f2c0dc1a4e9d9f890f181386809b596310",
+    "safety.untrusted_context@1": "sha256:2815c21a690488aec90f38edf052e48118cc1e2e14ae818f13e485d29e56b79b"
+  }
+}

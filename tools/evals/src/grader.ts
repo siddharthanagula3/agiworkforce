@@ -310,6 +310,43 @@ export function gradeCheck(check: Check, response: ModelResponse): CheckResult {
         problems.length === 0 ? 'urls grounded' : problems.join('; '),
       );
     }
+    case 'sourceQuality': {
+      const urls = citedUrls(text);
+      const authoritative = check.authoritative.map(normaliseUrl);
+      const weak = check.weak.map(normaliseUrl);
+      const leaned = urls.filter((url) => authoritative.includes(url));
+      const leanedWeak = urls.filter((url) => weak.includes(url));
+      const needed = check.minAuthoritative ?? 1;
+      const problems = [
+        ...(leaned.length < needed
+          ? [`cites ${leaned.length} authoritative sources, needs ${needed}`]
+          : []),
+        ...(leanedWeak.length > 0 ? [`leans on weaker sources ${leanedWeak.join(', ')}`] : []),
+      ];
+      return result(
+        check,
+        problems.length === 0,
+        problems.length === 0 ? 'sources are the authoritative ones' : problems.join('; '),
+      );
+    }
+    case 'sourceRestriction': {
+      const outsideIds = [...new Set(citedIds(text))].filter((id) => !check.sources.includes(id));
+      const allowed = (check.urls ?? []).map(normaliseUrl);
+      const outsideUrls = citedUrls(text).filter((url) => !allowed.includes(url));
+      const problems = [
+        ...(outsideIds.length > 0
+          ? [`cites sources outside the brief ${outsideIds.join(', ')}`]
+          : []),
+        ...(outsideUrls.length > 0
+          ? [`reaches past the supplied sources ${outsideUrls.join(', ')}`]
+          : []),
+      ];
+      return result(
+        check,
+        problems.length === 0,
+        problems.length === 0 ? 'stayed inside the supplied sources' : problems.join('; '),
+      );
+    }
     case 'language': {
       const detected = detectLanguage(text);
       return result(

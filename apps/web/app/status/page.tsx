@@ -288,6 +288,11 @@ export default async function StatusPage() {
               rows={[
                 ...COVERED.map((component) => ({ label: component.label, value: component.what })),
                 {
+                  label: 'Model routes',
+                  value:
+                    'The router tracks each model route separately and fails away from one that starts erroring, and operators read that per route behind their own sign-in. It is not published here, because the reading names which provider is failing and that is a third party outage to report, not ours. The Chat row above is the public half of it: it goes amber only once every provider behind the default route is degraded.',
+                },
+                {
                   label: 'Not covered',
                   value: `${NOT_COVERED.join(' · ')}. A green signal above says nothing about any of these. If one of them is failing for you, the report channel below is the fastest path.`,
                 },

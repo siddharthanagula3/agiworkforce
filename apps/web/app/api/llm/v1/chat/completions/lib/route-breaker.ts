@@ -7,7 +7,7 @@ import 'server-only';
  * the rotation path runs inside a live stream's failure handler, where a round
  * trip per candidate would put the store on a real user's latency budget.
  */
-import { isRouteBreakerOpen } from '@agiworkforce/routing';
+import { isRouteBreakerOpen, type RouteRateBudget } from '@agiworkforce/routing';
 
 import { logger } from '@/lib/logger';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
@@ -29,6 +29,8 @@ export interface FailoverBreakerView {
   onCredentialRejected: (provider: string) => void;
   isCandidateBreakerOpen: (candidate: { modelKey: string; provider: string }) => boolean;
   isCredentialCooling: (candidate: { modelKey: string; provider: string }) => boolean;
+  /** The refusal name when this candidate is over its own dispatch budget. */
+  rateLimitRefusal: (candidate: { modelKey: string; provider: string }) => string | null;
 }
 
 function providerOfCandidate(modelKey: string, fallbackProvider: string): string {
@@ -73,6 +75,7 @@ export function recordCredentialRejection(provider: string): void {
 export async function resolveFailoverBreakerView(
   processed: ProcessedRequest,
   nowMs: number = Date.now(),
+  rateBudgets: Readonly<Record<string, RouteRateBudget>> = {},
 ): Promise<FailoverBreakerView> {
   const routeIds = candidateRouteIds(processed);
   const providerIds = [...new Set(routeIds.map(providerOfRouteId))];
@@ -87,11 +90,21 @@ export async function resolveFailoverBreakerView(
     isRouteBreakerOpen(credentialSnapshots[providerId]),
   );
 
+  const refusalFor = ({ modelKey, provider }: { modelKey: string; provider: string }) => {
+    const budget = rateBudgets[buildServingRouteId(provider, modelKey)];
+    return budget === undefined || budget.admitted ? null : (budget.refusal ?? null);
+  };
+
   return {
     openCredentialProviders,
     onCredentialRejected: recordCredentialRejection,
-    isCandidateBreakerOpen: ({ modelKey, provider }) =>
-      isRouteBreakerOpen(routeSnapshots[buildServingRouteId(provider, modelKey)]),
+    // Over budget is unselectable for this turn, so rotation moves on rather
+    // than spending an attempt discovering the same ceiling as a 429.
+    isCandidateBreakerOpen: (candidate) =>
+      isRouteBreakerOpen(
+        routeSnapshots[buildServingRouteId(candidate.provider, candidate.modelKey)],
+      ) || refusalFor(candidate) !== null,
     isCredentialCooling: ({ provider }) => isRouteBreakerOpen(cooldownSnapshots[provider]),
+    rateLimitRefusal: refusalFor,
   };
 }
