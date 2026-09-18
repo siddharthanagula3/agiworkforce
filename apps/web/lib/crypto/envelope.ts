@@ -176,6 +176,11 @@ export interface AsyncKeyProvider {
   readonly name: string;
   resolveKeyRing(envName: string, options?: LoadKeyRingOptions): Promise<ProvidedKeyRing>;
   deriveTenantKey?(key: EnvelopeKey, organizationId: string): EnvelopeKey;
+  /**
+   * Drops cached material so a revocation takes effect now rather than at the
+   * end of the cache window. Named keys, or all of them when none are named.
+   */
+  invalidate?(wrappedKeys?: readonly string[]): void;
 }
 
 export interface KmsKeyProviderOptions {
@@ -237,6 +242,13 @@ export function createKmsKeyProvider(
       };
     },
     deriveTenantKey: hkdfDeriveTenantKey,
+    invalidate(wrappedKeys) {
+      if (!wrappedKeys) {
+        cache.clear();
+        return;
+      }
+      for (const wrapped of wrappedKeys) cache.delete(wrapped);
+    },
   };
 }
 

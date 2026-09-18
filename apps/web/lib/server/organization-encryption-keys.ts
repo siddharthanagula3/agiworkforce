@@ -19,9 +19,29 @@ import {
   type CmekProviderId,
   type CmekProviderRegistry,
   type CustomerKeyRingResolver,
+  type KeyRingPrincipal,
   type OrganizationKeyRecord,
   type OrganizationKeyRing,
 } from '@/lib/crypto/cmek';
+import {
+  assertRewrapComplete,
+  runKeyRewrap,
+  validateCmekSetup,
+  type CmekSetupValidation,
+  type RewrapOutcome,
+  type RewrapStore,
+} from '@/lib/crypto/cmek-lifecycle';
+import { createKmsProviderRegistry } from '@/lib/crypto/kms-providers';
+import {
+  assertCustomerKeyRegion,
+  keyManagementRegions,
+  readOrganizationRegion,
+} from './data-region';
+import {
+  SUPPORT_ACCESS_SCOPES,
+  assertSupportAccess,
+  type SupportAccessScope,
+} from './support-access-service';
 
 /**
  * The platform root every workspace without its own key is derived from. It is
@@ -110,18 +130,14 @@ export async function readOrganizationKeyRecord(
 }
 
 /**
- * The KMS clients this deployment can actually talk to.
- *
- * Empty for both real providers: reaching a customer's AWS or GCP key needs
- * credentials for an account this deployment does not hold, and inventing a
- * client that cannot connect would turn a provisioning gap into a runtime
- * mystery. The local double is built only outside production, where it exists
- * so every path below, the refusals included, runs without a vendor.
+ * The KMS clients this deployment can actually talk to. A vendor whose
+ * credentials are absent is absent from the registry, so a workspace whose key
+ * lives there is refused at resolution rather than served from somewhere else.
  */
 export function buildCmekProviderRegistry(
   env: Record<string, string | undefined> = process.env,
 ): CmekProviderRegistry {
-  const registry: CmekProviderRegistry = {};
+  const registry: CmekProviderRegistry = { ...createKmsProviderRegistry({ env }) };
   const localRoot = env[LOCAL_ROOT_ENV]?.trim();
   if (localRoot && env['NODE_ENV'] !== 'production') {
     registry.local = createLocalCmekProvider(Buffer.from(localRoot, 'hex'), {
@@ -142,9 +158,43 @@ function customerRingResolver(registry: CmekProviderRegistry): CustomerKeyRingRe
   return resolveCustomerRing;
 }
 
+/**
+ * Forgets one workspace's unwrapped data keys now. Without this a revocation
+ * would keep serving plaintext until the resolver's cache window lapsed.
+ */
+function forgetCustomerKeyMaterial(record: OrganizationKeyRecord | null): void {
+  if (record) resolveCustomerRing?.invalidate(record);
+}
+
+/**
+ * Asks the customer's KMS directly rather than through the ring cache, so a key
+ * the customer disabled on their side reads as unavailable on the next status
+ * call instead of at the end of the cache window. A failed probe also drops the
+ * cached material, which is what makes the serving path stop using it.
+ */
+async function probeCustomerKey(
+  registry: CmekProviderRegistry,
+  record: OrganizationKeyRecord,
+): Promise<void> {
+  if (record.status === 'revoked') throw new CustomerKeyRevokedError(record.organizationId);
+  const client = registry[record.descriptor.provider];
+  if (!client) throw new CmekProviderUnconfiguredError(record.descriptor.provider);
+  try {
+    await client.unwrapDataKey(record.descriptor, record.active.wrapped);
+  } catch (error) {
+    forgetCustomerKeyMaterial(record);
+    throw new CustomerKeyUnavailableError(record.organizationId, record.descriptor.provider, error);
+  }
+}
+
 export interface OrganizationKeyRingOptions {
   registry?: CmekProviderRegistry;
   env?: Record<string, string | undefined>;
+  principal?: KeyRingPrincipal;
+}
+
+function isSupportScope(value: string): value is SupportAccessScope {
+  return (SUPPORT_ACCESS_SCOPES as readonly string[]).includes(value);
 }
 
 /**
@@ -158,12 +208,29 @@ export async function organizationKeyRing(
   options: OrganizationKeyRingOptions = {},
 ): Promise<OrganizationKeyRing> {
   const registry = options.registry ?? buildCmekProviderRegistry(options.env);
-  return resolveOrganizationKeyRing(organizationId, {
-    loadRecord: (id) => readOrganizationKeyRecord(db, id),
-    resolveCustomerRing: customerRingResolver(registry),
-    platformEnvName: PLATFORM_TENANT_KEY_ENV,
-    ...(options.env ? { env: options.env } : {}),
-  });
+  return resolveOrganizationKeyRing(
+    organizationId,
+    {
+      loadRecord: (id) => readOrganizationKeyRecord(db, id),
+      resolveCustomerRing: customerRingResolver(registry),
+      platformEnvName: PLATFORM_TENANT_KEY_ENV,
+      assertSupportAccess: async (orgId, principal) => {
+        if (!isSupportScope(principal.scope)) {
+          throw new Error(
+            `"${principal.scope}" is not a break-glass scope, so no grant can cover this read.`,
+          );
+        }
+        await assertSupportAccess({
+          db,
+          organizationId: orgId,
+          actorUserId: principal.userId,
+          scope: principal.scope,
+        });
+      },
+      ...(options.env ? { env: options.env } : {}),
+    },
+    options.principal ?? { kind: 'tenant' },
+  );
 }
 
 export type OrganizationKeyAvailability =
@@ -228,7 +295,7 @@ export async function readOrganizationKeyStatus(
 
   const registry = options.registry ?? buildCmekProviderRegistry(options.env);
   try {
-    await customerRingResolver(registry)(record);
+    await probeCustomerKey(registry, record);
     return {
       ...meta,
       availability: {
@@ -272,11 +339,27 @@ export interface ProvisionOrganizationKeyInput {
   descriptor: CmekKeyDescriptor;
   provider: CmekProvider;
   keyVersion: string;
+  env?: Record<string, string | undefined>;
+}
+
+/**
+ * An EU-pinned workspace whose key lives in a US KMS is not out of reach of a
+ * US legal process, so the association is refused here rather than in review.
+ */
+async function assertKeyRegionAdmitted(
+  db: DatabaseAdapter,
+  organizationId: string,
+  descriptor: CmekKeyDescriptor,
+  env: Record<string, string | undefined> = process.env,
+): Promise<void> {
+  const region = await readOrganizationRegion(db, organizationId, env);
+  assertCustomerKeyRegion(region.effective, descriptor.region, env);
 }
 
 export async function provisionOrganizationKey(
   input: ProvisionOrganizationKeyInput,
 ): Promise<{ keyVersion: string }> {
+  await assertKeyRegionAdmitted(input.db, input.organizationId, input.descriptor, input.env);
   const { wrapped } = await input.provider.generateDataKey(input.descriptor);
   await input.db.execute(
     `insert into public.organization_encryption_keys
@@ -332,6 +415,7 @@ export async function rotateOrganizationKey(
   if (input.record.status === 'revoked') {
     throw new CustomerKeyRevokedError(input.organizationId);
   }
+  await assertKeyRegionAdmitted(input.db, input.organizationId, input.descriptor, input.env);
   const { wrapped } = await input.provider.generateDataKey(input.descriptor);
   const retired = [input.record.active, ...input.record.retired];
   await input.db.execute(
@@ -375,6 +459,9 @@ export interface RevokeOrganizationKeyInput {
 export async function revokeOrganizationKey(
   input: RevokeOrganizationKeyInput,
 ): Promise<{ revoked: boolean }> {
+  // Read only so the cache purge below can be precise. A row this build cannot
+  // parse must not be able to stop a revocation.
+  const before = await readOrganizationKeyRecord(input.db, input.organizationId).catch(() => null);
   const rows = await input.db.query<{ key_version: string }>(
     `update public.organization_encryption_keys
         set status = 'revoked',
@@ -386,6 +473,9 @@ export async function revokeOrganizationKey(
   );
   const row = rows[0];
   if (!row) return { revoked: false };
+  // Before the audit write: a revocation that waited on the audit round trip
+  // would keep serving cached plaintext for the length of it.
+  forgetCustomerKeyMaterial(before);
   await recordAuditEvent({
     eventType: 'encryption_key_revoked',
     userId: input.actorUserId,
@@ -399,4 +489,370 @@ export async function revokeOrganizationKey(
     },
   });
   return { revoked: true };
+}
+
+/**
+ * The pre-activation gate: run the customer's key before anything is sealed
+ * under it. Nothing is written, so a workspace can fix its grant and try again
+ * without a half-provisioned association in the table.
+ */
+export async function validateOrganizationKeySetup(
+  db: DatabaseAdapter,
+  organizationId: string,
+  descriptor: CmekKeyDescriptor,
+  options: OrganizationKeyRingOptions = {},
+): Promise<CmekSetupValidation> {
+  const env = options.env ?? process.env;
+  const registry = options.registry ?? buildCmekProviderRegistry(options.env);
+  const region = await readOrganizationRegion(db, organizationId, env);
+  return validateCmekSetup({
+    descriptor,
+    registry,
+    admittedRegions: keyManagementRegions(region.effective, env),
+  });
+}
+
+export type KeyRewrapState = 'pending' | 'running' | 'complete' | 'failed';
+
+export interface KeyRewrapRun {
+  organizationId: string;
+  fromVersion: string;
+  toVersion: string;
+  state: KeyRewrapState;
+  scanned: number;
+  resealed: number;
+  remaining: number;
+  failureCount: number;
+  lastError: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+interface RewrapRunRow {
+  organization_id: string;
+  from_key_version: string;
+  to_key_version: string;
+  state: string;
+  scanned: number | string;
+  resealed: number | string;
+  remaining: number | string;
+  failure_count: number | string;
+  last_error: string | null;
+  started_at: string | Date | null;
+  completed_at: string | Date | null;
+}
+
+function isRewrapState(value: string): value is KeyRewrapState {
+  return value === 'pending' || value === 'running' || value === 'complete' || value === 'failed';
+}
+
+function toRewrapRun(row: RewrapRunRow): KeyRewrapRun {
+  if (!isRewrapState(row.state)) {
+    throw new Error(
+      `organization_key_rewrap_runs row for ${row.organization_id} names state "${row.state}", ` +
+        'which this build cannot resolve.',
+    );
+  }
+  return {
+    organizationId: row.organization_id,
+    fromVersion: row.from_key_version,
+    toVersion: row.to_key_version,
+    state: row.state,
+    scanned: Number(row.scanned),
+    resealed: Number(row.resealed),
+    remaining: Number(row.remaining),
+    failureCount: Number(row.failure_count),
+    lastError: row.last_error,
+    startedAt: toIso(row.started_at),
+    completedAt: toIso(row.completed_at),
+  };
+}
+
+export async function readKeyRewrapRun(
+  db: DatabaseAdapter,
+  organizationId: string,
+  fromVersion: string,
+): Promise<KeyRewrapRun | null> {
+  const rows = await db.query<RewrapRunRow>(
+    `select organization_id, from_key_version, to_key_version, state, scanned, resealed,
+            remaining, failure_count, last_error, started_at, completed_at
+       from public.organization_key_rewrap_runs
+      where organization_id = $1
+        and from_key_version = $2
+      order by started_at desc
+      limit 1`,
+    [organizationId, fromVersion],
+  );
+  const row = rows[0];
+  return row ? toRewrapRun(row) : null;
+}
+
+export interface RunOrganizationKeyRewrapInput {
+  db: DatabaseAdapter;
+  organizationId: string;
+  actorUserId: string;
+  fromVersion: string;
+  stores: readonly RewrapStore[];
+  registry?: CmekProviderRegistry;
+  env?: Record<string, string | undefined>;
+}
+
+/**
+ * Moves a workspace's ciphertext off a retired key version and records what it
+ * moved. The row it writes is the only thing retireOrganizationKeyVersion will
+ * accept as evidence, and its schema refuses a completion that still has a
+ * remainder, so an interrupted run cannot be filed as a finished one.
+ */
+export async function runOrganizationKeyRewrap(
+  input: RunOrganizationKeyRewrapInput,
+): Promise<RewrapOutcome> {
+  const record = await readOrganizationKeyRecord(input.db, input.organizationId);
+  if (!record) {
+    throw new Error(
+      `Workspace ${input.organizationId} manages no key of its own, so there is nothing to rewrap.`,
+    );
+  }
+  if (record.status === 'revoked') throw new CustomerKeyRevokedError(input.organizationId);
+
+  const registry = input.registry ?? buildCmekProviderRegistry(input.env);
+  const ring = await customerRingResolver(registry)(record);
+  const toVersion = record.active.version;
+
+  await input.db.execute(
+    `insert into public.organization_key_rewrap_runs
+       (organization_id, from_key_version, to_key_version, state, started_by_user_id)
+     values ($1, $2, $3, 'running', $4)
+     on conflict (organization_id, from_key_version, to_key_version) do update
+       set state = 'running',
+           last_error = null,
+           completed_at = null,
+           started_at = now(),
+           started_by_user_id = excluded.started_by_user_id`,
+    [input.organizationId, input.fromVersion, toVersion, input.actorUserId],
+  );
+
+  let outcome: RewrapOutcome;
+  try {
+    outcome = await runKeyRewrap({
+      ring,
+      fromVersion: input.fromVersion,
+      stores: input.stores,
+    });
+  } catch (error) {
+    await input.db.execute(
+      `update public.organization_key_rewrap_runs
+          set state = 'failed', last_error = $4, completed_at = null
+        where organization_id = $1 and from_key_version = $2 and to_key_version = $3`,
+      [
+        input.organizationId,
+        input.fromVersion,
+        toVersion,
+        error instanceof Error ? error.message.slice(0, 2000) : String(error).slice(0, 2000),
+      ],
+    );
+    throw error;
+  }
+
+  const firstFailure = outcome.failures[0];
+  await input.db.execute(
+    `update public.organization_key_rewrap_runs
+        set state = $4,
+            scanned = $5,
+            resealed = $6,
+            remaining = $7,
+            failure_count = $8,
+            last_error = $9,
+            completed_at = case when $4 = 'complete' then now() else null end
+      where organization_id = $1 and from_key_version = $2 and to_key_version = $3`,
+    [
+      input.organizationId,
+      input.fromVersion,
+      toVersion,
+      outcome.complete ? 'complete' : 'failed',
+      outcome.scanned,
+      outcome.resealed,
+      outcome.remaining,
+      outcome.failures.length,
+      firstFailure ? `${firstFailure.store}/${firstFailure.id}: ${firstFailure.reason}` : null,
+    ],
+  );
+
+  await recordAuditEvent({
+    eventType: 'encryption_key_rotated',
+    userId: input.actorUserId,
+    organizationId: input.organizationId,
+    severity: 'warning',
+    detail: {
+      resourceType: 'encryption_key',
+      resourceId: input.organizationId,
+      status: outcome.complete ? 'rewrapped' : 'rewrap_incomplete',
+      keyVersion: outcome.fromVersion,
+      version: outcome.toVersion,
+      count: outcome.resealed,
+    },
+  });
+
+  return outcome;
+}
+
+export interface RetireOrganizationKeyVersionInput {
+  db: DatabaseAdapter;
+  organizationId: string;
+  actorUserId: string;
+  keyVersion: string;
+  reason: string;
+}
+
+/**
+ * Drops a version out of the ring, which is the moment anything still sealed
+ * under it becomes unreadable for good. Gated on a complete rewrap onto the
+ * key that is active right now, never on the operator's assurance.
+ */
+export async function retireOrganizationKeyVersion(
+  input: RetireOrganizationKeyVersionInput,
+): Promise<{ retainedVersions: string[] }> {
+  const record = await readOrganizationKeyRecord(input.db, input.organizationId);
+  if (!record) {
+    throw new Error(`Workspace ${input.organizationId} manages no key of its own.`);
+  }
+  if (record.active.version === input.keyVersion) {
+    throw new Error(
+      `Key version "${input.keyVersion}" is the active one. Rotate onto a new version before ` +
+        'retiring it, or nothing could be sealed at all.',
+    );
+  }
+  if (!record.retired.some((key) => key.version === input.keyVersion)) {
+    throw new Error(
+      `Key version "${input.keyVersion}" is not in this workspace's ring, so there is nothing ` +
+        'to retire.',
+    );
+  }
+
+  const run = await readKeyRewrapRun(input.db, input.organizationId, input.keyVersion);
+  if (!run) {
+    throw new Error(
+      `No rewrap has moved workspace ${input.organizationId}'s ciphertext off key version ` +
+        `"${input.keyVersion}". Dropping it now would make that data unreadable for good.`,
+    );
+  }
+  if (run.toVersion !== record.active.version) {
+    throw new Error(
+      `The rewrap off "${input.keyVersion}" targeted "${run.toVersion}" and the active version ` +
+        `is now "${record.active.version}". Rewrap onto the current key before retiring.`,
+    );
+  }
+  assertRewrapComplete({
+    fromVersion: run.fromVersion,
+    toVersion: run.toVersion,
+    scanned: run.scanned,
+    resealed: run.resealed,
+    remaining: run.remaining,
+    complete: run.state === 'complete',
+    failures: [],
+  });
+
+  const retained = record.retired.filter((key) => key.version !== input.keyVersion);
+  await input.db.execute(
+    `update public.organization_encryption_keys
+        set retired_keys = $2::jsonb
+      where organization_id = $1`,
+    [input.organizationId, JSON.stringify(retained)],
+  );
+  forgetCustomerKeyMaterial(record);
+
+  await recordAuditEvent({
+    eventType: 'encryption_key_rotated',
+    userId: input.actorUserId,
+    organizationId: input.organizationId,
+    severity: 'critical',
+    detail: {
+      resourceType: 'encryption_key',
+      resourceId: input.organizationId,
+      status: 'retired',
+      keyVersion: input.keyVersion,
+      version: record.active.version,
+      count: retained.length,
+      reason: input.reason,
+    },
+  });
+
+  return { retainedVersions: retained.map((key) => key.version) };
+}
+
+export interface ReplaceOrganizationKeyInput extends ProvisionOrganizationKeyInput {
+  record: OrganizationKeyRecord;
+}
+
+/**
+ * Moving a workspace onto a different key resource, which rotation does not do:
+ * rotation asks the same key for a new data key, replacement changes the key,
+ * and with it the vendor and region the association points at. The previous
+ * version stays in the ring until a rewrap lets it be retired.
+ */
+export async function replaceOrganizationKey(
+  input: ReplaceOrganizationKeyInput,
+): Promise<{ keyVersion: string; previousVersion: string }> {
+  if (input.record.status === 'revoked') {
+    throw new CustomerKeyRevokedError(input.organizationId);
+  }
+  const previous = input.record.descriptor;
+  if (
+    previous.provider === input.descriptor.provider &&
+    previous.keyUri === input.descriptor.keyUri &&
+    previous.region === input.descriptor.region
+  ) {
+    throw new Error(
+      'Replacement names the key the workspace already uses. Rotate it instead, which asks the ' +
+        'same key for a new data key.',
+    );
+  }
+  if (input.record.active.version === input.keyVersion) {
+    throw new Error(`Key version "${input.keyVersion}" is already the active one.`);
+  }
+  await assertKeyRegionAdmitted(input.db, input.organizationId, input.descriptor, input.env);
+
+  const { wrapped } = await input.provider.generateDataKey(input.descriptor);
+  const retained = [input.record.active, ...input.record.retired];
+  await input.db.execute(
+    `update public.organization_encryption_keys
+        set provider = $2,
+            key_uri = $3,
+            key_region = $4,
+            key_version = $5,
+            wrapped_data_key = $6,
+            retired_keys = $7::jsonb,
+            status = 'active',
+            last_rotated_at = now()
+      where organization_id = $1`,
+    [
+      input.organizationId,
+      input.descriptor.provider,
+      input.descriptor.keyUri,
+      input.descriptor.region,
+      input.keyVersion,
+      wrapped,
+      JSON.stringify(retained),
+    ],
+  );
+  forgetCustomerKeyMaterial(input.record);
+
+  await recordAuditEvent({
+    eventType: 'encryption_key_rotated',
+    userId: input.actorUserId,
+    organizationId: input.organizationId,
+    severity: 'critical',
+    detail: {
+      resourceType: 'encryption_key',
+      resourceId: input.organizationId,
+      status: 'replaced',
+      keyProvider: input.descriptor.provider,
+      region: input.descriptor.region,
+      previousRegion: previous.region,
+      keyVersion: input.keyVersion,
+      version: input.record.active.version,
+      count: retained.length,
+    },
+  });
+
+  return { keyVersion: input.keyVersion, previousVersion: input.record.active.version };
 }
