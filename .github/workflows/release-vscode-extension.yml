@@ -36,6 +36,9 @@ jobs:
       tag: ${{ steps.metadata.outputs.tag }}
       version: ${{ steps.metadata.outputs.version }}
       vsix: ${{ steps.metadata.outputs.vsix }}
+      channel: ${{ steps.channel.outputs.channel }}
+      prerelease: ${{ steps.channel.outputs.prerelease }}
+      vsce_args: ${{ steps.channel.outputs.vsce_args }}
     steps:
       - name: Checkout the selected release tag
         uses: actions/checkout@v7
@@ -43,15 +46,29 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
-      - name: Require an exact stable tag and matching source version
+      # The Marketplace has two channels and rejects a semver prerelease
+      # identifier in the manifest, so the channel lives in the tag suffix while
+      # package.json keeps the plain X.Y.Z both channels share.
+      - name: Resolve the release channel this tag publishes to
+        id: channel
+        shell: bash
+        env:
+          SELECTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: node scripts/release/resolve-channel.mjs vscode "$SELECTED_TAG"
+
+      - name: Require an exact release tag and matching source version
         id: metadata
         shell: bash
         env:
           SELECTED_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          CORE_VERSION: ${{ steps.channel.outputs.core_version }}
         run: |
           set -euo pipefail
-          if ! printf '%s' "$SELECTED_TAG" | grep -Eq '^v-vscode-[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "ERROR: VS Code release tags must use v-vscode-X.Y.Z" >&2
+          # Two exact forms and nothing else: X.Y.Z publishes stable, and
+          # X.Y.Z-<channel>.<n> publishes pre-release from the same source.
+          if ! printf '%s' "$SELECTED_TAG" | grep -Eq '^v-vscode-[0-9]+\.[0-9]+\.[0-9]+$' \
+            && ! printf '%s' "$SELECTED_TAG" | grep -Eq '^v-vscode-[0-9]+\.[0-9]+\.[0-9]+-(beta|rc|nightly|alpha|canary)\.[0-9]+$'; then
+            echo "ERROR: VS Code release tags must use v-vscode-X.Y.Z or v-vscode-X.Y.Z-<channel>.<n>" >&2
             exit 1
           fi
           if [ "$(git describe --tags --exact-match HEAD)" != "$SELECTED_TAG" ]; then
@@ -59,16 +76,15 @@ jobs:
             exit 1
           fi
 
-          VERSION="${SELECTED_TAG#v-vscode-}"
           PACKAGE_VERSION=$(node -p "require('./apps/extension-vscode/package.json').version")
-          if [ "$PACKAGE_VERSION" != "$VERSION" ]; then
+          if [ "$PACKAGE_VERSION" != "$CORE_VERSION" ]; then
             echo "ERROR: tag $SELECTED_TAG does not match extension version $PACKAGE_VERSION" >&2
             exit 1
           fi
 
           echo "tag=${SELECTED_TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "vsix=agi-workforce-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
+          echo "version=${CORE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "vsix=agi-workforce-${CORE_VERSION}.vsix" >> "$GITHUB_OUTPUT"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -97,6 +113,11 @@ jobs:
           pnpm --filter agi-workforce test:webview
           pnpm --filter agi-workforce check:vscode-theme-tokens
 
+      # The release gates themselves are tested first: a guard whose fixtures no
+      # longer fail it is a step that passes without checking anything.
+      - name: Self-test the release guards
+        run: node --test scripts/lib/rollout/release-guards.test.mjs
+
       - name: Build and verify the VSIX
         env:
           VSIX_NAME: ${{ steps.metadata.outputs.vsix }}
@@ -109,6 +130,16 @@ jobs:
           mkdir -p dist/vscode
           cp "apps/extension-vscode/${VSIX_NAME}" "dist/vscode/${VSIX_NAME}"
           sha256sum "dist/vscode/${VSIX_NAME}" > "dist/vscode/${VSIX_NAME}.sha256"
+
+      - name: Scan the packaged VSIX for secrets and dev endpoints
+        env:
+          VSIX_NAME: ${{ steps.metadata.outputs.vsix }}
+        run: |
+          set -euo pipefail
+          rm -rf dist/vscode-unpacked
+          unzip -q "dist/vscode/${VSIX_NAME}" -d dist/vscode-unpacked
+          node scripts/release/scan-release-artifact.mjs dist/vscode-unpacked
+          rm -rf dist/vscode-unpacked
 
       - name: Exercise the exact verified VSIX in a clean VS Code profile
         env:
@@ -187,10 +218,15 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           allow-no-subscriptions: true
 
-      - name: Publish the previously verified VSIX
+      # A beta or nightly tag publishes pre-release, so a plain install never
+      # picks it up; the channel comes from the tag the package job resolved.
+      - name: Publish the previously verified VSIX to its channel
+        env:
+          VSCE_CHANNEL_ARGS: ${{ needs.package.outputs.vsce_args }}
         run: |
           set -euo pipefail
+          # shellcheck disable=SC2086
           pnpm --dir apps/extension-vscode exec vsce publish \
             --azure-credential \
             --packagePath "$GITHUB_WORKSPACE/$VSIX_PATH" \
-            --no-dependencies
+            --no-dependencies $VSCE_CHANNEL_ARGS
