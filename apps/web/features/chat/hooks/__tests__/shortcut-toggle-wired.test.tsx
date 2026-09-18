@@ -21,7 +21,7 @@ describe('turning a keyboard shortcut off actually stops it', () => {
     const onSearch = vi.fn();
     renderHook(() => useKeyboardShortcuts({ onSearch }));
 
-    pressCmd('k');
+    pressCmd('f', { shiftKey: true });
 
     expect(onSearch).toHaveBeenCalledTimes(1);
   });
@@ -31,7 +31,7 @@ describe('turning a keyboard shortcut off actually stops it', () => {
     useSettingsStore.setState({ disabledShortcutIds: ['open-search'] });
     renderHook(() => useKeyboardShortcuts({ onSearch }));
 
-    pressCmd('k');
+    pressCmd('f', { shiftKey: true });
 
     expect(onSearch).not.toHaveBeenCalled();
   });
@@ -42,7 +42,7 @@ describe('turning a keyboard shortcut off actually stops it', () => {
     useSettingsStore.setState({ disabledShortcutIds: ['open-search'] });
     renderHook(() => useKeyboardShortcuts({ onSearch, onNewChat }));
 
-    pressCmd('k');
+    pressCmd('f', { shiftKey: true });
     pressCmd('o', { shiftKey: true });
 
     expect(onSearch).not.toHaveBeenCalled();
@@ -54,12 +54,12 @@ describe('turning a keyboard shortcut off actually stops it', () => {
     useSettingsStore.setState({ disabledShortcutIds: ['open-search'] });
     const { rerender } = renderHook(() => useKeyboardShortcuts({ onSearch }));
 
-    pressCmd('k');
+    pressCmd('f', { shiftKey: true });
     expect(onSearch).not.toHaveBeenCalled();
 
     useSettingsStore.getState().restoreShortcutDefaults();
     rerender();
-    pressCmd('k');
+    pressCmd('f', { shiftKey: true });
 
     expect(onSearch).toHaveBeenCalledTimes(1);
   });

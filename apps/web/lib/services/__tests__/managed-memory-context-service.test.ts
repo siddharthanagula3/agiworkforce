@@ -7,7 +7,15 @@ import {
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
   persistManagedAutoMemoryFacts,
+  type ManagedMemoryPolicy,
 } from '../managed-memory-context-service';
+
+const MEMORY_ON: ManagedMemoryPolicy = {
+  enabled: true,
+  generateFromHistory: true,
+  allowToolAssistedGeneration: false,
+  searchPastChats: false,
+};
 
 describe('loadManagedMemoryContext', () => {
   it('loads only active memories owned by the authenticated user', async () => {
@@ -21,7 +29,10 @@ describe('loadManagedMemoryContext', () => {
       },
     ]);
 
-    const memories = await loadManagedMemoryContext({ query }, { userId: 'user-1' });
+    const memories = await loadManagedMemoryContext(
+      { query },
+      { userId: 'user-1', policy: MEMORY_ON },
+    );
 
     expect(memories).toEqual([
       {

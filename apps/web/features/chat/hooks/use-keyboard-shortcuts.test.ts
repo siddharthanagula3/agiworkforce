@@ -62,6 +62,15 @@ describe('KEYBOARD_SHORTCUT_DOCS', () => {
     expect(described).toContain('Regenerate last message');
   });
 
+  // CommandPaletteProvider claims Cmd/Ctrl+K on `document` in the capture phase
+  // and stops propagation, so any doc claiming that key here is unreachable.
+  it('does not claim the key the command palette captures', () => {
+    const shadowed = KEYBOARD_SHORTCUT_DOCS.filter(
+      (doc) => doc.key.toLowerCase() === 'k' && (doc.meta || doc.ctrl) && !doc.shift && !doc.alt,
+    );
+    expect(shadowed).toEqual([]);
+  });
+
   it('carries no handler, so a documentation surface cannot invoke one', () => {
     for (const doc of KEYBOARD_SHORTCUT_DOCS) {
       expect(doc).not.toHaveProperty('action');
@@ -71,7 +80,7 @@ describe('KEYBOARD_SHORTCUT_DOCS', () => {
 
 describe('useKeyboardShortcuts bindings', () => {
   it.each([
-    ['k', { meta: true }, 'onSearch'],
+    ['f', { meta: true, shift: true }, 'onSearch'],
     ['/', { meta: true }, 'onShowShortcuts'],
     ['o', { meta: true, shift: true }, 'onNewChat'],
     ['b', { meta: true }, 'onToggleSidebar'],
@@ -116,7 +125,7 @@ describe('useKeyboardShortcuts bindings', () => {
   it('leaves the browser default alone for a shortcut this mount does not handle', () => {
     renderHook(() => useKeyboardShortcuts({ onToggleArtifacts: vi.fn() }));
 
-    expect(press('k', { meta: true }).defaultPrevented).toBe(false);
+    expect(press('f', { meta: true, shift: true }).defaultPrevented).toBe(false);
     expect(press('a', { meta: true, shift: true }).defaultPrevented).toBe(true);
   });
 
@@ -124,7 +133,7 @@ describe('useKeyboardShortcuts bindings', () => {
     const onSearch = vi.fn();
     renderHook(() => useKeyboardShortcuts({ onSearch, enabled: false }));
 
-    press('k', { meta: true });
+    press('f', { meta: true, shift: true });
 
     expect(onSearch).not.toHaveBeenCalled();
   });

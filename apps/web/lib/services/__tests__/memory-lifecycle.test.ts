@@ -7,12 +7,25 @@ vi.mock('@/lib/logger', () => ({
 
 import {
   MAX_MEMORY_EXPIRY_DAYS,
+  UNGOVERNED_MEMORY_POLICY,
   loadManagedMemoryContext,
   parseMemoryExpiry,
   persistManagedAutoMemoryFacts,
   sweepExpiredMemories,
   writeConsolidatedMemory,
+  type ManagedMemoryPolicy,
 } from '../managed-memory-context-service';
+
+const MEMORY_ON: ManagedMemoryPolicy = {
+  enabled: true,
+  generateFromHistory: true,
+  allowToolAssistedGeneration: false,
+  searchPastChats: false,
+};
+
+const WORKSPACE_MEMORY_ON = [
+  { allow_memory: true, retention_days: null, retention_enforced: false },
+];
 
 const ORG = '0190a000-0000-7000-8000-00000000a001';
 const OTHER_ORG = '0190a000-0000-7000-8000-00000000a002';
@@ -21,7 +34,9 @@ const NOW = Date.parse('2026-09-17T00:00:00.000Z');
 type Call = [string, unknown[]];
 
 function recordingDb(respond: (sql: string) => unknown[] = () => []) {
-  const query = vi.fn(async (sql: string) => respond(sql));
+  const query = vi.fn(async (sql: string) =>
+    sql.includes('organization_admin_policies') ? WORKSPACE_MEMORY_ON : respond(sql),
+  );
   return { db: { query: query as never }, calls: () => query.mock.calls as unknown as Call[] };
 }
 
@@ -50,7 +65,7 @@ describe('memory expiry input', () => {
 describe('memory context reads', () => {
   it('excludes deleted, superseded and expired rows in SQL', async () => {
     const { db, calls } = recordingDb();
-    await loadManagedMemoryContext(db, { userId: 'u1' });
+    await loadManagedMemoryContext(db, { userId: 'u1', policy: MEMORY_ON });
 
     const [sql] = calls()[0]!;
     expect(sql).toContain('is_deleted = false');
@@ -60,7 +75,7 @@ describe('memory context reads', () => {
 
   it('reads only the active workspace, never personal rows inside it', async () => {
     const { db, calls } = recordingDb();
-    await loadManagedMemoryContext(db, { userId: 'u1', organizationId: ORG });
+    await loadManagedMemoryContext(db, { userId: 'u1', organizationId: ORG, policy: MEMORY_ON });
 
     const [sql, params] = calls()[0]!;
     expect(sql).toContain('organization_id is not distinct from $2::uuid');
@@ -69,7 +84,7 @@ describe('memory context reads', () => {
 
   it('keeps personal memory personal', async () => {
     const { db, calls } = recordingDb();
-    await loadManagedMemoryContext(db, { userId: 'u1', organizationId: null });
+    await loadManagedMemoryContext(db, { userId: 'u1', organizationId: null, policy: MEMORY_ON });
 
     const [sql, params] = calls()[0]!;
     expect(sql).toContain('organization_id is not distinct from $2::uuid');
@@ -80,13 +95,17 @@ describe('memory context reads', () => {
 describe('consolidated memory write', () => {
   it('merges near-duplicates by a normalised content key within the same scope', async () => {
     const { db, calls } = recordingDb(() => [{ outcome: 'merged', id: 'm1' }]);
-    const row = await writeConsolidatedMemory(db, {
-      userId: 'u1',
-      content: 'User prefers Rust.',
-      category: 'preference',
-      source: 'web',
-      organizationId: ORG,
-    });
+    const row = await writeConsolidatedMemory(
+      db,
+      {
+        userId: 'u1',
+        content: 'User prefers Rust.',
+        category: 'preference',
+        source: 'web',
+        organizationId: ORG,
+      },
+      { organizationPolicy: UNGOVERNED_MEMORY_POLICY },
+    );
 
     expect(row?.outcome).toBe('merged');
     const [sql, params] = calls()[0]!;
