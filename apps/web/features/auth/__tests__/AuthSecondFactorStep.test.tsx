@@ -14,7 +14,7 @@ const AUTHENTICATOR: AuthSecondFactor = {
 function renderStep(overrides: Partial<Parameters<typeof AuthSecondFactorStep>[0]> = {}) {
   const props = {
     factor: AUTHENTICATOR,
-    busy: false,
+    phase: 'idle' as const,
     error: null,
     fieldError: null,
     onSubmit: vi.fn(),

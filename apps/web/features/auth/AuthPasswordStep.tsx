@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 
+import { useAuthCopy } from './authCopy';
 import { AuthLegalFooter } from './AuthLegalFooter';
+import { AuthMethodPicker } from './AuthMethodPicker';
 import { AuthPasswordField } from './AuthPasswordField';
+import { AuthPhaseStatus } from './AuthPhaseStatus';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AuthSubmitButton } from './AuthSubmitButton';
 import {
@@ -12,40 +15,41 @@ import {
   AUTH_QUIET_BUTTON_CLASS,
   AUTH_STEP_LINKS_CLASS,
 } from './authStyles';
-
-const HEADING = 'Enter your password';
-const PASSWORD_FIELD_LABEL = 'Password';
-const CONTINUE_LABEL = 'Continue';
+import type { AuthMethodId, AuthPhase } from './authContract';
 
 export function AuthPasswordStep({
   email,
-  busy,
+  phase,
   error,
   fieldError,
+  methods = [],
   onSubmit,
   onEditEmail,
   onForgotPassword,
-  onUseCode,
+  onChooseMethod,
 }: {
   email: string;
-  busy: boolean;
+  phase: AuthPhase;
   error: string | null;
   fieldError: string | null;
+  methods?: readonly AuthMethodId[];
   onSubmit: (password: string) => void;
   onEditEmail: () => void;
   onForgotPassword: () => void;
-  onUseCode: () => void;
+  onChooseMethod: (method: AuthMethodId) => void;
 }) {
+  const copy = useAuthCopy();
   const [password, setPassword] = useState('');
+  const busy = phase !== 'idle';
 
   return (
     <AuthStepFrame
-      heading={HEADING}
+      heading={copy.text('flow.password.heading', 'Enter your password')}
       detail={
         <div className={AUTH_DETAIL_ROW_CLASS}>
           <span>{email}</span>
           <button type="button" className={AUTH_QUIET_BUTTON_CLASS} onClick={onEditEmail}>
-            Edit
+            {copy.text('flow.edit', 'Edit')}
           </button>
         </div>
       }
@@ -58,7 +62,7 @@ export function AuthPasswordStep({
         }}
       >
         <AuthPasswordField
-          label={PASSWORD_FIELD_LABEL}
+          label={copy.text('flow.password.label', 'Password')}
           value={password}
           error={fieldError}
           disabled={busy}
@@ -72,8 +76,10 @@ export function AuthPasswordStep({
           </p>
         ) : null}
 
-        <AuthSubmitButton label={CONTINUE_LABEL} busy={busy} />
+        <AuthSubmitButton label={copy.text('flow.continue', 'Continue')} busy={busy} />
       </form>
+
+      <AuthPhaseStatus phase={phase} />
 
       <div className={AUTH_STEP_LINKS_CLASS}>
         <button
@@ -82,17 +88,11 @@ export function AuthPasswordStep({
           disabled={busy}
           onClick={onForgotPassword}
         >
-          Forgot password?
-        </button>
-        <button
-          type="button"
-          className={AUTH_QUIET_BUTTON_CLASS}
-          disabled={busy}
-          onClick={onUseCode}
-        >
-          Email me a code instead
+          {copy.text('flow.password.forgot', 'Forgot password?')}
         </button>
       </div>
+
+      <AuthMethodPicker methods={methods} disabled={busy} onChooseMethod={onChooseMethod} />
     </AuthStepFrame>
   );
 }

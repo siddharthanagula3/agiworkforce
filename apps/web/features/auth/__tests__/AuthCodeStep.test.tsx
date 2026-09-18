@@ -12,7 +12,7 @@ const ONE_SECOND_MS = 1000;
 function renderStep(overrides: Partial<Parameters<typeof AuthCodeStep>[0]> = {}) {
   const props = {
     email: EMAIL,
-    busy: false,
+    phase: 'idle' as const,
     error: null,
     fieldError: null,
     onSubmit: vi.fn(),
@@ -20,8 +20,12 @@ function renderStep(overrides: Partial<Parameters<typeof AuthCodeStep>[0]> = {})
     onEditEmail: vi.fn(),
     ...overrides,
   };
-  render(<AuthCodeStep {...props} />);
-  return props;
+  const view = render(<AuthCodeStep {...props} />);
+  return {
+    ...props,
+    rerender: (next: Partial<Parameters<typeof AuthCodeStep>[0]>) =>
+      view.rerender(<AuthCodeStep {...props} {...next} />),
+  };
 }
 
 describe('AuthCodeStep', () => {
@@ -68,6 +72,36 @@ describe('AuthCodeStep', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('holds the resend control for the window the server asked for', async () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = renderStep();
+
+      for (let elapsed = 0; elapsed < AUTH_RESEND_COOLDOWN_SECONDS; elapsed += 1) {
+        await act(async () => {
+          vi.advanceTimersByTime(ONE_SECOND_MS);
+        });
+      }
+      expect(screen.getByRole('button', { name: 'Resend code' })).toBeEnabled();
+
+      rerender({ resendBlockedSeconds: 90 });
+
+      expect(screen.getByRole('button', { name: 'Resend code in 90s' })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the code field to digits the platform can autofill', () => {
+    renderStep();
+
+    const field = screen.getByLabelText('Code');
+    expect(field).toHaveAttribute('autocomplete', 'one-time-code');
+    expect(field).toHaveAttribute('inputmode', 'numeric');
+    expect(field).toHaveAttribute('pattern', '[0-9]*');
+    expect(field).toHaveAttribute('autocapitalize', 'off');
   });
 
   it('reports a wrong code inline', () => {
