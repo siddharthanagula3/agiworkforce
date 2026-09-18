@@ -4,6 +4,7 @@ title: Add your own provider API key (BYOK)
 path: /byok
 category: providers
 tags: byok, api key, provider key, anthropic, openai, google, bring your own key, add key, encrypted
+platforms: desktop, cli
 updated: 2026-08-05
 scope: public
 ---

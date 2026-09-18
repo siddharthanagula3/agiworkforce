@@ -4,6 +4,7 @@ title: Installing the desktop and mobile apps
 path: /download
 category: surfaces
 tags: install, download, desktop app, macos, windows, linux, dmg, installer, mobile app, ios, android, release notes, signature, notarized, get notified
+platforms: desktop, mobile, macos, windows, linux, ios, android
 updated: 2026-09-17
 scope: public
 ---

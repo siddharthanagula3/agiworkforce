@@ -6,6 +6,10 @@ import type { OrganizationPermission } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
 import { isAdminApiKeyToken, verifyAdminApiKey } from '@/lib/server/admin-api-keys';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  assertServicePrincipalScope,
+  servicePrincipalActorId,
+} from '@/lib/server/service-principal';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
@@ -14,15 +18,14 @@ import {
   requireTeamAdminAccess,
 } from '@/app/api/settings/team/team-admin-access';
 
-export const ADMIN_API_KEY_ACTOR_PREFIX = 'admin_api_key:';
-
 export interface ComplianceCaller {
-  kind: 'member' | 'admin_api_key';
+  kind: 'member' | 'service_principal';
   db: DatabaseAdapter;
   actorUserId: string;
   organizationId: string;
   role: string;
   keyId: string | null;
+  servicePrincipalId: string | null;
 }
 
 function bearerToken(request: Request): string | null {
@@ -36,7 +39,15 @@ export async function resolveComplianceCaller(
   deniedMessage: string,
 ): Promise<ComplianceCaller> {
   const token = bearerToken(request);
-  if (isAdminApiKeyToken(token)) {
+  if (token !== null) {
+    if (!isAdminApiKeyToken(token)) {
+      // An automation that presents a bearer token must never be served by the
+      // interactive cookie on the same request: the cookie belongs to whoever
+      // last signed in on that browser, not to the automation.
+      throw createError.unauthorized(
+        'This endpoint accepts a workspace API key in the Authorization header. Remove the header to use an interactive session.',
+      );
+    }
     const db = getNeonDb();
     const verified = await verifyAdminApiKey(db, token);
     if (!verified) {
@@ -48,16 +59,15 @@ export async function resolveComplianceCaller(
         'Workspace API keys require an active Team or Enterprise subscription.',
       );
     }
-    if (!verified.scopes.has(permission)) {
-      throw createError.forbidden(`This workspace API key is not scoped for ${permission}.`);
-    }
+    assertServicePrincipalScope(verified, permission);
     return {
-      kind: 'admin_api_key',
+      kind: 'service_principal',
       db,
-      actorUserId: `${ADMIN_API_KEY_ACTOR_PREFIX}${verified.id}`,
+      actorUserId: servicePrincipalActorId(verified.principalId),
       organizationId: verified.organizationId,
-      role: 'admin_api_key',
-      keyId: verified.id,
+      role: 'service_principal',
+      keyId: verified.keyId,
+      servicePrincipalId: verified.principalId,
     };
   }
 
@@ -72,5 +82,6 @@ export async function resolveComplianceCaller(
     organizationId: membership.organizationId,
     role: membership.role,
     keyId: null,
+    servicePrincipalId: null,
   };
 }

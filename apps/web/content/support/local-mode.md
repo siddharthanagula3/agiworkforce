@@ -4,6 +4,7 @@ title: Run AGI offline with Local mode
 path: /local
 category: local
 tags: local mode, offline, ollama, lm studio, llama.cpp, vllm, on device, no internet, privacy, free
+platforms: desktop, cli
 updated: 2026-08-13
 scope: public
 ---

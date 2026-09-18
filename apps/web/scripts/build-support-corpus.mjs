@@ -14,6 +14,10 @@ const CORPUS_VERSION = 1;
 
 const REQUIRED_KEYS = ['id', 'title', 'path', 'category', 'tags', 'updated', 'scope'];
 
+const OPTIONAL_KEYS = ['platforms'];
+
+const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+
 const FORBIDDEN_PATH_PREFIXES = [
   '/settings',
   '/admin',
@@ -60,7 +64,7 @@ function parseFrontmatter(raw, file) {
     }
   }
   for (const key of Object.keys(data)) {
-    if (!REQUIRED_KEYS.includes(key)) {
+    if (!REQUIRED_KEYS.includes(key) && !OPTIONAL_KEYS.includes(key)) {
       throw new BuildError(`${file}: unknown frontmatter key: ${key}`);
     }
   }
@@ -74,6 +78,27 @@ function parseFrontmatter(raw, file) {
     throw new BuildError(`${file}: updated must be YYYY-MM-DD (got "${data['updated']}")`);
   }
   return { data, body };
+}
+
+function parsePlatforms(raw, file) {
+  if (raw === undefined) return [];
+  const platforms = [
+    ...new Set(
+      raw
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (platforms.length === 0) {
+    throw new BuildError(`${file}: platforms is present but empty; remove the key instead`);
+  }
+  for (const platform of platforms) {
+    if (!SLUG_PATTERN.test(platform)) {
+      throw new BuildError(`${file}: platform must be a kebab-case slug (got "${platform}")`);
+    }
+  }
+  return platforms.sort();
 }
 
 function assertPublicAppRoute(path, file) {
@@ -179,6 +204,8 @@ export function buildCorpus(contentDir = CONTENT_DIR) {
       .filter(Boolean);
     if (tags.length === 0) throw new BuildError(`${file}: tags must not be empty`);
 
+    const platforms = parsePlatforms(data['platforms'], file);
+
     const chunks = chunkBody(body, data['title'], file).map((chunk, index) => ({
       id: `${data['id']}#${index}`,
       ordinal: index,
@@ -193,6 +220,7 @@ export function buildCorpus(contentDir = CONTENT_DIR) {
       path: data['path'],
       category: data['category'],
       tags,
+      ...(platforms.length > 0 ? { platforms } : {}),
       updated: data['updated'],
       source: file,
       chunks,
