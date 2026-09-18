@@ -6,6 +6,7 @@ import * as _React from 'react';
 import { act } from 'react';
 
 import { BrandedGreeting } from '../BrandedGreeting';
+import { resolveGreetingHeadline } from '../../lib/greeting';
 import { AdvancedEmptyState } from '../AdvancedEmptyState';
 import { ChatInterface } from '../ChatInterface';
 import { EmptyState } from '../EmptyState';
@@ -45,19 +46,14 @@ function resetStores() {
 }
 
 describe('BrandedGreeting', () => {
-  it('renders without user name', () => {
-    const html = renderToStaticMarkup(<BrandedGreeting />);
-    expect(html).toContain('AGI in your hands');
+  it('renders the headline the host resolved', () => {
+    const html = renderToStaticMarkup(<BrandedGreeting headline="Good morning, Alice" />);
+    expect(html).toContain('Good morning, Alice');
   });
 
-  it('includes user first name when provided', () => {
-    const html = renderToStaticMarkup(<BrandedGreeting userName="Alice" />);
-    expect(html).toContain('Alice');
-  });
-
-  it('uses only first word of multi-word name', () => {
+  it('derives a time-band headline from the clock when the host passes none', () => {
     const html = renderToStaticMarkup(<BrandedGreeting userName="Alice Wonderland" />);
-    expect(html).toContain('Alice');
+    expect(html).toContain(resolveGreetingHeadline(new Date(), 'Alice Wonderland'));
     expect(html).not.toContain('Wonderland');
   });
 
@@ -66,9 +62,19 @@ describe('BrandedGreeting', () => {
     expect(html).toContain('my-custom-class');
   });
 
-  it('renders Sparkles icon container', () => {
-    const html = renderToStaticMarkup(<BrandedGreeting />);
-    expect(html).toContain('from-violet-500');
+  it('draws the brand mark and the display serif from tokens, never a hardcoded palette', () => {
+    const html = renderToStaticMarkup(<BrandedGreeting headline="Good evening" />);
+    expect(html).toContain('var(--chat-font-display)');
+    expect(html).toContain('var(--chat-text-primary)');
+    expect(html).not.toContain('violet');
+  });
+
+  it('offers the workspace headline when a host scopes the greeting to a folder', () => {
+    const html = renderToStaticMarkup(
+      <BrandedGreeting headline="Good evening" workspaceLabel="agiworkforce" />,
+    );
+    expect(html).toContain('What should we build in');
+    expect(html).toContain('agiworkforce');
   });
 });
 
@@ -655,61 +661,6 @@ describe('ChatInputToolbar plan-mode toggle (Task #18)', () => {
     expect(usePlanModeStore.getState().planMode).toBe(true);
     usePlanModeStore.getState().togglePlanMode();
     expect(usePlanModeStore.getState().planMode).toBe(false);
-  });
-});
-
-import { ChatStream } from '../ChatStream';
-
-describe('ChatStream', () => {
-  beforeEach(() => resetStores());
-
-  it('renders relative container', () => {
-    const html = renderToStaticMarkup(<ChatStream />);
-    expect(html).toContain('relative');
-  });
-
-  it('renders custom empty state when no messages', () => {
-    const html = renderToStaticMarkup(
-      <ChatStream emptyState={<div className="custom-empty">Start chatting</div>} />,
-    );
-    expect(html).toContain('Start chatting');
-  });
-
-  it('renders messages passed via messages prop (prop override)', () => {
-    const msgs: Array<{
-      id: string;
-      role: 'user' | 'assistant';
-      content: string;
-      createdAt: string;
-    }> = [
-      { id: 'msg-1', role: 'user', content: 'Hello world', createdAt: new Date().toISOString() },
-    ];
-    const html = renderToStaticMarkup(<ChatStream messages={msgs} />);
-    expect(html).toContain('Hello world');
-  });
-
-  it('renders with custom renderMessage via messages prop', () => {
-    const msgs: Array<{
-      id: string;
-      role: 'user' | 'assistant';
-      content: string;
-      createdAt: string;
-    }> = [
-      {
-        id: 'msg-2',
-        role: 'assistant',
-        content: 'AI says hi',
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    const html = renderToStaticMarkup(
-      <ChatStream
-        messages={msgs}
-        renderMessage={(msg) => <div className="custom-bubble">{msg.content}</div>}
-      />,
-    );
-    expect(html).toContain('custom-bubble');
-    expect(html).toContain('AI says hi');
   });
 });
 

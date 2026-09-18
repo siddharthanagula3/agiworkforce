@@ -2,7 +2,14 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
+import {
+  GREETING_BAND_GROUP,
+  GREETING_TIME_BANDS,
+  greetingFirstName,
+  greetingHeadline,
+  greetingTimeBand,
+  greetingVariantIndex,
+} from '@agiworkforce/unified-chat';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 
@@ -17,76 +24,6 @@ interface GreetingResult {
   nameResolved: boolean;
 }
 
-type TimeBand = 'earlyMorning' | 'morning' | 'afternoon' | 'evening' | 'night' | 'lateNight';
-
-interface TimeBandConfig {
-  variants: string[];
-  variantsNamed: string[];
-}
-
-const TIME_BANDS: Record<TimeBand, TimeBandConfig> = {
-  earlyMorning: {
-    variants: ['Good morning', 'Early start', 'Good early morning'],
-    variantsNamed: ['Good morning, {name}', 'Early start, {name}', 'Good early morning, {name}'],
-  },
-  morning: {
-    variants: ['Good morning', 'Morning', 'Good to see you this morning'],
-    variantsNamed: [
-      'Good morning, {name}',
-      'Morning, {name}',
-      'Good to see you this morning, {name}',
-    ],
-  },
-  afternoon: {
-    variants: ['Good afternoon', 'Afternoon', 'Good to see you this afternoon'],
-    variantsNamed: [
-      'Good afternoon, {name}',
-      'Afternoon, {name}',
-      'Good to see you this afternoon, {name}',
-    ],
-  },
-  evening: {
-    variants: ['Good evening', 'Evening', 'Good to see you this evening'],
-    variantsNamed: [
-      'Good evening, {name}',
-      'Evening, {name}',
-      'Good to see you this evening, {name}',
-    ],
-  },
-  night: {
-    variants: ['Good evening', 'Night session', 'Burning the midnight oil'],
-    variantsNamed: [
-      'Good evening, {name}',
-      'Night session, {name}',
-      'Burning the midnight oil, {name}',
-    ],
-  },
-  lateNight: {
-    variants: ['Good evening', 'Up late', 'Night owl mode'],
-    variantsNamed: ['Good evening, {name}', 'Up late, {name}', 'Night owl mode, {name}'],
-  },
-};
-
-export { normalizeDisplayName as normalizeGreetingName } from '@agiworkforce/utils/display-name';
-
-function getTimeBand(hour: number): TimeBand {
-  if (hour >= 4 && hour <= 6) return 'earlyMorning';
-  if (hour >= 7 && hour <= 11) return 'morning';
-  if (hour >= 12 && hour <= 16) return 'afternoon';
-  if (hour >= 17 && hour <= 20) return 'evening';
-  if (hour >= 21 && hour <= 23) return 'night';
-  return 'lateNight';
-}
-
-const GREETING_GROUPS: Record<TimeBand, 'morning' | 'afternoon' | 'evening'> = {
-  earlyMorning: 'morning',
-  morning: 'morning',
-  afternoon: 'afternoon',
-  evening: 'evening',
-  night: 'evening',
-  lateNight: 'evening',
-};
-
 export function useGreeting(): GreetingResult {
   const { t, i18n } = useTranslation('chat');
   const { user: compatibilityUser, isLoading, initialized } = useAuthStore();
@@ -100,35 +37,26 @@ export function useGreeting(): GreetingResult {
 
   const [snapshot] = React.useState(() => {
     const now = new Date();
-    return { hour: now.getHours(), variantIndex: now.getDate() % 3 };
+    return { hour: now.getHours(), variantIndex: greetingVariantIndex(now.getDate()) };
   });
 
-  const hour = snapshot.hour;
-  const variantIndex = snapshot.variantIndex;
-
-  const band = getTimeBand(hour);
-  const config = TIME_BANDS[band];
-
-  const rawName = userName?.split(' ')[0]?.trim();
-  const cleanedName = rawName && rawName.length <= 50 ? rawName.replace(/\p{Cc}/gu, '') : undefined;
-  const firstName = cleanedName ? normalizeDisplayName(cleanedName) : undefined;
+  const band = greetingTimeBand(snapshot.hour);
+  const firstName = greetingFirstName(userName);
 
   const language = i18n?.language ?? 'en';
   const localized = !language.toLowerCase().startsWith('en');
   let headline: string;
   if (localized) {
-    const group = GREETING_GROUPS[band];
+    const group = GREETING_BAND_GROUP[band];
+    const fallback = GREETING_TIME_BANDS[band].variants[0];
     headline = firstName
       ? t(`greeting.${group}Named`, {
           name: firstName,
-          defaultValue: `${config.variants[0]}, {{name}}`,
+          defaultValue: `${fallback}, {{name}}`,
         })
-      : t(`greeting.${group}`, { defaultValue: config.variants[0] ?? 'Hello' });
-  } else if (firstName) {
-    const template = config.variantsNamed[variantIndex] ?? config.variantsNamed[0];
-    headline = (template ?? '{name}').replace('{name}', firstName);
+      : t(`greeting.${group}`, { defaultValue: fallback ?? 'Hello' });
   } else {
-    headline = config.variants[variantIndex] ?? config.variants[0] ?? 'Hello';
+    headline = greetingHeadline(band, snapshot.variantIndex, firstName);
   }
 
   return {
