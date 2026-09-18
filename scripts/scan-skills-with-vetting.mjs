@@ -12,16 +12,30 @@ const LOCK_PATH = join(REPO_ROOT, 'skills-lock.json');
 
 const BLOCKING_RECOMMENDATIONS = new Set(['DO_NOT_INSTALL']);
 
+const FIXTURE_ROOT = 'packages/client/client-runtime/src/plugins/__fixtures__';
+const HOSTILE_FIXTURE = join(REPO_ROOT, FIXTURE_ROOT, 'malicious-skill');
+const BENIGN_FIXTURE = join(REPO_ROOT, FIXTURE_ROOT, 'benign-skill');
+
+/**
+ * An uploaded package lives outside the tree, so the caller names its extracted
+ * directory in SKILL_VETTING_EXTRA_ROOTS and it clears the same bar.
+ */
 function skillRoots() {
-  if (!existsSync(LOCK_PATH)) return ['.agents/skills'];
+  const extra = (process.env['SKILL_VETTING_EXTRA_ROOTS'] ?? '')
+    .split(':')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  if (!existsSync(LOCK_PATH)) return ['.agents/skills', ...extra];
   const lock = JSON.parse(readFileSync(LOCK_PATH, 'utf-8'));
-  return Array.isArray(lock.roots) && lock.roots.length > 0 ? lock.roots : ['.agents/skills'];
+  const roots =
+    Array.isArray(lock.roots) && lock.roots.length > 0 ? lock.roots : ['.agents/skills'];
+  return [...roots, ...extra];
 }
 
 function discoverSkillPackages() {
   const packages = [];
   for (const root of skillRoots()) {
-    const absoluteRoot = join(REPO_ROOT, root);
+    const absoluteRoot = resolve(REPO_ROOT, root);
     if (!existsSync(absoluteRoot)) continue;
     for (const entry of readdirSync(absoluteRoot, { withFileTypes: true })) {
       if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
@@ -79,8 +93,16 @@ function scanVerdict(scanner, packageDir, reportDir) {
   };
 }
 
-const explicitTargets = process.argv.slice(2).map((entry) => resolve(REPO_ROOT, entry));
-const targets = explicitTargets.length > 0 ? explicitTargets : discoverSkillPackages();
+const args = process.argv.slice(2);
+const selfTest = args.includes('--self-test');
+const explicitTargets = args
+  .filter((entry) => !entry.startsWith('--'))
+  .map((entry) => resolve(REPO_ROOT, entry));
+const targets = selfTest
+  ? [HOSTILE_FIXTURE, BENIGN_FIXTURE]
+  : explicitTargets.length > 0
+    ? explicitTargets
+    : discoverSkillPackages();
 
 if (targets.length === 0) {
   console.log('No in-repo skill packages to vet.');
@@ -97,10 +119,12 @@ if (!scanner) {
 
 const reportDir = mkdtempSync(join(tmpdir(), 'skill-vetting-reports-'));
 let blocked = 0;
+const verdicts = new Map();
 try {
   for (const target of targets) {
     const label = relative(REPO_ROOT, target);
     const { recommendation, riskScore, error } = scanVerdict(scanner, target, reportDir);
+    verdicts.set(target, { recommendation, error });
     if (error !== undefined) {
       console.error(`❌ ${label}: ${error}`);
       blocked += 1;
@@ -119,6 +143,30 @@ try {
   }
 } finally {
   rmSync(reportDir, { recursive: true, force: true });
+}
+
+// A gate nobody has watched refuse anything is not known to be a gate: the
+// hostile fixture must be refused and the ordinary one must not.
+if (selfTest) {
+  const hostile = verdicts.get(HOSTILE_FIXTURE) ?? {};
+  const benign = verdicts.get(BENIGN_FIXTURE) ?? {};
+  const failures = [];
+  if (!BLOCKING_RECOMMENDATIONS.has(hostile.recommendation)) {
+    failures.push(
+      `the hostile fixture was not refused (recommendation ${hostile.recommendation ?? 'none'})`,
+    );
+  }
+  if (benign.error !== undefined || BLOCKING_RECOMMENDATIONS.has(benign.recommendation)) {
+    failures.push(
+      `the ordinary fixture was refused (recommendation ${benign.recommendation ?? 'none'})`,
+    );
+  }
+  if (failures.length > 0) {
+    console.error(`Skill vetting self-test failed: ${failures.join('; ')}.`);
+    process.exit(1);
+  }
+  console.log('Skill vetting self-test passed: hostile refused, ordinary allowed.');
+  process.exit(0);
 }
 
 if (blocked > 0) {

@@ -1,3 +1,8 @@
+import {
+  resolveConnectorHealth as resolveSharedConnectorHealth,
+  type ConnectorHealth,
+} from '@agiworkforce/client-runtime';
+
 export type ConnectorImplementation = 'first-party' | 'operator-configurable' | 'device-local';
 
 export type ConnectorAuthScheme =
@@ -263,21 +268,11 @@ export function getDeclaredConnectorActions(connectorId: string): readonly strin
   return getConnectorCapability(connectorId)?.supportedActions ?? NO_DECLARED_ACTIONS;
 }
 
-export type ConnectorHealth =
-  | 'connected'
-  | 'connectable'
-  | 'needs-reauthorization'
-  | 'not-responding'
-  | 'not-configured'
-  | 'unsupported-here';
+export type { ConnectorHealth };
 
 /**
- * `notResponding` is the only input here that is an observation rather than a
- * configuration fact: it comes from the account's own recent calls to this
- * connector (see connector-call-log-service). It ranks below reauthorization
- * because an expired grant is the actionable cause of failures it would
- * otherwise be reported as, and above `connected` because a connector that is
- * authorized and refusing every call is not working, whatever the grant says.
+ * Ranking lives in the shared client runtime; the catalog only answers whether
+ * this connector runs on cloud web at all.
  */
 export function resolveConnectorHealth(input: {
   connectorId: string;
@@ -287,8 +282,13 @@ export function resolveConnectorHealth(input: {
   notResponding?: boolean;
 }): ConnectorHealth {
   const record = getConnectorCapability(input.connectorId);
-  if (record && !record.surfaces.includes('cloud-web')) return 'unsupported-here';
-  if (input.needsReauthorization) return 'needs-reauthorization';
-  if (input.connected) return input.notResponding === true ? 'not-responding' : 'connected';
-  return input.available === true ? 'connectable' : 'not-configured';
+  return resolveSharedConnectorHealth({
+    supportedHere: record ? record.surfaces.includes('cloud-web') : true,
+    ...(input.available === undefined ? {} : { available: input.available }),
+    ...(input.connected === undefined ? {} : { connected: input.connected }),
+    ...(input.needsReauthorization === undefined
+      ? {}
+      : { needsReauthorization: input.needsReauthorization }),
+    ...(input.notResponding === undefined ? {} : { notResponding: input.notResponding }),
+  });
 }

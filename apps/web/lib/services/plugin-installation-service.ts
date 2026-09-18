@@ -7,7 +7,18 @@ import type {
   PluginInstallationSettings,
 } from '@agiworkforce/cloud-contracts';
 
+import {
+  diffPluginPermissions,
+  normalizePluginPermissions,
+} from '@agiworkforce/client-runtime/plugins';
+
+import { AppError, ErrorCode } from '@/lib/errors';
+
 import { getPluginRegistryEntry } from './plugin-registry-service';
+import {
+  assertPluginPackageInstallable,
+  PluginPackageRefusedError,
+} from './plugin-marketplace-service';
 
 interface PluginInstallationRow {
   plugin_id: string;
@@ -61,6 +72,47 @@ export async function listPluginInstallations(
   return rows.map(mapInstallation);
 }
 
+export { PluginPackageRefusedError };
+
+export class PluginPermissionReviewRequiredError extends AppError {
+  readonly pluginId: string;
+  readonly added: string[];
+  readonly approved: string[];
+
+  constructor(pluginId: string, added: string[], approved: string[]) {
+    super(
+      ErrorCode.CONFLICT,
+      `${pluginId} now asks for permissions you have not approved: ${added.join(', ')}. Review them before it runs again.`,
+      409,
+    );
+    Object.setPrototypeOf(this, PluginPermissionReviewRequiredError.prototype);
+    this.name = 'PluginPermissionReviewRequiredError';
+    this.pluginId = pluginId;
+    this.added = added;
+    this.approved = approved;
+    this.asUserSafe();
+  }
+}
+
+async function readApprovedPermissions(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<string[] | null> {
+  const rows = await db.query<{ approved_permissions: unknown }>(
+    `select approved_permissions
+       from public.plugin_installations
+      where user_id = $1 and plugin_id = $2
+      limit 1`,
+    [userId, pluginId],
+  );
+  return rows[0] ? toStringArray(rows[0].approved_permissions) : null;
+}
+
+/**
+ * Fails closed before any row is written: signed digest, passing scan verdict,
+ * and no permission beyond what this member approved.
+ */
 export async function installWebPlugin(
   db: DatabaseAdapter,
   userId: string,
@@ -69,18 +121,113 @@ export async function installWebPlugin(
   const found = await getPluginRegistryEntry(db, pluginId);
   if (!found || !isPluginEntryWebInstallable(found.entry) || !found.manifest) return null;
 
+  await assertPluginPackageInstallable(db, {
+    pluginId: found.entry.id,
+    version: found.entry.version,
+    sha256: found.entry.integrity.sha256,
+    signature: found.entry.integrity.signature,
+    signatureAlgorithm: found.entry.integrity.signatureAlgorithm,
+  });
+
+  const declared = normalizePluginPermissions(found.entry.permissions);
+  const previouslyApproved = await readApprovedPermissions(db, userId, pluginId);
+  const diff = diffPluginPermissions(previouslyApproved ?? declared, declared);
+
+  if (previouslyApproved !== null && diff.expands) {
+    await db.execute(
+      `update public.plugin_installations
+          set enabled = false,
+              review_required = true,
+              pending_permissions = $3::jsonb,
+              updated_at = now()
+        where user_id = $1 and plugin_id = $2`,
+      [userId, pluginId, JSON.stringify(declared)],
+    );
+    throw new PluginPermissionReviewRequiredError(pluginId, diff.added, previouslyApproved);
+  }
+
   const rows = await db.query<PluginInstallationRow>(
     `insert into public.plugin_installations
-       (user_id, plugin_id, installed_version, enabled, enabled_skills, installed_at, updated_at)
-     values ($1, $2, $3, true, $4::jsonb, now(), now())
+       (user_id, plugin_id, installed_version, enabled, enabled_skills,
+        approved_permissions, pending_permissions, review_required, installed_at, updated_at)
+     values ($1, $2, $3, true, $4::jsonb, $5::jsonb, null, false, now(), now())
      on conflict (user_id, plugin_id) do update
        set installed_version = excluded.installed_version,
            enabled = true,
+           approved_permissions = excluded.approved_permissions,
+           pending_permissions = null,
+           review_required = false,
            updated_at = now()
      returning plugin_id, installed_version, enabled, installed_at, updated_at`,
-    [userId, pluginId, found.entry.version, JSON.stringify(found.entry.declaredSkills)],
+    [
+      userId,
+      pluginId,
+      found.entry.version,
+      JSON.stringify(found.entry.declaredSkills),
+      JSON.stringify(declared),
+    ],
   );
   return rows[0] ? mapInstallation(rows[0]) : null;
+}
+
+/**
+ * The only way out of review, and an explicit member act: the expanded set is
+ * written as approved, never inferred from the registry.
+ */
+export async function approvePendingPluginPermissions(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<PluginInstallation | null> {
+  const rows = await db.query<PluginInstallationRow>(
+    `update public.plugin_installations
+        set approved_permissions = coalesce(pending_permissions, approved_permissions),
+            pending_permissions = null,
+            review_required = false,
+            enabled = true,
+            updated_at = now()
+      where user_id = $1 and plugin_id = $2 and review_required = true
+      returning plugin_id, installed_version, enabled, installed_at, updated_at`,
+    [userId, pluginId],
+  );
+  return rows[0] ? mapInstallation(rows[0]) : null;
+}
+
+export interface PluginPermissionReview {
+  pluginId: string;
+  approved: string[];
+  pending: string[];
+  added: string[];
+  removed: string[];
+}
+
+export async function listPluginPermissionReviews(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<PluginPermissionReview[]> {
+  const rows = await db.query<{
+    plugin_id: string;
+    approved_permissions: unknown;
+    pending_permissions: unknown;
+  }>(
+    `select plugin_id, approved_permissions, pending_permissions
+       from public.plugin_installations
+      where user_id = $1 and review_required = true
+      order by plugin_id asc`,
+    [userId],
+  );
+  return rows.map((row) => {
+    const approved = toStringArray(row.approved_permissions);
+    const pending = toStringArray(row.pending_permissions);
+    const diff = diffPluginPermissions(approved, pending);
+    return {
+      pluginId: row.plugin_id,
+      approved,
+      pending,
+      added: diff.added,
+      removed: diff.removed,
+    };
+  });
 }
 
 export async function setWebPluginEnabled(
@@ -123,6 +270,7 @@ export async function listEnabledPluginIds(
        join public.plugin_registry_entries registry on registry.id = installation.plugin_id
       where installation.user_id = $1
         and installation.enabled = true
+        and installation.review_required = false
         and registry.status = 'published'
         and registry.web_installable = true`,
     [userId],

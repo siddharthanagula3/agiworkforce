@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CONNECTOR_HEALTH_STATES,
   ConnectorConnectionSchema,
   ListConnectorsResponseSchema,
   ConnectRequestSchema,
@@ -121,6 +122,76 @@ describe('ConnectorConnectionSchema / ListConnectorsResponseSchema', () => {
       pending: ['notion'],
     };
     expect(ListConnectorsResponseSchema.safeParse(response).success).toBe(true);
+  });
+
+  /*
+   * A connector whose recent calls failed used to sink the whole list: the enum
+   * omitted `not-responding` and the VS Code client showed nothing at all.
+   */
+  it('accepts the whole list when a connector is not responding', () => {
+    const response = {
+      connectors: [
+        {
+          id: 'conn_1',
+          connectorId: 'slack',
+          authType: 'oauth',
+          connectedAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+          source: 'oauth',
+          health: 'not-responding',
+        },
+        {
+          id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+          connectorId: 'linear',
+          toolConnectorId: 'custom-a1b2c3d4e5',
+          directoryId: 'linear',
+          authType: 'custom_mcp',
+          connectedAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-01T00:00:00.000Z',
+          source: 'custom',
+          name: 'Linear',
+          health: 'not-responding',
+        },
+      ],
+      available: ['slack', 'github'],
+      setup: {
+        notion: {
+          kind: 'oauth',
+          missingEnv: ['NOTION_CLIENT_ID'],
+          message: 'Notion is not set up.',
+        },
+      },
+      pending: ['figma'],
+    };
+    const parsed = ListConnectorsResponseSchema.safeParse(response);
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.connectors).toHaveLength(2);
+  });
+
+  it('accepts every declared health state, so the enum and the schema cannot drift', () => {
+    for (const health of CONNECTOR_HEALTH_STATES) {
+      const parsed = ConnectorConnectionSchema.safeParse({
+        id: 'conn_1',
+        connectorId: 'slack',
+        authType: 'oauth',
+        connectedAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+        source: 'user',
+        health,
+      });
+      expect(parsed.success, `health "${health}" was rejected`).toBe(true);
+    }
+  });
+
+  it('names the six states the route can produce', () => {
+    expect([...CONNECTOR_HEALTH_STATES]).toEqual([
+      'connected',
+      'connectable',
+      'needs-reauthorization',
+      'not-responding',
+      'not-configured',
+      'unsupported-here',
+    ]);
   });
 
   it('rejects an unknown health value', () => {

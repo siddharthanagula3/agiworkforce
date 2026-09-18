@@ -10,16 +10,44 @@ jest.mock('../services/api', () => ({
 }));
 
 import {
+  ConnectorPolicyError,
   connectConnector,
   fetchConnectorDirectory,
+  invalidateConnectorPolicy,
   startConnectorOAuth,
 } from '../services/connectors';
+
+const POLICY_PATH = '/api/settings/organization/connector-policy';
 
 function httpError(message: string, status: number): Error & { status: number } {
   return Object.assign(new Error(message), { status });
 }
 
-beforeEach(() => jest.clearAllMocks());
+function blockingPolicy(connectorId: string) {
+  return {
+    organizationId: 'org-1',
+    configured: true,
+    policy: {
+      allowedConnectors: [],
+      blockedConnectors: [connectorId],
+      allowCustomConnectors: true,
+      allowedPlugins: [],
+      blockedPlugins: [],
+      allowedMcpHosts: [],
+      updatedAt: '2026-09-17T00:00:00.000Z',
+    },
+  };
+}
+
+/** Every surface reads the workspace policy before it starts an authorization. */
+function gets(path: string): unknown[] {
+  return mockGet.mock.calls.filter((call) => String(call[0]).startsWith(path));
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  invalidateConnectorPolicy();
+});
 
 describe('connectConnector', () => {
   it('reports connected only when the server actually wrote the enablement row', async () => {
@@ -27,7 +55,19 @@ describe('connectConnector', () => {
 
     await expect(connectConnector('slack')).resolves.toEqual({ kind: 'connected' });
     expect(mockPost).toHaveBeenCalledWith('/api/connectors', { connectorId: 'slack' });
-    expect(mockGet).not.toHaveBeenCalled();
+    expect(gets('/api/connectors/oauth/start')).toEqual([]);
+  });
+
+  it('refuses a connector the workspace administrator blocked, before any request', async () => {
+    mockGet.mockResolvedValue(blockingPolicy('slack'));
+
+    await expect(connectConnector('slack')).rejects.toBeInstanceOf(ConnectorPolicyError);
+    await expect(connectConnector('slack')).rejects.toThrow(
+      'Your workspace administrator has blocked the "slack" connector.',
+    );
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(gets('/api/connectors/oauth/start')).toEqual([]);
+    expect(gets(POLICY_PATH).length).toBeGreaterThan(0);
   });
 
   it('turns the OAuth 409 into an authorization handoff instead of an error', async () => {
@@ -69,7 +109,7 @@ describe('connectConnector', () => {
     await expect(connectConnector('notion')).rejects.toThrow(
       'Connector authorization is not implemented',
     );
-    expect(mockGet).not.toHaveBeenCalled();
+    expect(gets('/api/connectors/oauth/start')).toEqual([]);
   });
 });
 
@@ -122,7 +162,7 @@ describe('fetchConnectorDirectory with OAuth grants', () => {
       available: ['linear'],
     });
 
-    await expect(fetchConnectorDirectory()).resolves.toEqual({
+    await expect(fetchConnectorDirectory()).resolves.toMatchObject({
       connectors: [
         {
           id: 'oauth-linear',
@@ -136,7 +176,24 @@ describe('fetchConnectorDirectory with OAuth grants', () => {
         },
       ],
       available: ['linear'],
+      policy: null,
     });
+  });
+
+  it('marks a blocked connector in the directory the screen renders', async () => {
+    mockGet.mockImplementation(async (path: string) => {
+      if (String(path).startsWith(POLICY_PATH)) return blockingPolicy('linear');
+      return {
+        connectors: [],
+        available: ['linear', 'github'],
+      };
+    });
+
+    const directory = await fetchConnectorDirectory();
+    const blocked = directory.entries.find((entry) => entry.connectorId === 'linear');
+    const permitted = directory.entries.find((entry) => entry.connectorId === 'github');
+    expect(blocked?.access).toMatchObject({ allowed: false, code: 'connector_blocked' });
+    expect(permitted?.access.allowed).toBe(true);
   });
 
   it('still rejects an unknown source or a malformed scopes list', async () => {

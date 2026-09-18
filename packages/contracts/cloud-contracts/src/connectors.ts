@@ -5,10 +5,15 @@ export const MANAGED_CLOUD_CONNECTORS_PATH = '/api/connectors';
 export const CONNECTOR_SOURCES = ['user', 'github-app', 'custom', 'oauth'] as const;
 export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number];
 
+/**
+ * Every state `GET /api/connectors` can put on a row. Omitting one makes a
+ * validating consumer reject the whole list over a single connector.
+ */
 export const CONNECTOR_HEALTH_STATES = [
   'connected',
   'connectable',
   'needs-reauthorization',
+  'not-responding',
   'not-configured',
   'unsupported-here',
 ] as const;

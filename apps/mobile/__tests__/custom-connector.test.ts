@@ -17,9 +17,13 @@ import {
   resetConnectorToolPermission,
   setConnectorToolPermission,
 } from '../services/connectors';
+import { ConnectorPolicyError, invalidateConnectorPolicy } from '../services/connectors';
 import { isLikelyHttpsUrl } from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  invalidateConnectorPolicy();
+});
 
 describe('addCustomConnector', () => {
   it('POSTs trimmed name/url (and optional auth token) to /api/connectors/custom', async () => {
@@ -44,6 +48,30 @@ describe('addCustomConnector', () => {
       authToken: 'secret',
     });
     expect(result.shortId).toBe('ab12');
+  });
+
+  it('is refused when the workspace does not allow custom endpoints', async () => {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    // Once, not for the rest of the file: jest.clearAllMocks() clears calls but
+    // keeps an implementation, so a persistent policy would leak into the next test.
+    mockGet.mockResolvedValueOnce({
+      organizationId: 'org-1',
+      configured: true,
+      policy: {
+        allowedConnectors: [],
+        blockedConnectors: [],
+        allowCustomConnectors: false,
+        allowedPlugins: [],
+        blockedPlugins: [],
+        allowedMcpHosts: [],
+        updatedAt: '2026-09-17T00:00:00.000Z',
+      },
+    });
+
+    await expect(
+      addCustomConnector({ name: 'Internal', url: 'https://mcp.example.com/sse' }),
+    ).rejects.toBeInstanceOf(ConnectorPolicyError);
+    expect(mockPost).not.toHaveBeenCalled();
   });
 
   it('omits an empty auth token', async () => {
@@ -90,7 +118,7 @@ describe('fetchConnectorDirectory', () => {
       available: ['slack', 'github'],
     });
 
-    await expect(fetchConnectorDirectory()).resolves.toEqual({
+    await expect(fetchConnectorDirectory()).resolves.toMatchObject({
       connectors: expect.arrayContaining([
         expect.objectContaining({ connectorId: 'custom-ab12', name: 'Internal tools' }),
       ]),

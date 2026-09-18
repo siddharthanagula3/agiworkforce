@@ -10,6 +10,7 @@ const HEALTH_FACES: Record<ConnectorHealthState, { label: string; icon: string }
   connected: { label: 'Connected', icon: 'plug' },
   connectable: { label: 'Not connected', icon: 'circle-outline' },
   'needs-reauthorization': { label: 'Needs reauthorization', icon: 'warning' },
+  'not-responding': { label: 'Not responding', icon: 'cloud-offline' },
   'not-configured': { label: 'Not configured here', icon: 'circle-slash' },
   'unsupported-here': { label: 'Not available on the web app', icon: 'circle-slash' },
 };

@@ -167,3 +167,4 @@ export type {
   WorkspacePolicySnapshot,
   WorkspacePolicySource,
 } from './workspacePolicy';
+export * from './connectors';
