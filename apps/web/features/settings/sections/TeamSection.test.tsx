@@ -630,6 +630,41 @@ describe('TeamSection', () => {
     ).not.toMatch(/minmax\(\s*220px/);
   });
 
+  it('gives the owner a way to reach workspace deletion, and says what it costs', () => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Acme',
+      slug: 'acme',
+      plan: 'team',
+      memberCount: 12,
+      maxMembers: null,
+      currentUserRole: 'owner',
+    };
+
+    render(<TeamSection />);
+
+    const link = screen.getByRole('link', { name: 'Delete workspace' });
+    expect(link).toHaveAttribute('href', '/admin/workspace-deletion');
+    expect(screen.getByText(/for all 12 members/)).toBeVisible();
+    expect(screen.getByText(/cancel there until the scheduled date/)).toBeVisible();
+  });
+
+  it('does not offer deletion to an admin who does not own the workspace', () => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Acme',
+      slug: 'acme',
+      plan: 'team',
+      memberCount: 12,
+      maxMembers: null,
+      currentUserRole: 'admin',
+    };
+
+    render(<TeamSection />);
+
+    expect(screen.queryByRole('link', { name: 'Delete workspace' })).toBeNull();
+  });
+
   it('never offers the transfer to a member who is not the owner', () => {
     state.organization = {
       id: 'org-1',

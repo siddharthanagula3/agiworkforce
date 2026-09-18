@@ -33,6 +33,14 @@ import { StarterPrompts } from './StarterPrompts';
 
 const TOTAL_STEPS = 2;
 const CHAT_PATH = '/chat';
+const USE_CASE_DISCLOSURE =
+  'This picks the suggestions below and nothing else. It is not saved to your account, and it does not label you or change which models you can use.';
+const EXPLANATION_SUMMARY = 'How this works';
+const EXPLANATION_POINTS: readonly string[] = [
+  'Every chat starts with a model you pick, from any provider we support. Change it per message in the composer.',
+  'Chats are saved to your history so you can come back to them. Turn on temporary chat for one that is never saved.',
+  'Your name and the work you described shape how replies are written. Edit or clear both in Settings whenever you like.',
+];
 
 type Step = 1 | 2;
 
@@ -68,11 +76,11 @@ export function OnboardingWizard() {
   }, [seeded, step]);
 
   const finish = useCallback(
-    async (useCase: string | null, prompt?: string) => {
+    async (prompt?: string) => {
       setSubmitting(true);
       setError(null);
       try {
-        await completeOnboarding({ preferredName, workDescription, primaryUseCase: useCase });
+        await completeOnboarding({ preferredName, workDescription });
         router.replace(
           prompt ? `${CHAT_PATH}?starterPrompt=${encodeURIComponent(prompt)}` : CHAT_PATH,
         );
@@ -187,7 +195,7 @@ export function OnboardingWizard() {
               className="flex flex-col gap-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                void finish(primaryUseCase || null);
+                void finish();
               }}
             >
               <fieldset className="flex flex-col gap-2">
@@ -217,9 +225,10 @@ export function OnboardingWizard() {
                   ))}
                 </RadioGroup>
               </fieldset>
+              <p className="text-xs text-muted-foreground">{USE_CASE_DISCLOSURE}</p>
               <StarterPrompts
                 useCase={primaryUseCase || null}
-                onSelect={(prompt) => void finish(primaryUseCase || null, prompt)}
+                onSelect={(prompt) => void finish(prompt)}
               />
               <div className="mt-2 flex items-center justify-between gap-3">
                 <Button
@@ -246,6 +255,17 @@ export function OnboardingWizard() {
               </div>
             </form>
           )}
+
+          <details className="mt-5 border-t border-border/70 pt-4">
+            <summary className="cursor-pointer text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              {EXPLANATION_SUMMARY}
+            </summary>
+            <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-sm text-muted-foreground">
+              {EXPLANATION_POINTS.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          </details>
         </CardContent>
       </Card>
     </main>
