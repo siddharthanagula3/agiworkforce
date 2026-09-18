@@ -697,6 +697,10 @@
       },
       {
         "from": "@agiworkforce/web",
+        "to": "@agiworkforce/context-engine"
+      },
+      {
+        "from": "@agiworkforce/web",
         "to": "@agiworkforce/data-layer"
       },
       {
