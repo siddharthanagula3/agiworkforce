@@ -8,7 +8,7 @@ import type {
   ToolDef,
   ToolChoice,
 } from '@agiworkforce/types';
-import { inlineFileBlockAsText } from '@agiworkforce/types';
+import { buildPromptCachePlan, inlineFileBlockAsText } from '@agiworkforce/types';
 import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-protocol';
 import {
   normalizeOpenAIStrictToolParameters,
@@ -225,6 +225,14 @@ function collectLeadingSystemMessageText(messages: ProviderMessage[]): string[] 
   return out;
 }
 
+/**
+ * `prompt_cache_key` is a namespace shared by everything the upstream account
+ * sends, and the managed deployment sends every workspace's traffic under one
+ * account. The key therefore comes from the canonical cache plan, which folds
+ * the tenant, the plan version and the toolset in before this hashes anything,
+ * and which withholds its material entirely for a Temporary Chat, a
+ * zero-retention turn, or a caller that named no tenant.
+ */
 export function derivePromptCacheKey(req: ChatRequest): string | undefined {
   const explicit = req.system;
   const joinedText =
@@ -234,9 +242,10 @@ export function derivePromptCacheKey(req: ChatRequest): string | undefined {
         : explicit.map((b: TextBlock) => b.text).join('\n\n')
       : collectLeadingSystemMessageText(req.messages).join('\n\n');
   const stablePrefixText = splitSystemPromptCacheBoundary(joinedText)?.stablePrefix ?? joinedText;
-  if (!stablePrefixText) return undefined;
+  const plan = buildPromptCachePlan(req, { stablePrefix: stablePrefixText });
+  if (!plan.keyMaterial) return undefined;
   const digest = createHash('sha256')
-    .update(stablePrefixText)
+    .update(plan.keyMaterial)
     .digest('hex')
     .slice(0, PROMPT_CACHE_KEY_DIGEST_LENGTH);
   return `${PROMPT_CACHE_KEY_PREFIX}_${digest}`;

@@ -37,3 +37,47 @@ describe('resolveZeroDataRetentionProviderOverrides', () => {
     expect(resolveZeroDataRetentionProviderOverrides()).toEqual(new Set());
   });
 });
+
+const { buildPromptCachePlan } = await import('@agiworkforce/types');
+
+/**
+ * An agreed-with provider is one this deployment may DISPATCH a zero-retention
+ * turn to. It is not permission to leave a cached prefix behind on it, which
+ * the cache plan refuses whoever serves the turn.
+ */
+describe('a zero-retention turn is never cached, whatever the overrides say', () => {
+  afterEach(() => {
+    for (const key of ENV_KEYS) delete process.env[key];
+  });
+
+  const REQUEST = {
+    model: 'gpt-5.6-sol',
+    system: 'stable preamble',
+    messages: [{ role: 'user' as const, content: 'hi' }],
+    promptCache: { organizationId: 'org_alpha', userId: 'user_alpha' },
+  };
+
+  it('withholds the cache key and every breakpoint from the turn', () => {
+    process.env['AGI_OPENAI_ZDR_AGREEMENT'] = '1';
+    const plan = buildPromptCachePlan(
+      { ...REQUEST, zeroDataRetentionOnly: true },
+      { stablePrefix: 'stable preamble' },
+    );
+
+    expect(plan).toMatchObject({
+      cacheable: false,
+      privacyClass: 'zero_retention',
+      skipReason: 'zero_data_retention',
+      retention: 'none',
+      maxBreakpoints: 0,
+    });
+    expect(plan.keyMaterial).toBeUndefined();
+  });
+
+  it('still caches the same turn once the retention requirement is lifted', () => {
+    const plan = buildPromptCachePlan(REQUEST, { stablePrefix: 'stable preamble' });
+
+    expect(plan.cacheable).toBe(true);
+    expect(plan.keyMaterial).toBeDefined();
+  });
+});

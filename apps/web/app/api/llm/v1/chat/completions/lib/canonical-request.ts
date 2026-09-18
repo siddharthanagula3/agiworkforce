@@ -135,6 +135,7 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
 
   const chatRequest = openAIWireRequestToChatRequest(wireRequest);
   if (rawVendorTools.length > 0) chatRequest.rawVendorTools = rawVendorTools;
+  if (llmRequest.promptCacheScope) chatRequest.promptCache = llmRequest.promptCacheScope;
   if (requiresZeroDataRetention(processed, llmRequest.model))
     chatRequest.zeroDataRetentionOnly = true;
   if (processed.provider && OPENROUTER_DISPATCH_PROVIDERS.has(processed.provider)) {
