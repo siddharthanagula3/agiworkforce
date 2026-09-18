@@ -12,6 +12,7 @@ const {
   mockTransaction,
   mockAudit,
   mockNotifyDisconnected,
+  mockListUserSessions,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockRevokeSession: vi.fn(async () => undefined),
@@ -22,6 +23,10 @@ const {
   mockExecute: vi.fn(async () => 1),
   mockTransaction: vi.fn(),
   mockAudit: vi.fn(async () => {}),
+  mockListUserSessions: vi.fn(async () => ({
+    sessions: [] as Array<Record<string, unknown>>,
+    totalCount: 0,
+  })),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -34,7 +39,11 @@ vi.mock('@/lib/services/account-activity-notifications', () => ({
 }));
 
 vi.mock('@/lib/server/identity', () => ({
-  getIdentityProvider: () => ({ getSession: mockGetSession, revokeSession: mockRevokeSession }),
+  getIdentityProvider: () => ({
+    getSession: mockGetSession,
+    revokeSession: mockRevokeSession,
+    listUserSessions: mockListUserSessions,
+  }),
   getRequestIdentity: vi.fn(async () => ({ sessionId: 'sess_current' })),
   verifyIdentitySessionToken: vi.fn(async () => null),
 }));
@@ -73,6 +82,7 @@ beforeEach(() => {
   mockQuery.mockReset();
   mockQuery.mockResolvedValue([]);
   mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
+  mockListUserSessions.mockResolvedValue({ sessions: [], totalCount: 0 });
   mockGetUserScopedDb.mockResolvedValue({
     db: { query: mockQuery, execute: mockExecute, transaction: mockTransaction },
     userId: 'user-1',
@@ -474,5 +484,137 @@ describe('renaming a device', () => {
     expect((await PATCH(patch({ name: '   ' }), params(REGISTERED_ID))).status).toBe(400);
     expect((await PATCH(patch({ name: 'x'.repeat(121) }), params(REGISTERED_ID))).status).toBe(400);
     expect(mockExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('reporting a device lost', () => {
+  function registryRow() {
+    return {
+      kind: 'desktop',
+      name: 'Stolen laptop',
+      install_id: 'install-abcdef',
+      credential_family_id: 'family-9',
+      identity_session_id: null,
+    };
+  }
+
+  function unlinkRequest(body: Record<string, unknown>) {
+    return new Request('http://localhost:3000/api/settings/devices/x', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }) as never;
+  }
+
+  function bindRegisteredDevice() {
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from device_registrations') ? [registryRow()] : [],
+    );
+    mockTransaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        query: vi.fn(async (sql: string) =>
+          sql.includes('update device_refresh_tokens') ? [{ id: 'tok-1' }, { id: 'tok-2' }] : [],
+        ),
+        execute: mockExecute,
+      }),
+    );
+  }
+
+  function executedStatements(): string[] {
+    return mockExecute.mock.calls.map((call) => String((call as unknown[])[0]));
+  }
+
+  function executedSql(fragment: string): boolean {
+    return executedStatements().some((sql) => sql.includes(fragment));
+  }
+
+  function auditedEvents(): string[] {
+    return mockAudit.mock.calls.map((call) => {
+      const event = (call as unknown[])[0] as { eventType?: unknown };
+      return String(event.eventType);
+    });
+  }
+
+  it('finishes the credential family for good and withdraws remote control', async () => {
+    bindRegisteredDevice();
+
+    const response = await DELETE(unlinkRequest({ lost: true }), params(REGISTERED_ID));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      message: 'Device reported lost and unlinked',
+      credentialFamilyCompromised: true,
+      remoteControlRevoked: true,
+      revokedCredentials: 2,
+    });
+    expect(executedSql('compromised_at')).toBe(true);
+    expect(executedSql('remote_enabled = false')).toBe(true);
+    expect(auditedEvents()).toEqual(
+      expect.arrayContaining(['device_trust_revoked', 'refresh_family_compromised']),
+    );
+  });
+
+  it('withdraws remote control before the registration row is deleted', async () => {
+    bindRegisteredDevice();
+
+    await DELETE(unlinkRequest({ lost: true }), params(REGISTERED_ID));
+
+    const order = executedStatements();
+    const revoked = order.findIndex((sql) => sql.includes('remote_enabled = false'));
+    const deleted = order.findIndex((sql) => sql.includes('delete from device_registrations'));
+    expect(revoked).toBeGreaterThanOrEqual(0);
+    expect(deleted).toBeGreaterThan(revoked);
+  });
+
+  it('ends every other session inline when the report asks for it', async () => {
+    bindRegisteredDevice();
+    mockListUserSessions
+      .mockResolvedValueOnce({
+        sessions: [
+          { id: 'sess_current', userId: 'user-1', status: 'active' },
+          { id: 'sess_elsewhere', userId: 'user-1', status: 'active' },
+        ],
+        totalCount: 2,
+      })
+      .mockResolvedValue({ sessions: [], totalCount: 0 });
+
+    const response = await DELETE(
+      unlinkRequest({ lost: true, logoutAll: true }),
+      params(REGISTERED_ID),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      loggedOutEverywhere: { ended: 1, failed: 0, incomplete: false },
+    });
+    expect(mockRevokeSession).toHaveBeenCalledWith('sess_elsewhere');
+    expect(mockRevokeSession).not.toHaveBeenCalledWith('sess_current');
+    expect(executedSql('update device_refresh_tokens')).toBe(true);
+  });
+
+  it('leaves an ordinary unlink exactly as it was: revoked, not compromised', async () => {
+    bindRegisteredDevice();
+
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/devices/x', { method: 'DELETE' }) as never,
+      params(REGISTERED_ID),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      message: 'Device unlinked',
+      credentialFamilyCompromised: false,
+    });
+    expect(executedSql('compromised_at')).toBe(false);
+    expect(auditedEvents()).not.toContain('refresh_family_compromised');
+  });
+
+  it('refuses an unlink body it does not recognise rather than guessing', async () => {
+    bindRegisteredDevice();
+
+    const response = await DELETE(unlinkRequest({ lost: 'yes' }), params(REGISTERED_ID));
+
+    expect(response.status).toBe(400);
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 });

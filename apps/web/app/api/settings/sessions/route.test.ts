@@ -9,6 +9,7 @@ const {
   mockGetUserScopedDb,
   mockVerifyToken,
   mockNeonExecute,
+  mockNeonQuery,
 } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockGetSessionList: vi.fn(),
@@ -16,6 +17,7 @@ const {
   mockGetUserScopedDb: vi.fn(),
   mockVerifyToken: vi.fn(),
   mockNeonExecute: vi.fn(async () => 1),
+  mockNeonQuery: vi.fn(async () => [] as Record<string, unknown>[]),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -50,11 +52,14 @@ vi.mock('@/lib/logger', () => ({
 
 import { DELETE, GET } from './route';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function session(
   id: string,
   overrides: Partial<{
     userId: string;
     status: string;
+    createdAt: number;
     lastActiveAt: number;
     latestActivity: Record<string, unknown>;
   }> = {},
@@ -64,7 +69,7 @@ function session(
     clientId: `client-${id}`,
     userId: overrides.userId ?? 'user-1',
     status: overrides.status ?? 'active',
-    createdAt: Date.parse('2026-07-01T12:00:00.000Z'),
+    createdAt: overrides.createdAt ?? Date.now() - DAY_MS,
     updatedAt: Date.parse('2026-07-02T12:00:00.000Z'),
     lastActiveAt: overrides.lastActiveAt ?? Date.parse('2026-07-03T12:00:00.000Z'),
     expireAt: Date.parse('2026-08-01T12:00:00.000Z'),
@@ -93,11 +98,12 @@ describe('/api/settings/sessions', () => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'user-1', sessionId: 'sess_current' });
     mockGetUserScopedDb.mockResolvedValue({
-      db: { execute: mockNeonExecute },
+      db: { execute: mockNeonExecute, query: mockNeonQuery },
       userId: 'user-1',
       organizationId: null,
     });
     mockRevokeSession.mockResolvedValue({ status: 'revoked' });
+    mockNeonQuery.mockResolvedValue([]);
     process.env['CLERK_SECRET_KEY'] = 'sk_test_clerk_secret';
   });
 
@@ -156,6 +162,106 @@ describe('/api/settings/sessions', () => {
         limit: 100,
         offset: 0,
       });
+    });
+
+    it('names the operating system and the surface from the install that registered under the session', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_cli')],
+        totalCount: 2,
+      });
+      mockNeonQuery.mockResolvedValue([
+        {
+          identity_session_id: 'sess_cli',
+          surface: 'cli',
+          os: 'macos',
+          os_version: '26.1',
+        },
+      ]);
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+      const body = (await response.json()) as { sessions: Array<Record<string, unknown>> };
+
+      expect(response.status).toBe(200);
+      expect(body.sessions.find((row) => row['id'] === 'sess_cli')).toMatchObject({
+        os: 'macos',
+        osVersion: '26.1',
+        surface: 'cli',
+      });
+      expect(body.sessions.find((row) => row['id'] === 'sess_current')).toMatchObject({
+        os: null,
+        osVersion: null,
+        surface: 'web',
+      });
+    });
+
+    it('still lists sessions when the device registry has not been provisioned', async () => {
+      mockGetSessionList.mockResolvedValue({ data: [session('sess_current')], totalCount: 1 });
+      mockNeonQuery.mockRejectedValue(
+        Object.assign(new Error('relation "device_registrations" does not exist'), {
+          code: '42P01',
+        }),
+      );
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+      const body = (await response.json()) as { sessions: Array<Record<string, unknown>> };
+
+      expect(response.status).toBe(200);
+      expect(body.sessions[0]).toMatchObject({ surface: 'web', os: null });
+    });
+
+    it('ends a session that has outlived the absolute lifetime and never returns it', async () => {
+      const ancient = Date.now() - 400 * DAY_MS;
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_ancient', { createdAt: ancient })],
+        totalCount: 2,
+      });
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+      const body = (await response.json()) as {
+        sessions: Array<{ id: string; absoluteExpiresAt: string | null }>;
+        totalCount: number;
+        endedByAbsoluteTimeout: number;
+      };
+
+      expect(response.status).toBe(200);
+      expect(mockRevokeSession).toHaveBeenCalledWith('sess_ancient');
+      expect(body.sessions.map((row) => row.id)).toEqual(['sess_current']);
+      expect(body.endedByAbsoluteTimeout).toBe(1);
+      expect(body.totalCount).toBe(1);
+      expect(body.sessions[0]?.absoluteExpiresAt).toBe(
+        new Date(Date.parse(String(body.sessions[0]?.absoluteExpiresAt))).toISOString(),
+      );
+    });
+
+    it('honours a shorter absolute lifetime when policy sets one', async () => {
+      process.env['SESSION_ABSOLUTE_LIFETIME_HOURS'] = '12';
+      try {
+        mockGetSessionList.mockResolvedValue({
+          data: [session('sess_yesterday')],
+          totalCount: 1,
+        });
+
+        const response = await GET(
+          new Request('http://localhost:3000/api/settings/sessions') as never,
+        );
+        const body = (await response.json()) as {
+          sessions: unknown[];
+          endedByAbsoluteTimeout: number;
+        };
+
+        expect(response.status).toBe(200);
+        expect(mockRevokeSession).toHaveBeenCalledWith('sess_yesterday');
+        expect(body.sessions).toEqual([]);
+        expect(body.endedByAbsoluteTimeout).toBe(1);
+      } finally {
+        delete process.env['SESSION_ABSOLUTE_LIFETIME_HOURS'];
+      }
     });
 
     it('revokes other devices before ending the current session', async () => {
