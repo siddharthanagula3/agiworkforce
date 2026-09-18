@@ -33,6 +33,7 @@ import {
   type TeamMember,
 } from '../hooks/use-settings-queries';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
+import { WORKSPACE_DELETION_PATH } from '@/features/admin/pages/workspace-deletion-route';
 import { SSOPanel } from './team/SSOPanel';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -1048,6 +1049,33 @@ export function TeamSection() {
               {transferOwnership.isPending ? 'Transferring…' : 'Transfer ownership'}
             </button>
             <InlineError error={transferOwnership.error} />
+          </div>
+        </SectionCard>
+      ) : null}
+
+      {isOwner ? (
+        <SectionCard
+          title="Delete this workspace"
+          description="Only the owner can, and only by typing the workspace name."
+        >
+          <div style={{ padding: 20 }}>
+            <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
+              Deleting erases every chat, project, file, connector and API key in{' '}
+              {organization?.name ?? 'this workspace'} for all {organization?.memberCount ?? 0}{' '}
+              {organization?.memberCount === 1 ? 'member' : 'members'}. Nothing goes on the day you
+              ask: the next page schedules it, and you can cancel there until the scheduled date.
+            </p>
+            <SettingsPageLink
+              href={WORKSPACE_DELETION_PATH}
+              style={{
+                ...secondaryButtonStyle,
+                display: 'inline-flex',
+                marginTop: 14,
+                textDecoration: 'none',
+              }}
+            >
+              Delete workspace
+            </SettingsPageLink>
           </div>
         </SectionCard>
       ) : null}

@@ -93,7 +93,6 @@ describe('OnboardingWizard', () => {
       expect(mocks.complete).toHaveBeenCalledWith({
         preferredName: 'Priya',
         workDescription: '',
-        primaryUseCase: secondUseCase.value,
       }),
     );
     expect(mocks.replace).toHaveBeenCalledWith('/chat');
@@ -118,7 +117,6 @@ describe('OnboardingWizard', () => {
       expect(mocks.complete).toHaveBeenCalledWith({
         preferredName: 'Priya',
         workDescription: '',
-        primaryUseCase: firstUseCase.value,
       }),
     );
     expect(mocks.replace).toHaveBeenCalledWith(
@@ -164,6 +162,35 @@ describe('OnboardingWizard', () => {
     await waitFor(() => expect(mocks.skip).toHaveBeenCalledTimes(1));
     expect(mocks.replace).toHaveBeenCalledWith('/chat');
     expect(mocks.complete).not.toHaveBeenCalled();
+  });
+
+  it('says what the use-case answer is for before the user gives it', async () => {
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+
+    await screen.findByDisplayValue('Ada');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: 'What do you want to do first?' });
+
+    expect(screen.getByText(/not saved to your account, and it does not label you/i)).toBeVisible();
+  });
+
+  it('offers the explanation collapsed, so nobody has to read it to get started', async () => {
+    render(<OnboardingWizard />);
+
+    const summary = await screen.findByText('How this works');
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(summary.closest('details')?.open).toBe(false);
+  });
+
+  it('answers what happens to the chat, the models and the details it just took', async () => {
+    render(<OnboardingWizard />);
+
+    await screen.findByText('How this works');
+
+    expect(screen.getByText(/any provider we support/i)).toBeInTheDocument();
+    expect(screen.getByText(/temporary chat/i)).toBeInTheDocument();
+    expect(screen.getByText(/Edit or clear both in Settings/i)).toBeInTheDocument();
   });
 
   it('surfaces a recoverable error instead of a dead end when saving fails', async () => {
