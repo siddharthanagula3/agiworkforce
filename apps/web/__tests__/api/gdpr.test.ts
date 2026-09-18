@@ -289,8 +289,15 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 
     it('does not schedule auth-account purge when an active video blocks data-only erasure', async () => {
       mockNeonQuery.mockImplementation(async (sql: string) => {
-        if (sql.includes("to_regclass('public.video_generation_jobs')")) {
+        // The route probes the durable video schema for itself, and the erasure
+        // fence probes video and image together; each reads its own alias.
+        if (
+          sql.includes("to_regclass('public.video_generation_jobs') is not null as provisioned")
+        ) {
           return [{ provisioned: true }];
+        }
+        if (sql.includes("to_regclass('public.video_generation_jobs') is not null as video")) {
+          return [{ video: true, image: true }];
         }
         if (
           sql.includes('update public.profiles') &&
@@ -298,8 +305,8 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
         ) {
           return [{ id: mockUser.id }];
         }
-        if (sql.includes('from public.video_generation_jobs')) {
-          return [{ has_blocking: true }];
+        if (sql.includes('as video_blocking')) {
+          return [{ video_blocking: true, image_blocking: false }];
         }
         return [];
       });

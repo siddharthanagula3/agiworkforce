@@ -79,7 +79,8 @@ const timestampSchema = z
 const nullableTimestampSchema = timestampSchema.nullable();
 // bigint and numeric arrive from Postgres as text; a bare z.number() would
 // skip every row that carries one.
-const nullableNumericSchema = z.union([z.number(), z.string()]).nullable();
+const numericSchema = z.union([z.number(), z.string()]);
+const nullableNumericSchema = numericSchema.nullable();
 
 const profileExportSchema = z.object({
   id: z.string(),
@@ -835,6 +836,70 @@ const videoGenerationJobExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+// The lease token, idempotency key, request hash and claim token are live
+// capabilities over a paid job, and the microUSD columns are cost accounting,
+// not subject content; the same columns are withheld from the video section.
+const imageGenerationJobExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  conversation_id: z.string().nullable(),
+  provider: z.string(),
+  model: z.string(),
+  operation: z.string(),
+  prompt: z.string(),
+  plan: z.unknown(),
+  source_image_sha256: z.string().nullable(),
+  mask_image_sha256: z.string().nullable(),
+  image_count: z.number().int(),
+  source_surface: z.string(),
+  status: z.string(),
+  attempts: z.number().int(),
+  max_attempts: z.number().int(),
+  retryable: z.boolean(),
+  public_error: z.string().nullable(),
+  cancel_requested_at: nullableTimestampSchema,
+  terminal_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const workPlanExportSchema = z.object({
+  id: z.string(),
+  run_id: z.string().nullable(),
+  conversation_id: z.string().nullable(),
+  objective: z.string(),
+  constraints: z.string().nullable(),
+  deliverable: z.string().nullable(),
+  version: numericSchema,
+  status: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const workPlanStepExportSchema = z.object({
+  plan_id: z.string(),
+  step_id: z.string(),
+  step_order: z.number().int(),
+  description: z.string(),
+  status: z.string(),
+  depends_on: z.array(z.string()),
+  started_at: nullableTimestampSchema,
+  ended_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+// (plan_id, version) is the revision's own identity; the bigserial surrogate
+// says nothing the subject asked for.
+const workPlanRevisionExportSchema = z.object({
+  plan_id: z.string(),
+  version: numericSchema,
+  revised_by: z.string(),
+  operations: z.unknown(),
+  snapshot: z.unknown(),
+  created_at: timestampSchema,
+});
+
 const pluginInstallationExportSchema = z.object({
   id: z.string(),
   plugin_id: z.string(),
@@ -1186,6 +1251,48 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           order by created_at asc`,
     schema: videoGenerationJobExportSchema,
     acrossWorkspaces: true,
+  },
+  {
+    section: 'image_generation_jobs',
+    table: 'image_generation_jobs',
+    sql: `select id, organization_id, conversation_id, provider, model, operation, prompt,
+                 plan, source_image_sha256, mask_image_sha256, image_count, source_surface,
+                 status, attempts, max_attempts, retryable, public_error,
+                 cancel_requested_at, terminal_at, created_at, updated_at
+          from image_generation_jobs
+          where user_id = $1
+          order by created_at asc`,
+    schema: imageGenerationJobExportSchema,
+    acrossWorkspaces: true,
+  },
+  {
+    section: 'work_plans',
+    table: 'work_plans',
+    sql: `select id, run_id, conversation_id, objective, constraints, deliverable,
+                 version, status, created_at, updated_at
+          from work_plans
+          where user_id = $1
+          order by created_at asc`,
+    schema: workPlanExportSchema,
+  },
+  {
+    section: 'work_plan_steps',
+    table: 'work_plan_steps',
+    sql: `select plan_id, step_id, step_order, description, status, depends_on,
+                 started_at, ended_at, created_at, updated_at
+          from work_plan_steps
+          where user_id = $1
+          order by plan_id asc, step_order asc`,
+    schema: workPlanStepExportSchema,
+  },
+  {
+    section: 'work_plan_revisions',
+    table: 'work_plan_revisions',
+    sql: `select plan_id, version, revised_by, operations, snapshot, created_at
+          from work_plan_revisions
+          where user_id = $1
+          order by plan_id asc, version asc`,
+    schema: workPlanRevisionExportSchema,
   },
   {
     section: 'plugin_installations',
