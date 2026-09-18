@@ -22,6 +22,7 @@ import {
   listRetentionSweeps,
   readRetentionBacklog,
   releaseLegalHold,
+  LEGAL_HOLD_RESOURCE_TYPES,
   type LegalHold,
   type RetentionBacklog,
   type RetentionSweepRecord,
@@ -33,8 +34,10 @@ const CreateHoldSchema = z
   .object({
     name: z.string().trim().min(1).max(200),
     reason: z.string().trim().max(2000).nullable().optional(),
-    scope: z.enum(['organization', 'member']),
+    scope: z.enum(['organization', 'member', 'custodian']),
     subjectUserId: z.string().trim().min(1).max(255).nullable().optional(),
+    custodianUserIds: z.array(z.string().trim().min(1).max(255)).max(500).optional(),
+    resourceTypes: z.array(z.enum(LEGAL_HOLD_RESOURCE_TYPES)).min(1).nullable().optional(),
   })
   .strict();
 
@@ -114,6 +117,12 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
     );
   }
 
+  if (parsed.data.scope === 'custodian' && !parsed.data.custodianUserIds?.length) {
+    throw createError.validation(
+      'A custodian-scoped hold needs at least one custodian; without one it would hold nothing.',
+    );
+  }
+
   // Writes use the privileged connection: the application role has SELECT only
   // on legal_holds (0138), because a hold the held organization can delete is
   // not a hold. Authorization was established above.
@@ -127,6 +136,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
       reason: parsed.data.reason ?? null,
       scope: parsed.data.scope,
       subjectUserId: parsed.data.subjectUserId ?? null,
+      custodianUserIds: parsed.data.custodianUserIds ?? [],
+      resourceTypes: parsed.data.resourceTypes ?? null,
       createdByUserId: userId,
     });
   } catch (error) {
@@ -153,6 +164,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
       resourceName: hold.name,
       scope: hold.scope,
       targetUserId: hold.subjectUserId ?? undefined,
+      count: hold.custodianUserIds.length,
+      scopes: hold.resourceTypes ?? undefined,
       role: membership.role,
     },
   });
