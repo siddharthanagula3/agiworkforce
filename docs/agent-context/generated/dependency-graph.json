@@ -10,6 +10,7 @@
       "@agiworkforce/client-runtime",
       "@agiworkforce/cloud-contracts",
       "@agiworkforce/compliance",
+      "@agiworkforce/context",
       "@agiworkforce/data-layer",
       "@agiworkforce/design-tokens",
       "@agiworkforce/desktop",
@@ -19,6 +20,7 @@
       "@agiworkforce/guardian-github",
       "@agiworkforce/i18n",
       "@agiworkforce/icons",
+      "@agiworkforce/ide-runtime",
       "@agiworkforce/identity",
       "@agiworkforce/key-value",
       "@agiworkforce/licensing",
@@ -219,6 +221,10 @@
       {
         "from": "@agiworkforce/guardian-github",
         "to": "@agiworkforce/guardian-core"
+      },
+      {
+        "from": "@agiworkforce/ide-runtime",
+        "to": "@agiworkforce/utils"
       },
       {
         "from": "@agiworkforce/local-llm",
@@ -682,6 +688,10 @@
       },
       {
         "from": "@agiworkforce/web",
+        "to": "@agiworkforce/context"
+      },
+      {
+        "from": "@agiworkforce/web",
         "to": "@agiworkforce/data-layer"
       },
       {
@@ -795,6 +805,10 @@
       {
         "from": "agi-workforce",
         "to": "@agiworkforce/design-tokens"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/ide-runtime"
       },
       {
         "from": "agi-workforce",
