@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { resolveBrowserSession, type BrowserSessionKind } from '@agiworkforce/types';
+import type { BrowserSessionKind } from '@agiworkforce/types';
 import { useBrowserStore } from '../../stores/browserStore';
 import { cn } from '../../lib/utils';
 import { BrowserSessionPicker } from './BrowserSessionPicker';
+import { decideViewerStart } from './browserSelection';
 import { Button } from '@/ui/Button';
 import {
   Play,
@@ -26,10 +27,6 @@ interface BrowserViewerProps {
   className?: string;
   tabId?: string;
 }
-
-const VIEWER_HOSTS_THE_BUILT_IN_SESSION =
-  'Your Chrome is driven by the AGI extension inside Chrome itself, so this viewer cannot start it. ' +
-  'Pick the built-in browser to run here.';
 
 function describeRuntimeError(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -287,13 +284,9 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
 
   const handleStartRuntime = async () => {
     if (runtimeBusy) return;
-    const resolution = resolveBrowserSession(sessionKind);
-    if (!resolution.ok) {
-      setRuntimeError(resolution.reason);
-      return;
-    }
-    if (sessionKind !== 'built-in') {
-      setRuntimeError(VIEWER_HOSTS_THE_BUILT_IN_SESSION);
+    const decision = decideViewerStart({ requested: sessionKind });
+    if (!decision.canStartHere) {
+      setRuntimeError(decision.message);
       return;
     }
     setRuntimeBusy(true);

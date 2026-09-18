@@ -125,6 +125,119 @@ export function clearSessionPermissions(): void {
   session.clear();
 }
 
+const revokedDevices = new Map<string, number>();
+let revocationsLoaded = false;
+
+function revocationStorePath(): string {
+  return path.join(app.getPath('userData'), 'revoked-devices.json');
+}
+
+function loadRevocations(): void {
+  if (revocationsLoaded) return;
+  revocationsLoaded = true;
+  let raw: string;
+  try {
+    raw = readFileSync(revocationStorePath(), 'utf8');
+  } catch {
+    return;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue;
+      const record = entry as { deviceId?: unknown; revokedAtMs?: unknown };
+      if (typeof record.deviceId !== 'string' || record.deviceId.length === 0) continue;
+      revokedDevices.set(
+        record.deviceId,
+        typeof record.revokedAtMs === 'number' ? record.revokedAtMs : 0,
+      );
+    }
+  } catch {
+    // A corrupt store is read as no revocations; the cloud re-sends them on the next sync.
+  }
+}
+
+function persistRevocations(): void {
+  const rows = [...revokedDevices.entries()].map(([deviceId, revokedAtMs]) => ({
+    deviceId,
+    revokedAtMs,
+  }));
+  try {
+    writeFileSync(revocationStorePath(), `${JSON.stringify(rows, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
+  } catch (error) {
+    console.warn('[permissions] could not persist device revocations:', error);
+  }
+}
+
+/**
+ * Takes effect on the next command, not on the next sync: the refusal is held
+ * in memory and written to disk, so neither a poll interval nor a restart can
+ * let the device carry on working.
+ */
+export function revokeDevice(deviceId: string, revokedAtMs: number = Date.now()): void {
+  if (!deviceId) return;
+  loadRevocations();
+  revokedDevices.set(deviceId, revokedAtMs);
+  persistRevocations();
+}
+
+export function reinstateDevice(deviceId: string): void {
+  loadRevocations();
+  if (revokedDevices.delete(deviceId)) persistRevocations();
+}
+
+export function isDeviceRevoked(deviceId: string | null | undefined): boolean {
+  if (!deviceId) return false;
+  loadRevocations();
+  return revokedDevices.has(deviceId);
+}
+
+export function listRevokedDevices(): { deviceId: string; revokedAtMs: number }[] {
+  loadRevocations();
+  return [...revokedDevices.entries()].map(([deviceId, revokedAtMs]) => ({
+    deviceId,
+    revokedAtMs,
+  }));
+}
+
+export interface RemoteCommandAuthorization {
+  readonly allowed: boolean;
+  readonly reason?: string;
+}
+
+const UNNAMED_DEVICE_REFUSAL =
+  'This command did not say which device it came from, so it was refused.';
+
+/**
+ * The gate every command that arrived from another device passes. A revoked
+ * device is refused outright rather than prompted: there is nobody at the other
+ * end of this machine's dialog to answer for it.
+ */
+export function authorizeRemoteCommand(
+  deviceId: string | null | undefined,
+  capability: DesktopCapability,
+  scope: PermissionScope,
+): RemoteCommandAuthorization {
+  if (!deviceId) return { allowed: false, reason: UNNAMED_DEVICE_REFUSAL };
+  if (isDeviceRevoked(deviceId)) {
+    return {
+      allowed: false,
+      reason: 'This device was revoked, so it can no longer be asked to do anything.',
+    };
+  }
+  if (getPermissionState(capability, scope) !== 'granted') {
+    return {
+      allowed: false,
+      reason: `This device has not been allowed to ${describe(capability, scope)}.`,
+    };
+  }
+  return { allowed: true };
+}
+
 const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   'filesystem.read': 'read files in',
   'filesystem.write': 'create and change files in',

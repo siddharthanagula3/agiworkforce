@@ -1,5 +1,13 @@
 import type { RunPageAction, ScheduledTask, WebMCPToolInfo } from '../types';
 import { redactSecrets } from '@agiworkforce/utils/logger';
+import {
+  evaluateSitePolicy,
+  selectBrowser,
+  sitePolicyDenialMessage,
+  type BrowserSelection,
+  type BrowserSessionKind,
+  type SitePolicyInput,
+} from '@agiworkforce/types';
 
 export type SenderClass = 'extension-page-only' | 'allowlisted-tab' | 'discovery';
 
@@ -406,6 +414,105 @@ export const INVISIBLE_UNICODE_RE =
 export function sanitizePageText(raw: string): string {
   const stripped = raw.replace(INVISIBLE_UNICODE_RE, '');
   return redactSecrets(stripped);
+}
+
+export const TELEMETRY_TEXT_MAX_CHARS = 300;
+
+/**
+ * The only way page-derived text may enter a telemetry payload. Telemetry is
+ * shipped off the machine, so it is scrubbed and truncated here rather than at
+ * each call site, where one missed path leaks the page.
+ */
+export function scrubTelemetryText(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length === 0) return '';
+  return sanitizePageText(raw).trim().slice(0, TELEMETRY_TEXT_MAX_CHARS);
+}
+
+/** An origin is safe to attribute a metric to; a full URL carries path and query, so it is not. */
+export function telemetryOrigin(rawUrl: unknown): string | null {
+  if (typeof rawUrl !== 'string' || rawUrl.length === 0) return null;
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+/** The extension drives one browser: the Chrome it is installed in. */
+export const EXTENSION_BROWSER_PRESENCE: readonly BrowserSessionKind[] = ['user-chrome'];
+
+export function selectExtensionBrowser(
+  requested?: BrowserSessionKind | null,
+  allowed?: readonly BrowserSessionKind[],
+): BrowserSelection {
+  return selectBrowser({
+    requested: requested ?? null,
+    ...(allowed ? { allowed } : {}),
+    present: EXTENSION_BROWSER_PRESENCE,
+  });
+}
+
+export interface CrossOriginTransfer {
+  readonly from: string;
+  readonly to: string;
+}
+
+export interface CrossOriginTransferDecision {
+  readonly allowed: boolean;
+  readonly sameOrigin: boolean;
+  readonly reason: string;
+}
+
+/**
+ * Whether data read on one page may be carried to another. Both ends are
+ * checked, because an origin the policy never approved is as unsafe to send to
+ * as it is to read from.
+ */
+export function evaluateCrossOriginTransfer(
+  policy: SitePolicyInput,
+  transfer: CrossOriginTransfer,
+): CrossOriginTransferDecision {
+  const source = telemetryOrigin(transfer.from);
+  const destination = telemetryOrigin(transfer.to);
+  if (!source || !destination) {
+    return {
+      allowed: false,
+      sameOrigin: false,
+      reason: 'A page-to-page transfer needs two http or https pages.',
+    };
+  }
+
+  const sameOrigin = source === destination;
+  const read = evaluateSitePolicy(policy, transfer.from, 'automation');
+  if (!read.allowed) {
+    return {
+      allowed: false,
+      sameOrigin,
+      reason: sitePolicyDenialMessage(read, `"${source}" is not approved for automation.`),
+    };
+  }
+
+  const write = evaluateSitePolicy(policy, transfer.to, sameOrigin ? 'automation' : 'upload');
+  if (!write.allowed) {
+    return {
+      allowed: false,
+      sameOrigin,
+      reason: sitePolicyDenialMessage(
+        write,
+        `Moving data from "${source}" to "${destination}" is not approved.`,
+      ),
+    };
+  }
+
+  return {
+    allowed: true,
+    sameOrigin,
+    reason: sameOrigin
+      ? `Both pages are "${source}".`
+      : `"${source}" and "${destination}" are both approved.`,
+  };
 }
 
 export function shouldExecuteScheduledTask(

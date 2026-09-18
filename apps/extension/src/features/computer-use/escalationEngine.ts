@@ -1,5 +1,12 @@
 import type { FillResult } from '../content/autofill/filler';
 import type { DetectedField } from '../content/autofill/detector';
+import {
+  credentialFieldKind,
+  isMfaChallenge,
+  MFA_HANDOFF,
+  PASSWORD_MANAGER_HANDOFF,
+  type CredentialFieldDescriptor,
+} from '../auth/authInterop';
 
 export type EscalationReason =
   | 'readback_mismatch'
@@ -11,6 +18,8 @@ export type EscalationReason =
   | 'multi_page_flow'
   | 'platform_always_escalate'
   | 'low_confidence_label'
+  | 'credential_field'
+  | 'mfa_challenge'
   | 'unknown_platform';
 
 export interface EscalationTrigger {
@@ -78,8 +87,57 @@ const TYPEAHEAD_SELECTORS = [
   '[class*="autocomplete"]',
 ];
 
-export function detectStructuralTriggers(): EscalationTrigger[] {
+function describeInput(input: HTMLInputElement): CredentialFieldDescriptor {
+  const labelledBy = input.getAttribute('aria-labelledby');
+  const label =
+    input.getAttribute('aria-label') ??
+    (labelledBy ? (document.getElementById(labelledBy)?.textContent ?? null) : null) ??
+    input.getAttribute('placeholder');
+  return {
+    type: input.getAttribute('type'),
+    autocomplete: input.getAttribute('autocomplete'),
+    name: input.getAttribute('name'),
+    id: input.getAttribute('id'),
+    label,
+    inputMode: input.getAttribute('inputmode'),
+  };
+}
+
+function pageCredentialFields(): CredentialFieldDescriptor[] {
+  return [...document.querySelectorAll('input')].map(describeInput);
+}
+
+/**
+ * Credential and second-factor prompts always escalate to the person. The
+ * extension has no credential to offer and must not answer a second factor.
+ */
+export function detectAuthTriggers(
+  fields: readonly CredentialFieldDescriptor[] = pageCredentialFields(),
+  headingText: string | null = document.querySelector('h1, h2')?.textContent ?? null,
+): EscalationTrigger[] {
   const triggers: EscalationTrigger[] = [];
+
+  const credentialKinds = new Set(
+    fields
+      .map(credentialFieldKind)
+      .filter((kind): kind is NonNullable<typeof kind> => kind !== null),
+  );
+  if (credentialKinds.size > 0) {
+    triggers.push({
+      reason: 'credential_field',
+      description: `${PASSWORD_MANAGER_HANDOFF} (${[...credentialKinds].join(', ')})`,
+    });
+  }
+
+  if (isMfaChallenge({ fields, headingText })) {
+    triggers.push({ reason: 'mfa_challenge', description: MFA_HANDOFF });
+  }
+
+  return triggers;
+}
+
+export function detectStructuralTriggers(): EscalationTrigger[] {
+  const triggers: EscalationTrigger[] = [...detectAuthTriggers()];
 
   const hasLoginWall = LOGIN_WALL_SELECTORS.some((s) => document.querySelector(s) !== null);
   const hasFormFields =
@@ -216,8 +274,10 @@ export function makeEscalationDecision(
     `Instructions:\n` +
     `1. Do NOT re-fill fields that were already successfully filled.\n` +
     `2. Handle each blocked field: for file uploads, look for a visible upload button and interact with it; the user is asked to approve every upload. For typeaheads, click the input and type slowly then select from the dropdown. For login walls, stop and report, do not attempt to log in.\n` +
-    `3. NEVER click Submit or any form submission button.\n` +
-    `4. When all accessible fields are filled, report what you completed and what still needs human review.`;
+    `3. NEVER fill a password, one-time code or security-key field, and never dismiss a second-factor prompt. Leave it to the person and their password manager, then carry on from where they left it.\n` +
+    `4. A redirect to an identity provider and back is part of the same sign-in, not a new site: wait for it rather than reporting the page as broken.\n` +
+    `5. NEVER click Submit or any form submission button.\n` +
+    `6. When all accessible fields are filled, report what you completed and what still needs human review.`;
 
   return { shouldEscalate: true, triggers, agentGoal };
 }
