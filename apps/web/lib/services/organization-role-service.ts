@@ -20,6 +20,7 @@ export interface OrganizationRoleSummary {
   permissions: OrganizationPermission[];
   memberCount: number;
   groupCount: number;
+  version: number;
 }
 
 interface RoleRow {
@@ -29,6 +30,7 @@ interface RoleRow {
   name: string;
   description: string | null;
   permissions: string[] | null;
+  version: number | string | null;
   member_count: number | string | null;
   group_count: number | string | null;
 }
@@ -58,6 +60,7 @@ function formatRole(row: RoleRow): OrganizationRoleSummary {
     ),
     memberCount: toCount(row.member_count),
     groupCount: toCount(row.group_count),
+    version: toCount(row.version),
   };
 }
 
@@ -66,7 +69,7 @@ export async function listOrganizationRoles(
   organizationId: string,
 ): Promise<OrganizationRoleSummary[]> {
   const rows = await db.query<RoleRow>(
-    `select r.id, r.organization_id, r.key, r.name, r.description, r.permissions,
+    `select r.id, r.organization_id, r.key, r.name, r.description, r.permissions, r.version,
             (select count(*) from public.organization_member_roles mr
               where mr.organization_id = $1 and mr.role_id = r.id) as member_count,
             (select count(*) from public.organization_group_roles gr
@@ -141,7 +144,7 @@ export async function createCustomRole(
       `insert into public.organization_roles
          (organization_id, key, name, description, permissions, created_by)
        values ($1, $2, $3, $4, $5::text[], $6)
-       returning id, organization_id, key, name, description, permissions,
+       returning id, organization_id, key, name, description, permissions, version,
                  0 as member_count, 0 as group_count`,
       [
         input.organizationId,
@@ -168,8 +171,11 @@ async function readCustomRole(
   roleId: string,
 ): Promise<RoleRow> {
   const [row] = await db.query<RoleRow>(
-    `select id, organization_id, key, name, description, permissions,
-            0 as member_count, 0 as group_count
+    `select id, organization_id, key, name, description, permissions, version,
+            (select count(*) from public.organization_member_roles mr
+              where mr.organization_id = $2 and mr.role_id = organization_roles.id) as member_count,
+            (select count(*) from public.organization_group_roles gr
+              where gr.organization_id = $2 and gr.role_id = organization_roles.id) as group_count
        from public.organization_roles
       where id = $1 and organization_id = $2
       limit 1`,
@@ -181,11 +187,22 @@ async function readCustomRole(
   return row;
 }
 
+function assertRoleVersion(row: RoleRow, expected: number | null | undefined): void {
+  if (expected === null || expected === undefined) return;
+  if (toCount(row.version) === expected) return;
+  throw createError
+    .conflict(
+      `Another administrator changed the ${row.name} role while you were editing. Reload and reapply your change.`,
+    )
+    .asUserSafe();
+}
+
 export async function updateCustomRole(
   db: DatabaseAdapter,
-  input: CustomRoleInput & { roleId: string },
+  input: CustomRoleInput & { roleId: string; expectedVersion?: number | null },
 ): Promise<OrganizationRoleSummary> {
   const existing = await readCustomRole(db, input.organizationId, input.roleId);
+  assertRoleVersion(existing, input.expectedVersion);
   const permissions = [...new Set(input.permissions)].sort();
   assertPermissionsWithinActor(
     [...new Set([...(existing.permissions ?? []), ...permissions])],
@@ -194,26 +211,94 @@ export async function updateCustomRole(
 
   const [row] = await db.query<RoleRow>(
     `update public.organization_roles
-        set name = $3, description = $4, permissions = $5::text[]
-      where id = $1 and organization_id = $2
-      returning id, organization_id, key, name, description, permissions,
+        set name = $3, description = $4, permissions = $5::text[], version = version + 1
+      where id = $1 and organization_id = $2 and version = $6
+      returning id, organization_id, key, name, description, permissions, version,
                 0 as member_count, 0 as group_count`,
-    [input.roleId, input.organizationId, input.name, input.description, permissions],
+    [
+      input.roleId,
+      input.organizationId,
+      input.name,
+      input.description,
+      permissions,
+      toCount(existing.version),
+    ],
   );
-  if (!row) throw createError.notFound('Custom role not found in this workspace.').asUserSafe();
+  if (!row) {
+    throw createError
+      .conflict(`The ${existing.name} role changed while this write was in flight.`)
+      .asUserSafe();
+  }
   return formatRole(row);
 }
 
 export async function deleteCustomRole(
   db: DatabaseAdapter,
-  input: { organizationId: string; roleId: string; actorPermissions: ReadonlySet<string> },
-): Promise<void> {
+  input: {
+    organizationId: string;
+    roleId: string;
+    actorPermissions: ReadonlySet<string>;
+    reassignToRoleId?: string | null;
+    expectedVersion?: number | null;
+  },
+): Promise<{ reassignedMembers: number; reassignedGroups: number }> {
   const existing = await readCustomRole(db, input.organizationId, input.roleId);
+  assertRoleVersion(existing, input.expectedVersion);
   assertPermissionsWithinActor(existing.permissions ?? [], input.actorPermissions);
-  await db.query(`delete from public.organization_roles where id = $1 and organization_id = $2`, [
-    input.roleId,
-    input.organizationId,
-  ]);
+
+  const held = toCount(existing.member_count) + toCount(existing.group_count);
+  const replacementId = input.reassignToRoleId ?? null;
+
+  if (held > 0 && replacementId === null) {
+    throw createError
+      .conflict(
+        `${existing.name} is still held by ${toCount(existing.member_count)} member(s) and ${toCount(existing.group_count)} group(s). Move them to another role, or remove the role from them, before deleting it.`,
+      )
+      .asUserSafe();
+  }
+  if (replacementId === input.roleId) {
+    throw createError.validation('A role cannot be reassigned to itself.').asUserSafe();
+  }
+
+  return db.transaction(async (tx) => {
+    let reassignedMembers = 0;
+    let reassignedGroups = 0;
+
+    if (replacementId !== null && held > 0) {
+      const [replacement] = await readGrantableRoles(tx, input.organizationId, [replacementId]);
+      if (!replacement) {
+        throw createError
+          .validation('That replacement role does not exist in this workspace.')
+          .asUserSafe();
+      }
+      assertPermissionsWithinActor(replacement.permissions ?? [], input.actorPermissions);
+
+      reassignedMembers = await tx.execute(
+        `insert into public.organization_member_roles
+           (organization_id, user_id, role_id, granted_by_user_id)
+         select organization_id, user_id, $3::uuid, granted_by_user_id
+           from public.organization_member_roles
+          where organization_id = $1 and role_id = $2
+         on conflict do nothing`,
+        [input.organizationId, input.roleId, replacementId],
+      );
+      reassignedGroups = await tx.execute(
+        `insert into public.organization_group_roles
+           (organization_id, group_id, role_id, granted_by_user_id)
+         select organization_id, group_id, $3::uuid, granted_by_user_id
+           from public.organization_group_roles
+          where organization_id = $1 and role_id = $2
+         on conflict do nothing`,
+        [input.organizationId, input.roleId, replacementId],
+      );
+    }
+
+    await tx.query(`delete from public.organization_roles where id = $1 and organization_id = $2`, [
+      input.roleId,
+      input.organizationId,
+    ]);
+    return { reassignedMembers, reassignedGroups };
+  });
 }
 
 async function readGrantableRoles(
@@ -223,7 +308,7 @@ async function readGrantableRoles(
 ): Promise<RoleRow[]> {
   if (roleIds.length === 0) return [];
   const rows = await db.query<RoleRow>(
-    `select id, organization_id, key, name, description, permissions,
+    `select id, organization_id, key, name, description, permissions, version,
             0 as member_count, 0 as group_count
        from public.organization_roles
       where id = any($1::uuid[])
@@ -338,6 +423,9 @@ export interface DirectoryGroupRoleSummary {
   memberCount: number;
   roleIds: string[];
   managerUserIds: string[];
+  // A directory group's membership and name are replaced by the next sync, so
+  // only the role mapping below is editable in the console.
+  source: { kind: 'directory'; connectionName: string | null };
 }
 
 export async function listDirectoryGroupsWithRoles(
@@ -351,8 +439,11 @@ export async function listDirectoryGroupsWithRoles(
     member_count: number | string;
     role_ids: string[] | null;
     manager_user_ids: string[] | null;
+    connection_name: string | null;
   }>(
     `select g.id, g.display_name,
+            (select c.display_name from public.directory_sync_connections c
+              where c.id = g.connection_id) as connection_name,
             (select count(*) from public.scim_group_members m
               where m.group_id = g.id and m.organization_id = g.organization_id) as member_count,
             array(select gr.role_id::text from public.organization_group_roles gr
@@ -377,6 +468,7 @@ export async function listDirectoryGroupsWithRoles(
     memberCount: toCount(row.member_count),
     roleIds: row.role_ids ?? [],
     managerUserIds: row.manager_user_ids ?? [],
+    source: { kind: 'directory', connectionName: row.connection_name },
   }));
 }
 

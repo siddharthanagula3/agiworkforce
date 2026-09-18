@@ -22,6 +22,7 @@ export interface WorkspaceRole {
   permissions: OrganizationPermission[];
   memberCount: number;
   groupCount: number;
+  version: number;
 }
 
 export interface WorkspaceRolesResult {
@@ -43,6 +44,7 @@ export interface WorkspaceDirectoryGroup {
   memberCount: number;
   roleIds: string[];
   managerUserIds: string[];
+  source?: { kind: 'directory'; connectionName: string | null };
 }
 
 export interface WorkspaceGroupsResult {
@@ -55,6 +57,7 @@ export interface CustomRoleDraft {
   name: string;
   description: string | null;
   permissions: OrganizationPermission[];
+  version?: number;
 }
 
 export const WORKSPACE_ROLES_QUERY_KEY = ['workspace', 'roles'] as const;
@@ -149,10 +152,22 @@ export function useUpdateWorkspaceRole() {
 
 export function useDeleteWorkspaceRole() {
   return useInvalidatingMutation(
-    (roleId: string) =>
-      request<{ success: true }>(`/api/settings/organization/roles/${roleId}`, {
-        method: 'DELETE',
-      }),
+    ({
+      roleId,
+      version,
+      reassignToRoleId,
+    }: {
+      roleId: string;
+      version: number;
+      reassignToRoleId?: string;
+    }) => {
+      const params = new URLSearchParams({ version: String(version) });
+      if (reassignToRoleId) params.set('reassignToRoleId', reassignToRoleId);
+      return request<{ success: true }>(
+        `/api/settings/organization/roles/${roleId}?${params.toString()}`,
+        { method: 'DELETE' },
+      );
+    },
     [WORKSPACE_ROLES_QUERY_KEY, WORKSPACE_GROUPS_QUERY_KEY, WORKSPACE_OVERRIDES_QUERY_KEY],
   );
 }

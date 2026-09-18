@@ -10,6 +10,12 @@ import { createError } from '@/lib/errors';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { deleteCustomRole, updateCustomRole } from '@/lib/services/organization-role-service';
+import {
+  assertWorkspaceRevisionUnchanged,
+  readExpectedWorkspaceRevision,
+  readWorkspaceRevision,
+  withWorkspaceRevisionHeaders,
+} from '@/lib/server/workspace-revision';
 import { requireWorkspaceConsolePermission } from '../../workspace-access';
 import { CustomRoleSchema } from '../role-schema';
 
@@ -32,6 +38,7 @@ async function handleUpdate(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
+  const expectedRevision = readExpectedWorkspaceRevision(request);
   const roleId = await parseRoleId(context);
   const { db, userId, organizationId, access } = await requireWorkspaceConsolePermission(
     request,
@@ -40,12 +47,15 @@ async function handleUpdate(request: NextRequest, context: RouteContext) {
   );
   const input = await readValidatedJsonBody(request, CustomRoleSchema, 'Invalid role');
 
+  await assertWorkspaceRevisionUnchanged(db, organizationId, expectedRevision);
+
   const role = await updateCustomRole(db, {
     roleId,
     organizationId,
     name: input.name,
     description: input.description,
     permissions: input.permissions,
+    expectedVersion: input.version,
     actorUserId: userId,
     actorPermissions: access.permissions,
   });
@@ -66,7 +76,8 @@ async function handleUpdate(request: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({ role });
+  const revision = await readWorkspaceRevision(db, organizationId);
+  return withWorkspaceRevisionHeaders(NextResponse.json({ role, revision }), revision);
 }
 
 async function handleDelete(request: NextRequest, context: RouteContext) {
@@ -76,6 +87,7 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
+  const expectedRevision = readExpectedWorkspaceRevision(request);
   const roleId = await parseRoleId(context);
   const { db, userId, organizationId, access } = await requireWorkspaceConsolePermission(
     request,
@@ -83,10 +95,24 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
     'Your workspace role does not allow managing roles.',
   );
 
-  await deleteCustomRole(db, {
+  await assertWorkspaceRevisionUnchanged(db, organizationId, expectedRevision);
+
+  const params = new URL(request.url).searchParams;
+  const reassignToRoleId = params.get('reassignToRoleId');
+  if (reassignToRoleId !== null && !UUID_RE.test(reassignToRoleId)) {
+    throw createError.validation('reassignToRoleId must be a uuid');
+  }
+  const rawVersion = params.get('version');
+  if (rawVersion !== null && !/^\d+$/u.test(rawVersion)) {
+    throw createError.validation('version must be a non-negative integer');
+  }
+
+  const reassigned = await deleteCustomRole(db, {
     organizationId,
     roleId,
     actorPermissions: access.permissions,
+    reassignToRoleId,
+    expectedVersion: rawVersion === null ? null : Number.parseInt(rawVersion, 10),
   });
 
   await recordAuditEvent({
@@ -100,10 +126,11 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
       resourceId: roleId,
       status: 'deleted',
       role: access.role,
+      ...(reassignToRoleId ? { reassignedToRoleId: reassignToRoleId } : {}),
     },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, ...reassigned });
 }
 
 export const PATCH = withErrorHandler(handleUpdate);

@@ -74,6 +74,19 @@ export function WorkspaceIdentityPanels() {
       <DirectorySyncAdminPage organizationId={organization.id} />
       <div style={noticeStyle}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
+          What deprovisioning does
+        </p>
+        <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+          Deactivating or deleting a user at your identity provider removes their membership and, in
+          the same request, revokes the device tokens and workspace API keys this workspace issued
+          them, plus their browser sessions if they were working in this workspace. Chat, Work and
+          Code stop here on Desktop, Mobile, CLI, VS Code and Chrome. Their personal account and any
+          other workspace they belong to are untouched, and anything that could not be reached is
+          recorded on the directory log above.
+        </p>
+      </div>
+      <div style={noticeStyle}>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           Not yet available
         </p>
         <ul
@@ -84,11 +97,6 @@ export function WorkspaceIdentityPanels() {
             <strong style={{ color: 'var(--text-2)' }}>Requiring SSO.</strong> An active connection
             adds an authentication route; it does not remove the others. A member who has a password
             can still use it.
-          </li>
-          <li>
-            <strong style={{ color: 'var(--text-2)' }}>Session revocation on deprovision.</strong>{' '}
-            Deactivating a user at your IdP removes their membership, but does not yet terminate
-            live sessions or device tokens on Desktop, Mobile, CLI, VS Code, or Chrome.
           </li>
           <li>
             <strong style={{ color: 'var(--text-2)' }}>Group-scoped entitlements.</strong> Directory
