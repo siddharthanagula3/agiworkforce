@@ -124,6 +124,11 @@ function draftFor(conversationId: string | null) {
 }
 
 beforeEach(() => {
+  // These cover what one browsing session keeps in memory. A draft that
+  // outlives the document is composer-draft-storage's, and carrying one test's
+  // into the next would be a reload none of them performed.
+  window.localStorage.clear();
+  window.sessionStorage.clear();
   useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
   useChatStore.setState({
     draftsByConversation: {},

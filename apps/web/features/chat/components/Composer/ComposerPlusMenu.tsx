@@ -58,6 +58,12 @@ import {
   type InstalledPlugin,
 } from '@features/chat/services/installed-plugins';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
+import {
+  TEMPORARY_CHAT_END_LABEL,
+  TEMPORARY_CHAT_LABEL,
+  TEMPORARY_CHAT_PRIVACY_EXPLANATION,
+  TEMPORARY_CHAT_RETENTION_NOTE,
+} from '@/lib/temporary-chat-policy';
 
 export const COMPOSER_PALETTE_SEARCH_TESTID = 'composer-palette-search';
 
@@ -79,12 +85,8 @@ const ROW_LABEL_PLUGINS = 'Plugins';
 const ROW_LABEL_RESEARCH = 'Deep Research';
 const ROW_LABEL_OFFICE = 'Create Office files';
 const ROW_LABEL_MEMORY = 'Memory';
-const ROW_LABEL_TEMPORARY = 'Temporary chat';
-const ROW_LABEL_TEMPORARY_SAVING = 'Temporary chat · saving…';
-export const TEMPORARY_CHAT_RETENTION_NOTE =
-  "Won't be saved to your history and skips memory. Files you attach stay out of your " +
-  'Library, and a connector asks before every call even where you saved Always allow. ' +
-  'A connector call still reaches that service, which keeps its own record.';
+const ROW_LABEL_TEMPORARY = TEMPORARY_CHAT_LABEL;
+const ROW_LABEL_TEMPORARY_SAVING = `${TEMPORARY_CHAT_LABEL} · saving…`;
 const ROW_LABEL_MANAGE_CONNECTORS = 'Manage in Settings';
 const ROW_LABEL_BROWSE_CONNECTORS = 'Browse connectors';
 const ROW_LABEL_ADD_CUSTOM_CONNECTOR = 'Add custom connector';
@@ -127,6 +129,7 @@ const BADGE_BASE_CLASS =
 const BADGE_MUTED_CLASS = 'bg-muted text-muted-foreground';
 const BADGE_UPGRADE_CLASS = 'bg-primary/10 text-primary';
 const DIVIDER_CLASS = 'my-1 border-t border-border/30';
+const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 pl-10 text-[12px] text-muted-foreground';
 const SECTION_HEADING_CLASS =
   'px-3 pb-1 pt-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =
@@ -326,6 +329,59 @@ function MenuToggleRow({
 }
 
 /**
+ * The toggle, what it costs the user, and the way out, together.
+ *
+ * The retention note is three sentences and only ever reached a pointer, as a
+ * tooltip the row renders when it is disabled. The clause a user needs before
+ * they type is on screen instead, and ending the chat is a named action:
+ * a temporary chat keeps no messages, so walking away from it and closing it
+ * are the same move, and only one of them says so first.
+ */
+function TemporaryChatRows({
+  temporaryChatSaving,
+  isIncognito,
+  canToggleIncognito,
+  onToggleIncognito,
+  canEndTemporaryChat,
+  onEndTemporaryChat,
+  role,
+}: Pick<
+  ComposerPlusMenuProps,
+  | 'temporaryChatSaving'
+  | 'isIncognito'
+  | 'canToggleIncognito'
+  | 'onToggleIncognito'
+  | 'canEndTemporaryChat'
+  | 'onEndTemporaryChat'
+> & { role?: string }) {
+  return (
+    <>
+      <MenuToggleRow
+        icon={EyeOff}
+        role={role}
+        label={temporaryChatSaving ? ROW_LABEL_TEMPORARY_SAVING : ROW_LABEL_TEMPORARY}
+        checked={isIncognito}
+        onToggle={onToggleIncognito}
+        disabled={!canToggleIncognito}
+        title={TEMPORARY_CHAT_RETENTION_NOTE}
+      />
+      <p className={TEMPORARY_EXPLANATION_CLASS}>{TEMPORARY_CHAT_PRIVACY_EXPLANATION}</p>
+      {canEndTemporaryChat && (
+        <button
+          type="button"
+          role={role}
+          onClick={onEndTemporaryChat}
+          className={cn(ROW_CLASS, ROW_HOVER_CLASS, 'text-muted-foreground')}
+        >
+          <X className={GLYPH_CLASS} />
+          <span className="flex-1 text-left">{TEMPORARY_CHAT_END_LABEL}</span>
+        </button>
+      )}
+    </>
+  );
+}
+
+/**
  * One connector row inside the Connectors submenu. `role="menuitemcheckbox"`
  * is the correct ARIA role for a toggleable item in a menu (as opposed to
  * `MenuToggleRow`'s plain `aria-pressed` button, used for composer-wide
@@ -501,6 +557,8 @@ export interface ComposerPlusMenuProps {
   isIncognito: boolean;
   canToggleIncognito: boolean;
   onToggleIncognito: () => void;
+  canEndTemporaryChat: boolean;
+  onEndTemporaryChat: () => void;
 
   skills: SkillItem[];
   onSelectSkill: (skillName: string) => void;
@@ -1029,16 +1087,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         />
       )}
 
-      {props.showTemporaryChat && (
-        <MenuToggleRow
-          icon={EyeOff}
-          label={props.temporaryChatSaving ? ROW_LABEL_TEMPORARY_SAVING : ROW_LABEL_TEMPORARY}
-          checked={props.isIncognito}
-          onToggle={props.onToggleIncognito}
-          disabled={!props.canToggleIncognito}
-          title={TEMPORARY_CHAT_RETENTION_NOTE}
-        />
-      )}
+      {props.showTemporaryChat && <TemporaryChatRows {...props} />}
 
       {/* Last in the list and sticky to the panel's own scrollport, the same
       treatment the AGI Work palette uses for its search field, so the send
@@ -1203,17 +1252,8 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         disabled={props.scopeDisabled}
       />
     ),
-    props.showTemporaryChat && matches(ROW_LABEL_TEMPORARY) && (
-      <MenuToggleRow
-        key="temporary"
-        role="menuitem"
-        icon={EyeOff}
-        label={props.temporaryChatSaving ? ROW_LABEL_TEMPORARY_SAVING : ROW_LABEL_TEMPORARY}
-        checked={props.isIncognito}
-        onToggle={props.onToggleIncognito}
-        disabled={!props.canToggleIncognito}
-        title={TEMPORARY_CHAT_RETENTION_NOTE}
-      />
+    props.showTemporaryChat && matches(ROW_LABEL_TEMPORARY, TEMPORARY_CHAT_END_LABEL) && (
+      <TemporaryChatRows key="temporary" {...props} role="menuitem" />
     ),
   ].filter(Boolean);
 

@@ -90,6 +90,8 @@ import {
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { containsSecrets } from '@/lib/security/secrets-audit';
+import { TEMPORARY_CHAT_END_CONFIRMATION } from '@/lib/temporary-chat-policy';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import {
@@ -124,6 +126,12 @@ import {
   parkPendingDraft,
   restorablePendingDraft,
 } from '@features/chat/lib/pending-composer-draft';
+import {
+  claimReloadedPendingDraft,
+  clearPersistedDraft,
+  readPersistedDraft,
+  writePersistedDraft,
+} from './composer-draft-storage';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import {
@@ -517,6 +525,8 @@ const USAGE_RESET_TICK_MS = 60_000;
 const RESTORED_DRAFT_NOTICE = "Couldn't send. Restored here so you can try again.";
 const RESTORED_BLOCKED_SEND_NOTICE =
   'Your previous message was still starting, so this one is back here. Send it again.';
+const DRAFT_NOT_SAVED_NOTICE =
+  "This browser's storage is full, so this draft will not come back if you reload. Copy it somewhere safe.";
 
 /**
  * Distinct from a plain `false`: an earlier send (not this composer's own)
@@ -1236,6 +1246,9 @@ const ChatComposerNewComponent = ({
     !isTurnActive &&
     !disabled &&
     !isSavingIncognito;
+  const deleteConversationFromStore = useChatStore((s) => s.deleteConversation);
+  const { confirm: confirmEndTemporaryChat, dialog: endTemporaryChatDialog } = useConfirmAction();
+  const canEndTemporaryChat = isIncognito && Boolean(activeConversationId) && !isTurnActive;
 
   // Thinking / effort store
   // Styles and response length live on the account, not just in localStorage,
@@ -1469,6 +1482,7 @@ const ChatComposerNewComponent = ({
     // AUDIT-FIX STR-23: a sent/cleared composer must not leave a stale parked
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
+    clearPersistedDraft(conversationId ?? null);
     if (!conversationId) clearPendingDraft();
     // The blocked send this composer was holding has now left, by a send or by
     // an explicit clear. Releasing it by fingerprint is what makes the handback
@@ -1498,6 +1512,32 @@ const ChatComposerNewComponent = ({
       textareaRef.current.style.height = COMPOSER_AUTO_HEIGHT;
     }
   }, [clearAttachments, clearDraftContent, clearParkedSend, conversationId, setComposerToggles]);
+
+  /**
+   * A temporary chat has no history row to come back to, so walking away from
+   * it and destroying it are the same act. This is the one that says so first
+   * and then finishes the job: the transcript, its drafts and its send options
+   * leave the store with it, rather than sitting in the tab until a reload.
+   */
+  const handleEndTemporaryChat = useCallback(() => {
+    confirmEndTemporaryChat({
+      ...TEMPORARY_CHAT_END_CONFIRMATION,
+      onConfirm: () => {
+        const ended = activeConversationId;
+        clearComposerState();
+        setPendingTemporaryChat(false);
+        if (ended) deleteConversationFromStore(ended);
+        router.push('/chat');
+      },
+    });
+  }, [
+    activeConversationId,
+    clearComposerState,
+    confirmEndTemporaryChat,
+    deleteConversationFromStore,
+    router,
+    setPendingTemporaryChat,
+  ]);
 
   useEffect(() => {
     if (!isFreeTrial || !researchEnabled) return;
@@ -2686,6 +2726,42 @@ const ChatComposerNewComponent = ({
   }, [message, attachments.length, handleSubmit]);
 
   /**
+   * A refresh and a crash both end the document before any cleanup runs, so
+   * the draft has to already be on disk when they happen.
+   *
+   * Two commits are not safe to write in, and both are guarded rather than
+   * hoped away. The first is the mount, whose empty `message` would erase the
+   * draft the effect below is about to restore. The second is a conversation
+   * switch, where `message` is still the outgoing text while `conversationId`
+   * is already the incoming chat: the owner ref, which only the effect below
+   * moves, says which one the text on screen belongs to, and the switch's own
+   * text lands on the commit after.
+   */
+  const persistedDraftOwnerRef = useRef<string | null>(conversationId ?? null);
+  const persistedDraftHydratedRef = useRef(false);
+  const claimedReloadedDraftRef = useRef('');
+  useEffect(() => {
+    if (!persistedDraftHydratedRef.current) {
+      persistedDraftHydratedRef.current = true;
+      return;
+    }
+    // Mid-switch: the effect below has not moved the owner yet, so the text on
+    // screen and the temporary flag belong to two different conversations.
+    // Neither is safe to act on until the next commit, which this one gets.
+    if (persistedDraftOwnerRef.current !== (conversationId ?? null)) return;
+    // A temporary chat promises to leave nothing behind, and an unsent draft
+    // outliving the tab is something behind. Arming it mid-sentence clears
+    // what was already written.
+    if (isIncognito) {
+      clearPersistedDraft(persistedDraftOwnerRef.current);
+      return;
+    }
+    if (!writePersistedDraft(persistedDraftOwnerRef.current, message) && message.trim()) {
+      setLocalNotice(DRAFT_NOT_SAVED_NOTICE);
+    }
+  }, [conversationId, isIncognito, message]);
+
+  /**
    * AUDIT-FIX STR-23: the composer input is per-conversation. Park the outgoing
    * conversation's half-typed text under its own id and restore the incoming
    * one's, so a private draft can never follow the user into another chat.
@@ -2695,15 +2771,28 @@ const ChatComposerNewComponent = ({
    * empty-state and in-conversation composers are separate positions in the
    * page's tree, so opening a new chat unmounts one and mounts the other, and
    * an effect body only ever runs on the instance that stays. The mount then
-   * reads the draft back. Session-only by design; the store does not persist
-   * `draftsByConversation`, so a reload still starts on an empty composer.
+   * reads the draft back. The store itself is memory-only, so a refresh or a
+   * crash falls through to `composer-draft-storage`, which was written as the
+   * user typed rather than on the way out.
    */
   useEffect(() => {
     const parked = useChatStore.getState().getDraftContent(conversationId);
     // A saved conversation owns its draft outright. The unsaved surface does
     // not. Its slot is shared by every new chat, so it is only the same draft
-    // when the user stepped back to it. See pending-composer-draft.
-    writeComposerMessage(conversationId ? parked : restorablePendingDraft(parked));
+    // when the user stepped back to it, or when the document itself was
+    // reloaded under them. See pending-composer-draft.
+    persistedDraftOwnerRef.current = conversationId ?? null;
+    if (!conversationId && !claimedReloadedDraftRef.current) {
+      // Re-running this effect on the same composer is the development
+      // double-mount, not a second arrival, so the claim it already spent is
+      // still this composer's to restore.
+      claimedReloadedDraftRef.current = claimReloadedPendingDraft();
+    }
+    writeComposerMessage(
+      conversationId
+        ? parked || readPersistedDraft(conversationId)
+        : restorablePendingDraft(parked) || claimedReloadedDraftRef.current,
+    );
     return () => {
       const outgoing = messageRef.current;
       if (outgoing.trim()) {
@@ -3097,6 +3186,8 @@ const ChatComposerNewComponent = ({
     <div className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       <DragDropOverlay onDrop={handleFileDrop} />
       {leaveLocalModelDialog}
+
+      {endTemporaryChatDialog}
 
       {localNotice && (
         <div
@@ -3884,6 +3975,11 @@ const ChatComposerNewComponent = ({
                     canToggleIncognito={canToggleIncognito}
                     onToggleIncognito={() => {
                       void handleIncognitoToggle();
+                      closeMenu();
+                    }}
+                    canEndTemporaryChat={canEndTemporaryChat}
+                    onEndTemporaryChat={() => {
+                      handleEndTemporaryChat();
                       closeMenu();
                     }}
                     skills={availableSkills}

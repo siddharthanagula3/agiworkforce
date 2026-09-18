@@ -95,6 +95,8 @@ function baseProps(): Omit<ComposerPlusMenuProps, 'anchorRef' | 'contentRef'> {
     isIncognito: false,
     canToggleIncognito: true,
     onToggleIncognito: vi.fn(),
+    canEndTemporaryChat: false,
+    onEndTemporaryChat: vi.fn(),
     skills: [
       { name: 'brand-voice', description: 'Rewrite copy in the house voice', source: 'personal' },
       { name: 'sql-review', description: 'Review a query plan', source: 'personal' },
