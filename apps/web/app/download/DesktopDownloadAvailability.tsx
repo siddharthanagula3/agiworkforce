@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Eyebrow, Prose, Section } from '@/features/marketing/components/system';
+import { detectMacArchitecture, type DetectedArchitecture } from './detect-architecture';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
@@ -13,6 +14,36 @@ type Availability =
   | { state: 'available'; version: string; architectures: Architectures }
   | { state: 'empty' }
   | { state: 'error' };
+
+interface InstallerChecksum {
+  name: string;
+  architecture: 'arm64' | 'x64' | null;
+  sha256: string;
+}
+
+const ARCHITECTURE_LABELS: Record<'arm64' | 'x64', string> = {
+  arm64: 'Apple silicon',
+  x64: 'Intel Mac',
+};
+
+const INSTALL_STEPS: readonly string[] = [
+  'Download the installer for your Mac. The buttons above appear only for an architecture this release actually publishes.',
+  'Check the file against the published SHA-256 below with shasum -a 256, and compare the two strings before you open anything.',
+  'Open the .dmg and drag AGI Cloud into your Applications folder. Installing anywhere else leaves updates unable to find the app.',
+  'Launch it from Applications. macOS verifies the notarization ticket on first launch, so no Gatekeeper override is needed.',
+  'Sign in with the same account you use on the web. Nothing installs or updates on its own.',
+];
+
+const UNAVAILABLE_PLATFORMS: readonly { platform: string; detail: string }[] = [
+  {
+    platform: 'Windows',
+    detail: 'Windows installer not published. No release date is available for it.',
+  },
+  {
+    platform: 'Linux',
+    detail: 'Linux installer not published. No release date is available for it.',
+  },
+];
 
 function isDesktopManifest(
   value: unknown,
@@ -37,6 +68,28 @@ function isDesktopManifest(
   );
 }
 
+function parseChecksums(value: unknown): InstallerChecksum[] {
+  if (!value || typeof value !== 'object') return [];
+  const installers = (value as Record<string, unknown>)['installers'];
+  if (!Array.isArray(installers)) return [];
+  const parsed: InstallerChecksum[] = [];
+  for (const entry of installers) {
+    if (!entry || typeof entry !== 'object') continue;
+    const record = entry as Record<string, unknown>;
+    const name = record['name'];
+    const sha256 = record['sha256'];
+    const architecture = record['architecture'];
+    if (typeof name !== 'string' || typeof sha256 !== 'string') continue;
+    if (!/^[0-9a-f]{64}$/.test(sha256)) continue;
+    parsed.push({
+      name,
+      architecture: architecture === 'arm64' || architecture === 'x64' ? architecture : null,
+      sha256,
+    });
+  }
+  return parsed;
+}
+
 function Alternatives() {
   return (
     <p className="agi-ds-availability-links">
@@ -50,8 +103,31 @@ function Alternatives() {
   );
 }
 
+function DownloadButton({
+  architecture,
+  detected,
+}: {
+  architecture: 'arm64' | 'x64';
+  detected: DetectedArchitecture;
+}) {
+  const recommended = detected === architecture;
+  return (
+    <a
+      href={`/api/download?platform=mac&arch=${architecture}`}
+      className="agi-ds-btn"
+      data-variant={recommended ? 'primary' : 'secondary'}
+      aria-describedby={recommended ? 'desktop-arch-detected' : undefined}
+    >
+      Download for {ARCHITECTURE_LABELS[architecture]}
+      {recommended ? ' (this Mac)' : ''}
+    </a>
+  );
+}
+
 export function DesktopDownloadAvailability() {
   const [availability, setAvailability] = useState<Availability>({ state: 'loading' });
+  const [checksums, setChecksums] = useState<InstallerChecksum[]>([]);
+  const [detected, setDetected] = useState<DetectedArchitecture>('unknown');
   const requestId = useRef(0);
 
   const checkRelease = useCallback(async (signal?: AbortSignal) => {
@@ -88,11 +164,43 @@ export function DesktopDownloadAvailability() {
     }
   }, []);
 
+  const checkChecksums = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch('/api/download/checksums', { cache: 'no-store', signal });
+      setChecksums(response.ok ? parseChecksums(await response.json()) : []);
+    } catch {
+      setChecksums([]);
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     void checkRelease(controller.signal);
+    void checkChecksums(controller.signal);
     return () => controller.abort();
-  }, [checkRelease]);
+  }, [checkRelease, checkChecksums]);
+
+  useEffect(() => {
+    let live = true;
+    void detectMacArchitecture(typeof navigator === 'undefined' ? undefined : navigator, () =>
+      typeof document === 'undefined' ? null : document.createElement('canvas'),
+    ).then((architecture) => {
+      if (live) setDetected(architecture);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const offered =
+    availability.state === 'available'
+      ? (['arm64', 'x64'] as const).filter(
+          (architecture) => availability.architectures[architecture],
+        )
+      : [];
+  const shownChecksums = checksums.filter(
+    (checksum) => checksum.architecture === null || offered.includes(checksum.architecture),
+  );
 
   return (
     <Section id="desktop-downloads" labelledBy="desktop-downloads-title" rule>
@@ -103,7 +211,8 @@ export function DesktopDownloadAvailability() {
       <Prose>
         AGI Desktop ships for macOS as one notarized installer per architecture. A download control
         appears here only once the release API confirms a signed build for that architecture.
-        Windows installers have not been published, and no release date is available for them.
+        Windows and Linux installers have not been published, and no release date is available for
+        them.
       </Prose>
 
       <ul className="agi-ds-ledger agi-ds-availability" aria-label="Desktop platforms">
@@ -126,24 +235,18 @@ export function DesktopDownloadAvailability() {
                   Signed and notarized · version {availability.version}
                 </span>
                 <span className="agi-ds-btn-row">
-                  {availability.architectures.arm64 && (
-                    <a
-                      href="/api/download?platform=mac&arch=arm64"
-                      className="agi-ds-btn"
-                      data-variant="primary"
-                    >
-                      Download for Apple silicon
-                    </a>
-                  )}
-                  {availability.architectures.x64 && (
-                    <a
-                      href="/api/download?platform=mac&arch=x64"
-                      className="agi-ds-btn"
-                      data-variant="secondary"
-                    >
-                      Download for Intel Mac
-                    </a>
-                  )}
+                  {offered.map((architecture) => (
+                    <DownloadButton
+                      key={architecture}
+                      architecture={architecture}
+                      detected={detected}
+                    />
+                  ))}
+                </span>
+                <span className="agi-ds-muted" id="desktop-arch-detected">
+                  {detected === 'unknown'
+                    ? 'We could not read this machine’s processor from the browser, so both installers are offered. Apple menu, then About This Mac, names yours.'
+                    : `This browser reports ${ARCHITECTURE_LABELS[detected]}. The other installer stays available if that is wrong.`}
                 </span>
               </span>
             )}
@@ -175,21 +278,57 @@ export function DesktopDownloadAvailability() {
           </span>
         </li>
 
-        <li className="agi-ds-ledger-row">
-          <span className="agi-ds-ledger-label">Windows</span>
-          <span className="agi-ds-ledger-value">
-            <span
-              role="status"
-              aria-label="Windows downloads unavailable"
-              aria-live="polite"
-              className="agi-ds-availability-state"
-            >
-              Windows installer not published.
-              <Alternatives />
+        {UNAVAILABLE_PLATFORMS.map((row) => (
+          <li className="agi-ds-ledger-row" key={row.platform}>
+            <span className="agi-ds-ledger-label">{row.platform}</span>
+            <span className="agi-ds-ledger-value">
+              <span
+                role="status"
+                aria-label={`${row.platform} downloads unavailable`}
+                aria-live="polite"
+                className="agi-ds-availability-state"
+              >
+                {row.detail}
+                <Alternatives />
+              </span>
             </span>
-          </span>
-        </li>
+          </li>
+        ))}
       </ul>
+
+      {shownChecksums.length > 0 && (
+        <div style={{ marginTop: '2rem' }}>
+          <Eyebrow>Published checksums</Eyebrow>
+          <Prose size="sm">
+            Run <code>shasum -a 256</code> against the file you downloaded and compare it with the
+            SHA-256 the release run published for it.
+          </Prose>
+          <ul className="agi-ds-ledger" aria-label="Installer checksums">
+            {shownChecksums.map((checksum) => (
+              <li className="agi-ds-ledger-row" key={checksum.name}>
+                <span className="agi-ds-ledger-label">{checksum.name}</span>
+                <span className="agi-ds-ledger-value">
+                  <code>{checksum.sha256}</code>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {availability.state === 'available' && (
+        <div style={{ marginTop: '2rem' }}>
+          <Eyebrow>Install it</Eyebrow>
+          <ol
+            className="mt-4 list-decimal space-y-2 pl-5 text-sm"
+            aria-label="Install AGI Desktop on macOS"
+          >
+            {INSTALL_STEPS.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      )}
     </Section>
   );
 }

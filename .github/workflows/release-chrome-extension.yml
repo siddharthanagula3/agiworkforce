@@ -115,6 +115,19 @@ jobs:
           pnpm --filter @agiworkforce/extension check:no-hex
           pnpm --filter @agiworkforce/extension check:no-cloud-ipc
 
+      # The release gates themselves are tested first: a guard whose fixtures no
+      # longer fail it is a step that passes without checking anything.
+      - name: Self-test the release guards
+        run: node --test scripts/lib/rollout/release-guards.test.mjs
+
+      - name: Refuse a permission the published extension does not already hold
+        run: node scripts/release/check-chrome-permissions.mjs
+
+      - name: Require the service worker to survive a restart
+        run: >
+          pnpm --filter @agiworkforce/extension exec vitest run
+          __tests__/service-worker-lifecycle.test.ts
+
       - name: Build and verify the store ZIP
         env:
           ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
@@ -125,6 +138,18 @@ jobs:
           cp apps/extension/extension.zip "dist/chrome/${ARCHIVE_NAME}"
           node apps/extension/scripts/verify-package.mjs "dist/chrome/${ARCHIVE_NAME}"
           sha256sum "dist/chrome/${ARCHIVE_NAME}" > "dist/chrome/${ARCHIVE_NAME}.sha256"
+
+      - name: Scan the packaged extension for secrets and dev endpoints
+        env:
+          ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
+        run: |
+          set -euo pipefail
+          rm -rf dist/chrome-unpacked
+          unzip -q "dist/chrome/${ARCHIVE_NAME}" -d dist/chrome-unpacked
+          node scripts/release/check-chrome-permissions.mjs \
+            dist/chrome-unpacked/manifest.json --schema-only
+          node scripts/release/scan-release-artifact.mjs dist/chrome-unpacked
+          rm -rf dist/chrome-unpacked
 
       # errorReporting.ts tags every event with the manifest version, so that
       # bare version is the release name a crash arrives under and the one the
