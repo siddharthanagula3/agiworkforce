@@ -25,16 +25,7 @@ const RETIRED_TIER_NAMES = ['hobby', 'pro_plus'] as const;
  * Files allowed to name a retired tier, each because it maps that stored value
  * onto a canonical one before anything renders it.
  */
-const LEGACY_NORMALISERS: ReadonlyArray<{ file: string; why: string }> = [
-  {
-    file: 'features/chat/components/InlinePaywallCard.tsx',
-    why: 'maps a stored hobby value to basic before rendering the card',
-  },
-  {
-    file: 'features/billing/hooks/use-billing-queries.ts',
-    why: 'maps stored hobby and pro_plus values onto the catalogue names',
-  },
-];
+const LEGACY_NORMALISERS: ReadonlyArray<{ file: string; why: string }> = [];
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

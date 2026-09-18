@@ -43,8 +43,8 @@ import {
 import {
   getBillingPlanPricing,
   getPlanPriceUsd,
-  isBillingPlanTier,
   normalizePaywallFeature,
+  normalizeBillingPlanTier,
   normalizeUIPlanTier,
   paywallLimitHeadline,
   paywallUpgradeLabel,
@@ -76,11 +76,7 @@ export type { PaywallFeature };
 export type UserTier = BillingPlanTier;
 export type RequiredTier = Exclude<BillingPlanTier, 'local-only' | 'byok' | 'free'>;
 export type PaywallRecoveryAction =
-  | 'upgrade'
-  | 'subscribe'
-  | 'manage_billing'
-  | 'view_usage'
-  | 'top_up';
+  'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage' | 'top_up';
 
 /**
  * The free lane ran out of shared capacity, which is not a plan limit.
@@ -135,11 +131,9 @@ const EMPTY_REASON = '';
 // ---------------------------------------------------------------------------
 
 export function normalizeRequiredTier(value: string): RequiredTier {
-  if (value === 'hobby') return 'basic';
-  if (!isBillingPlanTier(value) || value === 'local-only' || value === 'byok' || value === 'free') {
-    return 'basic';
-  }
-  return value;
+  const tier = normalizeBillingPlanTier(value);
+  if (tier === 'local-only' || tier === 'byok' || tier === 'free') return 'basic';
+  return tier;
 }
 
 /**
