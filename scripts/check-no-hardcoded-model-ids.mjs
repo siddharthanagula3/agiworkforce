@@ -85,6 +85,7 @@ export const MODEL_ID_OWNER_PATHS = Object.freeze([
 // measurement is keyed by the model and route it measured, like probes.json.
 export const MODEL_ID_OWNER_PATTERNS = Object.freeze([
   /^tools\/evals\/measurements\/(?:baselines|runs|recordings)\/[A-Za-z0-9._-]+\.json$/u,
+  /^tools\/evals\/measurements\/ledger\.json$/u,
 ]);
 
 const OWNER_PATH_SET = new Set(MODEL_ID_OWNER_PATHS);
