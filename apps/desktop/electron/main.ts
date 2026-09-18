@@ -90,6 +90,16 @@ import { createTray, destroyTray } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
 import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
 import { pageBackgroundColor, titleBarChrome } from './windowChrome';
+import {
+  readWindowState,
+  rememberFrame,
+  restoreFrame,
+  routeFromUrl,
+  shouldFallBackToRoot,
+  writeWindowState,
+  type ShellWindowState,
+  type WindowFrameState,
+} from './windowState';
 import { handleWorkspaceDrop } from './workspaceDrop';
 import {
   isTrustedCloudRendererOrigin,
@@ -444,6 +454,7 @@ function registerIpcHandlers(): void {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     if (!isAppearance(theme)) return;
     nativeTheme.themeSource = theme;
+    paintWindowsForTheme();
     if (getPreferences().appearance !== theme) saveSettings({ appearance: theme });
   });
 
@@ -590,22 +601,65 @@ function offlineScreenUrl(targetUrl: string, detail: string): string {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
-function rememberedFrame(): WindowFrame | null {
-  const frame = getPreferences().windowFrame;
-  if (!frame) return null;
-  const workAreas = screen.getAllDisplays().map((display) => display.workArea);
-  return frameIsOnScreen(frame, workAreas) ? frame : null;
+/**
+ * Repaints every open window for the current appearance.
+ *
+ * `nativeTheme.themeSource` already reaches each renderer's
+ * `prefers-color-scheme` live, but the window's own background is a main-process
+ * property: without this the Quick Ask panel and any second window keep the
+ * ground colour they were created with until they are closed and reopened.
+ */
+function paintWindowsForTheme(): void {
+  const background = pageBackgroundColor(nativeTheme.shouldUseDarkColors);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.setBackgroundColor(background);
+  }
+}
+
+function windowStatePath(): string {
+  return path.join(app.getPath('userData'), 'window-state.json');
 }
 
 /**
- * Follows the window's frame so a launch can put it back where it was.
+ * Reads the shell's window state, seeding it once from the single frame the
+ * preferences file used to hold so an upgrade does not lose the user's window.
+ */
+function loadWindowState(): ShellWindowState {
+  const state = readWindowState(windowStatePath());
+  if (Object.keys(state.frames).length > 0) return state;
+  const legacy: WindowFrame | null = getPreferences().windowFrame;
+  if (!legacy) return state;
+  const workAreas = screen.getAllDisplays().map((display) => display.workArea);
+  if (!frameIsOnScreen(legacy, workAreas)) return state;
+  return rememberFrame(
+    state,
+    screen.getDisplayMatching(legacy),
+    { ...legacy, maximized: legacy.maximized === true },
+    Date.now(),
+  );
+}
+
+function patchWindowState(patch: Partial<ShellWindowState>): ShellWindowState {
+  const next = { ...readWindowState(windowStatePath()), ...patch };
+  writeWindowState(windowStatePath(), next);
+  return next;
+}
+
+function rememberedFrame(): WindowFrameState | null {
+  return restoreFrame(loadWindowState(), screen.getAllDisplays());
+}
+
+/**
+ * Follows the window's frame so a launch can put it back where it was, per
+ * display: a frame is filed under the arrangement it was chosen on, so moving
+ * between a laptop screen and a monitor stops overwriting one with the other.
  *
  * The restore size is only ever taken from a frame the user chose: a zoomed
  * window reports its own bounds as normal on macOS while it settles, and
  * writing that down is what makes a remembered window creep outwards a little
  * on every launch until it fills the screen.
  */
-function followWindowFrame(win: BrowserWindow, restored: WindowFrame | null): () => void {
+function followWindowFrame(win: BrowserWindow, restored: WindowFrameState | null): () => void {
   let bounds = restored
     ? { x: restored.x, y: restored.y, width: restored.width, height: restored.height }
     : win.getBounds();
@@ -613,6 +667,14 @@ function followWindowFrame(win: BrowserWindow, restored: WindowFrame | null): ()
   let pending: ReturnType<typeof setTimeout> | null = null;
 
   const persist = () => {
+    const display = screen.getDisplayMatching(bounds);
+    const state = rememberFrame(
+      readWindowState(windowStatePath()),
+      display,
+      { ...bounds, maximized },
+      Date.now(),
+    );
+    writeWindowState(windowStatePath(), state);
     saveSettings({ windowFrame: { ...bounds, maximized } });
   };
 
@@ -715,15 +777,30 @@ function createMainWindow(): void {
     if (process.platform !== 'darwin') destroyQuickAsk();
   });
 
-  const followSystemTheme = () => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setBackgroundColor(pageBackgroundColor(nativeTheme.shouldUseDarkColors));
-    }
-  };
-  nativeTheme.on('updated', followSystemTheme);
-  mainWindow.once('closed', () => nativeTheme.off('updated', followSystemTheme));
+  paintWindowsForTheme();
 
-  const entryUrl = isRemote ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
+  const rootUrl = isRemote ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
+  const restoredRoute = isRemote ? loadWindowState().lastRoute : null;
+  const entryUrl = restoredRoute ? `${CLOUD_APP_ORIGIN}${restoredRoute}` : rootUrl;
+
+  if (isRemote) {
+    const followRoute = (_event: unknown, url: string, httpStatusCode?: number) => {
+      // A restored conversation deleted elsewhere must not become the page the
+      // app opens on, so a not-found answer sends the window to the root. The
+      // root answering the same way is not something a second load can fix.
+      if (shouldFallBackToRoot(httpStatusCode) && url !== rootUrl) {
+        patchWindowState({ lastRoute: null });
+        void mainWindow?.loadURL(rootUrl);
+        return;
+      }
+      const route = routeFromUrl(url, CLOUD_APP_ORIGIN);
+      if (route) patchWindowState({ lastRoute: route });
+    };
+    mainWindow.webContents.on('did-navigate', followRoute);
+    mainWindow.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+      if (isMainFrame) followRoute(_event, url);
+    });
+  }
 
   mainWindow.webContents.on(
     'did-fail-load',
@@ -961,6 +1038,7 @@ if (!hasSingleInstanceLock) {
     // which mode we booted in.
     registerIpcHandlers();
     nativeTheme.themeSource = getPreferences().appearance;
+    nativeTheme.on('updated', paintWindowsForTheme);
     if (RENDERER_MODE === 'bundled') {
       protocol.handle(RENDERER_SCHEME, serveRenderer);
       configureSession(session.defaultSession);

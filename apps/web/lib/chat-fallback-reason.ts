@@ -19,31 +19,58 @@ export function addModelEscalationHeaders(
   if (reason) headers[MOVED_REASON_HEADER] = reason.replace(/[^\w .,:/-]/g, '_').slice(0, 200);
 }
 
+/**
+ * The code emitted when a substitution is known to have happened but nothing
+ * named a cause. Without it an unlabelled fallback carried no header at all,
+ * which is the silent substitution the disclosure exists to prevent.
+ */
+export const UNSPECIFIED_SUBSTITUTION_REASON = 'model_substituted';
+
 export const FALLBACK_REASON_CODES = [
   'managed_failover',
   'openrouter_route_failover',
   'insufficient_credits',
   'research_unsupported_model',
+  UNSPECIFIED_SUBSTITUTION_REASON,
 ] as const;
 
 export type FallbackReasonCode = (typeof FALLBACK_REASON_CODES)[number];
 
-export function toFallbackReasonHeaderValue(source: {
+export interface FallbackReasonSource {
   usedFallback?: boolean;
   fallbackReason?: string | undefined;
-}): string | null {
+  /** The model id the caller asked for, when the caller knows it. */
+  requestedModel?: string | null | undefined;
+  /** The model id that actually served the turn. */
+  servedModel?: string | null | undefined;
+}
+
+/**
+ * True when the turn ran on something other than what the user picked. A served
+ * model that differs from the requested one is a substitution on its own terms,
+ * whether or not any layer bothered to set `usedFallback`.
+ */
+export function isSubstitution(source: FallbackReasonSource): boolean {
+  if (source.usedFallback) return true;
+  const requested = source.requestedModel?.trim();
+  const served = source.servedModel?.trim();
+  return Boolean(requested && served && requested !== served);
+}
+
+export function toFallbackReasonHeaderValue(source: FallbackReasonSource): string | null {
   // A downgrade is worth reporting even when the model itself did not change:
   // the request the user asked for is not the request that ran.
-  if (!source.usedFallback && source.fallbackReason !== 'research_unsupported_model') return null;
-  const raw = source.fallbackReason?.trim();
-  if (!raw) return null;
+  if (!isSubstitution(source) && source.fallbackReason !== 'research_unsupported_model') {
+    return null;
+  }
+  const raw = source.fallbackReason?.trim() || UNSPECIFIED_SUBSTITUTION_REASON;
   const safe = raw.replace(/[^\w.:-]/g, '_').slice(0, 120);
-  return safe.length > 0 ? safe : null;
+  return safe.length > 0 ? safe : UNSPECIFIED_SUBSTITUTION_REASON;
 }
 
 export function addFallbackReasonHeader(
   headers: Record<string, string>,
-  source: { usedFallback?: boolean; fallbackReason?: string | undefined },
+  source: FallbackReasonSource,
 ): void {
   const value = toFallbackReasonHeaderValue(source);
   if (value) headers[FALLBACK_REASON_HEADER] = value;
@@ -73,6 +100,10 @@ export function describeFallbackReason(
       return servedBy
         ? `${servedBy} cannot run Deep Research, so this reply used web search instead. No research report was saved.`
         : 'This model cannot run Deep Research, so this reply used web search instead. No research report was saved.';
+    case UNSPECIFIED_SUBSTITUTION_REASON:
+      return servedBy
+        ? `This reply came from ${servedBy}, not the model you picked. The reason was not recorded.`
+        : 'This reply came from a different model than the one you picked. The reason was not recorded.';
     default:
       return servedBy
         ? `This reply came from ${servedBy} instead of the model you picked.`
@@ -94,6 +125,8 @@ export function fallbackStepLabel(
       return servedBy ? `Switched to ${servedBy}` : 'Switched to a cheaper model';
     case 'research_unsupported_model':
       return 'Switched to web search';
+    case UNSPECIFIED_SUBSTITUTION_REASON:
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to a different model';
     case 'managed_failover':
     default:
       return servedBy ? `Switched to ${servedBy}` : 'Switched to a backup model';

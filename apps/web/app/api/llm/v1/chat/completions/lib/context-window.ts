@@ -1,42 +1,25 @@
 import 'server-only';
 
-import { estimateTokens } from '@agiworkforce/routing';
 import { getModelMetadataById } from '@agiworkforce/types';
+import {
+  contextBudgetTokens,
+  estimateConversationTokens,
+  estimateMessageTokens,
+  type ContextSizedMessage,
+} from '@features/chat/components/Composer/model-compatibility';
 import { logger } from '@/lib/logger';
 
-export type TrimmableMessage = {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
-  multimodal_content?: unknown[];
-  tool_calls?: unknown[];
+export type TrimmableMessage = ContextSizedMessage & {
   tool_call_id?: string;
 };
-
-const CONTEXT_RESERVE_TOKENS = 2_048;
-
-const MULTIMODAL_PART_TOKENS = 800;
 
 export const DROPPED_HISTORY_MARKER =
   '[Earlier messages in this conversation were omitted to fit the model context window.]';
 
 const TRUNCATED_MESSAGE_MARKER = '\n\n[...truncated to fit the model context window]';
 
-function messageTokens(message: TrimmableMessage, model: string): number {
-  const parts = Array.isArray(message.multimodal_content) ? message.multimodal_content.length : 0;
-  const toolCallJson = message.tool_calls ? JSON.stringify(message.tool_calls) : '';
-  return (
-    estimateTokens(typeof message.content === 'string' ? message.content : '', model) +
-    estimateTokens(toolCallJson, model) +
-    parts * MULTIMODAL_PART_TOKENS +
-    4
-  );
-}
-
-function totalTokens(messages: readonly TrimmableMessage[], model: string): number {
-  let total = 0;
-  for (const message of messages) total += messageTokens(message, model);
-  return total;
-}
+const messageTokens = estimateMessageTokens;
+const totalTokens = estimateConversationTokens;
 
 export interface ContextTrimResult {
   droppedMessages: number;
@@ -68,10 +51,7 @@ export function planContextTrim(
   const contextWindow = getModelMetadataById(model)?.contextWindow;
   if (!contextWindow || contextWindow <= 0) return null;
 
-  const budgetTokens = Math.max(
-    1_024,
-    contextWindow - Math.max(0, maxOutputTokens) - CONTEXT_RESERVE_TOKENS,
-  );
+  const budgetTokens = contextBudgetTokens(contextWindow, maxOutputTokens);
   const estimatedTokensBefore = totalTokens(messages, model);
   if (estimatedTokensBefore <= budgetTokens) return null;
 
