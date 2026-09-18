@@ -19,7 +19,12 @@ vi.mock('@/lib/logger', () => ({
 import {
   NeonMcpResponseCacheStore,
   loadMcpPriorDiscovery,
+  mcpAuthorizationContext,
+  mcpResponseCachePartitionKey,
+  purgeMcpResponseCachePartitions,
   saveMcpDiscovery,
+  sweepExpiredMcpDiscoveryCache,
+  sweepExpiredMcpResponseCache,
 } from '../mcp-runtime-cache';
 
 describe('stateless MCP persistent cache', () => {
@@ -126,5 +131,70 @@ describe('stateless MCP persistent cache', () => {
         discover: { protocolVersion: '2026-07-28', capabilities: {} },
       },
     );
+  });
+});
+
+describe('cached MCP response bodies are reachable and expire', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('will not serve a body whose expiry has passed', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+
+    await new NeonMcpResponseCacheStore().get({ method: 'tools/list', partition: 'p' });
+
+    const [sql, values] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('expires_at_ms is null or expires_at_ms >=');
+    expect(typeof values[3]).toBe('number');
+  });
+
+  it('deletes every row of the partitions a disconnect names, once each', async () => {
+    mocks.query.mockResolvedValueOnce([{ partition_key: 'a' }, { partition_key: 'b' }]);
+    const context = mcpAuthorizationContext.userCustomConnector('user_1', 'row-1');
+
+    const deleted = await purgeMcpResponseCachePartitions([context, context]);
+
+    expect(deleted).toBe(2);
+    const [sql, values] = mocks.query.mock.calls[0] as [string, unknown[][]];
+    expect(sql).toContain('partition_key = any($1::text[])');
+    expect(values[0]).toEqual([mcpResponseCachePartitionKey(context)]);
+  });
+
+  it('asks for nothing when no context was named', async () => {
+    await expect(purgeMcpResponseCachePartitions([])).resolves.toBe(0);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('sweeps only the rows whose expiry has passed', async () => {
+    mocks.query.mockResolvedValueOnce([{ partition_key: 'a' }]);
+
+    await expect(sweepExpiredMcpResponseCache(1_700_000_000_000)).resolves.toBe(1);
+
+    const [sql, values] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('expires_at_ms is not null and expires_at_ms < $1');
+    expect(values).toEqual([1_700_000_000_000]);
+  });
+
+  it('reports nothing swept when the cache table is not provisioned', async () => {
+    mocks.query.mockRejectedValue(Object.assign(new Error('missing'), { code: '42P01' }));
+
+    await expect(sweepExpiredMcpResponseCache()).resolves.toBe(0);
+    await expect(sweepExpiredMcpDiscoveryCache()).resolves.toBe(0);
+    await expect(
+      purgeMcpResponseCachePartitions([mcpAuthorizationContext.operatorConnector('github')]),
+    ).resolves.toBe(0);
+  });
+
+  it('gives each authorization context its own partition digest', () => {
+    const first = mcpResponseCachePartitionKey(
+      mcpAuthorizationContext.userOauthConnector('user_1', 'github'),
+    );
+    const second = mcpResponseCachePartitionKey(
+      mcpAuthorizationContext.userOauthConnector('user_2', 'github'),
+    );
+
+    expect(first).toMatch(/^[a-f0-9]{64}$/);
+    expect(first).not.toBe(second);
   });
 });

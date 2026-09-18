@@ -145,3 +145,24 @@ describe('objectStorageUploadOrigins', () => {
     expect(objectStorageUploadOrigins(resolveObjectStorageConfig({}))).toEqual([]);
   });
 });
+
+describe('object storage encryption', () => {
+  it('reads the algorithm and the key id an operator configured', () => {
+    expect(
+      resolveObjectStorageConfig({
+        AGI_STORAGE_ENCRYPTION: 'aws:kms',
+        AGI_STORAGE_ENCRYPTION_KEY_ID: 'key-id',
+      }).encryption,
+    ).toEqual({ algorithm: 'aws:kms', keyId: 'key-id' });
+  });
+
+  it('leaves encryption unset when nothing names an algorithm', () => {
+    expect(resolveObjectStorageConfig({}).encryption).toBeUndefined();
+  });
+
+  it('refuses a key id with no algorithm rather than writing in the clear', () => {
+    expect(() => resolveObjectStorageConfig({ AGI_STORAGE_ENCRYPTION_KEY_ID: 'key-id' })).toThrow(
+      ObjectStorageConfigError,
+    );
+  });
+});

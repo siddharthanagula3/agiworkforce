@@ -42,6 +42,10 @@ import { readConnectorsNotResponding } from '@/lib/services/connector-call-log-s
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 import {
+  mcpAuthorizationContext,
+  purgeMcpResponseCachePartitions,
+} from '@/lib/connectors/mcp-runtime-cache';
+import {
   CONNECTOR_TOKEN_STORAGE_UNAVAILABLE,
   isConnectorTokenStorageAvailable,
 } from '@/lib/custom-connector-crypto';
@@ -400,7 +404,7 @@ async function connectDirectoryTarget(
       serverName: target.serverId,
       url,
       transport: target.transport,
-      authorizationContext: `user:${userId}:custom-url:${url}`,
+      authorizationContext: mcpAuthorizationContext.userCustomUrl(userId, url),
     });
   } catch (error) {
     if (error instanceof McpProbeError) return unreachableResponse(target.name, error.message);
@@ -635,6 +639,10 @@ async function disconnectDirectoryTarget(
     const deleted = await deleteCustomConnectorRows(db, userId, row.id);
     for (const removed of deleted) {
       await evictCustomConnectorCaches(userId, removed.id);
+      await purgeMcpResponseCachePartitions([
+        mcpAuthorizationContext.userCustomConnector(userId, removed.id),
+        mcpAuthorizationContext.userCustomUrl(userId, target.mcpUrl),
+      ]);
       await clearConnectorToolPermissions(db, userId, customConnectorId(removed.short_id));
       await recordAuditEvent({
         userId,
@@ -653,6 +661,10 @@ async function disconnectDirectoryTarget(
 
   if (await disconnectConnectorOAuthGrant(userId, target.connectorId)) {
     await evictConnectorOAuthCaches(userId, target.connectorId);
+    await purgeMcpResponseCachePartitions([
+      mcpAuthorizationContext.userOauthConnector(userId, target.connectorId),
+      mcpAuthorizationContext.operatorConnector(target.connectorId),
+    ]);
     await clearConnectorToolPermissions(db, userId, target.serverId);
     await recordAuditEvent({
       userId,
@@ -694,6 +706,10 @@ async function handleDeleteConnector(request: NextRequest) {
   const oauthRevoked = await disconnectConnectorOAuthGrant(userId, connectorId);
   if (oauthRevoked) {
     await evictConnectorOAuthCaches(userId, connectorId);
+    await purgeMcpResponseCachePartitions([
+      mcpAuthorizationContext.userOauthConnector(userId, connectorId),
+      mcpAuthorizationContext.operatorConnector(connectorId),
+    ]);
     await clearConnectorToolPermissions(db, userId, connectorId);
     await recordAuditEvent({
       userId,

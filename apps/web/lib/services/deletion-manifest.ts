@@ -46,11 +46,13 @@ const CUSTOMER_CONTENT = [
   'media_assets',
   'message_bookmarks',
   'message_reactions',
+  'notebook_runs',
   'notifications',
   'organization_shared_artifacts',
   'organization_shared_projects',
   'organization_shared_sessions',
   'project_knowledge_files',
+  'published_artifact_versions',
   'published_artifacts',
   'research_reports',
   'scheduled_tasks',
@@ -62,6 +64,7 @@ const CUSTOMER_CONTENT = [
   'support_handoff_sessions',
   'support_ticket_replies',
   'support_tickets',
+  'study_sessions',
   'sync_data',
   'user_memories',
   'user_projects',
@@ -70,16 +73,25 @@ const CUSTOMER_CONTENT = [
   'video_generation_jobs',
   'web_artifacts',
   'web_conversations',
+  'web_messages',
   'work_plan_revisions',
   'work_plan_steps',
   'work_plans',
 ];
 
-const DERIVED_CONTENT = ['retrieval_chunks', 'retrieval_documents', 'web_artifact_index'];
+const DERIVED_CONTENT = [
+  'context_manifests',
+  'file_lineage',
+  'retrieval_chunks',
+  'retrieval_documents',
+  'web_artifact_index',
+];
 
 const OPERATIONAL_RECORD = [
+  'account_compromise_responses',
   'account_lockout_attempts',
   'account_sessions',
+  'admin_request_idempotency',
   'agent_approval_requests',
   'agent_tools',
   'api_keys',
@@ -119,6 +131,7 @@ const OPERATIONAL_RECORD = [
   'mobile_iap_accounts',
   'mobile_iap_transactions',
   'organization_admin_api_keys',
+  'organization_admin_delegations',
   'organization_admin_policies',
   'organization_audit_destinations',
   'organization_billing_contracts',
@@ -130,6 +143,8 @@ const OPERATIONAL_RECORD = [
   'organization_group_managers',
   'organization_group_roles',
   'organization_invitations',
+  'organization_key_rewrap_runs',
+  'organization_mcp_servers',
   'organization_member_roles',
   'organization_members',
   'organization_model_policies',
@@ -137,6 +152,7 @@ const OPERATIONAL_RECORD = [
   'organization_policy_revisions',
   'organization_project_access',
   'organization_roles',
+  'organization_service_principals',
   'organization_shared_connectors',
   'organization_spend_alerts',
   'organization_spend_limits',
@@ -179,8 +195,10 @@ const AUDIT_TRAIL = [
 
 const TELEMETRY = [
   'agent_tool_executions',
+  'authentication_attempts',
   'connector_call_events',
   'event_trigger_events',
+  'identity_risk_observations',
   'product_analytics_events',
   'routing_decision_traces',
   'usage_events',
@@ -270,11 +288,13 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
     store: 'mcp_response_cache',
     kind: 'cache',
     dataClass: 'derived_content',
-    erasedWithSubject: false,
+    erasedWithSubject: true,
     erasedWithTenant: false,
     cascadesFrom: null,
     maximumAgeDays: null,
-    deletionPath: null,
+    deletionPath:
+      'lib/server/account-erasure.ts eraseConnectorResponseCache, and the expiry sweep in ' +
+      'api/cron/purge-deleted-accounts',
     retainedReason: null,
   },
   {
@@ -285,7 +305,7 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
     erasedWithTenant: false,
     cascadesFrom: null,
     maximumAgeDays: null,
-    deletionPath: null,
+    deletionPath: 'api/cron/purge-deleted-accounts expiry sweep',
     retainedReason: null,
   },
 ];
@@ -372,6 +392,29 @@ function buildRetentionMatrix(): RetentionEntry[] {
 }
 
 export const RETENTION_MATRIX: readonly RetentionEntry[] = buildRetentionMatrix();
+
+function retentionRow(entry: RetentionEntry): string {
+  const reach = [
+    entry.erasedWithSubject ? 'account' : null,
+    entry.erasedWithTenant ? 'workspace' : null,
+    entry.cascadesFrom ? `cascade from ${entry.cascadesFrom}` : null,
+  ].filter((value): value is string => value !== null);
+  const age = entry.maximumAgeDays === null ? 'no maximum' : `${entry.maximumAgeDays} days`;
+  const path = entry.deletionPath ?? entry.retainedReason ?? 'none';
+  return `| \`${entry.store}\` | ${entry.kind} | ${entry.dataClass} | ${reach.join(', ') || 'none'} | ${age} | ${path.replace(/\|/g, '/')} |`;
+}
+
+/**
+ * The matrix as a document. It is rendered rather than written so the table
+ * cannot describe a store list the code no longer has.
+ */
+export function renderRetentionMatrixMarkdown(): string {
+  const header = [
+    '| store | kind | data class | erased with | maximum age | deletion path or reason |',
+    '| ----- | ---- | ---------- | ----------- | ----------- | ----------------------- |',
+  ];
+  return [...header, ...RETENTION_MATRIX.map(retentionRow)].join('\n');
+}
 
 /** A store the erasure inventories name but the matrix cannot classify. */
 export function unclassifiedStores(): string[] {

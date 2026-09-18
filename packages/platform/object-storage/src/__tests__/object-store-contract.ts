@@ -1,6 +1,8 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import type { ObjectStore } from '../types';
+import { objectChecksum } from '../checksum';
+import { isPresignedUrlExpired, presignedUrlExpiresAt } from '../presign';
+import { supportsMultipartUploads, type ObjectStore } from '../types';
 
 const BUCKET = 'contract-bucket';
 const KEY = 'object.png';
@@ -12,6 +14,10 @@ const PRESIGN_TTL_SECONDS = 300;
 const PRESIGN_CONTENT_LENGTH = 4096;
 const RANGE_START = 2;
 const RANGE_END = 4;
+const MAX_TTL_SECONDS = 3_600;
+const MULTIPART_KEY = 'large/object.bin';
+const PART_ONE = new Uint8Array([10, 11, 12]);
+const PART_TWO = new Uint8Array([20, 21, 22, 23]);
 
 async function drain(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
   const reader = stream.getReader();
@@ -166,6 +172,100 @@ export function runObjectStoreContract(name: string, createStore: () => ObjectSt
           expiresInSeconds: PRESIGN_TTL_SECONDS,
         }),
       ).rejects.toThrow('must bind a content type');
+    });
+
+    it('refuses to presign an upload that never expires', async () => {
+      const store = await seeded();
+      await expect(
+        store.presignPut({
+          bucket: BUCKET,
+          key: KEY,
+          contentType: CONTENT_TYPE,
+          contentLength: PRESIGN_CONTENT_LENGTH,
+          expiresInSeconds: 0,
+        }),
+      ).rejects.toThrow('must expire');
+      await expect(
+        store.presignPut({
+          bucket: BUCKET,
+          key: KEY,
+          contentType: CONTENT_TYPE,
+          contentLength: PRESIGN_CONTENT_LENGTH,
+          expiresInSeconds: MAX_TTL_SECONDS + 1,
+        }),
+      ).rejects.toThrow('may not outlive');
+    });
+
+    it('issues a signed url that is expired once its lifetime has passed', async () => {
+      const store = await seeded();
+      const url = await store.presignPut({
+        bucket: BUCKET,
+        key: KEY,
+        contentType: CONTENT_TYPE,
+        contentLength: PRESIGN_CONTENT_LENGTH,
+        expiresInSeconds: PRESIGN_TTL_SECONDS,
+      });
+
+      const expiresAt = presignedUrlExpiresAt(url);
+      expect(expiresAt).not.toBeNull();
+      expect(isPresignedUrlExpired(url, (expiresAt as number) - 1)).toBe(false);
+      expect(isPresignedUrlExpired(url, expiresAt as number)).toBe(true);
+    });
+
+    it('reports the checksum of the bytes it stored and refuses bytes that do not match', async () => {
+      const store = await seeded();
+      const head = await store.head(BUCKET, KEY);
+      expect(head?.checksumSha256).toBe(objectChecksum(BYTES));
+
+      await expect(
+        store.put({
+          bucket: BUCKET,
+          key: `${KEY}.mismatched`,
+          body: BYTES,
+          contentType: CONTENT_TYPE,
+          checksumSha256: objectChecksum(new Uint8Array([0])),
+        }),
+      ).rejects.toThrow(/checksum/iu);
+    });
+
+    it('assembles a multipart upload and reports it pending until it completes', async () => {
+      const store = createStore();
+      if (!supportsMultipartUploads(store)) return;
+
+      const handle = await store.createMultipartUpload({
+        bucket: BUCKET,
+        key: MULTIPART_KEY,
+        contentType: CONTENT_TYPE,
+      });
+      const first = await store.uploadPart({ ...handle, partNumber: 1, body: PART_ONE });
+      expect(first.checksumSha256).toBe(objectChecksum(PART_ONE));
+      expect(await store.listPendingMultipartUploads(BUCKET)).toHaveLength(1);
+      expect(await store.listUploadedParts(handle)).toHaveLength(1);
+
+      const second = await store.uploadPart({ ...handle, partNumber: 2, body: PART_TWO });
+      await store.completeMultipartUpload({ ...handle, parts: [first, second] });
+
+      const stored = await store.get(BUCKET, MULTIPART_KEY);
+      expect(stored ? Buffer.from(stored.data) : null).toEqual(
+        Buffer.concat([Buffer.from(PART_ONE), Buffer.from(PART_TWO)]),
+      );
+      expect(await store.listPendingMultipartUploads(BUCKET)).toEqual([]);
+    });
+
+    it('drops the parts of an aborted multipart upload without writing the object', async () => {
+      const store = createStore();
+      if (!supportsMultipartUploads(store)) return;
+
+      const handle = await store.createMultipartUpload({
+        bucket: BUCKET,
+        key: MULTIPART_KEY,
+        contentType: CONTENT_TYPE,
+      });
+      await store.uploadPart({ ...handle, partNumber: 1, body: PART_ONE });
+      await store.abortMultipartUpload(handle);
+
+      expect(await store.listPendingMultipartUploads(BUCKET)).toEqual([]);
+      expect(await store.get(BUCKET, MULTIPART_KEY)).toBeNull();
     });
   });
 }

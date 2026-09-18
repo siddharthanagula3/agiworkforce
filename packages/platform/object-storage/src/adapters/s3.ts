@@ -1,25 +1,40 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CopyObjectCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListMultipartUploadsCommand,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
+  ServerSideEncryption,
+  UploadPartCommand,
   type GetObjectCommandOutput,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { objectChecksum } from '../checksum';
 import { bindPresignedUpload } from '../presign';
 import { type ObjectStorageConfig } from '../config';
 import {
   ObjectStorageConfigError,
   ObjectStorageTimeoutError,
+  type CompleteMultipartUploadInput,
   type CopyObjectIfMatchInput,
+  type CreateMultipartUploadInput,
+  type MultipartUploadHandle,
+  type ObjectEncryption,
   type ObjectStore,
+  type PendingMultipartUpload,
   type PresignPutInput,
   type PutObjectInput,
   type StoredObjectBytes,
   type StoredObjectHead,
   type StoredObjectStream,
+  type UploadPartInput,
+  type UploadedPart,
 } from '../types';
 
 const MISSING_OBJECT_ERROR_NAMES = new Set(['NoSuchKey', 'NotFound']);
@@ -28,6 +43,9 @@ const PRECONDITION_FAILED_STATUS = 412;
 const COPY_METADATA_DIRECTIVE = 'COPY';
 const SIGNABLE_UPLOAD_HEADERS = ['content-length', 'content-type'];
 const KEY_SEPARATOR = '/';
+const CHECKSUM_ALGORITHM = 'SHA256';
+const REGION_METADATA_KEY = 'agi-region';
+const ENCRYPTION_METADATA_KEY = 'agi-encryption';
 
 export interface S3ClientTimeouts {
   connectionTimeoutMs: number;
@@ -37,6 +55,8 @@ export interface S3ClientTimeouts {
 export interface S3ObjectStoreOptions {
   client: S3Client;
   requestTimeoutMs: number;
+  encryption?: ObjectEncryption;
+  region?: string;
 }
 
 export function createS3Client(config: ObjectStorageConfig, timeouts: S3ClientTimeouts): S3Client {
@@ -94,7 +114,43 @@ function withRequestTimeout<T>(timeoutMs: number, operation: () => Promise<T>): 
 }
 
 export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore {
-  const { client, requestTimeoutMs } = options;
+  const { client, requestTimeoutMs, encryption, region } = options;
+
+  function objectMetadata(
+    extra: Readonly<Record<string, string>> | undefined,
+  ): Record<string, string> | undefined {
+    const metadata: Record<string, string> = { ...extra };
+    if (region) metadata[REGION_METADATA_KEY] = region;
+    if (encryption) metadata[ENCRYPTION_METADATA_KEY] = encryption.algorithm;
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+  }
+
+  function encryptionHeaders(): {
+    ServerSideEncryption?: ServerSideEncryption;
+    SSEKMSKeyId?: string;
+  } {
+    if (!encryption) return {};
+    const algorithms = Object.values(ServerSideEncryption) as string[];
+    if (!algorithms.includes(encryption.algorithm)) {
+      throw new ObjectStorageConfigError(
+        `"${encryption.algorithm}" is not an encryption this host offers: ${algorithms.join(', ')}`,
+      );
+    }
+    return {
+      ServerSideEncryption: encryption.algorithm as ServerSideEncryption,
+      ...(encryption.keyId ? { SSEKMSKeyId: encryption.keyId } : {}),
+    };
+  }
+
+  function encryptionOf(response: {
+    ServerSideEncryption?: string;
+    SSEKMSKeyId?: string;
+    Metadata?: Record<string, string>;
+  }): ObjectEncryption | undefined {
+    const algorithm = response.ServerSideEncryption ?? response.Metadata?.[ENCRYPTION_METADATA_KEY];
+    if (!algorithm) return undefined;
+    return { algorithm, keyId: response.SSEKMSKeyId };
+  }
 
   async function getObject(
     bucket: string,
@@ -120,6 +176,9 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
           Body: input.body,
           ContentType: input.contentType,
           ContentLength: input.contentLength,
+          Metadata: objectMetadata(input.metadata),
+          ...(input.checksumSha256 ? { ChecksumSHA256: input.checksumSha256 } : {}),
+          ...encryptionHeaders(),
         }),
       );
     },
@@ -150,11 +209,16 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
 
     async head(bucket: string, key: string): Promise<StoredObjectHead | null> {
       try {
-        const response = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+        const response = await client.send(
+          new HeadObjectCommand({ Bucket: bucket, Key: key, ChecksumMode: 'ENABLED' }),
+        );
         return {
           contentLength: response.ContentLength,
           contentType: response.ContentType,
           etag: response.ETag,
+          checksumSha256: response.ChecksumSHA256,
+          encryption: encryptionOf(response),
+          metadata: response.Metadata,
         };
       } catch (error) {
         if (isMissingObject(error)) return null;
@@ -195,10 +259,127 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
           ContentLength: bound.contentLength,
         }),
         {
-          expiresIn: input.expiresInSeconds,
+          expiresIn: bound.expiresInSeconds,
           signableHeaders: new Set(SIGNABLE_UPLOAD_HEADERS),
         },
       );
+    },
+
+    async createMultipartUpload(input: CreateMultipartUploadInput): Promise<MultipartUploadHandle> {
+      const response = await client.send(
+        new CreateMultipartUploadCommand({
+          Bucket: input.bucket,
+          Key: input.key,
+          ContentType: input.contentType,
+          Metadata: objectMetadata(input.metadata),
+          ChecksumAlgorithm: CHECKSUM_ALGORITHM,
+          ...encryptionHeaders(),
+        }),
+      );
+      if (!response.UploadId) {
+        throw new ObjectStorageConfigError('The host did not open a multipart upload.');
+      }
+      return { bucket: input.bucket, key: input.key, uploadId: response.UploadId };
+    },
+
+    async uploadPart(input: UploadPartInput): Promise<UploadedPart> {
+      const checksumSha256 = input.checksumSha256 ?? objectChecksum(input.body);
+      const response = await client.send(
+        new UploadPartCommand({
+          Bucket: input.bucket,
+          Key: input.key,
+          UploadId: input.uploadId,
+          PartNumber: input.partNumber,
+          Body: input.body,
+          ContentLength: input.body.byteLength,
+          ChecksumSHA256: checksumSha256,
+        }),
+      );
+      return {
+        partNumber: input.partNumber,
+        etag: response.ETag ?? '',
+        size: input.body.byteLength,
+        checksumSha256: response.ChecksumSHA256 ?? checksumSha256,
+      };
+    },
+
+    async listUploadedParts(handle: MultipartUploadHandle): Promise<UploadedPart[]> {
+      const response = await client.send(
+        new ListPartsCommand({
+          Bucket: handle.bucket,
+          Key: handle.key,
+          UploadId: handle.uploadId,
+        }),
+      );
+      return (response.Parts ?? [])
+        .filter((part) => part.PartNumber !== undefined)
+        .map((part) => ({
+          partNumber: part.PartNumber as number,
+          etag: part.ETag ?? '',
+          size: part.Size ?? 0,
+          checksumSha256: part.ChecksumSHA256 ?? '',
+        }))
+        .sort((left, right) => left.partNumber - right.partNumber);
+    },
+
+    async completeMultipartUpload(input: CompleteMultipartUploadInput): Promise<void> {
+      await client.send(
+        new CompleteMultipartUploadCommand({
+          Bucket: input.bucket,
+          Key: input.key,
+          UploadId: input.uploadId,
+          MultipartUpload: {
+            Parts: [...input.parts]
+              .sort((left, right) => left.partNumber - right.partNumber)
+              .map((part) => ({
+                PartNumber: part.partNumber,
+                ETag: part.etag,
+                ChecksumSHA256: part.checksumSha256,
+              })),
+          },
+        }),
+      );
+    },
+
+    async abortMultipartUpload(handle: MultipartUploadHandle): Promise<void> {
+      await client.send(
+        new AbortMultipartUploadCommand({
+          Bucket: handle.bucket,
+          Key: handle.key,
+          UploadId: handle.uploadId,
+        }),
+      );
+    },
+
+    async listPendingMultipartUploads(
+      bucket: string,
+      prefix?: string,
+    ): Promise<PendingMultipartUpload[]> {
+      const pending: PendingMultipartUpload[] = [];
+      let keyMarker: string | undefined;
+      let uploadIdMarker: string | undefined;
+      for (;;) {
+        const response = await client.send(
+          new ListMultipartUploadsCommand({
+            Bucket: bucket,
+            Prefix: prefix,
+            KeyMarker: keyMarker,
+            UploadIdMarker: uploadIdMarker,
+          }),
+        );
+        for (const upload of response.Uploads ?? []) {
+          if (!upload.Key || !upload.UploadId) continue;
+          pending.push({
+            key: upload.Key,
+            uploadId: upload.UploadId,
+            initiatedAtMs: upload.Initiated?.getTime() ?? 0,
+          });
+        }
+        if (!response.IsTruncated) return pending;
+        keyMarker = response.NextKeyMarker;
+        uploadIdMarker = response.NextUploadIdMarker;
+        if (!keyMarker && !uploadIdMarker) return pending;
+      }
     },
   };
 }

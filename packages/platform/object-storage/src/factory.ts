@@ -52,6 +52,8 @@ export function resolveObjectStorageRuntime(
       const store = createS3ObjectStore({
         client,
         requestTimeoutMs: options.timeouts.requestTimeoutMs,
+        encryption: config.encryption,
+        region: config.region,
       });
       return {
         provider: config.provider,
@@ -63,7 +65,11 @@ export function resolveObjectStorageRuntime(
       };
     }
     case 'memory':
-      return { provider: config.provider, config, store: createMemoryObjectStore(options.memory) };
+      return {
+        provider: config.provider,
+        config,
+        store: createMemoryObjectStore({ encryption: config.encryption, ...options.memory }),
+      };
     case 'none':
       return { provider: config.provider, config, store: null };
   }

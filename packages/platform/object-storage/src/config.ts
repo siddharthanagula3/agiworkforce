@@ -1,4 +1,8 @@
-import { ObjectStorageConfigError, type ObjectStorageProvider } from './types';
+import {
+  ObjectStorageConfigError,
+  type ObjectEncryption,
+  type ObjectStorageProvider,
+} from './types';
 
 export const OBJECT_STORAGE_PROVIDER_ENV = 'AGI_STORAGE_PROVIDER';
 export const OBJECT_STORAGE_ENDPOINT_ENV = 'AGI_STORAGE_ENDPOINT';
@@ -9,6 +13,8 @@ export const OBJECT_STORAGE_ACCESS_KEY_ID_ENV = 'AGI_STORAGE_ACCESS_KEY_ID';
 export const OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV = 'AGI_STORAGE_SECRET_ACCESS_KEY';
 export const OBJECT_STORAGE_PUBLIC_BASE_URL_ENV = 'AGI_STORAGE_PUBLIC_BASE_URL';
 export const OBJECT_STORAGE_FORCE_PATH_STYLE_ENV = 'AGI_STORAGE_FORCE_PATH_STYLE';
+export const OBJECT_STORAGE_ENCRYPTION_ENV = 'AGI_STORAGE_ENCRYPTION';
+export const OBJECT_STORAGE_ENCRYPTION_KEY_ID_ENV = 'AGI_STORAGE_ENCRYPTION_KEY_ID';
 
 export const R2_ACCOUNT_ID_ENV = 'CLOUDFLARE_R2_ACCOUNT_ID';
 export const R2_ACCESS_KEY_ID_ENV = 'CLOUDFLARE_R2_ACCESS_KEY_ID';
@@ -37,6 +43,7 @@ export interface ObjectStorageConfig {
   publicBucket: string | undefined;
   privateBucket: string | undefined;
   publicBaseUrl: string | undefined;
+  encryption: ObjectEncryption | undefined;
 }
 
 function read(env: ObjectStorageEnvironment, name: string): string | undefined {
@@ -64,6 +71,24 @@ function readProvider(env: ObjectStorageEnvironment): ObjectStorageProvider | un
   throw new ObjectStorageConfigError(
     `${OBJECT_STORAGE_PROVIDER_ENV}="${configured}" is not one of: ${OBJECT_STORAGE_PROVIDERS.join(', ')}`,
   );
+}
+
+/**
+ * A key id without an algorithm is a misconfiguration that would otherwise
+ * store the object unencrypted while the operator believes it is not.
+ */
+function readEncryption(env: ObjectStorageEnvironment): ObjectEncryption | undefined {
+  const algorithm = read(env, OBJECT_STORAGE_ENCRYPTION_ENV);
+  const keyId = read(env, OBJECT_STORAGE_ENCRYPTION_KEY_ID_ENV);
+  if (!algorithm) {
+    if (keyId) {
+      throw new ObjectStorageConfigError(
+        `${OBJECT_STORAGE_ENCRYPTION_KEY_ID_ENV} is set without ${OBJECT_STORAGE_ENCRYPTION_ENV}.`,
+      );
+    }
+    return undefined;
+  }
+  return { algorithm, keyId };
 }
 
 /**
@@ -98,6 +123,7 @@ export function resolveObjectStorageConfig(
     privateBucket: read(env, OBJECT_STORAGE_PRIVATE_BUCKET_ENV) ?? read(env, R2_PRIVATE_BUCKET_ENV),
     publicBaseUrl:
       read(env, OBJECT_STORAGE_PUBLIC_BASE_URL_ENV) ?? read(env, R2_PUBLIC_BASE_URL_ENV),
+    encryption: readEncryption(env),
   };
 }
 
