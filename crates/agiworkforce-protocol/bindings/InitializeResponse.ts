@@ -6,4 +6,14 @@ export type InitializeResponse = {
   serverInfo: AppServerClientInfo;
   protocolVersion: number;
   capabilities: AppServerCapabilities;
+  /**
+   * Schema version of every `turn/agent_event` envelope this connection
+   * will carry. Absent from servers that predate it.
+   */
+  agentEventSchemaVersion?: number;
+  /**
+   * Oldest protocol version this server answers. Absent from servers that
+   * predate it.
+   */
+  minimumProtocolVersion?: number;
 };

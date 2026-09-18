@@ -6,6 +6,7 @@ import { requirePlatformAdmin } from '@/lib/auth-guards';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { flagConfigProblems } from '@/lib/feature-flags/config-schema';
 import { FlagDefinitionInputSchema } from '@/lib/feature-flags/flag-definition';
 import { createFlag } from '@/lib/feature-flags/flag-admin-service';
 import { listFlagDefinitions } from '@/lib/feature-flags/flag-store';
@@ -38,6 +39,10 @@ async function handleCreate(request: NextRequest): Promise<NextResponse> {
   const parsed = FlagDefinitionInputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.badRequest('Invalid flag definition', parsed.error.flatten());
+  }
+  const problems = flagConfigProblems(parsed.data);
+  if (problems.length > 0) {
+    throw createError.badRequest('The definition contradicts its flag namespace', { problems });
   }
   const flag = await createFlag({ userId, request }, parsed.data);
   return NextResponse.json({ flag }, { status: 201, headers: NO_STORE });
