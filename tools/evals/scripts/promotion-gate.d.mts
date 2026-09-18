@@ -25,9 +25,29 @@ export interface GateVerdict {
   readonly findings: readonly GateFinding[];
 }
 
+export interface BaselineAudit {
+  readonly passed: boolean;
+  readonly problems: readonly string[];
+  readonly unmet: readonly string[];
+  readonly audited: readonly string[];
+}
+
 export const MEASUREMENTS_DIR: string;
 export const GATE_POLICY_FILE: string;
 export function measurementFileName(key: string): string;
+export function scoreFloor(
+  base: Pick<SuiteSummaryLike, 'score' | 'threshold'>,
+  tolerance: Pick<GateTolerance, 'scoreDrop'>,
+): number;
+export function auditBaselines(options: {
+  readonly measurementsDir?: string;
+  readonly families?: Readonly<Record<string, unknown>>;
+}): BaselineAudit;
+
+interface SuiteSummaryLike {
+  readonly score: number;
+  readonly threshold?: number;
+}
 export function readGatePolicy(file?: string): GatePolicy;
 export function toleranceFor(policy: GatePolicy, familyId: string): GateTolerance;
 export function compareToBaseline(

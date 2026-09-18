@@ -10,6 +10,7 @@ import { buildRunReport, type RunIdentity, type RunReport } from './report';
 import {
   caseFingerprint,
   RECORDING_SCHEMA_VERSION,
+  WITHHELD_REASON,
   type Recording,
   replayResponder,
 } from './replay';
@@ -27,17 +28,22 @@ export async function runReplay(
 ): Promise<RunOutcome> {
   const reports: SuiteReport[] = [];
   const unsupported: Partial<Record<SuiteName, string>> = {};
+  const withheld = new Set(recording.withheld);
+  const absent = (caseId: string): string =>
+    withheld.has(caseId) ? WITHHELD_REASON : 'not in this recording';
   for (const dataset of datasets) {
     const recorded = dataset.cases.filter((entry) => recording.responses[entry.id] !== undefined);
     if (recording.source === 'live' && recorded.length === 0) {
-      unsupported[dataset.suite] = 'not in this recording';
+      unsupported[dataset.suite] = dataset.cases.every((entry) => withheld.has(entry.id))
+        ? WITHHELD_REASON
+        : 'not in this recording';
       continue;
     }
     reports.push(
       await runSuite(dataset, replayResponder(recording, dataset), {
         skip: (evalCase) =>
           recording.source === 'live' && recording.responses[evalCase.id] === undefined
-            ? 'not in this recording'
+            ? absent(evalCase.id)
             : null,
       }),
     );
@@ -69,6 +75,7 @@ export async function runLive(
   const reports: SuiteReport[] = [];
   const unsupported: Partial<Record<SuiteName, string>> = {};
   const responses: Record<string, Recording['responses'][string]> = {};
+  const withheld: string[] = [];
   for (const dataset of datasets) {
     const reason = unsupportedSuiteReason(dataset, options.target);
     if (reason !== null) {
@@ -78,6 +85,10 @@ export async function runLive(
     const respond = options.responderFor(dataset);
     const recordingResponder: Responder = async (evalCase) => {
       const response = await respond(evalCase);
+      if (evalCase.expected === 'refusal') {
+        withheld.push(evalCase.id);
+        return response;
+      }
       responses[evalCase.id] = {
         fingerprint: caseFingerprint(dataset, evalCase.id),
         response,
@@ -104,6 +115,7 @@ export async function runLive(
     routeId: options.target.routeId,
     recordedOn: options.recordedOn,
     responses,
+    withheld,
   };
   return { reports, report: buildRunReport(identity, reports, unsupported), recording };
 }

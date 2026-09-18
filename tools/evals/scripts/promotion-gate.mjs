@@ -45,6 +45,21 @@ function exceeds(candidate, baseline, ratio) {
   return candidate > baseline * (1 + ratio);
 }
 
+/**
+ * The bar a candidate suite has to clear.
+ *
+ * A measured baseline may raise the bar; it may never lower it under the
+ * corpus's own declared threshold. Without that floor a baseline recorded from
+ * a model that fails a corpus outright sets the bar at its own failure: the
+ * first committed baseline scored 0.000 on the refusal corpus, and comparing
+ * against it alone would have let every later model answer every disallowed
+ * request and still be promoted. It also means no suite can be averaged away:
+ * each is gated on its own floor, and a corpus that declares 1.0 stays at 1.0.
+ */
+export function scoreFloor(base, tolerance) {
+  return Math.max(base.score - tolerance.scoreDrop, base.threshold ?? 0);
+}
+
 export function compareToBaseline(baseline, candidate, tolerance) {
   const findings = [];
   const suites = Object.entries(baseline.suites ?? {});
@@ -76,13 +91,13 @@ export function compareToBaseline(baseline, candidate, tolerance) {
       );
       continue;
     }
-    const floor = base.score - tolerance.scoreDrop;
+    const floor = scoreFloor(base, tolerance);
     findings.push(
       finding(
         suite,
         'score',
         run.score >= floor,
-        `score ${run.score.toFixed(3)} vs baseline ${base.score.toFixed(3)} (floor ${floor.toFixed(3)})`,
+        `score ${run.score.toFixed(3)} vs baseline ${base.score.toFixed(3)} (floor ${floor.toFixed(3)}, corpus threshold ${(base.threshold ?? 0).toFixed(3)})`,
       ),
     );
     if (base.cost?.meanUsd !== null && base.cost?.meanUsd !== undefined) {
@@ -163,17 +178,101 @@ export function evaluatePromotionGate({
   };
 }
 
+/**
+ * Integrity of the committed baselines, for CI.
+ *
+ * The promotion gate only ever reads the one baseline a promotion names, so a
+ * baseline that rots, loses its live provenance or outlives its family slot is
+ * invisible until the promotion it was supposed to gate. This walks every
+ * committed baseline instead, and fails closed: a malformed, replayed or
+ * orphaned baseline is a gate that would have waved a promotion through.
+ */
+export function auditBaselines({ measurementsDir = MEASUREMENTS_DIR, families }) {
+  const dir = path.join(measurementsDir, 'baselines');
+  const problems = [];
+  const unmet = [];
+  const audited = [];
+  const entries = fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter((name) => name.endsWith('.json'))
+    : [];
+  for (const name of entries) {
+    const file = path.join(dir, name);
+    let baseline;
+    try {
+      baseline = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+      problems.push(`${name} is not readable JSON: ${error.message}`);
+      continue;
+    }
+    const familyId = baseline.familyId;
+    if (typeof familyId !== 'string' || measurementFileName(familyId) !== name) {
+      problems.push(`${name} does not name the family slot its filename claims`);
+      continue;
+    }
+    audited.push(familyId);
+    if (families !== undefined && families[familyId] === undefined) {
+      problems.push(
+        `${familyId} has a committed baseline but is not a family slot in the registry`,
+      );
+    }
+    problems.push(...liveProblems(`baseline for ${familyId}`, baseline));
+    const suites = Object.entries(baseline.suites ?? {});
+    if (suites.length === 0) problems.push(`${familyId} baseline measured no suites`);
+    for (const [suite, summary] of suites) {
+      if (typeof summary.score !== 'number' || typeof summary.version !== 'number') {
+        problems.push(`${familyId} baseline suite ${suite} carries no score or version`);
+        continue;
+      }
+      if (typeof summary.threshold !== 'number') {
+        problems.push(`${familyId} baseline suite ${suite} carries no corpus threshold`);
+        continue;
+      }
+      if (summary.met !== true) {
+        unmet.push(
+          `${familyId} ${suite}: measured ${summary.score.toFixed(3)} against corpus threshold ${summary.threshold.toFixed(3)}`,
+        );
+      }
+    }
+  }
+  return { passed: problems.length === 0, problems, unmet, audited };
+}
+
 function argValue(args, flag) {
   const index = args.indexOf(flag);
   return index === -1 ? undefined : args[index + 1];
 }
 
+function runAudit(args) {
+  const registryFile =
+    argValue(args, '--registry') ??
+    path.resolve(EVALS_ROOT, '../../packages/ai/model-registry/generated/registry.json');
+  const registry = readJsonIfPresent(registryFile);
+  if (registry === null) {
+    process.stderr.write(`[evals gate] no model registry at ${registryFile}\n`);
+    process.exitCode = 2;
+    return;
+  }
+  const verdict = auditBaselines({ families: registry.families });
+  for (const problem of verdict.problems) process.stdout.write(`FAIL ${problem}\n`);
+  for (const entry of verdict.unmet) process.stdout.write(`unmet ${entry}\n`);
+  process.stdout.write(
+    `[evals gate] audited ${verdict.audited.length} committed baselines: ${verdict.passed ? 'every one is a live, well-formed measurement of a registry family slot' : 'see the failures above'}\n`,
+  );
+  process.exitCode = verdict.passed ? 0 : 1;
+}
+
 function main() {
   const args = process.argv.slice(2);
+  if (args.includes('--audit')) {
+    runAudit(args);
+    return;
+  }
   const familyId = argValue(args, '--family');
   const candidateModelKey = argValue(args, '--candidate');
   if (!familyId || !candidateModelKey) {
-    process.stderr.write('usage: promotion-gate.mjs --family <familyId> --candidate <modelKey>\n');
+    process.stderr.write(
+      'usage: promotion-gate.mjs --family <familyId> --candidate <modelKey> | --audit\n',
+    );
     process.exitCode = 2;
     return;
   }

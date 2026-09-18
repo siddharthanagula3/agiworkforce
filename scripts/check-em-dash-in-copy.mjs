@@ -27,7 +27,11 @@ function vendoredSkillPrefixes() {
   }
 }
 
-const EXCLUDE_PREFIX = ['apps/web/db/neon/', ...vendoredSkillPrefixes()];
+const EXCLUDE_PREFIX = [
+  'apps/web/db/neon/',
+  'tools/evals/measurements/recordings/',
+  ...vendoredSkillPrefixes(),
+];
 const EXCLUDE_SUFFIX = ['pnpm-lock.yaml', 'Cargo.lock'];
 const EXCLUDE_BASENAME = new Set(['LICENSE', 'LICENSE.md', 'LICENSE.txt']);
 

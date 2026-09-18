@@ -1,11 +1,18 @@
 name: AI output quality evals
 
-# The two jobs answer different questions.
+# The three jobs answer different questions.
 #
 # `harness` runs on every change to the harness and proves the harness itself:
 # the graders reject the failures they claim to reject, the corpora are well
 # formed, and the gate fails a system that answers badly. It calls no provider
-# and measures no model.
+# and measures no model. It also fails closed on the evidence the promotion gate
+# depends on: a prompt with no corpus and no recorded reason, and a baseline that
+# is malformed, replayed rather than measured, or orphaned by its family slot.
+#
+# `certification` runs on pull requests only and demands a satisfied 14C.591 or
+# 14C.592 checklist for every model and route the branch adds. The eval lines are
+# computed from the committed measurement and cannot be asserted; the operational
+# lines need a signer, a date and evidence.
 #
 # `live-quality` is the measurement, and it is the only job whose result says
 # anything about a model. It bills real tokens (33 rows, one non-streaming
@@ -21,12 +28,25 @@ name: AI output quality evals
 # does not execute either of them. Extending the responder to the product chat
 # path is the work that would make this a prompt/routing regression gate.
 
+# The trigger list is the answer to "what could move a score". A corpus and a
+# model are the obvious two; the product's own prompts, the adapter that speaks
+# to a provider, the routing that picks one and the registry the harness reads
+# its target from are the four that used to change without this workflow
+# noticing, which is exactly the regression the harness cannot see afterwards.
 on:
   pull_request:
     paths:
       - 'tools/evals/**'
       - 'packages/contracts/types/src/models.json'
-      - 'packages/ai/model-registry/scripts/family-slots.mjs'
+      - 'packages/contracts/types/src/provider-adapter.ts'
+      - 'packages/ai/model-registry/catalog/**'
+      - 'packages/ai/model-registry/generated/registry.json'
+      - 'packages/ai/model-registry/scripts/**'
+      - 'packages/ai/providers/**'
+      - 'packages/ai/routing/**'
+      - 'apps/web/lib/prompts/**'
+      - 'apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts'
+      - 'apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts'
       - '.github/workflows/evals.yml'
   push:
     branches:
@@ -34,7 +54,15 @@ on:
     paths:
       - 'tools/evals/**'
       - 'packages/contracts/types/src/models.json'
-      - 'packages/ai/model-registry/scripts/family-slots.mjs'
+      - 'packages/contracts/types/src/provider-adapter.ts'
+      - 'packages/ai/model-registry/catalog/**'
+      - 'packages/ai/model-registry/generated/registry.json'
+      - 'packages/ai/model-registry/scripts/**'
+      - 'packages/ai/providers/**'
+      - 'packages/ai/routing/**'
+      - 'apps/web/lib/prompts/**'
+      - 'apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts'
+      - 'apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts'
       - '.github/workflows/evals.yml'
   schedule:
     # Weekly on Monday at 05:40 UTC, matching the other scheduled jobs in this
@@ -93,6 +121,47 @@ jobs:
       # recording whose request no longer matches the corpus fails here.
       - name: Replay recorded responses (no network)
         run: pnpm evals:replay
+
+      # Every product prompt either has a corpus that measures it or a recorded
+      # reason it has none. A prompt added without either fails here, which is
+      # what stops the trigger list above from running a harness that covers
+      # nothing the change touched.
+      - name: Every product prompt is covered or accounted for
+        run: node tools/evals/scripts/prompt-coverage.mjs
+
+      # Fails closed on the evidence the promotion gate depends on: a baseline
+      # that is malformed, replayed rather than measured, or left behind by a
+      # family slot that no longer exists is a gate that would wave a promotion
+      # through. Suites that did not meet their own corpus threshold are printed
+      # so the reading is in the log, not only in the file.
+      - name: Audit the committed eval baselines
+        run: node tools/evals/scripts/promotion-gate.mjs --audit
+
+  certification:
+    name: New model and route certification (14C.591/592)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          # The gate reads the registry on both sides of the merge base to see
+          # what this branch adds; a shallow checkout would report every model
+          # as new.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # A model or route this branch adds may only merge once every line of its
+      # release checklist is satisfied: the eval lines are computed from the
+      # committed measurement and cannot be asserted, and the operational lines
+      # need a name, a date and evidence. A branch that adds neither passes
+      # without doing anything.
+      - name: Certify every model and route this branch adds
+        run: node tools/evals/scripts/certification-gate.mjs --base "origin/${{ github.base_ref }}"
 
   live-quality:
     name: Live model quality (paid, weekly + on demand)

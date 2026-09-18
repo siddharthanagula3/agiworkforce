@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "uncovered": {
+    "support.system": "the support agent answers from the help corpus, which the eval harness cannot reach without the support retrieval stack; covered today by apps/web/lib/support tests, not by a graded corpus",
+    "voice.live_instructions": "spoken output over a WebRTC session; the harness grades text from a non-streaming completion and cannot hold a voice turn",
+    "voice.live_backend_instructions": "reached only from a live voice session's delegation, same limitation as voice.live_instructions",
+    "voice.live_context_rules": "applies inside a live voice session, same limitation as voice.live_instructions",
+    "product.memory_fact_extraction": "no corpus yet; extraction is gradeable with the structured-output checks and is the next prompt to cover",
+    "agent.cloud_code_system": "runs inside a sandbox with the agent's file tools; the coding corpus grades written code, not a sandboxed agent loop",
+    "tool.places_search_description": "needs live place results to grade a tool choice against; the tools corpus covers tool.url_fetch_description instead"
+  }
+}

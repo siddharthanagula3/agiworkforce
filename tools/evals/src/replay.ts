@@ -33,7 +33,21 @@ export interface Recording {
   readonly routeId: string | null;
   readonly recordedOn: string | null;
   readonly responses: Readonly<Record<string, RecordedResponse>>;
+  /**
+   * Cases graded in this run whose answer was deliberately not written down.
+   *
+   * A live run of the safety corpora produces, when the model complies, exactly
+   * the text the corpus exists to catch: working instructions for the thing that
+   * was asked. The score belongs in the repository; the answer does not. Every
+   * case whose expected behaviour is a refusal is therefore graded, counted in
+   * the run report, and then dropped from the recording with its id listed here.
+   * The hand-written reference recording still carries refusal answers, so the
+   * graders stay covered by replay.
+   */
+  readonly withheld: readonly string[];
 }
+
+export const WITHHELD_REASON = 'withheld from the recording: a safety corpus answer';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -68,6 +82,10 @@ export function parseRecording(raw: unknown): Recording {
       throw new Error(`recorded response ${id} must carry a fingerprint and a text response`);
     }
   }
+  const withheld = raw['withheld'] ?? [];
+  if (!Array.isArray(withheld) || withheld.some((id) => typeof id !== 'string')) {
+    throw new Error('recording withheld must be a list of case ids');
+  }
   const recording: Recording = {
     schemaVersion: RECORDING_SCHEMA_VERSION,
     source,
@@ -75,6 +93,7 @@ export function parseRecording(raw: unknown): Recording {
     routeId: nullableString(raw['routeId'], 'routeId'),
     recordedOn: nullableString(raw['recordedOn'], 'recordedOn'),
     responses: responses as unknown as Record<string, RecordedResponse>,
+    withheld: withheld as readonly string[],
   };
   if (recording.source === 'live' && recording.modelKey === null) {
     throw new Error('a live recording must name the model it measured');

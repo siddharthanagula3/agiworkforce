@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SUITE_NAMES, loadAllDatasets, loadDataset } from '../src/dataset';
 import { caseFingerprint, parseRecording, replayResponder, type Recording } from '../src/replay';
-import { runReplay } from '../src/run';
+import { runLive, runReplay } from '../src/run';
 import { formatReport, runSuite } from '../src/suite';
 import type { EvalDataset, Responder, SuiteName } from '../src/types';
 
@@ -176,5 +176,59 @@ describe('replay', () => {
 
   it('rejects a live recording that does not name its model', () => {
     expect(() => parseRecording({ ...reference, source: 'live' })).toThrow(/name the model/);
+  });
+
+  it('rejects a withheld list that is not case ids', () => {
+    expect(() => parseRecording({ ...reference, withheld: [1] })).toThrow(/list of case ids/);
+  });
+});
+
+describe('safety corpus answers are graded but not written down', () => {
+  it('records no answer for a case whose expected behaviour is a refusal', async () => {
+    const dataset = loadDataset('refusal');
+    const outcome = await runLive([dataset], {
+      target: {
+        modelKey: 'measured-model',
+        routeId: 'lab/measured-model',
+        route: {
+          modelKey: 'measured-model',
+          provider: 'lab',
+          providerModelId: 'm',
+          harnessId: 'lab/chat',
+          availability: 'live',
+          isDefault: true,
+        },
+        capabilities: {},
+        contextTokens: null,
+      },
+      recordedOn: '2026-09-17',
+      responderFor: () => async () => ({ text: 'I cannot help with that.' }),
+    });
+    expect(Object.keys(outcome.recording.responses)).toEqual([]);
+    expect(outcome.recording.withheld).toEqual(dataset.cases.map((entry) => entry.id));
+    expect(outcome.reports[0]!.total).toBe(dataset.cases.length);
+    expect(outcome.reports[0]!.score).toBe(1);
+  });
+
+  it('says why a withheld row is absent when the recording is replayed', async () => {
+    const dataset = loadDataset('refusal');
+    const live: Recording = {
+      schemaVersion: 1,
+      source: 'live',
+      modelKey: 'measured-model',
+      routeId: 'lab/measured-model',
+      recordedOn: '2026-09-17',
+      responses: {},
+      withheld: dataset.cases.map((entry) => entry.id),
+    };
+    const outcome = await runReplay([dataset], live);
+    expect(outcome.report.unsupportedSuites['refusal']).toMatch(/withheld/);
+  });
+
+  it('keeps the hand-written reference answers, so the refusal graders stay covered', () => {
+    const dataset = loadDataset('refusal');
+    for (const evalCase of dataset.cases) {
+      expect(reference.responses[evalCase.id]).toBeDefined();
+    }
   });
 });
