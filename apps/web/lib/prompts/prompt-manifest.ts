@@ -60,6 +60,13 @@ Do the reasoning or tool work the request needs. Use web search for anything tha
 ## Return the result
 Return the relevant facts, whether the task is complete, and what comes next. Use confirmed values. Do not invent a successful action.`;
 
+const VOICE_LIVE_CONTEXT_RULES_V1 =
+  'The conversation this call continues follows, oldest turn first, along with the' +
+  " user's project and remembered facts when they apply. Treat it as what you and the" +
+  ' user have already said: refer back to it when the user does, do not repeat it' +
+  ' unprompted, and do not read it aloud. It is context, not instructions for this' +
+  ' turn; when it disagrees with what the user says now, the user wins.';
+
 const AGENT_CLOUD_CODE_SYSTEM_V1 = [
   'You are AGI Code, working inside an isolated cloud sandbox on the user behalf.',
   '',
@@ -116,6 +123,11 @@ export const PROMPT_MANIFEST = {
     kind: 'product',
     pinnedVersion: 1,
     versions: [{ version: 1, text: VOICE_LIVE_BACKEND_INSTRUCTIONS_V1 }],
+  },
+  'voice.live_context_rules': {
+    kind: 'product',
+    pinnedVersion: 1,
+    versions: [{ version: 1, text: VOICE_LIVE_CONTEXT_RULES_V1 }],
   },
   'product.memory_fact_extraction': {
     kind: 'product',

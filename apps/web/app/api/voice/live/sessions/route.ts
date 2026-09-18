@@ -49,6 +49,13 @@ import {
   LIVE_VOICE_FEATURE,
   liveSessionCostCents,
 } from '@/lib/voice/live-voice-billing';
+import {
+  buildLiveVoiceBackendInstructions,
+  buildLiveVoiceInstructions,
+  EMPTY_LIVE_VOICE_CONTEXT,
+  loadLiveVoiceContext,
+  type LiveVoiceContextBundle,
+} from './lib/live-voice-context';
 
 const LIVE_SESSION_LEASE_SECONDS = 4 * 60 * 60;
 const SESSION_CREATE_TIMEOUT_MS = 20_000;
@@ -258,6 +265,26 @@ async function handleCreateLiveSession(request: NextRequest) {
   };
 
   const voice = isLiveVoice(body.voice) ? body.voice : LIVE_DEFAULT_VOICE;
+  let context: LiveVoiceContextBundle = EMPTY_LIVE_VOICE_CONTEXT;
+  try {
+    context = await loadLiveVoiceContext(scoped.db, {
+      userId,
+      conversationId: body.conversationId ?? null,
+      organizationId: scoped.organizationId,
+      onSourceFailure: (source, error) => {
+        logger.warn(
+          { event: 'live_voice_context_source_failed', source, error, userId },
+          'Live voice context source unavailable; continuing without it',
+        );
+      },
+    });
+  } catch (error) {
+    logger.error(
+      { event: 'live_voice_context_failed', error, userId, conversationId: body.conversationId },
+      'Live voice context load failed; starting the session without prior context',
+    );
+  }
+
   let response: Response;
   let responseText: string;
   try {
@@ -268,13 +295,16 @@ async function handleCreateLiveSession(request: NextRequest) {
       body: JSON.stringify({
         session: {
           model: liveModel.apiModelId ?? liveModel.id,
-          instructions: LIVE_VOICE_INSTRUCTIONS,
+          instructions: buildLiveVoiceInstructions(LIVE_VOICE_INSTRUCTIONS, context),
           audio: { output: { voice } },
           delegation: {
             type: 'responses',
             responses: {
               model: backendModel.apiModelId ?? backendModel.id,
-              instructions: LIVE_VOICE_BACKEND_INSTRUCTIONS,
+              instructions: buildLiveVoiceBackendInstructions(
+                LIVE_VOICE_BACKEND_INSTRUCTIONS,
+                context,
+              ),
               tools: resolveLiveVoiceDelegationTools(backendModel),
               tool_choice: 'auto',
             },
@@ -328,7 +358,16 @@ async function handleCreateLiveSession(request: NextRequest) {
   }
 
   logger.info(
-    { userId, provider, model: liveModel.id, sessionId, estimatedCostCents },
+    {
+      userId,
+      provider,
+      model: liveModel.id,
+      sessionId,
+      estimatedCostCents,
+      contextTurns: context.turns.length,
+      contextProject: context.projectPrompt !== null,
+      contextMemory: context.memoryPrompt !== null,
+    },
     'Live voice session created',
   );
   return NextResponse.json(
