@@ -1428,6 +1428,68 @@ describe('POST /api/media/video/generate', () => {
       });
     });
 
+    it('submits one durable job per requested candidate, each with its own reservation', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 'runway-task-c1', status: 'PENDING' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 'runway-task-c2', status: 'PENDING' }),
+        });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+          n: 2,
+        }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.task_ids).toHaveLength(2);
+      expect(data.task_id).toBe(data.task_ids[0]);
+      expect(durableJobMocks.create).toHaveBeenCalledTimes(2);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(2);
+
+      const reservedKeys = managedUsageMocks.reserve.mock.calls.map(
+        (call) => (call[0] as { idempotencyKey: string }).idempotencyKey,
+      );
+      expect(new Set(reservedKeys).size).toBe(2);
+      expect(reservedKeys[1]).toBe(`${reservedKeys[0]}-c2`);
+    });
+
+    it('keeps the accepted candidates when a later one cannot be submitted', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 'runway-task-c1', status: 'PENDING' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          text: async () => 'rejected',
+          json: async () => ({ error: 'rejected' }),
+        });
+
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic sunset',
+          provider: 'runway',
+          model: RUNWAY_MODEL_ID,
+          n: 2,
+        }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.task_ids).toHaveLength(1);
+    });
+
     it('should include estimated_duration_secs based on video duration', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

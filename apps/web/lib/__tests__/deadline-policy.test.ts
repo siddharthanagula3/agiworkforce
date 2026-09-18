@@ -91,15 +91,27 @@ describe('deadline hierarchy', () => {
     expect(Number(declared![1]) * 1000).toBe(IMAGE_GENERATION_FUNCTION_LIMIT_MS);
   });
 
-  it('keeps every upstream provider call in the image route on the shared deadline', () => {
-    const routeSource = readFileSync(
-      join(__dirname, '../../app/api/media/image/generate/route.ts'),
-      'utf8',
+  it('keeps every upstream provider call in the image capability on the shared deadline', () => {
+    // The provider calls moved out of the route when image generation became a
+    // durable job: the route now owns admission and the job row, and the module
+    // below owns every fetch. Both are read, so a hardcoded timeout is caught
+    // wherever the call ends up living.
+    const sources = [
+      '../../app/api/media/image/generate/route.ts',
+      '../../app/api/media/image/lib/image-generation-provider.ts',
+    ].map((relativePath) => readFileSync(join(__dirname, relativePath), 'utf8'));
+
+    for (const source of sources) {
+      expect(
+        source.match(/AbortSignal\.timeout\(\d+/g) ?? [],
+        'no upstream call may hardcode its own timeout',
+      ).toEqual([]);
+    }
+
+    const sharedTimeouts = sources.flatMap(
+      (source) =>
+        source.match(/AbortSignal\.timeout\(IMAGE_GENERATION_PROVIDER_DEADLINE_MS\)/g) ?? [],
     );
-    const literalTimeouts = routeSource.match(/AbortSignal\.timeout\(\d+/g) ?? [];
-    expect(literalTimeouts, 'no upstream call may hardcode its own timeout').toEqual([]);
-    const sharedTimeouts =
-      routeSource.match(/AbortSignal\.timeout\(IMAGE_GENERATION_PROVIDER_DEADLINE_MS\)/g) ?? [];
     expect(sharedTimeouts.length).toBeGreaterThan(0);
   });
 });

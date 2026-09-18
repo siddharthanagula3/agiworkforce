@@ -12,7 +12,7 @@ import {
   MoreHorizontal,
   Send,
 } from 'lucide-react';
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import { Spinner, useDialogKeyboard, useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import {
   getImageAspectOptionsForModel,
@@ -187,13 +187,14 @@ function GeneratingCard({
           'radial-gradient(circle, color-mix(in srgb, var(--color-muted-foreground) 14%, transparent) 1px, transparent 1px)',
         backgroundSize: '20px 20px',
       }}
+      role="status"
       aria-label="Generating image"
       aria-live="polite"
     >
       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-foreground/[0.02] via-transparent to-foreground/[0.04]" />
 
       <div className="relative z-10 flex flex-col items-center gap-2.5">
-        <div className="h-10 w-10 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-primary/60" />
+        <Spinner aria-hidden="true" className="h-10 w-10 text-primary/60" />
         <span className="text-sm font-medium text-foreground">Generating image</span>
         {modelLabel && (
           <span className="text-xs text-muted-foreground">Generating with {modelLabel}</span>
@@ -298,6 +299,7 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
               controls
               playsInline
               preload="metadata"
+              aria-label={`Preview of ${title}`}
               className="h-40 w-full object-cover"
             />
           ) : (
@@ -386,8 +388,13 @@ function EditPanel({
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [showAspectMenu, setShowAspectMenu] = useState(false);
+  const [revisionAnnouncement, setRevisionAnnouncement] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
   const maskInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const aspectTriggerRef = useRef<HTMLButtonElement>(null);
+  const aspectMenuRef = useRef<HTMLDivElement>(null);
+  const closeAspectMenu = useCallback(() => setShowAspectMenu(false), []);
   const aspectOptions = getImageAspectOptionsForModel(modelId);
   const { admissionFor } = useMediaModelAvailability();
   const supportsEdit = modelId ? admissionFor(modelId)?.supports_edit === true : false;
@@ -399,11 +406,13 @@ function EditPanel({
       if (!onRegenerate || retryBlocked) return;
       setGenerating(true);
       setGenError(null);
+      setRevisionAnnouncement('');
       try {
         const newUrl = await onRegenerate(request);
         setCurrentUrl(newUrl);
         setCurrentAspect(request.aspectRatio);
         setCurrentPrompt(request.prompt);
+        setRevisionAnnouncement('The new version of this image is ready');
         onImageUpdated(newUrl, request.aspectRatio, request.prompt);
       } catch (err) {
         const msg = toUserMessage(err, String(err));
@@ -507,14 +516,17 @@ function EditPanel({
     [currentUrl],
   );
 
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  // Escape, the Tab boundary and focus return are the dialog contract this
+  // panel claims with role="dialog" aria-modal; the aspect popup claims the
+  // menu contract separately.
+  useDialogKeyboard({ open: true, onClose, panelRef, closeOnEscape: !showAspectMenu });
+  useMenuKeyboard({
+    open: showAspectMenu,
+    onClose: closeAspectMenu,
+    panelRef: aspectMenuRef,
+    triggerRef: aspectTriggerRef,
+    itemSelector: '[role="menuitemradio"]',
+  });
 
   return (
     <>
@@ -527,6 +539,7 @@ function EditPanel({
 
       {/* Panel - mirrors ArtifactsPanel layout exactly */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Revise this image"
@@ -557,6 +570,7 @@ function EditPanel({
             {/* Aspect ratio dropdown */}
             <div className="relative">
               <button
+                ref={aspectTriggerRef}
                 type="button"
                 onClick={() => setShowAspectMenu((p) => !p)}
                 disabled={generating || retryBlocked}
@@ -564,17 +578,27 @@ function EditPanel({
                   'flex h-7 items-center gap-1 rounded-lg border border-border/40 px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
                   (generating || retryBlocked) && 'cursor-not-allowed opacity-50',
                 )}
+                aria-haspopup="menu"
+                aria-expanded={showAspectMenu}
+                aria-label="Aspect ratio"
                 title="Generate this image with a different aspect ratio"
               >
                 {aspectOptions.find((option) => option.id === currentAspect)?.label ?? 'Aspect'}
                 <ChevronDown className="h-3 w-3" />
               </button>
               {showAspectMenu && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                <div
+                  ref={aspectMenuRef}
+                  role="menu"
+                  aria-label="Aspect ratio"
+                  className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+                >
                   {aspectOptions.map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
+                      role="menuitemradio"
+                      aria-checked={currentAspect === opt.id}
                       onClick={() => void handleAspectChange(opt.id)}
                       disabled={generating || retryBlocked}
                       className={cn(
@@ -619,6 +643,12 @@ function EditPanel({
 
         {/* Image area */}
         <div className="flex flex-1 flex-col items-center justify-center overflow-hidden bg-muted/40 p-4">
+          {/* The image itself carries the new prompt as its alt text, which a
+              screen reader only reaches by navigating to it. This says, at the
+              moment it happens, that the request started and that it landed. */}
+          <p className="sr-only" role="status" aria-live="polite">
+            {generating ? 'Generating a new version of this image' : revisionAnnouncement}
+          </p>
           {generating ? (
             <GeneratingCard aspectRatio={currentAspect} modelId={modelId} />
           ) : (
