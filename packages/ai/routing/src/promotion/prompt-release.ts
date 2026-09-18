@@ -36,12 +36,11 @@ export function ledgerPromptStamps(ledger: ReleaseLedger): { id: string; version
   const stamps = new Map<string, { id: string; version: number }>();
   for (const record of ledger.records) {
     if (record.artifact !== 'prompt') continue;
-    const matched = STAMP.exec(record.id);
-    if (matched?.groups === undefined) continue;
-    stamps.set(record.id, {
-      id: matched.groups.id,
-      version: Number.parseInt(matched.groups.version, 10),
-    });
+    const groups = STAMP.exec(record.id)?.groups;
+    const id = groups?.['id'];
+    const version = groups?.['version'];
+    if (id === undefined || version === undefined) continue;
+    stamps.set(record.id, { id, version: Number.parseInt(version, 10) });
   }
   return [...stamps.values()];
 }
