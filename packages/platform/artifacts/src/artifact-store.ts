@@ -34,6 +34,13 @@ export interface ArtifactStoreState {
   clearConversation: (conversationId: string) => void;
   clearAll: () => void;
 
+  /**
+   * Re-publish an earlier version as the newest one. History is append-only, so
+   * a restore adds a version rather than deleting the ones after it; restoring
+   * the current version is a no-op and reports false.
+   */
+  restoreArtifactVersion: (id: string, version: number) => boolean;
+
   getArtifact: (id: string) => SharedArtifact | undefined;
   getArtifactVersions: (id: string) => SharedArtifact[];
   getConversationArtifacts: (conversationId: string) => SharedArtifact[];
@@ -148,6 +155,22 @@ export function createArtifactStore(options: CreateArtifactStoreOptions = {}): A
       }),
 
     clearAll: () => set({ artifacts: [], versionsById: {}, selectedArtifactId: null }),
+
+    restoreArtifactVersion: (id, version) => {
+      const state = get();
+      const current = state.artifacts.find((a) => a.id === id);
+      const target = (state.versionsById[id] ?? []).find((v) => v.version === version);
+      if (!current || !target || target === current) return false;
+      if (current.content === target.content && current.title === target.title) return false;
+      set((s) =>
+        upsertOne(
+          s,
+          { ...target, version: current.version, updatedAt: new Date().toISOString() },
+          maxArtifacts,
+        ),
+      );
+      return true;
+    },
 
     getArtifact: (id) => get().artifacts.find((a) => a.id === id),
     getArtifactVersions: (id) => get().versionsById[id] ?? [],

@@ -106,6 +106,201 @@ export function extractCandidateMemoryFacts(message: string): string[] {
 }
 
 /**
+ * # Explicit remember and forget are commands, not observations
+ *
+ * "Remember that I use TypeScript" used to be one of twenty extraction
+ * patterns, so a user who asked for something got the same silent, best-effort
+ * treatment as a user who merely mentioned it: no confirmation, no separate
+ * policy check, and nothing to react to when it was refused. "Forget X" had no
+ * path at all; deletion lived only behind the Settings endpoint.
+ *
+ * These two are commands. They are parsed first, they answer, and the passive
+ * extractor below never sees the sentence that carried them.
+ */
+
+const EXPLICIT_REMEMBER_PATTERNS: readonly RegExp[] = [
+  /^(?:please\s+)?remember\s+that\s+(.+)$/i,
+  /^(?:please\s+)?remember\s*:\s*(.+)$/i,
+  /^(?:please\s+)?remember\s+this\s*[:,]\s*(.+)$/i,
+  /^(?:please\s+)?remember\s+(.+)$/i,
+];
+
+const EXPLICIT_FORGET_PATTERNS: readonly RegExp[] = [
+  /^(?:please\s+)?forget\s+(?:everything\s+|what\s+)?(?:i\s+(?:told|said\s+to)\s+you\s+)?about\s+(.+)$/i,
+  /^(?:please\s+)?forget\s+that\s+(.+)$/i,
+  /^(?:please\s+)?stop\s+remembering\s+(?:that\s+|about\s+)?(.+)$/i,
+  /^(?:please\s+)?delete\s+(?:the\s+|my\s+)?memor(?:y|ies)\s+(?:about\s+|of\s+)?(.+)$/i,
+  /^(?:please\s+)?forget\s+(?:my\s+)?(.+)$/i,
+];
+
+/** "Do you remember X?" asks; it does not command. */
+const MEMORY_QUESTION_RE = /^(?:do|does|did|can|could|will|would|what|why|how|when|where|who)\b/i;
+
+export const MEMORY_COMMAND_KINDS = ['remember', 'forget'] as const;
+export type MemoryCommandKind = (typeof MEMORY_COMMAND_KINDS)[number];
+
+export interface ExplicitMemoryCommand {
+  kind: MemoryCommandKind;
+  /** The fact to store, or the subject to search deletions for. */
+  subject: string;
+  /** The sentence the command was read from, for the audit record. */
+  utterance: string;
+}
+
+const MIN_MEMORY_COMMAND_SUBJECT_CHARS = 2;
+
+function matchExplicitCommand(sentence: string): ExplicitMemoryCommand | null {
+  const trimmed = sentence.trim();
+  if (!trimmed || trimmed.endsWith('?') || MEMORY_QUESTION_RE.test(trimmed)) return null;
+
+  for (const [kind, patterns] of [
+    ['forget', EXPLICIT_FORGET_PATTERNS],
+    ['remember', EXPLICIT_REMEMBER_PATTERNS],
+  ] as const) {
+    for (const pattern of patterns) {
+      const match = pattern.exec(trimmed);
+      if (!match) continue;
+      const subject = cleanMemoryClause(match[1] ?? '');
+      if (
+        subject.length < MIN_MEMORY_COMMAND_SUBJECT_CHARS ||
+        subject.length > MAX_EXTRACTED_CLAUSE_CHARS
+      ) {
+        return null;
+      }
+      return { kind, subject, utterance: trimmed };
+    }
+  }
+  return null;
+}
+
+/** The first explicit command in the turn, or null when the turn only mentions things. */
+export function parseExplicitMemoryCommand(message: string): ExplicitMemoryCommand | null {
+  if (!message || typeof message !== 'string') return null;
+  for (const sentence of splitMemorySentences(message)) {
+    const command = matchExplicitCommand(sentence);
+    if (command) return command;
+  }
+  return null;
+}
+
+/**
+ * Passive extraction with the explicit commands taken out, so a turn that asked
+ * for something is never also silently observed. Callers that have not adopted
+ * the command handlers keep using {@link extractCandidateMemoryFacts}.
+ */
+export function extractPassiveMemoryFacts(message: string): string[] {
+  if (!message || typeof message !== 'string') return [];
+  const passive = splitMemorySentences(message)
+    .filter((sentence) => matchExplicitCommand(sentence) === null)
+    .join(' ');
+  return extractCandidateMemoryFacts(passive);
+}
+
+export type MemoryCommandRefusalReason = 'ineligible' | 'excluded' | 'memory_disabled';
+
+export type ExplicitRememberOutcome =
+  | { status: 'stored' | 'already_known'; fact: string; category: MemoryCategory; message: string }
+  | { status: 'refused'; fact: string; reason: MemoryCommandRefusalReason; message: string };
+
+export type ExplicitForgetOutcome =
+  | { status: 'forgotten'; removed: MemoryCommandMatch[]; message: string }
+  | { status: 'nothing_to_forget'; removed: []; message: string }
+  | { status: 'confirmation_required'; removed: MemoryCommandMatch[]; message: string }
+  | { status: 'refused'; removed: []; reason: MemoryCommandRefusalReason; message: string };
+
+export interface MemoryCommandMatch {
+  id: string;
+  content: string;
+}
+
+export type MemoryCommandEligibility =
+  { eligible: true } | { eligible: false; reason: MemoryCommandRefusalReason; message: string };
+
+/**
+ * agent-core owns no storage. The host binds these to whatever it already uses
+ * to read and write memory, which keeps the wording, the policy order and the
+ * audit shape identical on every surface.
+ */
+export interface ExplicitMemoryPorts {
+  checkEligibility: (fact: string) => Promise<MemoryCommandEligibility>;
+  store: (input: {
+    fact: string;
+    category: MemoryCategory;
+  }) => Promise<{ stored: boolean; alreadyKnown: boolean }>;
+  find: (subject: string) => Promise<MemoryCommandMatch[]>;
+  remove: (ids: readonly string[]) => Promise<MemoryCommandMatch[]>;
+}
+
+function quoteList(matches: readonly MemoryCommandMatch[]): string {
+  return matches.map((match) => `"${match.content}"`).join(', ');
+}
+
+export async function explicitRememberHandler(
+  command: ExplicitMemoryCommand,
+  ports: Pick<ExplicitMemoryPorts, 'checkEligibility' | 'store'>,
+): Promise<ExplicitRememberOutcome> {
+  const fact = capitalizeMemoryClause(cleanMemoryClause(command.subject));
+  const eligibility = await ports.checkEligibility(fact);
+  if (!eligibility.eligible) {
+    return {
+      status: 'refused',
+      fact,
+      reason: eligibility.reason,
+      message: `I did not save that. ${eligibility.message}`,
+    };
+  }
+
+  const category = classifyMemoryCategory(fact);
+  const result = await ports.store({ fact, category });
+  if (result.alreadyKnown && !result.stored) {
+    return { status: 'already_known', fact, category, message: `I already remember: ${fact}` };
+  }
+  return { status: 'stored', fact, category, message: `Saved to memory: ${fact}` };
+}
+
+/**
+ * Deletion is not recoverable, so the handler stops and reports what it found
+ * unless the caller has already carried a confirmation. The confirmation itself
+ * belongs to the surface, which is where the user can see what is at stake.
+ */
+export async function explicitForgetHandler(
+  command: ExplicitMemoryCommand,
+  ports: Pick<ExplicitMemoryPorts, 'find' | 'remove'>,
+  options: { confirmed?: boolean } = {},
+): Promise<ExplicitForgetOutcome> {
+  const matches = await ports.find(command.subject);
+  if (matches.length === 0) {
+    return {
+      status: 'nothing_to_forget',
+      removed: [],
+      message: `I had nothing stored about "${command.subject}", so there was nothing to forget.`,
+    };
+  }
+
+  if (!options.confirmed) {
+    return {
+      status: 'confirmation_required',
+      removed: matches,
+      message: `Forgetting this cannot be undone. I would delete ${matches.length === 1 ? 'this memory' : `these ${matches.length} memories`}: ${quoteList(matches)}`,
+    };
+  }
+
+  const removed = await ports.remove(matches.map((match) => match.id));
+  if (removed.length === 0) {
+    return {
+      status: 'nothing_to_forget',
+      removed: [],
+      message: `I had nothing stored about "${command.subject}", so there was nothing to forget.`,
+    };
+  }
+  return {
+    status: 'forgotten',
+    removed,
+    message: `Forgotten, and it will not come back: ${quoteList(removed)}`,
+  };
+}
+
+/**
  * Model-backed candidate extraction.
  *
  * The pattern list above only ever sees the phrasings it was written for, so

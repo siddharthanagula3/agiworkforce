@@ -28,11 +28,23 @@
  */
 
 import { parseGeneratedFilesDelta } from '@agiworkforce/cloud-contracts';
+import {
+  createSearchSource,
+  isSourceDelivery,
+  searchCitationId,
+  type SearchSourceProvenance,
+  type SourceDelivery,
+} from '@agiworkforce/types';
 
 export interface PersistedTurnSource {
+  /** Stable across turns and providers, so the same page is one citation. */
+  id: string;
   url: string;
   title: string;
   snippet: string;
+  /** Moves when the cited text changes, so a re-verified source is comparable. */
+  contentVersion: string;
+  provenance: SearchSourceProvenance;
 }
 
 /**
@@ -41,8 +53,11 @@ export interface PersistedTurnSource {
  */
 export interface PersistedTurnCitation {
   type: typeof URL_CITATION_TYPE;
+  id: string;
   url: string;
   title: string;
+  contentVersion: string;
+  provenance: SearchSourceProvenance;
 }
 
 /** What a code-execution tool run printed, in the shape the panel renders. */
@@ -82,6 +97,8 @@ const CITATION_DELTA_KEY = 'x_citation';
 const CODE_RESULT_DELTA_KEY = 'x_code_result';
 const CODE_RESULT_ERROR_TYPE = 'code_execution_tool_result_error';
 const GENERATED_FILES_DELTA_KEY = 'x_generated_files';
+/** A provider-executed search does not name its backend on the wire. */
+const NATIVE_SEARCH_PROVIDER_ID = 'provider_native_search';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -92,6 +109,37 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function readString(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === 'string' ? value : '';
+}
+
+function readOptionalString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * A provider-executed search answers out of the provider's own index, so that
+ * is the floor. Only a frame that says otherwise moves it, which is what stops
+ * a cached result being persisted as a live one.
+ */
+function readDelivery(record: Record<string, unknown>): SourceDelivery {
+  const declared = record['delivery'];
+  return isSourceDelivery(declared) ? declared : 'indexed';
+}
+
+function readIdentity(
+  record: Record<string, unknown>,
+  input: { url: string; title: string; snippet: string },
+  retrievedAt: string,
+): { id: string; contentVersion: string; provenance: SearchSourceProvenance } {
+  const source = createSearchSource({
+    ...input,
+    providerId: readOptionalString(record, 'provider_id') ?? NATIVE_SEARCH_PROVIDER_ID,
+    delivery: readDelivery(record),
+    retrievedAt,
+    indexedAt: readOptionalString(record, 'last_updated') ?? readOptionalString(record, 'page_age'),
+    publishedAt: readOptionalString(record, 'date') ?? readOptionalString(record, 'published_date'),
+  });
+  return { id: source.id, contentVersion: source.contentVersion, provenance: source.provenance };
 }
 
 /**
@@ -138,10 +186,15 @@ function readDeltaBlocks(event: unknown, key: string): Record<string, unknown>[]
  * padding.
  */
 export class AssistantTurnSourceCollector {
-  private readonly byUrl = new Map<string, PersistedTurnSource>();
-  private readonly citationsByUrl = new Map<string, PersistedTurnCitation>();
+  private readonly byId = new Map<string, PersistedTurnSource>();
+  private readonly citationsById = new Map<string, PersistedTurnCitation>();
   private readonly filesByName = new Map<string, PersistedTurnGeneratedFile>();
   private codeExecution: PersistedTurnCodeExecution | undefined;
+  private readonly now: () => Date;
+
+  constructor(options: { now?: () => Date } = {}) {
+    this.now = options.now ?? (() => new Date());
+  }
 
   ingestWireBytes(value: Uint8Array): void {
     for (const rawLine of new TextDecoder().decode(value).split('\n')) {
@@ -159,16 +212,22 @@ export class AssistantTurnSourceCollector {
     this.ingestCitation(event);
     this.ingestCodeExecution(event);
     this.ingestGeneratedFiles(event);
-    if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
+    if (this.byId.size >= MAX_PERSISTED_TURN_SOURCES) return;
     for (const result of readSearchResultContent(event)) {
-      if (this.byUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
+      if (this.byId.size >= MAX_PERSISTED_TURN_SOURCES) return;
       if (result['type'] !== WEB_SEARCH_RESULT_TYPE) continue;
       const url = readString(result, 'url');
-      if (!url || this.byUrl.has(url)) continue;
-      this.byUrl.set(url, {
+      if (!url) continue;
+      const id = searchCitationId({ url });
+      if (this.byId.has(id)) continue;
+      const source = {
         url,
         title: readString(result, 'title') || url,
         snippet: readString(result, 'encrypted_content').slice(0, MAX_SNIPPET_CHARS),
+      };
+      this.byId.set(id, {
+        ...source,
+        ...readIdentity(result, source, this.now().toISOString()),
       });
     }
   }
@@ -180,7 +239,7 @@ export class AssistantTurnSourceCollector {
    * markers pointed at outlets the row never recorded.
    */
   private ingestCitation(event: unknown): void {
-    if (this.citationsByUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
+    if (this.citationsById.size >= MAX_PERSISTED_TURN_SOURCES) return;
     const envelope = asRecord(event);
     const choices = envelope?.['choices'];
     if (!Array.isArray(choices)) return;
@@ -190,9 +249,16 @@ export class AssistantTurnSourceCollector {
       if (!record) continue;
       const url = readString(record, 'url');
       const title = readString(record, 'title');
-      if (!url || !title || this.citationsByUrl.has(url)) continue;
-      this.citationsByUrl.set(url, { type: URL_CITATION_TYPE, url, title });
-      if (this.citationsByUrl.size >= MAX_PERSISTED_TURN_SOURCES) return;
+      if (!url || !title) continue;
+      const id = searchCitationId({ url });
+      if (this.citationsById.has(id)) continue;
+      this.citationsById.set(id, {
+        type: URL_CITATION_TYPE,
+        url,
+        title,
+        ...readIdentity(record, { url, title, snippet: '' }, this.now().toISOString()),
+      });
+      if (this.citationsById.size >= MAX_PERSISTED_TURN_SOURCES) return;
     }
   }
 
@@ -253,12 +319,12 @@ export class AssistantTurnSourceCollector {
 
   /** The collected sources, or undefined when the turn cited none. */
   snapshot(): readonly PersistedTurnSource[] | undefined {
-    return this.byUrl.size > 0 ? [...this.byUrl.values()] : undefined;
+    return this.byId.size > 0 ? [...this.byId.values()] : undefined;
   }
 
   /** The cited pages in marker order, or undefined when the turn cited none. */
   citationSnapshot(): readonly PersistedTurnCitation[] | undefined {
-    return this.citationsByUrl.size > 0 ? [...this.citationsByUrl.values()] : undefined;
+    return this.citationsById.size > 0 ? [...this.citationsById.values()] : undefined;
   }
 
   /** The last code-execution output, or undefined when the turn ran none. */

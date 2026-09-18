@@ -33,6 +33,32 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => 
 }));
 
 import { patchAssistantTurnSourceUrls } from './assistant-turn-persistence';
+import { searchCitationId, sourceContentVersion } from '@agiworkforce/types';
+
+const PROVENANCE = {
+  providerId: 'provider_native_search',
+  retrievedAt: '2026-09-18T12:00:00.000Z',
+  indexedAt: null,
+  delivery: 'indexed' as const,
+  freshness: { publishedAt: null, ageDays: null, class: 'unknown' as const },
+};
+function src(input: { url: string; title: string; snippet: string }) {
+  return {
+    ...input,
+    id: searchCitationId({ url: input.url }),
+    contentVersion: sourceContentVersion(input),
+    provenance: PROVENANCE,
+  };
+}
+function cite(input: { url: string; title: string }) {
+  return {
+    type: 'url_citation' as const,
+    ...input,
+    id: searchCitationId({ url: input.url }),
+    contentVersion: sourceContentVersion({ ...input, snippet: '' }),
+    provenance: PROVENANCE,
+  };
+}
 import type { ProcessedRequest } from './request-processor';
 
 const processed = {
@@ -86,7 +112,7 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed,
       userId: USER_ID,
-      sources: [{ url: `${REDIRECT}/both-lists`, title: 'reuters.com', snippet: 'a snippet' }],
+      sources: [src({ url: `${REDIRECT}/both-lists`, title: 'reuters.com', snippet: 'a snippet' })],
       overrides: { fetchImpl },
     });
 
@@ -123,10 +149,7 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed,
       userId: USER_ID,
-      citations: [
-        { type: 'url_citation', url: first, title: 'AP News' },
-        { type: 'url_citation', url: second, title: 'AP News' },
-      ],
+      citations: [cite({ url: first, title: 'AP News' }), cite({ url: second, title: 'AP News' })],
       overrides: { fetchImpl },
     });
 
@@ -152,7 +175,7 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed,
       userId: USER_ID,
-      sources: [{ url, title: 'reuters.com', snippet: '' }],
+      sources: [src({ url, title: 'reuters.com', snippet: '' })],
       overrides: { fetchImpl },
     });
 
@@ -173,8 +196,8 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed,
       userId: USER_ID,
-      sources: [{ url: 'https://www.reuters.com/world/story', title: 'Reuters', snippet: '' }],
-      citations: [{ type: 'url_citation', url: 'https://apnews.com/article/c', title: 'AP News' }],
+      sources: [src({ url: 'https://www.reuters.com/world/story', title: 'Reuters', snippet: '' })],
+      citations: [cite({ url: 'https://apnews.com/article/c', title: 'AP News' })],
       overrides: { fetchImpl: fetchImpl as unknown as typeof fetch },
     });
 
@@ -206,7 +229,7 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed,
       userId: USER_ID,
-      sources: [{ url, title: 'AP News', snippet: '' }],
+      sources: [src({ url, title: 'AP News', snippet: '' })],
       overrides: { fetchImpl },
     });
 
@@ -235,7 +258,7 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed,
       userId: USER_ID,
-      citations: [{ type: 'url_citation', url, title: 'AP News' }],
+      citations: [cite({ url, title: 'AP News' })],
       overrides: { fetchImpl },
     });
 
@@ -263,7 +286,7 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed: { ...processed, conversationIsTemporary: true } as ProcessedRequest,
       userId: USER_ID,
-      citations: [{ type: 'url_citation', url: `${REDIRECT}/temporary`, title: 'AP News' }],
+      citations: [cite({ url: `${REDIRECT}/temporary`, title: 'AP News' })],
       overrides: { fetchImpl: fetchImpl as unknown as typeof fetch },
     });
 
@@ -283,7 +306,7 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     await patchAssistantTurnSourceUrls({
       processed,
       userId: USER_ID,
-      citations: [{ type: 'url_citation', url: `${REDIRECT}/missing-row`, title: 'AP News' }],
+      citations: [cite({ url: `${REDIRECT}/missing-row`, title: 'AP News' })],
       overrides: { fetchImpl: fetchImpl as unknown as typeof fetch },
     });
 
