@@ -1,0 +1,639 @@
+{
+  "$comment": "Every background worker in this product runs as a cron route inside the one Next.js service, not as a standalone deployable. This registry is what makes each one independently versioned and releasable anyway: a name, a role, a version with a changelog, the job queues it produces into or claims from, and what happens to the work it holds when a deployment replaces it mid-run. apps/web/app/api/cron/deployable-components.test.ts is the gate; it runs in CI's js-verify lane, so an unregistered route, an unknown queue, an unanswered in-flight contract or a version without a changelog entry fails the build.",
+  "workerCategories": {
+    "inference": {
+      "role": "inference",
+      "note": "Model inference itself is request-path work in the web service, not a worker. The scheduled part is which model a request is served by, and that is evaluate-model-rollout."
+    },
+    "sync": {
+      "role": "sync",
+      "note": "Object backup replication is the only scheduled sync; everything else syncs in the request that caused it."
+    },
+    "projection": {
+      "role": "projection",
+      "note": "Derived product metrics are rolled up on a schedule; every other projection is computed on read."
+    },
+    "billing": {
+      "role": "billing",
+      "note": "Credit reset, reconciliation, reservation recovery, provider-cost reconciliation, enterprise metering and collection enforcement."
+    },
+    "ingestion": {
+      "role": "search-index",
+      "note": "Document ingestion is the retrieval index pipeline; the cron starts a durable workflow run and does not itself carry the ingestion."
+    },
+    "connector-sync": {
+      "role": "connector-sync",
+      "note": "The connector and plugin directories are refreshed on a schedule; a user's own connector calls run in their request."
+    },
+    "search-index": {
+      "role": "search-index",
+      "note": "One component, index-retrieval-documents, owns both ingestion and indexing."
+    },
+    "scheduler": {
+      "role": "scheduler",
+      "note": "run-schedules is the scheduler; Vercel cron is the timer that drives it and every other component here."
+    },
+    "sandbox-runner": {
+      "role": "sandbox-runner",
+      "note": "Sandboxes execute in the E2B and Vercel Sandbox services, outside this deployable. reclaim-sandboxes is the part that runs here."
+    },
+    "cleanup": {
+      "role": "cleanup",
+      "note": "Retention, expiry, purge and reap. Each is bounded per run and resumes from its own predicate, so none of them can be left half-done by a deployment."
+    },
+    "queue": {
+      "role": "queue-drain",
+      "note": "The queue is Postgres: apps/web/db/neon/0208_background_jobs.sql plus the per-queue policy in apps/web/lib/jobs/job-queues.ts. drain-background-jobs is its consumer. There is no separate broker, and a claimed job is released by lease expiry rather than by a shutdown hook."
+    },
+    "observability": {
+      "role": "observability",
+      "note": "The health probe, the SLO burn evaluator and the security anomaly pager. health-probe is the health endpoint this deployable is measured by."
+    }
+  },
+  "components": [
+    {
+      "name": "drain-audit-streams",
+      "role": "queue-drain",
+      "version": "1.0.0",
+      "produces": ["webhooks"],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing. It enqueues one idempotent delivery job per organization per sweep bucket.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "drain-background-jobs",
+      "role": "queue-drain",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [
+        "notifications",
+        "email",
+        "webhooks",
+        "data-deletion",
+        "file-processing",
+        "research",
+        "event-triggers"
+      ],
+      "inFlightWork": {
+        "holds": "Jobs claimed for the length of this invocation's drain budget.",
+        "recovery": "lease-expiry"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "enforce-billing-collection",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing across invocations; each run re-reads the accounts it acts on.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "enforce-billing-retention",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; deletion is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "enforce-domain-retention",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; deletion is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "enforce-workspace-retention",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; deletion is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "evaluate-model-rollout",
+      "role": "inference",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; rollout state lives in the key-value store, not in the invocation.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "evaluate-slo-burn",
+      "role": "observability",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; each run recomputes the burn window from stored samples.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "expire-memories",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; expiry is idempotent on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "expire-organization-invitations",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; expiry is idempotent on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "expire-support-handoffs",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; expiry is idempotent on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "health-probe",
+      "role": "observability",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "A failure streak in the key-value store, which outlives the deployment by design so a restart cannot reset the page threshold.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "index-retrieval-documents",
+      "role": "search-index",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing here; the indexing itself is a durable workflow run that survives the deployment.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "page-security-anomalies",
+      "role": "observability",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; each run rescans the audit window.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "purge-deleted-accounts",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; erasure is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "purge-deleted-media",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; erasure is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "purge-deleted-organizations",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; erasure is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "purge-security-audit-logs",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; deletion is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "purge-temporary-chats",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; deletion is bounded per run and resumes from the same predicate.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "reap-agent-runs",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing of its own; it is what reclaims agent runs abandoned by a previous deployment.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "reap-code-turns",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing of its own; it is what reclaims code turns abandoned by a previous deployment.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "reclaim-sandboxes",
+      "role": "sandbox-runner",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing of its own; it is what reclaims the sandboxes a previous deployment left running.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "reconcile-credits",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; reconciliation is derived from ledger rows on every run.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "reconcile-provider-costs",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; reconciliation is derived from ledger rows on every run.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "recover-reservations",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing of its own; it is what releases credit reservations stranded by an interrupted request.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "refresh-connector-directory",
+      "role": "connector-sync",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the fetched directory is written whole or not at all.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "refresh-plugin-directory",
+      "role": "connector-sync",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the fetched directory is written whole or not at all.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "replicate-object-backups",
+      "role": "sync",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "A replication cursor in the key-value store; an interrupted run resumes from it.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "report-enterprise-usage",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the Stripe usage record is idempotent per period.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "reset-credits",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the reset is idempotent per billing period.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "roll-up-product-metrics",
+      "role": "projection",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the roll-up is recomputed from source rows on every run.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "run-schedules",
+      "role": "scheduler",
+      "version": "1.0.0",
+      "produces": ["notifications", "email"],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; a schedule due during a deployment fires on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-17",
+          "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    }
+  ]
+}
