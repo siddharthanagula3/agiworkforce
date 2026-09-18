@@ -32,7 +32,7 @@ jobs:
   validate:
     name: Validate tagged mobile release
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     outputs:
       tag: ${{ steps.metadata.outputs.tag }}
       version: ${{ steps.metadata.outputs.version }}
@@ -102,6 +102,58 @@ jobs:
           jq -e '.build.production.environment == "production"' apps/mobile/eas.json >/dev/null
           jq -e '.submit.production.android.track == "internal"' apps/mobile/eas.json >/dev/null
           jq -e '.submit.production.android.releaseStatus == "draft"' apps/mobile/eas.json >/dev/null
+
+      - name: Require stable identifiers, hardened entitlements and forward-only numbering
+        run: pnpm --filter @agiworkforce/mobile release:verify-integrity
+
+      - name: Require a pinned native build environment
+        run: pnpm --filter @agiworkforce/mobile release:check-build-env
+
+      - name: Reconcile the store listings this release submits to
+        run: |
+          pnpm --filter @agiworkforce/mobile test:release-store-listings
+          pnpm --filter @agiworkforce/mobile release:verify-store-listings
+
+      - name: Export the production bundle this release ships
+        env:
+          APP_ENV: production
+          EXPO_PUBLIC_APP_ENV: production
+          EXPO_NO_DOTENV: '1'
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        run: pnpm --filter @agiworkforce/mobile release:export-bundle
+
+      - name: Refuse a bundle carrying a dev server, a test endpoint or a secret
+        run: pnpm --filter @agiworkforce/mobile release:scan-bundle -- dist
+
+      - name: Regenerate the native projects and keep the tracked tree untouched
+        env:
+          APP_ENV: production
+          EXPO_PUBLIC_APP_ENV: production
+          EXPO_NO_DOTENV: '1'
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @agiworkforce/mobile exec expo prebuild --platform all --clean --no-install
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "ERROR: prebuild changed tracked files; the native config is not reproducible" >&2
+            git status --porcelain >&2
+            exit 1
+          fi
+          # Informational: the fingerprint the runtimeVersion is derived from,
+          # recorded beside the artifact a reviewer compares against.
+          pnpm --filter @agiworkforce/mobile exec expo-updates fingerprint:generate \
+            >> "$GITHUB_STEP_SUMMARY" || echo 'fingerprint unavailable' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the generated native projects for release review
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-generated-native-${{ steps.metadata.outputs.version }}
+          path: |
+            apps/mobile/ios
+            apps/mobile/android
+          if-no-files-found: warn
+          retention-days: 14
 
   device-matrix-e2e:
     name: Device matrix E2E (${{ matrix.device }})

@@ -29,6 +29,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 export default function CameraScreen() {
@@ -36,6 +37,7 @@ export default function CameraScreen() {
   const c = useThemeColors();
   const styles = useMemo(() => createStyles(c), [c]);
   const [permission, requestPermission] = useCameraPermissions();
+  const cameraAllowed = useCapability('canUseCamera');
   const params = useLocalSearchParams<{ imageUri?: string; question?: string }>();
 
   const [flashMode, setFlashMode] = useState<FlashMode>('off');
@@ -156,6 +158,14 @@ export default function CameraScreen() {
     setCameraReady(true);
     setCameraSlow(false);
   }, []);
+
+  if (!cameraAllowed) {
+    return (
+      <SafeAreaView style={styles.permissionContainer}>
+        <CapabilityUnavailable label="The camera" onDismiss={handleClose} />
+      </SafeAreaView>
+    );
+  }
 
   if (!permission) {
     return (
