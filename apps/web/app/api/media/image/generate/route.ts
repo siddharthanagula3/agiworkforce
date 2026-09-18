@@ -10,6 +10,12 @@ import { isMediaAssetStoreReady } from '@/lib/server/media-assets';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import {
+  MEDIA_DIAGNOSTIC_HEADER,
+  recordMediaSafety,
+  withMediaJobSpan,
+} from '@/lib/observability/media-telemetry';
+import { annotateActiveSpan } from '@/lib/observability/span';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { evaluateManagedComputeSubscriptionAccess } from '@/lib/services/managed-compute-access';
@@ -310,6 +316,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     segments: negative_prompt ? [prompt, negative_prompt] : [prompt],
   });
   if (!moderation.allowed) {
+    recordMediaSafety({ media: 'image', decision: 'blocked', reason: 'prompt_moderation' });
     return NextResponse.json(
       {
         error: {
@@ -626,6 +633,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     for (const [param, bytes] of suppliedUploads) {
       const hashMatch = matchDenylistedUpload(bytes);
       if (!hashMatch.matched) continue;
+      recordMediaSafety({ media: 'image', decision: 'blocked', reason: 'upload_hash_denylist' });
       recordModerationEvent({
         surface: 'upload',
         action: 'block',
@@ -675,6 +683,8 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       },
     );
   }
+
+  annotateActiveSpan({ 'media.provider': provider, 'media.model': catalogModel.id });
 
   const estimatedCostMicrousd = estimateImageCostMicrousd(provider, n, quality, catalogModel.id);
   let reservation: ManagedUsageRequestReservation;
@@ -976,7 +986,13 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   );
 }
 
-export const POST = withErrorHandler(handleImageGeneration);
+export const POST = withErrorHandler((request: NextRequest) =>
+  withMediaJobSpan({ media: 'image' }, async (span) => {
+    const response = await handleImageGeneration(request);
+    response.headers.set(MEDIA_DIAGNOSTIC_HEADER, span.traceId);
+    return response;
+  }),
+);
 
 export function OPTIONS(request: NextRequest) {
   return (

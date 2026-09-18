@@ -1,7 +1,17 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { LifecycleProjection, LifecycleStatus } from '@agiworkforce/types';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import {
+  mediaJobDiagnostics,
+  recordMediaAttempt,
+  recordMediaCallback,
+  recordMediaGeneration,
+  recordMediaPoll,
+  type MediaGenerationOutcome,
+  type MediaJobDiagnosticsRecord,
+} from '@/lib/observability/media-telemetry';
 import {
   VIDEO_ADMISSION_CEILING_SECONDS,
   VIDEO_ADMISSION_FLOOR_SECONDS,
@@ -9,13 +19,25 @@ import {
 } from '@/lib/workflows/video-generation-timing';
 
 export type VideoJobProvider = 'google' | 'runway' | 'openrouter';
-export type VideoJobStatus =
-  | 'submitting'
-  | 'queued'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'outcome_unknown';
+
+/** `submitting` and `processing` are the provider-facing spellings of `pending`
+ * and `running`; the column keeps them, the vocabulary explains them. */
+export const LIFECYCLE_STATUS_BY_VIDEO_JOB_STATUS = Object.freeze({
+  submitting: 'pending',
+  queued: 'queued',
+  processing: 'running',
+  completed: 'completed',
+  failed: 'failed',
+  outcome_unknown: 'outcome_unknown',
+}) satisfies LifecycleProjection<
+  'submitting' | 'queued' | 'processing' | 'completed' | 'failed' | 'outcome_unknown'
+>;
+
+export type VideoJobStatus = keyof typeof LIFECYCLE_STATUS_BY_VIDEO_JOB_STATUS;
+
+export function lifecycleStatusForVideoJob(status: VideoJobStatus): LifecycleStatus {
+  return LIFECYCLE_STATUS_BY_VIDEO_JOB_STATUS[status];
+}
 export type VideoJobResolution = '480p' | '720p' | '1080p' | '4k';
 export type VideoJobAspectRatio = '16:9' | '4:3' | '1:1' | '3:4' | '9:16' | '21:9';
 export type VideoJobSourceSurface = 'web' | 'mobile' | 'desktop';
@@ -77,6 +99,39 @@ export interface VideoSettlementIncident {
   alertClaimToken: string | null;
   alertClaimExpiresAt: string | null;
   completedAt: string | null;
+}
+
+function epoch(value: string | null | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function videoJobDiagnostics(job: VideoGenerationJob): MediaJobDiagnosticsRecord {
+  return mediaJobDiagnostics({
+    media: 'video',
+    jobId: job.id,
+    status: job.status,
+    provider: job.provider,
+    model: job.model,
+    attempt: job.reconcileFailures,
+    ...(epoch(job.createdAt) === undefined ? {} : { createdAtMs: epoch(job.createdAt) }),
+    ...(epoch(job.terminalAt) === undefined ? {} : { settledAtMs: epoch(job.terminalAt) }),
+    ...(job.providerFailureCode ? { failureCode: job.providerFailureCode } : {}),
+  });
+}
+
+function reportVideoGeneration(job: VideoGenerationJob, outcome: MediaGenerationOutcome): void {
+  const diagnostics = videoJobDiagnostics(job);
+  recordMediaGeneration({
+    media: 'video',
+    outcome,
+    provider: job.provider,
+    model: job.model,
+    surface: job.sourceSurface,
+    mode: 'async',
+    ...(diagnostics.latencyMs === undefined ? {} : { latencyMs: diagnostics.latencyMs }),
+  });
 }
 
 type VideoGenerationJobRow = Record<string, unknown>;
@@ -421,6 +476,7 @@ export async function createVideoGenerationJob(input: {
     return persisted;
   });
   if (!job) throw new Error('Video generation job was not persisted.');
+  reportVideoGeneration(job, 'accepted');
   return job;
 }
 
@@ -743,17 +799,32 @@ export async function listDueVideoGenerationJobIds(
   return rows.map((row) => String(row.id));
 }
 
-export function claimVideoGenerationJob(input: {
+export async function claimVideoGenerationJob(input: {
   db: DatabaseAdapter;
   jobId: string;
   claimToken: string;
   claimSeconds?: number;
 }): Promise<VideoGenerationJob | null> {
-  return queryJob(
+  const claimed = await queryJob(
     input.db,
     'select * from public.claim_video_generation_job($1::uuid, $2::text, $3::integer)',
     [input.jobId, input.claimToken, input.claimSeconds ?? 180],
   );
+  recordMediaPoll({
+    media: 'video',
+    outcome: claimed ? 'claimed' : 'pending',
+    ...(claimed ? { provider: claimed.provider } : {}),
+  });
+  if (claimed) {
+    recordMediaAttempt({
+      media: 'video',
+      outcome: 'started',
+      attempt: claimed.reconcileFailures + 1,
+      provider: claimed.provider,
+      model: claimed.model,
+    });
+  }
+  return claimed;
 }
 
 export async function deferVideoGenerationJob(input: {
@@ -794,6 +865,14 @@ export async function deferVideoGenerationJob(input: {
     ],
   );
   if (!job) throw new Error('Video reconciliation claim was lost before it could be deferred.');
+  recordMediaPoll({ media: 'video', outcome: 'pending', provider: job.provider });
+  recordMediaAttempt({
+    media: 'video',
+    outcome: 'deferred',
+    attempt: job.reconcileFailures,
+    provider: job.provider,
+    model: job.model,
+  });
   return job;
 }
 
@@ -826,6 +905,13 @@ export async function deferVideoGenerationJobFailure(input: {
     ],
   );
   if (!job) throw new Error('Video reconciliation claim was lost before retry scheduling.');
+  recordMediaAttempt({
+    media: 'video',
+    outcome: 'failed',
+    attempt: job.reconcileFailures,
+    provider: job.provider,
+    model: job.model,
+  });
   return job;
 }
 
@@ -875,6 +961,17 @@ export async function finalizeVideoGenerationJob(input: {
     });
   }
 
+  if (job) {
+    recordMediaAttempt({
+      media: 'video',
+      outcome: input.outcome === 'completed' ? 'completed' : 'failed',
+      attempt: job.reconcileFailures,
+      provider: job.provider,
+      model: job.model,
+    });
+    reportVideoGeneration(job, input.outcome === 'completed' ? 'completed' : 'failed');
+  }
+
   return job;
 }
 
@@ -911,7 +1008,14 @@ export async function nudgeVideoGenerationJobFromProviderEvent(input: {
     [input.provider, input.providerTaskId, input.eventKey],
   );
   const disposition = rows[0]?.disposition;
-  return disposition === 'nudged' || disposition === 'duplicate' ? disposition : 'not_found';
+  const settled =
+    disposition === 'nudged' || disposition === 'duplicate' ? disposition : 'not_found';
+  recordMediaCallback({
+    media: 'video',
+    provider: input.provider,
+    outcome: settled === 'nudged' ? 'accepted' : 'ignored',
+  });
+  return settled;
 }
 
 export function markVideoGenerationOutcomeUnknown(input: {

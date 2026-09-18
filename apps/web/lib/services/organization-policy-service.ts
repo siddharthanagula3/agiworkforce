@@ -7,15 +7,20 @@ import {
   SECRET_HANDLING_MODE_DEFAULT,
   WORKSPACE_FEATURES,
   isWorkspaceReasoningEffort,
+  DEFAULT_WORKSPACE_CODE_CONTROLS,
+  WORKSPACE_CODE_TOGGLE_KEYS,
   type AdminPolicy,
   type PrivacyMode,
   type SecretHandlingMode,
   type SourceSurface,
   type SyncedAppSurface,
+  type WorkspaceCodeControls,
+  type WorkspaceCodeControlsLayer,
   type WorkspaceControls,
   type WorkspaceControlsLayer,
   type WorkspaceFeature,
 } from '@agiworkforce/types';
+import { invalidateIpAllowListCache } from '@/lib/services/organization-ip-allow-list-cache';
 
 export type AdminPolicyInput = Omit<AdminPolicy, 'organizationId' | 'updatedAt'>;
 
@@ -128,6 +133,75 @@ function readSurfaces(value: unknown): readonly SourceSurface[] | null | undefin
   return SOURCE_SURFACES.filter((surface) => value.includes(surface));
 }
 
+const HOST_PATTERN =
+  /^(\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+const MAX_CODE_HOSTS = 200;
+const MAX_CODE_RETENTION_DAYS = 3650;
+
+/**
+ * Code controls live at `metadata.codeControls`, beside `metadata.controls`
+ * rather than inside it, so that a policy PATCH that rewrites the workspace
+ * controls object cannot drop them by omission.
+ */
+export const WORKSPACE_CODE_CONTROLS_METADATA_KEY = 'codeControls';
+
+export function parseCodeHostList(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return [
+    ...new Set(
+      value
+        .filter((entry): entry is string => typeof entry === 'string')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter((entry) => HOST_PATTERN.test(entry)),
+    ),
+  ]
+    .sort()
+    .slice(0, MAX_CODE_HOSTS);
+}
+
+function parseRetentionDays(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) return undefined;
+  return Math.min(value, MAX_CODE_RETENTION_DAYS);
+}
+
+export function parseWorkspaceCodeControlsLayer(value: unknown): WorkspaceCodeControlsLayer {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const layer: WorkspaceCodeControlsLayer = {};
+
+  for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
+    if (typeof record[key] === 'boolean') layer[key] = record[key] as boolean;
+  }
+
+  const mcpServers = parseCodeHostList(record['allowedMcpServers']);
+  if (mcpServers !== undefined) layer.allowedMcpServers = mcpServers;
+
+  const egressHosts = parseCodeHostList(record['allowedEgressHosts']);
+  if (egressHosts !== undefined) layer.allowedEgressHosts = egressHosts;
+
+  const retention = parseRetentionDays(record['sessionRetentionDays']);
+  if (retention !== undefined) layer.sessionRetentionDays = retention;
+
+  return layer;
+}
+
+export function readWorkspaceCodeControls(
+  metadata: Record<string, unknown> | null | undefined,
+): WorkspaceCodeControls {
+  return {
+    ...DEFAULT_WORKSPACE_CODE_CONTROLS,
+    ...parseWorkspaceCodeControlsLayer(metadata?.[WORKSPACE_CODE_CONTROLS_METADATA_KEY]),
+  };
+}
+
+export function withWorkspaceCodeControls(
+  metadata: Record<string, unknown> | null | undefined,
+  controls: WorkspaceCodeControls,
+): Record<string, unknown> {
+  return { ...(metadata ?? {}), [WORKSPACE_CODE_CONTROLS_METADATA_KEY]: controls };
+}
+
 export function parseWorkspaceControlsLayer(value: unknown): WorkspaceControlsLayer {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const record = value as Record<string, unknown>;
@@ -158,6 +232,11 @@ export function parseWorkspaceControlsLayer(value: unknown): WorkspaceControlsLa
 
   const surfaces = readSurfaces(record['allowedSurfaces']);
   if (surfaces !== undefined) layer.allowedSurfaces = surfaces;
+
+  const code = record['code'];
+  if (code && typeof code === 'object' && !Array.isArray(code)) {
+    layer.code = parseWorkspaceCodeControlsLayer(code);
+  }
 
   return layer;
 }
@@ -353,6 +432,9 @@ export async function upsertOrganizationPolicy(
   if (!row) {
     throw new Error(`organization_admin_policies upsert returned no row for ${organizationId}`);
   }
+  // Eviction belongs to the write, not to one route: the code-controls route
+  // writes the same row and would otherwise leave a stale allow list cached.
+  invalidateIpAllowListCache(organizationId);
   return formatAdminPolicy(row);
 }
 
@@ -391,4 +473,198 @@ export function diffAdminPolicy(
     }
   }
   return changed;
+}
+
+export type PolicyChangeDirection = 'narrows' | 'widens' | 'changes';
+
+export interface PolicyChangeImpact {
+  key: string;
+  from: unknown;
+  to: unknown;
+  direction: PolicyChangeDirection;
+}
+
+export interface PolicyBlastRadius {
+  narrowing: PolicyChangeImpact[];
+  widening: PolicyChangeImpact[];
+  neutral: PolicyChangeImpact[];
+  revokesAccess: boolean;
+}
+
+const PERMISSIVE_WHEN_TRUE: readonly string[] = [
+  'allowManagedCompute',
+  'chatSyncSurfaces',
+  'allowCliCloudSync',
+  'allowVsCodeCloudSync',
+  'allowChromeCloudSync',
+  'auditExportEnabled',
+  'externalSharingEnabled',
+  'allowMemory',
+  'allowedPrivacyModes',
+];
+
+const RESTRICTIVE_WHEN_TRUE: readonly string[] = [
+  'requireLocalToByokPreview',
+  'retentionEnforced',
+  'requireMfa',
+  'zeroDataRetentionOnly',
+];
+
+const REASONING_EFFORT_ORDER: readonly string[] = ['low', 'medium', 'high'];
+
+function listDirection(
+  from: unknown,
+  to: unknown,
+  allowListSemantics: boolean,
+): PolicyChangeDirection {
+  if (!Array.isArray(from) || !Array.isArray(to)) return 'changes';
+  const before = new Set(from as unknown[]);
+  const after = new Set(to as unknown[]);
+  if (allowListSemantics) {
+    if (before.size === 0 && after.size > 0) return 'narrows';
+    if (before.size > 0 && after.size === 0) return 'widens';
+  }
+  const removed = [...before].some((entry) => !after.has(entry));
+  const added = [...after].some((entry) => !before.has(entry));
+  if (removed && !added) return allowListSemantics ? 'narrows' : 'narrows';
+  if (added && !removed) return 'widens';
+  return 'changes';
+}
+
+function numericDirection(
+  from: unknown,
+  to: unknown,
+  lowerIsStricter: boolean,
+): PolicyChangeDirection {
+  const before = from === null || from === undefined ? null : Number(from);
+  const after = to === null || to === undefined ? null : Number(to);
+  if (before === null && after !== null) return lowerIsStricter ? 'narrows' : 'widens';
+  if (before !== null && after === null) return lowerIsStricter ? 'widens' : 'narrows';
+  if (before === null || after === null) return 'changes';
+  if (after === before) return 'changes';
+  const stricter = lowerIsStricter ? after < before : after > before;
+  return stricter ? 'narrows' : 'widens';
+}
+
+function featureAccessImpacts(from: unknown, to: unknown): PolicyChangeImpact[] {
+  const before = (from ?? {}) as Record<string, unknown>;
+  const after = (to ?? {}) as Record<string, unknown>;
+  const impacts: PolicyChangeImpact[] = [];
+  for (const feature of WORKSPACE_FEATURES) {
+    const was = before[feature];
+    const now = after[feature];
+    if (was === now) continue;
+    impacts.push({
+      key: `controls.featureAccess.${feature}`,
+      from: was ?? null,
+      to: now ?? null,
+      direction: now === false ? 'narrows' : now === true ? 'widens' : 'changes',
+    });
+  }
+  return impacts;
+}
+
+function controlsImpacts(from: unknown, to: unknown): PolicyChangeImpact[] {
+  const before = (from ?? {}) as Record<string, unknown>;
+  const after = (to ?? {}) as Record<string, unknown>;
+  const impacts = featureAccessImpacts(before['featureAccess'], after['featureAccess']);
+
+  if (JSON.stringify(before['defaultModelId']) !== JSON.stringify(after['defaultModelId'])) {
+    impacts.push({
+      key: 'controls.defaultModelId',
+      from: before['defaultModelId'] ?? null,
+      to: after['defaultModelId'] ?? null,
+      direction: 'changes',
+    });
+  }
+
+  if (
+    JSON.stringify(before['maxReasoningEffort']) !== JSON.stringify(after['maxReasoningEffort'])
+  ) {
+    const wasIndex = REASONING_EFFORT_ORDER.indexOf(String(before['maxReasoningEffort']));
+    const nowIndex = REASONING_EFFORT_ORDER.indexOf(String(after['maxReasoningEffort']));
+    impacts.push({
+      key: 'controls.maxReasoningEffort',
+      from: before['maxReasoningEffort'] ?? null,
+      to: after['maxReasoningEffort'] ?? null,
+      direction:
+        nowIndex === -1 ? 'widens' : wasIndex === -1 || nowIndex < wasIndex ? 'narrows' : 'widens',
+    });
+  }
+
+  for (const key of ['allowedCountries', 'allowedSurfaces'] as const) {
+    if (JSON.stringify(before[key]) === JSON.stringify(after[key])) continue;
+    const beforeList = before[key] ?? [];
+    const afterList = after[key] ?? [];
+    impacts.push({
+      key: `controls.${key}`,
+      from: before[key] ?? null,
+      to: after[key] ?? null,
+      direction:
+        after[key] === null
+          ? 'widens'
+          : before[key] === null
+            ? 'narrows'
+            : listDirection(beforeList, afterList, true),
+    });
+  }
+
+  return impacts;
+}
+
+function impactFor(key: string, from: unknown, to: unknown): PolicyChangeImpact {
+  if (PERMISSIVE_WHEN_TRUE.includes(key)) {
+    if (Array.isArray(from) || Array.isArray(to)) {
+      return { key, from, to, direction: listDirection(from, to, false) };
+    }
+    return {
+      key,
+      from,
+      to,
+      direction: to === false ? 'narrows' : to === true ? 'widens' : 'changes',
+    };
+  }
+  if (RESTRICTIVE_WHEN_TRUE.includes(key)) {
+    return {
+      key,
+      from,
+      to,
+      direction: to === true ? 'narrows' : to === false ? 'widens' : 'changes',
+    };
+  }
+  if (key === 'retentionDays' || key === 'monthlySpendCapCents') {
+    return { key, from, to, direction: numericDirection(from, to, true) };
+  }
+  if (key === 'ipAllowList') {
+    return { key, from, to, direction: listDirection(from, to, true) };
+  }
+  return { key, from, to, direction: 'changes' };
+}
+
+/**
+ * What a proposed policy takes away before it is saved, so an administrator is
+ * shown the consequence rather than discovering it from a support ticket.
+ */
+export function simulateAdminPolicyChange(
+  before: AdminPolicy | null,
+  after: AdminPolicy,
+): PolicyBlastRadius {
+  const diff = diffAdminPolicy(before, after);
+  const impacts: PolicyChangeImpact[] = [];
+
+  for (const [key, change] of Object.entries(diff)) {
+    if (key === 'controls') {
+      impacts.push(...controlsImpacts(change.from, change.to));
+      continue;
+    }
+    impacts.push(impactFor(key, change.from, change.to));
+  }
+
+  const narrowing = impacts.filter((impact) => impact.direction === 'narrows');
+  return {
+    narrowing,
+    widening: impacts.filter((impact) => impact.direction === 'widens'),
+    neutral: impacts.filter((impact) => impact.direction === 'changes'),
+    revokesAccess: narrowing.length > 0,
+  };
 }

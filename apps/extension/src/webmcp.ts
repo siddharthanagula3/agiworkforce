@@ -1,5 +1,12 @@
 import { logger } from './utils';
 import { safeJsonParse, MAX_WEBMCP_SCHEMA_BYTES } from './background/policy';
+import {
+  describeSiteToolApproval,
+  effectFromAnnotations,
+  effectFromFormMethod,
+  planSiteToolCall,
+  type SiteToolEffect,
+} from './features/tools/siteToolRegistry';
 
 function escapeAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -18,6 +25,7 @@ export interface WebMCPToolInfo {
   description: string;
   inputSchema?: Record<string, unknown>;
   source: 'imperative' | 'declarative';
+  effect: SiteToolEffect;
 }
 
 export interface WebMCPDiscoveryResult {
@@ -36,6 +44,8 @@ export interface WebMCPCallToolResponse {
   success: boolean;
   result?: unknown;
   error?: string;
+  /** Set when a failed site-tool call was completed through the page's own form. */
+  fellBackToDom?: boolean;
 }
 
 export function discoverDeclarativeTools(): WebMCPToolInfo[] {
@@ -97,6 +107,7 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
         ...(required.length > 0 ? { required } : {}),
       },
       source: 'declarative',
+      effect: effectFromFormMethod(form.getAttribute('method')),
     });
   }
 
@@ -109,7 +120,12 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
   const testing = (
     navigator as {
       modelContextTesting?: {
-        listTools(): Array<{ name: string; description: string; inputSchema?: string }>;
+        listTools(): Array<{
+          name: string;
+          description: string;
+          inputSchema?: string;
+          annotations?: { readOnlyHint?: unknown };
+        }>;
       };
     }
   ).modelContextTesting;
@@ -127,6 +143,7 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
           description: (tool.description ?? '').slice(0, TOOL_DESCRIPTION_MAX_CHARS),
           inputSchema: parsedSchema,
           source: 'imperative',
+          effect: effectFromAnnotations(tool.annotations),
         });
       }
       return tools;
@@ -142,6 +159,7 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
           name: string;
           description?: string;
           inputSchema?: Record<string, unknown>;
+          annotations?: { readOnlyHint?: unknown };
         }>;
       };
     }
@@ -157,6 +175,7 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
           description: (tool.description || '').slice(0, TOOL_DESCRIPTION_MAX_CHARS),
           inputSchema: tool.inputSchema,
           source: 'imperative',
+          effect: effectFromAnnotations(tool.annotations),
         });
       }
     } catch (e) {
@@ -191,9 +210,27 @@ export function discoverAllTools(): WebMCPDiscoveryResult {
   };
 }
 
-export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCallToolResponse> {
-  const { name, arguments: args = {} } = request;
+function findToolForm(name: string): HTMLFormElement | null {
+  return document.querySelector(
+    `form[tool-name="${escapeAttrValue(name)}"]`,
+  ) as HTMLFormElement | null;
+}
 
+function declaredEffect(name: string): SiteToolEffect {
+  const form = findToolForm(name);
+  if (form) return effectFromFormMethod(form.getAttribute('method'));
+  const declared = discoverImperativeTools().find((tool) => tool.name === name);
+  return declared?.effect ?? 'write';
+}
+
+function toError(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+async function callToolImperative(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<WebMCPCallToolResponse | null> {
   const testing = (
     navigator as {
       modelContextTesting?: {
@@ -214,10 +251,7 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
         : null;
       return { success: true, result: parsedResult };
     } catch (e) {
-      return {
-        success: false,
-        error: e instanceof Error ? e.message : String(e),
-      };
+      return { success: false, error: toError(e) };
     }
   }
 
@@ -237,56 +271,73 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
       const result = await mc.callTool({ name, arguments: args });
       return { success: true, result };
     } catch (e) {
-      return {
-        success: false,
-        error: e instanceof Error ? e.message : String(e),
-      };
+      return { success: false, error: toError(e) };
     }
   }
 
-  const form = document.querySelector(
-    `form[tool-name="${escapeAttrValue(name)}"]`,
-  ) as HTMLFormElement | null;
-  if (form) {
-    try {
-      const argLines = Object.entries(args)
-        .map(([k, v]) => `  ${k}: ${String(v).slice(0, 120)}`)
-        .join('\n');
-      const confirmed = window.confirm(
-        `AGI Workforce: tool "${name}" wants to submit this form:\n\n${argLines}\n\nClick OK to submit, or Cancel to abort.`,
-      );
-      if (!confirmed) {
-        return {
-          success: false,
-          error: 'User cancelled the tool invocation.',
-        };
-      }
-      for (const [key, value] of Object.entries(args)) {
-        const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as
-          | HTMLInputElement
-          | HTMLSelectElement
-          | HTMLTextAreaElement
-          | null;
-        if (field) {
-          field.value = String(value);
-          field.dispatchEvent(new Event('input', { bubbles: true }));
-          field.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      }
-      form.requestSubmit();
-      return { success: true, result: { submitted: true, toolName: name } };
-    } catch (e) {
-      return {
-        success: false,
-        error: e instanceof Error ? e.message : String(e),
-      };
-    }
-  }
+  return null;
+}
 
-  return {
-    success: false,
-    error: `Tool "${name}" not found on this page`,
+function callToolViaDom(name: string, args: Record<string, unknown>): WebMCPCallToolResponse {
+  const form = findToolForm(name);
+  if (!form) return { success: false, error: `Tool "${name}" not found on this page` };
+  try {
+    for (const [key, value] of Object.entries(args)) {
+      const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+      if (field) {
+        field.value = String(value);
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+    form.requestSubmit();
+    return { success: true, result: { submitted: true, toolName: name } };
+  } catch (e) {
+    return { success: false, error: toError(e) };
+  }
+}
+
+const CANCELLED: WebMCPCallToolResponse = {
+  success: false,
+  error: 'User cancelled the tool invocation.',
+};
+
+/**
+ * Site tools run under the same approval policy as every other browser action,
+ * and a tool call that fails falls back to the page's own form rather than
+ * ending the run, which is the path a site tool exists to shortcut.
+ */
+export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCallToolResponse> {
+  const { name, arguments: args = {} } = request;
+  const pageUrl = typeof window === 'undefined' ? null : window.location.href;
+  const plan = planSiteToolCall({ name, effect: declaredEffect(name) }, args, pageUrl);
+
+  let asked = false;
+  const approve = (): boolean => {
+    if (asked) return true;
+    asked = true;
+    return window.confirm(describeSiteToolApproval(name, args, plan));
   };
+
+  if (plan.requiresApproval && !approve()) return CANCELLED;
+
+  const imperative = await callToolImperative(name, args);
+  if (imperative?.success) return imperative;
+
+  const form = findToolForm(name);
+  if (!form)
+    return imperative ?? { success: false, error: `Tool "${name}" not found on this page` };
+
+  // Submitting the page's own form navigates, so it always asks, whatever the
+  // tool declared its effect to be.
+  if (!approve()) return CANCELLED;
+
+  const fallback = callToolViaDom(name, args);
+  if (!imperative) return fallback;
+  return fallback.success
+    ? { ...fallback, fellBackToDom: true }
+    : { success: false, error: imperative.error };
 }
 
 let toolChangeCallback: ((tools: WebMCPToolInfo[]) => void) | null = null;

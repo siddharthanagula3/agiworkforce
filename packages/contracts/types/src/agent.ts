@@ -8,6 +8,8 @@
  * @packageDocumentation
  */
 
+import type { LifecycleProjection, LifecycleStatus } from './lifecycle-status';
+
 /**
  * Configuration for an AI agent instance.
  *
@@ -53,14 +55,24 @@ export interface AgentConfig {
 }
 
 export type AgentLifecycleStatus =
-  | 'idle'
-  | 'thinking'
-  | 'working'
-  | 'waiting'
-  | 'paused'
-  | 'completed'
-  | 'error'
-  | 'cancelled';
+  'idle' | 'thinking' | 'working' | 'waiting' | 'paused' | 'completed' | 'error' | 'cancelled';
+
+/** `thinking` and `working` are two presentations of one state: the agent runs. */
+export const LIFECYCLE_STATUS_BY_AGENT_STATUS: LifecycleProjection<AgentLifecycleStatus> =
+  Object.freeze({
+    idle: 'idle',
+    thinking: 'running',
+    working: 'running',
+    waiting: 'awaiting_input',
+    paused: 'awaiting_input',
+    completed: 'completed',
+    error: 'failed',
+    cancelled: 'cancelled',
+  });
+
+export function lifecycleStatusForAgentStatus(status: AgentLifecycleStatus): LifecycleStatus {
+  return LIFECYCLE_STATUS_BY_AGENT_STATUS[status];
+}
 
 /**
  * A fully hydrated agent instance with runtime state.

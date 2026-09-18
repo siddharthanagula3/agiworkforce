@@ -73,6 +73,73 @@ export function clampReasoningEffort<T extends string>(
     : effort;
 }
 
+// Code controls are the organization's answer for the Code surface specifically:
+// which of its outbound connections an administrator permits at all.
+export interface WorkspaceCodeControls {
+  allowDesktopCloudSync: boolean;
+  allowGithubConnection: boolean;
+  allowMcpServers: boolean;
+  allowAutomatedReview: boolean;
+  allowedMcpServers: readonly string[];
+  allowedEgressHosts: readonly string[];
+  sessionRetentionDays: number | null;
+}
+
+export type WorkspaceCodeControlKey = keyof WorkspaceCodeControls;
+
+export const WORKSPACE_CODE_CONTROL_KEYS = [
+  'allowDesktopCloudSync',
+  'allowGithubConnection',
+  'allowMcpServers',
+  'allowAutomatedReview',
+  'allowedMcpServers',
+  'allowedEgressHosts',
+  'sessionRetentionDays',
+] as const satisfies readonly WorkspaceCodeControlKey[];
+
+export const WORKSPACE_CODE_TOGGLE_KEYS = [
+  'allowDesktopCloudSync',
+  'allowGithubConnection',
+  'allowMcpServers',
+  'allowAutomatedReview',
+] as const;
+
+export type WorkspaceCodeToggleKey = (typeof WORKSPACE_CODE_TOGGLE_KEYS)[number];
+
+export const WORKSPACE_CODE_CONTROL_LABELS: Readonly<Record<WorkspaceCodeControlKey, string>> =
+  Object.freeze({
+    allowDesktopCloudSync: 'Desktop cloud sync',
+    allowGithubConnection: 'GitHub connection',
+    allowMcpServers: 'MCP servers',
+    allowAutomatedReview: 'Automated pull request review',
+    allowedMcpServers: 'Allowed MCP servers',
+    allowedEgressHosts: 'Allowed network hosts',
+    sessionRetentionDays: 'Code session retention',
+  });
+
+export const WORKSPACE_CODE_CONTROL_HINTS: Readonly<Record<WorkspaceCodeControlKey, string>> =
+  Object.freeze({
+    allowDesktopCloudSync: 'The desktop app syncing Code sessions to the cloud.',
+    allowGithubConnection: 'Connecting a GitHub account or installing the GitHub app.',
+    allowMcpServers: 'Code sessions reaching MCP servers at all.',
+    allowAutomatedReview: 'The GitHub app reviewing pull requests on its own.',
+    allowedMcpServers: 'Empty allows every MCP server the egress policy already permits.',
+    allowedEgressHosts: 'Empty allows every host the session egress policy already permits.',
+    sessionRetentionDays: 'Empty keeps Code sessions for the workspace retention period.',
+  });
+
+export const DEFAULT_WORKSPACE_CODE_CONTROLS: WorkspaceCodeControls = Object.freeze({
+  allowDesktopCloudSync: true,
+  allowGithubConnection: true,
+  allowMcpServers: true,
+  allowAutomatedReview: true,
+  allowedMcpServers: Object.freeze([]) as readonly string[],
+  allowedEgressHosts: Object.freeze([]) as readonly string[],
+  sessionRetentionDays: null,
+});
+
+export type WorkspaceCodeControlsLayer = Partial<WorkspaceCodeControls>;
+
 export interface WorkspaceControls {
   featureAccess: WorkspaceFeatureAccess;
   defaultModelId: string | null;
@@ -95,6 +162,7 @@ export interface WorkspaceControlsLayer {
   maxReasoningEffort?: WorkspaceReasoningEffort | null;
   allowedCountries?: readonly string[];
   allowedSurfaces?: readonly SourceSurface[] | null;
+  code?: WorkspaceCodeControlsLayer;
 }
 
 // The settings scopes below the workspace, most general first.
@@ -135,7 +203,7 @@ export interface WorkspacePolicyOverride {
 }
 
 export type WorkspacePolicyBlockingRuleControl =
-  'feature' | 'reasoning_effort' | 'country' | 'surface';
+  'feature' | 'reasoning_effort' | 'country' | 'surface' | 'code';
 
 // Which layer narrowed a control, so an administrator inspecting an effective
 // value is told the rule that produced it and not only the value.
@@ -145,6 +213,7 @@ export interface WorkspacePolicyBlockingRule {
   overrideId: string | null;
   subjectId: string | null;
   feature?: WorkspaceFeature;
+  codeControl?: WorkspaceCodeControlKey;
   reason: string;
 }
 
@@ -278,6 +347,119 @@ export function resolveWorkspaceControls(
     revision,
     blockingRules,
   };
+}
+
+export interface EffectiveWorkspaceCodeControls extends WorkspaceCodeControls {
+  appliedOverrideIds: readonly string[];
+  revision: number;
+  blockingRules: readonly WorkspacePolicyBlockingRule[];
+}
+
+function narrowCodeWithLayer(
+  base: WorkspaceCodeControls,
+  layer: WorkspaceCodeControlsLayer,
+  origin: LayerOrigin,
+  rules: WorkspacePolicyBlockingRule[],
+): WorkspaceCodeControls {
+  const next: WorkspaceCodeControls = { ...base };
+
+  for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
+    if (layer[key] !== false || next[key] === false) continue;
+    next[key] = false;
+    rules.push({ control: 'code', ...origin, codeControl: key, reason: 'code_control_disabled' });
+  }
+
+  for (const key of ['allowedMcpServers', 'allowedEgressHosts'] as const) {
+    const allowed = layer[key];
+    if (!allowed || allowed.length === 0) continue;
+    const current = next[key];
+    const merged =
+      current.length === 0 ? [...allowed] : current.filter((entry) => allowed.includes(entry));
+    if (merged.length === current.length) continue;
+    next[key] = merged;
+    rules.push({ control: 'code', ...origin, codeControl: key, reason: 'code_control_narrowed' });
+  }
+
+  const retention = layer.sessionRetentionDays;
+  if (
+    retention != null &&
+    (next.sessionRetentionDays === null || retention < next.sessionRetentionDays)
+  ) {
+    next.sessionRetentionDays = retention;
+    rules.push({
+      control: 'code',
+      ...origin,
+      codeControl: 'sessionRetentionDays',
+      reason: 'code_retention_shortened',
+    });
+  }
+
+  return next;
+}
+
+// Same narrow-only contract as resolveWorkspaceControls: a role, group, project,
+// device or person layer may take a Code connection away and never give one back.
+export function resolveWorkspaceCodeControls(
+  base: WorkspaceCodeControls,
+  overrides: readonly WorkspacePolicyOverride[],
+  revision = 0,
+): EffectiveWorkspaceCodeControls {
+  const blockingRules: WorkspacePolicyBlockingRule[] = [];
+  let resolved = narrowCodeWithLayer(
+    DEFAULT_WORKSPACE_CODE_CONTROLS,
+    base,
+    { scope: 'workspace', overrideId: null, subjectId: null },
+    blockingRules,
+  );
+
+  const applied: string[] = [];
+  for (const subjectType of WORKSPACE_POLICY_OVERRIDE_SUBJECTS) {
+    const tier = overrides
+      .filter((override) => override.subjectType === subjectType)
+      .sort((a, b) => a.subjectId.localeCompare(b.subjectId));
+    for (const override of tier) {
+      if (!override.layer.code) continue;
+      applied.push(override.id);
+      resolved = narrowCodeWithLayer(
+        resolved,
+        override.layer.code,
+        { scope: subjectType, overrideId: override.id, subjectId: override.subjectId },
+        blockingRules,
+      );
+    }
+  }
+
+  return { ...resolved, appliedOverrideIds: applied.sort(), revision, blockingRules };
+}
+
+function matchesAllowedHost(pattern: string, host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  const rule = pattern.trim().toLowerCase();
+  if (!rule || !normalized) return false;
+  return rule.startsWith('*.')
+    ? normalized === rule.slice(2) || normalized.endsWith(rule.slice(1))
+    : normalized === rule;
+}
+
+// An empty allow list is "the organization added no rule", not "deny everything";
+// the surface's own egress policy still decides. A non-empty list is exhaustive.
+export function isCodeHostAllowed(
+  allowed: readonly string[],
+  host: string | null | undefined,
+): boolean {
+  if (allowed.length === 0) return true;
+  if (!host) return false;
+  return allowed.some((pattern) => matchesAllowedHost(pattern, host));
+}
+
+export const WORKSPACE_CODE_POLICY_PATH = '/api/settings/organization/policy/code';
+
+export interface WorkspaceCodePolicyResponse {
+  organizationId: string;
+  configured: boolean;
+  canManagePolicy: boolean;
+  controls: WorkspaceCodeControls;
+  effective: EffectiveWorkspaceCodeControls;
 }
 
 export const WORKSPACE_POLICY_EFFECTIVE_PATH = '/api/settings/organization/policy/effective';

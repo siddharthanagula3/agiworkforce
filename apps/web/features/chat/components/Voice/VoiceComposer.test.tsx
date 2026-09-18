@@ -10,11 +10,13 @@ function renderComposer(overrides: Partial<Parameters<typeof VoiceComposer>[0]> 
   const props = {
     value: '',
     muted: false,
+    captionsOpen: false,
     deviceName: DEVICE,
     dockOpen: false,
     onChange: vi.fn(),
     onSubmit: vi.fn(),
     onToggleMute: vi.fn(),
+    onToggleCaptions: vi.fn(),
     onToggleDock: vi.fn(),
     onExit: vi.fn(),
     ...overrides,
@@ -24,12 +26,13 @@ function renderComposer(overrides: Partial<Parameters<typeof VoiceComposer>[0]> 
 }
 
 describe('VoiceComposer', () => {
-  it('offers the four controls the voice bar carries', () => {
+  it('offers the five controls the voice bar carries', () => {
     renderComposer();
 
     expect(screen.getByLabelText('Open this chat panel')).toBeInTheDocument();
     expect(screen.getByTestId('voice-composer-field')).toHaveAttribute('placeholder', 'Type');
     expect(screen.getByTestId('voice-mute-toggle')).toBeInTheDocument();
+    expect(screen.getByTestId('voice-captions-toggle')).toBeInTheDocument();
     expect(screen.getByTestId('voice-exit-button')).toBeInTheDocument();
   });
 

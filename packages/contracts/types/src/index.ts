@@ -20,6 +20,8 @@ export * from './customModel';
 
 export * from './tool-events';
 
+export * from './tool-status';
+
 export * from './agent-status';
 
 export * from './auth';
@@ -28,6 +30,7 @@ export * from './voice';
 
 export * from './visual-session';
 export * from './visual-session-capture';
+export * from './visual-usage';
 
 export * from './time-focus';
 export * from './tool-approval-policy';
@@ -76,6 +79,8 @@ export * from './model';
 export * from './user';
 
 export * from './billing-catalog';
+export * from './billing-plan-catalog';
+export * from './product-plan';
 export * from './credits';
 export * from './model-price-copy';
 export * from './billing-topups';
@@ -137,6 +142,31 @@ export * from './design-system';
 export * from './on-device-models';
 
 export * from './suite-contracts';
+
+export * from './lifecycle-status';
+
+export * from './provider-state';
+
+export * from './dependency-registry';
+
+export * from './trust-mode-contract';
+
+export {
+  CONCEPT_NAMES,
+  CONCEPT_REGISTRY,
+  ORIGIN_SURFACES,
+  RESOURCE_COLUMN_CONTRACT,
+  conceptForTable,
+  getConcept,
+  isConceptName,
+  isOriginSurface,
+  resourceColumn,
+  type ConceptRecord,
+  type ConceptRegistry,
+  type OriginSurface,
+  type ResourceColumnContract,
+  type ResourceColumnRole,
+} from './concept-registry';
 
 export * from './resource-lifecycle';
 

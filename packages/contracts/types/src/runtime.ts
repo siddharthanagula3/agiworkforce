@@ -12,13 +12,15 @@
  * @packageDocumentation
  */
 
+import type { WorkLifecycleStatus } from './lifecycle-status';
+
 export const CLOUD_WORK_MODES = ['chat', 'agiwork'] as const;
 
 export type CloudWorkMode = (typeof CLOUD_WORK_MODES)[number];
 
 export type RuntimeActivityType = 'tool_call' | 'agent_action' | 'system_event' | 'mcp_request';
 
-export type RuntimeActivityStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type RuntimeActivityStatus = WorkLifecycleStatus;
 
 export interface RuntimeActivity {
   id: string;

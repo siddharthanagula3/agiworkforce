@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { recordMediaCallback } from '@/lib/observability/media-telemetry';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { nudgeVideoGenerationJobFromProviderEvent } from '@/lib/server/video-generation-jobs';
 import {
@@ -13,6 +14,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 10;
 
 const MAX_WEBHOOK_BYTES = 64 * 1024;
+const PROVIDER = 'openrouter';
 
 async function readBoundedRawBody(request: NextRequest): Promise<Buffer | null> {
   if (!request.body) return Buffer.alloc(0);
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const declaredLength = Number(request.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_WEBHOOK_BYTES) {
+    recordMediaCallback({ media: 'video', provider: PROVIDER, outcome: 'malformed' });
     return NextResponse.json({ error: 'Webhook payload is too large' }, { status: 413 });
   }
 
@@ -51,9 +54,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     rawBody = await readBoundedRawBody(request);
   } catch {
+    recordMediaCallback({ media: 'video', provider: PROVIDER, outcome: 'malformed' });
     return NextResponse.json({ error: 'Webhook payload could not be read' }, { status: 400 });
   }
   if (!rawBody || rawBody.byteLength === 0) {
+    recordMediaCallback({ media: 'video', provider: PROVIDER, outcome: 'malformed' });
     return NextResponse.json({ error: 'Webhook payload is invalid' }, { status: 400 });
   }
 
@@ -70,6 +75,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       error instanceof OpenRouterVideoWebhookVerificationError && error.kind === 'payload'
         ? 400
         : 401;
+    recordMediaCallback({
+      media: 'video',
+      provider: PROVIDER,
+      outcome: status === 400 ? 'malformed' : 'unauthorized',
+    });
     return NextResponse.json({ error: 'Webhook verification failed' }, { status });
   }
 
@@ -77,7 +87,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const eventKey = request.headers.get('x-openrouter-idempotency-key')!;
     const disposition = await nudgeVideoGenerationJobFromProviderEvent({
       db: getNeonDb(),
-      provider: 'openrouter',
+      provider: PROVIDER,
       providerTaskId: event.data.id,
       eventKey,
     });

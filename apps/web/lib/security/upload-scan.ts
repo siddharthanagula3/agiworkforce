@@ -3,6 +3,7 @@ import 'server-only';
 import { isSensitiveFile } from '@agiworkforce/utils';
 
 import { logger } from '@/lib/logger';
+import { filenameIsUnsafe, sanitizeFilename } from '@/lib/redaction';
 
 import { isHighConfidenceSecretName } from './secret-patterns';
 import { scanForSecrets } from './secrets-audit';
@@ -28,33 +29,18 @@ import { scanForSecrets } from './secrets-audit';
  * open, a disguised executable), which is a different and more tractable
  * problem than general antivirus.
  *
- * An external AV service can be layered on top via `scanUploadBytes`'s hook.
- * see `UPLOAD_SCAN_WEBHOOK_URL` below, but the product is not left defenceless
- * while that is unconfigured.
+ * An external AV service can be layered on top via `UPLOAD_SCAN_WEBHOOK_URL`.
+ * In production it is required unless an operator sets UPLOAD_SCAN_REQUIRED to
+ * false; see docs/security/upload-scanning.md.
  *
- * ─────────────────────────────────────────────────────────────────────────────
- * KNOWN LIMITATION, needs a product decision, see docs/agent-context/known-flaws.md
+ * Both ingest paths write to the PRIVATE bucket, which
+ * `isPrivateObjectStorageConfigured` keeps distinct from the public one, so an
+ * uploaded object is never world-readable before this scanner runs.
  *
- * The R2 bucket is PUBLIC by design (zero egress cost), so an object is
- * world-readable the instant the client's presigned PUT lands, BEFORE this
- * scanner ever runs at `/complete`. Scanning here therefore cannot prevent
- * exposure; it can only refuse to register the asset and delete the object,
- * which shrinks the window from "forever" to "seconds" and stops the file being
- * reachable through `/api/files/[id]` or any share link.
- *
- * Closing the window entirely requires one of:
- *   (a) making the bucket private and proxying every read through the already
- *       auth-gated `/api/files/[id]`, costs egress, or
- *   (b) scanning at presign time, which means proxying the upload through the
- *       server and giving up direct-to-R2 uploads (Vercel caps bodies ~4.5MB).
- * Both are cost/architecture calls, not code changes.
- *
- * A second, narrower limitation: this does NOT reject `text/html` for carrying
- * script, because a knowledge file legitimately can be a saved web page and
- * refusing it would break the feature. What stops that markup executing is the
- * serving side, see `lib/security/served-bytes.ts`, which demotes every
- * browser-executable type to an opaque download on both byte-serving routes.
- * ─────────────────────────────────────────────────────────────────────────────
+ * This does NOT reject `text/html` for carrying script, because a knowledge
+ * file legitimately can be a saved web page. What stops that markup executing
+ * is `lib/security/served-bytes.ts`, which demotes every browser-executable
+ * type to an opaque download on both byte-serving routes.
  */
 
 export interface UploadScanFinding {
@@ -66,6 +52,7 @@ export interface UploadScanFinding {
     | 'archive_not_allowed'
     | 'credential_material'
     | 'sensitive_filename'
+    | 'unsafe_filename'
     | 'external_scanner';
   detail: string;
 }
@@ -169,10 +156,17 @@ export function scanUploadForCredentials(
 ): UploadScanFinding[] {
   const findings: UploadScanFinding[] = [];
 
-  if (filename && isSensitiveFile(filename)) {
+  if (filename && filenameIsUnsafe(filename)) {
+    findings.push({
+      code: 'unsafe_filename',
+      detail: `${sanitizeFilename(filename)} was submitted as a path rather than a file name`,
+    });
+  }
+
+  if (filename && isSensitiveFile(sanitizeFilename(filename))) {
     findings.push({
       code: 'sensitive_filename',
-      detail: `${filename} is the name of a credential file`,
+      detail: `${sanitizeFilename(filename)} is the name of a credential file`,
     });
   }
 
@@ -191,7 +185,7 @@ export function scanUploadForCredentials(
 }
 
 export function uploadFindingRejects(finding: UploadScanFinding): boolean {
-  if (finding.code === 'sensitive_filename') return true;
+  if (finding.code === 'sensitive_filename' || finding.code === 'unsafe_filename') return true;
   if (finding.code !== 'credential_material') return true;
   const name = finding.detail.slice(0, finding.detail.lastIndexOf(' at byte '));
   return isHighConfidenceSecretName(name);
@@ -254,11 +248,17 @@ export interface UploadScannerStatus {
   required: boolean;
 }
 
+/**
+ * Production requires an external scanner unless an operator explicitly opts
+ * out, so an unprovisioned deployment refuses uploads rather than admitting
+ * unscanned bytes.
+ */
 export function uploadScannerStatus(): UploadScannerStatus {
-  return {
-    configured: Boolean(process.env['UPLOAD_SCAN_WEBHOOK_URL']?.trim()),
-    required: process.env['UPLOAD_SCAN_REQUIRED']?.trim().toLowerCase() === 'true',
-  };
+  const configured = Boolean(process.env['UPLOAD_SCAN_WEBHOOK_URL']?.trim());
+  const declared = process.env['UPLOAD_SCAN_REQUIRED']?.trim().toLowerCase();
+  if (declared === 'true') return { configured, required: true };
+  if (declared === 'false') return { configured, required: false };
+  return { configured, required: process.env['NODE_ENV'] === 'production' };
 }
 
 let unconfiguredScannerReported = false;
@@ -279,7 +279,7 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
       unconfiguredScannerReported = true;
       logger.warn(
         { event: 'upload_scanner_unconfigured' },
-        '[upload-scan] no external malware scanner is configured; uploads get structural checks only',
+        '[upload-scan] UPLOAD_SCAN_REQUIRED is off and no external malware scanner is configured; uploads get structural checks only',
       );
     }
     return [];

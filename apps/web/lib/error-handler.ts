@@ -223,16 +223,17 @@ export function withErrorHandler<T extends unknown[]>(
   return async (...args: T): Promise<NextResponse | Response> => {
     const inbound = parseTraceparent(readHeader(args[0], 'traceparent'));
     const serverSpan = startBridgedSpan(HTTP_SERVER_SPAN, HTTP_SERVER_SPAN_KIND, inbound);
-    const context: TraceContext = {
-      traceId: serverSpan.traceId,
-      spanId: serverSpan.spanId,
-      sampled: serverSpan.sampled,
-    };
     const inboundRequestId = readHeader(args[0], 'x-request-id');
     const requestId =
       inboundRequestId && /^[A-Za-z0-9._~-]{1,128}$/u.test(inboundRequestId)
         ? inboundRequestId
-        : context.traceId;
+        : serverSpan.traceId;
+    const context: TraceContext = {
+      traceId: serverSpan.traceId,
+      spanId: serverSpan.spanId,
+      sampled: serverSpan.sampled,
+      requestId,
+    };
     const method = (args[0] as { method?: string } | undefined)?.method;
     const url = (args[0] as { url?: string } | undefined)?.url;
     const breach = findPayloadCeilingBreach(

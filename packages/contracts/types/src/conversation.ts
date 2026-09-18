@@ -1,4 +1,5 @@
 import { RUN_STATUS_LABELS } from './cross-device';
+import type { LifecycleStatus, WorkLifecycleStatus } from './lifecycle-status';
 
 declare const __brand: unique symbol;
 
@@ -34,16 +35,7 @@ export type MessageStatus =
   /** Message failed to send or stream. */
   | 'error';
 
-export type ActionStatus =
-  | 'pending'
-  /** Action is currently executing. */
-  | 'running'
-  /** Action finished successfully. */
-  | 'completed'
-  /** Action finished with an error. */
-  | 'failed'
-  /** Action was cancelled before completion. */
-  | 'cancelled';
+export type ActionStatus = WorkLifecycleStatus;
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -112,13 +104,21 @@ export function toolCallStatusLabel(status: ToolCallDisplayStatus): string {
   return TOOL_CALL_STATUS_LABELS[status];
 }
 
+export const RUNTIME_ACTIVITY_STEP_STATUSES = [
+  'running',
+  'completed',
+  'failed',
+] as const satisfies readonly LifecycleStatus[];
+
+export type RuntimeActivityStepStatus = (typeof RUNTIME_ACTIVITY_STEP_STATUSES)[number];
+
 export interface RuntimeActivityStep {
   id: string;
   icon?: string;
   message: string;
   detail?: string;
   progress?: number;
-  status: 'running' | 'completed' | 'failed';
+  status: RuntimeActivityStepStatus;
 }
 
 export interface FileAttachmentBase {

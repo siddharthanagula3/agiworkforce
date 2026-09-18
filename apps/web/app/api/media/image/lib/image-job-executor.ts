@@ -5,6 +5,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { classifyError, SPENDING_CAP_PROVIDER_HINT } from '@agiworkforce/provider-runtime';
 import { getModelMetadataById, isExecutableImageModel } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { withMediaAttemptSpan } from '@/lib/observability/media-telemetry';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import {
@@ -371,7 +372,26 @@ async function persistGeneratedImages(input: {
  * persistence and settlement code runs against an in-memory job so image
  * generation keeps working, with no durable handle to retry or poll.
  */
-export async function runImageGenerationJobAttempt(input: {
+export function runImageGenerationJobAttempt(input: {
+  db: DatabaseAdapter;
+  job: ImageGenerationJob;
+  inlineEdit?: ImageJobInlineEdit | undefined;
+  detached?: boolean;
+}): Promise<ImageJobAttemptOutcome> {
+  return withMediaAttemptSpan(
+    {
+      media: 'image',
+      provider: input.job.provider,
+      model: input.job.model,
+      surface: input.job.sourceSurface,
+      jobId: input.job.id,
+      attempt: input.job.attempts + 1,
+    },
+    () => executeImageGenerationJobAttempt(input),
+  );
+}
+
+async function executeImageGenerationJobAttempt(input: {
   db: DatabaseAdapter;
   job: ImageGenerationJob;
   inlineEdit?: ImageJobInlineEdit | undefined;

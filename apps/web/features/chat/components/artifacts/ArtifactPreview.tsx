@@ -30,6 +30,7 @@ import {
   Globe,
   Pencil,
   GitFork,
+  Sparkles,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { isSupportedChatAttachment } from '@agiworkforce/cloud-contracts';
@@ -73,6 +74,7 @@ import type { ArtifactRenderPayload, ArtifactKind } from '@/lib/artifact-sandbox
 import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { toast } from 'sonner';
 import { useArtifactsStore } from '../../stores/artifacts-store';
+import { WORK_ENTRY_POINT_LABELS, startWork } from '@/features/work';
 import { toUserMessage } from '@/lib/user-error-message';
 
 /**
@@ -1491,6 +1493,31 @@ if (__AgiApp) {
               >
                 <GitFork className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="ml-1 hidden text-xs @[30rem]:inline">Duplicate</span>
+              </Button>
+            )}
+
+            {/* Start Work: the artifact becomes the objective of a multi-step run
+                rather than something to copy into a new chat by hand. */}
+            {variant === 'panel' && isStoredArtifact && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  startWork({
+                    source: {
+                      entryPoint: 'artifact',
+                      title: artifact.title || 'Untitled artifact',
+                      reference: `artifacts/${artifact.id}`,
+                    },
+                  })
+                }
+                className="h-7 px-2"
+                aria-label={WORK_ENTRY_POINT_LABELS.artifact}
+                title="Start Work"
+                data-testid="artifact-start-work"
+              >
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="ml-1 hidden text-xs @[30rem]:inline">Start Work</span>
               </Button>
             )}
 

@@ -238,6 +238,154 @@ function scanFiles() {
   return [...new Set(files)].filter((file) => !EXCLUDED_FILES.has(file));
 }
 
+const REDIRECT_URI_OWNERS = new Set([
+  'apps/web/lib/connectors/oauth-registry.ts',
+  'apps/web/lib/connectors/oauth-client.ts',
+]);
+const CATALOG_PATH = 'apps/web/lib/connectors/catalog.ts';
+const TOOL_LOADER_PATH = 'apps/web/lib/user-connector-tools.ts';
+const SERVER_ONLY_MODULES = [
+  '@/lib/custom-connector-crypto',
+  '@/lib/connectors/oauth-store',
+  '@/lib/connectors/oauth-access',
+];
+const TENANT_KEY_PARAMS = ['userId', 'organizationId'];
+
+function readIfPresent(relative) {
+  const full = path.join(repoRoot, relative);
+  try {
+    return fs.readFileSync(full, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function lineOf(source, index) {
+  return source.slice(0, index).split('\n').length;
+}
+
+function checkRedirectUriAllowlist(files, findings) {
+  const registry = readIfPresent('apps/web/lib/connectors/oauth-registry.ts');
+  if (registry === null) {
+    findings.push({ rule: 'redirect-uri', detail: 'oauth-registry.ts is missing' });
+  } else if (!/isAllowedConnectorOAuthRedirectUri\(/.test(registry)) {
+    findings.push({
+      rule: 'redirect-uri',
+      detail: 'oauth-registry.ts no longer checks the redirect URI against the allowlist',
+    });
+  }
+
+  for (const file of files) {
+    const relative = path.relative(repoRoot, file);
+    if (REDIRECT_URI_OWNERS.has(relative)) continue;
+    const source = fs.readFileSync(file, 'utf8');
+    // A row shape or a column name is not a provider request. Only an outbound
+    // parameter reaches the provider, so only that is the boundary.
+    const match = /searchParams\.set\(\s*'redirect_uri'|redirect_uri\s*:\s*[^;\n]*redirectUri/.exec(
+      source,
+    );
+    if (!match) continue;
+    findings.push({
+      rule: 'redirect-uri',
+      detail: `${relative}:${lineOf(source, match.index)} sends redirect_uri to a provider outside the allowlisted builder`,
+    });
+  }
+}
+
+function checkRiskClassDeclared(findings) {
+  const source = readIfPresent(CATALOG_PATH);
+  if (source === null) {
+    findings.push({ rule: 'risk-class', detail: `${CATALOG_PATH} is missing` });
+    return;
+  }
+  for (const match of source.matchAll(/implementation:\s*'[^']+'/g)) {
+    const body = source.slice(match.index, source.indexOf('};', match.index) + 2);
+    if (/\briskClass\b/.test(body)) continue;
+    findings.push({
+      rule: 'risk-class',
+      detail: `${CATALOG_PATH}:${lineOf(source, match.index)} declares a connector with no riskClass`,
+    });
+  }
+}
+
+function checkServerOnlyTokenModules(files, findings) {
+  for (const file of files) {
+    const relative = path.relative(repoRoot, file);
+    const source = fs.readFileSync(file, 'utf8');
+    const imported = SERVER_ONLY_MODULES.find((module) => source.includes(`'${module}'`));
+    if (!imported) continue;
+    if (/^\s*'use client'/m.test(source)) {
+      findings.push({
+        rule: 'token-boundary',
+        detail: `${relative} is a client module and imports ${imported}`,
+      });
+      continue;
+    }
+    // A route handler under app/api only ever runs on the server, so the
+    // marker adds nothing there; every other module must declare it.
+    const isRouteHandler = /^apps\/web\/app\/api\/.*\/route\.ts$/.test(relative);
+    if (!isRouteHandler && !/import\s+'server-only'/.test(source)) {
+      findings.push({
+        rule: 'token-boundary',
+        detail: `${relative} imports ${imported} without "import 'server-only'"`,
+      });
+    }
+  }
+}
+
+function checkCacheKeysAreTenantScoped(findings) {
+  const source = readIfPresent(TOOL_LOADER_PATH);
+  if (source === null) {
+    findings.push({ rule: 'cache-key', detail: `${TOOL_LOADER_PATH} is missing` });
+    return;
+  }
+  const builders = [
+    ...source.matchAll(/function\s+(\w*CacheKey)\s*\(([^)]*)\)[^{]*\{([\s\S]*?)\n\}/g),
+  ];
+  if (builders.length === 0) {
+    findings.push({
+      rule: 'cache-key',
+      detail: `${TOOL_LOADER_PATH} declares no cache-key builder`,
+    });
+    return;
+  }
+  for (const builder of builders) {
+    const [, name, params, body] = builder;
+    const tenant = TENANT_KEY_PARAMS.find((param) => new RegExp(`\\b${param}\\b`).test(params));
+    if (!tenant) {
+      findings.push({
+        rule: 'cache-key',
+        detail: `${TOOL_LOADER_PATH}:${lineOf(source, builder.index)} ${name} takes no userId or organizationId`,
+      });
+      continue;
+    }
+    if (!body.includes(`\${encodeURIComponent(${tenant})}`)) {
+      findings.push({
+        rule: 'cache-key',
+        detail: `${TOOL_LOADER_PATH}:${lineOf(source, builder.index)} ${name} does not put ${tenant} in the key`,
+      });
+    }
+  }
+}
+
+function checkRevokedGrantsExcluded(files, findings) {
+  for (const file of files) {
+    const relative = path.relative(repoRoot, file);
+    const source = fs.readFileSync(file, 'utf8');
+    for (const match of source.matchAll(
+      /`([^`]*\bfrom\s+public\.connector_oauth_grants\b[^`]*)`/g,
+    )) {
+      const statement = match[1];
+      if (!/^\s*select/i.test(statement.trim())) continue;
+      if (/revoked_at\s+is\s+null/i.test(statement)) continue;
+      findings.push({
+        rule: 'revoked-grant',
+        detail: `${relative}:${lineOf(source, match.index)} reads connector_oauth_grants without excluding revoked rows`,
+      });
+    }
+  }
+}
+
 function main() {
   const { connectors, forbidden } = loadManifest();
   const described = loadDescriptions();
@@ -261,7 +409,15 @@ function main() {
     if (DISTINCTIVE_SCOPE.test(scope)) watchedScopes.add(scope);
   }
 
-  for (const file of scanFiles()) {
+  const scanned = scanFiles();
+  const boundaryFindings = [];
+  checkRedirectUriAllowlist(scanned, boundaryFindings);
+  checkRiskClassDeclared(boundaryFindings);
+  checkServerOnlyTokenModules(scanned, boundaryFindings);
+  checkCacheKeysAreTenantScoped(boundaryFindings);
+  checkRevokedGrantsExcluded(scanned, boundaryFindings);
+
+  for (const file of scanned) {
     const source = fs.readFileSync(file, 'utf8');
     for (const scope of watchedScopes) {
       const needle = `'${scope}'`;
@@ -277,7 +433,10 @@ function main() {
   }
 
   const failures =
-    violations.length > 0 || missingPurpose.length > 0 || forbiddenInCeiling.length > 0;
+    violations.length > 0 ||
+    missingPurpose.length > 0 ||
+    forbiddenInCeiling.length > 0 ||
+    boundaryFindings.length > 0;
 
   if (forbiddenInCeiling.length > 0) {
     console.error('\nFORBIDDEN SCOPE IN CEILING');
@@ -300,12 +459,21 @@ function main() {
     }
   }
 
+  if (boundaryFindings.length > 0) {
+    console.error('\nCONNECTOR BOUNDARY');
+    for (const { rule, detail } of boundaryFindings) {
+      console.error(`  [${rule}] ${detail}`);
+    }
+  }
+
   if (failures) {
     console.error(
       '\ncheck:connector-scopes FAILED. Every requested OAuth scope must be added to' +
         ' CONNECTOR_OAUTH_SCOPE_CEILINGS in apps/web/lib/connectors/oauth-scope-allowlist.ts' +
         ' with a description in apps/web/lib/connectors/scope-descriptions.ts, and nothing' +
-        ' outside those two files may declare a scope literal directly.',
+        ' outside those two files may declare a scope literal directly. A CONNECTOR BOUNDARY' +
+        ' finding means the redirect-URI allowlist, a connector risk class, the server-only' +
+        ' token boundary, a tenant-scoped cache key or the revoked-grant exclusion was broken.',
     );
     process.exit(1);
   }
@@ -314,7 +482,8 @@ function main() {
   console.log(
     `check:connector-scopes passed: ${connectors.size} connectors, ${enforced} with an` +
       ` enforced ceiling, ${scopeCount} ceiling scopes, all described and none duplicated` +
-      ' outside the manifest.',
+      ' outside the manifest; redirect URIs allowlisted, risk classes declared, token modules' +
+      ' server-only, cache keys tenant-scoped and revoked grants excluded.',
   );
   process.exit(0);
 }

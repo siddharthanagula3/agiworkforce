@@ -408,6 +408,7 @@ export const PROVIDER_TRAITS = [
   'image-generation',
   'video-generation',
   'strict-tool-schemas',
+  'zero-data-retention',
 ] as const;
 
 export type ProviderTrait = (typeof PROVIDER_TRAITS)[number];
