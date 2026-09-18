@@ -57,6 +57,11 @@ pub enum GitOperation {
     Show {
         rev: String,
     },
+    /// One of the three versions git keeps in the index for an unmerged path.
+    ShowStage {
+        path: PathBuf,
+        stage: u8,
+    },
     BranchList {
         include_remote: bool,
     },
@@ -104,6 +109,7 @@ impl GitOperation {
     pub fn label(&self) -> &'static str {
         match self {
             Self::Show { .. } => "show",
+            Self::ShowStage { .. } => "show stage",
             Self::BranchList { .. } => "branch list",
             Self::WorktreeList => "worktree list",
             Self::RevParse { .. } => "rev-parse",
@@ -125,6 +131,7 @@ impl GitOperation {
         !matches!(
             self,
             Self::Show { .. }
+                | Self::ShowStage { .. }
                 | Self::BranchList { .. }
                 | Self::WorktreeList
                 | Self::RevParse { .. }
@@ -186,6 +193,16 @@ impl GitOperation {
                     COMMIT_FORMAT.into(),
                     checked_ref(rev, "rev")?,
                 ]
+            }
+            Self::ShowStage { path, stage } => {
+                if !(1..=3).contains(stage) {
+                    bail!("git index stage must be 1, 2 or 3, not {stage}");
+                }
+                let display = checked_text(&path.to_string_lossy(), "path")?.replace('\\', "/");
+                if display.starts_with('/') || display.starts_with("..") {
+                    bail!("git stage path must be relative to the repository root: {display:?}");
+                }
+                vec!["show".into(), format!(":{stage}:{display}")]
             }
             Self::BranchList { include_remote } => {
                 let mut argv = vec![
@@ -581,6 +598,18 @@ impl GitApi {
             .await?;
         parse_commit_detail(&stdout)
             .with_context(|| format!("read the commit git show returned for {rev}"))
+    }
+
+    /// The blob git holds for one side of an unmerged path. `None` when that
+    /// side does not exist, which is what an add/add or delete/modify conflict
+    /// looks like in the index.
+    pub async fn show_stage(&self, path: &Path, stage: u8) -> Result<Option<String>> {
+        let operation = GitOperation::ShowStage {
+            path: path.to_path_buf(),
+            stage,
+        };
+        let output = self.run(&operation).await?;
+        Ok(output.success.then_some(output.stdout))
     }
 
     pub async fn branches(&self, include_remote: bool) -> Result<Vec<BranchRef>> {
@@ -1135,6 +1164,78 @@ mod tests {
         };
         assert_eq!(paths[0].path, PathBuf::from("README.md"));
         assert_eq!(paths[0].kind, ConflictKind::BothModified);
+    }
+
+    #[tokio::test]
+    async fn show_stage_reads_all_three_sides_of_an_unmerged_path() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        let run = |args: &[&str]| {
+            SyncCommand::new("git")
+                .current_dir(dir.path())
+                .args(args)
+                .output()
+                .expect("git available");
+        };
+        run(&["checkout", "-q", "-b", "feature"]);
+        std::fs::write(dir.path().join("README.md"), "feature\n").unwrap();
+        run(&["commit", "-qam", "feature"]);
+        run(&["checkout", "-q", "main"]);
+        std::fs::write(dir.path().join("README.md"), "main\n").unwrap();
+        run(&["commit", "-qam", "main"]);
+
+        let git = GitApi::at(dir.path());
+        assert!(git
+            .merge("feature", HookPolicy::Respect)
+            .await
+            .unwrap()
+            .is_conflicted());
+
+        let readme = PathBuf::from("README.md");
+        assert_eq!(
+            git.show_stage(&readme, 1).await.unwrap().as_deref(),
+            Some("hello\n")
+        );
+        assert_eq!(
+            git.show_stage(&readme, 2).await.unwrap().as_deref(),
+            Some("main\n")
+        );
+        assert_eq!(
+            git.show_stage(&readme, 3).await.unwrap().as_deref(),
+            Some("feature\n")
+        );
+        assert_eq!(
+            git.show_stage(&PathBuf::from("absent.rs"), 2)
+                .await
+                .unwrap(),
+            None,
+            "a side git does not hold reads as absent, not as an error"
+        );
+    }
+
+    #[test]
+    fn a_stage_read_refuses_an_out_of_range_stage_or_an_escaping_path() {
+        assert!(GitOperation::ShowStage {
+            path: PathBuf::from("README.md"),
+            stage: 0,
+        }
+        .argv()
+        .is_err());
+        assert!(GitOperation::ShowStage {
+            path: PathBuf::from("../outside.rs"),
+            stage: 2,
+        }
+        .argv()
+        .is_err());
+        assert_eq!(
+            GitOperation::ShowStage {
+                path: PathBuf::from("src/main.rs"),
+                stage: 3,
+            }
+            .argv()
+            .unwrap(),
+            vec!["show", ":3:src/main.rs"]
+        );
     }
 
     #[tokio::test]

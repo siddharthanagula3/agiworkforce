@@ -1,7 +1,6 @@
 use anyhow::{bail, Context, Result};
 
 use crate::model_catalog;
-use crate::project_registry::ProjectRegistry;
 use crate::project_scope::resolve_project_scope;
 use crate::terminal_style as ts;
 
@@ -116,35 +115,51 @@ fn print_welcome_banner() {
 /// unavailable current directory must never be treated as trusted.
 pub fn is_current_directory_trusted() -> Result<bool> {
     let cwd = std::env::current_dir().context("Failed to resolve current directory for trust")?;
-    let target = resolve_project_scope(&cwd);
-    let agiworkforce_home = crate::config::CliConfig::config_dir()?;
-    let registry = ProjectRegistry::load(&agiworkforce_home)?;
-    let target_key = target.to_string_lossy().to_string();
+    Ok(crate::trust::is_trusted(&cwd))
+}
 
-    Ok(registry
-        .projects
-        .get(&target_key)
-        .is_some_and(|entry| entry.trust_level == "trusted"))
+/// The choices the trust prompt offers, given whether the organization allows
+/// new grants on this device.
+pub(crate) fn trust_prompt_choices(grants_allowed: bool) -> Vec<&'static str> {
+    let mut choices = Vec::new();
+    if grants_allowed {
+        choices.push("Yes, trust this directory");
+    }
+    choices.push("Open restricted, no shell, network, secrets or MCP auto-start");
+    choices.push("No, quit");
+    choices
+}
+
+/// What the selected index means. Restricted and declined both record an
+/// untrusted decision; only the last one stops the launch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TrustChoice {
+    Grant,
+    OpenRestricted,
+    Quit,
+}
+
+pub(crate) fn trust_choice_for(grants_allowed: bool, index: usize) -> TrustChoice {
+    let offset = usize::from(!grants_allowed);
+    match index + offset {
+        0 => TrustChoice::Grant,
+        1 => TrustChoice::OpenRestricted,
+        _ => TrustChoice::Quit,
+    }
 }
 
 /// Require an explicit trust decision for the current project.
 ///
-/// Returns `Ok(false)` when the user declines so callers can exit before
-/// loading repository-controlled configuration, memory, hooks, or tools.
+/// Returns `Ok(false)` only when the user quits. "Open restricted" continues
+/// with every untrusted-workspace restriction in force, which each capability
+/// checks for itself.
 pub fn ensure_current_directory_trusted() -> Result<bool> {
     let cwd = std::env::current_dir().context("Failed to resolve current directory for trust")?;
-    let target = resolve_project_scope(&cwd);
-    let agiworkforce_home = crate::config::CliConfig::config_dir()?;
-    let registry = ProjectRegistry::load(&agiworkforce_home)?;
-    let target_key = target.to_string_lossy().to_string();
-
-    if registry
-        .projects
-        .get(&target_key)
-        .is_some_and(|entry| entry.trust_level == "trusted")
-    {
+    let status = crate::trust::status_for(&cwd);
+    if status.state.is_trusted() {
         return Ok(true);
     }
+    let target = resolve_project_scope(&cwd);
 
     eprintln!("\n  {}", ts::brand_header("Trust This Directory"));
     eprintln!(
@@ -166,58 +181,81 @@ pub fn ensure_current_directory_trusted() -> Result<bool> {
             ))
         );
     }
+    if let Some(reason) = &status.reason {
+        eprintln!("  {} {}", ts::warning("•"), ts::muted(reason));
+    }
+    let grants_allowed = crate::trust::grants_allowed();
+    if !grants_allowed {
+        eprintln!(
+            "  {} {}",
+            ts::warning("•"),
+            ts::muted("Your organization's managed policy does not allow trusting workspaces.")
+        );
+    }
     eprintln!();
 
-    let choices = &["Yes, continue", "No, quit"];
+    let choices = trust_prompt_choices(grants_allowed);
     let selection = dialoguer::Select::new()
         .with_prompt("  Do you trust the contents of this directory?")
-        .items(choices)
+        .items(&choices)
         .default(0)
         .interact()
         .context("Failed to display trust prompt")?;
 
-    if selection != 0 {
-        let mut registry = registry;
-        if let Err(err) = registry
-            .register_project(&target, "untrusted")
-            .and_then(|()| registry.save(&agiworkforce_home))
-        {
+    match trust_choice_for(grants_allowed, selection) {
+        TrustChoice::Quit => {
+            if let Err(err) = crate::trust::decline(&target) {
+                eprintln!(
+                    "  {} Failed to record trust decision: {}",
+                    ts::warning_header("⚠"),
+                    err
+                );
+            }
             eprintln!(
-                "  {} Failed to record trust decision: {}",
-                ts::warning_header("⚠"),
-                err
+                "\n  {}",
+                ts::muted("Launch canceled. Run AGI again when you trust this directory.")
             );
+            Ok(false)
         }
-        eprintln!(
-            "\n  {}",
-            ts::muted("Launch canceled. Run AGI again when you trust this directory.")
-        );
-        return Ok(false);
+        TrustChoice::OpenRestricted => {
+            if let Err(err) = crate::trust::decline(&target) {
+                eprintln!(
+                    "  {} Failed to record trust decision: {}",
+                    ts::warning_header("⚠"),
+                    err
+                );
+            }
+            eprintln!("\n  {}", ts::warning_header("Restricted session"));
+            for item in crate::trust::TrustRestrictions::RESTRICTED.withheld() {
+                eprintln!("  {} {}", ts::warning("•"), ts::muted(item));
+            }
+            eprintln!("  {}", ts::muted("Run /trust grant to lift them."));
+            Ok(true)
+        }
+        TrustChoice::Grant => {
+            match crate::trust::grant(&target) {
+                Ok(_) => eprintln!(
+                    "\n  {} Trusted {}",
+                    ts::success_header("✓"),
+                    ts::brand_header(target.display().to_string())
+                ),
+                Err(err) => {
+                    eprintln!(
+                        "\n  {} Failed to save trust decision: {}",
+                        ts::warning_header("⚠"),
+                        err
+                    );
+                    eprintln!(
+                        "  {}",
+                        ts::muted(
+                            "Continuing with every untrusted-workspace restriction in force."
+                        )
+                    );
+                }
+            }
+            Ok(true)
+        }
     }
-
-    let mut registry = registry;
-    if let Err(err) = registry
-        .register_project(&target, "trusted")
-        .and_then(|()| registry.save(&agiworkforce_home))
-    {
-        eprintln!(
-            "\n  {} Failed to save trust decision: {}",
-            ts::warning_header("⚠"),
-            err
-        );
-        eprintln!(
-            "  {}",
-            ts::muted("Continuing anyway. You can set trust later in config.toml.")
-        );
-    } else {
-        eprintln!(
-            "\n  {} Trusted {}",
-            ts::success_header("✓"),
-            ts::brand_header(target.display().to_string())
-        );
-    }
-
-    Ok(true)
 }
 
 fn select_auth_provider() -> Result<AuthChoice> {
@@ -980,6 +1018,30 @@ pub async fn run_onboarding() -> Result<bool> {
 
     eprintln!();
     Ok(true)
+}
+
+#[cfg(test)]
+mod trust_prompt_tests {
+    use super::{trust_choice_for, trust_prompt_choices, TrustChoice};
+
+    #[test]
+    fn the_prompt_offers_a_restricted_open_between_trusting_and_quitting() {
+        let choices = trust_prompt_choices(true);
+        assert_eq!(choices.len(), 3);
+        assert!(choices[1].contains("Open restricted"));
+        assert_eq!(trust_choice_for(true, 0), TrustChoice::Grant);
+        assert_eq!(trust_choice_for(true, 1), TrustChoice::OpenRestricted);
+        assert_eq!(trust_choice_for(true, 2), TrustChoice::Quit);
+    }
+
+    #[test]
+    fn a_managed_device_that_forbids_grants_offers_only_restricted_or_quit() {
+        let choices = trust_prompt_choices(false);
+        assert_eq!(choices.len(), 2);
+        assert!(choices[0].contains("Open restricted"));
+        assert_eq!(trust_choice_for(false, 0), TrustChoice::OpenRestricted);
+        assert_eq!(trust_choice_for(false, 1), TrustChoice::Quit);
+    }
 }
 
 #[cfg(test)]
