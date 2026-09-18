@@ -41,6 +41,26 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+const { mockSendTransactionalEmail } = vi.hoisted(() => ({
+  mockSendTransactionalEmail: vi.fn(
+    async (_input: {
+      from: string;
+      to: string;
+      subject: string;
+      text: string;
+      html: string;
+    }): Promise<
+      | { delivered: true; providerMessageId: string | null }
+      | { delivered: false; reason: string; detail: string }
+    > => ({ delivered: true, providerMessageId: 'msg_invite_1' }),
+  ),
+}));
+vi.mock('@/lib/support/handoff/resend-client', () => ({
+  sendTransactionalEmail: mockSendTransactionalEmail,
+  sendSupportEmail: vi.fn(),
+  sendBulkTransactionalEmail: vi.fn(),
+}));
+
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: {
@@ -154,6 +174,90 @@ describe('organization invitation lifecycle routes', () => {
       );
       expect((insert?.[1] as unknown[])[3]).toBe(hashInvitationToken(body.inviteToken));
       expect(insert?.[1]).not.toContain(body.inviteToken);
+    });
+
+    it('sends the invitation email and says so when a provider is configured', async () => {
+      process.env['RESEND_API_KEY'] = 'test-resend-key';
+      process.env['AGI_NOTIFICATIONS_FROM_EMAIL'] = 'team@agiworkforce.test';
+      process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+      mockQuery
+        .mockResolvedValueOnce([adminMembership])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([invitation()])
+        .mockResolvedValueOnce([{ name: 'Northwind' }]);
+
+      try {
+        const response = await POST(
+          jsonRequest('http://localhost:3000/api/settings/team/invitations', 'POST', {
+            organizationId: ORG_A,
+            email: 'Invitee@Example.com',
+            role: 'member',
+          }),
+        );
+
+        const body = (await response.json()) as {
+          inviteToken: string;
+          delivery: { emailSent: boolean };
+        };
+
+        expect(body.delivery.emailSent).toBe(true);
+        expect(mockSendTransactionalEmail).toHaveBeenCalledTimes(1);
+        const sent = mockSendTransactionalEmail.mock.calls[0]![0];
+        expect(sent.from).toBe('team@agiworkforce.test');
+        expect(sent.to).toBe('invitee@example.com');
+        expect(sent.subject).toContain('Northwind');
+        expect(sent.text).toContain(
+          `https://app.agiworkforce.test/invite#token=${body.inviteToken}`,
+        );
+        expect(sent.html).toContain('Accept the invitation');
+      } finally {
+        delete process.env['RESEND_API_KEY'];
+        delete process.env['AGI_NOTIFICATIONS_FROM_EMAIL'];
+        delete process.env['NEXT_PUBLIC_APP_URL'];
+      }
+    });
+
+    it('does not claim delivery when the provider rejects the send', async () => {
+      process.env['RESEND_API_KEY'] = 'test-resend-key';
+      process.env['AGI_NOTIFICATIONS_FROM_EMAIL'] = 'team@agiworkforce.test';
+      process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+      mockSendTransactionalEmail.mockResolvedValueOnce({
+        delivered: false,
+        reason: 'rejected',
+        detail: '422 domain not verified',
+      } as never);
+      mockQuery
+        .mockResolvedValueOnce([adminMembership])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([invitation()])
+        .mockResolvedValueOnce([{ name: 'Northwind' }]);
+
+      try {
+        const response = await POST(
+          jsonRequest('http://localhost:3000/api/settings/team/invitations', 'POST', {
+            organizationId: ORG_A,
+            email: 'Invitee@Example.com',
+            role: 'member',
+          }),
+        );
+
+        const body = (await response.json()) as {
+          inviteToken: string;
+          delivery: { emailSent: boolean; reason: string };
+        };
+
+        expect(body.delivery.emailSent).toBe(false);
+        expect(body.delivery.reason).toContain('rejected');
+        expect(body.inviteToken).toMatch(/^[A-Za-z0-9_-]{20,}$/);
+      } finally {
+        delete process.env['RESEND_API_KEY'];
+        delete process.env['AGI_NOTIFICATIONS_FROM_EMAIL'];
+        delete process.env['NEXT_PUBLIC_APP_URL'];
+      }
     });
 
     it('rejects an owner role on the invitation path', async () => {

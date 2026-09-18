@@ -11,6 +11,11 @@ import {
   objectKeyFromStorageUri,
 } from '@/lib/server/object-storage';
 import {
+  deleteBackupObject,
+  forgetBackupReplicas,
+  resolveObjectBackupTarget,
+} from '@/lib/server/object-backup';
+import {
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
 } from '@/lib/server/project-knowledge-object-storage';
@@ -93,6 +98,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'mobile_iap_transactions', column: 'user_id' },
   { table: 'mobile_iap_accounts', column: 'user_id' },
   { table: 'video_generation_jobs', column: 'user_id' },
+  { table: 'image_generation_jobs', column: 'user_id' },
   { table: 'managed_usage_requests', column: 'user_id' },
   { table: 'credit_transactions', column: 'user_id' },
   { table: 'token_credits', column: 'user_id' },
@@ -156,12 +162,30 @@ export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
   },
 ];
 
+/**
+ * Why the subject's own money rows are deleted while the platform's are only
+ * anonymized. Both are financial records; only one of them is a record the
+ * platform still owes anyone once the account is gone.
+ */
+export const FINANCIAL_ERASURE_DISPOSITION: Readonly<Record<string, string>> = {
+  credit_transactions:
+    "The subject's own ledger of credits bought and spent. 0126's credit_transactions_owner_immutable trigger refuses any update that moves user_id, so there is no anonymized form of this row to keep, and credit_account_id references a token_credits row that goes with the account. What the platform must still be able to prove, what it charged and what it paid, survives in provider_cost_events, cogs_adjustments and organization_usage_ledger with the subject removed, and the invoice itself sits with the payment processor.",
+  token_credits:
+    'The current balance and period window. Anonymizing it would leave an ownerless balance the reset and settlement paths would keep servicing; it is erased with the account, as the retention schedule already states.',
+  subscriptions:
+    'Current plan state, one row per account. A subscription without a subscriber is not a financial record, it is a live entitlement; it is erased with the account, as the retention schedule already states.',
+};
+
 export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   media_assets: 'Erased by eraseUserMedia(): bytes first, then rows.',
   cloud_agent_events: 'Cascades from cloud_agent_runs.',
   cloud_agent_approval_checkpoints: 'Cascades from cloud_agent_runs.',
   cloud_agent_execution_operations: 'Cascades from cloud_agent_runs.',
   cloud_code_terminal_entries: 'Cascades from cloud_code_sessions.',
+  image_generation_job_assets:
+    'Cascades from image_generation_jobs (0226), and from media_assets via asset_id, so eraseUserMedia already takes it.',
+  support_access_events:
+    'Append-only break-glass trail (0229), hash-chained on previous_hash. actor_user_id is the support agent who acted, not the subject, and deleting a row breaks the chain verifySupportAccessTrail verifies.',
   cloud_code_agent_turns: 'Cascades from cloud_code_sessions.',
   managed_usage_request_extensions: 'Cascades from managed_usage_requests.',
   free_daily_usage_reservations: 'Cascades from profiles.',
@@ -201,6 +225,8 @@ export interface AccountErasureReport {
   mediaObjectsDeleted: number;
   mediaObjectsFailed: number;
   mediaRowsDeleted: number;
+  backupObjectsDeleted: number;
+  backupObjectsFailed: number;
   knowledgeObjectsDeleted: number;
   knowledgeObjectsFailed: number;
   avatarObjectsDeleted: number;
@@ -384,10 +410,52 @@ async function sealAndCheckVideoJobsForErasure(
   }
 }
 
+/**
+ * The backup bucket is a copy of what existed, and an erasure that stops at the
+ * primary leaves the subject's objects restorable from it. The hourly
+ * reconciliation would reach them eventually; an erasure request cannot wait
+ * for a round of a round-robin sweep, so the copies go with the originals.
+ */
+async function eraseBackupCopies(
+  keys: ReadonlyArray<string>,
+): Promise<{ deleted: number; failed: number }> {
+  if (keys.length === 0) return { deleted: 0, failed: 0 };
+  const target = resolveObjectBackupTarget();
+  if (!target) return { deleted: 0, failed: 0 };
+
+  const removed: string[] = [];
+  let failed = 0;
+  for (const key of keys) {
+    try {
+      const outcome = await deleteBackupObject(key, { target });
+      if (outcome === 'deleted') removed.push(key);
+      else if (outcome === 'absent') removed.push(key);
+    } catch (error) {
+      failed += 1;
+      logger.warn({ key, error }, 'Failed to delete the backup copy of an erased object');
+    }
+  }
+
+  try {
+    await forgetBackupReplicas(removed);
+  } catch (error) {
+    logger.warn({ error }, 'Backup replica records outlived the objects they tracked');
+  }
+
+  return { deleted: removed.length, failed };
+}
+
 export async function eraseUserMedia(
   userId: string,
 ): Promise<
-  Pick<AccountErasureReport, 'mediaObjectsDeleted' | 'mediaObjectsFailed' | 'mediaRowsDeleted'>
+  Pick<
+    AccountErasureReport,
+    | 'mediaObjectsDeleted'
+    | 'mediaObjectsFailed'
+    | 'mediaRowsDeleted'
+    | 'backupObjectsDeleted'
+    | 'backupObjectsFailed'
+  >
 > {
   const db = getNeonDb();
   let rows: Array<{ id: string; storage_pathname: string | null }> = [];
@@ -398,13 +466,25 @@ export async function eraseUserMedia(
     );
   } catch (error) {
     if (isSchemaAbsent(error)) {
-      return { mediaObjectsDeleted: 0, mediaObjectsFailed: 0, mediaRowsDeleted: 0 };
+      return {
+        mediaObjectsDeleted: 0,
+        mediaObjectsFailed: 0,
+        mediaRowsDeleted: 0,
+        backupObjectsDeleted: 0,
+        backupObjectsFailed: 0,
+      };
     }
     throw error;
   }
 
   if (rows.length === 0) {
-    return { mediaObjectsDeleted: 0, mediaObjectsFailed: 0, mediaRowsDeleted: 0 };
+    return {
+      mediaObjectsDeleted: 0,
+      mediaObjectsFailed: 0,
+      mediaRowsDeleted: 0,
+      backupObjectsDeleted: 0,
+      backupObjectsFailed: 0,
+    };
   }
 
   const { deleted, failedPathnames } = await deleteStoredMediaObjects(
@@ -424,10 +504,18 @@ export async function eraseUserMedia(
     mediaRowsDeleted = purged.length;
   }
 
+  const backup = await eraseBackupCopies(
+    rows
+      .map((row) => row.storage_pathname)
+      .filter((key): key is string => key !== null && !stillStored.has(key)),
+  );
+
   return {
     mediaObjectsDeleted: deleted,
     mediaObjectsFailed: failedPathnames.length,
     mediaRowsDeleted,
+    backupObjectsDeleted: backup.deleted,
+    backupObjectsFailed: backup.failed,
   };
 }
 
@@ -542,6 +630,8 @@ function heldReport(userId: string, error: string | undefined): AccountErasureRe
     mediaObjectsDeleted: 0,
     mediaObjectsFailed: 0,
     mediaRowsDeleted: 0,
+    backupObjectsDeleted: 0,
+    backupObjectsFailed: 0,
     knowledgeObjectsDeleted: 0,
     knowledgeObjectsFailed: 0,
     avatarObjectsDeleted: 0,
@@ -584,6 +674,8 @@ export async function eraseUserAccountData(
       mediaObjectsDeleted: 0,
       mediaObjectsFailed: 0,
       mediaRowsDeleted: 0,
+      backupObjectsDeleted: 0,
+      backupObjectsFailed: 0,
       knowledgeObjectsDeleted: 0,
       knowledgeObjectsFailed: 0,
       avatarObjectsDeleted: 0,
