@@ -12,6 +12,9 @@ import { buildManagedAgentStream } from '@/app/api/llm/v1/chat/completions/lib/m
 import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { runToolLoop, type ApprovalMode } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
+import type { FlagSubject } from '@/lib/feature-flags/evaluate-flags';
+import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { withSpan, type ActiveSpan } from '@/lib/observability/span';
@@ -43,6 +46,24 @@ import type { ConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions
 const CLOUD_AGENT_ENQUEUE_SPAN = 'workflow.enqueue';
 const CLOUD_AGENT_QUEUE_NAME = 'cloud-agent-turn';
 
+/**
+ * The one choke point every Work caller reaches, so the switch is read here
+ * rather than at each entry point. Refusing before the span means a switched
+ * off capability starts no run and leaves nothing to unwind.
+ */
+function workFlagSubject(input: StartCloudAgentWorkflowExecutionInput): FlagSubject {
+  return {
+    userId: input.userId,
+    workspaceId: input.processed.organizationId ?? null,
+    surface: input.processed.chatSurface,
+    role: null,
+    plan: null,
+    region: null,
+    country: null,
+    clientVersion: null,
+  };
+}
+
 export interface StartCloudAgentWorkflowExecutionInput {
   db: DatabaseAdapter;
   runId: string;
@@ -71,6 +92,7 @@ export async function startCloudAgentWorkflowExecution(
   readable: WorkflowReadableStream<Uint8Array>;
   cancel: () => Promise<void>;
 }> {
+  await assertCapabilityAvailable(workFlagSubject(input), WORK_CAPABILITY, 'Work');
   return withSpan(
     CLOUD_AGENT_ENQUEUE_SPAN,
     {

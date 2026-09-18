@@ -5,6 +5,7 @@ import {
   EffectiveCapabilityDocumentSchema,
 } from '@agiworkforce/cloud-contracts';
 import {
+  ALL_PLATFORM_CAPABILITIES,
   CAPABILITY_DOCUMENT_VERSION_UNRESOLVED,
   SYNCED_APP_SURFACES,
   resolveCapabilityDecision,
@@ -354,5 +355,76 @@ describe('BILL-15, one decision for one account across every synced surface', ()
     for (const document of documents) {
       expect(document.limits).toEqual(documents[0]?.limits);
     }
+  });
+});
+
+describe('buildMeCapabilityHandshake, operator kill switches', () => {
+  const CLOSED = ['canUseDesktopAutomation'] as const;
+  // Desktop, because Computer Use is a capability the web surface never grants:
+  // a switch cannot be observed closing something already closed.
+  const DESKTOP_INPUT = { ...BASE_INPUT, surface: 'desktop' as const };
+
+  it('removes a switched-off capability from the document', () => {
+    const open = buildMeCapabilityHandshake({ ...DESKTOP_INPUT, tier: 'pro' });
+    const closed = buildMeCapabilityHandshake({
+      ...DESKTOP_INPUT,
+      tier: 'pro',
+      closedCapabilities: CLOSED,
+    });
+
+    expect(resolveCapabilityDecision(open, 'canUseDesktopAutomation').allowed).toBe(true);
+    expect(resolveCapabilityDecision(closed, 'canUseDesktopAutomation').allowed).toBe(false);
+  });
+
+  it('leaves every other capability exactly as it was', () => {
+    const open = buildMeCapabilityHandshake({ ...DESKTOP_INPUT, tier: 'pro' });
+    const closed = buildMeCapabilityHandshake({
+      ...DESKTOP_INPUT,
+      tier: 'pro',
+      closedCapabilities: CLOSED,
+    });
+
+    for (const capability of ALL_PLATFORM_CAPABILITIES) {
+      if (capability === 'canUseDesktopAutomation') continue;
+      expect(resolveCapabilityDecision(closed, capability).allowed, `${capability} changed`).toBe(
+        resolveCapabilityDecision(open, capability).allowed,
+      );
+    }
+  });
+
+  it('names the switch as the reason rather than leaving it to be guessed', () => {
+    const closed = buildMeCapabilityHandshake({
+      ...DESKTOP_INPUT,
+      tier: 'pro',
+      closedCapabilities: CLOSED,
+    });
+
+    expect(closed.sources.settings).toBe('kill-switch:canUseDesktopAutomation');
+    expect(closed.deniedBy.canUseDesktopAutomation).toContain('settings');
+  });
+
+  it('changes the document version, so every client refetches on a flip', () => {
+    const open = buildMeCapabilityHandshake({ ...DESKTOP_INPUT, tier: 'pro' });
+    const closed = buildMeCapabilityHandshake({
+      ...DESKTOP_INPUT,
+      tier: 'pro',
+      closedCapabilities: CLOSED,
+    });
+
+    expect(closed.version).not.toBe(open.version);
+    expect(isMeCapabilityHandshakeStale({ version: open.version }, closed)).toBe(true);
+  });
+
+  it('is identical to an untouched document when no switch is thrown', () => {
+    const none = buildMeCapabilityHandshake({
+      ...DESKTOP_INPUT,
+      tier: 'pro',
+      closedCapabilities: [],
+    });
+
+    expect(none.sources.settings).toBe('settings:none-configured');
+    expect(none.version).toBe(
+      buildMeCapabilityHandshake({ ...DESKTOP_INPUT, tier: 'pro' }).version,
+    );
   });
 });

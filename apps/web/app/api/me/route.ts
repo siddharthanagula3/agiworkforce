@@ -41,6 +41,8 @@ import {
   evaluateFlagsForSubject,
 } from '@/lib/feature-flags/flag-evaluation-service';
 import { clientVisibleFlags } from '@/lib/feature-flags/routing-flags';
+import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
+import { platformCapabilitiesOf } from '@/lib/feature-flags/kill-switches';
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
@@ -126,17 +128,21 @@ async function handleGetMe(request: NextRequest) {
       );
       return null;
     });
-    const rolloutFlags = clientVisibleFlags(
-      await evaluateFlagsForSubject(
-        buildFlagSubject(request, {
-          userId,
-          workspaceId: membership?.organizationId ?? null,
-          role: membership?.role ?? null,
-          plan: effectiveTier,
-          surface,
-        }),
-      ),
-    );
+    const flagSubject = buildFlagSubject(request, {
+      userId,
+      workspaceId: membership?.organizationId ?? null,
+      role: membership?.role ?? null,
+      plan: effectiveTier,
+      surface,
+    });
+    const rolloutFlags = clientVisibleFlags(await evaluateFlagsForSubject(flagSubject));
+    const killSwitches = await readKillSwitchGate(flagSubject).catch((gateError: unknown) => {
+      logger.error(
+        { userId, error: gateError },
+        'Kill-switch gate unreadable; capabilities are reported as shipped',
+      );
+      return null;
+    });
 
     const feature_flags = {
       ...rolloutFlags.enabled,
@@ -150,6 +156,7 @@ async function handleGetMe(request: NextRequest) {
       tier: effectiveTier,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
+      closedCapabilities: platformCapabilitiesOf(killSwitches?.closedCapabilities ?? []),
       resets: await getCapabilityLimitResets(db, userId, subscription?.current_period_end ?? null),
     });
 

@@ -41,6 +41,12 @@ export async function register() {
       const { assertPooledDatabaseEndpoint } = await import('./lib/server/db-pool-tuning');
       assertPooledDatabaseEndpoint();
 
+      const { recordConfigurationState } = await import('./lib/observability/metrics');
+      recordConfigurationState({
+        component: 'environment',
+        state: result.valid ? 'ok' : 'invalid',
+      });
+
       if (result.valid) {
         console.debug('✅ Server initialization complete - environment validated');
       } else {
@@ -83,6 +89,12 @@ export async function register() {
     const { startOtelSdk } = await import('./lib/observability/otel-sdk');
     startOtelSdk(otelConfig, sentryClient);
     if (sentryClient) Sentry.validateOpenTelemetrySetup();
+
+    const { recordConfigurationState } = await import('./lib/observability/metrics');
+    recordConfigurationState({
+      component: 'error-tracking',
+      state: sentryClient ? 'ok' : 'unavailable',
+    });
   }
 }
 

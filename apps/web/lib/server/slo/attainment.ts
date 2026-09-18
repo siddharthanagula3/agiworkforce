@@ -9,7 +9,7 @@ import {
   RENDER_CACHE_TAGS,
 } from '@/lib/server/render-cache';
 
-import { SLO_CATALOGUE, type SloDefinition } from './catalogue';
+import { alertableSlos, measuredSlos, type SloDefinition } from './catalogue';
 
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
 const HOUR_MS = 60 * 60 * 1_000;
@@ -110,8 +110,7 @@ export async function measureSloCatalogue(
   db: DatabaseAdapter = getNeonDb(),
 ): Promise<SloAttainment[]> {
   const measured: SloAttainment[] = [];
-  for (const definition of SLO_CATALOGUE) {
-    if (!definition.source) continue;
+  for (const definition of measuredSlos()) {
     const from = new Date(now.getTime() - definition.windowDays * MILLISECONDS_PER_DAY);
     measured.push(await measureSlo(definition, from, now, db));
   }
@@ -166,8 +165,7 @@ export async function evaluateBurnRates(
 ): Promise<BurnRateAlert[]> {
   const alerts: BurnRateAlert[] = [];
 
-  for (const definition of SLO_CATALOGUE) {
-    if (!definition.source) continue;
+  for (const definition of alertableSlos()) {
     for (const threshold of BURN_RATE_THRESHOLDS) {
       const from = new Date(now.getTime() - threshold.hours * HOUR_MS);
       const measured = await measureSlo(definition, from, now, db);

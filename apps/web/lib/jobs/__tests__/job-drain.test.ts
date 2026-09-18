@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   readJobQueueStats: vi.fn(),
   recordQueueDepth: vi.fn(),
   recordQueueWait: vi.fn(),
+  recordQueueAge: vi.fn(),
+  notifyIncident: vi.fn(),
+  clearIncident: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -24,6 +27,11 @@ vi.mock('@/lib/observability/span', () => ({
 vi.mock('@/lib/observability/metrics', () => ({
   recordQueueDepth: mocks.recordQueueDepth,
   recordQueueWait: mocks.recordQueueWait,
+  recordQueueAge: mocks.recordQueueAge,
+}));
+vi.mock('@/lib/server/incident/dispatch', () => ({
+  notifyIncident: mocks.notifyIncident,
+  clearIncident: mocks.clearIncident,
 }));
 vi.mock('../job-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../job-service')>();
@@ -79,6 +87,8 @@ beforeEach(() => {
   mocks.failJob.mockResolvedValue('retry');
   mocks.claimJobs.mockResolvedValue([]);
   mocks.readJobQueueStats.mockResolvedValue([]);
+  mocks.notifyIncident.mockResolvedValue({ paged: 'paged', delivery: 'delivered', level: 1 });
+  mocks.clearIncident.mockResolvedValue(undefined);
 });
 
 describe('drainBackgroundJobs', () => {
@@ -248,6 +258,8 @@ describe('drainBackgroundJobs', () => {
         dead: 2,
         maxConcurrency: 4,
         oldestQueuedAt: null,
+        oldestQueuedAgeMs: 0,
+        stuck: 0,
       },
     ]);
 
@@ -290,5 +302,70 @@ describe('drainBackgroundJobs', () => {
     expect(String((mocks.failJob.mock.calls as unknown as unknown[][])[0]?.[2])).toContain(
       'time budget',
     );
+  });
+});
+
+describe('background queue health', () => {
+  function stats(overrides: Record<string, unknown> = {}) {
+    return [
+      {
+        queue: 'notifications',
+        queued: 0,
+        running: 0,
+        dead: 0,
+        maxConcurrency: 4,
+        oldestQueuedAt: null,
+        oldestQueuedAgeMs: 0,
+        stuck: 0,
+        ...overrides,
+      },
+    ];
+  }
+
+  async function drain() {
+    return drainBackgroundJobs({ db, handlers: {}, budgetMs: 120_000, maxInFlight: 4 });
+  }
+
+  it('exports the queue age and the stuck count alongside the depth', async () => {
+    mocks.readJobQueueStats.mockResolvedValue(stats({ oldestQueuedAgeMs: 61_000, stuck: 2 }));
+
+    await drain();
+
+    expect(mocks.recordQueueAge).toHaveBeenCalledWith({
+      queue: 'notifications',
+      oldestQueuedAgeMs: 61_000,
+      stuck: 2,
+    });
+  });
+
+  it('pages when a job is running on a lease nobody renewed', async () => {
+    mocks.readJobQueueStats.mockResolvedValue(stats({ stuck: 3 }));
+
+    const summary = await drain();
+
+    expect(mocks.notifyIncident).toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'job-health:notifications', severity: 'warning' }),
+    );
+    expect(summary.unhealthyQueues).toEqual(['notifications']);
+  });
+
+  it('pages at critical when a queue has not been picked up for an hour', async () => {
+    mocks.readJobQueueStats.mockResolvedValue(stats({ queued: 4, oldestQueuedAgeMs: 3_600_000 }));
+
+    await drain();
+
+    expect(mocks.notifyIncident).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'critical', source: 'job-health' }),
+    );
+  });
+
+  it('clears the incident once the queue drains again, so it can fire next time', async () => {
+    mocks.readJobQueueStats.mockResolvedValue(stats());
+
+    const summary = await drain();
+
+    expect(mocks.notifyIncident).not.toHaveBeenCalled();
+    expect(mocks.clearIncident).toHaveBeenCalledWith('job-health:notifications');
+    expect(summary.unhealthyQueues).toEqual([]);
   });
 });

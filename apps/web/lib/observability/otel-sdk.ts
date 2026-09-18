@@ -15,6 +15,7 @@ import {
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { initOpenTelemetry, type NodeClient } from '@sentry/nextjs';
 
+import { deploymentAttributes } from './attributes';
 import type { OtelExportConfig } from './otel-config';
 import { keepSpanForExport } from './trace-sampling';
 
@@ -22,6 +23,15 @@ export type SentryTracingClient = NodeClient;
 
 export interface OtelTracing {
   shutdown(): Promise<void>;
+}
+
+// On the resource rather than per span: every span and metric the process
+// exports then names the build it came from, including ones this file never sees.
+function telemetryResource(serviceName: string) {
+  return resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: serviceName,
+    ...deploymentAttributes(),
+  });
 }
 
 const FULL_SAMPLE_RATIO = 1;
@@ -110,7 +120,7 @@ export function startOtelSdk(
     if (!process.env['OTEL_SERVICE_NAME']) process.env['OTEL_SERVICE_NAME'] = config.serviceName;
     initOpenTelemetry(sentryClient, { spanProcessors: [processor] });
     const meterProvider = new MeterProvider({
-      resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: config.serviceName }),
+      resource: telemetryResource(config.serviceName),
       readers: [metricReader],
     });
     metrics.setGlobalMeterProvider(meterProvider);
@@ -122,7 +132,7 @@ export function startOtelSdk(
   }
 
   const sdk = new NodeSDK({
-    resource: resourceFromAttributes({ [ATTR_SERVICE_NAME]: config.serviceName }),
+    resource: telemetryResource(config.serviceName),
     instrumentations: [...NO_INSTRUMENTATIONS],
     sampler: new ParentBasedSampler({ root: new AlwaysOnSampler() }),
     spanProcessors: [processor],

@@ -5,9 +5,16 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { captureWorkerFailure } from '@/lib/observability/error-capture';
-import { recordQueueDepth, recordQueueWait } from '@/lib/observability/metrics';
+import { recordQueueAge, recordQueueDepth, recordQueueWait } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
 import { runWithCarriedTrace } from '@/lib/observability/trace-propagation';
+import { clearIncident, notifyIncident } from '@/lib/server/incident/dispatch';
+import {
+  describeJobHealth,
+  evaluateJobHealth,
+  jobHealthIncidentKey,
+  type JobHealthAlert,
+} from '@/lib/server/slo/job-health';
 
 import { JOB_QUEUE_NAMES, JOB_QUEUE_POLICIES, isJobKind, type JobKind } from './job-queues';
 import {
@@ -19,6 +26,7 @@ import {
   readJobQueueStats,
   reapExpiredJobLeases,
   type BackgroundJob,
+  type JobQueueStats,
 } from './job-service';
 
 const LEASE_SAFETY_MS = 5_000;
@@ -43,6 +51,7 @@ export interface JobDrainSummary {
   reaped: { requeued: number; deadLettered: number };
   pruned: number;
   drained: boolean;
+  unhealthyQueues: string[];
 }
 
 export interface DrainBackgroundJobsOptions {
@@ -57,12 +66,70 @@ function jobTimeoutError(job: BackgroundJob): Error {
   return new Error(`Job ${job.kind} exceeded its time budget`);
 }
 
-async function recordQueueBacklog(db: DatabaseAdapter): Promise<void> {
-  for (const stats of await readJobQueueStats(db)) {
-    recordQueueDepth({ queue: stats.queue, status: 'queued', count: stats.queued });
-    recordQueueDepth({ queue: stats.queue, status: 'running', count: stats.running });
-    recordQueueDepth({ queue: stats.queue, status: 'dead', count: stats.dead });
+async function recordQueueBacklog(db: DatabaseAdapter): Promise<JobQueueStats[]> {
+  const stats = await readJobQueueStats(db);
+  for (const queue of stats) {
+    recordQueueDepth({ queue: queue.queue, status: 'queued', count: queue.queued });
+    recordQueueDepth({ queue: queue.queue, status: 'running', count: queue.running });
+    recordQueueDepth({ queue: queue.queue, status: 'dead', count: queue.dead });
+    recordQueueAge({
+      queue: queue.queue,
+      oldestQueuedAgeMs: queue.oldestQueuedAgeMs,
+      stuck: queue.stuck,
+    });
   }
+  return stats;
+}
+
+function jobHealthPage(alert: JobHealthAlert): { subject: string; text: string } {
+  return {
+    subject: `[AGI ${alert.severity === 'critical' ? 'CRITICAL' : 'WARNING'}] background queue ${alert.queue} is not draining`,
+    text: [
+      `Queue: ${alert.queue}`,
+      '',
+      'WHAT IS WRONG',
+      describeJobHealth(alert),
+      '',
+      'The thresholds are in apps/web/lib/server/slo/job-health.ts.',
+      'Follow docs/runbooks/incident-response.md.',
+    ].join('\n'),
+  };
+}
+
+/**
+ * A stuck queue reports no failure of its own: nothing completes, so no
+ * success rate falls and no dead-letter count rises. The drain is the only
+ * thing that sees it, so the drain is what raises it.
+ */
+async function reportJobHealth(stats: readonly JobQueueStats[]): Promise<JobHealthAlert[]> {
+  const alerts = evaluateJobHealth(stats);
+  const alerting = new Set(alerts.map((alert) => alert.queue));
+
+  // A pager that is down must not take the drain with it.
+  try {
+    for (const alert of alerts) {
+      const { subject, text } = jobHealthPage(alert);
+      const dispatched = await notifyIncident({
+        key: jobHealthIncidentKey(alert.queue),
+        severity: alert.severity,
+        subject,
+        text,
+        source: 'job-health',
+      });
+      logger.error(
+        { queue: alert.queue, reasons: alert.reasons, paged: dispatched?.paged },
+        'Background queue health alert dispatched',
+      );
+    }
+
+    for (const queue of stats) {
+      if (!alerting.has(queue.queue)) await clearIncident(jobHealthIncidentKey(queue.queue));
+    }
+  } catch (error) {
+    logger.error({ error }, 'Background queue health alert could not be dispatched');
+  }
+
+  return alerts;
 }
 
 async function runJob(
@@ -132,6 +199,7 @@ export async function drainBackgroundJobs(
     reaped: await reapExpiredJobLeases(options.db),
     pruned: 0,
     drained: false,
+    unhealthyQueues: [],
   };
 
   const inFlight = new Set<Promise<void>>();
@@ -192,7 +260,8 @@ export async function drainBackgroundJobs(
   }
 
   summary.pruned = await pruneFinishedJobs(options.db);
-  await recordQueueBacklog(options.db);
+  const stats = await recordQueueBacklog(options.db);
+  summary.unhealthyQueues = (await reportJobHealth(stats)).map((alert) => alert.queue);
   logger.info(summary, 'Background job drain completed');
   return summary;
 }

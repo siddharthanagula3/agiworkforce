@@ -7,6 +7,7 @@ import {
   type DataPoint,
 } from '@opentelemetry/sdk-metrics';
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { listCanonicalModels } from '@agiworkforce/types';
 
 import {
   METRIC_NAME,
@@ -14,12 +15,18 @@ import {
   recordFailure,
   recordHttpRequest,
   recordNotificationDelivery,
+  recordQueueAge,
   recordQueueDepth,
   recordQueueWait,
+  recordRoutingDecision,
   recordSpanMetrics,
   recordToolOutcome,
 } from './metrics';
+import { resetDeploymentAttributesCache } from './attributes';
 import { withSpan } from './span';
+
+const MODEL = listCanonicalModels()[0]!;
+const ROUTE_ID = `${MODEL.provider}/${MODEL.id}`;
 
 let reader: PeriodicExportingMetricReader;
 let provider: MeterProvider;
@@ -216,5 +223,101 @@ describe('queue metrics', () => {
     recordQueueDepth({ queue: 'dead', status: 'dead', count: -1 });
     const depth = await points(METRIC_NAME.queueDepth);
     expect(countWhere(depth, { 'agi.queue.status': 'dead' })).toBe(0);
+  });
+});
+
+describe('job health metrics', () => {
+  it('exports queue age and the count of jobs holding an unrenewed lease', async () => {
+    recordQueueAge({ queue: 'exports', oldestQueuedAgeMs: 900_000, stuck: 2 });
+
+    const age = await points(METRIC_NAME.queueAge);
+    expect(countWhere(age, { 'messaging.destination.name': 'exports' })).toBe(900_000);
+    const stuck = await points(METRIC_NAME.queueStuck);
+    expect(countWhere(stuck, { 'messaging.destination.name': 'exports' })).toBe(2);
+  });
+
+  it('counts a stuck job as a worker failure so it reaches the failure alert', async () => {
+    recordQueueAge({ queue: 'exports', oldestQueuedAgeMs: 0, stuck: 1 });
+    expect(countWhere(await points(METRIC_NAME.failures), { 'agi.failure.kind': 'worker' })).toBe(
+      1,
+    );
+  });
+
+  it('does not raise a failure when nothing is stuck', async () => {
+    recordQueueAge({ queue: 'exports', oldestQueuedAgeMs: 10, stuck: 0 });
+    expect(await points(METRIC_NAME.failures)).toHaveLength(0);
+  });
+});
+
+describe('routing decision metrics', () => {
+  it('carries the route, cohort, trust mode and data region of the decision', async () => {
+    recordRoutingDecision({
+      status: 'selected',
+      routeId: ROUTE_ID,
+      provider: MODEL.provider,
+      modelKey: MODEL.id,
+      cohort: 'canary',
+      trustMode: 'zero_retention',
+      region: 'eu',
+      surface: 'web',
+    });
+
+    const decisions = await points(METRIC_NAME.routingDecisions);
+    expect(decisions[0]?.attributes).toMatchObject({
+      'agi.route.id': ROUTE_ID,
+      'agi.routing.cohort': 'canary',
+      'agi.routing.status': 'selected',
+      'agi.trust_mode': 'zero_retention',
+      'agi.data.region': 'eu',
+    });
+  });
+
+  it('counts a turn that found no route as a model failure', async () => {
+    recordRoutingDecision({
+      status: 'unavailable',
+      routeId: null,
+      provider: null,
+      modelKey: null,
+      cohort: null,
+      trustMode: 'standard',
+      region: null,
+      surface: 'web',
+    });
+
+    expect(countWhere(await points(METRIC_NAME.failures), { 'agi.failure.kind': 'model' })).toBe(1);
+  });
+});
+
+describe('release identity on every metric', () => {
+  const previous = process.env['AGI_RELEASE_SHA'];
+
+  beforeEach(() => {
+    process.env['AGI_RELEASE_SHA'] = 'abc1234';
+    resetDeploymentAttributesCache();
+  });
+
+  afterEach(() => {
+    if (previous === undefined) delete process.env['AGI_RELEASE_SHA'];
+    else process.env['AGI_RELEASE_SHA'] = previous;
+    resetDeploymentAttributesCache();
+  });
+
+  it('tags a signal with the build that emitted it, whatever the call site passed', async () => {
+    recordHttpRequest({ method: 'GET', statusCode: 200, durationMs: 5 });
+    recordFailure('api', '5xx');
+
+    const requests = await points(METRIC_NAME.httpRequests);
+    expect(requests[0]?.attributes).toMatchObject({ 'service.version': 'abc1234' });
+    const failures = await points(METRIC_NAME.failures);
+    expect(failures[0]?.attributes).toMatchObject({ 'service.version': 'abc1234' });
+  });
+
+  it('never lets release identity overwrite an attribute the call site set', async () => {
+    recordQueueDepth({ queue: 'service.version', status: 'queued', count: 1 });
+    const depth = await points(METRIC_NAME.queueDepth);
+    expect(depth[0]?.attributes).toMatchObject({
+      'service.version': 'abc1234',
+      'messaging.destination.name': 'service.version',
+    });
   });
 });

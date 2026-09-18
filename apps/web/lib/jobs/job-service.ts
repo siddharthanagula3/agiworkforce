@@ -434,6 +434,10 @@ export interface JobQueueStats {
   dead: number;
   maxConcurrency: number;
   oldestQueuedAt: string | null;
+  /** How long the oldest job that is due has waited, zero when none is due. */
+  oldestQueuedAgeMs: number;
+  /** Running jobs whose lease lapsed: the worker never reported a result. */
+  stuck: number;
 }
 
 export async function readJobQueueStats(db: DatabaseAdapter): Promise<JobQueueStats[]> {
@@ -442,13 +446,24 @@ export async function readJobQueueStats(db: DatabaseAdapter): Promise<JobQueueSt
     queued: string;
     running: string;
     dead: string;
+    stuck: string;
     oldest_queued_at: string | Date | null;
+    oldest_queued_age_ms: string | number | null;
   }>(
     `select queue,
             count(*) filter (where status = 'queued')::text as queued,
             count(*) filter (where status = 'running')::text as running,
             count(*) filter (where status = 'dead')::text as dead,
-            min(run_after) filter (where status = 'queued') as oldest_queued_at
+            count(*) filter (
+              where status = 'running' and lease_expires_at is not null and lease_expires_at < now()
+            )::text as stuck,
+            min(run_after) filter (where status = 'queued') as oldest_queued_at,
+            coalesce(
+              extract(epoch from (
+                now() - min(run_after) filter (where status = 'queued' and run_after <= now())
+              )) * 1000,
+              0
+            )::bigint as oldest_queued_age_ms
        from public.background_jobs
       where status in ('queued', 'running', 'dead')
       group by queue`,
@@ -464,6 +479,8 @@ export async function readJobQueueStats(db: DatabaseAdapter): Promise<JobQueueSt
       dead: Number(row?.dead ?? 0),
       maxConcurrency: JOB_QUEUE_POLICIES[queue].maxConcurrency,
       oldestQueuedAt: iso(row?.oldest_queued_at ?? null),
+      oldestQueuedAgeMs: Math.max(0, Number(row?.oldest_queued_age_ms ?? 0)),
+      stuck: Number(row?.stuck ?? 0),
     };
   });
 }

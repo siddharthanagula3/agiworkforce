@@ -4,10 +4,12 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  alertableSlos,
   declaredOnlySlos,
   findSlo,
   formatObjective,
   measuredSlos,
+  publishedSlos,
   SLO_CATALOGUE,
 } from '../catalogue';
 
@@ -39,8 +41,17 @@ function migrationCorpus(): string {
 
 describe('SLO catalogue', () => {
   it('covers every service-level domain exactly once', () => {
-    expect(SLO_CATALOGUE.map((slo) => slo.domain)).toEqual(DOMAINS_FROM_SECTION_90);
+    expect(publishedSlos().map((slo) => slo.domain)).toEqual(DOMAINS_FROM_SECTION_90);
     expect(new Set(SLO_CATALOGUE.map((slo) => slo.id)).size).toBe(SLO_CATALOGUE.length);
+  });
+
+  it('publishes nothing §90 does not promise, while alerting on more than it', () => {
+    const published = new Set(publishedSlos().map((slo) => slo.id));
+    const alertable = alertableSlos().map((slo) => slo.id);
+    expect(alertable).toContain('billing-usage');
+    expect(alertable).toContain('entitlement-activation');
+    expect(published.has('billing-usage')).toBe(false);
+    expect(published.has('entitlement-activation')).toBe(false);
   });
 
   it('states an objective strictly between zero and one for every domain', () => {
@@ -83,7 +94,7 @@ describe('SLO catalogue', () => {
   });
 
   it('splits the catalogue into what is measured and what is only declared', () => {
-    expect(measuredSlos().length + declaredOnlySlos().length).toBe(SLO_CATALOGUE.length);
+    expect(measuredSlos().length + declaredOnlySlos().length).toBe(publishedSlos().length);
     expect(declaredOnlySlos().map((slo) => slo.id)).toEqual([
       'authentication',
       'search',

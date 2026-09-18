@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { evaluateJobHealth, type JobHealthAlert } from '@/lib/server/slo/job-health';
 import { formatCount, formatDateTime } from '../lib/operator-format';
 
 const ENDPOINT = '/api/admin/background-jobs';
@@ -20,6 +21,8 @@ interface QueueStats {
   dead: number;
   maxConcurrency: number;
   oldestQueuedAt: string | null;
+  oldestQueuedAgeMs: number;
+  stuck: number;
 }
 
 interface DeadJob {
@@ -41,6 +44,11 @@ export default function BackgroundJobsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
+
+  const unhealthy: JobHealthAlert[] = useMemo(
+    () => (queues === null ? [] : evaluateJobHealth(queues)),
+    [queues],
+  );
 
   const load = useCallback(async () => {
     setError(null);
@@ -109,6 +117,20 @@ export default function BackgroundJobsPanel() {
         </p>
       ) : null}
 
+      {unhealthy.length > 0 ? (
+        <div role="alert" className={`${CARD_CLASS} border-danger`}>
+          <h3 className="text-sm font-medium text-danger">Queues that are not draining</h3>
+          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+            {unhealthy.map((alert) => (
+              <li key={alert.queue}>
+                <span className="font-mono text-xs">{alert.queue}</span>
+                {` (${alert.severity}): ${alert.reasons.join('; ')}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {queues === null ? (
         <div className={`${CARD_CLASS} flex items-center gap-3`}>
           <Spinner size="sm" />
@@ -124,6 +146,7 @@ export default function BackgroundJobsPanel() {
                 <th className="p-3 font-medium">Running</th>
                 <th className="p-3 font-medium">Limit</th>
                 <th className="p-3 font-medium">Dead</th>
+                <th className="p-3 font-medium">Stuck</th>
                 <th className="p-3 font-medium">Oldest waiting</th>
               </tr>
             </thead>
@@ -137,6 +160,11 @@ export default function BackgroundJobsPanel() {
                     {formatCount(queue.maxConcurrency)}
                   </td>
                   <td className="p-3 tabular-nums">{formatCount(queue.dead)}</td>
+                  <td
+                    className={`p-3 tabular-nums${queue.stuck > 0 ? ' text-danger' : ' text-muted-foreground'}`}
+                  >
+                    {formatCount(queue.stuck)}
+                  </td>
                   <td className="p-3 text-xs text-muted-foreground">
                     {queue.oldestQueuedAt
                       ? formatDateTime(queue.oldestQueuedAt)

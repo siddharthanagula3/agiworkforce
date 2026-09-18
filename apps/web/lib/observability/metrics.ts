@@ -12,7 +12,7 @@ import {
 } from '@opentelemetry/semantic-conventions';
 import { scrubAttributes } from '@agiworkforce/observability';
 
-import { OBSERVABILITY_ATTRIBUTE } from './attributes';
+import { OBSERVABILITY_ATTRIBUTE, deploymentAttributes } from './attributes';
 import { SPAN_DOMAIN_ATTRIBUTE, TRACER_NAME } from './otel-span-bridge';
 
 export const METRIC_NAME = {
@@ -29,6 +29,10 @@ export const METRIC_NAME = {
   databaseDuration: 'db.client.operation.duration',
   queueDepth: 'agi.queue.depth',
   queueWait: 'agi.queue.wait',
+  queueAge: 'agi.queue.age',
+  queueStuck: 'agi.queue.stuck',
+  routingDecisions: 'agi.routing.decisions',
+  configurationState: 'agi.configuration.state',
 } as const;
 
 export type FailureKind =
@@ -65,6 +69,10 @@ interface Instruments {
   readonly databaseDuration: Histogram;
   readonly queueDepth: Gauge;
   readonly queueWait: Histogram;
+  readonly queueAge: Gauge;
+  readonly queueStuck: Gauge;
+  readonly routingDecisions: Counter;
+  readonly configurationState: Gauge;
 }
 
 let cached: { provider: MeterProvider; instruments: Instruments } | null = null;
@@ -87,13 +95,19 @@ function instruments(): Instruments {
     databaseDuration: meter.createHistogram(METRIC_NAME.databaseDuration, { unit: MILLISECONDS }),
     queueDepth: meter.createGauge(METRIC_NAME.queueDepth),
     queueWait: meter.createHistogram(METRIC_NAME.queueWait, { unit: MILLISECONDS }),
+    queueAge: meter.createGauge(METRIC_NAME.queueAge, { unit: MILLISECONDS }),
+    queueStuck: meter.createGauge(METRIC_NAME.queueStuck),
+    routingDecisions: meter.createCounter(METRIC_NAME.routingDecisions),
+    configurationState: meter.createGauge(METRIC_NAME.configurationState),
   };
   cached = { provider, instruments: created };
   return created;
 }
 
+// Release identity is a dimension of every series, not of the few call sites
+// that remember to pass it.
 function clean(attributes: Readonly<Record<string, unknown>>): Attributes {
-  return scrubAttributes(attributes);
+  return scrubAttributes({ ...deploymentAttributes(), ...attributes });
 }
 
 function nonNegative(durationMs: number): number {
@@ -187,6 +201,77 @@ export function recordQueueWait(input: { queue: string; waitMs: number }): void 
     nonNegative(input.waitMs),
     clean({ [OBSERVABILITY_ATTRIBUTE.queueName]: input.queue }),
   );
+}
+
+/**
+ * The age of the oldest work a queue has not started, and the count of jobs
+ * holding a lease nobody renewed. A job that is stuck is neither dead nor
+ * finished, so neither the dead-letter count nor the success rate moves.
+ */
+export function recordQueueAge(input: {
+  queue: string;
+  oldestQueuedAgeMs: number;
+  stuck: number;
+}): void {
+  const attributes = clean({ [OBSERVABILITY_ATTRIBUTE.queueName]: input.queue });
+  const recorded = instruments();
+  recorded.queueAge.record(nonNegative(input.oldestQueuedAgeMs), attributes);
+  recorded.queueStuck.record(nonNegative(input.stuck), attributes);
+  if (input.stuck > 0) recordFailure('worker', 'stuck_job');
+}
+
+export type ConfigurationState = 'ok' | 'invalid' | 'unavailable';
+
+const CONFIGURATION_STATE_VALUE: Readonly<Record<ConfigurationState, number>> = {
+  ok: 1,
+  unavailable: 0,
+  invalid: -1,
+};
+
+/**
+ * What a boot-time check found, as a standing series rather than a log line
+ * nobody reads again. An optional integration that is simply absent reads
+ * `unavailable`, which is not the same as configured and wrong.
+ */
+export function recordConfigurationState(input: {
+  component: string;
+  state: ConfigurationState;
+}): void {
+  instruments().configurationState.record(
+    CONFIGURATION_STATE_VALUE[input.state],
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.configurationComponent]: input.component,
+      [OBSERVABILITY_ATTRIBUTE.configurationState]: input.state,
+    }),
+  );
+}
+
+export type RoutingDecisionStatus = 'selected' | 'unavailable';
+
+export function recordRoutingDecision(input: {
+  status: RoutingDecisionStatus;
+  routeId: string | null;
+  provider: string | null;
+  modelKey: string | null;
+  cohort: string | null;
+  trustMode: string;
+  region: string | null;
+  surface: string;
+}): void {
+  instruments().routingDecisions.add(
+    1,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.routeId]: input.routeId ?? undefined,
+      [OBSERVABILITY_ATTRIBUTE.providerName]: input.provider ?? undefined,
+      [OBSERVABILITY_ATTRIBUTE.requestModel]: input.modelKey ?? undefined,
+      [OBSERVABILITY_ATTRIBUTE.routingCohort]: input.cohort ?? undefined,
+      [OBSERVABILITY_ATTRIBUTE.trustMode]: input.trustMode,
+      [OBSERVABILITY_ATTRIBUTE.dataRegion]: input.region ?? undefined,
+      [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+      [OBSERVABILITY_ATTRIBUTE.routingStatus]: input.status,
+    }),
+  );
+  if (input.status === 'unavailable') recordFailure('model', 'no_route');
 }
 
 export type BrowserTaskStatus =

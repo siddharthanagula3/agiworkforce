@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import {
   backupReplicaSummary,
   isCrossRegionBackup,
@@ -21,35 +22,71 @@ export const runtime = 'nodejs';
 
 export const maxDuration = 300;
 
-const CURSOR_KEY = 'agi-object-backup:cursor';
 const CURSOR_TTL_SECONDS = 30 * 24 * 60 * 60;
 const MAX_ASSETS_PER_RUN = 200;
 const MAX_RECONCILED_PER_RUN = 200;
 const LOOKBACK_HOURS = 48;
 const HOUR_MS = 60 * 60 * 1_000;
 
-interface AssetRow {
-  id: string;
-  storage_pathname: string | null;
+interface StoredObjectRow {
+  object_reference: string | null;
   created_at: string;
 }
 
-async function readCursor(): Promise<string | null> {
+interface BackupSource {
+  id: string;
+  cursorKey: string;
+  sql: string;
+  toKey: (reference: string) => string | null;
+}
+
+/**
+ * Every table that holds a key into object storage. A class of object missing
+ * from this list has no second copy at all, which is indistinguishable from a
+ * working backup until a restore is attempted.
+ */
+const BACKUP_SOURCES: readonly BackupSource[] = [
+  {
+    id: 'media',
+    cursorKey: 'agi-object-backup:cursor',
+    sql: `select storage_pathname as object_reference, created_at
+            from public.media_assets
+           where created_at > $1::timestamptz
+             and deleted_at is null
+             and storage_pathname is not null
+           order by created_at asc
+           limit ${MAX_ASSETS_PER_RUN}`,
+    toKey: (reference) => reference,
+  },
+  {
+    id: 'project-knowledge',
+    cursorKey: 'agi-object-backup:knowledge-cursor',
+    sql: `select storage_uri as object_reference, created_at
+            from public.project_knowledge_files
+           where created_at > $1::timestamptz
+             and storage_uri is not null
+           order by created_at asc
+           limit ${MAX_ASSETS_PER_RUN}`,
+    toKey: objectKeyFromStorageUri,
+  },
+];
+
+async function readCursor(key: string): Promise<string | null> {
   const store = getKeyValueStore();
   if (!store) return null;
   try {
-    return await store.get<string>(CURSOR_KEY);
+    return await store.get<string>(key);
   } catch (error) {
     logger.warn({ error }, '[object-backup] cursor could not be read');
     return null;
   }
 }
 
-async function writeCursor(value: string): Promise<void> {
+async function writeCursor(key: string, value: string): Promise<void> {
   const store = getKeyValueStore();
   if (!store) return;
   try {
-    await store.set(CURSOR_KEY, value, { ttlSeconds: CURSOR_TTL_SECONDS });
+    await store.set(key, value, { ttlSeconds: CURSOR_TTL_SECONDS });
   } catch (error) {
     logger.warn({ error }, '[object-backup] cursor could not be written');
   }
@@ -73,8 +110,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const since =
-    (await readCursor()) ?? new Date(Date.now() - LOOKBACK_HOURS * HOUR_MS).toISOString();
   const counts: Record<ReplicationOutcome, number> = {
     unconfigured: 0,
     replicated: 0,
@@ -84,39 +119,45 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   };
 
   try {
-    const assets = await getNeonDb().query<AssetRow>(
-      `select id, storage_pathname, created_at
-         from public.media_assets
-        where created_at > $1::timestamptz
-          and deleted_at is null
-          and storage_pathname is not null
-        order by created_at asc
-        limit ${MAX_ASSETS_PER_RUN}`,
-      [since],
-    );
-
     const target = resolveObjectBackupTarget();
-    let cursor = since;
+    const fallbackSince = new Date(Date.now() - LOOKBACK_HOURS * HOUR_MS).toISOString();
+    const cursors: Record<string, string> = {};
+    let scanned = 0;
+    let unreadable = 0;
     let bytes = 0;
-    for (const asset of assets) {
-      if (!asset.storage_pathname) continue;
-      const result = await replicateObject(asset.storage_pathname);
-      counts[result.outcome] += 1;
-      bytes += result.bytes;
-      if (target && (result.outcome === 'replicated' || result.outcome === 'already-present')) {
-        await recordBackupReplica(asset.storage_pathname, result.bytes, target.bucket);
-      }
-      cursor = new Date(asset.created_at).toISOString();
-    }
 
-    if (assets.length > 0) await writeCursor(cursor);
+    for (const source of BACKUP_SOURCES) {
+      const since = (await readCursor(source.cursorKey)) ?? fallbackSince;
+      let cursor = since;
+      const rows = await getNeonDb().query<StoredObjectRow>(source.sql, [since]);
+      scanned += rows.length;
+
+      for (const row of rows) {
+        cursor = new Date(row.created_at).toISOString();
+        const key = row.object_reference ? source.toKey(row.object_reference) : null;
+        if (!key) {
+          unreadable += 1;
+          continue;
+        }
+        const result = await replicateObject(key);
+        counts[result.outcome] += 1;
+        bytes += result.bytes;
+        if (target && (result.outcome === 'replicated' || result.outcome === 'already-present')) {
+          await recordBackupReplica(key, result.bytes, target.bucket);
+        }
+      }
+
+      if (rows.length > 0) await writeCursor(source.cursorKey, cursor);
+      cursors[source.id] = cursor;
+    }
 
     const reconciled = await reconcileBackupDeletions(MAX_RECONCILED_PER_RUN, { target });
     const summary = await backupReplicaSummary();
 
     logger.info(
       {
-        scanned: assets.length,
+        scanned,
+        unreadable,
         counts,
         bytes,
         reconciled,
@@ -127,7 +168,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
 
     return NextResponse.json({
-      scanned: assets.length,
+      scanned,
+      unreadable,
       replicated: counts.replicated,
       alreadyPresent: counts['already-present'],
       missingSource: counts['missing-source'],
@@ -138,7 +180,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       newestReplicatedAt: summary.newestReplicatedAt,
       oldestVerifiedAt: summary.oldestVerifiedAt,
       crossRegion: isCrossRegionBackup(),
-      cursor,
+      cursors,
     });
   } catch (error) {
     logger.error(

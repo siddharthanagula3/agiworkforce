@@ -72,7 +72,7 @@
     {
       "name": "drain-background-jobs",
       "role": "queue-drain",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "produces": [],
       "consumes": [
         "notifications",
@@ -81,13 +81,19 @@
         "data-deletion",
         "file-processing",
         "research",
-        "event-triggers"
+        "event-triggers",
+        "media-generation"
       ],
       "inFlightWork": {
         "holds": "Jobs claimed for the length of this invocation's drain budget.",
         "recovery": "lease-expiry"
       },
       "changelog": [
+        {
+          "version": "1.1.0",
+          "date": "2026-09-18",
+          "change": "Claims the media-generation queue, and reports queue age and stuck-lease counts so a queue that stops draining pages on its own."
+        },
         {
           "version": "1.0.0",
           "date": "2026-09-17",
@@ -488,6 +494,24 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "reconcile-billed-plans",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the report is derived from subscription rows and Stripe on every run, and it repairs nothing.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-18",
+          "change": "Compares the plan and amount Stripe charges against the plan this deployment entitles, and reports the drift."
         }
       ]
     },

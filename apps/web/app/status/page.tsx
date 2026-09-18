@@ -19,6 +19,7 @@ import {
 import { getCachedHealthChecks, type HealthCheckResult } from '../../lib/server/health-check';
 import { getCachedSloAttainment, type SloAttainment } from '@/lib/server/slo/attainment';
 import { declaredOnlySlos, formatObjective } from '@/lib/server/slo/catalogue';
+import { CAPABILITY_DEGRADATION } from '@/lib/server/slo/degradation';
 import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { contactMailto } from '@/lib/legal-constants';
 
@@ -41,7 +42,7 @@ const HEALTH_LABEL: Record<HealthState, string> = {
 const HEALTH_NOTE: Record<HealthState, string> = {
   healthy: 'Every check below passed on the most recent run.',
   degraded:
-    'Core serving passed, but a non-core dependency did not. Chat keeps working; billing may not.',
+    'Core serving passed, but at least one capability or dependency below did not. Read the rows: they name which one.',
   unhealthy:
     'A core check failed on the most recent run. The hosted platform cannot serve normally.',
   unknown:
@@ -101,7 +102,17 @@ function attainmentValue(measured: SloAttainment): string {
   return `${attained}% of ${measured.samples.toLocaleString('en-GB')} events over ${measured.windowDays} days · ${objective} · ${budget}${latency}`;
 }
 
-const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what: string }[] = [
+type CoveredKey = keyof HealthCheckResult['checks'];
+
+function componentValue(
+  check: HealthCheckResult['checks'][CoveredKey],
+  checkedLabel: string,
+): string {
+  const reason = 'message' in check && check.message ? ` (${check.message})` : '';
+  return `${COMPONENT_LABEL[check.status]}${reason} · checked ${checkedLabel}`;
+}
+
+const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'environment',
     label: 'Configuration',
@@ -116,6 +127,26 @@ const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what
     key: 'stripe',
     label: 'Payments',
     what: 'A read call to the payments API returns. A failure here degrades billing only: chat is unaffected, so it does not report a platform outage.',
+  },
+  {
+    key: 'chat',
+    label: 'Chat',
+    what: 'The default managed chat route resolves to a live model, at least one provider behind it is configured, and the router has not marked every one of them degraded. It does not send a message through the model.',
+  },
+  {
+    key: 'work',
+    label: 'Work',
+    what: 'The background job queues are draining: nothing has waited past the critical threshold and no worker lease has lapsed in bulk. This is the queue itself, not any one task.',
+  },
+  {
+    key: 'voice',
+    label: 'Voice',
+    what: 'The default managed voice route resolves to a live model with a configured, non-degraded provider behind it. It does not open a voice session.',
+  },
+  {
+    key: 'search',
+    label: 'Search',
+    what: 'The retrieval index the search over your own content reads is present in the database. It runs beside the Postgres probe and is reused for the same hour, and it never runs a query on your behalf.',
   },
 ];
 
@@ -190,7 +221,7 @@ export default async function StatusPage() {
                 ...(checks
                   ? COVERED.map((component) => ({
                       label: component.label,
-                      value: `${COMPONENT_LABEL[checks[component.key].status]} · checked ${checkedLabel}`,
+                      value: componentValue(checks[component.key], checkedLabel),
                     }))
                   : []),
               ]}
@@ -206,8 +237,9 @@ export default async function StatusPage() {
                 What this signal proves, and what it does not.
               </h2>
               <Prose>
-                A green row here is worth exactly three checks, so here they are. Reading it as
-                whole-platform coverage would be reading it wrong.
+                A green row here is worth exactly {COVERED.length} checks, so here they are. Each
+                one states what it actually proves, which is narrower than the name above it.
+                Reading them as whole-platform coverage would be reading them wrong.
               </Prose>
             </div>
             <Ledger
@@ -264,6 +296,28 @@ export default async function StatusPage() {
                 label: slo.domain,
                 value: `Not measured. ${slo.missingInstrument ?? ''}`,
                 quiet: true,
+              }))}
+            />
+          </Stack>
+        </Section>
+
+        <Section id="degraded-modes" labelledBy="agi-status-degraded-title" rule>
+          <Stack gap="loose">
+            <div>
+              <h2 className="agi-ds-h2" id="agi-status-degraded-title">
+                What each capability does when its dependency is gone.
+              </h2>
+              <Prose>
+                Degrading is a decision made in advance, not whatever the last error path happens to
+                produce. Work that has been accepted is held; work that cannot be held is refused at
+                the door rather than queued against a page or a device that has moved on.
+              </Prose>
+            </div>
+            <Ledger
+              caption="Degraded modes"
+              rows={CAPABILITY_DEGRADATION.map((entry) => ({
+                label: entry.capability,
+                value: `Without ${entry.dependency}: ${entry.behaviour}`,
               }))}
             />
           </Stack>

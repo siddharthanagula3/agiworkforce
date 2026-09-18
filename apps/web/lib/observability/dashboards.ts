@@ -3,7 +3,7 @@ import { METRIC_NAME } from './metrics';
 
 export type DashboardMetric = (typeof METRIC_NAME)[keyof typeof METRIC_NAME];
 
-export type PanelAggregation = 'rate' | 'ratio' | 'p50' | 'p95';
+export type PanelAggregation = 'rate' | 'ratio' | 'p50' | 'p95' | 'max';
 
 export interface DashboardPanel {
   readonly id: string;
@@ -109,6 +109,107 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
       },
     ],
   },
+  {
+    id: 'release-health',
+    title: 'Release health',
+    panels: [
+      {
+        id: 'error-rate-by-release',
+        title: 'Error rate by release',
+        metric: METRIC_NAME.httpRequests,
+        aggregation: 'ratio',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.deploymentEnvironment),
+        ],
+        match: { error_type: '5xx' },
+      },
+      {
+        id: 'crash-rate-by-release',
+        title: 'Crash rate by release',
+        metric: METRIC_NAME.failures,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.failureKind),
+        ],
+      },
+      {
+        id: 'traffic-by-client-version',
+        title: 'Traffic by client version',
+        metric: METRIC_NAME.httpRequests,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.clientVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.surface),
+        ],
+      },
+      {
+        id: 'latency-p95-by-release',
+        title: 'Request latency p95 by release',
+        metric: METRIC_NAME.httpDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion)],
+      },
+      {
+        id: 'configuration-completeness',
+        title: 'Configuration completeness',
+        metric: METRIC_NAME.configurationState,
+        aggregation: 'max',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.configurationComponent),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'job-health',
+    title: 'Background job health',
+    panels: [
+      {
+        id: 'queue-age',
+        title: 'Oldest queued job age',
+        metric: METRIC_NAME.queueAge,
+        aggregation: 'max',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
+      },
+      {
+        id: 'stuck-jobs',
+        title: 'Jobs holding an unrenewed lease',
+        metric: METRIC_NAME.queueStuck,
+        aggregation: 'max',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
+      },
+    ],
+  },
+  {
+    id: 'model-routing',
+    title: 'Model routing',
+    panels: [
+      {
+        id: 'routing-decision-rate',
+        title: 'Routing decisions by route',
+        metric: METRIC_NAME.routingDecisions,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.routeId),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort),
+        ],
+      },
+      {
+        id: 'routing-unavailable-ratio',
+        title: 'Share of turns with no route',
+        metric: METRIC_NAME.routingDecisions,
+        aggregation: 'ratio',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.trustMode),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.dataRegion),
+        ],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.routingStatus)]: 'unavailable' },
+      },
+    ],
+  },
 ] as const;
 
 export function attributeKey(attribute: string): string {
@@ -133,6 +234,10 @@ export function panelQuery(panel: DashboardPanel): string {
   if (panel.aggregation === 'rate') return counterRate(panel, panel.match);
   if (panel.aggregation === 'ratio') {
     return `${counterRate(panel, panel.match)} / ${counterRate(panel, panel.of)}`;
+  }
+  // A gauge has no _total and no _bucket: it is read at its last value.
+  if (panel.aggregation === 'max') {
+    return `max by (${panel.groupBy.join(',')}) (${seriesName(panel.metric, '')}${selector(panel.match)})`;
   }
   const quantile = HISTOGRAM_QUANTILE[panel.aggregation];
   return `histogram_quantile(${quantile}, sum by (le,${panel.groupBy.join(',')}) (rate(${seriesName(panel.metric, '_bucket')}${selector(panel.match)}[${RATE_WINDOW}])))`;

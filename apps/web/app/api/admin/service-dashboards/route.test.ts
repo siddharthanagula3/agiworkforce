@@ -16,6 +16,13 @@ function request() {
   return new NextRequest('https://agiworkforce.com/api/admin/service-dashboards');
 }
 
+/**
+ * The three shapes a panel may take. `max by` is the gauge class: a state or a
+ * depth reading has no _total to rate and no _bucket to take a quantile over,
+ * so reading one as either returns an empty series rather than failing loudly.
+ */
+const PANEL_QUERY_SHAPE = /rate\(|histogram_quantile|^max by \(/u;
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
@@ -42,8 +49,7 @@ describe('GET /api/admin/service-dashboards', () => {
     expect(ids).toContain('notification-delivery');
     for (const dashboard of body.dashboards) {
       expect(dashboard.panels.length).toBeGreaterThan(0);
-      for (const panel of dashboard.panels)
-        expect(panel.query).toMatch(/rate\(|histogram_quantile/u);
+      for (const panel of dashboard.panels) expect(panel.query).toMatch(PANEL_QUERY_SHAPE);
     }
   });
 
