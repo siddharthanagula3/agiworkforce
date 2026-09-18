@@ -43,9 +43,11 @@ export async function clearCloudAgentDevice(
 
   let clearance: DeviceStepClearance;
   try {
+    // No surface is named: the install id identifies the device on its own, and
+    // pinning 'desktop' here would refuse a step any other registered surface
+    // could carry out.
     const device = await readRegisteredDevice(getNeonDb(), {
       userId: input.userId,
-      surface: 'desktop',
       installId: declaration.deviceId,
     });
     clearance = clearDeviceForRemoteSteps(declaration, device);

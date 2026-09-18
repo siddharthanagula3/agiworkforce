@@ -25,6 +25,7 @@ import {
   isLifecycleStatus,
   isPermanentFailureSurfaceState,
   isTerminalLifecycleStatus,
+  lifecycleStatusFromParts,
   lifecycleTransitionEmitsEvent,
   surfaceStateForDenialLayers,
   surfaceStateForErrorCode,
@@ -135,6 +136,23 @@ describe('lifecycle status vocabulary', () => {
     expect(lifecycleTransitionEmitsEvent('running', 'outcome_unknown')).toBe(true);
     expect(lifecycleTransitionEmitsEvent('idle', 'pending')).toBe(false);
     expect(lifecycleTransitionEmitsEvent('completed', 'running')).toBe(false);
+  });
+
+  it('never reports work that partly landed as a whole failure', () => {
+    expect(lifecycleStatusFromParts(['completed', 'failed'])).toBe('completed_partial');
+    expect(lifecycleStatusFromParts(['failed', 'failed'])).toBe('failed');
+    expect(lifecycleStatusFromParts(['completed', 'completed'])).toBe('completed');
+    expect(lifecycleStatusFromParts(['completed', 'cancelled'])).toBe('completed_partial');
+    expect(lifecycleStatusFromParts(['cancelled', 'cancelled'])).toBe('cancelled');
+    expect(isTerminalLifecycleStatus('completed_partial')).toBe(true);
+    expect(toLifecycleStatus('partial')).toBe('completed_partial');
+  });
+
+  it('holds a whole open while any part still owes a reconciliation', () => {
+    expect(lifecycleStatusFromParts(['completed', 'outcome_unknown'])).toBe('outcome_unknown');
+    expect(lifecycleStatusFromParts(['failed', 'outcome_unknown'])).toBe('outcome_unknown');
+    expect(lifecycleStatusFromParts(['completed', 'running'])).toBe('running');
+    expect(lifecycleStatusFromParts([])).toBe('completed');
   });
 
   it('reports the first unfinished stage as the current one', () => {

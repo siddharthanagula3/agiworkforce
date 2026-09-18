@@ -9,6 +9,7 @@ const receiptMocks = vi.hoisted(() => ({
   complete: vi.fn(),
   fail: vi.fn(),
   renew: vi.fn(),
+  reconcile: vi.fn(),
 }));
 
 vi.mock('@/lib/services/cloud-agent-execution-service', async () => {
@@ -21,6 +22,7 @@ vi.mock('@/lib/services/cloud-agent-execution-service', async () => {
     completeCloudAgentExecutionOperation: receiptMocks.complete,
     failCloudAgentExecutionOperation: receiptMocks.fail,
     renewCloudAgentExecutionOperationLease: receiptMocks.renew,
+    reconcileCloudAgentExecutionOperation: receiptMocks.reconcile,
     fingerprintCloudAgentOperation: () => 'a'.repeat(64),
   };
 });
@@ -317,6 +319,91 @@ describe('durable cloud agent operation executor', () => {
         execute: vi.fn(),
       }),
     ).rejects.toBeInstanceOf(FatalError);
+    expect(receiptMocks.reconcile).not.toHaveBeenCalled();
+  });
+
+  describe('reconciling an outcome that was never observed', () => {
+    const unknownOperation = {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'tool:post-comment:1',
+      operationKind: 'tool' as const,
+      retrySafety: 'unsafe' as const,
+      payload: {},
+      resultSchema: ResultSchema,
+    };
+
+    beforeEach(() => {
+      receiptMocks.claim.mockResolvedValue({ disposition: 'outcome_unknown' });
+    });
+
+    it('returns the observed result and settles the receipt without repeating the write', async () => {
+      const execute = vi.fn();
+      const reconcile = vi.fn().mockResolvedValue({ outcome: 'completed', result: { answer: 7 } });
+
+      await expect(
+        executeCloudAgentOperation(db, { ...unknownOperation, execute, reconcile }),
+      ).resolves.toEqual({ answer: 7 });
+
+      expect(execute).not.toHaveBeenCalled();
+      expect(receiptMocks.reconcile).toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({
+          operationKey: 'tool:post-comment:1',
+          observed: { outcome: 'completed', result: { answer: 7 } },
+        }),
+      );
+    });
+
+    it('settles an observed failure as a failure and reports its reason', async () => {
+      const reconcile = vi
+        .fn()
+        .mockResolvedValue({ outcome: 'failed', message: 'The comment was never created.' });
+
+      await expect(
+        executeCloudAgentOperation(db, { ...unknownOperation, execute: vi.fn(), reconcile }),
+      ).rejects.toThrow('The comment was never created.');
+
+      expect(receiptMocks.reconcile).toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({
+          observed: {
+            outcome: 'failed',
+            error: expect.objectContaining({ message: 'The comment was never created.' }),
+          },
+        }),
+      );
+    });
+
+    it('leaves the step unresolved when the probe cannot tell either', async () => {
+      const reconcile = vi.fn().mockResolvedValue({ outcome: 'unknown' });
+
+      await expect(
+        executeCloudAgentOperation(db, { ...unknownOperation, execute: vi.fn(), reconcile }),
+      ).rejects.toBeInstanceOf(FatalError);
+      expect(receiptMocks.reconcile).not.toHaveBeenCalled();
+    });
+
+    it('leaves the step unresolved when the probe itself fails', async () => {
+      const reconcile = vi.fn().mockRejectedValue(new Error('the connector is unreachable'));
+
+      await expect(
+        executeCloudAgentOperation(db, { ...unknownOperation, execute: vi.fn(), reconcile }),
+      ).rejects.toBeInstanceOf(FatalError);
+      expect(receiptMocks.reconcile).not.toHaveBeenCalled();
+    });
+
+    it('refuses a probe result its own contract rejects', async () => {
+      const reconcile = vi
+        .fn()
+        .mockResolvedValue({ outcome: 'completed', result: { answer: 'no' } });
+
+      await expect(
+        executeCloudAgentOperation(db, { ...unknownOperation, execute: vi.fn(), reconcile }),
+      ).rejects.toThrow();
+      expect(receiptMocks.reconcile).not.toHaveBeenCalled();
+    });
   });
 
   it('leaves the lease active when the external result cannot be durably recorded', async () => {

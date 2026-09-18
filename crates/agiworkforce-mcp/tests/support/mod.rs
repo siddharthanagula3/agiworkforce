@@ -169,6 +169,35 @@ fn tools_list_result() -> serde_json::Value {
     })
 }
 
+fn resources_list_result() -> serde_json::Value {
+    serde_json::json!({
+        "resources": [
+            {
+                "uri": "file:///readme.md",
+                "name": "readme",
+                "title": "Read me first",
+                "mimeType": "text/markdown",
+                "size": 128
+            },
+            { "uri": "file:///logo.png", "name": "logo", "mimeType": "image/png" }
+        ]
+    })
+}
+
+fn resource_templates_list_result() -> serde_json::Value {
+    serde_json::json!({
+        "resourceTemplates": [
+            { "uriTemplate": "sim://issues/{id}", "name": "issue", "title": "Issue by number" }
+        ]
+    })
+}
+
+fn resources_read_result(uri: &str) -> serde_json::Value {
+    serde_json::json!({
+        "contents": [{ "uri": uri, "mimeType": "text/markdown", "text": "# hello" }]
+    })
+}
+
 fn tools_call_result(args: &serde_json::Value) -> serde_json::Value {
     let text = args
         .get("text")
@@ -188,6 +217,39 @@ fn tools_call_result(args: &serde_json::Value) -> serde_json::Value {
 /// A basic Streamable-HTTP MCP server: initialize + tools/list + tools/call,
 /// inline JSON responses, echoing the request id. If `session_id` is set, it is
 /// returned on `initialize` and recorded on every later request (stickiness).
+/// A server that speaks tools but answers `resources/list` with an empty
+/// result, which is what a server with no resources capability does.
+pub fn http_no_resources() -> (Router, Arc<HttpRecord>) {
+    let rec = Arc::new(HttpRecord::default());
+    let rec2 = Arc::clone(&rec);
+    let app = Router::new().route(
+        "/",
+        post(move |headers: HeaderMap, body: String| {
+            let rec = Arc::clone(&rec2);
+            async move {
+                let frame: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+                let method = record(&rec, &headers, &frame);
+                let id = frame.get("id").cloned().unwrap_or(serde_json::Value::Null);
+                match method.as_str() {
+                    "initialize" => {
+                        json_response(StatusCode::OK, None, rpc_result(&id, initialize_result()))
+                    }
+                    "notifications/initialized" | "notifications/cancelled" => {
+                        json_response(StatusCode::ACCEPTED, None, String::new())
+                    }
+                    "tools/list" => {
+                        json_response(StatusCode::OK, None, rpc_result(&id, tools_list_result()))
+                    }
+                    _ => {
+                        json_response(StatusCode::OK, None, rpc_result(&id, serde_json::json!({})))
+                    }
+                }
+            }
+        }),
+    );
+    (app, rec)
+}
+
 pub fn http_basic(session_id: Option<String>) -> (Router, Arc<HttpRecord>) {
     let rec = Arc::new(HttpRecord::default());
     let rec2 = Arc::clone(&rec);
@@ -211,6 +273,29 @@ pub fn http_basic(session_id: Option<String>) -> (Router, Arc<HttpRecord>) {
                     }
                     "tools/list" => {
                         json_response(StatusCode::OK, None, rpc_result(&id, tools_list_result()))
+                    }
+                    "resources/list" => json_response(
+                        StatusCode::OK,
+                        None,
+                        rpc_result(&id, resources_list_result()),
+                    ),
+                    "resources/templates/list" => json_response(
+                        StatusCode::OK,
+                        None,
+                        rpc_result(&id, resource_templates_list_result()),
+                    ),
+                    "resources/read" => {
+                        let uri = frame
+                            .get("params")
+                            .and_then(|p| p.get("uri"))
+                            .and_then(|u| u.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        json_response(
+                            StatusCode::OK,
+                            None,
+                            rpc_result(&id, resources_read_result(&uri)),
+                        )
                     }
                     "tools/call" => {
                         let args = frame

@@ -50,6 +50,9 @@ interface RegistrationRow {
   live_credential: boolean | null;
 }
 
+// The surface is optional because an install id identifies one install on its
+// own: a step may be handed to whichever surface registered it, not only the
+// desktop shell that happens to declare itself in a chat request header.
 const BY_INSTALL = `
   select r.id::text as device_id, r.surface, r.name, r.last_seen_at, r.remote_enabled,
          r.browser_available, r.computer_use_available, r.local_models_available,
@@ -67,8 +70,9 @@ const BY_INSTALL = `
          end as live_credential
     from device_registrations r
    where r.user_id = $1
-     and r.surface = $2
+     and ($2::text is null or r.surface = $2)
      and r.install_id = $3
+   order by r.last_seen_at desc
    limit 1`;
 
 // A device with no recorded credential family and no identity session never
@@ -80,13 +84,13 @@ function isAuthenticated(row: RegistrationRow): boolean {
 
 export async function readRegisteredDevice(
   db: DatabaseAdapter,
-  params: { userId: string; surface: DeviceSurface; installId: string; now?: number },
+  params: { userId: string; surface?: DeviceSurface | null; installId: string; now?: number },
 ): Promise<RegisteredDevice | null> {
   let rows: RegistrationRow[];
   try {
     rows = await db.query<RegistrationRow>(BY_INSTALL, [
       params.userId,
-      params.surface,
+      params.surface ?? null,
       params.installId,
     ]);
   } catch (error) {
@@ -111,6 +115,33 @@ export async function readRegisteredDevice(
     },
     authenticated: isAuthenticated(row),
   };
+}
+
+/**
+ * Stops remote work on one device now, without unlinking it.
+ *
+ * Unlinking is the other control and it is a bigger one: it ends the
+ * credential, so the device has to be paired again. This leaves the device
+ * signed in and merely withdrawn from remote work, which every durable run
+ * re-reads before each invocation, so a run already in flight loses the
+ * device's tools at its next step rather than finishing the work.
+ */
+export async function stopRemoteWorkOnDevice(
+  db: DatabaseAdapter,
+  params: { userId: string; deviceId: string },
+): Promise<boolean> {
+  try {
+    const affected = await db.execute(
+      `update device_registrations
+          set remote_enabled = false, updated_at = now()
+        where id = $1 and user_id = $2 and remote_enabled`,
+      [params.deviceId, params.userId],
+    );
+    return affected > 0;
+  } catch (error) {
+    if (isRegistryMissing(error)) return false;
+    throw error;
+  }
 }
 
 export type DeviceStepClearance =
