@@ -21,6 +21,7 @@ import {
 } from '@/lib/services/organization-invitation-service';
 import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '../team-admin-access';
+import { readOrganizationName, sendInvitationEmail } from './invitation-email';
 
 const ListQuerySchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
@@ -112,8 +113,16 @@ async function handleCreate(request: NextRequest) {
     invitedByUserId: userId,
   });
 
+  const delivery = await sendInvitationEmail({
+    to: invitation.email,
+    token,
+    role: invitation.role,
+    organizationName: await readOrganizationName(db, organizationId),
+    expiresAt: String(invitation.expires_at),
+  });
+
   logger.info(
-    { userId, organizationId, invitationId: invitation.id, role },
+    { userId, organizationId, invitationId: invitation.id, role, emailSent: delivery.emailSent },
     'Organization invitation created',
   );
 
@@ -134,11 +143,7 @@ async function handleCreate(request: NextRequest) {
     {
       invitation: formatInvitation(invitation),
       inviteToken: token,
-      delivery: {
-        emailSent: false,
-        reason:
-          'No transactional email provider is configured. Send this link to the invited address yourself; it expires with the invitation.',
-      },
+      delivery,
     },
     { status: 201 },
   );

@@ -65,6 +65,18 @@ export interface AuditDestination {
 export const AUDIT_STREAM_BATCH = 100;
 
 /**
+ * The contract a receiver is parsing against.
+ *
+ * Stamped on the envelope AND on every event, because a SIEM commonly splits
+ * the batch and stores each event on its own; a version that lives only on the
+ * envelope is lost the moment the record is separated from it, which is exactly
+ * when a field change becomes unreadable. Additive changes keep this number;
+ * removing or repurposing a field raises it.
+ */
+export const AUDIT_STREAM_SCHEMA = 'agiworkforce.enterprise-audit';
+export const AUDIT_STREAM_SCHEMA_VERSION = 1;
+
+/**
  * Failures before a destination is skipped for the run.
  *
  * A dead endpoint retried forever would consume the drain and starve every
@@ -367,9 +379,15 @@ export async function drainAuditDestination(
 
   const timestamp = now.toISOString();
   const body = JSON.stringify({
+    schema: AUDIT_STREAM_SCHEMA,
+    schemaVersion: AUDIT_STREAM_SCHEMA_VERSION,
     organizationId,
     deliveredAt: timestamp,
-    events: events.map((event) => ({ ...event, created_at: toIso(event.created_at) })),
+    events: events.map((event) => ({
+      schema_version: AUDIT_STREAM_SCHEMA_VERSION,
+      ...event,
+      created_at: toIso(event.created_at),
+    })),
   });
   const signature = signPayload(row.secret_hash, timestamp, body);
 
