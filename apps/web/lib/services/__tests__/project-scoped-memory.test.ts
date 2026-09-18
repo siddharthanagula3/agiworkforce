@@ -19,7 +19,17 @@ import {
   GLOBAL_MEMORY_SCOPE,
   loadManagedMemoryContext,
   loadProjectMemoryScope,
+  type ManagedMemoryPolicy,
 } from '../managed-memory-context-service';
+
+// These cases measure the scoping SQL, so the policy is handed in rather than
+// read back from the fake: whether memory is on is its own test.
+const MEMORY_ON: ManagedMemoryPolicy = {
+  enabled: true,
+  generateFromHistory: true,
+  allowToolAssistedGeneration: false,
+  searchPastChats: false,
+};
 
 const PROJECT = '11111111-2222-4333-8444-555555555555';
 
@@ -35,7 +45,7 @@ beforeEach(() => vi.clearAllMocks());
 describe('memory scoping', () => {
   it('a loose chat sees only global memories', async () => {
     const d = db();
-    await loadManagedMemoryContext(d as never, { userId: 'u1' });
+    await loadManagedMemoryContext(d as never, { userId: 'u1', policy: MEMORY_ON });
 
     const [sql] = d.calls.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain('project_id is null');
@@ -44,7 +54,11 @@ describe('memory scoping', () => {
 
   it('an explicit global scope behaves the same as no scope', async () => {
     const d = db();
-    await loadManagedMemoryContext(d as never, { userId: 'u1', scope: GLOBAL_MEMORY_SCOPE });
+    await loadManagedMemoryContext(d as never, {
+      userId: 'u1',
+      scope: GLOBAL_MEMORY_SCOPE,
+      policy: MEMORY_ON,
+    });
 
     const [sql] = d.calls.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain('project_id is null');
@@ -54,6 +68,7 @@ describe('memory scoping', () => {
     const d = db();
     await loadManagedMemoryContext(d as never, {
       userId: 'u1',
+      policy: MEMORY_ON,
       scope: { projectId: PROJECT, usesGlobalMemory: true },
     });
 
@@ -66,6 +81,7 @@ describe('memory scoping', () => {
     const d = db();
     await loadManagedMemoryContext(d as never, {
       userId: 'u1',
+      policy: MEMORY_ON,
       scope: { projectId: PROJECT, usesGlobalMemory: false },
     });
 
@@ -79,6 +95,7 @@ describe('memory scoping', () => {
     const d = db();
     await loadManagedMemoryContext(d as never, {
       userId: 'u1',
+      policy: MEMORY_ON,
       suppressedSources: ['auto'],
       scope: { projectId: PROJECT, usesGlobalMemory: false },
     });

@@ -244,6 +244,15 @@ describe('ChatMessageList rendering', () => {
     expect(screen.getByText('Hi there')).toBeInTheDocument();
   });
 
+  // Without containment a transcript fling chains into the shell scroll
+  // container behind it, and on touch the rubber band shows the page background.
+  it('contains its own overscroll rather than chaining to the shell', () => {
+    render(<ChatMessageList messages={messages} />);
+    const log = screen.getByRole('log', { name: 'Chat messages' });
+    expect(log.style.overscrollBehaviorY).toBe('contain');
+    expect(log.style.overflowX).toBe('hidden');
+  });
+
   it('aligns follow-up suggestions to the composer content column when enabled', () => {
     const messagesWithSuggestions = [
       messages[0]!,

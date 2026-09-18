@@ -262,6 +262,9 @@ export function ArtifactsPanel() {
       ? (s.messagesByConversation[activeConversationId] ?? s.messages)
       : s.messages,
   );
+  // `messages` is the store's active-path mirror; `messagesByConversation` holds
+  // every branch, so the two together say which rows the reader can currently see.
+  const visibleThread = useChatStore((s) => s.messages);
   const activeConversation = useChatStore(
     (s) =>
       s.conversations.find((conversation) => conversation.id === s.activeConversationId) ?? null,
@@ -333,7 +336,28 @@ export function ArtifactsPanel() {
     [cloudPublisher, conversationMessages, activeConversation],
   );
 
-  const artifacts = activeConversationId ? getConversationArtifacts(activeConversationId) : [];
+  const [deepLinkId, setDeepLinkId] = useState<string | null>(() => readArtifactDeepLink());
+  const conversationArtifacts = activeConversationId
+    ? getConversationArtifacts(activeConversationId)
+    : [];
+  const loadedMessageIds = useMemo(
+    () => new Set(conversationMessages.map((message) => message.id)),
+    [conversationMessages],
+  );
+  const visibleMessageIds = useMemo(
+    () => new Set(visibleThread.map((message) => message.id)),
+    [visibleThread],
+  );
+  // An artifact written by an abandoned variant is not part of the answer on
+  // screen. A row the transcript has not loaded yet is not evidence either way,
+  // and a deep link names the one artifact the reader asked for by id.
+  const artifacts = conversationArtifacts.filter(
+    (artifact) =>
+      !artifact.messageId ||
+      artifact.id === deepLinkId ||
+      !loadedMessageIds.has(artifact.messageId) ||
+      visibleMessageIds.has(artifact.messageId),
+  );
 
   const selectedArtifact = artifacts.find((a) => a.id === selectedArtifactId) ?? artifacts[0];
 
@@ -362,7 +386,6 @@ export function ArtifactsPanel() {
     store.selectArtifact(conversationArtifacts[0]?.id ?? null);
   }, [activeConversationId]);
 
-  const [deepLinkId, setDeepLinkId] = useState<string | null>(() => readArtifactDeepLink());
   const appliedDeepLinkRef = useRef<string | null>(null);
   useEffect(() => {
     const onPopState = () => setDeepLinkId(readArtifactDeepLink());

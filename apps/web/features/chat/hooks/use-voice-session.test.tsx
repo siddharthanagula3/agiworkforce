@@ -16,7 +16,12 @@ vi.mock('@features/support/hooks/usePrefersReducedMotion', () => ({
 }));
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
 
-import { endLiveVoiceSession, useVoiceSession } from './use-voice-session';
+import {
+  endLiveVoiceSession,
+  useVoiceSession,
+  RECONNECT_BASE_MS,
+  RECONNECT_MAX_ATTEMPTS,
+} from './use-voice-session';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import {
   LIVE_SESSION_MESSAGE,
@@ -216,5 +221,151 @@ describe('useVoiceSession', () => {
     expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.error);
     expect(result.current.state.error).toBe(LIVE_SESSION_MESSAGE.sessionEnded);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
+  describe('automatic reconnect', () => {
+    // waitFor polls on timers the fake clock owns, so this block drives the
+    // clock itself rather than waiting on it.
+    async function reconnectAfter(ms: number) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+    }
+
+    async function enterStarted(result: { current: { enter: () => void } }) {
+      await act(async () => {
+        result.current.enter();
+      });
+      await reconnectAfter(0);
+      await act(async () => {
+        lastCallbacks().onStarted();
+      });
+    }
+
+    async function drop() {
+      await act(async () => {
+        lastCallbacks().onConnectionLost?.(LIVE_SESSION_MESSAGE.connectionDropped);
+      });
+      await reconnectAfter(0);
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('settles the dropped session and opens a new one after the backoff', async () => {
+      const { result } = mount();
+      await enterStarted(result);
+      await drop();
+
+      expect(result.current.reconnecting).toBe(true);
+      expect(result.current.reconnectAttempt).toBe(1);
+      expect(live.start).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe('/api/voice/live/sessions/live_1/close');
+      expect(JSON.parse(String(init.body))).toMatchObject({ reason: 'connection_lost' });
+      expect(live.close).not.toHaveBeenCalled();
+
+      await reconnectAfter(RECONNECT_BASE_MS);
+      expect(live.start).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        lastCallbacks().onStarted();
+      });
+      expect(result.current.reconnecting).toBe(false);
+      expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
+    });
+
+    it('backs off further on each attempt and gives up at the bounded limit', async () => {
+      const { result } = mount();
+      await enterStarted(result);
+
+      for (let attempt = 1; attempt <= RECONNECT_MAX_ATTEMPTS; attempt += 1) {
+        await drop();
+        expect(result.current.reconnectAttempt).toBe(attempt);
+        await reconnectAfter(RECONNECT_BASE_MS * 2 ** (attempt - 1) - 1);
+        expect(live.start).toHaveBeenCalledTimes(attempt);
+        await reconnectAfter(1);
+        expect(live.start).toHaveBeenCalledTimes(attempt + 1);
+        await act(async () => {
+          lastCallbacks().onStarted();
+        });
+      }
+
+      await drop();
+      expect(result.current.reconnecting).toBe(false);
+      expect(result.current.state.error).toBe(LIVE_SESSION_MESSAGE.reconnectFailed);
+      await reconnectAfter(RECONNECT_BASE_MS * 8);
+      expect(live.start).toHaveBeenCalledTimes(RECONNECT_MAX_ATTEMPTS + 1);
+    });
+
+    it('keeps retrying when the reconnect itself cannot reach the provider', async () => {
+      const { result } = mount();
+      await enterStarted(result);
+      live.start.mockRejectedValueOnce(
+        new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.sessionRejected, 'http_503'),
+      );
+
+      await drop();
+      await reconnectAfter(RECONNECT_BASE_MS);
+      expect(live.start).toHaveBeenCalledTimes(2);
+      expect(result.current.reconnecting).toBe(true);
+      expect(result.current.reconnectAttempt).toBe(2);
+
+      await reconnectAfter(RECONNECT_BASE_MS * 2);
+      expect(live.start).toHaveBeenCalledTimes(3);
+    });
+
+    it('stops reconnecting when the microphone is what failed', async () => {
+      const { result } = mount();
+      await enterStarted(result);
+      live.start.mockRejectedValueOnce(
+        new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.microphoneDenied, 'microphone_denied'),
+      );
+
+      await drop();
+      await reconnectAfter(RECONNECT_BASE_MS);
+      expect(live.start).toHaveBeenCalledTimes(2);
+      expect(result.current.reconnecting).toBe(false);
+      expect(result.current.state.error).toBe(LIVE_SESSION_MESSAGE.microphoneDenied);
+
+      await reconnectAfter(RECONNECT_BASE_MS * 8);
+      expect(live.start).toHaveBeenCalledTimes(2);
+    });
+
+    it('reconnects as soon as the network is back, without waiting out the backoff', async () => {
+      const { result } = mount();
+      await enterStarted(result);
+      await drop();
+      await reconnectAfter(RECONNECT_BASE_MS * 4);
+      await drop();
+      expect(live.start).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        window.dispatchEvent(new Event('online'));
+      });
+      await reconnectAfter(0);
+
+      expect(live.start).toHaveBeenCalledTimes(3);
+    });
+
+    it('cancels a pending reconnect when the user leaves voice mode', async () => {
+      const { result } = mount();
+      await enterStarted(result);
+      await drop();
+
+      await act(async () => {
+        result.current.exit();
+      });
+      await reconnectAfter(RECONNECT_BASE_MS * 8);
+
+      expect(live.start).toHaveBeenCalledTimes(1);
+      expect(result.current.reconnecting).toBe(false);
+      expect(result.current.state.status).toBe(VOICE_SESSION_STATUS.exited);
+    });
   });
 });

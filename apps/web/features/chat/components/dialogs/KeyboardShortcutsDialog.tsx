@@ -11,7 +11,7 @@ import {
 import { Separator } from '@agiworkforce/ui';
 import { Keyboard } from 'lucide-react';
 import { safePlatform } from '@shared/utils/browser-utils';
-import type { KeyboardShortcutDoc } from '../../hooks/use-keyboard-shortcuts';
+import { formatShortcutKeys, type KeyboardShortcutDoc } from '../../hooks/use-keyboard-shortcuts';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { memoWhenClosed } from '@shared/lib/memo-when-closed';
 import { useHostShortcuts } from '@/features/desktop-host';
@@ -35,22 +35,7 @@ function KeyboardShortcutsDialogImpl({
   const setShortcutEnabled = useSettingsStore((state) => state.setShortcutEnabled);
   const restoreShortcutDefaults = useSettingsStore((state) => state.restoreShortcutDefaults);
 
-  const formatShortcut = (shortcut: KeyboardShortcutDoc) => {
-    const keys: string[] = [];
-
-    if (shortcut.ctrl || shortcut.meta) {
-      keys.push(isMac ? '⌘' : 'Ctrl');
-    }
-    if (shortcut.shift) {
-      keys.push(isMac ? '⇧' : 'Shift');
-    }
-    if (shortcut.alt) {
-      keys.push(isMac ? '⌥' : 'Alt');
-    }
-    keys.push(shortcut.key);
-
-    return keys;
-  };
+  const formatShortcut = (shortcut: KeyboardShortcutDoc) => formatShortcutKeys(shortcut, isMac);
 
   const groupedShortcuts = shortcuts.reduce(
     (acc, shortcut) => {

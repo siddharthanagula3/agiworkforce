@@ -4998,7 +4998,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           <SheetContent
             id={MOBILE_NAV_DRAWER_ID}
             side="left"
-            className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto p-0"
+            className="w-[280px] max-w-[85vw] gap-0 overflow-y-auto overscroll-contain p-0 [scrollbar-width:thin]"
             data-testid="chat-mobile-nav-drawer"
             onEscapeKeyDown={keepOpenForMenuEscape}
             onCloseAutoFocus={(event) => {
@@ -5273,7 +5273,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 <ChatLoadingState className="w-full" />
               </div>
             ) : isEmptyChat ? (
-              <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
                 <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
                   {!voiceModeActive && <GreetingBanner />}

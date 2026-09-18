@@ -19,6 +19,27 @@ const CONTROL_HEIGHT = 30;
 const WORKSPACE_MEMORY_OFF_NOTICE =
   'Your workspace has memory turned off, so none of these settings apply until an owner or admin turns it back on in Workspace → Policy.';
 
+const MEMORY_SCOPE_EXPLANATION: ReadonlyArray<{ scope: string; meaning: string }> = [
+  {
+    scope: 'Account',
+    meaning:
+      'Read in every personal chat, on every device you sign in to. This is where a fact lands unless a project claims it.',
+  },
+  {
+    scope: 'Workspace',
+    meaning:
+      'A memory written inside a workspace stays inside it. Nothing you record at work is read in a personal chat, and nothing personal is read at work.',
+  },
+  {
+    scope: 'Project',
+    meaning:
+      'Read only in that project. A project set to use its own memory only never sees your account facts, so a project can hold a standing brief, the decisions and background a long project accumulates, without any of it leaking into an unrelated chat.',
+  },
+];
+
+const MEMORY_DISABLED_CONTRACT =
+  'Turning persistent memory off stops both halves: nothing new is saved, and the memories you already have are no longer read into any answer. They are kept until you delete them.';
+
 function memoryRow(title: string, description: string, control: ReactNode) {
   return (
     <div
@@ -280,6 +301,41 @@ export function MemorySection() {
             onCheckedChange={(value) => setBoolean('allowToolAssistedGeneration', value)}
           />,
         )}
+      </section>
+
+      <section
+        aria-labelledby="memory-scope-heading"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          padding: 16,
+        }}
+      >
+        <h2
+          id="memory-scope-heading"
+          style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: 0 }}
+        >
+          Where a memory applies
+        </h2>
+        <dl style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: 0 }}>
+          {MEMORY_SCOPE_EXPLANATION.map((entry) => (
+            <div key={entry.scope}>
+              <dt style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>
+                {entry.scope}
+              </dt>
+              <dd style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>
+                {entry.meaning}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+          {MEMORY_DISABLED_CONTRACT}
+        </p>
       </section>
 
       {/* Exclusions sit ABOVE the memory list: the rule that governs what gets

@@ -392,6 +392,20 @@ describe('WebAppShell responsive navigation', () => {
     expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-list-error', LIST_FAILURE);
   });
 
+  // Scroll chaining out of the content region moves the fixed shell wrapper
+  // underneath it, which on touch rubber-bands the page background into view.
+  it('contains the content region overscroll', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    const content = document.getElementById('main-content');
+    expect(content?.className).toContain('overscroll-contain');
+    expect(content?.className).toContain('overflow-auto');
+  });
+
   it('claims no list failure when the fetch succeeded', () => {
     render(
       <WebAppShell>

@@ -22,9 +22,13 @@ export type KeyboardShortcutDoc = Omit<KeyboardShortcut, 'action'> & { id: strin
 
 export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
   {
-    key: 'K',
+    // Not Cmd/Ctrl+K: CommandPaletteProvider binds that on `document` in the
+    // capture phase and stops propagation, so this listener never saw it and
+    // the row the settings list advertised opened a different surface.
+    key: 'F',
     ctrl: true,
     meta: true,
+    shift: true,
     id: 'open-search',
     description: 'Open search',
     category: 'navigation',
@@ -91,6 +95,19 @@ export const KEYBOARD_SHORTCUT_DOCS: readonly KeyboardShortcutDoc[] = [
     category: 'ui',
   },
 ];
+
+export function findShortcutDoc(id: string): KeyboardShortcutDoc | undefined {
+  return KEYBOARD_SHORTCUT_DOCS.find((doc) => doc.id === id);
+}
+
+export function formatShortcutKeys(shortcut: KeyboardShortcutDoc, isMac: boolean): string[] {
+  const keys: string[] = [];
+  if (shortcut.ctrl || shortcut.meta) keys.push(isMac ? '⌘' : 'Ctrl');
+  if (shortcut.shift) keys.push(isMac ? '⇧' : 'Shift');
+  if (shortcut.alt) keys.push(isMac ? '⌥' : 'Alt');
+  keys.push(shortcut.key);
+  return keys;
+}
 
 interface UseKeyboardShortcutsOptions {
   onNewChat?: () => void;

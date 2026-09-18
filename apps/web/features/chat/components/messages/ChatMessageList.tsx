@@ -1793,10 +1793,13 @@ const ChatMessageListComponent = ({
         onWheel={markUserScrollIntent}
         onTouchMove={markUserScrollIntent}
         onKeyDown={handleTranscriptKeyDown}
-        className="h-full"
+        className="h-full [scrollbar-width:thin]"
         // react-window's List bounds only the y axis, unlike its Grid sibling.
         // Horizontal scroll belongs to the code block or table that needs it.
-        style={{ overflowX: 'hidden' }}
+        // `contain` keeps a transcript fling from chaining into the shell scroll
+        // container behind it, and kills the rubber band that showed the page
+        // background under the transcript on touch.
+        style={{ overflowX: 'hidden', overscrollBehaviorY: 'contain' }}
       />
 
       {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
