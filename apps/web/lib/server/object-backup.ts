@@ -14,6 +14,7 @@ import {
 } from '@agiworkforce/object-storage';
 
 import { logger } from '@/lib/logger';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 import { getObjectStore, objectStorageConfig } from './object-storage-runtime';
 import {
@@ -66,13 +67,39 @@ function backupEnvironment(env: Environment): Environment {
   };
 }
 
+export const BACKUP_REQUIRED_ENV: ReadonlyArray<string> = [
+  BACKUP_ENDPOINT_ENV,
+  BACKUP_BUCKET_ENV,
+  BACKUP_ACCESS_KEY_ID_ENV,
+  BACKUP_SECRET_ACCESS_KEY_ENV,
+];
+
+export function missingBackupEnv(env: Environment = environment()): string[] {
+  return BACKUP_REQUIRED_ENV.filter((name) => !env[name]);
+}
+
 export function isObjectBackupConfigured(env: Environment = environment()): boolean {
-  return Boolean(
-    env[BACKUP_ENDPOINT_ENV] &&
-    env[BACKUP_BUCKET_ENV] &&
-    env[BACKUP_ACCESS_KEY_ID_ENV] &&
-    env[BACKUP_SECRET_ACCESS_KEY_ENV],
-  );
+  return missingBackupEnv(env).length === 0;
+}
+
+export interface ObjectBackupReadiness {
+  configured: boolean;
+  missing: string[];
+  crossRegion: boolean;
+}
+
+/**
+ * What a production host can answer about its own backup without holding a
+ * credential: which variables are unset by name, and whether the copy leaves
+ * the primary's failure domain. Names only, never values.
+ */
+export function objectBackupReadiness(env: Environment = environment()): ObjectBackupReadiness {
+  const missing = missingBackupEnv(env);
+  return {
+    configured: missing.length === 0,
+    missing,
+    crossRegion: missing.length === 0 && isCrossRegionBackup(env),
+  };
 }
 
 let cached: { identity: string; target: BackupTarget } | null = null;
@@ -160,4 +187,127 @@ export async function replicateObject(
   });
 
   return { outcome: 'replicated', bytes: stored.data.byteLength };
+}
+
+export type BackupDeletionOutcome = 'unconfigured' | 'deleted' | 'absent';
+
+export async function deleteBackupObject(
+  key: string,
+  options: { target?: BackupTarget | null } = {},
+): Promise<BackupDeletionOutcome> {
+  const target = options.target === undefined ? resolveObjectBackupTarget() : options.target;
+  if (!target) return 'unconfigured';
+
+  const existing = await target.store.head(target.bucket, key);
+  if (!existing) return 'absent';
+
+  await target.store.delete(target.bucket, key);
+  return 'deleted';
+}
+
+const REPLICA_TABLE = 'object_backup_replicas';
+
+export interface BackupReplicaSummary {
+  tracked: number;
+  newestReplicatedAt: string | null;
+  oldestVerifiedAt: string | null;
+}
+
+export async function recordBackupReplica(
+  key: string,
+  bytes: number,
+  backupBucket: string,
+): Promise<void> {
+  await getNeonDb().execute(
+    `insert into public.${REPLICA_TABLE} (object_key, backup_bucket, bytes)
+     values ($1, $2, $3)
+     on conflict (object_key) do update
+        set backup_bucket = excluded.backup_bucket,
+            bytes = excluded.bytes,
+            replicated_at = now(),
+            verified_at = now()`,
+    [key, backupBucket, bytes],
+  );
+}
+
+export async function replicasDueForReconciliation(limit: number): Promise<string[]> {
+  const rows = await getNeonDb().query<{ object_key: string }>(
+    `select object_key
+       from public.${REPLICA_TABLE}
+      order by verified_at asc
+      limit $1`,
+    [limit],
+  );
+  return rows.map((row) => row.object_key);
+}
+
+export async function markReplicaVerified(key: string): Promise<void> {
+  await getNeonDb().execute(
+    `update public.${REPLICA_TABLE} set verified_at = now() where object_key = $1`,
+    [key],
+  );
+}
+
+export async function forgetBackupReplicas(keys: ReadonlyArray<string>): Promise<number> {
+  if (keys.length === 0) return 0;
+  const rows = await getNeonDb().query<{ object_key: string }>(
+    `delete from public.${REPLICA_TABLE} where object_key = any($1::text[]) returning object_key`,
+    [keys],
+  );
+  return rows.length;
+}
+
+export async function backupReplicaSummary(): Promise<BackupReplicaSummary> {
+  const rows = await getNeonDb().query<{
+    tracked: string | number;
+    newest_replicated_at: string | null;
+    oldest_verified_at: string | null;
+  }>(
+    `select count(*) as tracked,
+            max(replicated_at) as newest_replicated_at,
+            min(verified_at) as oldest_verified_at
+       from public.${REPLICA_TABLE}`,
+  );
+  const row = rows[0];
+  return {
+    tracked: Number(row?.tracked ?? 0),
+    newestReplicatedAt: row?.newest_replicated_at ?? null,
+    oldestVerifiedAt: row?.oldest_verified_at ?? null,
+  };
+}
+
+/**
+ * The backup is a copy of what exists, so a deletion the primary has already
+ * made has to reach it or an erased object survives in the second bucket. The
+ * sweep asks the primary about each tracked key rather than trusting a delete
+ * notification that no path guarantees.
+ */
+export async function reconcileBackupDeletions(
+  limit: number,
+  options: { source?: ObjectStore; target?: BackupTarget | null; sourceBucket?: string } = {},
+): Promise<{ checked: number; deleted: number; retained: number }> {
+  const target = options.target === undefined ? resolveObjectBackupTarget() : options.target;
+  if (!target) return { checked: 0, deleted: 0, retained: 0 };
+
+  const source = options.source ?? getObjectStore();
+  const sourceBucket = options.sourceBucket ?? objectStorageConfig().privateBucket;
+  if (!sourceBucket) return { checked: 0, deleted: 0, retained: 0 };
+
+  const keys = await replicasDueForReconciliation(limit);
+  const orphaned: string[] = [];
+  let retained = 0;
+
+  for (const key of keys) {
+    const head = await source.head(sourceBucket, key);
+    if (head) {
+      retained += 1;
+      await markReplicaVerified(key);
+      continue;
+    }
+    await deleteBackupObject(key, { target });
+    orphaned.push(key);
+  }
+
+  await forgetBackupReplicas(orphaned);
+  return { checked: keys.length, deleted: orphaned.length, retained };
 }

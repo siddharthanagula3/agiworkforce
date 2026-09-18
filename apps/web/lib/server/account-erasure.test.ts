@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
   deleteObject: vi.fn(),
   objectStorageConfigured: vi.fn(() => true),
   deleteE2BSessionsForUser: vi.fn(),
+  resolveObjectBackupTarget: vi.fn(
+    (): { store: unknown; bucket: string; region: string; endpoint: string } | null => null,
+  ),
+  deleteBackupObject: vi.fn(async (_key: string, _options?: unknown) => 'deleted'),
+  forgetBackupReplicas: vi.fn(async (_keys: readonly string[]) => 0),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -62,15 +67,25 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
 vi.mock('@/lib/e2b/session-store', () => ({
   deleteE2BSessionsForUser: (...args: unknown[]) => mocks.deleteE2BSessionsForUser(...args),
 }));
+vi.mock('@/lib/server/object-backup', () => ({
+  resolveObjectBackupTarget: () => mocks.resolveObjectBackupTarget(),
+  deleteBackupObject: (key: string, options?: unknown) => mocks.deleteBackupObject(key, options),
+  forgetBackupReplicas: (keys: readonly string[]) => mocks.forgetBackupReplicas(keys),
+}));
 
 process.env['JWT_SECRET'] = 'test-developer-jwt-secret-at-least-32-bytes';
 
 import {
   ANONYMIZED_USER_COLUMNS,
+  FINANCIAL_ERASURE_DISPOSITION,
   UNDELETED_USER_TABLES,
   USER_SCOPED_TABLES,
   eraseUserAccountData,
 } from './account-erasure';
+import {
+  FINANCIAL_RETENTION_RULES,
+  FINANCIAL_TABLES_WITHOUT_MAXIMUM_AGE,
+} from '@/lib/billing/financial-record-retention';
 import { POST as refreshDeviceSession } from '@/app/api/auth/device/refresh/route';
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 
@@ -258,6 +273,49 @@ describe('account erasure inventory', () => {
       expect(anonymized.has(table), `${table} is not shared with another owner`).toBe(false);
     }
   });
+
+  it('classifies every financial table the retention schedule names', () => {
+    const scoped = userScopedSchemaTables();
+    const classified = new Set([
+      ...USER_SCOPED_TABLES.map((entry) => entry.table),
+      ...ANONYMIZED_USER_COLUMNS.map((entry) => entry.table),
+      ...Object.keys(UNDELETED_USER_TABLES),
+    ]);
+
+    const financial = new Set([
+      ...FINANCIAL_RETENTION_RULES.map((rule) => rule.table),
+      ...FINANCIAL_TABLES_WITHOUT_MAXIMUM_AGE.map((entry) => entry.table),
+    ]);
+
+    const unclassified = [...financial]
+      .filter((table) => scoped.has(table) && !classified.has(table))
+      .sort();
+    expect(unclassified).toEqual([]);
+  });
+
+  it("deletes the subject's own credit ledger and keeps the platform's cost ledger", () => {
+    const deleted = new Set(USER_SCOPED_TABLES.map((entry) => entry.table));
+    const anonymized = new Set(ANONYMIZED_USER_COLUMNS.map((entry) => entry.table));
+
+    for (const table of Object.keys(FINANCIAL_ERASURE_DISPOSITION)) {
+      expect(deleted.has(table), `${table} must go with the subject`).toBe(true);
+      expect(anonymized.has(table), `${table} has no anonymized form to keep`).toBe(false);
+      expect(FINANCIAL_ERASURE_DISPOSITION[table]!.length).toBeGreaterThan(40);
+    }
+
+    for (const table of ['provider_cost_events', 'cogs_adjustments', 'organization_usage_ledger']) {
+      expect(anonymized.has(table), `${table} is the platform's record, not the subject's`).toBe(
+        true,
+      );
+      expect(deleted.has(table)).toBe(false);
+    }
+
+    expect(Object.keys(FINANCIAL_ERASURE_DISPOSITION).sort()).toEqual([
+      'credit_transactions',
+      'subscriptions',
+      'token_credits',
+    ]);
+  });
 });
 
 describe('eraseUserAccountData', () => {
@@ -279,6 +337,78 @@ describe('eraseUserAccountData', () => {
     expect(report.cacheKeysDeleted).toBe(3);
     expect(report.cacheKeysFailed).toBe(0);
     expect(report.complete).toBe(true);
+  });
+
+  it("deletes the subject's credit ledger while anonymizing the platform's cost rows", async () => {
+    primeDb({});
+
+    await eraseUserAccountData('user-1');
+
+    const statements = executedStatements();
+    for (const table of Object.keys(FINANCIAL_ERASURE_DISPOSITION)) {
+      expect(statements).toContain(`delete from public.${table} where user_id = $1`);
+      expect(
+        statements.some((sql) => sql.includes(`update public.${table} set user_id = null`)),
+      ).toBe(false);
+    }
+    expect(statements).toContain(
+      'update public.provider_cost_events set user_id = null where user_id = $1',
+    );
+    expect(statements).toContain(
+      'update public.cogs_adjustments set user_id = null where user_id = $1',
+    );
+  });
+
+  it('removes the backup copy of every object it erased from the primary', async () => {
+    primeDb({
+      mediaRows: [
+        { id: '11111111-1111-4111-8111-111111111111', storage_pathname: 'private-media/a.png' },
+        { id: '22222222-2222-4222-8222-222222222222', storage_pathname: 'private-media/b.png' },
+      ],
+    });
+    mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 2, failedPathnames: [] });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'agi-backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deleteBackupObject).toHaveBeenCalledTimes(2);
+    expect(mocks.deleteBackupObject).toHaveBeenCalledWith(
+      'private-media/a.png',
+      expect.objectContaining({ target: expect.objectContaining({ bucket: 'agi-backup' }) }),
+    );
+    expect(mocks.forgetBackupReplicas).toHaveBeenCalledWith([
+      'private-media/a.png',
+      'private-media/b.png',
+    ]);
+    expect(report.backupObjectsDeleted).toBe(2);
+    expect(report.backupObjectsFailed).toBe(0);
+  });
+
+  it('leaves the backup copy of an object the primary still holds', async () => {
+    primeDb({
+      mediaRows: [
+        { id: '11111111-1111-4111-8111-111111111111', storage_pathname: 'private-media/a.png' },
+      ],
+    });
+    mocks.deleteStoredMediaObjects.mockResolvedValue({
+      deleted: 0,
+      failedPathnames: ['private-media/a.png'],
+    });
+    mocks.resolveObjectBackupTarget.mockReturnValue({
+      store: {},
+      bucket: 'agi-backup',
+      region: 'us-west-1',
+      endpoint: 'https://backup',
+    });
+
+    await eraseUserAccountData('user-1');
+
+    expect(mocks.deleteBackupObject).not.toHaveBeenCalled();
   });
 
   it('keeps the account open for retry when cached sandbox state survived', async () => {

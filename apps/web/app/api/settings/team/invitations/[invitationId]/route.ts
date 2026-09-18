@@ -2,12 +2,12 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
@@ -19,6 +19,7 @@ import {
   revokeInvitation,
 } from '@/lib/services/organization-invitation-service';
 import { requireTeamAdminAccess } from '../../team-admin-access';
+import { readOrganizationName, sendInvitationEmail } from '../invitation-email';
 
 const UUID = z.string().uuid();
 
@@ -32,7 +33,7 @@ const RevokeQuerySchema = z.object({
 });
 
 async function requireOrgAdmin(
-  db: ReturnType<typeof getNeonDb>,
+  db: DatabaseAdapter,
   organizationId: string,
   userId: string,
 ): Promise<OrganizationMemberRow> {
@@ -90,16 +91,24 @@ async function handleResend(
 
   const { invitation, token } = await resendInvitation(db, organizationId, invitationId);
 
-  logger.info({ userId, organizationId, invitationId }, 'Organization invitation resent');
+  const delivery = await sendInvitationEmail({
+    to: invitation.email,
+    token,
+    role: invitation.role,
+    organizationName: await readOrganizationName(db, organizationId),
+    expiresAt: String(invitation.expires_at),
+    replacesPreviousLink: true,
+  });
+
+  logger.info(
+    { userId, organizationId, invitationId, emailSent: delivery.emailSent },
+    'Organization invitation resent',
+  );
 
   return NextResponse.json({
     invitation: formatInvitation(invitation),
     inviteToken: token,
-    delivery: {
-      emailSent: false,
-      reason:
-        'No transactional email provider is configured. The previous link is now invalid; send this one instead.',
-    },
+    delivery,
   });
 }
 

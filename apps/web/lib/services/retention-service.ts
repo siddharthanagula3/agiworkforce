@@ -401,6 +401,116 @@ export async function listOrganizationsWithRetentionEnforced(
   return rows.map((row) => row.organization_id);
 }
 
+export interface RetentionBacklog {
+  organizationId: string;
+  enforced: boolean;
+  retentionDays: number | null;
+  cutoff: string | null;
+  pendingDeletions: number;
+  heldFromDeletion: number;
+  perRunCeiling: number;
+  runsRemaining: number;
+  lastSweptAt: string | null;
+  estimatedCompletionAt: string | null;
+}
+
+const RETENTION_SWEEP_CEILING = RETENTION_SWEEP_MAX_BATCHES * RETENTION_SWEEP_BATCH;
+
+/**
+ * The sweep already knows it stopped short of the cutoff; until now only its
+ * own log said so. An administrator who switched retention on and is waiting
+ * for it to take effect needs the size of what is left and when it clears.
+ *
+ * The estimate is built from the interval between this workspace's own last two
+ * real sweeps, not from the cron's schedule: the schedule is configuration this
+ * service cannot read, and an observed cadence is also the one that survives a
+ * run being skipped.
+ */
+export async function readRetentionBacklog(
+  db: DatabaseAdapter,
+  organizationId: string,
+  options: { now?: Date } = {},
+): Promise<RetentionBacklog> {
+  const now = options.now ?? new Date();
+  const empty: RetentionBacklog = {
+    organizationId,
+    enforced: false,
+    retentionDays: null,
+    cutoff: null,
+    pendingDeletions: 0,
+    heldFromDeletion: 0,
+    perRunCeiling: RETENTION_SWEEP_CEILING,
+    runsRemaining: 0,
+    lastSweptAt: null,
+    estimatedCompletionAt: null,
+  };
+
+  const [policy] = await db.query<RetentionPolicyRow>(
+    `select retention_days, retention_enforced
+       from public.organization_admin_policies
+      where organization_id = $1
+      limit 1`,
+    [organizationId],
+  );
+  if (!policy || !policy.retention_enforced) return empty;
+
+  const retentionDays = policy.retention_days;
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const holds = await listLegalHolds(db, organizationId);
+  const organizationHold = holds.some((hold) => hold.scope === 'organization');
+  const heldUserIds = holds
+    .filter((hold) => hold.scope === 'member' && hold.subjectUserId)
+    .map((hold) => hold.subjectUserId as string);
+
+  const [counts] = await db.query<{ pending: string | number; held: string | number }>(
+    `select count(*) filter (where not (user_id = any($3::text[])))::int as pending,
+            count(*) filter (where user_id = any($3::text[]))::int as held
+       from public.web_conversations
+      where organization_id = $1
+        and updated_at < $2`,
+    [organizationId, cutoff, heldUserIds],
+  );
+
+  const due = Number(counts?.pending ?? 0);
+  const memberHeld = Number(counts?.held ?? 0);
+  const pendingDeletions = organizationHold ? 0 : due;
+  const heldFromDeletion = organizationHold ? due + memberHeld : memberHeld;
+
+  const sweeps = await db.query<{ created_at: string | Date }>(
+    `select created_at
+       from public.organization_retention_sweeps
+      where organization_id = $1
+        and dry_run = false
+      order by created_at desc
+      limit 2`,
+    [organizationId],
+  );
+  const lastSweptAt = sweeps[0] ? toIso(sweeps[0].created_at) : null;
+  const previousSweptAt = sweeps[1] ? toIso(sweeps[1].created_at) : null;
+
+  const runsRemaining = Math.ceil(pendingDeletions / RETENTION_SWEEP_CEILING);
+  const cadenceMs =
+    lastSweptAt && previousSweptAt ? Date.parse(lastSweptAt) - Date.parse(previousSweptAt) : null;
+  const estimatedCompletionAt =
+    runsRemaining > 0 && lastSweptAt && cadenceMs && cadenceMs > 0
+      ? new Date(Date.parse(lastSweptAt) + cadenceMs * runsRemaining).toISOString()
+      : null;
+
+  return {
+    organizationId,
+    enforced: true,
+    retentionDays,
+    cutoff,
+    pendingDeletions,
+    heldFromDeletion,
+    perRunCeiling: RETENTION_SWEEP_CEILING,
+    runsRemaining,
+    lastSweptAt,
+    estimatedCompletionAt,
+  };
+}
+
 export interface RetentionSweepRecord {
   id: string;
   organizationId: string;
