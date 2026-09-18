@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import { VISUAL_SOURCE_MESSAGE } from '@agiworkforce/types';
 
 import { VOICE_SESSION_STATUS, INITIAL_VOICE_SESSION_STATE } from '@agiworkforce/unified-chat';
 import { LIVE_SESSION_MESSAGE } from '@features/chat/lib/live-voice-session';
@@ -37,7 +38,7 @@ function session(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function renderSurface() {
+function renderSurface(overrides: Partial<Record<string, unknown>> = {}) {
   return render(
     <VoiceModeSurface
       variant={VOICE_SURFACE_VARIANT.chat}
@@ -50,6 +51,7 @@ function renderSurface() {
       onOpenLibrary={() => undefined}
       onOpenConnectors={() => undefined}
       onIntelligenceChange={() => undefined}
+      {...overrides}
     />,
   );
 }
@@ -97,5 +99,32 @@ describe('VoiceModeSurface reconnect state', () => {
       LIVE_SESSION_MESSAGE.reconnectFailed,
     );
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('VoiceModeSurface live camera', () => {
+  it('offers no camera control when no frame sink is wired', () => {
+    renderSurface();
+
+    expect(screen.queryByTestId('voice-camera-toggle')).toBeNull();
+  });
+
+  it('offers the control, unpressed and without a preview, until the camera is shared', () => {
+    renderSurface({ onVisualFrame: () => undefined });
+
+    const toggle = screen.getByTestId('voice-camera-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('voice-camera-preview')).toBeNull();
+  });
+
+  it('reports the refusal from the visual session rather than failing silently', async () => {
+    renderSurface({ onVisualFrame: () => undefined });
+
+    await act(async () => {
+      screen.getByTestId('voice-camera-toggle').click();
+    });
+
+    expect(screen.getByRole('alert').textContent).toBe(VISUAL_SOURCE_MESSAGE.unavailable);
+    expect(screen.queryByTestId('voice-camera-preview')).toBeNull();
   });
 });

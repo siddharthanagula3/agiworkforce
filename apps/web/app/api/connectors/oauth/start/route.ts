@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
@@ -22,7 +21,8 @@ import {
 } from '@/lib/connectors/mcp-discovery';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
-import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import {
   findDirectoryTargetByRemoteUrl,
@@ -42,7 +42,9 @@ import {
 import {
   ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization,
+  listConnectorAccounts,
 } from '@/lib/connectors/oauth-store';
+import { scopeEscalation } from '@/lib/connectors/scopes-escalation';
 
 export const OAUTH_START_STATUS_NOT_CONFIGURED = 'not_configured';
 export const OAUTH_START_STATUS_REGISTRATION_REJECTED = 'registration_rejected';
@@ -52,6 +54,7 @@ export const OAUTH_START_STATUS_OPEN = 'open';
 export const OAUTH_START_STATUS_UNAVAILABLE = 'unavailable';
 export const OAUTH_START_STATUS_CREDENTIAL = 'credential';
 export const OAUTH_START_STATUS_POLICY_BLOCKED = 'policy_blocked';
+export const OAUTH_START_STATUS_SCOPE_RECONSENT = 'scope_reconsent';
 
 const CONNECTORS_PATH = '/connectors';
 const CONNECTORS_PATH_API = '/api/connectors';
@@ -120,8 +123,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const wantsJson = url.searchParams.get('mode') === 'json';
 
   let userId: string;
+  let db: DatabaseAdapter;
+  let organizationId: string | null;
   try {
-    ({ userId } = await getClerkAuthUser(request));
+    ({ db, userId, organizationId } = await getUserScopedDb(request));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
@@ -201,8 +206,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // moving, which is here. It resolves the active workspace, so it runs only
   // once this request is actually going to attempt a connection.
   const policyDecision = await evaluateConnectorPolicyForUser({
-    db: getNeonDb(),
+    db,
     userId,
+    organizationId,
     connectorId,
     isCustom: Boolean(!provider && discovered),
     request,
@@ -246,6 +252,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // The stored grant is what a reconnect would otherwise inherit. A connector
+  // that has since widened its scope list may not have the extra permission
+  // carried over silently, so the widening is named and consent is asked again.
+  const accounts = await listConnectorAccounts(userId, connectorId);
+  const grantedScopes = accounts.flatMap((account) => account.grantedScopes);
+  const escalation = scopeEscalation(connectorId, grantedScopes, provider.scopes);
+  const requestedScopes = provider.scopes.filter((scope) => !escalation.refused.includes(scope));
+  const needsReconsent = accounts.length > 0 && escalation.escalated;
+  if (escalation.refused.length > 0) {
+    logger.warn(
+      { connectorId, refused: escalation.refused },
+      '[connector-oauth] scopes above the reviewed ceiling were dropped from the request',
+    );
+  }
+
   const state = generateOAuthState();
   const pkce = provider.usePkce ? generatePkcePair() : null;
 
@@ -257,7 +278,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       codeVerifier: pkce?.verifier ?? '',
       codeChallengeMethod: pkce ? 'S256' : 'plain',
       redirectUri,
-      requestedScopes: provider.scopes,
+      requestedScopes,
       returnPath,
     });
   } catch (error) {
@@ -278,6 +299,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     codeChallenge: pkce?.challenge ?? null,
   });
 
-  if (wantsJson) return NextResponse.json({ connectorId, authorizeUrl });
+  if (wantsJson) {
+    return NextResponse.json({
+      connectorId,
+      authorizeUrl,
+      ...(needsReconsent
+        ? { status: OAUTH_START_STATUS_SCOPE_RECONSENT, addedScopes: escalation.added }
+        : {}),
+    });
+  }
   return NextResponse.redirect(authorizeUrl);
 }

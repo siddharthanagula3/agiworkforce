@@ -65,8 +65,16 @@ const ID_PATTERN = /^[a-z][a-z0-9_]*$/;
 const FULL_REACH = 100;
 const NO_REACH = 0;
 
+export function rolloutRingKey(
+  surface: RolloutSurface,
+  channel: ReleaseChannel,
+  id: string,
+): string {
+  return `${ROLLOUT_FLAG_PREFIX}${surface}.${channel}.${id}`;
+}
+
 export function rolloutRingFlagKey(ring: RolloutRing): string {
-  return `${ROLLOUT_FLAG_PREFIX}${ring.surface}.${ring.channel}.${ring.id}`;
+  return rolloutRingKey(ring.surface, ring.channel, ring.id);
 }
 
 export function parseRolloutRingFlagKey(

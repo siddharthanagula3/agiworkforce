@@ -43,6 +43,12 @@ import {
 import { clientVisibleFlags } from '@/lib/feature-flags/routing-flags';
 import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { platformCapabilitiesOf } from '@/lib/feature-flags/kill-switches';
+import { readRolloutGate } from '@/lib/feature-flags/rollout-gate';
+import {
+  RELEASE_CHANNELS,
+  rolloutRingKey,
+  type ReleaseChannel,
+} from '@/lib/feature-flags/rollout-rings';
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
@@ -114,12 +120,21 @@ async function handleGetMe(request: NextRequest) {
 
     const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
-    const requestedSurface = new URL(request.url).searchParams.get('surface');
+    const searchParams = new URL(request.url).searchParams;
+    const requestedSurface = searchParams.get('surface');
     const surface: SyncedAppSurface = (SYNCED_APP_SURFACES as readonly string[]).includes(
       requestedSurface ?? '',
     )
       ? (requestedSurface as SyncedAppSurface)
       : 'web';
+    // A ring is opt-in, so an unrecognised or absent channel is handed nothing
+    // rather than the widest population.
+    const requestedChannel = searchParams.get('channel');
+    const channel: ReleaseChannel = (RELEASE_CHANNELS as readonly string[]).includes(
+      requestedChannel ?? '',
+    )
+      ? (requestedChannel as ReleaseChannel)
+      : 'stable';
 
     const membership = await resolveOrgMembership(db, userId).catch((membershipError: unknown) => {
       logger.warn(
@@ -144,8 +159,23 @@ async function handleGetMe(request: NextRequest) {
       return null;
     });
 
+    const rolloutGate = await readRolloutGate(flagSubject).catch((ringError: unknown) => {
+      logger.error(
+        { userId, error: ringError },
+        'Rollout ring gate unreadable; no staged change is offered',
+      );
+      return null;
+    });
+    const openRings = Object.fromEntries(
+      (rolloutGate?.openRingIds(surface, channel) ?? []).map((id) => [
+        rolloutRingKey(surface, channel, id),
+        true,
+      ]),
+    );
+
     const feature_flags = {
       ...rolloutFlags.enabled,
+      ...openRings,
       advanced_model_access: canAccessManualModelSelection(effectiveTier),
       code_execution: e2bCutoverEnabled(),
       generic_web_search: webSearchBackendConfigured(),

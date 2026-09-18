@@ -197,6 +197,25 @@ describe('Health Check API', () => {
       expect(data.checks.stripe.message).toBe('unavailable');
     });
 
+    it('names every unconfigured dependency, optional ones included', async () => {
+      delete process.env['E2B_API_KEY'];
+      process.env['AGI_OTEL_EXPORTER_ENDPOINT'] = 'https://otel.example';
+
+      const response = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+      const data = await response.json();
+      const unready = data.checks.environment.unreadyDependencies as Array<{
+        id: string;
+        criticality: string;
+        missing: string[];
+      }>;
+
+      const codeExecution = unready.find((entry) => entry.id === 'code_execution');
+      expect(codeExecution?.criticality).toBe('optional');
+      expect(codeExecution?.missing).toContain('E2B_API_KEY');
+      expect(unready.map((entry) => entry.id)).not.toContain('observability');
+      expect(unready.map((entry) => entry.id)).not.toContain('database');
+    });
+
     it('should handle DB connection failure gracefully', async () => {
       mockNeonQuery.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
@@ -220,19 +239,13 @@ describe('public health route load shape', () => {
   // dependencies an incident is already straining. `no-store` on the response
   // means no CDN can dedupe it either, so the memoisation has to be server-side.
   it('serves from the memoised checks, not a fresh run per request', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'app/api/health/route.ts'),
-      'utf8',
-    );
+    const source = readFileSync(resolve(process.cwd(), 'app/api/health/route.ts'), 'utf8');
     expect(source).toContain('getCachedHealthChecks');
     expect(source).not.toMatch(/\bawait runHealthChecks\(/);
   });
 
   it('declares its own duration ceiling instead of inheriting dashboard state', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'app/api/health/route.ts'),
-      'utf8',
-    );
+    const source = readFileSync(resolve(process.cwd(), 'app/api/health/route.ts'), 'utf8');
     expect(source).toMatch(/export const maxDuration = \d+/);
   });
 });

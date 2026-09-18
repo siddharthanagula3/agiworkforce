@@ -4,6 +4,7 @@ import {
   ANONYMIZED_USER_COLUMNS,
   UNDELETED_USER_TABLES,
   USER_SCOPED_TABLES,
+  type AccountErasureReport,
 } from '@/lib/server/account-erasure';
 import {
   ORGANIZATION_ANONYMIZED_COLUMNS,
@@ -443,5 +444,63 @@ export function resolveDeletionStatus(progress: DeletionProgress): DeletionOutco
   return {
     status: 'complete',
     reason: `All ${progress.storesAttempted} stores cleared and every stored object freed.`,
+  };
+}
+
+const LEGAL_HOLD_STORE = 'legal_holds';
+
+/**
+ * An erasure report read against the manifest. A store counts as attempted only
+ * when the matrix gives it a deletion path and the report names it, so a store
+ * added to the schema and never erased lowers the count rather than passing.
+ */
+export function accountErasureProgress(
+  report: AccountErasureReport,
+  scheduledFor: string | null = null,
+): DeletionProgress {
+  const hold = report.tables[LEGAL_HOLD_STORE];
+  const activeLegalHolds = hold && !hold.deleted && hold.retainedForRetry === true ? 1 : 0;
+
+  let storesAttempted = 0;
+  let storesCleared = 0;
+  let storesFailed = 0;
+  for (const entry of RETENTION_MATRIX) {
+    if (entry.deletionPath === null) continue;
+    const table = report.tables[entry.store];
+    const anonymized = report.anonymized[entry.store];
+    if (!table && !anonymized) continue;
+    if (table?.skipped === true || anonymized?.skipped === true) continue;
+    storesAttempted += 1;
+    if (table?.error !== undefined || anonymized?.error !== undefined) storesFailed += 1;
+    else if (table?.deleted === true || anonymized?.updated === true) storesCleared += 1;
+  }
+
+  return {
+    scheduledFor,
+    activeLegalHolds,
+    storesAttempted,
+    storesCleared,
+    storesFailed,
+    objectsFailed:
+      report.mediaObjectsFailed +
+      report.backupObjectsFailed +
+      report.knowledgeObjectsFailed +
+      report.avatarObjectsFailed +
+      report.cacheKeysFailed,
+  };
+}
+
+/**
+ * A deletion that has been accepted and not started. Legal holds are evaluated
+ * by the purge, not by the request, so none are claimed here.
+ */
+export function scheduledDeletionProgress(scheduledFor: string | null): DeletionProgress {
+  return {
+    scheduledFor,
+    activeLegalHolds: 0,
+    storesAttempted: 0,
+    storesCleared: 0,
+    storesFailed: 0,
+    objectsFailed: 0,
   };
 }

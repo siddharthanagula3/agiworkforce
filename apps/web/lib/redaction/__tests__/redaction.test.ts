@@ -10,6 +10,7 @@ import {
   redactSecretsDeep,
   sanitizeFilename,
 } from '..';
+import { FIELDS_NEVER_LOGGED } from '@/lib/identity/log-hygiene';
 
 describe('redactSecrets', () => {
   it('masks bearer tokens, provider keys and addresses in free text', () => {
@@ -85,5 +86,33 @@ describe('filenameIsUnsafe', () => {
   it('accepts an ordinary file name', () => {
     expect(filenameIsUnsafe('quarterly report.pdf')).toBe(false);
     expect(filenameIsUnsafe('.env.example')).toBe(false);
+  });
+});
+
+describe('the fields a log line may never name', () => {
+  it('redacts every name the build-time scanner refuses, camel case included', () => {
+    const record = redactLogRecord(
+      Object.fromEntries(FIELDS_NEVER_LOGGED.map((field) => [field, 'raw value'])),
+    );
+
+    for (const field of FIELDS_NEVER_LOGGED) {
+      expect(record[field], field).toBe(REDACTED);
+    }
+  });
+
+  it('leaves the derived fields a log line exists to carry', () => {
+    const record = redactLogRecord({
+      requestId: 'req_1',
+      promptTokens: 12,
+      messageCount: 3,
+      contentLength: 900,
+    });
+
+    expect(record).toEqual({
+      requestId: 'req_1',
+      promptTokens: 12,
+      messageCount: 3,
+      contentLength: 900,
+    });
   });
 });

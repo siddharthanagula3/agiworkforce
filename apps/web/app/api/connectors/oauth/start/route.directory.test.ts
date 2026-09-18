@@ -4,17 +4,25 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   authUser: vi.fn(),
   begin: vi.fn(),
+  listAccounts: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
   target: null as Record<string, unknown> | null,
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a) }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: async (...a: unknown[]) => {
+    const { userId } = (await mocks.authUser(...a)) as { userId: string };
+    return { db: { query: vi.fn(), execute: vi.fn() }, userId, organizationId: null };
+  },
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
+  listConnectorAccounts: (...a: unknown[]) => mocks.listAccounts(...a),
   ConnectorOAuthStoreUnavailableError: class extends Error {},
   createPendingAuthorization: vi.fn(),
   upsertConnectorOAuthGrant: vi.fn(),
@@ -42,6 +50,7 @@ function request(query: string): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+  mocks.listAccounts.mockResolvedValue([]);
   mocks.target = {
     connectorId: RECORD_ID,
     serverId: 'dir-0123456789ab',

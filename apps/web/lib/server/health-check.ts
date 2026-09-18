@@ -8,6 +8,10 @@ import {
   type DefaultModelKind,
 } from '@agiworkforce/types';
 
+import {
+  resolveDependencyReadiness,
+  type DependencyCriticality,
+} from '@/lib/config/dependency-readiness';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
@@ -55,6 +59,14 @@ export interface CapabilityCheck {
   message?: string;
 }
 
+export interface UnreadyDependency {
+  id: string;
+  criticality: DependencyCriticality;
+  missing: readonly string[];
+}
+
+const DATABASE_DEPENDENCY_ID = 'database';
+
 export interface HealthCheckResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -70,6 +82,8 @@ export interface HealthCheckResult {
     environment: {
       status: 'healthy' | 'unhealthy';
       missingCount?: number;
+      /** every dependency, optional ones included, whose configuration is absent */
+      unreadyDependencies?: UnreadyDependency[];
     };
     chat: CapabilityCheck;
     work: CapabilityCheck;
@@ -154,13 +168,26 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     search: { status: 'unhealthy' },
   };
 
-  const neonEnvVars = ['DATABASE_URL', 'AGI_DATABASE_URL'];
-  const missingEnvVars = neonEnvVars.filter((key) => !process.env[key]);
-  if (missingEnvVars.length < neonEnvVars.length) {
+  const readiness = resolveDependencyReadiness();
+  const unready = readiness
+    .filter((state) => !state.ready)
+    .map((state) => ({
+      id: state.dependency.id,
+      criticality: state.dependency.criticality,
+      missing: state.missing,
+    }));
+  const database = readiness.find((state) => state.dependency.id === DATABASE_DEPENDENCY_ID);
+  if (database?.ready !== false) {
     checks.environment.status = 'healthy';
   } else {
-    checks.environment.missingCount = missingEnvVars.length;
-    logger.warn({ missingEnvVars }, 'Health check: missing Neon environment variables');
+    checks.environment.missingCount = database.missing.length;
+    logger.warn(
+      { missingEnvVars: database.missing },
+      'Health check: missing Neon environment variables',
+    );
+  }
+  if (unready.length > 0) {
+    checks.environment.unreadyDependencies = unready;
   }
 
   if (await shouldSkipProbe(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY)) {

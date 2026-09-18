@@ -141,6 +141,17 @@ export const PRODUCTION_DEPENDENCIES: readonly ProductionDependency[] = [
     liveProbeGap: 'runs on the operator device, not in the deployment, so it has no server probe',
   },
   {
+    id: 'context_engine',
+    label: 'Context engine',
+    owner: 'context-engine',
+    requires: [],
+    criticality: 'core',
+    liveProbe: null,
+    liveProbeGap:
+      'it resolves context in process against the database it is handed, so it has no ' +
+      'configuration and no endpoint of its own to probe',
+  },
+  {
     id: 'transactional_email',
     label: 'Resend email',
     owner: null,
