@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-04
+Last updated: 2026-09-18
 
 ## Why this exists
 
@@ -24,7 +24,24 @@ own edge, not by the client directly, but a deployment that puts an
 additional untrusted proxy in front of that edge without stripping or
 overwriting these headers would let that proxy's client forge either one.
 There is no separate `x-vercel-forwarded-for` reader in this codebase to
-reuse or drift from. `resolveIpAllowListPolicy`
+reuse or drift from.
+
+**The hop policy is configurable for rate limiting and not for security
+decisions, and that divergence is deliberate only in the sense that nobody has
+closed it.** `AGI_RATE_LIMIT_CLIENT_IP_SOURCE`
+(`apps/web/lib/rate-limit.ts`) selects `x-real-ip`, `xff-rightmost` or
+`xff-hop:<n>`, so an operator running an extra proxy can tell the limiter how
+many hops to skip. `getClientIp` does not read that setting: it is fixed at
+`x-real-ip` then rightmost. On a deployment with one extra proxy in front of
+the edge, the limiter can be configured to see the true client while the ip
+allow list and the audit trail record the address that proxy presents.
+
+Until both read one policy, a deployment that fronts the platform edge with
+its own proxy must strip `x-real-ip` and `x-forwarded-for` from inbound
+requests at that proxy and set them itself. An audit record and an allow-list
+decision are only as trustworthy as the nearest hop that can rewrite them.
+
+`resolveIpAllowListPolicy`
 (`apps/web/lib/services/organization-policy-gate.ts`) caches the resolved
 list in-process for up to 30 seconds per organization, so a save can take up
 to that long to take effect on an instance that already cached the old list,
