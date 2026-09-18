@@ -9,7 +9,8 @@ import {
   scanValueForSecrets,
 } from '@/lib/security/secrets-audit';
 
-export type OutboundChannel = 'connector_write' | 'share' | 'artifact_publish';
+export type OutboundChannel =
+  'connector_write' | 'share' | 'artifact_publish' | 'prompt' | 'upload';
 
 export interface OutboundFinding {
   scanner: string;
@@ -20,12 +21,16 @@ export interface OutboundFinding {
 
 export interface OutboundContentScanner {
   id: string;
+  channels?: readonly OutboundChannel[];
   scan(input: { channel: OutboundChannel; value: unknown }): Promise<OutboundFinding[]>;
   redact?<T>(value: T): T;
 }
 
 export const secretPatternScanner: OutboundContentScanner = {
   id: 'secret_patterns',
+  // The prompt and upload channels run this scanner in their own gates, with
+  // confidence rules this one does not have; a second pass would double-block.
+  channels: ['connector_write', 'share', 'artifact_publish'],
   async scan({ value }) {
     const counts = new Map<string, OutboundFinding>();
     for (const detection of scanValueForSecrets(value)) {
@@ -72,15 +77,21 @@ export interface InspectOutboundInput<T> {
   organizationId: string | null;
   resourceId?: string;
   auditUnblocked?: boolean;
+  priorFindings?: readonly OutboundFinding[];
   resolveMode: () => Promise<{ mode: SecretHandlingMode; organizationId: string | null }>;
+}
+
+function scannersForChannel(channel: OutboundChannel): OutboundContentScanner[] {
+  return scanners.filter((scanner) => !scanner.channels || scanner.channels.includes(channel));
 }
 
 export async function inspectOutboundContent<T>(
   input: InspectOutboundInput<T>,
 ): Promise<OutboundVerdict<T>> {
-  const findings: OutboundFinding[] = [];
+  const applicable = scannersForChannel(input.channel);
+  const findings: OutboundFinding[] = [...(input.priorFindings ?? [])];
   let scannerFailed = false;
-  for (const scanner of scanners) {
+  for (const scanner of applicable) {
     try {
       findings.push(...(await scanner.scan({ channel: input.channel, value: input.value })));
     } catch (error) {
@@ -105,14 +116,21 @@ export async function inspectOutboundContent<T>(
   }
   const organizationId = policy.organizationId ?? input.organizationId;
 
-  const mode: SecretHandlingMode = scannerFailed && policy.mode !== 'warn' ? 'block' : policy.mode;
+  // A finding no applicable scanner can redact would leave the match in place,
+  // so the strict mode of the two is the only honest answer.
+  const redactable = findings.every((finding) =>
+    applicable.some((scanner) => scanner.id === finding.scanner && scanner.redact),
+  );
+  const requested: SecretHandlingMode =
+    policy.mode === 'redact' && !redactable ? 'block' : policy.mode;
+  const mode: SecretHandlingMode = scannerFailed && requested !== 'warn' ? 'block' : requested;
   let verdict: OutboundVerdict<T>;
   if (mode === 'block') {
     verdict = { action: 'blocked', findings, message: OUTBOUND_BLOCKED_MESSAGE };
   } else if (mode === 'redact') {
     try {
       let value = input.value;
-      for (const scanner of scanners) {
+      for (const scanner of applicable) {
         if (scanner.redact) value = scanner.redact(value);
       }
       verdict = { action: 'redacted', value, findings };

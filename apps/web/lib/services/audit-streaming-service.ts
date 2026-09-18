@@ -1,11 +1,18 @@
 import 'server-only';
 
-import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
-import { assertResolvedPublicHostname, pinnedPublicFetch } from '@/lib/egress-policy';
+import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { getKeyValueStore } from '@/lib/server/key-value';
+import { buildBoundedDeliveryBody, deliverAuditBatch } from '@/lib/services/audit-streaming-proxy';
+
+export {
+  AUDIT_STREAM_MAX_BODY_BYTES,
+  signPayload,
+  verifySignature,
+} from '@/lib/services/audit-streaming-proxy';
 
 /**
  * Membership marks which organisations currently have an enabled destination,
@@ -252,31 +259,6 @@ export interface StreamableEvent {
   created_at: string | Date;
 }
 
-/**
- * Signs a payload the way the receiver verifies it.
- *
- * The timestamp is inside the signed material, not merely alongside it, so a
- * captured delivery cannot be replayed later with a fresh header. Receivers
- * should reject a timestamp outside their tolerance.
- */
-export function signPayload(secret: string, timestamp: string, body: string): string {
-  return createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
-}
-
-/** Constant-time, so a receiver's own verification cannot leak the secret by timing. */
-export function verifySignature(
-  secret: string,
-  timestamp: string,
-  body: string,
-  signature: string,
-): boolean {
-  const expected = signPayload(secret, timestamp, body);
-  const a = Buffer.from(expected, 'utf8');
-  const b = Buffer.from(signature, 'utf8');
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
-
 export interface DrainResult {
   organizationId: string;
   delivered: number;
@@ -392,7 +374,6 @@ export async function drainAuditDestination(
   options: { now?: Date; fetchImpl?: typeof fetch } = {},
 ): Promise<DrainResult> {
   const now = options.now ?? new Date();
-  const send = options.fetchImpl ?? pinnedPublicFetch;
 
   const [row] = await db.query<CursorRow>(
     `select endpoint_url, secret_hash, last_delivered_at, last_delivered_id, consecutive_failures
@@ -454,7 +435,7 @@ export async function drainAuditDestination(
   }
 
   const timestamp = now.toISOString();
-  const body = JSON.stringify({
+  const { body, sent } = buildBoundedDeliveryBody({
     schema: AUDIT_STREAM_SCHEMA,
     schemaVersion: AUDIT_STREAM_SCHEMA_VERSION,
     organizationId,
@@ -465,33 +446,18 @@ export async function drainAuditDestination(
       created_at: toIso(event.created_at),
     })),
   });
-  const signature = signPayload(row.secret_hash, timestamp, body);
 
-  let status: number | null = null;
-  let error: string | null = null;
-  try {
-    // Re-validated on every send: a destination saved months ago may point at a
-    // hostname that now resolves inward.
-    await assertResolvedPublicHostname(row.endpoint_url);
+  const { status, error, succeeded } = await deliverAuditBatch({
+    endpointUrl: row.endpoint_url,
+    secret: row.secret_hash,
+    timestamp,
+    body,
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+  });
 
-    const response = await send(row.endpoint_url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-AGI-Audit-Timestamp': timestamp,
-        'X-AGI-Audit-Signature': `sha256=${signature}`,
-      },
-      body,
-      signal: AbortSignal.timeout(10_000),
-    });
-    status = response.status;
-    if (!response.ok) error = `Endpoint answered ${response.status}.`;
-  } catch (caught) {
-    error = caught instanceof Error ? caught.message : String(caught);
-  }
-
-  const succeeded = status !== null && status >= 200 && status < 300;
-  const last = events[events.length - 1];
+  // The cursor advances to the last event actually sent, never to the last one
+  // read: a batch the ceiling shortened leaves the remainder for the next drain.
+  const last = sent[sent.length - 1];
 
   if (succeeded && last) {
     await db.query(
@@ -504,7 +470,7 @@ export async function drainAuditDestination(
         where organization_id = $1`,
       [organizationId, last.id, `HTTP ${status}`],
     );
-    return { organizationId, delivered: events.length, status: 'delivered', error: null };
+    return { organizationId, delivered: sent.length, status: 'delivered', error: null };
   }
 
   // Cursor deliberately untouched: the same events are retried rather than

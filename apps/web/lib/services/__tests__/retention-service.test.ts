@@ -2,7 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+const { mockResolvePlan } = vi.hoisted(() => ({
+  mockResolvePlan: vi.fn(async () => 'pro' as string),
+}));
+vi.mock('@/lib/services/org-entitlements', () => ({
+  resolveOrganizationEntitlementPlan: mockResolvePlan,
+}));
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { BILLING_PLAN_CAPABILITY_TIERS } from '@agiworkforce/types';
 import {
   createLegalHold,
   isSwept,
@@ -110,8 +118,13 @@ function sweepRow(inserts: unknown[][]) {
   };
 }
 
+const ENTERPRISE_PLAN = BILLING_PLAN_CAPABILITY_TIERS.enterprise_controls[0]!;
+
 describe('sweepOrganizationRetention', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolvePlan.mockResolvedValue('pro');
+  });
 
   it('does not sweep a workspace with no policy row', async () => {
     // No policy means ungoverned, not governed-by-column-defaults. Sweeping
@@ -124,11 +137,34 @@ describe('sweepOrganizationRetention', () => {
     expect(h.sweepInserts).toEqual([]);
   });
 
-  it('does not sweep a workspace that has not opted in', async () => {
+  it('does not sweep a workspace that has not opted in and owes no commitment', async () => {
     const h = harness({ policy: { retention_days: 30, retention_enforced: false } });
     const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
     expect(result.outcome).toBe('not_enforced');
+    expect(h.deletes).toEqual([]);
+  });
+
+  it('sweeps a plan-committed workspace whose owner never turned enforcement on', async () => {
+    // The window is contractual on this plan, so leaving it unswept is the
+    // product failing a commitment it sold, not respecting a preference.
+    mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
+    const h = harness({ policy: { retention_days: 30, retention_enforced: false } });
+
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(result.outcome).toBe('deleted');
+    expect(h.deletes.length).toBeGreaterThan(0);
+    expect(sweepRow(h.sweepInserts).retentionDays).toBe(30);
+  });
+
+  it('still sweeps nothing for a plan-committed workspace that recorded no window', async () => {
+    mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
+    const h = harness({ policy: null });
+
+    expect((await sweepOrganizationRetention(h.db, ORG, { now: NOW })).outcome).toBe(
+      'not_enforced',
+    );
     expect(h.deletes).toEqual([]);
   });
 

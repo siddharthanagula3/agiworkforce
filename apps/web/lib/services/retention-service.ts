@@ -2,6 +2,9 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { retentionEnforcement } from '@/lib/server/retention/enforcement';
+import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
+
 export type LegalHoldScope = 'organization' | 'member' | 'custodian';
 
 /**
@@ -67,7 +70,7 @@ export interface RetentionSweepResult {
   error: string | null;
 }
 
-/** A workspace with no saved policy, or one that has not opted in, is not swept. */
+/** A workspace with no saved window, and no plan commitment to one, is not swept. */
 export interface RetentionSkipped {
   organizationId: string;
   outcome: 'not_enforced';
@@ -322,10 +325,15 @@ export async function sweepOrganizationRetention(
     [organizationId],
   );
 
-  // No policy row means ungoverned, not governed-by-defaults. Sweeping an
-  // organization that never opted in would delete data on the strength of a
-  // column default nobody chose.
-  if (!policy || !policy.retention_enforced) {
+  // No policy row means ungoverned, not governed-by-defaults. A recorded window
+  // on a plan that sells enterprise controls is a commitment rather than an
+  // owner's preference, so it is swept whether or not anyone opted in.
+  const enforcement = retentionEnforcement({
+    plan: policy ? await resolveOrganizationEntitlementPlan(organizationId) : null,
+    retentionDays: policy?.retention_days ?? null,
+    retentionEnforced: policy?.retention_enforced ?? false,
+  });
+  if (!policy || (!enforcement.enforced && !enforcement.required)) {
     return { organizationId, outcome: 'not_enforced' };
   }
 

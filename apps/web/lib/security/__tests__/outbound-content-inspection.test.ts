@@ -105,6 +105,94 @@ describe('outbound content inspection', () => {
     }
   });
 
+  it('blocks a prompt on a registered provider finding and audits the prompt channel', async () => {
+    const vendor: OutboundContentScanner = {
+      id: 'vendor_dlp',
+      scan: async ({ value }) =>
+        JSON.stringify(value).includes('patient record')
+          ? [{ scanner: 'vendor_dlp', name: 'phi', severity: 'high', count: 1 }]
+          : [],
+    };
+    const unregister = registerOutboundContentScanner(vendor);
+    try {
+      const verdict = await inspectOutboundContent({
+        channel: 'prompt',
+        value: [{ role: 'user', content: 'summarise this patient record' }],
+        userId: 'user-1',
+        organizationId: 'org-1',
+        resolveMode: async () => ({ mode: 'block', organizationId: 'org-1' }),
+      });
+
+      expect(verdict.action).toBe('blocked');
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'dlp_content_blocked',
+          detail: expect.objectContaining({ resourceType: 'prompt', source: 'vendor_dlp:phi' }),
+        }),
+      );
+    } finally {
+      unregister();
+    }
+  });
+
+  it('leaves the prompt and upload channels to their own secret gates', async () => {
+    for (const channel of ['prompt', 'upload'] as const) {
+      const resolveMode = vi.fn();
+      const verdict = await inspectOutboundContent({
+        channel,
+        value: `key ${SECRET}`,
+        userId: 'user-1',
+        organizationId: 'org-1',
+        resolveMode,
+      });
+
+      expect(verdict.action).toBe('allowed');
+      expect(resolveMode).not.toHaveBeenCalled();
+    }
+  });
+
+  it('decides an upload on findings the upload scanner reported but did not refuse', async () => {
+    const verdict = await inspectOutboundContent({
+      channel: 'upload',
+      value: { fileName: 'notes.txt' },
+      userId: 'user-1',
+      organizationId: 'org-1',
+      resourceId: 'chat-attachments/user-1/notes.txt',
+      priorFindings: [
+        { scanner: 'upload_scan', name: 'credential_material', severity: 'medium', count: 2 },
+      ],
+      resolveMode: async () => ({ mode: 'block', organizationId: 'org-1' }),
+    });
+
+    expect(verdict.action).toBe('blocked');
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'dlp_content_blocked',
+        detail: expect.objectContaining({ resourceType: 'upload', count: 2 }),
+      }),
+    );
+  });
+
+  it('blocks rather than claiming a redaction no scanner can perform', async () => {
+    const unregister = registerOutboundContentScanner({
+      id: 'vendor_dlp',
+      scan: async () => [{ scanner: 'vendor_dlp', name: 'phi', severity: 'high', count: 1 }],
+    });
+    try {
+      const verdict = await inspectOutboundContent({
+        channel: 'prompt',
+        value: [{ role: 'user', content: 'a record' }],
+        userId: 'user-1',
+        organizationId: 'org-1',
+        resolveMode: async () => ({ mode: 'redact', organizationId: 'org-1' }),
+      });
+
+      expect(verdict.action).toBe('blocked');
+    } finally {
+      unregister();
+    }
+  });
+
   it('refuses to send when a scanner errors and the workspace does not merely warn', async () => {
     const unregister = registerOutboundContentScanner({
       id: 'broken',
