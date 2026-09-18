@@ -110,17 +110,16 @@ describe('StepUpDialog', () => {
     expect(screen.getByRole('button', { name: /^confirm$/i })).toBeDisabled();
   });
 
-  it('never spends the code twice: a caller-supplied verify replaces the mint call', async () => {
+  it('mints one grant per confirmation, so a code is never spent twice', async () => {
     const user = userEvent.setup();
-    const verify = vi.fn(async () => ({ ok: true }));
     const onSatisfied = vi.fn();
+    fetchMock.mockResolvedValue(jsonResponse(200, { token: 'grant.signature' }));
 
     render(
       <StepUpDialog
         open
         action="two_factor.disable"
         consequence="Two-factor authentication is switched off."
-        verify={verify}
         onCancel={vi.fn()}
         onSatisfied={onSatisfied}
       />,
@@ -129,8 +128,7 @@ describe('StepUpDialog', () => {
     await user.type(await screen.findByLabelText(/Authenticator or backup code/i), '654321');
     await user.click(screen.getByRole('button', { name: /^confirm$/i }));
 
-    await waitFor(() => expect(verify).toHaveBeenCalledWith('654321'));
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(onSatisfied).toHaveBeenCalledWith(null);
+    await waitFor(() => expect(onSatisfied).toHaveBeenCalledWith('grant.signature'));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

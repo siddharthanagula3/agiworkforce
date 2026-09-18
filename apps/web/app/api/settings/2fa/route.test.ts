@@ -3,10 +3,7 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
-  verifyStep: vi.fn(),
-  verifyBackup: vi.fn(),
-  claimTotpStep: vi.fn(),
-  recordAuditEvent: vi.fn(async (_event: unknown) => undefined),
+  recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -25,23 +22,17 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/two-factor-replay', () => ({
-  claimTotpStep: (...args: unknown[]) => mocks.claimTotpStep(...args),
-}));
-vi.mock('@/features/settings/services/user-preferences', () => ({
-  verifyTOTPStep: (...args: unknown[]) => mocks.verifyStep(...args),
-  verifyBackupCode: (...args: unknown[]) => mocks.verifyBackup(...args),
-}));
-vi.mock('@/lib/crypto/totp-envelope', () => ({
-  openTotpSecret: vi.fn(() => 'SECRET'),
-}));
 vi.mock('@/lib/security-audit', () => ({
-  recordAuditEvent: mocks.recordAuditEvent,
+  recordAuditEvent: (event: Record<string, unknown>) => mocks.recordAuditEvent(event),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
 
+process.env['CSRF_SECRET'] = 'two-factor-disable-step-up-secret-long-enough';
+
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant, resetStepUpSigningKeyCache } from '@/lib/server/step-up/grant-token';
 import { GET, DELETE } from './route';
 
 const ROW = {
@@ -60,19 +51,28 @@ function getRequest() {
   return new NextRequest('http://localhost/api/settings/2fa');
 }
 
-function deleteRequest(code: string) {
+function deleteRequest(stepUpToken?: string) {
   return new NextRequest('http://localhost/api/settings/2fa', {
     method: 'DELETE',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ code }),
+    headers: {
+      'content-type': 'application/json',
+      ...(stepUpToken ? { [STEP_UP_TOKEN_HEADER]: stepUpToken } : {}),
+    },
   });
+}
+
+function grant(method: 'totp' | 'backup_code' = 'totp') {
+  return createStepUpGrant({
+    userId: 'user-1',
+    action: 'two_factor.disable',
+    resourceId: null,
+    method,
+  }).token;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.verifyStep.mockResolvedValue(null);
-  mocks.verifyBackup.mockResolvedValue(-1);
-  mocks.claimTotpStep.mockResolvedValue(true);
+  resetStepUpSigningKeyCache();
 });
 
 describe('GET /api/settings/2fa', () => {
@@ -98,21 +98,73 @@ describe('GET /api/settings/2fa', () => {
 });
 
 describe('DELETE /api/settings/2fa', () => {
-  it('disables 2FA with a valid TOTP code', async () => {
-    mocks.verifyStep.mockResolvedValue(58_000_000);
+  it('refuses to disable without a fresh second factor, and writes nothing', async () => {
+    mocks.query.mockResolvedValueOnce([ROW]);
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'STEP_UP_REQUIRED',
+    );
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'step_up_challenged', outcome: 'denied' }),
+    );
+  });
+
+  it('refuses a proof minted for a different action', async () => {
+    mocks.query.mockResolvedValueOnce([ROW]);
+    const otherAction = createStepUpGrant({
+      userId: 'user-1',
+      action: 'account.delete',
+      resourceId: null,
+      method: 'totp',
+    }).token;
+
+    const response = await DELETE(deleteRequest(otherAction));
+
+    expect(response.status).toBe(403);
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables 2FA once the second factor has been re-verified', async () => {
     mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([]);
 
-    const response = await DELETE(deleteRequest('123456'));
+    const response = await DELETE(deleteRequest(grant()));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
+    expect(mocks.query.mock.calls[1]?.[0]).toContain('set enabled = false');
+  });
+
+  it('records how the second factor was proven', async () => {
+    mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([]);
+
+    await DELETE(deleteRequest(grant('backup_code')));
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'two_factor_disabled',
+        detail: expect.objectContaining({ resourceType: 'two_factor', source: 'backup_code' }),
+      }),
+    );
+  });
+
+  it('stays idempotent for an account that never enrolled, without a challenge', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ success: true });
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('exempts an organization owner from the mfa gate so disabling stays reachable', async () => {
-    mocks.verifyStep.mockResolvedValue(58_000_000);
     mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([]);
 
-    await DELETE(deleteRequest('123456'));
+    await DELETE(deleteRequest(grant()));
 
     expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
       mfaGateExemptForOwner: true,
