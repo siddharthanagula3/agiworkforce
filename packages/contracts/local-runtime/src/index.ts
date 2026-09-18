@@ -73,6 +73,22 @@ export type {
   DeveloperTurnRequest,
 } from './developer-sessions';
 
+export {
+  DEVELOPER_AGENT_MODES,
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_SESSION_PROTOCOL_VERSION,
+  LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+  MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+  PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+  SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+  developerAgentModeApprovesWithoutAsking,
+  developerSessionUpgradeTarget,
+  isDeveloperAgentModeReadOnly,
+  negotiateDeveloperSessionProtocol,
+  normalizeDeveloperAgentMode,
+} from './developer-session';
+export type { DeveloperAgentMode, DeveloperSessionNegotiation } from './developer-session';
+
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {
   BrowserPairRequestPrompt,
