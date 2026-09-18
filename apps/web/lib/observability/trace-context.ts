@@ -4,6 +4,8 @@ export interface TraceContext {
   readonly traceId: string;
   readonly spanId: string;
   readonly sampled: boolean;
+  /** The id a reporter quotes. Distinct from traceId: a client may supply it. */
+  requestId?: string;
   organizationId?: string;
   userId?: string;
 }
@@ -73,9 +75,19 @@ export function traceLogFields(): Record<string, string> {
   const context = storageOrNull()?.getStore();
   if (!context) return {};
   const fields: Record<string, string> = { trace_id: context.traceId, span_id: context.spanId };
+  if (context.requestId) fields['request_id'] = context.requestId;
   if (context.organizationId) fields['organization_id'] = context.organizationId;
   if (context.userId) fields['user_id'] = context.userId;
   return fields;
+}
+
+export function setRequestId(requestId: string): void {
+  const context = storageOrNull()?.getStore();
+  if (context) context.requestId = requestId;
+}
+
+export function getRequestId(): string | null {
+  return storageOrNull()?.getStore()?.requestId ?? null;
 }
 
 export function setTenantScope(scope: TenantScope): void {

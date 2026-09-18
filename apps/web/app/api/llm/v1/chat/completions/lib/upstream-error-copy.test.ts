@@ -6,6 +6,7 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 
 import { modelRegistry } from '@agiworkforce/model-registry';
+import { degradationFor } from '@/lib/server/slo/degradation';
 import { upstreamFailureCopy } from './upstream-error-copy';
 import { logger } from '@/lib/logger';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
@@ -162,5 +163,14 @@ describe('a request that is already on Auto', () => {
 
   it('keeps the Auto suggestion for a caller that reports no selection', () => {
     expect(upstreamFailureCopy(overloaded(), PROVIDER).message).toContain('choose Auto');
+  });
+});
+
+describe('the chat degraded mode the status page publishes', () => {
+  it('tells the reader what the policy says it will', () => {
+    const policy = degradationFor('chat');
+    expect(policy).toBeDefined();
+    const overload = Object.assign(new Error('{"type":"overloaded_error"}'), { status: 529 });
+    expect(upstreamFailureCopy(overload, PROVIDER).message).toContain(policy!.message);
   });
 });

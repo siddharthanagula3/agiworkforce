@@ -69,6 +69,23 @@ export function capabilityForKillSwitchKey(key: string): KillSwitchCapability | 
   return CAPABILITY_BY_KEY.get(key) ?? null;
 }
 
+const PLATFORM_CAPABILITY_SET: ReadonlySet<string> = new Set(ALL_PLATFORM_CAPABILITIES);
+
+export function isPlatformCapability(value: KillSwitchCapability): value is PlatformCapability {
+  return PLATFORM_CAPABILITY_SET.has(value);
+}
+
+/**
+ * The subset the capability handshake can express. `work` and the other extra
+ * switches are real surfaces with no PlatformCapability id, so they are gated
+ * at their own admission point instead of by the document.
+ */
+export function platformCapabilitiesOf(
+  capabilities: readonly KillSwitchCapability[],
+): PlatformCapability[] {
+  return capabilities.filter(isPlatformCapability);
+}
+
 /**
  * A kill switch is a gate: the flag says whether the thing may run, so an
  * absent flag leaves the surface exactly as it shipped. Creating no flags

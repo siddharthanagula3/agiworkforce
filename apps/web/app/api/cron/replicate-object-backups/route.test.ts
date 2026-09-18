@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   recordBackupReplica: vi.fn(),
   reconcileBackupDeletions: vi.fn(),
   backupReplicaSummary: vi.fn(),
+  objectKeyFromStorageUri: vi.fn(),
   error: vi.fn(),
 }));
 
@@ -27,6 +28,9 @@ vi.mock('@/lib/server/object-backup', () => ({
   reconcileBackupDeletions: mocks.reconcileBackupDeletions,
   backupReplicaSummary: mocks.backupReplicaSummary,
 }));
+vi.mock('@/lib/server/object-storage', () => ({
+  objectKeyFromStorageUri: mocks.objectKeyFromStorageUri,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: mocks.error, debug: vi.fn() },
 }));
@@ -42,18 +46,27 @@ function request(): NextRequest {
 }
 
 const ASSETS = [
-  { id: 'a1', storage_pathname: 'private-media/image/a/1.png', created_at: '2026-09-16T10:00:00Z' },
-  { id: 'a2', storage_pathname: 'private-media/image/a/2.png', created_at: '2026-09-16T11:00:00Z' },
+  { object_reference: 'private-media/image/a/1.png', created_at: '2026-09-16T10:00:00Z' },
+  { object_reference: 'private-media/image/a/2.png', created_at: '2026-09-16T11:00:00Z' },
+];
+
+const KNOWLEDGE = [
+  { object_reference: 'project-knowledge/p1/brief.pdf', created_at: '2026-09-16T12:00:00Z' },
 ];
 
 const TARGET = { store: {}, bucket: 'agi-backup', region: 'us-west-1', endpoint: 'https://backup' };
+
+function rowsFor(sql: string) {
+  return sql.includes('project_knowledge_files') ? KNOWLEDGE : ASSETS;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyCronRequest.mockReturnValue(true);
   mocks.objectBackupReadiness.mockReturnValue({ configured: true, missing: [], crossRegion: true });
   mocks.isCrossRegionBackup.mockReturnValue(true);
-  mocks.query.mockResolvedValue(ASSETS);
+  mocks.query.mockImplementation(async (sql: string) => rowsFor(sql));
+  mocks.objectKeyFromStorageUri.mockImplementation((value: string) => value);
   mocks.replicateObject.mockResolvedValue({ outcome: 'replicated', bytes: 1_024 });
   mocks.resolveObjectBackupTarget.mockReturnValue(TARGET);
   mocks.recordBackupReplica.mockResolvedValue(undefined);
@@ -98,22 +111,43 @@ describe(`GET ${ROUTE}`, () => {
   it('replicates each stored object and reports whether the copy leaves the region', async () => {
     const response = await GET(request());
 
-    expect(mocks.replicateObject).toHaveBeenCalledTimes(2);
-    expect(mocks.replicateObject).toHaveBeenCalledWith(ASSETS[0]?.storage_pathname);
+    expect(mocks.replicateObject).toHaveBeenCalledTimes(3);
+    expect(mocks.replicateObject).toHaveBeenCalledWith(ASSETS[0]?.object_reference);
     await expect(response.json()).resolves.toMatchObject({
-      scanned: 2,
-      replicated: 2,
+      scanned: 3,
+      replicated: 3,
       crossRegion: true,
-      cursor: '2026-09-16T11:00:00.000Z',
+      cursors: {
+        media: '2026-09-16T11:00:00.000Z',
+        'project-knowledge': '2026-09-16T12:00:00.000Z',
+      },
     });
+  });
+
+  it('backs up project knowledge files, not only media assets', async () => {
+    await GET(request());
+
+    const scanned = mocks.query.mock.calls.map(([sql]) => sql as string);
+    expect(scanned.some((sql) => sql.includes('public.media_assets'))).toBe(true);
+    expect(scanned.some((sql) => sql.includes('public.project_knowledge_files'))).toBe(true);
+    expect(mocks.replicateObject).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference);
+  });
+
+  it('skips a stored reference that resolves to no object key and counts it', async () => {
+    mocks.objectKeyFromStorageUri.mockReturnValue(null);
+
+    const response = await GET(request());
+
+    expect(mocks.replicateObject).toHaveBeenCalledTimes(2);
+    await expect(response.json()).resolves.toMatchObject({ scanned: 3, unreadable: 1 });
   });
 
   it('records every key it copied so a later deletion can reach the backup', async () => {
     await GET(request());
 
-    expect(mocks.recordBackupReplica).toHaveBeenCalledTimes(2);
+    expect(mocks.recordBackupReplica).toHaveBeenCalledTimes(3);
     expect(mocks.recordBackupReplica).toHaveBeenCalledWith(
-      ASSETS[0]?.storage_pathname,
+      ASSETS[0]?.object_reference,
       1_024,
       TARGET.bucket,
     );
@@ -122,7 +156,8 @@ describe(`GET ${ROUTE}`, () => {
   it('does not record a key it failed to copy', async () => {
     mocks.replicateObject
       .mockResolvedValueOnce({ outcome: 'missing-source', bytes: 0 })
-      .mockResolvedValueOnce({ outcome: 'too-large', bytes: 0 });
+      .mockResolvedValueOnce({ outcome: 'too-large', bytes: 0 })
+      .mockResolvedValueOnce({ outcome: 'missing-source', bytes: 0 });
 
     await GET(request());
 
@@ -150,18 +185,19 @@ describe(`GET ${ROUTE}`, () => {
   it('counts an object already in the backup separately from one it had to copy', async () => {
     mocks.replicateObject
       .mockResolvedValueOnce({ outcome: 'already-present', bytes: 10 })
-      .mockResolvedValueOnce({ outcome: 'too-large', bytes: 0 });
+      .mockResolvedValueOnce({ outcome: 'too-large', bytes: 0 })
+      .mockResolvedValueOnce({ outcome: 'already-present', bytes: 10 });
 
     const response = await GET(request());
 
     await expect(response.json()).resolves.toMatchObject({
       replicated: 0,
-      alreadyPresent: 1,
+      alreadyPresent: 2,
       tooLarge: 1,
     });
   });
 
-  it('resumes from the stored cursor instead of rescanning the lookback window', async () => {
+  it('keeps a cursor per source so one scan cannot skip the other', async () => {
     const store = {
       get: vi.fn(async () => '2026-09-16T09:00:00.000Z'),
       set: vi.fn(async () => true),
@@ -174,6 +210,11 @@ describe(`GET ${ROUTE}`, () => {
     expect(store.set).toHaveBeenCalledWith(
       'agi-object-backup:cursor',
       '2026-09-16T11:00:00.000Z',
+      expect.objectContaining({ ttlSeconds: expect.any(Number) }),
+    );
+    expect(store.set).toHaveBeenCalledWith(
+      'agi-object-backup:knowledge-cursor',
+      '2026-09-16T12:00:00.000Z',
       expect.objectContaining({ ttlSeconds: expect.any(Number) }),
     );
   });
