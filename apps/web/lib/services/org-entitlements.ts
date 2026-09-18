@@ -9,7 +9,7 @@ import {
   type CapabilityDenialReason,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { resolveEntitlementBundle } from '@/lib/services/effective-subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 
 export interface OrganizationEntitlements {
   organizationId: string;
@@ -28,7 +28,7 @@ export interface OrganizationEntitlements {
  * ownership-transfer candidate) call it directly with the same connection
  * they already hold, so the two paths cannot drift apart.
  *
- * It resolves through `resolveEntitlementBundle`, the single entitlement entry
+ * It resolves through `entitlement-resolution`, the single entitlement entry
  * point, with seats off: a seat in the very organization being asked about must
  * never be the thing that entitles its holder to own it.
  */
@@ -36,8 +36,7 @@ export async function resolveUserPersonalPlanTier(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<BillingPlanTier> {
-  const bundle = await resolveEntitlementBundle(db, userId, { includeSeats: false });
-  return bundle.plan;
+  return resolveEntitledPlanTier(db, userId, { includeSeats: false });
 }
 
 /**
