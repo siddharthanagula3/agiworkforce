@@ -26,6 +26,7 @@ export const LIFECYCLE_STATUSES = [
   'running',
   'awaiting_input',
   'completed',
+  'completed_partial',
   'failed',
   'cancelled',
   'outcome_unknown',
@@ -36,9 +37,11 @@ export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 /**
  * `outcome_unknown` is absent on purpose: it is the state of work whose result
  * was never observed, so it still owes a reconciliation and is not an ending.
+ * `completed_partial` is an ending: the work stopped and part of it landed.
  */
 export const TERMINAL_LIFECYCLE_STATUSES = [
   'completed',
+  'completed_partial',
   'failed',
   'cancelled',
 ] as const satisfies readonly LifecycleStatus[];
@@ -93,6 +96,9 @@ export const LIFECYCLE_STATUS_ALIASES = {
   canceled: 'cancelled',
   aborted: 'cancelled',
   unknown: 'outcome_unknown',
+  partial: 'completed_partial',
+  partial_success: 'completed_partial',
+  incomplete: 'completed_partial',
 } as const satisfies Readonly<Record<string, LifecycleStatus>>;
 
 export type LifecycleStatusAlias = keyof typeof LIFECYCLE_STATUS_ALIASES;
@@ -119,10 +125,18 @@ export const LIFECYCLE_TRANSITIONS = {
   idle: ['pending', 'queued', 'running', 'cancelled'],
   pending: ['queued', 'running', 'failed', 'cancelled'],
   queued: ['running', 'failed', 'cancelled'],
-  running: ['awaiting_input', 'completed', 'failed', 'cancelled', 'outcome_unknown'],
-  awaiting_input: ['running', 'completed', 'failed', 'cancelled'],
-  outcome_unknown: ['completed', 'failed', 'cancelled'],
+  running: [
+    'awaiting_input',
+    'completed',
+    'completed_partial',
+    'failed',
+    'cancelled',
+    'outcome_unknown',
+  ],
+  awaiting_input: ['running', 'completed', 'completed_partial', 'failed', 'cancelled'],
+  outcome_unknown: ['completed', 'completed_partial', 'failed', 'cancelled'],
   completed: [],
+  completed_partial: [],
   failed: [],
   cancelled: [],
 } as const satisfies Readonly<Record<LifecycleStatus, readonly LifecycleStatus[]>>;
@@ -138,6 +152,23 @@ export function canTransitionLifecycleStatus(from: LifecycleStatus, to: Lifecycl
 export function lifecycleTransitionEmitsEvent(from: LifecycleStatus, to: LifecycleStatus): boolean {
   if (!canTransitionLifecycleStatus(from, to)) return false;
   return to === 'running' || isTerminalLifecycleStatus(to) || to === 'outcome_unknown';
+}
+
+/**
+ * The ending of a whole, derived from the endings of its parts rather than
+ * stored beside them. A part that failed while others landed is the case every
+ * domain used to collapse into `failed`, which told the reader their finished
+ * work was lost.
+ */
+export function lifecycleStatusFromParts(parts: readonly LifecycleStatus[]): LifecycleStatus {
+  if (parts.length === 0) return 'completed';
+  if (parts.includes('outcome_unknown')) return 'outcome_unknown';
+  if (parts.some((part) => !isTerminalLifecycleStatus(part))) return 'running';
+  const partial = parts.includes('completed_partial');
+  const landed = partial || parts.includes('completed');
+  if (parts.includes('failed')) return landed ? 'completed_partial' : 'failed';
+  if (!landed) return 'cancelled';
+  return partial || parts.includes('cancelled') ? 'completed_partial' : 'completed';
 }
 
 /** The stage a reader is told about is the first one that has not ended. */

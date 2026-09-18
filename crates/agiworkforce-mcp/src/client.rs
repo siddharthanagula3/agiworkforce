@@ -19,6 +19,10 @@ use crate::error::McpError;
 use crate::hooks::ClientHooks;
 use crate::jsonrpc::{JsonRpcRequest, extract_matching_response, match_single_response};
 use crate::notification::McpNotification;
+use crate::resources::{
+    McpResource, McpResourceContents, McpResourceTemplate, parse_resource_contents,
+    parse_resource_templates, parse_resources,
+};
 use crate::transport::{http, sse};
 
 /// Transport-specific connection state. Shared JSON-RPC bookkeeping lives on
@@ -382,6 +386,36 @@ impl McpClient {
             tools.push(parsed);
         }
         Ok(tools)
+    }
+
+    /// Discover what the server offers to READ. Shares the discovery timeout
+    /// with `tools/list`: a server that will not answer inside that budget has
+    /// to report nothing rather than hold the caller open.
+    pub async fn list_resources(&mut self) -> Result<Vec<McpResource>, McpError> {
+        let timeout = self.timeouts.list_tools;
+        let response = self.send_rpc("resources/list", None, timeout).await?;
+        Ok(parse_resources(response))
+    }
+
+    /// The families of resources the caller names by filling in a template.
+    pub async fn list_resource_templates(&mut self) -> Result<Vec<McpResourceTemplate>, McpError> {
+        let timeout = self.timeouts.list_tools;
+        let response = self
+            .send_rpc("resources/templates/list", None, timeout)
+            .await?;
+        Ok(parse_resource_templates(response))
+    }
+
+    /// Read one resource by its URI. A read is not a tool call: it has no
+    /// arguments and no side effects, so it is never retried on a server error,
+    /// only on the transport re-establishing under `send_rpc`.
+    pub async fn read_resource(&mut self, uri: &str) -> Result<Vec<McpResourceContents>, McpError> {
+        let timeout = self.timeouts.list_tools;
+        let params = serde_json::json!({ "uri": uri });
+        let response = self
+            .send_rpc("resources/read", Some(params), timeout)
+            .await?;
+        Ok(parse_resource_contents(response))
     }
 
     /// Execute a tool and return the raw JSON-RPC `result` (or `None` for a

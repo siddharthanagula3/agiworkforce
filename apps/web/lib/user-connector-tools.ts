@@ -1486,7 +1486,9 @@ async function executeOAuthConnectorTool(
 }
 
 const ORG_SHARED_SERVER_PREFIX = 'orgmcp-';
-const ORG_SHORT_ID_RE = /^[0-9a-f]{10}$/;
+// A member's shared connector (0086) or a workspace-published server (0250),
+// which carries a leading 'p' so the two never share a short id.
+const ORG_SHORT_ID_RE = /^p?[0-9a-f]{10}$/;
 
 function orgSharedServerId(orgShortId: string): string {
   return `${ORG_SHARED_SERVER_PREFIX}${orgShortId}`;
@@ -1550,6 +1552,47 @@ async function getOrgSharedConnectorRows(
     if (isUndefinedTable(error)) return [];
     throw error;
   }
+}
+
+/**
+ * Servers an administrator published to the whole workspace (0250). They reach
+ * a member the same way a shared connector does, but nobody had to accept them:
+ * membership is the grant, so a member who joins tomorrow already has them.
+ */
+async function getWorkspacePublishedMcpRows(
+  organizationId: string,
+  limit?: number,
+): Promise<OrgSharedConnectorRow[]> {
+  const db = getNeonDb();
+  try {
+    const rows = await db.query<OrgSharedConnectorRow>(
+      `select id, short_id, name, url, transport, null::text as auth_header_enc,
+              organization_id, short_id as org_short_id
+         from public.organization_mcp_servers
+        where organization_id = $1 and published and retired_at is null
+        order by name asc, id asc
+        limit $2`,
+      [organizationId, limit ?? null],
+    );
+    return limit === undefined ? rows : rows.slice(0, limit);
+  } catch (error) {
+    if (isUndefinedTable(error)) return [];
+    throw error;
+  }
+}
+
+/** Every MCP server this member reaches through their workspace rather than their own account. */
+async function getOrgReachableConnectorRows(
+  userId: string,
+  organizationId: string,
+  limit?: number,
+): Promise<OrgSharedConnectorRow[]> {
+  const [shared, published] = await Promise.all([
+    getOrgSharedConnectorRows(userId, organizationId, limit),
+    getWorkspacePublishedMcpRows(organizationId, limit),
+  ]);
+  const rows = [...shared, ...published];
+  return limit === undefined ? rows : rows.slice(0, limit);
 }
 
 const _orgSharedCatalogCache = new Map<string, CustomCatalogState>();
@@ -1642,7 +1685,15 @@ async function executeOrgSharedConnectorTool(
          from public.organization_shared_connectors s
          join public.user_custom_connectors c on c.id = s.connector_row_id
         where s.organization_id = $1
-          and s.org_short_id = $2`,
+          and s.org_short_id = $2
+        union all
+       select p.id, p.short_id, p.name, p.url, p.transport, null::text as auth_header_enc,
+              p.organization_id, p.short_id as org_short_id
+         from public.organization_mcp_servers p
+        where p.organization_id = $1
+          and p.short_id = $2
+          and p.published
+          and p.retired_at is null`,
       [organizationId, orgShortId],
     );
   } catch (error) {
@@ -1905,7 +1956,7 @@ export async function loadUserConnectorCapabilityCatalog(
     }
   } else if (connectorRef.startsWith(ORG_SHARED_SERVER_PREFIX) && organizationId) {
     const suffix = connectorRef.slice(ORG_SHARED_SERVER_PREFIX.length);
-    const row = (await getOrgSharedConnectorRows(userId, organizationId)).find(
+    const row = (await getOrgReachableConnectorRows(userId, organizationId)).find(
       (candidate) => candidate.org_short_id === suffix,
     );
     if (row) {
@@ -2061,7 +2112,7 @@ export async function withUserConnectorMcpHandle<T>(
     }
   } else if (connectorRef.startsWith(ORG_SHARED_SERVER_PREFIX) && organizationId) {
     const suffix = connectorRef.slice(ORG_SHARED_SERVER_PREFIX.length);
-    const row = (await getOrgSharedConnectorRows(userId, organizationId)).find(
+    const row = (await getOrgReachableConnectorRows(userId, organizationId)).find(
       (candidate) => candidate.org_short_id === suffix,
     );
     if (row) {
@@ -2199,7 +2250,7 @@ export async function loadUserConnectorToolCatalog(
     ]);
     const grantedOAuthIds = new Set(grantSummaries.map((g) => g.connectorId));
     const sharedRows = organizationId
-      ? await getOrgSharedConnectorRows(userId, organizationId, customConnectorLimit)
+      ? await getOrgReachableConnectorRows(userId, organizationId, customConnectorLimit)
       : [];
 
     const dials: Array<{ member: boolean; load: () => Promise<WebMcpToolDef[]> }> = [];

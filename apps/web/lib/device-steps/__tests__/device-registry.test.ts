@@ -7,11 +7,13 @@ import type { DesktopHostDeclaration } from '@agiworkforce/local-runtime-contrac
 import {
   clearDeviceForRemoteSteps,
   readRegisteredDevice,
+  stopRemoteWorkOnDevice,
   type RegisteredDevice,
 } from '../device-registry';
 
 const NOW = Date.parse('2026-09-18T12:00:00.000Z');
 const INSTALL_ID = 'install-abcdefgh';
+const DEVICE_ID = '0190a000-0000-7000-8000-0000000000aa';
 
 function declaration(
   capabilities: DesktopHostDeclaration['capabilities'] = ['computer.use'],
@@ -222,5 +224,84 @@ describe('clearing a device for remote steps', () => {
     expect(
       clearDeviceForRemoteSteps(declaration(), registration({ presence: 'offline' })).decision,
     ).toBe('wait');
+  });
+});
+
+describe('reaching a device on any surface it registered from', () => {
+  it('matches on the install id alone when no surface is named', async () => {
+    const db = database([row({ surface: 'vscode' })]);
+
+    const device = await readRegisteredDevice(db, {
+      userId: 'user-1',
+      installId: INSTALL_ID,
+      now: NOW,
+    });
+
+    expect(device?.surface).toBe('vscode');
+    expect(vi.mocked(db.query).mock.calls[0]?.[1]).toEqual(['user-1', null, INSTALL_ID]);
+  });
+
+  it('still narrows to one surface when the caller names one', async () => {
+    const db = database([row()]);
+
+    await readRegisteredDevice(db, {
+      userId: 'user-1',
+      surface: 'cli',
+      installId: INSTALL_ID,
+      now: NOW,
+    });
+
+    expect(vi.mocked(db.query).mock.calls[0]?.[1]).toEqual(['user-1', 'cli', INSTALL_ID]);
+  });
+});
+
+describe('stopping remote work on one device', () => {
+  function stoppable(affected: number | Error): DatabaseAdapter {
+    return {
+      query: vi.fn(),
+      execute: vi.fn(async () => {
+        if (affected instanceof Error) throw affected;
+        return affected;
+      }),
+      transaction: vi.fn(),
+      withUser: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as DatabaseAdapter;
+  }
+
+  it('withdraws the device from remote work without touching its credential', async () => {
+    const db = stoppable(1);
+
+    await expect(
+      stopRemoteWorkOnDevice(db, { userId: 'user-1', deviceId: DEVICE_ID }),
+    ).resolves.toBe(true);
+
+    const [sql, params] = vi.mocked(db.execute).mock.calls[0]!;
+    expect(sql).toContain('remote_enabled = false');
+    expect(sql).not.toMatch(/device_refresh_tokens|delete/i);
+    expect(params).toEqual([DEVICE_ID, 'user-1']);
+  });
+
+  it('reports no change for a device that had already stopped', async () => {
+    await expect(
+      stopRemoteWorkOnDevice(stoppable(0), { userId: 'user-1', deviceId: DEVICE_ID }),
+    ).resolves.toBe(false);
+  });
+
+  it('leaves a run unblocked while the registry table is still unapplied', async () => {
+    const missing = Object.assign(new Error('relation "device_registrations" does not exist'), {
+      code: '42P01',
+    });
+
+    await expect(
+      stopRemoteWorkOnDevice(stoppable(missing), { userId: 'user-1', deviceId: DEVICE_ID }),
+    ).resolves.toBe(false);
+  });
+
+  it('withdraws a device the next clearance reads, so a run in flight loses its tools', () => {
+    const stopped = registration({ remoteEnabled: false });
+    expect(clearDeviceForRemoteSteps(declaration(), stopped)).toMatchObject({
+      decision: 'withdrawn',
+    });
   });
 });

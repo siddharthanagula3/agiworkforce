@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { lifecycleStatusFromParts, type LifecycleStatus } from '@agiworkforce/types';
 import { z } from 'zod';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import type { SameKeys } from '@/lib/schema-key-guard';
@@ -419,6 +420,129 @@ export async function failCloudAgentExecutionOperation(
       [input.operationId, input.userId, input.leaseToken, error],
     ),
   );
+}
+
+/**
+ * Settles an operation whose outcome was never observed, against what the
+ * external system was afterwards found to hold. This is the only way out of
+ * `outcome_unknown`: the run may not simply repeat an unsafe write to find out.
+ */
+export async function reconcileCloudAgentExecutionOperation(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    operationKey: string;
+    observed:
+      | { outcome: 'completed'; result: Record<string, unknown>; usage?: Record<string, unknown> }
+      | { outcome: 'failed'; error: Record<string, unknown> };
+  },
+): Promise<CloudAgentExecutionOperation | null> {
+  const operationKey = z.string().min(1).max(255).parse(input.operationKey);
+  const observed = input.observed;
+  const completed = observed.outcome === 'completed';
+  const result = observed.outcome === 'completed' ? JsonObjectSchema.parse(observed.result) : null;
+  const usage = observed.outcome === 'completed' ? (observed.usage ?? null) : null;
+  const error = observed.outcome === 'completed' ? null : JsonObjectSchema.parse(observed.error);
+  const rows = await db.query<CloudAgentExecutionOperationRow>(
+    `update public.cloud_agent_execution_operations
+        set status = $4,
+            result = $5::jsonb,
+            usage = $6::jsonb,
+            error = $7::jsonb,
+            lease_token = null,
+            lease_expires_at = null,
+            completed_at = now(),
+            updated_at = now()
+      where run_id = $1 and user_id = $2 and operation_key = $3
+        and status = 'outcome_unknown'
+      returning *`,
+    [
+      input.runId,
+      input.userId,
+      operationKey,
+      completed ? 'completed' : 'failed',
+      result,
+      usage,
+      error,
+    ],
+  );
+  return rows[0] ? mapOperation(rows[0]) : null;
+}
+
+export interface CloudAgentOperationOutcome {
+  operationKey: string;
+  operationKind: CloudAgentOperationKind;
+  status: CloudAgentExecutionStatus;
+  retrySafety: CloudAgentRetrySafety;
+  /** What the user is owed for this step: the sanitised failure, never a payload. */
+  reason: string | null;
+}
+
+export interface CloudAgentRunOutcomeSummary {
+  status: LifecycleStatus;
+  outcomes: CloudAgentOperationOutcome[];
+  failures: CloudAgentOperationOutcome[];
+  /** Steps still owing a reconciliation; a run holding one has not ended. */
+  unresolved: CloudAgentOperationOutcome[];
+}
+
+const EXECUTION_LIFECYCLE_STATUS = {
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+  outcome_unknown: 'outcome_unknown',
+} as const satisfies Readonly<Record<CloudAgentExecutionStatus, LifecycleStatus>>;
+
+function outcomeReason(status: CloudAgentExecutionStatus, error: unknown): string | null {
+  if (status === 'completed' || status === 'running') return null;
+  const message = (error as { message?: unknown } | null)?.message;
+  if (typeof message === 'string' && message.trim().length > 0) return message;
+  return status === 'outcome_unknown'
+    ? 'This step reached an external system, but its outcome was never confirmed.'
+    : 'This step failed without a recorded reason.';
+}
+
+/**
+ * How a run ended, derived from the durable receipts its steps already wrote.
+ * Nothing here is stored: a second copy of the verdict is a second thing to be
+ * wrong, and the receipts are what the replay logic reads anyway.
+ */
+export async function summarizeCloudAgentRunOutcome(
+  db: DatabaseAdapter,
+  input: { userId: string; runId: string },
+): Promise<CloudAgentRunOutcomeSummary> {
+  const rows = await db.query<{
+    operation_key: string;
+    operation_kind: string;
+    status: string;
+    retry_safety: string;
+    error: unknown;
+  }>(
+    `select operation_key, operation_kind, status, retry_safety, error
+       from public.cloud_agent_execution_operations
+      where run_id = $1 and user_id = $2
+      order by created_at asc, operation_key asc`,
+    [input.runId, input.userId],
+  );
+  const outcomes = rows.map((row) => {
+    const status = OperationStatusSchema.parse(row.status);
+    return {
+      operationKey: z.string().min(1).max(255).parse(row.operation_key),
+      operationKind: OperationKindSchema.parse(row.operation_kind),
+      status,
+      retrySafety: RetrySafetySchema.parse(row.retry_safety),
+      reason: outcomeReason(status, row.error),
+    };
+  });
+  return {
+    status: lifecycleStatusFromParts(
+      outcomes.map((outcome) => EXECUTION_LIFECYCLE_STATUS[outcome.status]),
+    ),
+    outcomes,
+    failures: outcomes.filter((outcome) => outcome.status === 'failed'),
+    unresolved: outcomes.filter((outcome) => outcome.status === 'outcome_unknown'),
+  };
 }
 
 interface CloudAgentExecutionUsageRow extends Record<string, unknown> {

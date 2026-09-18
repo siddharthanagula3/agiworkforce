@@ -38,6 +38,7 @@ pub mod error;
 pub mod hooks;
 pub mod notification;
 pub mod oauth;
+pub mod resources;
 pub mod security;
 
 mod jsonrpc;
@@ -52,6 +53,7 @@ pub use elicitation::{
 pub use error::McpError;
 pub use hooks::{BrowserAuthorizer, ClientHooks, ClientInfo, OAuthToken, TokenStore};
 pub use notification::McpNotification;
+pub use resources::{McpResource, McpResourceContents, McpResourceTemplate};
 
 // Re-export the MCP wire types this crate speaks so hosts do not have to add a
 // second explicit dependency edge just to name the return types.

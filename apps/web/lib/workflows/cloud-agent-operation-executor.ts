@@ -8,12 +8,26 @@ import {
   completeCloudAgentExecutionOperation,
   failCloudAgentExecutionOperation,
   fingerprintCloudAgentOperation,
+  reconcileCloudAgentExecutionOperation,
   renewCloudAgentExecutionOperationLease,
   OPERATION_LEASE_RENEWAL_INTERVAL_SECONDS,
   OPERATION_REPLAY_LIMIT_CODE,
   type CloudAgentOperationKind,
   type CloudAgentRetrySafety,
 } from '@/lib/services/cloud-agent-execution-service';
+
+export const OPERATION_UNRECONCILED_MESSAGE =
+  'The external operation outcome could not be verified, so AGI did not repeat it.';
+
+/**
+ * What the external system was found to hold after a write whose outcome was
+ * never observed. `unknown` is a real answer: it means the probe could not tell
+ * either, and repeating an unsafe write on a guess is the harm being avoided.
+ */
+export type CloudAgentOperationProbe<TResult> =
+  | { outcome: 'completed'; result: TResult }
+  | { outcome: 'failed'; message: string }
+  | { outcome: 'unknown' };
 
 const MILLISECONDS_PER_SECOND = 1000;
 const RAW_PAYLOAD_MESSAGE_PATTERN = /^\s*(?:\d{3}\s+)?[[{]/;
@@ -153,6 +167,58 @@ async function withLeaseHeartbeat<TResult>(
   }
 }
 
+/**
+ * An operation whose outcome was never observed is settled by looking, not by
+ * repeating it. Without a probe, or when the probe cannot tell either, the step
+ * stays unresolved so the run reports partial rather than claiming a failure it
+ * has no evidence of.
+ */
+async function settleUnknownOutcome<TResult extends object>(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    runId: string;
+    operationKey: string;
+    operationKind: CloudAgentOperationKind;
+    resultSchema: ZodType<TResult>;
+    reconcile?: () => Promise<CloudAgentOperationProbe<TResult>>;
+  },
+): Promise<TResult> {
+  if (!input.reconcile) throw new FatalError(OPERATION_UNRECONCILED_MESSAGE);
+
+  let probe: CloudAgentOperationProbe<TResult>;
+  try {
+    probe = await input.reconcile();
+  } catch (error) {
+    logger.warn(
+      { error, runId: input.runId, operationKey: input.operationKey },
+      '[cloud-agent] reconciliation probe failed; the operation stays unresolved',
+    );
+    throw new FatalError(OPERATION_UNRECONCILED_MESSAGE);
+  }
+
+  if (probe.outcome === 'unknown') throw new FatalError(OPERATION_UNRECONCILED_MESSAGE);
+  if (probe.outcome === 'failed') {
+    const error = { name: 'ReconciledExecutionError', message: probe.message };
+    await reconcileCloudAgentExecutionOperation(db, {
+      userId: input.userId,
+      runId: input.runId,
+      operationKey: input.operationKey,
+      observed: { outcome: 'failed', error },
+    });
+    throw recordedFailure(input.operationKind, error);
+  }
+
+  const result = input.resultSchema.parse(probe.result);
+  await reconcileCloudAgentExecutionOperation(db, {
+    userId: input.userId,
+    runId: input.runId,
+    operationKey: input.operationKey,
+    observed: { outcome: 'completed', result: result as Record<string, unknown> },
+  });
+  return result;
+}
+
 export async function executeCloudAgentOperation<TResult extends object>(
   db: DatabaseAdapter,
   input: {
@@ -166,6 +232,8 @@ export async function executeCloudAgentOperation<TResult extends object>(
     resultSchema: ZodType<TResult>;
     execute: () => Promise<TResult>;
     usage?: (result: TResult) => Record<string, unknown>;
+    /** Reads the external system to settle an outcome that was never observed. */
+    reconcile?: () => Promise<CloudAgentOperationProbe<TResult>>;
   },
 ): Promise<TResult> {
   const inputHash = fingerprintCloudAgentOperation({
@@ -192,9 +260,7 @@ export async function executeCloudAgentOperation<TResult extends object>(
         retryAfter: '65s',
       });
     case 'outcome_unknown':
-      throw new FatalError(
-        'The external operation outcome could not be verified, so AGI did not repeat it.',
-      );
+      return settleUnknownOutcome(db, input);
     case 'acquired':
       break;
   }
