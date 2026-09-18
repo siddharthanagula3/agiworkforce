@@ -123,6 +123,13 @@ jobs:
       - name: Self-test the deploy scope selector
         run: node --test scripts/production-deploy-scope.test.mjs
 
+      # The web deploy is what publishes availability claims to the public, so
+      # it is where the store listings are held to the binary they describe.
+      - name: Hold the store listings to the shipped mobile build
+        run: |
+          node --test scripts/lib/rollout/release-guards.test.mjs
+          node scripts/release/check-store-listing-claims.mjs
+
       # Measured from what each surface last actually SHIPPED, not from HEAD^.
       # A commit that lands while CI is red never deploys, so a one-commit diff
       # strands it permanently, that is what kept the argon2 outage fix
@@ -339,6 +346,42 @@ jobs:
           )"
           echo "url=$deployment_url" >> "$GITHUB_OUTPUT"
           echo "Deployed $deployment_url"
+
+      # The canary stage of a single-artifact deploy: the build is READY but not
+      # yet on the apex, so this is the only window in which it can be rejected
+      # without anyone having been served it. The project's SSO protection
+      # answers 401 to an unauthenticated probe of a `*.vercel.app` URL, so the
+      # probe needs the protection-bypass secret; without it there is nothing to
+      # canary against and the run says so rather than pretending it checked.
+      - name: Canary the deployment before it takes the production domains
+        id: canary
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_PROTECTION_BYPASS:-}" ]; then
+            echo "::warning::VERCEL_AUTOMATION_BYPASS_SECRET is unset, so the new build cannot be probed before it takes the production domains; set it to canary this deploy"
+            exit 0
+          fi
+          for path in /api/health /api/version; do
+            status="$(curl -sS -o "$RUNNER_TEMP/canary.json" -w '%{http_code}' \
+              -H "x-vercel-protection-bypass: ${VERCEL_PROTECTION_BYPASS}" \
+              -H 'accept: application/json' \
+              --max-time 30 "${DEPLOYMENT_URL}${path}")"
+            if [ "$status" != "200" ]; then
+              echo "::error::canary ${path} on the unpromoted build returned $status" >&2
+              exit 1
+            fi
+          done
+          deployed="$(node -p "JSON.parse(require('node:fs').readFileSync(process.env.RUNNER_TEMP + '/canary.json','utf8')).commit ?? ''")"
+          if [ "${deployed:0:7}" != "${HEAD_SHA:0:7}" ]; then
+            echo "::error::canary build reports commit ${deployed:-none}, expected $HEAD_SHA" >&2
+            exit 1
+          fi
+          echo "Canary passed on the unpromoted build at $DEPLOYMENT_URL"
 
       # With autoAssignCustomDomains off, `vercel deploy --prod` leaves a READY
       # deployment that never takes agiworkforce.com (production served the

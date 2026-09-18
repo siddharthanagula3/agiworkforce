@@ -24,6 +24,9 @@ import DownloadLoading from '../loading';
 import DownloadError from '../error';
 
 const DESKTOP_RELEASE_PATH = '/api/releases/desktop-cloud/latest';
+const CHECKSUM_PATH = '/api/download/checksums';
+const ARM64_SHA = 'a'.repeat(64);
+const X64_SHA = 'b'.repeat(64);
 
 function desktopManifest(architectures = { arm64: true, x64: true }) {
   return {
@@ -31,6 +34,17 @@ function desktopManifest(architectures = { arm64: true, x64: true }) {
     publishedAt: '2026-08-13T00:00:00.000Z',
     platforms: { mac: true },
     architectures,
+  };
+}
+
+function checksumManifest() {
+  return {
+    version: '1.2.0',
+    algorithm: 'sha256',
+    installers: [
+      { name: 'agiworkforce_1.2.0_aarch64.dmg', architecture: 'arm64', sha256: ARM64_SHA },
+      { name: 'agiworkforce_1.2.0_x64.dmg', architecture: 'x64', sha256: X64_SHA },
+    ],
   };
 }
 
@@ -45,8 +59,20 @@ function requestPath(input: RequestInfo | URL): string {
   return typeof input === 'string' ? input : input.toString();
 }
 
+function respondWith(
+  manifest: ReturnType<typeof desktopManifest> | null,
+  checksums: ReturnType<typeof checksumManifest> | null,
+) {
+  fetchMock.mockImplementation((input: RequestInfo | URL) => {
+    if (requestPath(input).includes(CHECKSUM_PATH)) {
+      return Promise.resolve(checksums === null ? releaseNotFound() : Response.json(checksums));
+    }
+    return Promise.resolve(manifest === null ? releaseNotFound() : Response.json(manifest));
+  });
+}
+
 beforeEach(() => {
-  fetchMock.mockImplementation(() => Promise.resolve(Response.json(desktopManifest())));
+  respondWith(desktopManifest(), checksumManifest());
 });
 
 describe('public Desktop download surfaces', () => {
@@ -78,7 +104,6 @@ describe('public Desktop download surfaces', () => {
       'href',
       '/api/download?platform=mac&arch=x64',
     );
-    expect(within(region).getByText('Windows installer not published.')).toBeInTheDocument();
     expect(within(region).queryByRole('link', { name: /Linux|Windows/i })).not.toBeInTheDocument();
     const desktopRequests = fetchMock.mock.calls
       .map(([input]) => requestPath(input as RequestInfo))
@@ -87,19 +112,67 @@ describe('public Desktop download surfaces', () => {
   });
 
   it('offers only the architecture the release actually carries', async () => {
-    fetchMock.mockImplementation(() =>
-      Promise.resolve(Response.json(desktopManifest({ arm64: true, x64: false }))),
-    );
+    respondWith(desktopManifest({ arm64: true, x64: false }), checksumManifest());
     render(<DownloadPage />);
 
     expect(
       await screen.findByRole('link', { name: 'Download for Apple silicon' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Download for Intel Mac' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(ARM64_SHA)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(X64_SHA)).not.toBeInTheDocument();
+  });
+
+  it('names Windows and Linux as unavailable rather than leaving them out', async () => {
+    render(<DownloadPage />);
+
+    const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
+    for (const platform of ['Windows', 'Linux']) {
+      const row = within(region).getByRole('status', { name: `${platform} downloads unavailable` });
+      expect(row).toHaveTextContent(`${platform} installer not published.`);
+      expect(row).toHaveTextContent('No release date is available for it.');
+      expect(row).toHaveAttribute('aria-live', 'polite');
+    }
+  });
+
+  it('publishes a checksum per offered installer and numbered install steps', async () => {
+    render(<DownloadPage />);
+
+    const checksums = await screen.findByRole('list', { name: 'Installer checksums' });
+    expect(within(checksums).getByText(ARM64_SHA)).toBeInTheDocument();
+    expect(within(checksums).getByText(X64_SHA)).toBeInTheDocument();
+
+    const steps = screen.getByRole('list', { name: 'Install AGI Desktop on macOS' });
+    expect(steps.tagName).toBe('OL');
+    expect(within(steps).getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
+    expect(steps).toHaveTextContent('shasum -a 256');
+    expect(steps).toHaveTextContent('Applications');
+  });
+
+  it('shows no checksum block when the release publishes none', async () => {
+    respondWith(desktopManifest(), null);
+    render(<DownloadPage />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Download for Apple silicon' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Installer checksums' })).not.toBeInTheDocument();
+  });
+
+  it('offers both installers and says so when the browser cannot name the processor', async () => {
+    render(<DownloadPage />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Download for Apple silicon' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Download for Intel Mac' })).toBeInTheDocument();
+    expect(screen.getByText(/could not read this machine/i)).toBeInTheDocument();
   });
 
   it('shows an accessible empty state when no signed desktop release exists', async () => {
-    fetchMock.mockImplementation(() => Promise.resolve(releaseNotFound()));
+    respondWith(null, null);
     render(<DownloadPage />);
 
     const status = await screen.findByRole('status', { name: 'AGI Desktop downloads unavailable' });
@@ -116,10 +189,13 @@ describe('public Desktop download surfaces', () => {
   });
 
   it('shows an accessible error with a working retry action', async () => {
-    let requests = 0;
-    fetchMock.mockImplementation(() => {
-      requests += 1;
-      return requests === 1
+    let releaseRequests = 0;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (requestPath(input).includes(CHECKSUM_PATH)) {
+        return Promise.resolve(Response.json(checksumManifest()));
+      }
+      releaseRequests += 1;
+      return releaseRequests === 1
         ? Promise.reject(new Error('network unavailable'))
         : Promise.resolve(Response.json(desktopManifest()));
     });

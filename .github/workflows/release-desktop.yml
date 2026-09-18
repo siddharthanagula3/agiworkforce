@@ -327,6 +327,14 @@ jobs:
         run: pnpm lint:extension
       - name: Type check
         run: pnpm typecheck:all
+      # The bundled llama.cpp runtime and the sidecar have versions of their
+      # own; without this they inherit the app version and an updater cannot
+      # tell a runtime change from a UI change.
+      - name: Check the local runtime, data format and sidecar versions
+        run: |
+          node --test scripts/verify-desktop-upgrade.test.mjs
+          node scripts/verify-desktop-upgrade.mjs runtime
+
       - name: Test
         run: pnpm test
 
@@ -439,6 +447,13 @@ jobs:
           find "$dist" -name '*.map' -delete
           echo "uploaded $maps renderer sourcemaps for $SENTRY_RELEASE from the Linux build"
 
+      # Computer use drives the machine, so its guardrails are re-proven per
+      # release rather than only on the branch that last touched them.
+      - name: Re-prove the automation guardrails for this release
+        run: >
+          cargo test -p agiworkforce-desktop
+          --test automation_integration --test automation_db_tests --test single_instance
+
       - name: Build native messaging host sidecar
         run: pnpm --filter @agiworkforce/desktop run build:native-host
 
@@ -501,6 +516,26 @@ jobs:
           NODE
           minisign -Vm "${appimages[0]}" -x "${signatures[0]}" -p "$public_key_file"
 
+      # The minisign signature proves who built these; a plain digest is what
+      # someone who already has the file can check without any tooling.
+      - name: Publish a checksum for every Linux artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p checksums
+          sha256sum \
+            target/release/bundle/appimage/*.AppImage \
+            target/release/bundle/deb/*.deb \
+            | sed 's|target/release/bundle/[a-z]*/||' > checksums/SHA256SUMS
+          cat checksums/SHA256SUMS
+
+      - name: Scan the built Linux binary for secrets and dev endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/lib/rollout/release-guards.test.mjs
+          node scripts/release/scan-release-artifact.mjs target/release/bundle/deb
+
       - name: Generate Linux release SBOM
         env:
           VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -524,6 +559,7 @@ jobs:
             target/release/bundle/appimage/*.AppImage
             target/release/bundle/appimage/*.AppImage.sig
             target/release/bundle/deb/*.deb
+            checksums/SHA256SUMS
             sbom/*.cdx.json
           retention-days: 7
 
@@ -624,6 +660,7 @@ jobs:
           args: --target universal-apple-darwin --bundles app,dmg
 
       - name: Verify notarized universal app, DMG, and updater archive
+        id: verify-macos
         shell: bash
         env:
           EXPECTED_VERSION: ${{ needs.prepare-release.outputs.version }}
@@ -691,6 +728,62 @@ jobs:
           fs.writeFileSync(process.argv[2], decoded);
           NODE
           minisign -Vm "${updaters[0]}" -x "${signatures[0]}" -p "$public_key_file"
+          echo "app_path=${app_path}" >> "$GITHUB_OUTPUT"
+          echo "dmg_path=${dmgs[0]}" >> "$GITHUB_OUTPUT"
+
+      # The source plist says what was asked for; this reads what the signature
+      # actually grants, which is the only thing the OS will honour.
+      - name: Refuse an entitlement outside the reviewed baseline
+        shell: bash
+        env:
+          APP_PATH: ${{ steps.verify-macos.outputs.app_path }}
+        run: |
+          set -euo pipefail
+          node scripts/release/check-entitlements.mjs
+          codesign -d --entitlements :- --xml "$APP_PATH" > "${RUNNER_TEMP}/signed-entitlements.plist"
+          node scripts/release/check-entitlements.mjs --signed "${RUNNER_TEMP}/signed-entitlements.plist"
+
+      # A signature without a secure timestamp stops being trusted the moment
+      # the signing certificate expires, which turns every installed copy dead.
+      - name: Require a secure timestamp and capture the notarization evidence
+        shell: bash
+        env:
+          APP_PATH: ${{ steps.verify-macos.outputs.app_path }}
+          DMG_PATH: ${{ steps.verify-macos.outputs.dmg_path }}
+        run: |
+          set -euo pipefail
+          mkdir -p notarization
+          for artifact in "$APP_PATH" "$DMG_PATH"; do
+            name=$(basename "$artifact")
+            codesign -dvvv --verbose=4 "$artifact" > "notarization/${name}.codesign.txt" 2>&1
+            if ! grep -Eq '^Timestamp=' "notarization/${name}.codesign.txt"; then
+              echo "ERROR: ${name} carries no secure timestamp; it would stop verifying when the certificate expires" >&2
+              exit 1
+            fi
+            xcrun stapler validate -v "$artifact" > "notarization/${name}.stapler.txt" 2>&1
+            spctl --assess --type execute --verbose=4 "$artifact" \
+              > "notarization/${name}.gatekeeper.txt" 2>&1 || true
+          done
+
+      - name: Scan the signed bundle for secrets and dev endpoints
+        shell: bash
+        env:
+          APP_PATH: ${{ steps.verify-macos.outputs.app_path }}
+        run: |
+          set -euo pipefail
+          node --test scripts/lib/rollout/release-guards.test.mjs
+          node scripts/release/scan-release-artifact.mjs "$APP_PATH"
+
+      # Notarization proves who built the DMG, not which bytes you received. A
+      # published digest is what lets someone check the file they downloaded.
+      - name: Publish a checksum for every macOS installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target/universal-apple-darwin/release/bundle/dmg
+          shasum -a 256 ./*.dmg | sed 's| \./| |' > SHA256SUMS
+          shasum -a 256 -c SHA256SUMS
+          cat SHA256SUMS
 
       - name: Generate macOS release SBOM
         env:
@@ -715,7 +808,9 @@ jobs:
             target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
             target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
             target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            target/universal-apple-darwin/release/bundle/dmg/SHA256SUMS
             sbom/*.cdx.json
+            notarization/*.txt
           if-no-files-found: error
           retention-days: 7
 

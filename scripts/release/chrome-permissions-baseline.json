@@ -1,0 +1,27 @@
+{
+  "description": "The permissions the published Chrome extension already holds. A release that adds one fails until the addition is reviewed and recorded here.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "nativeMessaging",
+    "alarms",
+    "contextMenus",
+    "sidePanel",
+    "scripting",
+    "cookies",
+    "notifications",
+    "tabGroups",
+    "debugger",
+    "downloads"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://agiworkforce.com/*",
+    "https://api.agiworkforce.com/*"
+  ],
+  "optional_permissions": [],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "approved": []
+}

@@ -1,0 +1,4 @@
+{
+  "description": "Literals scan-release-artifact.mjs may find in a shipped bundle. Every entry states why the value is public. A provider secret never belongs here.",
+  "allowed": []
+}
