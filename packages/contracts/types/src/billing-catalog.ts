@@ -564,9 +564,21 @@ export function classifyManagedQuotaErrorCode(
   return MANAGED_QUOTA_BLOCKS[code.trim().toLowerCase()] ?? null;
 }
 
+/**
+ * Tier spellings this catalogue retired, still on rows written before the
+ * rename. Folding them here is what stops each client inventing its own map.
+ */
+export const LEGACY_BILLING_PLAN_TIER_ALIASES: Readonly<Record<string, BillingPlanTier>> =
+  Object.freeze({
+    hobby: 'basic',
+    pro_plus: 'max',
+  });
+
 export function normalizeBillingPlanTier(value: string | null | undefined): BillingPlanTier {
   if (!value) return 'free';
   const normalized = value.toLowerCase();
+  const alias = LEGACY_BILLING_PLAN_TIER_ALIASES[normalized];
+  if (alias !== undefined) return alias;
   return isBillingPlanTier(normalized) ? normalized : 'free';
 }
 
