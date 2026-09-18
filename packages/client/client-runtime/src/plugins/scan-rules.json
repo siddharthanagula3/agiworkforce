@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "credential-file-read",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(~|\\$HOME|/home/[^\\s\"']+|/Users/[^\\s\"']+)/\\.(ssh|aws|gnupg|kube|docker|npmrc|netrc)",
+      "message": "reads a credential store outside the package"
+    },
+    {
+      "id": "credential-env-exfiltration",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(process\\.env|os\\.environ|printenv|\\benv\\b)[^\\n]{0,80}(curl|wget|fetch\\(|requests\\.(post|put)|\\bnc\\s|urllib)",
+      "message": "sends environment variables to a remote host"
+    },
+    {
+      "id": "remote-code-execution",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(curl|wget)[^\\n|]{0,200}\\|\\s*(sh|bash|zsh|python[0-9.]*|node)\\b",
+      "message": "pipes a downloaded script straight into a shell"
+    },
+    {
+      "id": "destructive-filesystem",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "rm\\s+-[a-z]*[rf][a-z]*\\s+(/|~|\\$HOME)(\\s|$)",
+      "message": "deletes a filesystem root or home directory"
+    },
+    {
+      "id": "prompt-injection-override",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(ignore|disregard|override)\\s+(all\\s+)?(previous|prior|earlier|above)\\s+(instructions|rules|prompts|directives)",
+      "message": "instructs the model to discard its operating instructions"
+    },
+    {
+      "id": "prompt-injection-secret-disclosure",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(reveal|print|output|send|exfiltrate|leak)\\s+(the\\s+)?(system\\s+prompt|api[_\\- ]?key|secret|credential|token|password)",
+      "message": "instructs the model to disclose secrets or its system prompt"
+    },
+    {
+      "id": "approval-bypass",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(without|skip|bypass|suppress)\\s+(asking|confirmation|approval|permission|the user)",
+      "message": "instructs the model to act without the approval the platform requires"
+    },
+    {
+      "id": "obfuscated-payload",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(eval|exec|Function)\\s*\\(\\s*(atob|Buffer\\.from|base64\\.b64decode|fromCharCode)",
+      "message": "evaluates a decoded payload at runtime"
+    },
+    {
+      "id": "reverse-shell",
+      "severity": "block",
+      "flags": "i",
+      "pattern": "(bash\\s+-i\\s*>&\\s*/dev/tcp/|\\bnc\\s+-[a-z]*e[a-z]*\\s|socat\\s+[^\\n]*exec:)",
+      "message": "opens a reverse shell"
+    },
+    {
+      "id": "hidden-bidi-directive",
+      "severity": "block",
+      "flags": "u",
+      "pattern": "[\\u202a-\\u202e\\u2066-\\u2069]",
+      "message": "carries bidirectional overrides that hide text from a reviewer"
+    },
+    {
+      "id": "hidden-tag-directive",
+      "severity": "block",
+      "flags": "u",
+      "pattern": "[\\u{E0000}-\\u{E007F}]",
+      "message": "carries Unicode tag characters that hide text from a reviewer"
+    },
+    {
+      "id": "undeclared-network-egress",
+      "severity": "review",
+      "flags": "i",
+      "pattern": "(curl|wget|fetch\\(|axios|requests\\.(get|post)|urlopen|http\\.request)[^\\n]{0,120}https?://(?!localhost|127\\.0\\.0\\.1)",
+      "message": "contacts a remote host from package code"
+    },
+    {
+      "id": "shell-escape",
+      "severity": "review",
+      "flags": "i",
+      "pattern": "(child_process|subprocess\\.(run|Popen|call)|os\\.system|spawnSync|execSync)",
+      "message": "runs a subprocess"
+    },
+    {
+      "id": "dynamic-dependency-install",
+      "severity": "review",
+      "flags": "i",
+      "pattern": "\\b(npm|pnpm|yarn)\\s+(i|install|add)\\b|\\bpip[0-9]*\\s+install\\b",
+      "message": "installs a dependency at run time"
+    }
+  ]
+}
