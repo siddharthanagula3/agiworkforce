@@ -21,6 +21,8 @@ function governed(revision: number, overrides: Record<string, boolean> = {}) {
       ...DEFAULT_WORKSPACE_CONTROLS,
       featureAccess: { ...DEFAULT_WORKSPACE_CONTROLS.featureAccess, ...overrides },
       appliedOverrideIds: [],
+      revision,
+      blockingRules: [],
     },
   } satisfies EffectiveWorkspacePolicyResponse;
 }
