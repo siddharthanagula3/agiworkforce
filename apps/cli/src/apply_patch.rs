@@ -27,6 +27,9 @@ pub struct PatchResult {
     pub skipped: Vec<String>,
     pub conflicted: Vec<String>,
     pub exit_code: i32,
+    /// The patch as a structure: which files, in which direction, with which
+    /// hunks. `applied` is the display projection of this.
+    pub diff: crate::diff_model::Diff,
 }
 
 /// CLI-NEW-007 fix (2026-05-04 audit): scan a unified diff for the file
@@ -139,6 +142,7 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
 
     // CLI-NEW-007 fix: validate every target path before invoking `git apply`.
     validate_patch_targets(patch, cwd)?;
+    let parsed = crate::diff_model::Diff::parse(patch);
     let tmp_path = std::env::temp_dir().join(format!("agi-patch-{}.patch", uuid::Uuid::new_v4()));
     // Write with restricted permissions (0o600) to prevent other users from reading
     use std::io::Write;
@@ -155,12 +159,6 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
     }
     file.write_all(patch.as_bytes())?;
     drop(file);
-    let mut stat_command = tokio::process::Command::new("git");
-    stat_command
-        .args(["apply", "--stat"])
-        .arg(tmp.path())
-        .current_dir(cwd);
-    let stat = crate::process_tree::output(stat_command, None, Some(GIT_APPLY_TIMEOUT)).await?;
     let mut apply_command = tokio::process::Command::new("git");
     apply_command
         .args(["apply", "--verbose"])
@@ -172,21 +170,9 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
     let mut conflicted = Vec::new();
     let mut skipped = Vec::new();
     if code == 0 {
-        // `git apply --stat` only summarizes what a patch *would* touch, it
-        // doesn't validate applicability the way the real `git apply` (run
-        // above as `apply`) does. Only trust that summary, and only report
-        // files as "applied", once the real apply invocation has actually
-        // succeeded. Reporting from `--stat` unconditionally previously made
-        // `agi apply` claim success (and list changed files) even when the
-        // real apply failed and nothing was written to disk.
-        for line in String::from_utf8_lossy(&stat.stdout).lines() {
-            if let Some(f) = line.split('|').next() {
-                let t = f.trim();
-                if !t.is_empty() {
-                    applied.push(t.to_string());
-                }
-            }
-        }
+        // The parse describes what the patch WOULD do; it is only reported as
+        // applied once the real `git apply` above has actually succeeded.
+        applied.extend(parsed.files.iter().map(|file| file.summary()));
     } else {
         for line in String::from_utf8_lossy(&apply.stderr).lines() {
             if line.contains("conflict") || line.contains("rejected") {
@@ -212,6 +198,7 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
         skipped,
         conflicted,
         exit_code: code,
+        diff: parsed,
     })
 }
 
@@ -328,14 +315,19 @@ mod patch_validation_tests {
         validate_patch_targets(patch, Path::new(".")).expect("body lines must not trigger");
     }
 
-    #[tokio::test]
-    async fn applies_a_valid_patch_through_the_supervised_git_process() {
+    fn seeded_repo() -> tempfile::TempDir {
         let workspace = tempfile::tempdir().expect("workspace");
         std::process::Command::new("git")
             .args(["init", "-q"])
             .current_dir(workspace.path())
             .status()
             .expect("git init");
+        workspace
+    }
+
+    #[tokio::test]
+    async fn applies_a_valid_patch_through_the_supervised_git_process() {
+        let workspace = seeded_repo();
         std::fs::write(workspace.path().join("example.txt"), "old\n").expect("seed file");
         let patch = "--- a/example.txt\n+++ b/example.txt\n@@ -1 +1 @@\n-old\n+new\n";
 
@@ -348,5 +340,87 @@ mod patch_validation_tests {
             std::fs::read_to_string(workspace.path().join("example.txt")).expect("read result"),
             "new\n"
         );
+        assert_eq!(result.diff.files.len(), 1);
+        assert_eq!(
+            result.diff.files[0].kind,
+            crate::diff_model::FileChangeKind::Modified
+        );
+    }
+
+    /// A `+++ /dev/null` hunk must remove the file from disk AND be reported
+    /// as deleted, not as a modification.
+    #[tokio::test]
+    async fn a_deletion_hunk_removes_the_file_and_reports_it_as_deleted() {
+        let workspace = seeded_repo();
+        let target = workspace.path().join("doomed.txt");
+        std::fs::write(&target, "one\ntwo\n").expect("seed file");
+        let patch = "diff --git a/doomed.txt b/doomed.txt\n\
+deleted file mode 100644\n\
+--- a/doomed.txt\n\
++++ /dev/null\n\
+@@ -1,2 +0,0 @@\n\
+-one\n\
+-two\n";
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply deletion patch");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        assert!(!target.exists(), "deletion hunk must remove the file");
+        assert_eq!(result.diff.files.len(), 1);
+        assert_eq!(
+            result.diff.files[0].kind,
+            crate::diff_model::FileChangeKind::Deleted
+        );
+        assert!(
+            result
+                .applied
+                .iter()
+                .any(|line| line.starts_with("D  doomed.txt")),
+            "expected a deletion row, got {:?}",
+            result.applied
+        );
+    }
+
+    #[tokio::test]
+    async fn a_creation_hunk_writes_the_file_and_reports_it_as_added() {
+        let workspace = seeded_repo();
+        let patch = "diff --git a/fresh.txt b/fresh.txt\n\
+new file mode 100644\n\
+--- /dev/null\n\
++++ b/fresh.txt\n\
+@@ -0,0 +1,1 @@\n\
++hello\n";
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply creation patch");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("fresh.txt")).expect("read new file"),
+            "hello\n"
+        );
+        assert_eq!(
+            result.diff.files[0].kind,
+            crate::diff_model::FileChangeKind::Added
+        );
+    }
+
+    /// A failed apply must never list files as applied.
+    #[tokio::test]
+    async fn a_patch_that_does_not_apply_reports_nothing_as_applied() {
+        let workspace = seeded_repo();
+        std::fs::write(workspace.path().join("example.txt"), "actual\n").expect("seed file");
+        let patch = "--- a/example.txt\n+++ b/example.txt\n@@ -1 +1 @@\n-expected\n+new\n";
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply runs");
+
+        assert_ne!(result.exit_code, 0);
+        assert!(result.applied.is_empty(), "{:?}", result.applied);
+        assert!(!result.conflicted.is_empty());
     }
 }

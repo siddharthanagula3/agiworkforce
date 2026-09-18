@@ -71,24 +71,53 @@ pub fn parse_account_usage(body: &str) -> Result<AccountUsage, serde_json::Error
 
 #[derive(Debug)]
 pub enum UsageFetchError {
-    /// 401, 402 and 403 all mean the cached tier no longer describes the account.
-    EntitlementChanged(u16),
+    /// 401, 402 and 403 all mean the cached tier no longer describes the
+    /// account; 403 is shared, so `detail` carries the server's own sentence.
+    EntitlementChanged {
+        status: u16,
+        detail: Option<String>,
+    },
     Other(anyhow::Error),
+}
+
+impl UsageFetchError {
+    pub fn entitlement(status: u16) -> UsageFetchError {
+        UsageFetchError::EntitlementChanged {
+            status,
+            detail: None,
+        }
+    }
+}
+
+/// The `{ error: { code, message } }` body every API error carries. An empty or
+/// unparseable body just means there is no detail to add.
+fn entitlement_detail(body: &str) -> Option<String> {
+    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
+    let message = parsed.get("error")?.get("message")?.as_str()?.trim();
+    (!message.is_empty()).then(|| message.to_string())
 }
 
 impl std::fmt::Display for UsageFetchError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            UsageFetchError::EntitlementChanged(401) => {
-                f.write_str("session expired, run `agi login`")
-            }
-            UsageFetchError::EntitlementChanged(402) => {
+            UsageFetchError::EntitlementChanged {
+                status: 401,
+                detail,
+            } => match detail {
+                Some(detail) => write!(f, "{detail} Run `agi login`."),
+                None => f.write_str("session expired, run `agi login`"),
+            },
+            UsageFetchError::EntitlementChanged { status: 402, .. } => {
                 f.write_str("plan payment required, see https://agiworkforce.com/pricing")
             }
-            UsageFetchError::EntitlementChanged(403) => {
-                f.write_str("this account cannot read managed usage")
-            }
-            UsageFetchError::EntitlementChanged(status) => write!(f, "HTTP {status}"),
+            UsageFetchError::EntitlementChanged {
+                status: 403,
+                detail,
+            } => match detail {
+                Some(detail) => f.write_str(detail),
+                None => f.write_str("this account cannot read managed usage"),
+            },
+            UsageFetchError::EntitlementChanged { status, .. } => write!(f, "HTTP {status}"),
             UsageFetchError::Other(error) => write!(f, "{error}"),
         }
     }
@@ -140,7 +169,13 @@ pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchEr
     let status = response.status().as_u16();
     if tier_cache::status_invalidates_tier(status) {
         tier_cache::invalidate_tier_cache();
-        return Err(UsageFetchError::EntitlementChanged(status));
+        let detail = response
+            .text()
+            .await
+            .ok()
+            .as_deref()
+            .and_then(entitlement_detail);
+        return Err(UsageFetchError::EntitlementChanged { status, detail });
     }
     if !response.status().is_success() {
         return Err(UsageFetchError::Other(anyhow::anyhow!(
@@ -576,11 +611,57 @@ mod tests {
     fn entitlement_answers_invalidate_the_tier_and_explain_themselves() {
         for status in [401, 402, 403] {
             assert!(tier_cache::status_invalidates_tier(status));
-            let message = UsageFetchError::EntitlementChanged(status).to_string();
+            let message = UsageFetchError::entitlement(status).to_string();
             assert!(!message.is_empty(), "HTTP {status} must explain itself");
             assert_eq!(unavailable_lines(&message).len(), 2);
         }
         assert!(!tier_cache::status_invalidates_tier(500));
+    }
+
+    /// A revoked account and a missing scope both answer 403, so the server's
+    /// sentence has to reach the user instead of one fixed guess.
+    #[test]
+    fn a_revoked_account_keeps_its_own_explanation() {
+        let revoked = entitlement_detail(
+            r#"{"error":{"code":"FORBIDDEN","message":"Your account has been suspended. Please contact support."},"requestId":"r1"}"#,
+        );
+        let message = UsageFetchError::EntitlementChanged {
+            status: 403,
+            detail: revoked,
+        }
+        .to_string();
+        assert_eq!(
+            message,
+            "Your account has been suspended. Please contact support."
+        );
+
+        let deleted = entitlement_detail(
+            r#"{"error":{"code":"FORBIDDEN","message":"This account has been deleted."}}"#,
+        );
+        assert_eq!(
+            UsageFetchError::EntitlementChanged {
+                status: 403,
+                detail: deleted,
+            }
+            .to_string(),
+            "This account has been deleted."
+        );
+
+        assert_ne!(
+            UsageFetchError::entitlement(403).to_string(),
+            "Your account has been suspended. Please contact support."
+        );
+    }
+
+    #[test]
+    fn a_body_with_no_error_message_adds_no_detail() {
+        assert_eq!(entitlement_detail(""), None);
+        assert_eq!(entitlement_detail("<html>502</html>"), None);
+        assert_eq!(
+            entitlement_detail(r#"{"error":{"code":"FORBIDDEN"}}"#),
+            None
+        );
+        assert_eq!(entitlement_detail(r#"{"error":{"message":"  "}}"#), None);
     }
 
     #[test]

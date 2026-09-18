@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use colored::Colorize;
@@ -248,6 +248,72 @@ fn patch_permission_paths(patch: &str) -> std::result::Result<Vec<PathBuf>, Stri
     }
 }
 
+/// Below this many lines a file is cheap to rewrite whole.
+const REWRITE_GUARD_MIN_LINES: usize = 40;
+/// Above this many changed lines a rewrite is a rewrite, not a targeted fix.
+const REWRITE_GUARD_MAX_CHANGED_LINES: usize = 5;
+
+/// How many lines differ, as a multiset so the cost is linear. A lower bound
+/// by construction: it can let a rewrite through, never block a real one.
+fn changed_line_count(old: &str, new: &str) -> usize {
+    let mut counts: std::collections::HashMap<&str, i64> = std::collections::HashMap::new();
+    for line in old.lines() {
+        *counts.entry(line).or_default() += 1;
+    }
+    for line in new.lines() {
+        *counts.entry(line).or_default() -= 1;
+    }
+    counts
+        .values()
+        .map(|delta| delta.unsigned_abs() as usize)
+        .sum()
+}
+
+/// `Some(message)` when this write rewrites a whole file to carry a change
+/// `edit_file` would express. A rewrite discards concurrent edits to the rest.
+fn rewrite_guard_refusal(shown_path: &str, old: &str, new: &str) -> Option<String> {
+    let old_lines = old.lines().count();
+    if old_lines < REWRITE_GUARD_MIN_LINES || old == new {
+        return None;
+    }
+    let changed = changed_line_count(old, new);
+    if changed == 0 || changed > REWRITE_GUARD_MAX_CHANGED_LINES || changed * 10 > old_lines {
+        return None;
+    }
+    Some(format!(
+        "Refusing to rewrite {shown_path}: this write replaces all {old_lines} lines but only \
+         {changed} differ. Use edit_file (or multiedit for several sites) so the rest of the file \
+         is left untouched."
+    ))
+}
+
+/// The refusal for a path that is not there, kept distinct from a read failure
+/// and named against the repository root so a retry uses the real spelling.
+fn missing_path_message(path: &Path) -> String {
+    let shown = crate::path_security::repo_relative(path);
+    let suggestions = crate::path_security::nearest_existing_paths(path, 3);
+    if suggestions.is_empty() {
+        return format!(
+            "Path does not exist: {}. Nothing in this repository matches it; \
+             locate the file with glob or search_files before reading it.",
+            shown.display()
+        );
+    }
+    let named: Vec<String> = suggestions
+        .iter()
+        .map(|candidate| {
+            crate::path_security::repo_relative(candidate)
+                .display()
+                .to_string()
+        })
+        .collect();
+    format!(
+        "Path does not exist: {}. Did you mean: {}?",
+        shown.display(),
+        named.join(", ")
+    )
+}
+
 pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<ToolResult> {
     let path = match args.get("path") {
         Some(p) => p,
@@ -295,7 +361,7 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         return Ok(ToolResult {
             tool_name: "read_file".to_string(),
             success: false,
-            output: format!("File not found: {}", path),
+            output: missing_path_message(file_path),
         });
     }
 
@@ -303,7 +369,10 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         return Ok(ToolResult {
             tool_name: "read_file".to_string(),
             success: false,
-            output: format!("Not a file: {}", path),
+            output: format!(
+                "Not a file: {} (it is a directory; use list_directory or glob)",
+                crate::path_security::repo_relative(file_path).display()
+            ),
         });
     }
 
@@ -480,6 +549,18 @@ pub(super) async fn execute_write_file(
             success: false,
             output: message,
         });
+    }
+
+    if file_path.is_file() {
+        if let Ok(existing) = read_existing_text_for_preview(file_path) {
+            if let Some(refusal) = rewrite_guard_refusal(&shown_path, &existing, content) {
+                return Ok(ToolResult {
+                    tool_name: "write_file".to_string(),
+                    success: false,
+                    output: refusal,
+                });
+            }
+        }
     }
 
     if require_confirmation {
@@ -1269,6 +1350,97 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
             ),
         ),
     })
+}
+
+#[cfg(test)]
+mod path_feedback_tests {
+    use super::*;
+
+    /// A bare "not found" is advice-free and the model retries its invention;
+    /// naming what is there makes the refusal a correction.
+    #[test]
+    fn a_near_miss_path_is_answered_with_what_exists() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let src = workspace.path().join("src");
+        std::fs::create_dir(&src).expect("create src");
+        std::fs::write(src.join("router.ts"), "export {}").expect("write fixture");
+
+        let message = missing_path_message(&src.join("routes.ts"));
+
+        assert!(message.starts_with("Path does not exist:"), "{message}");
+        assert!(message.contains("router.ts"), "{message}");
+    }
+
+    #[test]
+    fn an_invented_path_with_no_near_miss_says_so_and_names_the_way_out() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::fs::create_dir(workspace.path().join("src")).expect("create src");
+
+        let message = missing_path_message(&workspace.path().join("src").join("zzzzzz.rs"));
+
+        assert!(
+            message.contains("Nothing in this repository matches it"),
+            "{message}"
+        );
+        assert!(message.contains("glob"), "{message}");
+    }
+
+    #[test]
+    fn a_one_line_fix_sent_as_a_full_rewrite_is_refused_and_pointed_at_edit_file() {
+        let old: String = (0..80).map(|i| format!("line {i}\n")).collect();
+        let new = old.replace("line 40\n", "line forty\n");
+
+        let refusal = rewrite_guard_refusal("src/big.rs", &old, &new).expect("guard must fire");
+
+        assert!(refusal.contains("only 2 differ"), "{refusal}");
+        assert!(refusal.contains("edit_file"), "{refusal}");
+    }
+
+    #[test]
+    fn a_genuine_rewrite_and_a_short_file_both_pass_the_guard() {
+        let old: String = (0..80).map(|i| format!("line {i}\n")).collect();
+        let rewritten: String = (0..80).map(|i| format!("row {i}\n")).collect();
+        assert!(rewrite_guard_refusal("src/big.rs", &old, &rewritten).is_none());
+
+        let short: String = (0..10).map(|i| format!("line {i}\n")).collect();
+        let short_edit = short.replace("line 3\n", "line three\n");
+        assert!(rewrite_guard_refusal("src/small.rs", &short, &short_edit).is_none());
+
+        assert!(rewrite_guard_refusal("src/big.rs", &old, &old).is_none());
+    }
+
+    /// The bound comes from the change, not the file size.
+    #[test]
+    fn the_guard_scales_with_the_share_of_the_file_that_changed() {
+        let old: String = (0..60).map(|i| format!("line {i}\n")).collect();
+        let two_changed = old.replace("line 1\n", "a\n").replace("line 2\n", "b\n");
+        assert!(rewrite_guard_refusal("f", &old, &two_changed).is_some());
+
+        let many_changed = (0..60)
+            .map(|i| {
+                if i % 2 == 0 {
+                    format!("x {i}\n")
+                } else {
+                    format!("line {i}\n")
+                }
+            })
+            .collect::<String>();
+        assert!(rewrite_guard_refusal("f", &old, &many_changed).is_none());
+    }
+
+    /// A diff is ordinary tool output, so the shared size bound applies to it.
+    #[test]
+    fn a_huge_diff_is_bounded_before_it_reaches_the_model() {
+        let diff: String = (0..40_000)
+            .map(|i| format!("+added line {i} with enough text to matter\n"))
+            .collect();
+        assert!(diff.len() > 1_000_000, "fixture must exceed the cap");
+
+        let bounded = truncate_output_with_save("apply_patch", diff.clone());
+
+        assert!(bounded.len() < diff.len() / 10, "diff was not bounded");
+        assert!(bounded.contains("lines omitted"), "{}", &bounded[..200]);
+    }
 }
 
 #[cfg(test)]

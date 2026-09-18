@@ -692,7 +692,141 @@ pub fn review_prompt(arg: &str) -> String {
 }
 
 pub fn render_copy() -> String {
-    "Copy is available in the TUI for the last assistant response. In REPL mode, select or redirect terminal output directly.".to_string()
+    "Copy is available in the TUI: `/copy` for the last assistant response, `/copy code` for its last code block, `/copy diff` for its last diff. In REPL mode, select or redirect terminal output directly.".to_string()
+}
+
+/// What `/copy` should put on the clipboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyTarget {
+    Response,
+    Code,
+    Diff,
+}
+
+impl CopyTarget {
+    pub fn parse(arg: &str) -> Option<CopyTarget> {
+        match arg.trim().to_ascii_lowercase().as_str() {
+            "" | "response" | "message" | "all" => Some(CopyTarget::Response),
+            "code" | "block" | "snippet" => Some(CopyTarget::Code),
+            "diff" | "patch" => Some(CopyTarget::Diff),
+            _ => None,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CopyTarget::Response => "last response",
+            CopyTarget::Code => "last code block",
+            CopyTarget::Diff => "last diff",
+        }
+    }
+
+    /// `Err` is "the response holds nothing of this kind", a different outcome
+    /// from having no response at all.
+    pub fn extract(self, response: &str) -> std::result::Result<String, &'static str> {
+        match self {
+            CopyTarget::Response => Ok(response.to_string()),
+            CopyTarget::Code => last_code_block(response)
+                .ok_or("The last response has no fenced code block to copy."),
+            CopyTarget::Diff => last_diff(response).ok_or("The last response has no diff to copy."),
+        }
+    }
+}
+
+struct FencedBlock {
+    language: String,
+    body: String,
+}
+
+/// Fenced blocks in order. The opening fence's length is tracked so a nested
+/// shorter fence does not close the outer block.
+fn fenced_blocks(text: &str) -> Vec<FencedBlock> {
+    let mut blocks = Vec::new();
+    let mut open: Option<(usize, char, String, Vec<&str>)> = None;
+
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        let fence_char = trimmed.chars().next().filter(|c| *c == '`' || *c == '~');
+        let fence_len = match fence_char {
+            Some(c) => trimmed.chars().take_while(|ch| *ch == c).count(),
+            None => 0,
+        };
+
+        match open.as_mut() {
+            Some((len, ch, _, body)) => {
+                if fence_len >= *len
+                    && fence_char == Some(*ch)
+                    && trimmed[fence_len..].trim().is_empty()
+                {
+                    let (_, _, language, body) = open.take().expect("checked");
+                    blocks.push(FencedBlock {
+                        language,
+                        body: body.join("\n"),
+                    });
+                } else {
+                    body.push(line);
+                }
+            }
+            None if fence_len >= 3 => {
+                let language = trimmed[fence_len..].trim().to_ascii_lowercase();
+                open = Some((
+                    fence_len,
+                    fence_char.expect("fence_len implies a fence char"),
+                    language,
+                    Vec::new(),
+                ));
+            }
+            None => {}
+        }
+    }
+
+    // An unterminated fence is still a block the user meant to copy.
+    if let Some((_, _, language, body)) = open {
+        blocks.push(FencedBlock {
+            language,
+            body: body.join("\n"),
+        });
+    }
+    blocks
+}
+
+pub fn last_code_block(text: &str) -> Option<String> {
+    fenced_blocks(text)
+        .into_iter()
+        .rev()
+        .map(|block| block.body)
+        .find(|body| !body.trim().is_empty())
+}
+
+/// The last diff, fenced or bare, validated through the canonical diff model
+/// so "is this a diff" has one answer.
+pub fn last_diff(text: &str) -> Option<String> {
+    let fenced = fenced_blocks(text)
+        .into_iter()
+        .rev()
+        .find(|block| {
+            matches!(block.language.as_str(), "diff" | "patch")
+                || !crate::diff_model::Diff::parse(&block.body).is_empty()
+        })
+        .map(|block| block.body);
+    if let Some(body) = fenced.filter(|body| !body.trim().is_empty()) {
+        return Some(body);
+    }
+    unfenced_diff(text)
+}
+
+fn unfenced_diff(text: &str) -> Option<String> {
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.iter().rposition(|line| {
+        line.starts_with("diff --git ") || line.starts_with("--- ") || line.starts_with("Index: ")
+    })?;
+    let start = lines[..=start]
+        .iter()
+        .rposition(|line| line.starts_with("diff --git ") || line.starts_with("Index: "))
+        .unwrap_or(start);
+    let body = lines[start..].join("\n");
+    let parsed = crate::diff_model::Diff::parse(&body);
+    (!parsed.is_empty() && parsed.files.iter().any(|file| !file.hunks.is_empty())).then_some(body)
 }
 
 pub fn render_mcp(session: &AgentSession) -> String {
@@ -2332,5 +2466,129 @@ mod connector_contract_tests {
 
         assert!(render_install_app("GitHub").contains("https://github.com/apps"));
         clear_cached_policy();
+    }
+}
+
+#[cfg(test)]
+mod copy_target_tests {
+    use super::*;
+
+    const RESPONSE: &str = concat!(
+        "Here is the first idea:\n\n",
+        "```rust\n",
+        "fn first() {}\n",
+        "```\n\n",
+        "And the fix:\n\n",
+        "```rust\n",
+        "fn second() -> u8 {\n",
+        "    7\n",
+        "}\n",
+        "```\n\n",
+        "That is all.\n",
+    );
+
+    /// `copy code` takes the last block and nothing else; `/copy` alone used
+    /// to put the whole prose answer on the clipboard.
+    #[test]
+    fn copy_code_takes_only_the_last_fenced_block() {
+        let copied = CopyTarget::Code.extract(RESPONSE).expect("a block exists");
+
+        assert_eq!(copied, "fn second() -> u8 {\n    7\n}");
+        assert!(!copied.contains("Here is the first idea"));
+        assert!(!copied.contains("fn first"));
+        assert!(!copied.contains("```"));
+    }
+
+    #[test]
+    fn copy_response_still_takes_everything() {
+        assert_eq!(
+            CopyTarget::Response.extract(RESPONSE).expect("ok"),
+            RESPONSE
+        );
+    }
+
+    #[test]
+    fn a_response_with_no_block_says_so_rather_than_copying_prose() {
+        let error = CopyTarget::Code
+            .extract("No code here, just words.")
+            .expect_err("nothing to copy");
+        assert!(error.contains("no fenced code block"), "{error}");
+
+        let error = CopyTarget::Diff
+            .extract("No code here, just words.")
+            .expect_err("nothing to copy");
+        assert!(error.contains("no diff"), "{error}");
+    }
+
+    #[test]
+    fn copy_diff_prefers_the_diff_over_a_later_code_block() {
+        let response = concat!(
+            "The change:\n\n",
+            "```diff\n",
+            "--- a/src/lib.rs\n",
+            "+++ b/src/lib.rs\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            "```\n\n",
+            "Then run:\n\n",
+            "```bash\n",
+            "cargo test\n",
+            "```\n",
+        );
+
+        let copied = CopyTarget::Diff.extract(response).expect("a diff exists");
+        assert!(copied.starts_with("--- a/src/lib.rs"), "{copied}");
+        assert!(!copied.contains("cargo test"), "{copied}");
+
+        assert_eq!(
+            CopyTarget::Code.extract(response).expect("a block exists"),
+            "cargo test"
+        );
+    }
+
+    /// Models paste diffs unfenced as often as fenced, and a diff is a diff.
+    #[test]
+    fn copy_diff_finds_an_unfenced_diff() {
+        let response = concat!(
+            "Apply this:\n",
+            "diff --git a/x.rs b/x.rs\n",
+            "--- a/x.rs\n",
+            "+++ b/x.rs\n",
+            "@@ -1 +1 @@\n",
+            "-a\n",
+            "+b\n",
+        );
+
+        let copied = CopyTarget::Diff.extract(response).expect("a diff exists");
+        assert!(copied.starts_with("diff --git a/x.rs b/x.rs"), "{copied}");
+        assert!(!copied.contains("Apply this"), "{copied}");
+    }
+
+    #[test]
+    fn a_four_backtick_fence_is_not_closed_by_a_three_backtick_one() {
+        let response = "````markdown\nSee:\n```rust\nfn inner() {}\n```\n````\n";
+
+        assert_eq!(
+            CopyTarget::Code.extract(response).expect("a block exists"),
+            "See:\n```rust\nfn inner() {}\n```"
+        );
+    }
+
+    #[test]
+    fn copy_targets_parse_from_their_spellings() {
+        assert_eq!(CopyTarget::parse(""), Some(CopyTarget::Response));
+        assert_eq!(CopyTarget::parse("  "), Some(CopyTarget::Response));
+        assert_eq!(CopyTarget::parse("Code"), Some(CopyTarget::Code));
+        assert_eq!(CopyTarget::parse("snippet"), Some(CopyTarget::Code));
+        assert_eq!(CopyTarget::parse("patch"), Some(CopyTarget::Diff));
+        assert_eq!(CopyTarget::parse("everything"), None);
+    }
+
+    #[test]
+    fn the_copy_help_names_both_new_actions() {
+        let help = render_copy();
+        assert!(help.contains("/copy code"), "{help}");
+        assert!(help.contains("/copy diff"), "{help}");
     }
 }

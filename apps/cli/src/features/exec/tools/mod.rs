@@ -576,8 +576,8 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             execute_powershell(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
         "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
-        "todo_read" => execute_todo_read().await,
-        "todo_write" => execute_todo_write(&call.args).await,
+        "todo_read" => execute_todo_read(opts.workspace_root.as_deref()).await,
+        "todo_write" => execute_todo_write(&call.args, opts.workspace_root.as_deref()).await,
         "ask_user" => execute_ask_user(&call.args).await,
         "read_many_files" => execute_read_many_files(&call.args).await,
         "team_create" => execute_team_create(&call.args).await,
@@ -2068,6 +2068,8 @@ decision = "deny"
         assert!(result.output.contains("Missing required argument"));
     }
 
+    /// A missing path must be distinguishable from a failed read, and must name
+    /// the way to find the real one.
     #[tokio::test]
     async fn test_read_file_not_found() {
         let tmp = tempfile::tempdir_in(".").unwrap();
@@ -2078,7 +2080,33 @@ decision = "deny"
         let result = execute_read_file(&args).await.unwrap();
         assert!(!result.success);
         assert!(
-            result.output.contains("File not found"),
+            result.output.starts_with("Path does not exist:"),
+            "unexpected output: {}",
+            result.output
+        );
+        assert!(
+            result.output.contains("glob") || result.output.contains("Did you mean"),
+            "a missing path must be actionable: {}",
+            result.output
+        );
+    }
+
+    /// With a near miss on disk, the existing sibling is what the refusal names.
+    #[tokio::test]
+    async fn a_missing_path_names_the_sibling_that_exists() {
+        let tmp = tempfile::tempdir_in(".").unwrap();
+        std::fs::write(tmp.path().join("router.ts"), "export {}").unwrap();
+
+        let mut args = HashMap::new();
+        args.insert(
+            "path".to_string(),
+            tmp.path().join("routes.ts").display().to_string(),
+        );
+        let result = execute_read_file(&args).await.unwrap();
+
+        assert!(!result.success);
+        assert!(
+            result.output.contains("router.ts"),
             "unexpected output: {}",
             result.output
         );

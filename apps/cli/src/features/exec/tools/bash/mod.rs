@@ -549,9 +549,16 @@ mod tests {
         assert_eq!(parse_simple_command("cd src"), None);
     }
 
+    // CI runners can have bwrap installed yet refuse its namespace setup.
+    async fn sandbox_executes() -> bool {
+        let mut args = HashMap::new();
+        args.insert("command".to_string(), "true".to_string());
+        matches!(execute_run_command(&args, false, None).await, Ok(r) if r.success)
+    }
+
     #[tokio::test]
     async fn an_argv_execution_treats_a_separator_in_an_operand_as_data() {
-        if !sandbox_available() {
+        if !sandbox_available() || !sandbox_executes().await {
             return;
         }
         // Through `sh -c` the quoted `;` would still be quoted, but the operand

@@ -7,6 +7,11 @@
 #   --no-modify-path     Skip adding to PATH
 #   --install-dir DIR    Custom install directory (default: ~/.agi/bin)
 #
+# Windows: this is a bash script, so it needs Git Bash, MSYS2, Cygwin or WSL.
+# PowerShell and cmd.exe cannot run it. Native Windows installs go through npm:
+#   npm install -g @agiworkforce/cli
+# which resolves the @agiworkforce/cli-win32-x64 / -win32-arm64 binary package.
+#
 # Requires `cosign` to verify the release workflow's keyless Sigstore signature.
 
 set -euo pipefail
@@ -21,6 +26,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 GITHUB_REPO="siddharthanagula3/agiworkforce"
+NPM_PACKAGE="@agiworkforce/cli"
 BINARY_NAME="agi"
 LEGACY_BINARY_NAME="agiworkforce"
 ARCHIVE_BASENAME="agiworkforce"
@@ -51,7 +57,11 @@ detect_platform() {
     Darwin*)  os="darwin" ;;
     Linux*)   os="linux" ;;
     MINGW*|MSYS*|CYGWIN*) os="windows" ;;
-    *)        echo -e "${RED}Unsupported OS: $(uname -s)${NC}"; exit 1 ;;
+    *)
+      echo -e "${RED}Unsupported OS: $(uname -s)${NC}" >&2
+      echo "On Windows, install through npm instead: npm install -g ${NPM_PACKAGE}" >&2
+      exit 1
+      ;;
   esac
 
   case "$(uname -m)" in
@@ -122,6 +132,13 @@ download_binary() {
   if [[ "$platform" == windows-* ]]; then
     ext="zip"
     exe_suffix=".exe"
+    # A Windows archive is a zip, and Git Bash ships no unzip. Without this the
+    # run failed after downloading and verifying, at the extract step.
+    if ! command -v unzip >/dev/null 2>&1; then
+      echo -e "${RED}unzip is required to extract the Windows archive and was not found.${NC}" >&2
+      echo "Install it, or use the npm package instead: npm install -g ${NPM_PACKAGE}" >&2
+      exit 1
+    fi
   fi
 
   # release-cli.yml produces archives named agiworkforce-{platform}.{ext}
@@ -150,7 +167,9 @@ download_binary() {
     echo "  - The version ${version} doesn't have pre-built binaries yet"
     echo "  - Your platform (${platform}) is not supported"
     echo ""
-    echo "You can build from source instead:"
+    echo "You can install through npm instead:"
+    echo "  npm install -g ${NPM_PACKAGE}"
+    echo "Or build from source:"
     echo "  cargo install --git https://github.com/${GITHUB_REPO} agiworkforce-cli --bin agi"
     rm -rf "$tmpdir"
     exit 1
@@ -221,8 +240,20 @@ download_binary() {
 
 # ── PATH modification ─────────────────────────────────────────────────────────
 add_to_path() {
+  local platform="${1:-}"
+
   if [ "$MODIFY_PATH" != "true" ]; then
     return
+  fi
+
+  # The rc file below is read by this bash only. A Windows user who later opens
+  # PowerShell or cmd.exe would find `agi` missing with no explanation.
+  if [[ "$platform" == windows-* ]]; then
+    echo -e "${YELLOW}PowerShell and cmd.exe do not read this shell's profile.${NC}"
+    echo -e "  To use ${BOLD}agi${NC} there, add ${BOLD}${INSTALL_DIR}${NC} to your Windows PATH:"
+    echo -e "  ${BOLD}setx PATH \"%PATH%;\$(cygpath -w '${INSTALL_DIR}' 2>/dev/null || echo '${INSTALL_DIR}')\"${NC}"
+    echo -e "  Or install through npm instead: ${BOLD}npm install -g ${NPM_PACKAGE}${NC}"
+    echo ""
   fi
 
   # Already in PATH?
@@ -285,7 +316,7 @@ main() {
   echo ""
 
   download_binary "$platform" "$version"
-  add_to_path
+  add_to_path "$platform"
 
   # Verify installation
   if command -v "$BINARY_NAME" &>/dev/null; then

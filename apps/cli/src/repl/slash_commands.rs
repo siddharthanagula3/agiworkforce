@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::agent::AgentSession;
 use crate::config::CliConfig;
 use crate::output;
@@ -334,22 +336,30 @@ pub(super) async fn handle_slash_command(
         }
         "/plan" if arg == "show" || arg == "view" => {
             match (&session.current_plan, &session.current_plan_path) {
-                (Some(plan), Some(path)) => {
+                (Some(plan), path) => {
+                    let (remaining, total) = plan.outstanding();
+                    let heading = match path {
+                        Some(path) => format!("# Plan ({})", path.display()),
+                        None => "# Plan".to_string(),
+                    };
                     output::print_block(&format!(
-                        "\n# Plan ({})\n\n{}",
-                        path.display(),
+                        "\n{heading}\n\n{}\n{remaining} of {total} steps outstanding",
                         plan.render_markdown()
                     ));
-                }
-                (Some(plan), None) => {
-                    output::print_block(&format!("\n{}", plan.render_markdown()));
                 }
                 _ => output::print_info("No plan yet. Ask the model to call `update_plan`."),
             }
         }
+        "/plan" if arg == "todos" => {
+            let workspace = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            output::print_block(&format!(
+                "\n{}",
+                crate::plan_mode::TodoList::load_for_workspace(&workspace).render()
+            ));
+        }
         "/plan" => {
             output::print_warn(&format!(
-                "Unknown /plan subcommand: {arg}. Use one of: on | off | accept | reject <feedback> | show"
+                "Unknown /plan subcommand: {arg}. Use one of: on | off | accept | reject <feedback> | show | todos"
             ));
         }
         "/fast" => {
