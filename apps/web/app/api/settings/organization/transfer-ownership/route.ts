@@ -15,6 +15,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import { resolveUserPersonalPlanTier } from '@/lib/services/org-entitlements';
+import { canPerformOnOrganization } from '@/lib/resources';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
 
 const TransferSchema = z.object({
@@ -64,7 +65,12 @@ async function handleTransfer(request: NextRequest) {
       if (!requester) {
         throw createError.forbidden('You are not a member of this organization');
       }
-      if (requester.role !== 'owner') {
+      if (
+        !canPerformOnOrganization(
+          { organizationId, viewerUserId: userId, membership: requester },
+          'transfer',
+        )
+      ) {
         throw createError.forbidden('Only the Primary Owner can transfer ownership').asUserSafe();
       }
 

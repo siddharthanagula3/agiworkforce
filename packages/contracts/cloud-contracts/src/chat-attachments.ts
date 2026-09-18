@@ -1,4 +1,9 @@
-import { isTextLikeFileMediaType } from '@agiworkforce/types';
+import {
+  createFileReference,
+  isTextLikeFileMediaType,
+  type FileReference,
+  type SourceSurface,
+} from '@agiworkforce/types';
 import { z } from 'zod';
 
 export const MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH = '/api/uploads/presign';
@@ -162,3 +167,25 @@ export const ManagedCloudChatAttachmentCompleteResponseSchema = z.object({
 });
 
 export type ManagedCloudChatAttachment = z.infer<typeof ManagedCloudChatAttachmentSchema>;
+
+/**
+ * The canonical reference to an uploaded attachment. A text-like upload is
+ * read back as text, so its parse status is pending until an extractor has
+ * run; opaque bytes are never parsed and say so.
+ */
+export function chatAttachmentFileReference(
+  attachment: ManagedCloudChatAttachment,
+  options: { sourceSurface?: SourceSurface | null; checksumSha256?: string | null } = {},
+): FileReference {
+  return createFileReference({
+    id: attachment.id,
+    name: attachment.name,
+    mediaType: attachment.mimeType,
+    byteCount: attachment.byteCount,
+    uri: attachment.url,
+    origin: 'upload',
+    parseStatus: isTextLikeFileMediaType(attachment.mimeType) ? 'pending' : 'not_applicable',
+    checksumSha256: options.checksumSha256 ?? null,
+    sourceSurface: options.sourceSurface ?? null,
+  });
+}

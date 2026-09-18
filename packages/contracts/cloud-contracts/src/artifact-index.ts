@@ -1,4 +1,11 @@
 import { z } from 'zod';
+import {
+  DEFAULT_RESOURCE_VISIBILITY,
+  RESOURCE_VISIBILITIES,
+  createFileReference,
+  type FileReference,
+  type ResourceVisibility,
+} from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_ARTIFACT_INDEX_PATH = '/api/artifacts/index';
 export const MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH = '/api/artifacts/publish';
@@ -34,6 +41,14 @@ export const ManagedCloudArtifactIndexQuerySchema = z.object({
 });
 export type ManagedCloudArtifactIndexQuery = z.infer<typeof ManagedCloudArtifactIndexQuerySchema>;
 
+/**
+ * A visibility the reader does not recognise resolves to the most restrictive
+ * value, so a row written by a newer server is hidden rather than exposed.
+ */
+export const ResourceVisibilitySchema = z
+  .enum(RESOURCE_VISIBILITIES)
+  .catch(DEFAULT_RESOURCE_VISIBILITY);
+
 export const ManagedCloudPublishedArtifactSchema = z.object({
   token: z.string().min(1),
   artifactId: z.string().min(1),
@@ -41,7 +56,7 @@ export const ManagedCloudPublishedArtifactSchema = z.object({
   kind: z.string(),
   language: z.string().nullable(),
   contentChars: z.number().int().nonnegative(),
-  visibility: z.string(),
+  visibility: ResourceVisibilitySchema,
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
   shareUrl: z.string().min(1),
@@ -55,6 +70,26 @@ export const ManagedCloudPublishedArtifactListResponseSchema = z.object({
 export type ManagedCloudPublishedArtifactListResponse = z.infer<
   typeof ManagedCloudPublishedArtifactListResponseSchema
 >;
+
+/**
+ * The canonical reference to a published artifact's bytes. Media type and size
+ * come from the caller that materialised them: this index stores metadata only
+ * and knows neither.
+ */
+export function publishedArtifactFileReference(
+  artifact: ManagedCloudPublishedArtifact,
+  materialized: { mediaType: string; byteCount: number },
+): FileReference {
+  return createFileReference({
+    id: artifact.artifactId,
+    name: artifact.title,
+    mediaType: materialized.mediaType,
+    byteCount: materialized.byteCount,
+    uri: artifact.shareUrl,
+    origin: 'generated',
+    visibility: artifact.visibility satisfies ResourceVisibility,
+  });
+}
 
 export function managedCloudArtifactIndexQueryString(
   query: ManagedCloudArtifactIndexQuery = {},

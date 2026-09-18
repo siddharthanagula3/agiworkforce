@@ -1,6 +1,10 @@
-
 import { z } from 'zod';
-import { stripTrailingSlashes } from '@agiworkforce/types';
+import {
+  createFileReference,
+  stripTrailingSlashes,
+  type FileReference,
+  type SourceSurface,
+} from '@agiworkforce/types';
 
 export const GENERATED_FILE_SURFACES = ['artifact', 'file'] as const;
 export type GeneratedFileSurface = (typeof GENERATED_FILE_SURFACES)[number];
@@ -38,4 +42,25 @@ export function resolveGeneratedFileUri(uri: string, apiBaseUrl: string): string
   const base = stripTrailingSlashes(apiBaseUrl);
   if (!base) return uri;
   return uri.startsWith('/') ? `${base}${uri}` : `${base}/${uri}`;
+}
+
+/**
+ * The canonical reference to a file the model produced. A generated file is
+ * never parsed back into text by the platform, so its parse status is not
+ * applicable rather than pending.
+ */
+export function generatedFileReference(
+  file: GeneratedFileWire,
+  options: { apiBaseUrl?: string; sourceSurface?: SourceSurface | null } = {},
+): FileReference {
+  return createFileReference({
+    id: file.id,
+    name: file.file_name,
+    mediaType: file.mime_type,
+    byteCount: file.byte_count,
+    uri: options.apiBaseUrl ? resolveGeneratedFileUri(file.uri, options.apiBaseUrl) : file.uri,
+    origin: 'generated',
+    checksumSha256: file.checksum_sha256 ?? null,
+    sourceSurface: options.sourceSurface ?? null,
+  });
 }
