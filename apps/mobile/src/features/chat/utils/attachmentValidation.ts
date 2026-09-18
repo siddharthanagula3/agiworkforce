@@ -1,5 +1,6 @@
-import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
+import { MAX_CHAT_ATTACHMENT_BYTES, isChatImageMimeType } from '@agiworkforce/cloud-contracts';
 import { isParseableDocument } from '@/services/docParser';
+import { isHeicImage } from '@/src/features/media/image-normalization';
 
 export type AttachmentDestination = 'local' | 'cloud';
 
@@ -49,7 +50,14 @@ export function isAcceptableAttachment(
       ? `“${a.fileName}” is too large to send to AGI Cloud (max ${mb} MB). Switch to Local Mode to use it on this device, or attach a smaller file.`
       : `“${a.fileName}” is too large (max ${mb} MB).`;
   }
-  if (a.mimeType.startsWith('image/')) return true;
+  if (a.mimeType.startsWith('image/')) {
+    if (destination === 'cloud' && !isChatImageMimeType(a.mimeType)) {
+      return isHeicImage(a.mimeType, a.fileName)
+        ? `“${a.fileName}” is a HEIC photo, which AGI Cloud cannot read. Take the photo again with the in-app camera, or turn on Settings › Camera › Formats › Most Compatible.`
+        : `“${a.fileName}” is an image format AGI Cloud cannot read. Attach a JPEG, PNG, GIF, or WebP.`;
+    }
+    return true;
+  }
   if (isParseableDocument(a.uri, a.mimeType)) return true;
   return `“${a.fileName}” isn’t a supported file type. Try an image, PDF, text, CSV, Markdown, or code file.`;
 }

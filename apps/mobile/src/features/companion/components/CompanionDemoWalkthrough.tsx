@@ -169,6 +169,7 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
       animationType="none"
       statusBarTranslucent
       onRequestClose={handleSkip}
+      accessibilityViewIsModal
     >
       <Animated.View
         entering={FadeIn.duration(200)}

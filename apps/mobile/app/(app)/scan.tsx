@@ -7,7 +7,6 @@ import {
   TextInput,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Alert,
   useWindowDimensions,
 } from 'react-native';
@@ -24,7 +23,10 @@ import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
 import { useChatExecutionStore } from '@/stores/chatStore';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
+import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
+import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
 
@@ -34,6 +36,7 @@ export default function ScanScreen() {
   const styles = useMemo(() => createStyles(c), [c]);
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
+  const cameraAllowed = useCapability('canUseCamera');
 
   const params = useLocalSearchParams<{ imageUri?: string }>();
 
@@ -113,7 +116,7 @@ export default function ScanScreen() {
 
     setIsCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, exif: false });
       if (!photo?.uri) return;
       await scanImage(photo.uri);
     } catch (error) {
@@ -139,6 +142,23 @@ export default function ScanScreen() {
     setCameraReady(false);
     setCameraSlow(false);
   }, []);
+
+  const keyboard = useKeyboardSafeComposer('screen');
+  const chrome = useFullScreenChrome({
+    surface: 'scan',
+    back: { onPress: handleClose, label: 'Close' },
+    close: { onPress: handleClose, label: 'Close' },
+    ...(capturedUri
+      ? {
+          cancel: {
+            onPress: handleRetake,
+            label: 'Retake',
+            hint: 'Discards this scan and returns to the viewfinder',
+          },
+        }
+      : {}),
+    interceptHardwareBack: true,
+  });
 
   const handleCopy = useCallback(async () => {
     if (!extractedText.trim()) return;
@@ -195,6 +215,14 @@ export default function ScanScreen() {
     setCameraSlow(false);
   }, []);
 
+  if (!cameraAllowed) {
+    return (
+      <SafeAreaView style={styles.permissionContainer}>
+        <CapabilityUnavailable label="Scanning" onDismiss={handleClose} />
+      </SafeAreaView>
+    );
+  }
+
   if (!permission) {
     return (
       <View style={styles.centered}>
@@ -240,12 +268,7 @@ export default function ScanScreen() {
                 Open Settings
               </Text>
             </Pressable>
-            <Pressable
-              onPress={handleClose}
-              className="items-center py-3"
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
+            <Pressable {...chrome.close} className="items-center py-3" style={chrome.close.style}>
               <Text className="text-sm" style={{ color: c.cameraOverlayTextMuted }}>
                 Cancel
               </Text>
@@ -272,7 +295,8 @@ export default function ScanScreen() {
     return (
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={keyboard.behavior}
+        keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
         <View style={styles.flex}>
           {/* Photo */}
@@ -302,12 +326,7 @@ export default function ScanScreen() {
           {/* Top bar */}
           <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
             <View style={styles.topBar}>
-              <Pressable
-                onPress={handleClose}
-                style={styles.iconButton}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-              >
+              <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
                 <X size={22} color={c.cameraOverlayText} />
               </Pressable>
 
@@ -322,14 +341,11 @@ export default function ScanScreen() {
                 </Text>
               </View>
 
-              <Pressable
-                onPress={handleRetake}
-                style={styles.iconButton}
-                accessibilityRole="button"
-                accessibilityLabel="Retake"
-              >
-                <RotateCcw size={20} color={c.cameraOverlayText} />
-              </Pressable>
+              {chrome.cancel ? (
+                <Pressable {...chrome.cancel} style={[styles.iconButton, chrome.cancel.style]}>
+                  <RotateCcw size={20} color={c.cameraOverlayText} />
+                </Pressable>
+              ) : null}
             </View>
           </SafeAreaView>
 
@@ -406,12 +422,7 @@ export default function ScanScreen() {
       {/* Top bar */}
       <SafeAreaView style={styles.topBarSafeArea} edges={['top']}>
         <View style={styles.topBar}>
-          <Pressable
-            onPress={handleClose}
-            style={styles.iconButton}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
+          <Pressable {...chrome.close} style={[styles.iconButton, chrome.close.style]}>
             <X size={22} color={c.cameraOverlayText} />
           </Pressable>
 

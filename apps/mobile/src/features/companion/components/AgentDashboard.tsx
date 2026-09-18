@@ -40,6 +40,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {
   requestAgentRefresh,
@@ -250,12 +251,7 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
           <View
             className="w-1.5 h-1.5 rounded-full mt-1.5"
             style={{
-              backgroundColor:
-                call.status === 'completed'
-                  ? colors.agentSuccess
-                  : call.status === 'failed'
-                    ? colors.agentError
-                    : colors.agentActive,
+              backgroundColor: toolStatusColor(call.status, colors),
             }}
           />
           <View className="flex-1">

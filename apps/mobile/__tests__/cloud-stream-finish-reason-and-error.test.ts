@@ -419,3 +419,43 @@ describe('cloud send: canonical agent activity', () => {
     });
   });
 });
+
+// MOBILE-039: a real connectivity drop mid-answer could not be checked without a
+// device, so the drop is driven here through the same onError the transport uses.
+describe('cloud send: the connection drops mid-answer', () => {
+  it('keeps the partial answer, stops the streaming bar and settles every unfinished tool call', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        tool_calls: [
+          { index: 0, id: 'call-1', type: 'function', function: { name: 'web_search' } },
+        ],
+      });
+      callbacks.onDelta({ content: 'The first half of the answer' });
+      callbacks.onError(new Error('Network request failed'));
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
+
+    const assistant = lastAssistantMessage();
+    expect(assistant?.content).toContain('The first half of the answer');
+    expect(assistant?.isStreaming).not.toBe(true);
+    for (const tool of assistant?.toolCalls ?? []) {
+      expect(['succeeded', 'failed', 'partial', 'canceled']).toContain(tool.status);
+      expect(tool.requiresApproval).not.toBe(true);
+    }
+  });
+
+  it('leaves no conversation marked as streaming, so the composer is usable again', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'half' });
+      callbacks.onError(new Error('Network request failed'));
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
+
+    const state = useChatExecutionStore.getState();
+    expect(state.isStreaming).toBe(false);
+    expect(state.streamingConversationIds).toEqual([]);
+    expect(state.error).toBeTruthy();
+  });
+});

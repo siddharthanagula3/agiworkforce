@@ -35,6 +35,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
@@ -199,6 +200,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
+  const connectorsSwitchedOn = useCapability('canUseConnectors');
   const [connection, setConnection] = useState<ConnectedConnector | null>(null);
   const [permissions, setPermissions] = useState<ConnectorToolPermission[]>([]);
   const [loading, setLoading] = useState(false);
@@ -398,6 +400,14 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
     return (
       <SettingsScreenShell title="Connector" backHref="/(app)/connectors">
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={signIn} />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (!connectorsSwitchedOn) {
+    return (
+      <SettingsScreenShell title="Connector" backHref="/(app)/connectors">
+        <CapabilityUnavailable label="Connectors" />
       </SettingsScreenShell>
     );
   }

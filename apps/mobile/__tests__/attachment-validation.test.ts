@@ -51,6 +51,35 @@ describe('isAcceptableAttachment', () => {
     expect(mockIsParseable).not.toHaveBeenCalled();
   });
 
+  it('refuses a HEIC photo bound for Cloud and says how to get a readable one', () => {
+    const verdict = isAcceptableAttachment(
+      att({ fileName: 'IMG_0042.HEIC', mimeType: 'image/heic', uri: 'file:///IMG_0042.HEIC' }),
+      'cloud',
+    );
+    expect(verdict).not.toBe(true);
+    expect(String(verdict)).toContain('IMG_0042.HEIC');
+    expect(String(verdict)).toContain('HEIC');
+    expect(mockIsParseable).not.toHaveBeenCalled();
+  });
+
+  it('still stages a HEIC photo for a local-mode send, which never reaches the upload route', () => {
+    expect(
+      isAcceptableAttachment(
+        att({ fileName: 'IMG_0042.HEIC', mimeType: 'image/heic', uri: 'file:///IMG_0042.HEIC' }),
+        'local',
+      ),
+    ).toBe(true);
+  });
+
+  it('names the format when a Cloud-bound image is one the route cannot read', () => {
+    const verdict = isAcceptableAttachment(
+      att({ fileName: 'render.avif', mimeType: 'image/avif', uri: 'file:///render.avif' }),
+      'cloud',
+    );
+    expect(verdict).not.toBe(true);
+    expect(String(verdict)).toContain('JPEG, PNG, GIF, or WebP');
+  });
+
   it('accepts a pasted-text card unconditionally', () => {
     expect(
       isAcceptableAttachment(att({ pastedText: 'a big block', mimeType: 'application/zip' })),

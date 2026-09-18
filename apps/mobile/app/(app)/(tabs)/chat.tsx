@@ -43,6 +43,8 @@ import {
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
+import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/capabilities';
+import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
@@ -62,6 +64,7 @@ import {
 } from '@/src/features/model-picker/service';
 import { executionModeForSelection } from '@/src/features/chat/utils/conversationMode';
 import {
+  captureImageAssetsFromCamera,
   imageAssetsToChatAttachments,
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
@@ -113,6 +116,8 @@ export default function ChatTabScreen() {
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
   const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
   const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
+  const voiceAllowed = useCapability('canUseVoice');
+  const keyboard = useKeyboardSafeComposer('screen');
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const [styleSelectorOpenSignal, setStyleSelectorOpenSignal] = useState(0);
   const [projectPickerOpenSignal, setProjectPickerOpenSignal] = useState(0);
@@ -589,24 +594,9 @@ export default function ChatTabScreen() {
         );
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        quality: 0.85,
-        allowsEditing: false,
-        exif: false,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        const attachments: import('@/src/features/chat/components/AttachmentPreview').Attachment[] =
-          result.assets.map((asset) => ({
-            id: `cam-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            uri: asset.uri,
-            mimeType: asset.mimeType ?? 'image/jpeg',
-            fileName: asset.fileName ?? 'photo.jpg',
-            width: asset.width,
-            height: asset.height,
-            fileSize: asset.fileSize,
-          }));
-        chatInputAttachRef.current?.addAttachments(attachments);
+      const assets = await captureImageAssetsFromCamera();
+      if (assets.length > 0) {
+        chatInputAttachRef.current?.addAttachments(imageAssetsToChatAttachments(assets, 'cam'));
       }
     } catch {
       Alert.alert('Camera', 'Could not open the camera. Please try again.');
@@ -670,6 +660,10 @@ export default function ChatTabScreen() {
   );
 
   const startVoiceMode = useCallback(() => {
+    if (!voiceAllowed) {
+      Alert.alert('Voice is unavailable', CAPABILITY_SWITCHED_OFF_BODY);
+      return;
+    }
     const reason = liveVoiceModeUnavailableReason({
       executionMode: activeMode === 'cloud' ? 'cloud' : 'local',
       signedIn: isClerkSignedIn,
@@ -689,7 +683,7 @@ export default function ChatTabScreen() {
         setVoiceFallbackReason('The chat could not be started, so voice stays turn based.');
         setVoiceInlineVisible(true);
       });
-  }, [activeMode, createConversation, isClerkSignedIn, router]);
+  }, [activeMode, createConversation, isClerkSignedIn, router, voiceAllowed]);
 
   const handleOpenVoiceMode = useCallback(() => {
     Keyboard.dismiss();
@@ -805,8 +799,8 @@ export default function ChatTabScreen() {
           jumps. iOS keeps "padding". */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
+        behavior={keyboard.behavior}
+        keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
         <ScrollView
           style={{ flex: 1 }}

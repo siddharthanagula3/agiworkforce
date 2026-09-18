@@ -7,7 +7,11 @@ import {
   classifyExternalLink,
   getSystemIntentPrompt,
 } from '@/src/features/chat/utils/externalUrls';
-import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
+import {
+  tokenizeCode,
+  syntaxTokenColor,
+  type SyntaxToken,
+} from '@/src/features/chat/utils/syntaxHighlight';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 
@@ -449,11 +453,22 @@ function renderTextSegment(
   return nodes;
 }
 
+export interface MarkdownRenderOptions {
+  /**
+   * A streaming message re-renders on every token, and highlighting re-tokenises
+   * the whole fence each time; the plain fence settles into a highlighted one
+   * once the turn ends.
+   */
+  highlightCode?: boolean;
+}
+
 export function renderMarkdownContent(
   content: string,
   renderColors: ColorScheme = defaultColors,
+  options: MarkdownRenderOptions = {},
 ): React.ReactNode[] {
   if (!content) return [];
+  const highlightCode = options.highlightCode !== false;
 
   const source = normalizeMarkdownSource(content);
   const elements: React.ReactNode[] = [];
@@ -477,7 +492,9 @@ export function renderMarkdownContent(
       const fenceLanguage = match[3]?.trim().split(/\s+/)[0];
       const languageLabel =
         fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
-      const codeTokens = tokenizeCode(codeContent, fenceLanguage);
+      const codeTokens: SyntaxToken[] = highlightCode
+        ? tokenizeCode(codeContent, fenceLanguage)
+        : [{ text: codeContent, type: 'plain' }];
       elements.push(
         <View
           key={`code-${keyCounter++}`}

@@ -112,7 +112,9 @@ describe('StyleSelector', () => {
 
     const normalOption = getByLabelText('Normal style, selected');
     expect(normalOption).toBeTruthy();
-    expect(normalOption.props.accessibilityState).toEqual({ selected: true });
+    expect(normalOption.props.accessibilityRole).toBe('radio');
+    expect(normalOption.props.accessibilityState).toEqual({ checked: true });
+    expect(getByLabelText('Concise style').props.accessibilityState).toEqual({ checked: false });
   });
 
   it('tapping an option changes selection in chatStore', () => {

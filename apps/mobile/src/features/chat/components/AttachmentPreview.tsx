@@ -1,11 +1,16 @@
 import { View, Pressable, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
-import { Lock, X, FileText, ClipboardList, AlertCircle } from 'lucide-react-native';
+import { Lock, X, FileText, ClipboardList, AlertCircle, RotateCcw } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
+import {
+  isResumable,
+  uploadStatusLabel,
+  useUploadLifecycleStore,
+} from '@/src/features/chat/upload/uploadLifecycle';
 
 export interface Attachment {
   id: string;
@@ -24,6 +29,7 @@ interface AttachmentPreviewProps {
   attachments: Attachment[];
   onRemove: (id: string) => void;
   onExpandPastedText?: (id: string) => void;
+  onRetryUpload?: (id: string) => void;
   privacyShortLabel?: string;
 }
 
@@ -41,20 +47,31 @@ function AttachmentThumbnail({
   attachment,
   onRemove,
   onExpandPastedText,
+  onRetryUpload,
   privacyShortLabel,
   colors,
 }: {
   attachment: Attachment;
   onRemove: (id: string) => void;
   onExpandPastedText?: (id: string) => void;
+  onRetryUpload?: (id: string) => void;
   privacyShortLabel?: string;
   colors: ColorScheme;
 }) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const upload = useUploadLifecycleStore((s) => s.uploads[attachment.id]);
+  const cancelUpload = useUploadLifecycleStore((s) => s.cancel);
+  const uploading = upload?.phase === 'uploading';
+  const uploadLabel = uploadStatusLabel(upload);
+  const canRetryUpload = isResumable(upload) && onRetryUpload !== undefined;
 
   const handleRemove = () => {
     if (hapticsEnabled) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    if (uploading) {
+      cancelUpload(attachment.id);
+      return;
     }
     onRemove(attachment.id);
   };
@@ -152,12 +169,69 @@ function AttachmentThumbnail({
           borderWidth: 1,
           borderColor: colors.border,
         }}
-        accessibilityLabel={`Remove ${attachment.fileName}`}
+        accessibilityLabel={
+          uploading ? `Cancel upload of ${attachment.fileName}` : `Remove ${attachment.fileName}`
+        }
         accessibilityRole="button"
+        testID={`attachment-${uploading ? 'cancel' : 'remove'}-${attachment.id}`}
         hitSlop={12}
       >
         <X size={10} color={colors.textSecondary} />
       </Pressable>
+
+      {uploading ? (
+        <View
+          testID={`attachment-progress-${attachment.id}`}
+          accessibilityLabel={`${attachment.fileName}, ${uploadLabel}`}
+          accessibilityRole="progressbar"
+          accessibilityValue={{ min: 0, max: 100, now: Math.round(upload.progress * 100) }}
+          style={{
+            position: 'absolute',
+            left: 6,
+            right: 6,
+            bottom: 6,
+            height: 3,
+            borderRadius: 2,
+            overflow: 'hidden',
+            backgroundColor: colors.progressTrack,
+          }}
+        >
+          <View
+            style={{
+              width: `${Math.round(upload.progress * 100)}%`,
+              height: '100%',
+              backgroundColor: colors.agentActive,
+            }}
+          />
+        </View>
+      ) : null}
+
+      {canRetryUpload ? (
+        <Pressable
+          onPress={() => onRetryUpload?.(attachment.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`${uploadLabel}. Retry uploading ${attachment.fileName}`}
+          testID={`attachment-retry-${attachment.id}`}
+          hitSlop={12}
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            top: 0,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            borderWidth: 1,
+            borderColor: colors.warningBorder,
+            backgroundColor: colors.warningSurface,
+          }}
+        >
+          <RotateCcw size={16} color={colors.textPrimary} />
+          <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textPrimary }}>Retry</Text>
+        </Pressable>
+      ) : null}
 
       {sendFailed ? (
         <View
@@ -222,6 +296,7 @@ export function AttachmentPreview({
   attachments,
   onRemove,
   onExpandPastedText,
+  onRetryUpload,
   privacyShortLabel,
 }: AttachmentPreviewProps) {
   const colors = useThemeColors();
@@ -246,6 +321,7 @@ export function AttachmentPreview({
               attachment={attachment}
               onRemove={onRemove}
               onExpandPastedText={onExpandPastedText}
+              onRetryUpload={onRetryUpload}
               privacyShortLabel={privacyShortLabel}
               colors={colors}
             />

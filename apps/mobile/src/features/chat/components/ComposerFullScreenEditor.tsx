@@ -1,9 +1,10 @@
-
-import { View, TextInput, Modal, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TextInput, Modal, Pressable, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Minimize2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, radii } from '@/src/ui/theme';
+import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
+import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SendButton } from './SendButton';
 
 interface ComposerFullScreenEditorProps {
@@ -29,6 +30,17 @@ export function ComposerFullScreenEditor({
 }: ComposerFullScreenEditorProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardSafeComposer('modal');
+  const collapse = {
+    onPress: onClose,
+    label: 'Collapse editor',
+    hint: 'Returns to the chat composer, keeping the message',
+  };
+  const chrome = useFullScreenChrome({
+    surface: 'chat.composer.fullscreen',
+    back: collapse,
+    close: collapse,
+  });
 
   if (!visible) return null;
 
@@ -38,12 +50,13 @@ export function ComposerFullScreenEditor({
       animationType="slide"
       presentationStyle="overFullScreen"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={chrome.onRequestClose}
       statusBarTranslucent
       accessibilityViewIsModal
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={keyboard.behavior}
+        keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
         style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View
@@ -62,15 +75,9 @@ export function ComposerFullScreenEditor({
           {/* One exit control only: collapsing IS dismissing and the message
               survives either way, so a second X would be duplicate chrome. */}
           <Pressable
-            onPress={onClose}
-            hitSlop={8}
-            testID="chat.composer.fullscreen.collapse"
-            accessibilityLabel="Collapse editor"
-            accessibilityHint="Returns to the chat composer, keeping the message"
-            accessibilityRole="button"
+            {...chrome.back}
             style={{
-              width: 36,
-              height: 36,
+              ...chrome.back.style,
               borderRadius: radii.full,
               alignItems: 'center',
               justifyContent: 'center',
