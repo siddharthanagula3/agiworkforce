@@ -6,7 +6,7 @@ Candidate base: `c8ed5c61728588a29be380468b06342963c0657a`
 Remote base: `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`
 
 This manifest records every path in the consolidated release snapshot. The 756
-paths in the primary listing plus the two post-listing paths are all intended
+paths in the primary listing plus the three post-listing paths are all intended
 for the release. The 11 deletions are the audited removals described in the
 deployment handoff; no path is silently withheld. The snapshot had no untracked files.
 `git diff --cached --check` and the repository secret scan passed after
@@ -779,4 +779,5 @@ Post-listing paths:
 ```text
 A\tinclude: exhaustive release inventory\tdocs/work/release-inclusion-inventory-2026-09-19.md
 M\tinclude: corrected final secondary-audit diagnostic\tapps/web/__tests__/feature-page-claims.test.ts
+M\tinclude: preserve generator-owned support-corpus serialization\t.prettierignore
 ```

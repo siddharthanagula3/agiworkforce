@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-19T18:20:46Z",
+  "recordedAt": "2026-09-19T18:31:39Z",
   "scope": "Current public website, support, runtime, localization, README, and canonical product and architecture claims",
   "status": "passed",
   "observations": [
@@ -13,8 +13,8 @@
     "Telemetry copy distinguishes consent-gated browser reporting from configured server and edge operational reporting, and accurately describes sensitive-field removal, secret masking, stable browser identifiers, and the remaining free-text diagnostic boundary."
   ],
   "independentVerification": {
-    "report": "/tmp/agi-public-claims-audit-final-refresh-3.json",
-    "reportSha256": "9e0c06597bc2df5dfa12a59cf5dbffc35acd99fdec52e43076b5fac98ca7f7a8",
+    "report": "/tmp/agi-public-claims-audit-final-refresh-5.json",
+    "reportSha256": "50eaceabba18579676887f01d2352bb5d460e0f964324fde044ea24db412135d",
     "fullRefreshReport": "/tmp/agi-public-claims-audit-final-refresh-2.json",
     "fullRefreshReportSha256": "fe308995524ccc1acfc4b28fecc228531840efaa9352a6e6d818c5ec329a721d",
     "result": "clean",
@@ -28,7 +28,9 @@
       "docs:check passed, including reference integrity, capability preconditions, and README fact guards",
       "git diff --check and independent exact retired-phrase scans passed",
       "After correcting the sole stale non-rendered test comment, its 21-test suite passed; all other 40 audited source fingerprints remained unchanged",
-      "No rendered or non-rendered audited source retains the retired local-Mac-model phrase"
+      "No rendered or non-rendered audited source retains the retired local-Mac-model phrase",
+      "Canonical support-corpus verification passed at 41 documents and 215 chunks; 116 focused privacy and support tests passed",
+      "The recovered pre-hook privacy-page blob formats byte-for-byte to the final page, proving the hook delta was formatting-only"
     ]
   },
   "sourceHashes": {
@@ -43,7 +45,7 @@
     "apps/web/app/pricing/page.tsx": "3ea6d4e41275374e204a74d95670d9704a971175d06906b5150c8f305d9d859b",
     "packages/contracts/types/src/billing-catalog.ts": "02236bc67b530b9bedb8a695a35bbd2c6670a1fee3146c6d952ba4793e9790a1",
     "apps/web/__tests__/surface-page-claims.test.ts": "9a4cabeedd4d08393cd6abb4b4e39d9cace482c7927ac825f55048866fcd32d4",
-    "apps/web/app/privacy/page.tsx": "3838ff43fa3b14af962b452e964757500f0cc6ab5b306f81fff10b2ccc606b5f",
+    "apps/web/app/privacy/page.tsx": "4e4bfbd86b406c87d107973773badca2666dcc2f405e70ab7c4b65d239c3328e",
     "apps/web/lib/sentry-shared.ts": "d022ec9488e3df9ff3927f0a9d2ea165ca2f41b151fc468b12df857e2004ff82",
     "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06",
     "apps/web/content/support/privacy-controls.md": "d6e834fb617df8ea0284ed2d3945dc765c514bc3416d030f2fe3d7bb1cb3415a",
