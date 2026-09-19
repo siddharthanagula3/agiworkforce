@@ -185,7 +185,7 @@ export default function EnterprisePage() {
                 {
                   label: 'BYOK posture',
                   value:
-                    'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop, CLI and VS Code, and no conversation content reaches AGI Cloud. A member who moves a thread to managed cloud does so through an explicit, reviewed handoff.',
+                    'The released CLI can run fully local or on your own provider keys, so that work does not reach AGI Cloud. VS Code BYOK is coming soon, and the current public Desktop is managed-cloud only. A member who moves a CLI thread to managed cloud does so through an explicit, reviewed handoff.',
                 },
                 {
                   label: 'Service levels',

@@ -142,8 +142,8 @@ export default async function PluginDetailPage({ params }: Props) {
                   <strong>Deprecated. This pack should no longer be installed.</strong>
                 ) : installCommand !== null ? (
                   <strong>
-                    The web app cannot run this one. Install it from the desktop app or the CLI with
-                    the command below.
+                    The web app cannot run this one. Install it from the released CLI with the
+                    command below.
                   </strong>
                 ) : (
                   <strong>

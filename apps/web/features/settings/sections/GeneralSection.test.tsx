@@ -2,6 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { GeneralSection } from './GeneralSection';
 import { ACCENT_COLORS } from '@shared/stores/web-settings-store';
 
@@ -194,6 +195,30 @@ describe('GeneralSection preference hydration', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('requires successful personalization hydration before edits and recovers on retry', async () => {
+    mocks.fetchPreferences.mockImplementation(async (namespace: string) => {
+      if (namespace === 'personalization') throw new Error('Response preferences unavailable');
+      return { instructions: 'Keep my saved instructions.' };
+    });
+    render(<GeneralSection />);
+    expect(await screen.findByText('Response preferences unavailable')).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'Response style' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: /Instructions for AGI/ })).toBeDisabled();
+    mocks.fetchPreferences.mockImplementation(async (namespace: string) =>
+      namespace === 'personalization'
+        ? { style: 'formal' }
+        : { instructions: 'Keep my saved instructions.' },
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Response style' })).toBeEnabled(),
+    );
+    expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveValue('formal');
+    expect(screen.getByRole('textbox', { name: /Instructions for AGI/ })).toHaveValue(
+      'Keep my saved instructions.',
+    );
+  });
+
   it('keeps fields disabled after a load failure and offers an explicit retry', async () => {
     mocks.fetchPreferences.mockRejectedValueOnce(new Error('Settings unavailable'));
 
@@ -278,10 +303,11 @@ describe('GeneralSection read-aloud disclosure', () => {
     expect(screen.getByText(/browsers give web pages no way to choose one/i)).toBeVisible();
   });
 
-  it('states plainly that there is no continuous voice conversation', () => {
+  it('describes read-aloud without denying the separate voice mode', () => {
     render(<GeneralSection />);
 
-    expect(screen.getByText(/no hands-free voice conversation that listens back/i)).toBeVisible();
+    expect(screen.getByText(/Read-aloud plays a reply on request and then stops/i)).toBeVisible();
+    expect(screen.queryByText(/no hands-free voice conversation/i)).toBeNull();
   });
 
   it('states how far display-language translation actually reaches', () => {
@@ -416,5 +442,72 @@ describe('GeneralSection instruction and response-style preferences', () => {
       'aria-checked',
       'false',
     );
+  });
+});
+
+describe('GeneralSection preference save ordering', () => {
+  beforeEach(() => {
+    mocks.fetchPreferences.mockResolvedValue({});
+    vi.mocked(savePreferenceNamespace).mockReset();
+    vi.mocked(savePreferenceNamespace).mockResolvedValue({ version: null });
+  });
+
+  it('coalesces edits while a save is in flight without sending overlapping drafts', async () => {
+    const first = deferred<{ version: null }>();
+    vi.mocked(savePreferenceNamespace).mockImplementationOnce(() => first.promise);
+    render(<GeneralSection />);
+    const style = screen.getByRole('combobox', { name: 'Response style' });
+    await waitFor(() => expect(style).toBeEnabled());
+    await userEvent.selectOptions(style, 'concise');
+    await waitFor(() => expect(savePreferenceNamespace).toHaveBeenCalledTimes(2));
+    await userEvent.selectOptions(style, 'formal');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(savePreferenceNamespace).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      first.resolve({ version: null });
+      await first.promise;
+    });
+    await waitFor(() => expect(savePreferenceNamespace).toHaveBeenCalledTimes(4));
+    expect(vi.mocked(savePreferenceNamespace).mock.calls.at(-1)?.slice(0, 2)).toEqual([
+      'personalization',
+      expect.objectContaining({ style: 'formal' }),
+    ]);
+  });
+
+  it('retains a failed draft for explicit retry without repeatedly saving it', async () => {
+    vi.mocked(savePreferenceNamespace).mockRejectedValueOnce(new Error('Service unavailable'));
+    render(<GeneralSection />);
+    const style = screen.getByRole('combobox', { name: 'Response style' });
+    await waitFor(() => expect(style).toBeEnabled());
+    await userEvent.selectOptions(style, 'formal');
+    await screen.findByText('We could not save your preferences. Try Save profile again.');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    });
+    expect(savePreferenceNamespace).toHaveBeenCalledTimes(2);
+    expect(style).toHaveValue('formal');
+    await userEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    await screen.findByText('Saved');
+    expect(vi.mocked(savePreferenceNamespace).mock.calls.at(-1)?.slice(0, 2)).toEqual([
+      'personalization',
+      expect.objectContaining({ style: 'formal' }),
+    ]);
+  });
+
+  it('includes the latest response style when Save profile is clicked before debounce', async () => {
+    render(<GeneralSection />);
+    const style = screen.getByRole('combobox', { name: 'Response style' });
+    await waitFor(() => expect(style).toBeEnabled());
+    await userEvent.selectOptions(style, 'formal');
+    await userEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+    await screen.findByText('Saved');
+    expect(
+      vi
+        .mocked(savePreferenceNamespace)
+        .mock.calls.find(([namespace]) => namespace === 'personalization')
+        ?.slice(0, 2),
+    ).toEqual(['personalization', expect.objectContaining({ style: 'formal' })]);
   });
 });

@@ -13,7 +13,6 @@ import { isSeatBearingBillingPlan } from '@/lib/services/entitlement-resolution'
 // existing callers reach the same resolver.
 export {
   ensureSeatMemberCreditAccount,
-  entitlementDenialReason,
   isSeatBearingBillingPlan,
   resolveEffectiveSubscription,
   resolveEntitledPlanTier,

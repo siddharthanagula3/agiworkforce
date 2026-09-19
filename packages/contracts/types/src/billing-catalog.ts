@@ -184,7 +184,9 @@ export function isByokPlanTier(value: string | null | undefined): value is 'byok
   return value === 'byok';
 }
 
-export function isFreeOfChargePlanTier(value: string | null | undefined): boolean {
+export function isFreeOfChargePlanTier(
+  value: string | null | undefined,
+): value is 'local-only' | 'byok' | 'free' {
   return isLocalOnlyPlanTier(value) || isByokPlanTier(value) || isFreeBillingPlanTier(value);
 }
 

@@ -105,7 +105,7 @@ describe('/api/schedules', () => {
       'scheduled_tasks:user-1',
     ]);
     expect(assertScheduleQuota).toHaveBeenCalledWith(tx, 'user-1', 'pro');
-    expect(createSchedule).toHaveBeenCalledWith(tx, 'user-1', body);
+    expect(createSchedule).toHaveBeenCalledWith(tx, 'user-1', body, { planTier: 'pro' });
   });
 
   it('refuses to arm another unattended run past the plan ceiling', async () => {
@@ -122,6 +122,36 @@ describe('/api/schedules', () => {
     );
 
     expect(response.status).toBe(403);
+    expect(createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('returns the canonical plan-limit message before the workspace feature gate for Free', async () => {
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
+      plan_tier: 'free',
+    } as never);
+    vi.mocked(assertScheduleQuota).mockRejectedValueOnce(
+      new ScheduleLimitError(
+        'Free plans do not include scheduled tasks. Upgrade to schedule unattended runs.',
+        'free',
+        0,
+      ),
+    );
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/schedules', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Daily briefing', prompt: 'Brief me' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        message: 'Free plans do not include scheduled tasks. Upgrade to schedule unattended runs.',
+      },
+    });
+    expect(getNeonDb).not.toHaveBeenCalled();
     expect(createSchedule).not.toHaveBeenCalled();
   });
 

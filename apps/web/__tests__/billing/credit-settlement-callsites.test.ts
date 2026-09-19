@@ -20,13 +20,14 @@ describe('durable post-provider credit settlements', () => {
     expect(contents).not.toMatch(/CreditService\.(deductCredits|settleCreditsDurably)\(/);
   });
 
-  it('image generation uses the shared managed reservation lifecycle directly', () => {
-    const contents = source('app/api/media/image/generate/route.ts');
+  it('image generation owns the complete managed reservation lifecycle across route and executor', () => {
+    const route = source('app/api/media/image/generate/route.ts');
+    const executor = source('app/api/media/image/lib/image-job-executor.ts');
 
-    expect(contents).toMatch(/reserveManagedUsageRequest\(/);
-    expect(contents).toMatch(/markManagedUsageProviderStarted\(/);
-    expect(contents).toMatch(/finalizeManagedUsageRequest\(/);
-    expect(contents).toMatch(/markManagedUsageClientDelivered\(/);
+    expect(route).toMatch(/reserveManagedUsageRequest\(/);
+    expect(executor).toMatch(/markManagedUsageProviderStarted\(/);
+    expect(executor).toMatch(/finalizeManagedUsageRequest\(/);
+    expect(route).toMatch(/markManagedUsageClientDelivered\(/);
   });
 
   it('video generation owns provider start and final settlement transactionally', () => {

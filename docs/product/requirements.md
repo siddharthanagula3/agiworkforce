@@ -73,14 +73,14 @@ The surface roster is fixed; completion order is shortest-remaining-work-first
 (founder decision 2026-08-05, Decision #20). Numbers below are roster indices,
 not a sequence:
 
-| Order | Surface           | Meaning                                                                             |
-| ----- | ----------------- | ----------------------------------------------------------------------------------- |
-| 1     | Website           | Public site, signed-in Cloud product, account, and launch support.                  |
-| 2     | Mobile            | Native Local/Cloud app; must pass App Store release requirements.                   |
-| 3     | Desktop           | Deepest Local/BYOK host, rich app shell, local files, MCP, artifacts, computer use. |
-| 4     | Chrome Extension  | Browser context, capture, native bridge, page automation.                           |
-| 5     | VS Code Extension | IDE-native developer workflow.                                                      |
-| 6     | CLI               | Developer engine and terminal agent.                                                |
+| Order | Surface           | Meaning                                                                            |
+| ----- | ----------------- | ---------------------------------------------------------------------------------- |
+| 1     | Website           | Public site, signed-in Cloud product, account, and launch support.                 |
+| 2     | Mobile            | Native Local/Cloud app; must pass App Store release requirements.                  |
+| 3     | Desktop           | Managed-cloud Electron shell, approved local files/tools, artifacts, computer use. |
+| 4     | Chrome Extension  | Browser context, capture, native bridge, page automation.                          |
+| 5     | VS Code Extension | IDE-native developer workflow.                                                     |
+| 6     | CLI               | Developer engine and terminal agent.                                               |
 
 The parity ledger may track all six surfaces at all times. Implementation does
 not run on all six at once. A future agent must not start work on a non-active
@@ -280,9 +280,9 @@ Users must be able to answer:
 
 Website is the first release surface and the active development focus. Mobile
 follows, then Desktop, Chrome, VS Code, and CLI. Website-first does not weaken
-the suite boundaries: Desktop will eventually carry the deepest Local and BYOK
-workflows, while Chrome, VS Code, and CLI carry the developer workflows suited
-to their native surfaces.
+the suite boundaries: the public Desktop remains managed-cloud-only, while the
+CLI and forthcoming VS Code extension carry Local and BYOK developer workflows
+suited to their native surfaces.
 
 Website v1 should prove AGI can ship a polished, privacy-clear, user-facing Cloud
 product without pretending later native or developer surfaces are already
@@ -757,7 +757,7 @@ Mobile v1 should not publicly promise:
 
 - Broad AGI Managed Cloud.
 - Unlimited compute credits.
-- Full Desktop-level BYOK provider tooling.
+- Full developer-surface BYOK provider tooling.
 - Mobile BYOK in v1.
 - Full developer agent capabilities.
 - Full artifact generation parity.
@@ -1068,9 +1068,9 @@ Desktop must expose:
 - Scheduled tasks/routines.
 - AGI Code/Cowork-style task surfaces.
 
-Desktop is where BYOK Native First matters most for v1 parity. It must support
-native provider tools when the user enables them and capability metadata proves
-support.
+The CLI, and VS Code when published, are where BYOK Native First matters for v1
+parity. They must support native provider tools when the user enables them and
+capability metadata proves support. The public Electron Desktop accepts no key.
 
 ## 13. CLI Requirements
 
@@ -1652,7 +1652,7 @@ These are not blockers to writing the PRD, but they must be answered before
 later implementation phases claim release readiness:
 
 1. Exact Mobile local runtime/model pack shipping mechanism.
-2. Exact Desktop-first/developer-surface BYOK setup timing during the Desktop release phase.
+2. Exact VS Code BYOK setup timing after the released CLI path.
 3. Exact App Store privacy nutrition labels after final Mobile data audit.
 4. Exact Cloud invite-code backend and abuse limits.
 5. Exact provider retention metadata schema.

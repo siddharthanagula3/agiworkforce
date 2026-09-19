@@ -700,6 +700,27 @@ export interface CreateGitHubPullRequestInput {
   base: string;
   /** Opens the pull request as a draft, so nothing requests review yet. */
   draft?: boolean;
+  /** Issue numbers this work closes, written into the body as GitHub reads them. */
+  linkedIssues?: readonly number[];
+}
+
+const LINKED_ISSUE_HEADING = 'Closes';
+
+/**
+ * The body GitHub itself parses for issue links, so closing the pull request
+ * closes the issues the work was started from.
+ */
+export function buildPullRequestBody(
+  summary: string,
+  linkedIssues: readonly number[] = [],
+): string {
+  const numbers = linkedIssues.filter(
+    (issue, index) =>
+      Number.isSafeInteger(issue) && issue > 0 && linkedIssues.indexOf(issue) === index,
+  );
+  if (numbers.length === 0) return summary;
+  const links = numbers.map((issue) => `${LINKED_ISSUE_HEADING} #${issue}`).join('\n');
+  return summary.trim().length > 0 ? `${summary.trim()}\n\n${links}` : links;
 }
 
 export async function getGitHubRepositoryDefaultBranch(
@@ -788,7 +809,7 @@ export async function createGitHubPullRequest(
       },
       body: JSON.stringify({
         title: input.title,
-        body: input.body,
+        body: buildPullRequestBody(input.body, input.linkedIssues ?? []),
         head: input.head,
         base: input.base,
         draft: input.draft === true,
@@ -982,6 +1003,202 @@ export async function getGitHubPullRequestStatus(
     failedChecks,
     linkedIssues: parseLinkedIssues(parsed.data.body ?? ''),
   };
+}
+
+async function writeGitHubJson(
+  token: string,
+  path: string,
+  method: 'POST' | 'PATCH',
+  body: unknown,
+  label: string,
+): Promise<unknown> {
+  const response = await fetch(buildGitHubApiUrl(path), {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': GITHUB_API_VERSION,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    assertGitHubResponseAuthorized(response.status);
+    throw new Error(`Failed to ${label}: ${response.status}`);
+  }
+  return response.json();
+}
+
+const MAX_GITHUB_METADATA_ENTRIES = 50;
+
+function metadataList(values: readonly string[], label: string): string[] {
+  const unique = values
+    .map((value) => value.trim())
+    .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
+  if (unique.length > MAX_GITHUB_METADATA_ENTRIES) {
+    throw new Error(`Too many ${label} for one GitHub request`);
+  }
+  return unique;
+}
+
+export interface GitHubPullRequestUpdate {
+  title?: string;
+  body?: string;
+  base?: string;
+  state?: 'open' | 'closed';
+}
+
+/**
+ * Edits an open pull request in place. Draft is absent on purpose: REST cannot
+ * change it, so that transition goes through setGitHubPullRequestDraft.
+ */
+export async function updateGitHubPullRequest(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  update: GitHubPullRequestUpdate,
+): Promise<void> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const body: Record<string, unknown> = {};
+  if (update.title !== undefined) body['title'] = update.title;
+  if (update.body !== undefined) body['body'] = update.body;
+  if (update.base !== undefined) body['base'] = update.base;
+  if (update.state !== undefined) body['state'] = update.state;
+  if (Object.keys(body).length === 0) return;
+  await writeGitHubJson(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${githubNumberSegment(prNumber, 'pull request number')}`,
+    'PATCH',
+    body,
+    'update the pull request',
+  );
+}
+
+export async function addGitHubIssueLabels(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  labels: readonly string[],
+): Promise<void> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const names = metadataList(labels, 'labels');
+  if (names.length === 0) return;
+  await writeGitHubJson(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${githubNumberSegment(issueNumber, 'issue number')}/labels`,
+    'POST',
+    { labels: names },
+    'add issue labels',
+  );
+}
+
+export async function addGitHubIssueAssignees(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  assignees: readonly string[],
+): Promise<void> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const logins = metadataList(assignees, 'assignees');
+  if (logins.length === 0) return;
+  await writeGitHubJson(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${githubNumberSegment(issueNumber, 'issue number')}/assignees`,
+    'POST',
+    { assignees: logins },
+    'add issue assignees',
+  );
+}
+
+export async function requestGitHubPullRequestReviewers(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  reviewers: { users?: readonly string[]; teams?: readonly string[] },
+): Promise<void> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const users = metadataList(reviewers.users ?? [], 'reviewers');
+  const teams = metadataList(reviewers.teams ?? [], 'team reviewers');
+  if (users.length === 0 && teams.length === 0) return;
+  await writeGitHubJson(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${githubNumberSegment(prNumber, 'pull request number')}/requested_reviewers`,
+    'POST',
+    { reviewers: users, team_reviewers: teams },
+    'request pull request reviewers',
+  );
+}
+
+const gitHubGraphQlSchema = z.object({
+  data: z.unknown().nullish(),
+  errors: z.array(z.object({ message: z.string() })).optional(),
+});
+
+async function runGitHubGraphQl(
+  token: string,
+  query: string,
+  variables: Record<string, unknown>,
+  label: string,
+): Promise<void> {
+  const response = await fetch(buildGitHubApiUrl('/graphql'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    assertGitHubResponseAuthorized(response.status);
+    throw new Error(`Failed to ${label}: ${response.status}`);
+  }
+  const parsed = gitHubGraphQlSchema.safeParse(await response.json());
+  if (!parsed.success) throw new Error(`Failed to ${label}: invalid response`);
+  const failure = parsed.data.errors?.[0];
+  if (failure) throw new Error(`Failed to ${label}: ${failure.message}`);
+}
+
+const gitHubPullRequestNodeSchema = z.object({ node_id: z.string().min(1).max(255) });
+
+/**
+ * The draft transition. REST ignores `draft` on an update, so GitHub's own
+ * answer for this is the GraphQL mutation pair.
+ */
+export async function setGitHubPullRequestDraft(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  draft: boolean,
+): Promise<void> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const parsed = gitHubPullRequestNodeSchema.safeParse(
+    await readGitHubJson(
+      token,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${githubNumberSegment(prNumber, 'pull request number')}`,
+      'read the pull request',
+    ),
+  );
+  if (!parsed.success) throw new Error('GitHub pull request response was invalid');
+  const mutation = draft ? 'convertPullRequestToDraft' : 'markPullRequestReadyForReview';
+  await runGitHubGraphQl(
+    token,
+    `mutation($pullRequestId: ID!) { ${mutation}(input: { pullRequestId: $pullRequestId }) { pullRequest { isDraft } } }`,
+    { pullRequestId: parsed.data.node_id },
+    draft ? 'convert the pull request to a draft' : 'mark the pull request ready for review',
+  );
 }
 
 const MAX_GITHUB_ISSUE_BODY_LENGTH = 20_000;
@@ -1195,6 +1412,34 @@ export async function listPrReviewCommentBodies(
     if (batch.length < REVIEW_COMMENT_PAGE_SIZE) break;
   }
   return bodies;
+}
+
+const gitHubIssueCommentsSchema = z.array(z.object({ body: z.string().nullish() }));
+
+/**
+ * Bodies of the conversation comments on an issue or pull request. The thread
+ * is the authority on what has already been said, so a redelivered webhook does
+ * not post the same notice twice.
+ */
+export async function listGitHubIssueCommentBodies(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+): Promise<string[]> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const parsed = gitHubIssueCommentsSchema.safeParse(
+    await readGitHubJson(
+      token,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${githubNumberSegment(issueNumber, 'issue number')}/comments?per_page=${REVIEW_COMMENT_PAGE_SIZE}`,
+      'list issue comments',
+    ),
+  );
+  if (!parsed.success) return [];
+  return parsed.data
+    .map((comment) => comment.body)
+    .filter((body): body is string => typeof body === 'string');
 }
 
 export async function postIssueComment(

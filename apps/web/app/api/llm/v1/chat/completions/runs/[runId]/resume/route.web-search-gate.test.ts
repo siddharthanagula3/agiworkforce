@@ -33,7 +33,8 @@ vi.mock('../../../lib/tool-loop', async (importOriginal) => ({
   loadMcpToolDefs: vi.fn(async () => []),
 }));
 
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
   loadUserConnectorToolDefs: vi.fn(async () => []),
   makeUserConnectorExecutor: vi.fn(),
 }));

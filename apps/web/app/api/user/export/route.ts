@@ -17,6 +17,7 @@ import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service'
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { authenticatedMediaUrl } from '@/lib/server/media-storage';
+import { readRestrictedUserExportSections } from '@/lib/server/restricted-user-export-reader';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
@@ -33,8 +34,9 @@ async function handleExportUserData(request: NextRequest) {
 
   try {
     const { userId, email } = await getClerkAuthUser(request);
+    const serviceDb = getNeonDb();
     const scopedDbFor = (organizationId: string | null): DatabaseAdapter =>
-      createClaimedUserScopedDb(getNeonDb(), { userId, organizationId });
+      createClaimedUserScopedDb(serviceDb, { userId, organizationId });
 
     logger.info(
       {
@@ -47,6 +49,7 @@ async function handleExportUserData(request: NextRequest) {
     const exportData = await collectUserData(
       { id: userId, email },
       scopedDbFor,
+      serviceDb,
       exportOrigin(request),
     );
 
@@ -736,14 +739,6 @@ const eventTriggerDeliveryExportSchema = z.object({
   received_at: timestampSchema,
 });
 
-const productAnalyticsEventExportSchema = z.object({
-  event_name: z.string(),
-  surface: z.string(),
-  outcome: z.string().nullable(),
-  properties: z.unknown(),
-  occurred_at: timestampSchema,
-});
-
 const conversationBranchExportSchema = z.object({
   id: z.string(),
   source_conversation_id: z.string(),
@@ -1065,29 +1060,6 @@ const supportActionProposalExportSchema = z.object({
   created_at: timestampSchema,
 });
 
-const supportHandoffSessionExportSchema = z.object({
-  id: z.string(),
-  reference_id: z.string(),
-  surface: z.string(),
-  reason: z.string(),
-  status: z.string(),
-  contact_email: z.string(),
-  summary: z.string(),
-  transcript: z.unknown(),
-  attempted_actions: z.unknown(),
-  citations: z.unknown(),
-  account_context: z.unknown(),
-  page_path: z.string().nullable(),
-  locale: z.string().nullable(),
-  wait_expires_at: nullableTimestampSchema,
-  connected_at: nullableTimestampSchema,
-  last_activity_at: timestampSchema,
-  closed_at: nullableTimestampSchema,
-  email_sent_at: nullableTimestampSchema,
-  created_at: timestampSchema,
-  updated_at: timestampSchema,
-});
-
 const usageEventExportSchema = z.object({
   id: z.string(),
   organization_id: z.string().nullable(),
@@ -1149,14 +1121,46 @@ const notebookRunExportSchema = z.object({
   finished_at: timestampSchema,
 });
 
-const authenticationAttemptExportSchema = z.object({
+const voiceSessionExportSchema = z.object({
   id: z.string(),
+  organization_id: z.string().nullable(),
+  conversation_id: z.string(),
+  provider: z.string(),
+  provider_session_id: z.string(),
+  model_id: z.string(),
   surface: z.string(),
-  outcome: z.string(),
-  failure_reason: z.string().nullable(),
-  provider: z.string().nullable(),
-  region: z.string().nullable(),
-  occurred_at: timestampSchema,
+  voice: z.string(),
+  language: z.string().nullable(),
+  pace: numericSchema,
+  active_tools: z.unknown(),
+  last_turn_id: z.string().nullable(),
+  status: z.string(),
+  close_reason: z.string().nullable(),
+  started_at: timestampSchema,
+  last_seen_at: timestampSchema,
+  closed_at: nullableTimestampSchema,
+});
+
+const automationAuditEventExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  run_id: z.string(),
+  device_id: z.string().nullable(),
+  surface: z.string(),
+  action: z.string(),
+  target: z.string().nullable(),
+  session_kind: z.string().nullable(),
+  profile_id: z.string().nullable(),
+  status: z.string(),
+  reason: z.string(),
+  verified: z.boolean(),
+  verification_check: z.string().nullable(),
+  verification_passed: z.boolean().nullable(),
+  started_at: timestampSchema,
+  settled_at: timestampSchema,
+  duration_ms: z.number().int(),
+  client_event_id: z.string(),
+  created_at: timestampSchema,
 });
 
 const accountCompromiseResponseExportSchema = z.object({
@@ -1217,17 +1221,6 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           order by received_at desc
           limit 1000`,
     schema: eventTriggerDeliveryExportSchema,
-    rowLimit: EXPORT_ROW_LIMIT,
-  },
-  {
-    section: 'product_analytics_events',
-    table: 'product_analytics_events',
-    sql: `select event_name, surface, outcome, properties, occurred_at
-          from product_analytics_events
-          where user_id = $1
-          order by occurred_at desc
-          limit 1000`,
-    schema: productAnalyticsEventExportSchema,
     rowLimit: EXPORT_ROW_LIMIT,
   },
   {
@@ -1486,18 +1479,6 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     schema: supportActionProposalExportSchema,
   },
   {
-    section: 'support_handoff_sessions',
-    table: 'support_handoff_sessions',
-    sql: `select id, reference_id, surface, reason, status, contact_email, summary,
-                 transcript, attempted_actions, citations, account_context, page_path,
-                 locale, wait_expires_at, connected_at, last_activity_at, closed_at,
-                 email_sent_at, created_at, updated_at
-          from support_handoff_sessions
-          where owner_user_id = $1
-          order by created_at asc`,
-    schema: supportHandoffSessionExportSchema,
-  },
-  {
     section: 'usage_events',
     table: 'usage_events',
     sql: `select id, organization_id, event_type, quantity, created_at
@@ -1553,16 +1534,29 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     acrossWorkspaces: true,
   },
   {
-    section: 'authentication_attempts',
-    table: 'authentication_attempts',
-    sql: `select id, surface, outcome, failure_reason, provider, region, occurred_at
-          from authentication_attempts
+    section: 'voice_sessions',
+    table: 'voice_sessions',
+    sql: `select id, organization_id, conversation_id, provider, provider_session_id,
+                 model_id, surface, voice, language, pace, active_tools, last_turn_id,
+                 status, close_reason, started_at, last_seen_at, closed_at
+          from voice_sessions
           where user_id = $1
-          order by occurred_at desc
+          order by started_at desc`,
+    schema: voiceSessionExportSchema,
+  },
+  {
+    section: 'automation_audit_events',
+    table: 'automation_audit_events',
+    sql: `select id, organization_id, run_id, device_id, surface, action, target,
+                 session_kind, profile_id, status, reason, verified, verification_check,
+                 verification_passed, started_at, settled_at, duration_ms,
+                 client_event_id, created_at
+          from automation_audit_events
+          where user_id = $1
+          order by created_at desc
           limit 1000`,
-    schema: authenticationAttemptExportSchema,
+    schema: automationAuditEventExportSchema,
     rowLimit: EXPORT_ROW_LIMIT,
-    acrossWorkspaces: true,
   },
   {
     section: 'account_compromise_responses',
@@ -1638,6 +1632,7 @@ function exportOrigin(request: NextRequest): string {
 async function collectUserData(
   user: { id: string; email?: string },
   scopedDbFor: (organizationId: string | null) => DatabaseAdapter,
+  restrictedDb: DatabaseAdapter,
   origin: string,
 ): Promise<Record<string, unknown>> {
   const db = scopedDbFor(null);
@@ -2315,6 +2310,24 @@ async function collectUserData(
     if (rows.length > 0) exportData[section] = rows;
   }
 
+  for (const result of await readRestrictedUserExportSections(restrictedDb, user.id)) {
+    if (result.error) {
+      ledger.sectionUnavailable(result.section);
+      logger.warn(
+        { error: result.error, userId: user.id, section: result.section },
+        'Restricted section unavailable for user export',
+      );
+      continue;
+    }
+    for (let index = 0; index < result.skippedRows; index += 1) {
+      ledger.rowSkipped(result.section);
+    }
+    if (result.truncated && result.rowLimit !== undefined) {
+      ledger.sectionTruncated(result.section, result.rowLimit);
+    }
+    if (result.rows.length > 0) exportData[result.section] = result.rows;
+  }
+
   try {
     exportData['billing_invoices'] = await listUserBillingInvoices(db, user.id);
   } catch (error) {
@@ -2357,6 +2370,7 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
     return new NextResponse(jsonData, {
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'private, no-store',
         'X-Export-Status': status,
         'Content-Disposition': `attachment; filename="user-data-export-${timestamp}.json"`,
         ...getCorsHeaders(request),
@@ -2375,6 +2389,8 @@ function createExportResponse(request: NextRequest, userId: string, data: unknow
     },
     {
       headers: {
+        'Cache-Control': 'private, no-store',
+        'X-Export-Status': status,
         ...getCorsHeaders(request),
         ...getSecurityHeaders(),
       },

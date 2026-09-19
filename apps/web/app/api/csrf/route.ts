@@ -6,6 +6,7 @@ import { generateCsrfToken, getOrCreateAnonSession } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 
 async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
   try {
@@ -40,4 +41,4 @@ async function handleGetCsrfToken(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-export const GET = withErrorHandler(handleGetCsrfToken);
+export const GET = withPrivateNoStore(withErrorHandler(handleGetCsrfToken));

@@ -37,9 +37,13 @@ vi.mock('@agiworkforce/types', async () => {
 
 process.env['ANTHROPIC_API_KEY'] = 'sk-ant-test';
 
-const { mockPostComment } = vi.hoisted(() => ({
-  mockPostComment: vi.fn().mockResolvedValue(undefined),
-}));
+const { mockPostReview, mockReviewPullRequestDiff, mockGetSubscription, mockListReviewComments } =
+  vi.hoisted(() => ({
+    mockPostReview: vi.fn().mockResolvedValue(undefined),
+    mockReviewPullRequestDiff: vi.fn(),
+    mockGetSubscription: vi.fn(),
+    mockListReviewComments: vi.fn(),
+  }));
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
@@ -60,6 +64,8 @@ const { WEBHOOK_SECRET, hoistedCreateHmac } = vi.hoisted(() => {
   return { WEBHOOK_SECRET: 'test-webhook-secret', hoistedCreateHmac: cryptoMod.createHmac };
 });
 vi.mock('@/lib/github-app', () => ({
+  listPrReviewCommentBodies: (...args: unknown[]) => mockListReviewComments(...args),
+  postPrReview: (...args: unknown[]) => mockPostReview(...args),
   GITHUB_WEBHOOK_SECRET: WEBHOOK_SECRET,
   verifyGitHubWebhookSignature: (body: string, sig: string, secret: string) => {
     const expected = 'sha256=' + hoistedCreateHmac('sha256', secret).update(body).digest('hex');
@@ -67,7 +73,23 @@ vi.mock('@/lib/github-app', () => ({
   },
   getInstallationAccessToken: async () => 'ghs_token_abc',
   getPrDiff: async () => '+ added line',
-  postIssueComment: (...args: unknown[]) => mockPostComment(...args),
+  postIssueComment: vi.fn(async () => undefined),
+}));
+
+vi.mock('@/lib/managed-compute-gate', () => ({
+  isManagedComputePrivateBetaEnabled: () => true,
+}));
+
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: {
+    getSubscription: (...args: unknown[]) => mockGetSubscription(...args),
+  },
+}));
+
+vi.mock('@/lib/code-review/pipeline', () => ({
+  reviewPullRequestDiff: (...args: unknown[]) => mockReviewPullRequestDiff(...args),
+  reviewLineComments: () => [],
+  reviewSummaryBody: () => '## AGI Code Review\n\nNo correctness or security defect found.',
 }));
 
 import { POST } from '@/app/api/github/webhook/route';
@@ -113,6 +135,17 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
       ok: true,
       json: async () => ({ content: [{ text: 'LGTM - no issues' }] }),
     });
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
+    mockListReviewComments.mockResolvedValue([]);
+    mockPostReview.mockResolvedValue(undefined);
+    mockReviewPullRequestDiff.mockResolvedValue({
+      status: 'no-findings',
+      posted: [],
+      duplicates: 0,
+      fabricated: 0,
+      chunks: 1,
+      outputTokens: 12,
+    });
   });
 
   it('queries Neon DB for installation lookup in background task', async () => {
@@ -131,8 +164,9 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     await POST(req);
     await waitForBackground();
 
-    expect(mockPostComment).toHaveBeenCalledOnce();
-    const callArgs = mockPostComment.mock.calls[0] as unknown[];
+    expect(mockReviewPullRequestDiff).toHaveBeenCalledOnce();
+    expect(mockPostReview).toHaveBeenCalledOnce();
+    const callArgs = mockPostReview.mock.calls[0] as unknown[];
     expect(callArgs[4] as string).toContain('AGI Code Review');
   });
 
@@ -142,7 +176,7 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     await POST(req);
     await waitForBackground();
 
-    expect(mockPostComment).not.toHaveBeenCalled();
+    expect(mockPostReview).not.toHaveBeenCalled();
   });
 
   it('posts no comment when pr_review_enabled = false', async () => {
@@ -153,7 +187,7 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     await POST(req);
     await waitForBackground();
 
-    expect(mockPostComment).not.toHaveBeenCalled();
+    expect(mockPostReview).not.toHaveBeenCalled();
   });
 
   it('rejects forged webhook (bad HMAC) before background task runs', async () => {
@@ -163,7 +197,7 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
 
     await waitForBackground();
     expect(mockNeonQuery).not.toHaveBeenCalled();
-    expect(mockPostComment).not.toHaveBeenCalled();
+    expect(mockPostReview).not.toHaveBeenCalled();
   });
 
   it('returns 200 immediately (fire-and-forget pattern)', async () => {
@@ -180,7 +214,7 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     await POST(req);
     await waitForBackground();
 
-    expect(mockPostComment).not.toHaveBeenCalled();
+    expect(mockPostReview).not.toHaveBeenCalled();
     expect(mockLogger.error).not.toHaveBeenCalled();
   });
 });

@@ -192,15 +192,17 @@ describe('public marketing copy regressions', () => {
       'UI key entry, OS-keychain write, and revoke-all are private-beta',
     );
     expect(byokSetup).not.toContain('Desktop reads from OS keychain');
-    expect(byokSetup).toContain('Settings, Models &amp; Keys');
+    expect(byokSetup).toContain('The released CLI stores provider keys');
+    expect(byokSetup).toContain('VS Code support');
     expect(byokSetup).toContain('Desktop takes no provider key');
     expect(byokSetup).not.toContain('Tauri');
     expect(apiDocs).not.toContain('SSO &amp; org-seat early access');
-    expect(apiDocs).toContain('Enterprise SSO early access');
+    expect(apiDocs).toContain('Discuss Enterprise access');
     expect(waitlist).not.toContain('Team is already live at /pricing');
     expect(waitlistModal).not.toContain('Team has self-serve per-seat checkout');
     expect(publicWaitlistForm).not.toContain('when AGI Cloud access opens');
-    expect(publicWaitlistForm).toContain('when the Enterprise program opens');
+    expect(publicWaitlistForm).toContain('contract-scoped Enterprise access');
+    expect(publicWaitlistForm).not.toContain('when the Enterprise program opens');
   });
 
   it('does not promise unverified contact or enterprise sales guarantees', () => {

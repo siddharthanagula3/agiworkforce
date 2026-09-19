@@ -21,6 +21,7 @@ let server: Server;
 let port = 0;
 const received: Array<{ headers: Record<string, string>; body: string }> = [];
 let nextStatus = 200;
+let signingSecret = '';
 
 const db = {
   query: async <T>(sql: string, params?: unknown[]): Promise<T[]> =>
@@ -30,6 +31,7 @@ const db = {
 } as never;
 
 beforeAll(async () => {
+  vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', 'ab'.repeat(32));
   client = new Client({ connectionString: URL_PG });
   await client.connect();
 
@@ -71,6 +73,7 @@ beforeAll(async () => {
 afterAll(async () => {
   server?.close();
   await client?.end();
+  vi.unstubAllEnvs();
 });
 
 /**
@@ -105,9 +108,11 @@ describe('audit stream: a real signed delivery over TLS', () => {
       endpointUrl: ENDPOINT, enabled: true, createdByUserId: 'user_auditverify001',
     });
     expect(destination.secretPrefix).toBe(secret.slice(0, 8));
+    signingSecret = secret;
 
     const [row] = await db_query();
     expect(row.secret_hash).toBe(hashSecret(secret));
+    expect(row.secret_ciphertext).not.toBe(secret);
     expect(JSON.stringify(row)).not.toContain(secret);
   });
 
@@ -124,8 +129,9 @@ describe('audit stream: a real signed delivery over TLS', () => {
     const sig = hit.headers['x-agi-audit-signature']!;
     expect(sig.startsWith('sha256=')).toBe(true);
 
-    const [row] = await db_query();
-    const expected = createHmac('sha256', row.secret_hash).update(`${ts}.${hit.body}`).digest('hex');
+    const expected = createHmac('sha256', signingSecret)
+      .update(`${ts}.${hit.body}`)
+      .digest('hex');
     expect(sig).toBe(`sha256=${expected}`);
 
     const parsed = JSON.parse(hit.body);
@@ -137,11 +143,14 @@ describe('audit stream: a real signed delivery over TLS', () => {
   it('a tampered body fails the receiver-side check', async () => {
     const hit = received[0]!;
     const ts = hit.headers['x-agi-audit-timestamp']!;
-    const [row] = await db_query();
-    const forged = createHmac('sha256', row.secret_hash).update(`${ts}.${hit.body}`).digest('hex');
+    const forged = createHmac('sha256', signingSecret)
+      .update(`${ts}.${hit.body}`)
+      .digest('hex');
     const tampered = hit.body.replace('"outcome":"success"', '"outcome":"denied"');
     expect(tampered).not.toBe(hit.body);
-    const overTampered = createHmac('sha256', row.secret_hash).update(`${ts}.${tampered}`).digest('hex');
+    const overTampered = createHmac('sha256', signingSecret)
+      .update(`${ts}.${tampered}`)
+      .digest('hex');
     expect(overTampered).not.toBe(forged);
   });
 
@@ -189,9 +198,12 @@ describe('audit stream: a real signed delivery over TLS', () => {
   });
 });
 
-async function db_query(): Promise<Array<{ secret_hash: string; consecutive_failures: number }>> {
+async function db_query(): Promise<
+  Array<{ secret_hash: string; secret_ciphertext: string | null; consecutive_failures: number }>
+> {
   const r = await client.query(
-    `select secret_hash, consecutive_failures from public.organization_audit_destinations where organization_id = $1`,
+    `select secret_hash, secret_ciphertext, consecutive_failures
+       from public.organization_audit_destinations where organization_id = $1`,
     [ORG],
   );
   return r.rows;

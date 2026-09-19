@@ -17,20 +17,31 @@ const callerDb = createDatabaseAdapterFake({
 });
 
 import {
-  backfillDisplayNameFromUpstream,
+  backfillProfileFromUpstream,
   buildCustomInstructionsPreamble,
   getOnboardingStatus,
   readUserIdentity,
 } from '../user-identity';
 
-describe('backfillDisplayNameFromUpstream', () => {
+describe('backfillProfileFromUpstream', () => {
   it('writes the lazily created profile row on the connection it was given', async () => {
     query.mockClear();
-    await backfillDisplayNameFromUpstream(callerDb, 'user-42', 'Ada Lovelace');
+    await backfillProfileFromUpstream(callerDb, 'user-42', 'Ada Lovelace');
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining('insert into public.profiles'), [
       'user-42',
       'Ada Lovelace',
+      null,
+    ]);
+  });
+
+  it('fills missing identity email even when the upstream account has no display name', async () => {
+    query.mockClear();
+    await backfillProfileFromUpstream(callerDb, 'user-42', '', 'ada@example.com');
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('email'), [
+      'user-42',
+      null,
+      'ada@example.com',
     ]);
   });
 
@@ -38,7 +49,7 @@ describe('backfillDisplayNameFromUpstream', () => {
     execute.mockClear();
     query.mockClear();
 
-    await backfillDisplayNameFromUpstream(callerDb, 'user-42', '   ');
+    await backfillProfileFromUpstream(callerDb, 'user-42', '   ');
 
     expect(execute).not.toHaveBeenCalled();
     expect(query).not.toHaveBeenCalled();

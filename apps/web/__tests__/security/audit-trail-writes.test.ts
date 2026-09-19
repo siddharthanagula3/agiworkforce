@@ -139,6 +139,8 @@ describe('recordAuditEvent, writes a real security_audit_logs row', () => {
       resourceName: 'CI key',
       resource_type: 'api_key',
       resource_id: 'key_1',
+      schema_version: 1,
+      retention_class: 'security',
     });
   });
 

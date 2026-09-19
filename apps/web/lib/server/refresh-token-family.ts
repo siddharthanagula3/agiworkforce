@@ -38,7 +38,7 @@ const REVOKE = `
          select family_id from device_refresh_tokens
           where user_id = $2 and device_id = $1
        )
-       or family_id = $3
+       or family_id::text = $3
      )
    returning id`;
 
@@ -56,7 +56,7 @@ const COMPROMISE = `
          select family_id from device_refresh_tokens
           where user_id = $2 and device_id = $1
        )
-       or family_id = $3
+       or family_id::text = $3
      )`;
 
 function isCompromiseColumnMissing(error: unknown): boolean {

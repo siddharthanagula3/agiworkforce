@@ -70,6 +70,7 @@ export type ConnectorCapabilityCatalog = z.infer<typeof ConnectorCapabilityCatal
 const CACHE_TTL_MS = 30_000;
 const cache = new Map<string, { value: ConnectorCapabilityCatalog; fetchedAt: number }>();
 const inFlight = new Map<string, Promise<ConnectorCapabilityCatalog>>();
+let generation = 0;
 
 async function fetchCatalog(connectorRef: string): Promise<ConnectorCapabilityCatalog> {
   const cached = cache.get(connectorRef);
@@ -77,6 +78,7 @@ async function fetchCatalog(connectorRef: string): Promise<ConnectorCapabilityCa
   const pending = inFlight.get(connectorRef);
   if (pending) return pending;
 
+  const requestGeneration = generation;
   const request = fetch(`/api/connectors/${encodeURIComponent(connectorRef)}/capabilities`, {
     credentials: 'include',
     cache: 'no-store',
@@ -85,10 +87,14 @@ async function fetchCatalog(connectorRef: string): Promise<ConnectorCapabilityCa
       if (!response.ok) throw new Error(`Capability discovery failed (${response.status})`);
       const parsed = ConnectorCapabilityCatalogSchema.safeParse(await response.json());
       if (!parsed.success) throw new Error('Capability discovery returned invalid data');
-      cache.set(connectorRef, { value: parsed.data, fetchedAt: Date.now() });
+      if (requestGeneration === generation) {
+        cache.set(connectorRef, { value: parsed.data, fetchedAt: Date.now() });
+      }
       return parsed.data;
     })
-    .finally(() => inFlight.delete(connectorRef));
+    .finally(() => {
+      if (inFlight.get(connectorRef) === request) inFlight.delete(connectorRef);
+    });
   inFlight.set(connectorRef, request);
   return request;
 }
@@ -96,6 +102,8 @@ async function fetchCatalog(connectorRef: string): Promise<ConnectorCapabilityCa
 export function invalidateConnectorCapabilityCatalog(connectorRef?: string): void {
   if (connectorRef) cache.delete(connectorRef);
   else cache.clear();
+  generation += 1;
+  inFlight.clear();
 }
 
 export function useConnectorCapabilities(connectorRef: string | null, enabled = true) {

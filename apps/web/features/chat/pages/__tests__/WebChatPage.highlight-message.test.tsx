@@ -129,6 +129,8 @@ vi.mock('../../hooks/use-conversation-branches', () => ({
   }),
 }));
 vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
+  findShortcutDoc: vi.fn(() => undefined),
+  formatShortcutKeys: vi.fn(() => []),
   KEYBOARD_SHORTCUT_DOCS: [],
   useKeyboardShortcuts: vi.fn(),
 }));

@@ -79,7 +79,7 @@ export const ACTION_SOURCE_COPY: Record<ConnectorActionSource, string> = {
     'cannot be listed here beforehand. Once connected, set a permission on each discovered tool: ' +
     'one you leave unset can run without asking you first.',
   'device-local':
-    'Desktop Local runs these tools on your own machine. The web app neither lists nor runs them.',
+    'The released CLI runs these tools on your own machine. The web app and current public Desktop neither list nor run them.',
 };
 
 export function describeConnectorActions(connectorId: string): string {
@@ -98,7 +98,7 @@ export function buildConnectorDescription(seed: ConnectorSeed): string {
     if (sentence) return sentence;
   }
   if (getConnectorCapability(seed.id)?.implementation === 'device-local') {
-    return `Desktop Local only, ${seed.capabilitySummary}.`;
+    return `Released CLI device runtime only, ${seed.capabilitySummary}.`;
   }
   if (isSelfServiceConnector(seed.id)) {
     // Self-service connectors register with the vendor's own authorization server

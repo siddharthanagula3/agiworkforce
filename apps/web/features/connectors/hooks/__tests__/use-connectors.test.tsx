@@ -117,6 +117,26 @@ describe('useConnectors, OAuth grants', () => {
     expect(result.current.availableIds.has('linear')).toBe(true);
   });
 
+  it('turns a connector-list server failure into safe status-aware copy', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, { error: 'trace' })));
+
+    const { result } = renderHook(() => useConnectors());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBe('Something went wrong on our side. Try again shortly.');
+    expect(result.current.error).not.toContain('500');
+  });
+
+  it('names an unreachable connector service without showing browser wording', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+
+    const { result } = renderHook(() => useConnectors());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.error).toBe('Could not reach the server.');
+    expect(result.current.error).not.toContain('Failed to fetch');
+  });
+
   it('maps each display id to the id the chat tool loop uses', async () => {
     vi.stubGlobal(
       'fetch',

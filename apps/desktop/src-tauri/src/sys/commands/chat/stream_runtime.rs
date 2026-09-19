@@ -162,8 +162,8 @@ pub(super) async fn consume_llm_stream(
                             .map(TokenCounter::estimate_text_tokens)
                             .unwrap_or(0),
                     );
-                estimated_output_tokens = estimated_output_tokens
-                    .saturating_add(u32::try_from(estimated_chunk_tokens).unwrap_or(u32::MAX));
+                estimated_output_tokens =
+                    estimated_output_tokens.saturating_add(estimated_chunk_tokens);
 
                 if let Some(model) = chunk.model.as_ref() {
                     final_model = Some(model.clone());

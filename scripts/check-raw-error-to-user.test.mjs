@@ -12,6 +12,32 @@ test('flags a caught error forwarded straight to a user-visible sink', () => {
   assert.equal(found[0].line, 1);
 });
 
+test('flags a direct message passed to a component-specific error setter', () => {
+  const found = findRawErrorSinks('setFormError(mutationError.message);', 'a.tsx');
+  assert.equal(found.length, 1);
+});
+
+test('flags a multiline raw-error expression', () => {
+  const found = findRawErrorSinks(
+    `setError(
+      err instanceof Error
+        ? err.message
+        : 'Could not load'
+    );`,
+    'a.ts',
+  );
+  assert.equal(found.length, 1);
+  assert.equal(found[0].line, 1);
+});
+
+test('flags a raw message nested in a state object', () => {
+  const found = findRawErrorSinks(
+    'setState((current) => ({ ...current, error: caught.message }));',
+    'a.ts',
+  );
+  assert.equal(found.length, 1);
+});
+
 test.each = undefined;
 
 for (const sink of ['setError', 'setChatError', 'toast.error', 'setListError']) {
@@ -26,6 +52,16 @@ for (const sink of ['setError', 'setChatError', 'toast.error', 'setListError']) 
 test('accepts the wrapped form', () => {
   assert.deepEqual(
     findRawErrorSinks("setError(toUserMessage(err, 'Could not load'));", 'a.ts'),
+    [],
+  );
+});
+
+test('accepts a wrapped message nested in a state object', () => {
+  assert.deepEqual(
+    findRawErrorSinks(
+      "setState((current) => ({ ...current, error: toUserMessage(err, 'Could not load') }));",
+      'a.ts',
+    ),
     [],
   );
 });

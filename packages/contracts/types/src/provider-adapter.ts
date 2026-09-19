@@ -364,75 +364,33 @@ export interface StreamChunkStop {
   providerFinishReason?: string;
 }
 
-export const STREAM_STOP_REASONS = [
-  'end_turn',
-  'max_tokens',
-  'tool_use',
-  'stop_sequence',
-  'refusal',
-  'pause_turn',
-  'error',
-  'cancel',
-] as const;
-
-export type StreamStopReason = StreamChunkStop['reason'];
-
-export function isStreamStopReason(value: unknown): value is StreamStopReason {
-  return typeof value === 'string' && (STREAM_STOP_REASONS as readonly string[]).includes(value);
-}
+/**
+ * The version of the envelope shape itself, not of the chunk it rides on. A
+ * consumer that reads a version above the one it knows must keep the fields it
+ * understands and ignore the rest rather than refuse the chunk.
+ */
+export const STREAM_ENVELOPE_SCHEMA_VERSION = 1;
 
 /**
- * The tolerance rule for every adapter: an enum member this build does not
- * know maps onto the nearest canonical one and keeps the vendor string, so a
- * provider adding a value never turns into a dropped or failed turn.
+ * Identity and ordering for a single stream event, additive to the wire shape
+ * so a client that has never heard of it reads the stream exactly as before.
  */
-export function normalizeStopReason(
-  vendorReason: string | null | undefined,
-  mapping: Readonly<Record<string, StreamStopReason>>,
-  fallback: StreamStopReason = 'end_turn',
-): StreamChunkStop {
-  const raw = vendorReason?.trim();
-  if (!raw) return { type: 'stop', reason: fallback };
-  const mapped = mapping[raw] ?? mapping[raw.toLowerCase()];
-  return {
-    type: 'stop',
-    reason: mapped ?? (isStreamStopReason(raw) ? raw : fallback),
-    providerFinishReason: raw,
-  };
+export interface StreamEnvelope {
+  schemaVersion: number;
+  eventId: string;
+  /** Monotonic within one turn, starting at 1. Gaps and repeats are detectable. */
+  sequence: number;
+  emittedAt: number;
+  conversationId?: string;
+  turnId?: string;
+  toolInvocationId?: string;
 }
 
-export const CONTENT_BLOCK_TYPES = [
-  'text',
-  'image',
-  'file',
-  'tool_use',
-  'tool_result',
-  'thinking',
-] as const;
-
-export type ContentBlockType = ContentBlock['type'];
-
-export function isContentBlockType(value: unknown): value is ContentBlockType {
-  return typeof value === 'string' && (CONTENT_BLOCK_TYPES as readonly string[]).includes(value);
+export interface StreamEnvelopeCarrier {
+  envelope?: StreamEnvelope;
 }
 
-/**
- * The counterpart rule for content: a block type this build does not model is
- * carried through as `vendor-raw` rather than dropped or coerced into text.
- */
-export function isKnownContentBlock(block: unknown): block is ContentBlock {
-  return (
-    typeof block === 'object' &&
-    block !== null &&
-    isContentBlockType((block as { type?: unknown }).type)
-  );
-}
-
-export function vendorRawChunk(payload: unknown): StreamChunkVendorRaw {
-  return { type: 'vendor-raw', payload };
-}
-
-export type StreamChunk =
+export type StreamChunk = (
   | StreamChunkText
   | StreamChunkThinking
   | StreamChunkToolUseStart
@@ -445,7 +403,60 @@ export type StreamChunk =
   | StreamChunkResponseMeta
   | StreamChunkUsage
   | StreamChunkError
-  | StreamChunkStop;
+  | StreamChunkStop
+) &
+  StreamEnvelopeCarrier;
+
+export function isStreamEnvelope(value: unknown): value is StreamEnvelope {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<StreamEnvelope>;
+  return (
+    typeof candidate.schemaVersion === 'number' &&
+    typeof candidate.eventId === 'string' &&
+    candidate.eventId.length > 0 &&
+    typeof candidate.sequence === 'number' &&
+    Number.isInteger(candidate.sequence) &&
+    candidate.sequence > 0 &&
+    typeof candidate.emittedAt === 'number'
+  );
+}
+
+/**
+ * `unsequenced` is the compatibility answer: a producer that stamps nothing is
+ * older, not broken, and its stream must still be read to the end.
+ */
+export type StreamSequenceVerdict = 'in-order' | 'duplicate' | 'gap' | 'unsequenced';
+
+export interface StreamSequenceState {
+  readonly lastSequence: number | null;
+  readonly verdict: StreamSequenceVerdict;
+  /** How many sequence numbers the gap skipped, 0 for every other verdict. */
+  readonly missing: number;
+}
+
+export const INITIAL_STREAM_SEQUENCE_STATE: StreamSequenceState = {
+  lastSequence: null,
+  verdict: 'unsequenced',
+  missing: 0,
+};
+
+export function inspectStreamSequence(
+  state: StreamSequenceState,
+  envelope: StreamEnvelope | null | undefined,
+): StreamSequenceState {
+  if (!envelope) return { ...state, verdict: 'unsequenced', missing: 0 };
+  const last = state.lastSequence;
+  if (last === null) return { lastSequence: envelope.sequence, verdict: 'in-order', missing: 0 };
+  if (envelope.sequence <= last) return { ...state, verdict: 'duplicate', missing: 0 };
+  if (envelope.sequence === last + 1) {
+    return { lastSequence: envelope.sequence, verdict: 'in-order', missing: 0 };
+  }
+  return {
+    lastSequence: envelope.sequence,
+    verdict: 'gap',
+    missing: envelope.sequence - last - 1,
+  };
+}
 
 export interface ModelInfo {
   id: string;

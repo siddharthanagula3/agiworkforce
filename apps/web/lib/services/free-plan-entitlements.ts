@@ -66,7 +66,7 @@ export function getProjectLimitErrorMessage(planTier: string | null | undefined)
     }
     return `${label} accounts have no Project limit from your plan. This request hit an account-level limit; contact support if it persists.`;
   }
-  return `${label} accounts can have up to ${limit} ${limit === 1 ? 'Project' : 'Projects'}. Delete a Project or upgrade to add another.`;
+  return `Your ${label} plan includes ${limit} project ${limit === 1 ? 'folder' : 'folders'}. Upgrade your plan to add more, or delete an existing folder to make room.`;
 }
 
 export function getCustomRemoteMcpLimitErrorMessage(planTier: string | null | undefined): string {

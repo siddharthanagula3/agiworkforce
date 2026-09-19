@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
+  seatDataAvailable: true,
   organization: null as null | {
     id: string;
     name: string;
@@ -90,14 +91,16 @@ vi.mock('../hooks/use-settings-queries', () => ({
   useTeamInvitations: () => ({
     data: {
       invitations: state.invitations,
-      seats: {
-        organizationId: 'org-1',
-        licensedSeats: state.access.maxMembers ?? 2,
-        seatsConsumed: state.access.seatsConsumed ?? 1,
-        seatsAvailable: state.access.seatsAvailable ?? 1,
-        seatSource: state.access.seatSource === 'billing' ? 'billing' : 'unprovisioned',
-        ownerUserId: 'owner',
-      },
+      seats: state.seatDataAvailable
+        ? {
+            organizationId: 'org-1',
+            licensedSeats: state.access.maxMembers ?? 2,
+            seatsConsumed: state.access.seatsConsumed ?? 1,
+            seatsAvailable: state.access.seatsAvailable ?? 1,
+            seatSource: state.access.seatSource === 'billing' ? 'billing' : 'unprovisioned',
+            ownerUserId: 'owner',
+          }
+        : null,
     },
     isLoading: false,
     isError: false,
@@ -164,6 +167,7 @@ import { SettingsSectionNavigationProvider } from '../components/SettingsSection
 
 describe('TeamSection', () => {
   beforeEach(() => {
+    state.seatDataAvailable = true;
     state.organization = null;
     state.activeOrganizationId = null;
     state.workspaces = [];
@@ -364,6 +368,42 @@ describe('TeamSection', () => {
     render(<TeamSection />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('already pending');
+  });
+
+  it('routes contract-priced workspace seat changes to the existing contract page', () => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Enterprise',
+      slug: 'enterprise',
+      plan: 'enterprise',
+      memberCount: 1,
+      maxMembers: 1,
+      currentUserRole: 'owner',
+    };
+    state.access.plan = 'enterprise';
+    render(<TeamSection />);
+    expect(screen.getByRole('link', { name: 'Review contract' })).toHaveAttribute(
+      'href',
+      '/workspace/billing',
+    );
+    expect(screen.queryByRole('link', { name: 'Change seats' })).toBeNull();
+  });
+
+  it('names unknown seat values instead of showing punctuation as a value', () => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Enterprise',
+      slug: 'enterprise',
+      plan: 'enterprise',
+      memberCount: 1,
+      maxMembers: null,
+      currentUserRole: 'owner',
+    };
+    state.seatDataAvailable = false;
+    render(<TeamSection />);
+    expect(screen.getByText('Licensed').nextSibling).toHaveTextContent('Not set');
+    expect(screen.getByText('In use').nextSibling).toHaveTextContent('Unavailable');
+    expect(screen.getByText('Available').nextSibling).toHaveTextContent('Unknown');
   });
 
   it('shows billing-backed available seats and manages a pending invitation', () => {

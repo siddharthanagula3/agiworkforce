@@ -64,7 +64,7 @@
       "switchTo": "Переключиться на {{mode}}",
       "soon": "Скоро",
       "cloudUnavailable": "AGI Cloud доступен на десктопе, войдите, чтобы использовать управляемые модели и синхронизированные чаты.",
-      "localUnavailable": "Локальный режим работает в десктопном приложении AGI Workforce. Скачайте его, чтобы хранить чаты и файлы на этом устройстве."
+      "localUnavailable": "Локальный режим работает в CLI AGI Workforce через Ollama или LM Studio. Разговоры в Desktop используют управляемое облако."
     },
     "groups": {
       "lastHour": "Last hour",

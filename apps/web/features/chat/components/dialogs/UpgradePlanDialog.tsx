@@ -325,7 +325,7 @@ export function UpgradePlanDialog({
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Managed cloud is open by default; sign in and start now. Upgrade for higher hosted
-                capacity. Local and BYOK stay free on Desktop and CLI.
+                capacity. Local and BYOK stay free in the CLI.
               </p>
             </div>
             {/* Billing toggle (only meaningful for paid plans) */}
@@ -399,7 +399,7 @@ export function UpgradePlanDialog({
         <div className="border-t border-border/60 px-6 py-4">
           <p className="text-center text-[12px] text-muted-foreground">
             Managed cloud is open by default. Paid tiers add higher hosted capacity. Local and BYOK
-            always remain free on Desktop and CLI.
+            always remain free in the CLI.
           </p>
         </div>
       </DialogContent>

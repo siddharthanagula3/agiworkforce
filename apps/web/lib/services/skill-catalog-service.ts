@@ -237,14 +237,20 @@ export async function getManagedSkillPluginOwners(): Promise<ReadonlyMap<string,
   return owners;
 }
 
-export async function getManagedSkillDirectoryForPlugins(
+function filterSkillsForPlugins(
+  directory: readonly Skill[],
   enabledPluginIds: ReadonlySet<string>,
-): Promise<Skill[]> {
-  const directory = await getManagedSkillDirectory();
+): Skill[] {
   return directory.filter((skill) => {
     const owner = skillPluginOwner(skill);
     return owner === null || enabledPluginIds.has(owner);
   });
+}
+
+export async function getManagedSkillDirectoryForPlugins(
+  enabledPluginIds: ReadonlySet<string>,
+): Promise<Skill[]> {
+  return filterSkillsForPlugins(await getManagedSkillDirectory(), enabledPluginIds);
 }
 
 export async function getManagedSkillCatalogForPlugins(
@@ -526,28 +532,28 @@ async function readOptionalSkillSource<T>(
 export async function loadSelectableSkillCatalog(
   params: SelectableSkillCatalogParams,
 ): Promise<Skill[]> {
-  const [enabledPluginIds, installOverrides] = await Promise.all([
-    readOptionalSkillSource('enabled-plugin-ids', EMPTY_PLUGIN_IDS, () =>
-      params.loadEnabledPluginIds(),
-    ),
-    readOptionalSkillSource('skill-install-overrides', EMPTY_INSTALL_OVERRIDES, () =>
-      params.loadInstallOverrides(),
-    ),
-  ]);
+  const [directory, enabledPluginIds, installOverrides, userSkills, directorySkills] =
+    await Promise.all([
+      getManagedSkillDirectory(),
+      readOptionalSkillSource('enabled-plugin-ids', EMPTY_PLUGIN_IDS, () =>
+        params.loadEnabledPluginIds(),
+      ),
+      readOptionalSkillSource('skill-install-overrides', EMPTY_INSTALL_OVERRIDES, () =>
+        params.loadInstallOverrides(),
+      ),
+      readOptionalSkillSource('user-skills', NO_SKILLS, () =>
+        listUserSkillsAsManagedSkills(params.db, params.userId),
+      ),
+      params.includeNetworkBackedDirectorySkills === false
+        ? Promise.resolve(NO_SKILLS)
+        : readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
+            listInstalledDirectorySkills(params.db, params.userId),
+          ),
+    ]);
   const managed = filterSkillsByInstallOverrides(
-    await getManagedSkillCatalogForPlugins(enabledPluginIds),
+    filterSkillsForPlugins(directory, enabledPluginIds).filter(isExecutableSkill),
     installOverrides,
   );
-  const [userSkills, directorySkills] = await Promise.all([
-    readOptionalSkillSource('user-skills', NO_SKILLS, () =>
-      listUserSkillsAsManagedSkills(params.db, params.userId),
-    ),
-    params.includeNetworkBackedDirectorySkills === false
-      ? Promise.resolve(NO_SKILLS)
-      : readOptionalSkillSource('directory-skills', NO_SKILLS, () =>
-          listInstalledDirectorySkills(params.db, params.userId),
-        ),
-  ]);
   return dedupeByFirstClaimedName([...managed, ...directorySkills, ...userSkills]);
 }
 

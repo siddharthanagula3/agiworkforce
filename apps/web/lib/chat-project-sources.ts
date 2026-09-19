@@ -3,7 +3,7 @@ import {
   PROJECT_FILE_CITATIONS_HEADER,
   type ProjectFileCitation,
 } from '@agiworkforce/types';
-import type { PastChatCitationView } from '@/features/chat/components/messages/CitationPastChats';
+import type { PastChatCitation } from '@/lib/past-chat-citation';
 
 export { PROJECT_FILE_CITATIONS_HEADER };
 
@@ -39,7 +39,7 @@ export function addProjectSourcesHeader(
   headers: Record<string, string>,
   source: {
     projectSources?: readonly ProjectFileCitation[] | undefined;
-    pastChatSources?: readonly PastChatCitationView[] | undefined;
+    pastChatSources?: readonly PastChatCitation[] | undefined;
   },
 ): void {
   const value = toProjectSourcesHeaderValue(source.projectSources);
@@ -51,14 +51,14 @@ export function addProjectSourcesHeader(
 export const PAST_CHAT_CITATIONS_HEADER = 'x-agi-past-chat-citations';
 
 export function toPastChatSourcesHeaderValue(
-  citations: readonly PastChatCitationView[] | undefined,
+  citations: readonly PastChatCitation[] | undefined,
 ): string | null {
   if (!citations?.length) return null;
   const encoded = encodeHeaderValue(citations);
   return encoded && encoded.length <= MAX_PROJECT_SOURCES_HEADER_CHARS ? encoded : null;
 }
 
-function isPastChatCitation(value: unknown): value is PastChatCitationView {
+function isPastChatCitation(value: unknown): value is PastChatCitation {
   if (typeof value !== 'object' || value === null) return false;
   const row = value as Record<string, unknown>;
   return (
@@ -70,7 +70,7 @@ function isPastChatCitation(value: unknown): value is PastChatCitationView {
   );
 }
 
-export function readPastChatSourcesHeaderValue(value: string | null): PastChatCitationView[] {
+export function readPastChatSourcesHeaderValue(value: string | null): PastChatCitation[] {
   if (!value) return [];
   try {
     const parsed: unknown = JSON.parse(new TextDecoder().decode(decodeHeaderBytes(value)));

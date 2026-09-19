@@ -73,9 +73,10 @@ walkthrough:
   and a right dock. Our AGI Work sits between them.
 
 Where we are ahead by design rather than by execution: provider and model
-neutrality, a bring your own key lane on desktop, the CLI and the extensions,
-a route receipt that names the served model, and an explainable route preview
-that the leaders do not expose at all.
+neutrality, a bring-your-own-key lane in the released CLI and unpublished VS
+Code extension, a route receipt that names the served model, and an explainable
+route preview that the leaders do not expose at all. The public Electron
+Desktop is Managed Cloud only and has no provider-key lane.
 
 ## Portability risks
 
@@ -203,24 +204,26 @@ enforced ceilings do their job. The risks are in what the model cannot see.
 
 ## Desktop opportunity map
 
-The desktop product is the Electron cloud shell with the Tauri Rust layer as
-the capability substrate. Verified live today: the global voice chord, the
-tray presets and rebinding, sign in against the same account as the web.
-The Rust layer already holds OS level automation with tiered safety and
-confirmation, local SQLite, local model serving and the privileged command
-seam checked both ways.
+The desktop product is the Electron Managed Cloud shell. Its TypeScript main
+process owns the privileged command seam, approved roots, shell sandboxing,
+computer-use approvals, tray, shortcuts, and browser bridge. No public
+installer has been published, so source and local test evidence are not a
+public availability claim. The Tauri Rust layer is retained internal code; its
+SQLite, Local/BYOK inference, local MCP, and model-serving paths are not public
+Desktop capabilities.
 
 Where the desktop can lead rather than follow:
 
 1. Voice as a system wide surface. The leaders' dictation is a composer
-   feature; the desktop chord already works anywhere. A cleaned transcript
+   feature; Electron contains a global chord path that still needs release
+   verification. A cleaned transcript
    (filler removed, formatting applied, a personal dictionary), the shape the
    best dictation products ship, is a model task the registry can route
    without binding to a vendor. Permissions (input monitoring, accessibility)
    need a first run explanation, because the failure mode is silent.
-2. Computer use by hierarchy, not by vision first. Connectors and MCP where
-   an API exists, browser DOM through the extension, accessibility tree
-   through the Rust layer, screenshots last. The computer use task type
+2. Computer use by hierarchy, not by vision first. Managed remote connectors
+   where an API exists, browser DOM through the extension, Electron device
+   actions behind approval, screenshots last. The computer use task type
    already exists in routing; model choice is a capability lookup, never a
    name. The market doc records that the strongest vendor tool is generally
    available only on its own API and one cloud, so the hierarchy is also the
@@ -228,10 +231,10 @@ Where the desktop can lead rather than follow:
 3. Unattended work with a dock. The leaders' work agents run parallel steps
    and show every tool call in a right dock. AGI Work has approvals and a
    dock; the clarifying question card and the step timeline are the gap.
-4. Local models as a first class lane. Local inference is free, private and
-   already wired in the platform package; the leaders cannot offer it.
-   Surfacing it as a lane in the same picker is a differentiator that costs
-   no inference.
+4. Local models remain a released CLI lane. Adding them to public Desktop would
+   require an explicit product-decision change plus dispatcher, permission,
+   release, and trust-boundary verification; retained Tauri code is not proof
+   that Electron supports them.
 5. Release plumbing is the blocker, not features: signing and notarization
    secrets are founder gated, the Windows pipeline is engineering gated, and
    the shell has no auto update feed by design. None of the four items above

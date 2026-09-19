@@ -400,7 +400,7 @@ describe('the device registry', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ revokedCredentials: 2 });
     const revoke = statements.find((entry) => entry.sql.includes('update device_refresh_tokens'));
-    expect(revoke?.sql).toContain('family_id = $3');
+    expect(revoke?.sql).toContain('family_id::text = $3');
     expect(revoke?.values).toEqual([REGISTERED_ID, 'user-1', 'family-9']);
     expect(mockRevokeSession).toHaveBeenCalledWith('sess_phone');
     expect(mockExecute).toHaveBeenCalledWith(

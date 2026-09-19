@@ -7,6 +7,7 @@ import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { resolveNewChatTemporary } from '@/lib/temporary-chat-policy';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
@@ -65,6 +66,14 @@ function parseRetryAfterMs(header: string | null): number | null {
   if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
   const dateMs = Date.parse(header);
   return Number.isFinite(dateMs) ? Math.max(0, dateMs - Date.now()) : null;
+}
+
+function httpResponseError(response: Response, body: unknown): Error {
+  const error = (body as { error?: { message?: unknown } | string } | null)?.error;
+  const rawMessage = typeof error === 'string' ? error : error?.message;
+  const message =
+    response.status >= 500 ? '' : typeof rawMessage === 'string' ? rawMessage.trim() : '';
+  return Object.assign(new Error(message), { status: response.status });
 }
 
 /**
@@ -279,7 +288,7 @@ export function useConversations(): UseConversationsReturn {
             );
           listRetryTimeoutRef.current = setTimeout(() => retryListFetchRef.current(), delay);
         }
-        throw new Error(errorData.error?.message || 'Failed to fetch conversations');
+        throw httpResponseError(response, errorData);
       }
 
       const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
@@ -378,7 +387,7 @@ export function useConversations(): UseConversationsReturn {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error?.message || 'Failed to load more conversations');
+        throw httpResponseError(response, errorData);
       }
 
       const data = ManagedCloudConversationListResponseSchema.parse(await response.json());
@@ -432,8 +441,10 @@ export function useConversations(): UseConversationsReturn {
             // default and a one-off "Temporary chat" armed from the composer
             // before this conversation existed are both consumed here.
             ...((options?.isTemporary ??
-            (useSettingsStore.getState().newChatsTemporary ||
-              useChatStore.getState().pendingTemporaryChat))
+            resolveNewChatTemporary(
+              useChatStore.getState().pendingTemporaryChat,
+              useSettingsStore.getState().newChatsTemporary,
+            ))
               ? { isTemporary: true }
               : {}),
           }),
@@ -441,7 +452,7 @@ export function useConversations(): UseConversationsReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || 'Failed to create conversation');
+          throw httpResponseError(response, errorData);
         }
 
         const data = ManagedCloudCreateConversationResponseSchema.parse(await response.json());
@@ -487,9 +498,7 @@ export function useConversations(): UseConversationsReturn {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
-            const loadError = new Error(errorData.error?.message || 'Failed to load conversation');
-            (loadError as { status?: number }).status = response.status;
-            throw loadError;
+            throw httpResponseError(response, errorData);
           }
 
           const page = ManagedCloudConversationResponseSchema.parse(await response.json());
@@ -615,7 +624,7 @@ export function useConversations(): UseConversationsReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || 'Failed to update conversation');
+          throw httpResponseError(response, errorData);
         }
 
         const data = ManagedCloudUpdateConversationResponseSchema.parse(await response.json());
@@ -654,7 +663,7 @@ export function useConversations(): UseConversationsReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || 'Failed to delete conversation');
+          throw httpResponseError(response, errorData);
         }
 
         ManagedCloudDeleteConversationResponseSchema.parse(await response.json());
@@ -756,7 +765,7 @@ export function useProjectConversations(
         );
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || 'Failed to fetch project chats');
+          throw httpResponseError(response, errorData);
         }
 
         const data = ManagedCloudConversationListResponseSchema.parse(await response.json());

@@ -187,7 +187,9 @@ describe('GET /api/cron/health-probe', () => {
 
     expect(mocks.sendSupportEmail).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: expect.stringContaining('environment: unhealthy (2 required environment variable(s)'),
+        text: expect.stringContaining(
+          'environment: unhealthy (2 core dependency configuration gap(s)',
+        ),
       }),
     );
   });

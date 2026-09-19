@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type Enforcement = 'off' | 'notify' | 'block';
 
@@ -54,6 +55,10 @@ async function authed(path: string, init?: RequestInit): Promise<Response> {
   return fetch(path, { ...init, headers });
 }
 
+function requestError(message: string, status: number): Error {
+  return Object.assign(new Error(message), { status });
+}
+
 const ENFORCEMENT_COPY: Record<Enforcement, string> = {
   off: 'Recorded only. Nothing acts on the cap.',
   notify:
@@ -65,12 +70,12 @@ const ENFORCEMENT_COPY: Record<Enforcement, string> = {
 export function WorkspaceSpendLimit() {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const queryClient = useQueryClient();
-  const { data, isPending, isError } = useQuery<SpendLimitResult | null, Error>({
+  const { data, isPending, isError, error, refetch } = useQuery<SpendLimitResult | null, Error>({
     queryKey: KEY,
     queryFn: async () => {
       const res = await authed(ENDPOINT);
       if (res.status === 403) return null;
-      if (!res.ok) throw new Error(`Failed to load the spend limit (${res.status})`);
+      if (!res.ok) throw requestError('The spend limit could not be loaded.', res.status);
       return (await res.json()) as SpendLimitResult;
     },
     staleTime: 30_000,
@@ -83,7 +88,7 @@ export function WorkspaceSpendLimit() {
       alertThresholdPct: number;
     }) => {
       const res = await authed(ENDPOINT, { method: 'PUT', body: JSON.stringify(body) });
-      if (!res.ok) throw new Error(`Could not save the spend limit (${res.status})`);
+      if (!res.ok) throw requestError('The spend limit could not be saved.', res.status);
       return (await res.json()) as SpendLimitResult;
     },
     onSuccess: () => {
@@ -95,7 +100,7 @@ export function WorkspaceSpendLimit() {
   const remove = useMutation({
     mutationFn: async () => {
       const res = await authed(ENDPOINT, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`Could not remove the spend limit (${res.status})`);
+      if (!res.ok) throw requestError('The spend limit could not be removed.', res.status);
       return (await res.json()) as SpendLimitResult;
     },
     onSuccess: () => {
@@ -116,7 +121,36 @@ export function WorkspaceSpendLimit() {
     setThreshold(state.alertThresholdPct);
   }, [data]);
 
-  if (isPending || isError || data === null || data === undefined) return null;
+  if (isPending) {
+    return (
+      <section style={{ ...cardStyle, padding: 20 }} role="status">
+        Loading the monthly spend limit…
+      </section>
+    );
+  }
+
+  if (isError || data === undefined) {
+    return (
+      <section style={{ ...cardStyle, padding: 20 }} role="alert">
+        <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
+          We could not load the monthly spend limit
+        </p>
+        <p className="mt-1.5 text-xs" style={{ color: 'var(--text-3)' }}>
+          {toUserMessage(error, 'The spend limit could not be loaded. Try again.')}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="mt-3 rounded-md border px-3 py-1.5 text-xs transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+        >
+          Try again
+        </button>
+      </section>
+    );
+  }
+
+  if (data === null) return null;
 
   const { state, canManageLimit } = data;
   const cents = Math.round(Number.parseFloat(dollars || '0') * 100);
@@ -265,8 +299,17 @@ export function WorkspaceSpendLimit() {
             </button>
           ) : null}
           {save.isError || remove.isError ? (
-            <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-              {(save.error ?? remove.error)?.message}
+            <span
+              role="alert"
+              className="text-xs"
+              style={{ color: 'var(--settings-destructive-text)' }}
+            >
+              {toUserMessage(
+                save.error ?? remove.error,
+                save.isError
+                  ? 'The spend limit could not be saved. Try again.'
+                  : 'The spend limit could not be removed. Try again.',
+              )}
             </span>
           ) : null}
         </div>

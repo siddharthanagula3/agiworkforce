@@ -233,10 +233,15 @@ export type AuditEventType =
    * account's behalf is exactly what the trail has to show.
    */
   | 'connector_setting_changed'
+  | 'code_session_lifecycle_changed'
+  | 'agent_run_lifecycle_changed'
   | 'member_invited'
   | 'member_role_changed'
   | 'member_removed'
+  | 'member_joined'
+  | 'member_invitation_declined'
   | 'plan_changed'
+  | 'mobile_purchase_verified'
   | 'checkout_started'
   | 'billing_portal_opened'
   | 'data_exported'
@@ -280,6 +285,7 @@ export type AuditEventType =
   | 'plugin_installed'
   | 'plugin_removed'
   | 'plugin_setting_changed'
+  | 'plugin_marketplace_changed'
   | 'skill_installed'
   | 'skill_uninstalled'
   | 'remote_pairing_initiated'
@@ -328,6 +334,11 @@ export type AuditEventType =
   | 'admin_api_key_revoked'
   | 'ediscovery_export'
   | 'dlp_content_blocked'
+  | 'privacy_request_submitted'
+  | 'organization_share_granted'
+  | 'organization_share_revoked'
+  | 'support_action_proposed'
+  | 'support_action_confirmed'
   | 'device_renamed'
   | 'device_trust_revoked'
   /**
@@ -450,6 +461,7 @@ const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditE
   'retention_policy_changed',
   'data_region_change_requested',
   'data_region_changed',
+  'privacy_request_submitted',
 ]);
 
 export function auditRetentionClassFor(eventType: AuditEventType): AuditRetentionClass {
@@ -691,14 +703,22 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'connector_removed':
     case 'connector_setting_changed':
       return 'connector';
+    case 'code_session_lifecycle_changed':
+      return 'code_session';
+    case 'agent_run_lifecycle_changed':
+      return 'agent_run';
     case 'member_invited':
     case 'member_role_changed':
     case 'member_removed':
+    case 'member_joined':
+    case 'member_invitation_declined':
       return 'organization_member';
     case 'plan_changed':
     case 'checkout_started':
     case 'billing_portal_opened':
       return 'subscription';
+    case 'mobile_purchase_verified':
+      return 'mobile_iap_purchase';
     case 'data_exported':
       return 'user_data';
     case 'account_deletion_requested':
@@ -747,6 +767,16 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'plugin_removed':
     case 'plugin_setting_changed':
       return 'plugin';
+    case 'plugin_marketplace_changed':
+      return 'plugin_marketplace';
+    case 'privacy_request_submitted':
+      return 'privacy_request';
+    case 'organization_share_granted':
+    case 'organization_share_revoked':
+      return 'organization_share';
+    case 'support_action_proposed':
+    case 'support_action_confirmed':
+      return 'support_action';
     case 'skill_installed':
     case 'skill_uninstalled':
       return 'skill';

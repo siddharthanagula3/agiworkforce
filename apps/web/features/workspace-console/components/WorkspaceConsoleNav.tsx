@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useRef } from 'react';
 import {
   ShieldCheck,
   UserCog,
@@ -17,6 +18,7 @@ import {
   CreditCard,
   Server,
   Terminal,
+  ChevronDown,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -141,8 +143,26 @@ function isActive(pathname: string, href: string): boolean {
 
 export function WorkspaceConsoleNav() {
   const pathname = usePathname() ?? '/workspace';
+  const mobileDetailsRef = useRef<HTMLDetailsElement>(null);
+  const mobileSummaryRef = useRef<HTMLElement>(null);
+  const currentPage = SECTIONS.flatMap((section) => section.links).find((link) =>
+    isActive(pathname, link.href),
+  );
 
-  return (
+  useEffect(() => {
+    if (!mobileDetailsRef.current?.open) return;
+    mobileDetailsRef.current.open = false;
+    mobileSummaryRef.current?.focus();
+  }, [pathname]);
+
+  const closeMobileNavigation = (target: HTMLElement) => {
+    const details = target.closest('details');
+    if (!details) return;
+    details.open = false;
+    mobileSummaryRef.current?.focus();
+  };
+
+  const navigation = (
     <nav aria-label="Workspace administration" className="flex flex-col gap-6">
       {SECTIONS.map((section) => (
         <div key={section.title} className="flex flex-col gap-1">
@@ -159,8 +179,9 @@ export function WorkspaceConsoleNav() {
               <Link
                 key={link.href}
                 href={link.href}
+                onClick={(event) => closeMobileNavigation(event.currentTarget)}
                 aria-current={active ? 'page' : undefined}
-                className="flex items-start gap-2.5 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-h-11 items-start gap-2.5 rounded-md px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 style={{
                   background: active ? 'var(--bg-hover)' : 'transparent',
                   color: active ? 'var(--text-1)' : 'var(--text-2)',
@@ -179,5 +200,35 @@ export function WorkspaceConsoleNav() {
         </div>
       ))}
     </nav>
+  );
+
+  return (
+    <>
+      <details
+        ref={mobileDetailsRef}
+        className="group rounded-lg border border-border/70 bg-background md:hidden"
+      >
+        <summary
+          ref={mobileSummaryRef}
+          aria-label={`Workspace administration, current page: ${currentPage?.label ?? 'Overview'}`}
+          className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+        >
+          <span className="min-w-0">
+            <span className="block text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+              Administration
+            </span>
+            <span className="block truncate text-sm font-semibold text-foreground">
+              {currentPage?.label ?? 'Overview'}
+            </span>
+          </span>
+          <ChevronDown
+            aria-hidden
+            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+          />
+        </summary>
+        <div className="border-t border-border/70 p-2">{navigation}</div>
+      </details>
+      <div className="hidden md:block">{navigation}</div>
+    </>
   );
 }

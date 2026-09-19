@@ -51,22 +51,34 @@ export interface ModelFavourites {
 }
 
 let storedFavourites: Promise<readonly string[] | null> | null = null;
+let favouritesGeneration = 0;
+
+export function invalidateModelFavouritesCache(): void {
+  storedFavourites = null;
+  favouritesGeneration += 1;
+}
 
 function loadStoredFavourites(): Promise<readonly string[] | null> {
-  storedFavourites ??= fetch(`${PREFERENCES_ENDPOINT}?namespace=${PREFERENCES_NAMESPACE}`)
+  if (storedFavourites) return storedFavourites;
+  const requestGeneration = favouritesGeneration;
+  const request = fetch(`${PREFERENCES_ENDPOINT}?namespace=${PREFERENCES_NAMESPACE}`)
     .then(async (response) => {
       if (!response.ok) return null;
       const body = (await response.json()) as { settings?: Record<string, unknown> };
       const stored = body.settings?.[FAVOURITES_KEY];
-      return Array.isArray(stored)
+      const ids = Array.isArray(stored)
         ? stored.filter((id): id is string => typeof id === 'string')
         : null;
+      return requestGeneration === favouritesGeneration ? ids : null;
     })
     .catch(() => {
-      storedFavourites = null;
+      if (requestGeneration === favouritesGeneration && storedFavourites === request) {
+        storedFavourites = null;
+      }
       return null;
     });
-  return storedFavourites;
+  storedFavourites = request;
+  return request;
 }
 
 export function useModelFavourites(): ModelFavourites {

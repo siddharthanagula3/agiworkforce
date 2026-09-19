@@ -35,6 +35,13 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mocks.privilegedQuery(...args) }),
 }));
+vi.mock('@/lib/server/organization-encryption-keys', () => ({
+  organizationKeyRing: vi.fn(async () => ({ ring: {} })),
+}));
+vi.mock('@/lib/crypto/envelope', () => ({
+  sealEnvelope: vi.fn(async () => 'sealed-audit-signing-secret'),
+  openEnvelope: vi.fn(async () => ({ plaintext: 'fixture-secret' })),
+}));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',

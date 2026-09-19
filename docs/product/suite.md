@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-08-13
+Last updated: 2026-09-19
 
 ## Thesis
 
@@ -20,14 +20,14 @@ AGI does not try to be the next frontier-model lab. It tries to be the applicati
 
 ## Surfaces
 
-| Surface | Current role                                                                                                                                                           |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web     | Account, projects, synced app chats, artifacts, billing/subscriptions (interest list only for genuinely-unavailable hosted capacity), admin, web API routes.           |
-| Desktop | Local-first compute host, MCP/connectors, local files, artifacts, generated files, desktop approvals.                                                                  |
-| Mobile  | Small on-device Local LLM experience, Cloud in public alpha (sign-in gated, no invite/waitlist), preview/share for generated files, Desktop/local-host steering later. |
-| CLI     | Developer agent surface and Rust engine proving ground. Workspace/session scoped by default.                                                                           |
-| VS Code | IDE-native developer assistant. Workspace scoped unless explicit handoff is built.                                                                                     |
-| Chrome  | Cloud-only browser assistant, page context, extension/native-host bridge, and automatic account continuity for provenance-eligible Managed Cloud chats.                |
+| Surface | Current role                                                                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web     | Account, projects, synced app chats, artifacts, billing/subscriptions (interest list only for genuinely-unavailable hosted capacity), admin, web API routes. |
+| Desktop | Managed-cloud account shell with approved local folders, device tools, artifacts, computer use, and desktop approvals; no Local or BYOK inference.           |
+| Mobile  | Unpublished client with small on-device Local LLM work in the codebase, Cloud chat, preview/share, and Desktop/local-host steering planned for release.      |
+| CLI     | Developer agent surface and Rust engine proving ground. Workspace/session scoped by default.                                                                 |
+| VS Code | IDE-native developer assistant. Workspace scoped unless explicit handoff is built.                                                                           |
+| Chrome  | Cloud-only browser assistant, page context, extension/native-host bridge, and automatic account continuity for provenance-eligible Managed Cloud chats.      |
 
 ## Suite Requirements
 
@@ -36,7 +36,7 @@ Every surface must expose the same product contract even when the native impleme
 | Surface | Must ship before broad launch                                                                                                                                                         | Must not do                                                                                              |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Web     | Synced app chats, projects, artifacts, account/admin, Neon-backed subscription/entitlement state, generated-file preview/download.                                                    | Expose BYOK/free env-key chat or pretend Local compute is available in-browser without a connected host. |
-| Desktop | Local-first chat, BYOK handoff preview, MCP/connectors, local files, generated-file manifests, computer-use approvals, Mobile/Desktop handoff host.                                   | Silently upload Local chats or local generated files.                                                    |
+| Desktop | Managed-cloud chat, approved local files, generated-file manifests, computer-use approvals, and Mobile/Desktop handoff host.                                                          | Expose Local/BYOK inference or accept provider keys in the public Electron shell.                        |
 | Mobile  | Small Local LLM default, public-alpha Cloud (sign-in gated), preview/share generated files received from Desktop or managed compute, clear privacy labels.                            | Expose Mobile BYOK in v1 or make heavy PDF/PPTX/DOCX generation the first local mobile compute battle.   |
 | CLI     | Developer sessions, workspace-scoped tools, MCP/skills/hooks/plugins/subagents, privacy-mode commands, reproducible session/fork/replay contracts.                                    | Sync developer work into app chats without explicit handoff.                                             |
 | VS Code | IDE chat participant/sidebar, workspace context, provider labels, tier/usage source, Desktop bridge, safe command execution.                                                          | Trust workspace settings for tier/API endpoint/security-sensitive config.                                |
@@ -57,8 +57,8 @@ Local to BYOK is a fork, not a mode flip. The original Local thread remains Loca
 
 ## Sync Boundary
 
-Normal app chat sync is shared by Web, Mobile Cloud, and both Desktop Cloud
-shells. Chrome keeps its local store authoritative but automatically mirrors a
+Normal app chat sync is shared by Web, Mobile Cloud, and Desktop. Chrome keeps
+its local store authoritative but automatically mirrors a
 conversation into the same account store when every turn carries Managed Cloud
 provenance. Unknown-provenance or Local/BYOK-mixed Chrome conversations stay
 browser-local.

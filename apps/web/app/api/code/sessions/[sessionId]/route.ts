@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -98,6 +99,20 @@ async function handlePatch(request: NextRequest, context: RouteContext) {
     if (hasArchived) {
       session = await setCloudCodeSessionArchived(db, owner, sessionId, body['archived'] === true);
     }
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      request,
+      eventType: 'code_session_lifecycle_changed',
+      detail: {
+        resourceType: 'code_session',
+        resourceId: sessionId,
+        status: hasArchived ? (body['archived'] === true ? 'archived' : 'active') : 'renamed',
+        changedKeys: [hasTitle ? 'title' : null, hasArchived ? 'archived' : null].filter(
+          (key): key is string => key !== null,
+        ),
+      },
+    });
     return NextResponse.json({ session });
   } catch (error) {
     rethrowCloudCodeError(error);
@@ -115,6 +130,13 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
     await deleteCloudCodeSession(db, { userId, organizationId }, sessionId, planTier);
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      request,
+      eventType: 'code_session_lifecycle_changed',
+      detail: { resourceType: 'code_session', resourceId: sessionId, status: 'deleted' },
+    });
     return NextResponse.json({ deleted: true });
   } catch (error) {
     rethrowCloudCodeError(error);

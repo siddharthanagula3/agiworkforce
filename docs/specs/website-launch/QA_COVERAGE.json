@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 1,
+  "environment": {
+    "url": "http://localhost:3100",
+    "mode": "next dev / Turbopack",
+    "source": "source-baseline.json",
+    "database": "Isolated agiworkforce_dev at127.0.0.1:5432; native postgres provider via process-only override;272canonical migrations zero pending/drift. Loopback Neon proxy remains available but web runtime no longer uses it.",
+    "remoteCacheAndTelemetry": "disabled by process-only empty overrides",
+    "auth": "existing Clerk test instance",
+    "cache": "Local Redis on loopback6379; shared remote cache disabled with process-only overrides",
+    "storage": "Development filesystem fallback; process-only storage credential overrides. Google/gateway embedding credentials cleared for isolated upload test; semantic indexing unavailable."
+  },
+  "cases": [
+    {
+      "id": "ENV-DB",
+      "behavior": "Configured local database accepts connections without using production",
+      "expected": "local server available",
+      "status": "passed",
+      "evidence": "User authorized creation; initialized missing PostgreSQL 17 cluster; canonical apply and verify: 269 applied, zero pending/drift; 26 live adapter tests passed"
+    },
+    {
+      "id": "PUBLIC-ENTRY",
+      "behavior": "Public landing renders and primary CTA reaches local sign-in",
+      "expected": "usable page and local destination",
+      "status": "passed",
+      "evidence": "Rendered public page; clicked Try AGI Web; after navigation settled, local /login?redirectTo=%2F shows Welcome back and email/Google/GitHub controls. No sign-in performed."
+    },
+    {
+      "id": "DEMO-HISTORY",
+      "behavior": "Read representative existing demo chats without modifying originals",
+      "expected": "authenticated rendered history",
+      "status": "blocked",
+      "dependency": "Fresh QA database has no original demo conversations; no production data copied",
+      "actionable": false,
+      "boundary": "local"
+    },
+    {
+      "id": "WEB-014-LANDING-DESKTOP",
+      "behavior": "Tab then Enter on skip link transfers focus to unique main; next Tab stays inside main",
+      "conditions": {
+        "viewport": "1112x748",
+        "theme": "dark",
+        "auth": "signed out"
+      },
+      "status": "passed",
+      "attempts": [
+        {
+          "result": "failed",
+          "evidence": "Before: zero #main-content, Enter retained link focus"
+        },
+        {
+          "result": "passed",
+          "evidence": "After: one main, one target; activeElement MAIN#main-content; subsequent Tab inside main"
+        }
+      ],
+      "driver": "requested in-app Browser",
+      "dependencies": [
+        "apps/web/features/marketing/components/MarketingLanding.tsx",
+        "apps/web/shared/components/accessibility/SkipLinks.tsx",
+        "apps/web/app/layout.tsx"
+      ]
+    },
+    {
+      "id": "WEB-014-LANDING-MOBILE",
+      "behavior": "Skip and subsequent keyboard focus at mobile web width; no horizontal overflow",
+      "conditions": {
+        "viewport": "390x844",
+        "theme": "dark",
+        "auth": "signed out",
+        "limitation": "desktop browser viewport; no physical device or touch coverage"
+      },
+      "status": "passed",
+      "attempts": [
+        {
+          "result": "passed",
+          "evidence": "MAIN#main-content focused; next Tab inside main; scrollWidth <= innerWidth"
+        }
+      ],
+      "driver": "requested in-app Browser"
+    },
+    {
+      "id": "AUTH-HANDOFF",
+      "behavior": "Owner signs into existing demo account",
+      "status": "passed",
+      "evidence": "User completed terms step; browser /chat renders sidebar, composer and model picker with no error boundary"
+    },
+    {
+      "id": "CHAT-FIRST-TURN",
+      "behavior": "Explicit Luna model returns a complete answer and conversation survives reopen",
+      "status": "passed",
+      "conditions": {
+        "data": "new synthetic QA conversation only",
+        "database": "fresh local",
+        "model": "explicit Luna; no substitution"
+      },
+      "expected": "answer visible, completion state clear, saved conversation reopens",
+      "evidence": "Luna returned correct multiplication and synthetic label; both messages persisted after browser reload at the saved conversation URL."
+    },
+    {
+      "id": "CHAT-CONTEXT-AFTER-RESTART",
+      "behavior": "Follow-up recalls synthetic label from saved first turn after server restart",
+      "status": "passed",
+      "expected": "cedar-27 without prompting with the label again",
+      "conditions": {
+        "model": "explicit Luna",
+        "cache": "loopback Redis"
+      },
+      "evidence": "Luna recalled cedar-27 after server restart and reload. Cold request17.2s included8.7s compilation and recovered from2s durable first-event budget."
+    },
+    {
+      "id": "CHAT-WARM-LATENCY",
+      "behavior": "Measure warm minimal reply after reported latency",
+      "status": "passed",
+      "evidence": "UI displayed complete ready response. Server completion4.1s; compilation53ms; durable first event210ms; model stream-start span2208ms; no timeout/fallback. Single local sample, not performance certification. No timeout or security checks changed."
+    },
+    {
+      "id": "CHAT-CATALOG-CONCURRENCY",
+      "status": "passed",
+      "behavior": "Independent skill reads overlap without bypassing plugin access or install settings",
+      "evidence": "Deferred settings regression failed before fix; 49 catalog and skill-offer tests pass after fix. Live response complete, catalog19ms and total4.4s. No overall latency improvement proven."
+    },
+    {
+      "id": "CHAT-WORKFLOW-LATENCY",
+      "behavior": "Verify changed workflow path in Browser and measure production-like timing",
+      "status": "blocked",
+      "boundary": "local",
+      "actionable": false,
+      "dependencies": ["apps/web/lib/workflows/cloud-agent-workflow.ts"],
+      "dependency": "Provider API reports no credits remaining; no paid retry. Local transport mismatch is repaired in ignored env: native loopback PostgreSQL and loopback Redis pass direct adapter/factory validation, while the full app stayed stopped to preserve RAM. Successful provider-response latency verification remains open."
+    },
+    {
+      "id": "PROJECT-PERSISTENCE",
+      "behavior": "Create synthetic project; save and clear instructions; reopen",
+      "status": "passed",
+      "boundary": "local",
+      "actionable": false,
+      "dependencies": ["apps/web/features/projects/components/ProjectSettingsDialog.tsx"],
+      "evidence": "Synthetic project create/save/reopen/clear/reopen passed in Browser with local Free subscription fixture. Natural no-subscription first-project flow subsequently repaired and Browser verified; evidence/data-controls.json.",
+      "assertions": [
+        "Created synthetic project through UI after local Free subscription fixture",
+        "Saved synthetic instructions and observed Project updated",
+        "Reloaded and reopened settings; exact saved instructions present",
+        "Cleared instructions, saved, reloaded and reopened; Instructions empty"
+      ],
+      "verification": {
+        "assertions": [
+          "Created synthetic project through UI after local Free subscription fixture",
+          "Saved synthetic instructions and observed Project updated",
+          "Reloaded and reopened settings; exact saved instructions present",
+          "Cleared instructions, saved, reloaded and reopened; Instructions empty"
+        ],
+        "artifacts": {
+          "docs/specs/website-launch/evidence/project-instructions.json": "d899060e3c5d2aa8b56175f47cdaa365f46fdd1ad5d1ad0a9d8ee3119dbfcf63"
+        },
+        "dependencies": {
+          "apps/web/features/projects/components/ProjectSettingsDialog.tsx": "4941c3318101afe0f0ada9b01b6a65e31bbca7c1bb9e6019c50b9de317cfb00b"
+        }
+      }
+    },
+    {
+      "id": "GROUNDED-ANSWER",
+      "behavior": "Verify search and source inspection with explicit Luna",
+      "status": "blocked",
+      "boundary": "local",
+      "actionable": false,
+      "dependencies": [],
+      "dependency": "Provider API reports no credits remaining; no model rotation or quota reset authorized as a workaround."
+    },
+    {
+      "id": "FILES-OUTPUTS",
+      "behavior": "Create, inspect, revise, save and reopen useful outputs with isolated storage",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "dependency": "Provider-generated outputs remain blocked by provider balance; local source persistence is verified.",
+      "evidence": "Local upload, extraction, version persistence and UI replacement verified in evidence/project-sources.json; source-list regression fixed.",
+      "progress": "partially verified; see evidence"
+    },
+    {
+      "id": "PERMISSION-RECOVERY",
+      "behavior": "Verify approvals and recoverable tool failures with least privilege",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Approval/denial, duplicate submission, partial decision restoration and HTTP/auth recovery verified in42 focused tests; final19 hook cases verify temporary/persisted retries. Browser-notification permission restoration now recovers on focus/visibility; 5 files and43 tests pass. See evidence/data-controls.json approvalRecovery and browserPermissionRecovery. Browser tool execution remains blocked by provider prerequisite.",
+      "progress": "partially verified; no real provider/tool execution claim"
+    },
+    {
+      "id": "DATA-CONTROLS",
+      "behavior": "Verify local user data settings and permission boundaries",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Temporary default/explicit override/fresh-chat reset Browser verified; plan UI and resource/credit boundary checks recorded in evidence/plan-limits.json. Workspace switching clears prior effective-policy and pending MCP context caches. Account-export attachment bytes, project-source bytes, project export JSON, authenticated media links and exact media target bytes pass deterministic verification. The 390px Account session-table overflow is repaired with a 24-test Account regression set, while post-repair authenticated pixel geometry remains open after three browser-connection failures. Broader data controls remain pending. Export endpoint200 and destructive-action cancellation Browser verified; deletion copy aligned with existing restoration semantics. See evidence/data-controls.json.",
+      "progress": "partially verified; export/download byte paths and mobile Account structure repaired, post-repair browser geometry and broader controls remain open"
+    },
+    {
+      "id": "PUBLIC-CLAIMS",
+      "behavior": "Reconcile advertised website capabilities with functional evidence",
+      "status": "passed",
+      "boundary": "local",
+      "actionable": false,
+      "dependencies": [],
+      "evidence": "Independent source/runtime/doc re-audit is clean with 41 source fingerprints; 32 Desktop dispatcher tests, 281 public-claim tests, 305 privacy/legal/support tests, i18n parity, docs:check, diff validation and retired-phrase scans passed. The sole stale non-rendered test comment was corrected and its 21-test suite plus fingerprint delta refresh passed. See evidence/public-claims.json. Production behavior and provider-generated outputs remain separate QA cases."
+    },
+    {
+      "id": "JEV-PILOT-ELIGIBILITY",
+      "behavior": "Evaluate safe pilot eligibility from existing architecture and approved minimal data",
+      "status": "passed",
+      "boundary": "local",
+      "actionable": false,
+      "dependencies": [],
+      "evidence": "JEV_ARCHITECTURE.md: eligibility evaluated and product pilot deferred; no product integration or benefit claimed."
+    },
+    {
+      "id": "AFFECTED-VALIDATION",
+      "behavior": "Resolve affected local checks while preserving unrelated changes",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Current dependency-focused validation passes: 191 web files/1780 tests and 69 shared-UI files/500 tests. Four release-full failures were isolated to two legacy activation assertions and a stale generated support corpus; the canonical repairs pass in a 4-file/48-test rerun. Repository-wide, CI, migration and exact-main gates remain pending.",
+      "progress": "affected source evidence refreshed; aggregate release status remains pending"
+    }
+  ],
+  "reuse": [
+    {
+      "scope": "audit totals and historical findings",
+      "kind": "reference only; no runtime pass inferred",
+      "source": "../../work/checklist-reaudit/decisions.jsonl"
+    }
+  ],
+  "invalidations": [
+    {
+      "evidence": "Historical WEB-014 landmark-count result",
+      "reason": "Not equivalent to skip-link focus assertion on current MarketingLanding; retained historical result, declined reuse for this assertion"
+    }
+  ],
+  "checks": [
+    {
+      "command": "focused eslint MarketingLanding.tsx and landing-keyboard.spec.ts --max-warnings=0",
+      "result": "passed"
+    },
+    {
+      "command": "prettier --check both changed product/test files",
+      "result": "passed"
+    },
+    {
+      "command": "playwright test e2e/landing-keyboard.spec.ts --list",
+      "result": "passed: 1 test discovered; not an executed automated E2E pass"
+    },
+    {
+      "command": "git diff --check (changed product files)",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm check:llm-operability",
+      "result": "failed at check:doc-registry: required PROGRESS.md is rejected as a status document; subsequent guards not executed. Guard unchanged."
+    },
+    {
+      "command": "canonical migration apply --target local and verify --json",
+      "result": "passed: 269 applied, zero pending, zero drift"
+    },
+    {
+      "command": "data-layer adapter-contract.test.ts with live loopback Postgres and Neon proxy",
+      "result": "26 passed; no skips"
+    },
+    {
+      "command": "NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @agiworkforce/web typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "remaining44 operability guards independently, then focused reruns",
+      "result": "Reference integrity, model literals and doc registry resolved. Outstanding: unrelated concurrent em-dash, mock-exports, feature-baseline failures; production migration-dependencies gate. No aggregate green claim."
+    },
+    {
+      "command": "focused catalog/skill-offer tests, eslint, prettier, web typecheck",
+      "result": "49 tests passed; lint, formatting and typecheck passed"
+    },
+    {
+      "command": "Next production build with loopback service overrides",
+      "result": "passed: compile, TypeScript,381 static pages. Startup blocked by production environment guards; no bypass applied."
+    },
+    {
+      "command": "workflow scoped59 tests; project scoped39 tests; hook19 fixture tests",
+      "result": "passed. Workflow and project ESLint and formatting passed. Browser verification pending."
+    },
+    {
+      "command": "NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @agiworkforce/web typecheck",
+      "result": "passed",
+      "evidence": "/tmp/agi-launch-typecheck-final.log",
+      "limitation": "Working-tree result; concurrent changes after completion require affected revalidation."
+    },
+    {
+      "command": "Full web typecheck after Help article route; focused Help22tests; corpus consistency and18retrieval/helper/collection tests",
+      "result": "passed",
+      "evidence": "evidence/data-controls.json"
+    },
+    {
+      "command": "check:doc-registry, check:repo-organization, check:raw-error-to-user, check:rls-boundary, check:neon-migrations, check:reference-integrity, check:mock-exports",
+      "result": "passed; mock guard scanned3366test files. Before subsequent privacy changes; new privacy sources need affected revalidation."
+    },
+    {
+      "command": "Live native PostgreSQL adapter contract after repeated local WebSocket timeouts",
+      "result": "13passed; Neon13skipped, native leg only. Authenticated Browser recovered; one warm reload1148ms and route300ms.",
+      "evidence": "evidence/workflow-latency.json"
+    },
+    {
+      "command": "release-full web Vitest JSON run",
+      "result": "22828 passed, 4 failed, 5 pending across 6914 suites; failures isolated to two legacy activation assertions and two stale support-corpus checks. This red run is retained and is not represented as a pass.",
+      "evidence": "/tmp/agi-web-results-20260919-release-final.json (sha256 8b4b80a5eafb626d0cacf8d0fa1d877a3589b9aafed4bb9839511a8505806a42)"
+    },
+    {
+      "command": "focused activation, support-corpus and direct-project rerun",
+      "result": "passed: 4 files, 48 tests"
+    },
+    {
+      "command": "dependency-focused web freshness validation",
+      "result": "passed: 191 files, 1780 tests"
+    },
+    {
+      "command": "pnpm --filter @agiworkforce/ui test",
+      "result": "passed: 69 files, 500 tests"
+    }
+  ],
+  "dependencyHashes": {
+    "apps/web/features/marketing/components/MarketingLanding.tsx": "93cfdbe2bfa782414aeef86f632414033cc7538bf7d3a3bc08021adcb2cb2d3d",
+    "apps/web/shared/components/accessibility/SkipLinks.tsx": "4bcf280369105c56a25713190f7b0858881814ef0dfea218949ee338aa6bc054",
+    "apps/web/app/layout.tsx": "9bb4fc78c601bba9f08342ba9252ac95ae8cacba7f1144df4f73078b680d4bb4"
+  },
+  "historicalAudit": {
+    "checklist.reaudited.md": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/checklist.reaudited.md",
+      "sha256": "e0af6d0cab867b887014fdb35a1899519e65db863ba24d206f814ea0ed441a62"
+    },
+    "decisions.jsonl": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/decisions.jsonl",
+      "sha256": "601252b836a7db21d61186ccba7e3c86021d6ef2afbf3de0de2fe4d817dc2de6"
+    },
+    "verifications.jsonl": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/verifications.jsonl",
+      "sha256": "824f008eed12c4f77875860711110893b2107a69b0ac16c6009876b3c3a3a95a"
+    },
+    "CORRECTIONS.md": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/CORRECTIONS.md",
+      "sha256": "bef39d5a7559a961cc1748e98450dbbe3450fd6a5f4ccc7d4951eeddf0f8cd4f"
+    },
+    "snapshot.json": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/snapshot.json",
+      "sha256": "22bf4ceed1b8432f3117381f2919d15d671d9b12d0ab0bd3388b1a2e2abbbca9"
+    },
+    "corpus-manifest.jsonl": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/corpus-manifest.jsonl",
+      "sha256": "211e2e49ef03e0ee2f2bd441b9344f3a897b4daca6f3833bef1a31ee5abb4c62"
+    }
+  },
+  "localScope": [
+    "PUBLIC-ENTRY",
+    "WEB-014-LANDING-DESKTOP",
+    "WEB-014-LANDING-MOBILE",
+    "AUTH-HANDOFF",
+    "CHAT-FIRST-TURN",
+    "CHAT-CONTEXT-AFTER-RESTART",
+    "CHAT-WORKFLOW-LATENCY",
+    "PROJECT-PERSISTENCE",
+    "GROUNDED-ANSWER",
+    "FILES-OUTPUTS",
+    "PERMISSION-RECOVERY",
+    "DATA-CONTROLS",
+    "PUBLIC-CLAIMS",
+    "JEV-PILOT-ELIGIBILITY",
+    "AFFECTED-VALIDATION",
+    "DEMO-HISTORY"
+  ],
+  "ownerExpansion": {
+    "date": "2026-09-19",
+    "inventory": "QA_ISSUES.md#expanded-owner-requested-inventory-2026-09-19",
+    "enterprise": "Local existing-demo login, contract UI, domain rejection and inactive membership authorization verified; see evidence/plan-limits.json. New signup, live SSO and metered contract remain unverified.",
+    "repairAttemptsPerIssue": 3,
+    "generation": "cheap Luna only; no image/video generation",
+    "hookScope": "Existing bound scope and continuation limits unchanged; expansion is explicit owner authorization, not completion evidence."
+  }
+}

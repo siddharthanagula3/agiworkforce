@@ -43,6 +43,7 @@ const VerificationSchema = z.object({
  * cannot report one.
  */
 const ReportSchema = z.object({
+  eventId: z.string().uuid(),
   runId: z.string().min(1).max(128),
   action: z.string().min(1).max(120),
   surface: z.enum(AUTOMATION_SURFACES),
@@ -81,24 +82,27 @@ function auditTarget(value: string | null | undefined): string | null {
 
 const INSERT_RECEIPTS = `
   insert into automation_audit_events (
-    user_id, organization_id, run_id, device_id, surface, action, target,
+    user_id, organization_id, client_event_id, run_id, device_id, surface, action, target,
     session_kind, profile_id, status, reason, verified, verification_check,
     verification_passed, started_at, settled_at, duration_ms
   )
-  select $1, $2::uuid, row.run_id, row.device_id, row.surface, row.action, row.target,
+  select $1, $2::uuid, row.event_id, row.run_id, row.device_id, row.surface, row.action, row.target,
          row.session_kind, row.profile_id, row.status, row.reason, row.verified,
          row.verification_check, row.verification_passed,
          to_timestamp(row.started_at_ms / 1000.0), to_timestamp(row.settled_at_ms / 1000.0),
          row.duration_ms
     from jsonb_to_recordset($3::jsonb) as row(
-      run_id text, device_id text, surface text, action text, target text,
+      event_id uuid, run_id text, device_id text, surface text, action text, target text,
       session_kind text, profile_id text, status text, reason text, verified boolean,
       verification_check text, verification_passed boolean,
       started_at_ms bigint, settled_at_ms bigint, duration_ms integer
-    )`;
+    )
+  on conflict (user_id, client_event_id) do nothing
+  returning client_event_id`;
 
 function receiptRow(outcome: AutomationOutcome, report: Report): Record<string, unknown> {
   return {
+    event_id: report.eventId,
     run_id: outcome.runId,
     device_id: outcome.deviceId,
     surface: outcome.surface,
@@ -127,9 +131,14 @@ async function writeReceipts(
   userId: string,
   organizationId: string | null,
   rows: readonly Record<string, unknown>[],
-): Promise<void> {
-  if (rows.length === 0) return;
-  await db.query(INSERT_RECEIPTS, [userId, organizationId, JSON.stringify(rows)]);
+): Promise<Set<string>> {
+  if (rows.length === 0) return new Set();
+  const inserted = await db.query<{ client_event_id: string }>(INSERT_RECEIPTS, [
+    userId,
+    organizationId,
+    JSON.stringify(rows),
+  ]);
+  return new Set(inserted.map(({ client_event_id }) => client_event_id));
 }
 
 /** One enterprise audit event per run, which is what a SIEM reads. */
@@ -208,7 +217,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const reports = parsed.data.outcomes;
   const outcomes = reports.map(settle);
 
-  await writeReceipts(
+  const insertedEventIds = await writeReceipts(
     db,
     userId,
     organizationId,
@@ -217,9 +226,12 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   const accepted = recordAutomationOutcomes(outcomes);
   const summary = summarizeAutomationOutcomes(outcomes);
+  const insertedOutcomes = outcomes.filter((_, index) =>
+    insertedEventIds.has((reports[index] as Report).eventId),
+  );
 
-  for (const runId of new Set(outcomes.map((outcome) => outcome.runId))) {
-    const forRun = outcomes.filter((outcome) => outcome.runId === runId);
+  for (const runId of new Set(insertedOutcomes.map((outcome) => outcome.runId))) {
+    const forRun = insertedOutcomes.filter((outcome) => outcome.runId === runId);
     const diagnostics = automationRunDiagnostics(runId, forRun);
     logger.info({ userId, ...diagnostics }, 'Automation run outcomes recorded');
     await streamRunToAudit(

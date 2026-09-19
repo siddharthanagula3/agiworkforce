@@ -3,27 +3,25 @@ id: local-mode
 title: Run AGI offline with Local mode
 path: /local
 category: local
-tags: local mode, offline, ollama, lm studio, llama.cpp, vllm, on device, no internet, privacy, free
-platforms: desktop, cli
-updated: 2026-08-13
+tags: local mode, offline, ollama, lm studio, on device, no internet, privacy, free
+platforms: cli
+updated: 2026-09-19
 scope: public
 ---
 
 ## Running models on your own hardware
 
-Desktop Local mode runs models through Ollama, LM Studio, llama.cpp, or vLLM on
-your own machine. The CLI supports its documented local integrations, currently
-Ollama and LM Studio. There are no AGI API keys or managed quotas, and inference
-can run offline after the runtime and model are installed. Local mode is free.
+The released CLI runs models through Ollama or LM Studio on your own machine.
+There are no AGI API keys or managed quotas, and inference can run offline after
+the runtime and model are installed. Local mode is free. The current Desktop
+application is managed-cloud-only and does not run local models.
 
 ## Setting it up
 
-1. Install a supported runtime and at least one compatible model. On Desktop,
-   choose Ollama, LM Studio, llama.cpp, or vLLM; for the CLI, follow its current
-   Ollama or LM Studio setup guide.
-2. Install the AGI surface whose release is available for your platform.
-3. Select the local runtime in the model picker. AGI lists models exposed by the
-   running server.
+1. Install Ollama or LM Studio and at least one compatible model.
+2. Install the AGI CLI for your platform.
+3. Select the local runtime in the CLI. AGI lists models exposed by the running
+   server.
 
 ## What stays on your device
 

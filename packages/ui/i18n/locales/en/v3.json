@@ -64,7 +64,7 @@
       "switchTo": "Switch to {{mode}}",
       "soon": "Soon",
       "cloudUnavailable": "AGI Cloud is available on Desktop, sign in to use managed models and synced chats.",
-      "localUnavailable": "Local mode runs in the AGI Workforce desktop app. Download it to keep chats and files on this machine."
+      "localUnavailable": "Local mode runs in the AGI Workforce CLI through Ollama or LM Studio. Desktop conversations use managed cloud."
     },
     "groups": {
       "lastHour": "Last hour",

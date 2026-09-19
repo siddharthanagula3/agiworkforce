@@ -15,6 +15,7 @@
     "billing-plan-catalog",
     "billing-topups",
     "browser-bridge",
+    "browser-permission-profile",
     "browser-selection",
     "browser-session",
     "capabilities",

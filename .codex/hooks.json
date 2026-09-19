@@ -1,0 +1,38 @@
+{
+  "description": "Finite AGI website launch continuation, explicitly bound coordinator only; user trust required.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/launch.py\" hook --session 01a0b8ba-e573-7a53-af23-6671ff7670f0",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/launch.py\" hook --session 01a0b8ba-e573-7a53-af23-6671ff7670f0",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/launch.py\" hook --session 01a0b8ba-e573-7a53-af23-6671ff7670f0",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -874,24 +874,4 @@ describe('a sign-out with no app-server running', () => {
     );
     expect(rememberShellSignedCliIn).not.toHaveBeenCalled();
   });
-  it('routes an arbitrary app-server method through one transport', async () => {
-    const { service, children } = await loadService((method) => {
-      if (method === 'initialize') return HANDSHAKE;
-      if (method === 'doctor/report') return { checks: [{ id: 'git.repository', status: 'ok' }] };
-      return defaultResponder(method);
-    });
-
-    const result = await service.callDeveloperMethod(root.id, 'doctor/report', { verbose: true });
-
-    expect(result).toEqual({ checks: [{ id: 'git.repository', status: 'ok' }] });
-    const sent = children.at(-1)?.written.find((entry) => entry.method === 'doctor/report');
-    expect(sent?.params).toEqual({ verbose: true });
-  });
-
-  it('refuses a method for a folder this shell has no grant for', async () => {
-    getRoot.mockReturnValue(undefined);
-    const { service } = await loadService();
-
-    await expect(service.callDeveloperMethod('root-unknown', 'doctor/report')).rejects.toThrow();
-  });
 });

@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/hosting', () => ({ releaseSha: () => 'release-sha' }));
+vi.mock('@/lib/server/hosting', () => ({
+  deployEnvironment: vi.fn(() => undefined),
+  deployRegion: vi.fn(() => undefined),
+  releaseSha: () => 'release-sha',
+}));
 
 const SELECTED_ROUTE = {
   status: 'selected' as const,

@@ -2,6 +2,7 @@
 //! hunks, a resolution applied through `apply_patch`, staged, and the repo's.
 
 use std::fmt;
+use std::path::Component;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -682,6 +683,17 @@ pub async fn resolve_conflicted_file(
     resolutions: &[(usize, Resolution)],
     run_tests: bool,
 ) -> Result<ResolutionOutcome> {
+    validate_conflict_path(root, relative_path)?;
+    let conflicts = conflicted_paths(root).await?;
+    if !conflicts
+        .iter()
+        .any(|conflict| conflict.path == relative_path)
+    {
+        return Err(anyhow!(
+            "{} is not an unmerged path in this repository",
+            relative_path.display()
+        ));
+    }
     let absolute = root.join(relative_path);
     let text = std::fs::read_to_string(&absolute)
         .with_context(|| format!("reading {}", absolute.display()))?;
@@ -717,6 +729,34 @@ pub async fn resolve_conflicted_file(
         staged: true,
         tests,
     })
+}
+
+fn validate_conflict_path(root: &Path, relative_path: &Path) -> Result<()> {
+    if relative_path.as_os_str().is_empty()
+        || relative_path.is_absolute()
+        || relative_path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err(anyhow!(
+            "conflict path must stay inside the repository: {}",
+            relative_path.display()
+        ));
+    }
+    let canonical_root = root
+        .canonicalize()
+        .with_context(|| format!("resolving repository root {}", root.display()))?;
+    let canonical_path = root
+        .join(relative_path)
+        .canonicalize()
+        .with_context(|| format!("resolving conflict path {}", relative_path.display()))?;
+    if !canonical_path.starts_with(&canonical_root) {
+        return Err(anyhow!(
+            "conflict path escapes the repository: {}",
+            relative_path.display()
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -834,6 +874,16 @@ mod tests {
         assert!(refusal
             .to_string()
             .contains("never resolved by picking a side"));
+    }
+
+    #[test]
+    fn a_conflict_path_cannot_escape_the_repository() {
+        let dir = tempfile::tempdir().unwrap();
+        let inside = dir.path().join("inside.txt");
+        std::fs::write(&inside, "content").unwrap();
+        assert!(validate_conflict_path(dir.path(), Path::new("inside.txt")).is_ok());
+        assert!(validate_conflict_path(dir.path(), Path::new("../outside.txt")).is_err());
+        assert!(validate_conflict_path(dir.path(), Path::new("./inside.txt")).is_err());
     }
 
     #[test]

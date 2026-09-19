@@ -24,7 +24,10 @@ import {
   RECONNECT_BASE_MS,
   RECONNECT_MAX_ATTEMPTS,
 } from './use-voice-session';
-import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
+import {
+  useVoiceSessionStore,
+  VOICE_INTELLIGENCE,
+} from '@features/chat/stores/voice-session-store';
 import {
   LIVE_SESSION_MESSAGE,
   LiveVoiceSessionError,
@@ -115,6 +118,26 @@ describe('useVoiceSession', () => {
     endLiveVoiceSession('test');
     await new Promise((resolve) => setTimeout(resolve, 1));
     vi.unstubAllGlobals();
+  });
+
+  it('returns persisted voice preferences and transient panels to account-safe defaults', () => {
+    const store = useVoiceSessionStore.getState();
+    store.setIntelligence(VOICE_INTELLIGENCE.premium);
+    store.setLanguage('fr-FR');
+    store.setPace(1.5);
+    store.setDockOpen(true);
+    store.setBackendBusy(true);
+
+    useVoiceSessionStore.getState().resetOnLogout();
+
+    expect(useVoiceSessionStore.getState()).toMatchObject({
+      intelligence: VOICE_INTELLIGENCE.balanced,
+      language: '',
+      pace: 1,
+      dockOpen: false,
+      backendBusy: false,
+      toolActivity: [],
+    });
   });
 
   it('opens a live session on enter and listens only once the session has started', async () => {

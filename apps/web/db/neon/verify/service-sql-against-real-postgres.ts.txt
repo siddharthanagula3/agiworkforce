@@ -30,6 +30,7 @@ let ORG = '';
 const QA = 'user_3F8wXtZ4rDJ1SZmfO02Lz3BHj2v';
 
 beforeAll(async () => {
+  vi.stubEnv('CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY', 'ab'.repeat(32));
   client = new Client({ connectionString: URL });
   await client.connect();
   const r = await client.query(
@@ -42,6 +43,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client?.end();
+  vi.unstubAllEnvs();
 });
 
 async function db_seats(): Promise<Array<{ licensed_seats: number }>> {
@@ -222,10 +224,12 @@ describe('service SQL against a real schema', () => {
     expect(stored?.secretPrefix).toBe(saved.secret.slice(0, 8));
 
     const raw = await client.query(
-      'select secret_hash from public.organization_audit_destinations where organization_id = $1',
+      `select secret_hash, secret_ciphertext
+         from public.organization_audit_destinations where organization_id = $1`,
       [ORG],
     );
     expect(raw.rows[0].secret_hash, 'the raw secret must never be stored').not.toBe(saved.secret);
+    expect(raw.rows[0].secret_ciphertext, 'the signing key is sealed at rest').not.toBe(saved.secret);
   });
 
   it('the audit trail reads back what recordAuditEvent wrote', async () => {

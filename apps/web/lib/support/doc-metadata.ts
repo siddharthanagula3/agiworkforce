@@ -1,4 +1,12 @@
-import { BILLING_PLAN_PRICING, type BillingPlanTier } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  isByokPlanTier,
+  isContractPricedPlan,
+  isFreeBillingPlanTier,
+  isLocalOnlyPlanTier,
+  isTeamPlanTier,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 
 import { AVAILABLE_NOW_LABEL, SURFACE_STATUS } from '@/lib/surface-status';
 
@@ -60,11 +68,11 @@ export const WORKSPACE_DOC_PLANS = Object.freeze([
 export const ENTERPRISE_DOC_PLANS = Object.freeze(['enterprise']) as readonly BillingPlanTier[];
 
 export const CLOUD_DOC_PLANS = Object.freeze(
-  ALL_DOC_PLANS.filter((plan) => plan !== 'local-only' && plan !== 'byok'),
+  ALL_DOC_PLANS.filter((plan) => !isLocalOnlyPlanTier(plan) && !isByokPlanTier(plan)),
 ) as readonly BillingPlanTier[];
 
 export const PAID_CLOUD_DOC_PLANS = Object.freeze(
-  CLOUD_DOC_PLANS.filter((plan) => plan !== 'free'),
+  CLOUD_DOC_PLANS.filter((plan) => !isFreeBillingPlanTier(plan)),
 ) as readonly BillingPlanTier[];
 
 export const KEY_BEARING_DOC_PLANS = Object.freeze([
@@ -91,9 +99,11 @@ export function planLabel(plan: BillingPlanTier): string {
 /** Which commercial shape a document speaks to, read off the plans it applies to. */
 export function segmentsForPlans(plans: readonly BillingPlanTier[]): readonly DocSegment[] {
   const segments: DocSegment[] = [];
-  if (plans.some((plan) => plan !== 'team' && plan !== 'enterprise')) segments.push('consumer');
-  if (plans.includes('team')) segments.push('business');
-  if (plans.includes('enterprise')) segments.push('enterprise');
+  if (plans.some((plan) => !isTeamPlanTier(plan) && !isContractPricedPlan(plan))) {
+    segments.push('consumer');
+  }
+  if (plans.some(isTeamPlanTier)) segments.push('business');
+  if (plans.some(isContractPricedPlan)) segments.push('enterprise');
   return segments;
 }
 
@@ -133,7 +143,7 @@ export const SUPPORT_DOC_METADATA: Readonly<Record<string, DocMetadata>> = Objec
   'agi-work': metadata('beta', 'user', ['web'], PAID_CLOUD_DOC_PLANS),
   artifacts: metadata('ga', 'user', ['web', 'desktop'], CLOUD_DOC_PLANS),
   'billing-and-plans': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
-  'byok-provider-keys': metadata('ga', 'developer', ['cli', 'desktop', 'vscode'], ALL_DOC_PLANS),
+  'byok-provider-keys': metadata('ga', 'developer', ['cli', 'vscode'], ALL_DOC_PLANS),
   'chat-basics': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'chrome-extension': metadata('beta', 'user', ['chrome'], CLOUD_DOC_PLANS),
   'connectors-and-mcp': metadata('ga', 'user', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS),
@@ -148,7 +158,7 @@ export const SUPPORT_DOC_METADATA: Readonly<Record<string, DocMetadata>> = Objec
   'install-the-cli': metadata('ga', 'developer', ['cli'], ALL_DOC_PLANS),
   'keyboard-shortcuts': metadata('ga', 'user', ['web', 'desktop'], ALL_DOC_PLANS),
   library: metadata('ga', 'user', ['web'], CLOUD_DOC_PLANS),
-  'local-mode': metadata('ga', 'developer', ['desktop', 'cli'], KEY_BEARING_DOC_PLANS),
+  'local-mode': metadata('ga', 'developer', ['cli'], KEY_BEARING_DOC_PLANS),
   'managed-cloud': metadata('ga', 'developer', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS, ['v1']),
   'mcp-connections': metadata('ga', 'developer', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS),
   memory: metadata('ga', 'user', ['web', 'desktop'], CLOUD_DOC_PLANS),

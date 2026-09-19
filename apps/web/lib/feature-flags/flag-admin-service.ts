@@ -32,6 +32,10 @@ const COMPARED_FIELDS = [
   'defaultVariant',
   'rules',
   'expiresAt',
+  'maturity',
+  'channel',
+  'availability',
+  'owner',
 ] as const satisfies readonly (keyof FlagDefinitionInput)[];
 
 function changedFields(before: FlagDefinition, after: FlagDefinitionInput): string[] {

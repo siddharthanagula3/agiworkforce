@@ -9,8 +9,7 @@ import {
   scanValueForSecrets,
 } from '@/lib/security/secrets-audit';
 
-export type OutboundChannel =
-  'connector_write' | 'share' | 'artifact_publish' | 'prompt' | 'upload';
+export type OutboundChannel = 'connector_write' | 'share' | 'artifact_publish' | 'upload';
 
 export interface OutboundFinding {
   scanner: string;
@@ -28,8 +27,8 @@ export interface OutboundContentScanner {
 
 export const secretPatternScanner: OutboundContentScanner = {
   id: 'secret_patterns',
-  // The prompt and upload channels run this scanner in their own gates, with
-  // confidence rules this one does not have; a second pass would double-block.
+  // The upload channel runs this scanner in its own gate, with confidence
+  // rules this one does not have; a second pass would double-block.
   channels: ['connector_write', 'share', 'artifact_publish'],
   async scan({ value }) {
     const counts = new Map<string, OutboundFinding>();

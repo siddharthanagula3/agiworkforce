@@ -1,8 +1,39 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const push = vi.fn();
+const schedulePageProps = vi.fn();
+const billing = vi.hoisted(() => ({
+  state: {
+    subscription: { tier: 'enterprise' },
+    isLoading: false,
+    initialized: true,
+  },
+}));
+const projectFixture = {
+  id: 'project-1',
+  name: 'Marketing launch',
+  createdAt: '2026-07-01T00:00:00.000Z',
+  updatedAt: '2026-07-01T00:00:00.000Z',
+};
+const projectApi = vi.hoisted(() => ({
+  getProject: vi.fn(),
+  updateProject: vi.fn().mockResolvedValue(undefined),
+  deleteProject: vi.fn(),
+}));
+const retryProjects = vi.hoisted(() => vi.fn());
+const projectsSession = vi.hoisted(() => ({
+  accountId: 'user-1',
+  projects: [] as Array<typeof projectFixture>,
+  status: 'ready' as 'idle' | 'loading' | 'ready' | 'error' | 'signed-out',
+  error: null as string | null,
+  isReady: true,
+  hasMore: false,
+  isLoadingMore: false,
+  loadMore: vi.fn(),
+  retry: retryProjects,
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -18,19 +49,8 @@ vi.mock('@/features/projects', async (importOriginal) => {
   return {
     ...actual,
     useManagedCloudProjects: () => ({
-      accountId: 'user-1',
-      projects: [
-        {
-          id: 'project-1',
-          name: 'Marketing launch',
-          createdAt: '2026-07-01T00:00:00.000Z',
-          updatedAt: '2026-07-01T00:00:00.000Z',
-        },
-      ],
-      status: 'ready' as const,
-      error: null,
-      isReady: true,
-      retry: vi.fn(),
+      ...projectsSession,
+      projects: actual.useProjectStore((state) => state.projects),
     }),
   };
 });
@@ -53,22 +73,89 @@ vi.mock('@/features/chat/components/Composer/ChatComposerNew', () => ({
 }));
 
 vi.mock('@/features/schedules', () => ({
-  SchedulesPage: ({ scope }: { scope: { projectId: string; projectName: string } }) => (
-    <div data-testid="project-schedules-section">
-      Scheduled for {scope.projectName} ({scope.projectId})
-    </div>
-  ),
+  SchedulesPage: (props: {
+    scope: { projectId: string; projectName: string };
+    subscriptionTier: string;
+  }) => {
+    schedulePageProps(props);
+    return (
+      <div data-testid="project-schedules-section">
+        Scheduled for {props.scope.projectName} ({props.scope.projectId})
+      </div>
+    );
+  },
+  SchedulesEntitlementLoading: () => <div role="status" aria-label="Loading schedule access" />,
 }));
 
-const updateProjectRemote = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/shared/stores/web-auth-store', () => ({
+  useBillingStore: (selector: (state: typeof billing.state) => unknown) => selector(billing.state),
+}));
+
 vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
-  webManagedCloudProjects: {
-    updateProject: (id: string, input: unknown) => updateProjectRemote(id, input),
-    deleteProject: vi.fn(),
-  },
+  webManagedCloudProjects: projectApi,
 }));
 
 import ProjectDetailPage from './page';
+import { useChatProjectStore } from '@agiworkforce/unified-chat';
+
+beforeEach(() => {
+  projectsSession.accountId = 'user-1';
+  projectsSession.status = 'ready';
+  projectsSession.error = null;
+  projectsSession.isReady = true;
+  projectsSession.hasMore = false;
+  projectsSession.isLoadingMore = false;
+  projectApi.getProject.mockReset();
+  projectApi.updateProject.mockClear();
+  projectApi.deleteProject.mockClear();
+  retryProjects.mockClear();
+  billing.state = {
+    subscription: { tier: 'enterprise' },
+    isLoading: false,
+    initialized: true,
+  };
+  schedulePageProps.mockClear();
+  useChatProjectStore.setState({ projects: [projectFixture], activeProjectId: null });
+});
+
+describe('project detail hydration', () => {
+  it('resolves a project omitted from the first list page before presenting not found', async () => {
+    useChatProjectStore.setState({ projects: [], activeProjectId: null });
+    projectApi.getProject.mockResolvedValue(projectFixture);
+    render(<ProjectDetailPage />);
+
+    expect(screen.getByRole('status', { name: 'Loading project' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Project not found' })).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Marketing launch' })).toBeInTheDocument();
+    expect(projectApi.getProject).toHaveBeenCalledWith('project-1');
+  });
+
+  it('presents not found only after the project detail endpoint confirms it', async () => {
+    useChatProjectStore.setState({ projects: [], activeProjectId: null });
+    projectApi.getProject.mockRejectedValue({ status: 404 });
+    render(<ProjectDetailPage />);
+
+    expect(screen.getByRole('status', { name: 'Loading project' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Project not found' })).toBeInTheDocument();
+  });
+
+  it('retries a failed project detail lookup without exposing the raw error', async () => {
+    const user = userEvent.setup();
+    useChatProjectStore.setState({ projects: [], activeProjectId: null });
+    projectApi.getProject
+      .mockRejectedValueOnce(new Error('connect ECONNRESET db.internal.example'))
+      .mockResolvedValueOnce(projectFixture);
+    render(<ProjectDetailPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Project could not be loaded.');
+    expect(screen.queryByText(/ECONNRESET|internal\.example/)).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByRole('heading', { name: 'Marketing launch' })).toBeInTheDocument();
+    expect(projectApi.getProject).toHaveBeenCalledTimes(2);
+  });
+});
 
 describe('project detail page scheduled tab', () => {
   it('opens a project-scoped schedules section preselected to this project', async () => {
@@ -79,6 +166,25 @@ describe('project detail page scheduled tab', () => {
 
     const section = await screen.findByTestId('project-schedules-section');
     expect(section).toHaveTextContent('Scheduled for Marketing launch (project-1)');
+    expect(schedulePageProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ subscriptionTier: 'enterprise' }),
+    );
+  });
+
+  it('waits for billing hydration before rendering project schedule entitlements', async () => {
+    billing.state = {
+      subscription: { tier: 'enterprise' },
+      isLoading: true,
+      initialized: false,
+    };
+    const user = userEvent.setup();
+    render(<ProjectDetailPage />);
+
+    await user.click(screen.getByTestId('project-detail-tab-scheduled'));
+
+    expect(screen.getByRole('status', { name: 'Loading schedule access' })).toBeInTheDocument();
+    expect(screen.queryByTestId('project-schedules-section')).toBeNull();
+    expect(schedulePageProps).not.toHaveBeenCalled();
   });
 });
 
@@ -149,7 +255,9 @@ describe('project detail page icon and colour picker', () => {
     await user.click(within(picker).getByRole('option', { name: 'Terminal' }));
 
     await waitFor(() =>
-      expect(updateProjectRemote).toHaveBeenCalledWith('project-1', { iconEmoji: 'terminal' }),
+      expect(projectApi.updateProject).toHaveBeenCalledWith('project-1', {
+        iconEmoji: 'terminal',
+      }),
     );
     expect(screen.getByTestId('project-appearance-picker')).toBeInTheDocument();
   });
@@ -163,7 +271,7 @@ describe('project detail page icon and colour picker', () => {
     await user.click(within(picker).getByRole('option', { name: 'Sky' }));
 
     await waitFor(() =>
-      expect(updateProjectRemote).toHaveBeenCalledWith('project-1', { accentColor: 'sky' }),
+      expect(projectApi.updateProject).toHaveBeenCalledWith('project-1', { accentColor: 'sky' }),
     );
   });
 

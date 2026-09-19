@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { getAutoRoutingProfiles, getCoreManualModelOptions } from '@agiworkforce/types';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import {
   createInitialScheduleDraft,
@@ -11,7 +10,6 @@ import {
   zonedLocalInputToIso,
 } from './schedule-form';
 import type { ScheduleTask } from '../types';
-import { AVAILABLE_MODELS } from '../types';
 
 function draft(overrides: Partial<typeof INITIAL_SCHEDULE_DRAFT> = {}) {
   return {
@@ -58,19 +56,6 @@ function task(overrides: Partial<ScheduleTask> = {}): ScheduleTask {
 }
 
 describe('schedule form contract', () => {
-  it('derives every picker entry from the canonical auto profiles and current model registry', () => {
-    expect(AVAILABLE_MODELS).toEqual([
-      ...getAutoRoutingProfiles().map((profile) => ({
-        value: profile.id,
-        label: profile.label,
-      })),
-      ...getCoreManualModelOptions().map((model) => ({
-        value: model.id,
-        label: model.label,
-      })),
-    ]);
-  });
-
   it('starts a fresh draft on demand instead of a standing weekday-9am automation', () => {
     expect(createInitialScheduleDraft().recurrence).toBe('once');
     expect(

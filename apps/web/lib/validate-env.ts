@@ -20,6 +20,7 @@ import {
 } from './config/optional-features';
 import { getAllRegisteredPriceIds } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
+import { totpKeysourceValidationError } from './crypto/totp-keysource';
 
 interface ValidationResult {
   valid: boolean;
@@ -99,6 +100,13 @@ export function validateRequiredEnvVars(): ValidationResult {
         `Missing important environment variable: ${varName} (some features may not work)`,
       );
     }
+  }
+
+  const totpKeysource = process.env['TOTP_ENCRYPTION_KEY'];
+  const platformKeyProvider = process.env['AGI_PLATFORM_KEY_PROVIDER']?.trim() || 'env';
+  if (totpKeysource && platformKeyProvider === 'env') {
+    const error = totpKeysourceValidationError(totpKeysource);
+    if (error) errors.push(error);
   }
 
   const hasRedisRestUrl = !!(

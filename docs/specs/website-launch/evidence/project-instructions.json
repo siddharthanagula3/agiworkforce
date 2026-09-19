@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-09-19",
+  "kind": "targeted-verification",
+  "log": "\n> @agiworkforce/web@0.1.1 test /Users/siddhartha/Desktop/agiworkforce/apps/web\n> vitest run \"features/projects/components/__tests__/ProjectSettingsDialog.description.test.tsx\" \"features/projects/components/__tests__/ProjectSettingsDialog.delete.test.tsx\" \"app/api/projects/__tests__/round10-fields.test.ts\"\n\n\n RUN  v5.0.1 /Users/siddhartha/Desktop/agiworkforce/apps/web\n\n\n Test Files  3 passed (3)\n      Tests  39 passed (39)\n   Start at  03:52:02\n   Duration  5.13s (import 52%, transform 27%, environment 9%, tests 7%, setup 5%)\n\n  Transform  transforming modules took 2.39s \u00b7 27% of tracked time, re-done on every run\n             persist transforms across runs with fsModuleCache: true\n             learn more: https://vitest.dev/guide/improving-performance#caching-between-reruns\n\n",
+  "sourceHashes": {
+    "apps/web/features/projects/components/ProjectSettingsDialog.tsx": "4941c3318101afe0f0ada9b01b6a65e31bbca7c1bb9e6019c50b9de317cfb00b",
+    "apps/web/features/projects/components/__tests__/ProjectSettingsDialog.description.test.tsx": "d25d9e8d36a0cc278e4ab5a185e0340711b01f8fd29716777d94032504f55a0b"
+  },
+  "limitations": "Natural new-account provisioning remains unresolved: absent subscription rejected project creation despite Free plan allowance. No production or cross-device verification.",
+  "browser": {
+    "date": "2026-09-19T08:58:50.520942+00:00",
+    "driver": "requested in-app Browser",
+    "projectId": "ba4c5481-d61b-4855-85bb-983933cad013",
+    "assertions": [
+      "Created synthetic project through UI after local Free subscription fixture",
+      "Saved synthetic instructions and observed Project updated",
+      "Reloaded and reopened settings; exact saved instructions present",
+      "Cleared instructions, saved, reloaded and reopened; Instructions empty"
+    ],
+    "conditions": "Fresh loopback database; Free fixture inserted for existing synthetic QA account; no payment IDs or credit changes"
+  }
+}

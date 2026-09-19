@@ -3,7 +3,8 @@ import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
 import { ContinuityOnboardingGate } from '@/src/features/continuity';
 import { useDeviceRegistryHeartbeat } from '@/src/features/device-registry';
 import { useThemeColors } from '@/src/ui/theme';
-import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
+import { drawerGestureOptions } from '@/src/features/shell';
 
 export { default as ErrorBoundary } from './error';
 
@@ -11,7 +12,8 @@ const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
 
 export default function AppLayout() {
   const colors = useThemeColors();
-  const { drawerWidth, usesPersistentDrawer } = useResponsiveLayout();
+  const { drawerWidth, usesPersistentDrawer } = useTabletLayout();
+  const gestures = drawerGestureOptions({ usesPersistentDrawer });
   useDeviceRegistryHeartbeat();
 
   return (
@@ -20,7 +22,7 @@ export default function AppLayout() {
         drawerContent={(props) => <DrawerContent {...props} />}
         screenOptions={{
           headerShown: false,
-          drawerType: usesPersistentDrawer ? 'permanent' : 'front',
+          drawerType: gestures.drawerType,
           drawerStyle: {
             width: drawerWidth,
             backgroundColor: colors.background,
@@ -28,8 +30,9 @@ export default function AppLayout() {
             borderRightWidth: 1,
           },
           overlayColor: colors.scrim,
-          swipeEnabled: !usesPersistentDrawer,
-          swipeEdgeWidth: 40,
+          swipeEnabled: gestures.swipeEnabled,
+          swipeEdgeWidth: gestures.swipeEdgeWidth,
+          swipeMinDistance: gestures.swipeMinDistance,
         }}
       >
         {/* Redirect index */}

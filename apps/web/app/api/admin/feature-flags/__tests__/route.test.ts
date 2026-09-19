@@ -40,6 +40,7 @@ vi.mock('@/lib/security-audit', () => ({
 }));
 
 vi.mock('@/lib/feature-flags/flag-store', () => ({
+  ensureFlagDefinition: vi.fn(async () => undefined),
   listFlagDefinitions: (...args: unknown[]) => mocks.listFlagDefinitions(...args),
   getFlagDefinition: (...args: unknown[]) => mocks.getFlagDefinition(...args),
   insertFlagDefinition: (...args: unknown[]) => mocks.insertFlagDefinition(...args),

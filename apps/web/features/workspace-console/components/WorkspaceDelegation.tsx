@@ -209,7 +209,8 @@ export function WorkspaceDelegation() {
           setDelegateUserId('');
           setScopes([]);
         },
-        onError: (mutationError: Error) => setFormError(mutationError.message),
+        onError: (mutationError: Error) =>
+          setFormError(toUserMessage(mutationError, 'Could not grant this delegation. Try again.')),
       },
     );
   };

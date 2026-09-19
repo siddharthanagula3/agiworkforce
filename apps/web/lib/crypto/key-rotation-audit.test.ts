@@ -32,7 +32,7 @@ describe('scripts/reencrypt.mjs key rotation audit record', () => {
       resourceId: 'two-factor',
       resourceName: 'public.user_two_factor',
       keyVersion: '2',
-      count: 3,
+      count: 4,
     });
     expect(JSON.stringify(details)).not.toMatch(/TOTP_ENCRYPTION_KEY|material/);
   });

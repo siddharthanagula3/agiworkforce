@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { cn } from '../cn';
+import { toUserMessage } from '../lib/network-error';
 import { Spinner } from '../primitives/Spinner';
 import { Switch } from '../primitives/Switch';
 import {
@@ -82,7 +83,7 @@ export function SkillDetailView({
       })
       .catch((caught: unknown) => {
         if (cancelled) return;
-        setFileError(caught instanceof Error ? caught.message : GENERIC_ERROR_COPY);
+        setFileError(toUserMessage(caught, GENERIC_ERROR_COPY));
       })
       .finally(() => {
         if (!cancelled) setFileLoading(false);

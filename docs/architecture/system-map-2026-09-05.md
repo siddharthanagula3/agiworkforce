@@ -19,21 +19,21 @@ Six surfaces share one contract layer. None of them hold a vendor, model, or
 region literal; all six route through shared packages that other groups below
 own.
 
-| Surface                 | Entry point                                                                                | Local persistence                                                                                                           | Tests                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `apps/web`              | `apps/web/app/layout.tsx`                                                                  | browser state only (`apps/web/features/chat/stores/artifacts-store.ts`); durable data lives in Postgres                     | `apps/web/e2e`, `apps/web/__tests__`                                       |
-| `apps/desktop`          | renderer `apps/desktop/src/main.tsx`; privileged host `apps/desktop/src-tauri/src/main.rs` | local SQLite (`apps/desktop/src-tauri/src/data/async_sqlite.rs`, `apps/desktop/src-tauri/src/data/database/sqlite_pool.rs`) | `apps/desktop/check-wiring.sh`, `cargo test -p agiworkforce-desktop --lib` |
-| `apps/mobile`           | `apps/mobile/index.ts` (Expo)                                                              | on-device SQLite (`apps/mobile/storage/db.ts`), MMKV, secure storage                                                        | `apps/mobile/__tests__`                                                    |
-| `apps/cli`              | `apps/cli/src/main.rs`, binary `agi`                                                       | local config/session state (`apps/cli/src/config.rs`)                                                                       | `apps/cli/tests`                                                           |
-| `apps/extension`        | MV3 `apps/extension/manifest.json`                                                         | `chrome.storage`                                                                                                            | `apps/extension/__tests__`                                                 |
-| `apps/extension-vscode` | `apps/extension-vscode/src/extension.ts`                                                   | VS Code global/workspace state and secret storage                                                                           | `apps/extension-vscode/src/__tests__`                                      |
+| Surface                 | Entry point                                                                         | Local persistence                                                                                       | Tests                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `apps/web`              | `apps/web/app/layout.tsx`                                                           | browser state only (`apps/web/features/chat/stores/artifacts-store.ts`); durable data lives in Postgres | `apps/web/e2e`, `apps/web/__tests__`                                             |
+| `apps/desktop`          | public Electron host `apps/desktop/electron/main.ts`; remote renderer is `apps/web` | cloud conversations; local Electron settings, device identity, approved roots, and permission state     | Electron Vitest suites; `pnpm --filter @agiworkforce/desktop typecheck:electron` |
+| `apps/mobile`           | `apps/mobile/index.ts` (Expo)                                                       | on-device SQLite (`apps/mobile/storage/db.ts`), MMKV, secure storage                                    | `apps/mobile/__tests__`                                                          |
+| `apps/cli`              | `apps/cli/src/main.rs`, binary `agi`                                                | local config/session state (`apps/cli/src/config.rs`)                                                   | `apps/cli/tests`                                                                 |
+| `apps/extension`        | MV3 `apps/extension/manifest.json`                                                  | `chrome.storage`                                                                                        | `apps/extension/__tests__`                                                       |
+| `apps/extension-vscode` | `apps/extension-vscode/src/extension.ts`                                            | VS Code global/workspace state and secret storage                                                       | `apps/extension-vscode/src/__tests__`                                            |
 
-The desktop seam is real and enforced both directions: every privileged call
-is registered once in `apps/desktop/src-tauri/src/lib.rs`, and
-`apps/desktop/check-wiring.sh` (`apps/desktop/scripts/check-wiring.mjs`,
-`apps/desktop/scripts/check-wiring.node-test.mjs`) fails if the renderer calls
-a command that block does not register, or the block registers one the
-renderer never calls.
+The public Desktop seam is Electron preload IPC into
+`apps/desktop/electron/runtime/dispatcher.ts`. The dispatcher rejects Local
+inference before permission resolution, exposes device capabilities only
+through the command registry, and gates filesystem work by approved roots and
+path containment. The Rust/Tauri host and `apps/desktop/check-wiring.sh` remain
+maintained internal code, not a second public Desktop product.
 
 Coupling: a vendor change, a model upgrade, a region move, or a cheaper route
 for an existing model touches none of these six trees directly. Tool-support
@@ -191,7 +191,11 @@ ships. The real applied state lives only in the `public.schema_migrations`
 table written by `scripts/neon-migrate.mjs`
 (`scripts/lib/neon-migrations.mjs`), not in the header text. A header-only
 read cannot tell you whether a given migration in the 0153 to 0174 range has
-shipped; that requires the ledger. Row-level security is enforced by
+shipped; that requires the ledger. After applying migrations to production,
+bump `appliedThrough` in `scripts/config/production-migrations-applied.json`
+with the apply date and the ledger commit, because that file is the only
+record `scripts/check-migration-dependencies.mjs` can read. Row-level
+security is enforced by
 `scripts/check-rls-boundary.mjs` against
 `scripts/config/rls-boundary-allowlist.json`, which requires a stated
 cross-tenant justification per entry rather than a blanket exemption.

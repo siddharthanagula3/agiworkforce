@@ -3,6 +3,7 @@
 import { Badge, Button, Skeleton } from '@agiworkforce/ui';
 import { AlertCircle, CheckCircle2, Clock3, Coins, Loader2, XCircle } from 'lucide-react';
 import type { ScheduleRun } from '../types';
+import { scheduleErrorMessage } from '../lib/schedule-error-message';
 import {
   formatCostCents,
   formatDateTime,
@@ -100,7 +101,7 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
       </div>
       {run.error && (
         <p className="mt-2 break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-danger">
-          {run.error}
+          {scheduleErrorMessage(run.error)}
         </p>
       )}
       {resultText && (
@@ -137,7 +138,8 @@ export function ScheduleRunHistory({
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4">
         <p role="alert" className="text-sm text-danger">
-          {state.error ?? 'Run history could not be loaded.'} Retry to check this schedule again.
+          {scheduleErrorMessage(state.error, 'Run history could not be loaded.')} Retry to check
+          this schedule again.
         </p>
         <Button type="button" variant="outline" size="sm" className="mt-3" onClick={onRetry}>
           Retry Run History
@@ -160,7 +162,7 @@ export function ScheduleRunHistory({
       {state.error && (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3">
           <p role="alert" className="text-sm text-danger">
-            {state.error}
+            {scheduleErrorMessage(state.error, 'More run history could not be loaded.')}
           </p>
           <Button type="button" variant="outline" size="sm" className="mt-2" onClick={onLoadMore}>
             Retry Loading More Runs

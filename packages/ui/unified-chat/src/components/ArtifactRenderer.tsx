@@ -424,7 +424,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
     } catch (err) {
       return {
         srcDoc: '',
-        error: err instanceof Error ? err.message : 'Could not prepare this HTML for preview.',
+        error: toUserMessage(err, 'Could not prepare this HTML for preview.'),
       };
     }
   }, [artifact.content, isRunning]);

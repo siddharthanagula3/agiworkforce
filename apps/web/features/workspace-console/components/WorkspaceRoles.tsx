@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/types';
 
 import { useTeamMembers, type TeamMember } from '@/features/settings/hooks/use-settings-queries';
+import { toUserMessage } from '@/lib/user-error-message';
 import {
   useCreateWorkspaceRole,
   useDeleteWorkspaceRole,
@@ -127,7 +128,7 @@ function ErrorLine({ error }: { error: Error | null }) {
   if (!error) return null;
   return (
     <p role="alert" className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-      {error.message}
+      {toUserMessage(error, 'Could not complete this workspace role action. Try again.')}
     </p>
   );
 }

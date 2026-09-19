@@ -476,6 +476,43 @@ describe('loadSelectableSkillCatalog directory cost', () => {
     loadInstallOverrides: async () => new Map<string, boolean>(),
   };
 
+  it('starts independent skill reads while plugin settings are pending', async () => {
+    let releaseSettings!: (ids: ReadonlySet<string>) => void;
+    const settings = new Promise<ReadonlySet<string>>((resolve) => {
+      releaseSettings = resolve;
+    });
+    const pending = loadSelectableSkillCatalog({
+      ...params,
+      loadEnabledPluginIds: () => settings,
+    });
+
+    try {
+      expect(userSkills.listUserSkillsAsManagedSkills).toHaveBeenCalledWith(params.db, 'user-1');
+      expect(directorySkills.listInstalledDirectorySkills).toHaveBeenCalledWith(
+        params.db,
+        'user-1',
+      );
+    } finally {
+      releaseSettings(new Set());
+      await pending;
+    }
+  });
+
+  it('applies current plugin access and install overrides after the parallel reads', async () => {
+    const loadInstallOverrides = async () => new Map([['code-review', false]]);
+    const disabled = await loadSelectableSkillCatalog({ ...params, loadInstallOverrides });
+    expect(disabled.some((skill) => skill.name === 'literature-review')).toBe(false);
+    expect(disabled.some((skill) => skill.name === 'code-review')).toBe(false);
+
+    const enabled = await loadSelectableSkillCatalog({
+      ...params,
+      loadInstallOverrides,
+      loadEnabledPluginIds: async () => new Set(['research-pack']),
+    });
+    expect(enabled.some((skill) => skill.name === 'literature-review')).toBe(true);
+    expect(enabled.some((skill) => skill.name === 'code-review')).toBe(false);
+  });
+
   it('still serves the bundled catalogue when the plugin-id read throws', async () => {
     const skills = await loadSelectableSkillCatalog({
       ...params,

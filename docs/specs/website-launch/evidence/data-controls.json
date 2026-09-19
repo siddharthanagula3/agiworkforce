@@ -1,0 +1,358 @@
+{
+  "recordedAt": "2026-09-19T18:12:19Z",
+  "scope": "Local data export and deletion cancellation",
+  "browser": [
+    "Account export GET /api/user/data returned200 in2.3s; UI recovered from preparation without visible error.",
+    "A deterministic download fixture decoded the actual attachment Response bytes as JSON, preserved representative profile/device data, and excluded live credentials and Stripe identifiers.",
+    "Bulk chat deletion confirmed real server count1 and described restoration; Cancel selected, no delete submitted.",
+    "Project source removal confirmation described impact; Cancel selected, source retained.",
+    "Privacy row now describes recoverable removal; confirmation points to actual Recently deleted label."
+  ],
+  "validation": [
+    "11 tests in export-completeness and PrivacySection.account-deletion passed.",
+    "5 source-level export category/credential scoping guards passed; structural assertions do not prove full downloaded contents.",
+    "Focused PrivacySection ESLint passed; changed privacy row rendered once in Browser.",
+    "7 focused account-export files passed 57 tests; the download-byte regression checks attachment headers, non-empty bytes, portable data and credential exclusion. Focused test lint passed."
+  ],
+  "limitations": [
+    "No account erasure or bulk deletion executed.",
+    "Post-repair mobile Account geometry remains unverified because the authenticated in-app browser connection dropped during three bounded retries."
+  ],
+  "sourceHashes": {
+    "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06",
+    "apps/web/app/api/user/export/route.ts": "a0fa34901b8a29dff005d6c1c8e7c6a3871400fbe9b826c0c18e9ed1e763e7da",
+    "apps/web/app/api/chat/conversations/bulk/route.ts": "daffccf62a1786f362e5d06753f5d0c6c28a3058e2baec3877555f9cdcde5899"
+  },
+  "accountExportBytes": {
+    "status": "passed",
+    "verification": "The actual download Response was read through arrayBuffer, decoded and parsed. It contained representative portable profile and device metadata, was non-empty, used a dated JSON attachment filename, declared private no-store caching and complete status, and omitted fixture Stripe, user-code, access-token and refresh-token values.",
+    "tests": "7 focused export files, 57 tests passed; focused ESLint and diff validation passed.",
+    "limitations": "Safe deterministic database fixtures; no owner export was written to disk and no separate project-source or media target was downloaded.",
+    "jev": {
+      "choice": "data_export_bytes",
+      "confidence": 0.69,
+      "requestHash": "9df31bcbf48b45d8fcbe9b14a70f19515c64debcca25ecbb96bebbe8480d8bca"
+    },
+    "sourceHashes": {
+      "apps/web/__tests__/api/gdpr.test.ts": "eaba1a3f9d0b825c4a22ff26f409cf3dd38f4dd19d9cd829dd78da18e7d78108",
+      "apps/web/app/api/user/export/route.ts": "a0fa34901b8a29dff005d6c1c8e7c6a3871400fbe9b826c0c18e9ed1e763e7da"
+    }
+  },
+  "jev": {
+    "choice": "align_copy",
+    "confidence": 1,
+    "requestHash": "48674f409ebf8805e309d23f625bc9c23de444a1c208b5c543b418b3a3710685"
+  },
+  "linkedDevices": {
+    "status": "passed",
+    "repairAttempts": 1,
+    "browser": "Account now displays No app is linked to this account; sessions continue rendering.",
+    "postgres": {
+      "checks": {
+        "active": true,
+        "revoked": false,
+        "expired": false,
+        "foreign": false,
+        "invalidLegacy": false,
+        "noCredential": null
+      },
+      "realDatabase": "loopback agiworkforce_dev",
+      "temporaryTablesOnly": true,
+      "sourceHash": "8dcc004ed4325fcf1e5b675b53da39bc99f08a8fc4d7df509f0fd32f1aee2f96"
+    },
+    "before": "Actual PostgreSQL query failed: operator does not exist uuid = text.",
+    "verification": "37 route/panel tests pass. Real query evaluated six credential states using temporary tables copied from canonical schema; transaction rolled back.",
+    "source": "apps/web/app/api/settings/devices/route.ts",
+    "scope": "Listing repaired; no owner sessions revoked or credentials altered."
+  },
+  "professionalErrors": {
+    "projectQuota": {
+      "browser": "Inline quota rejection is helpful, preserves name, no HTTP prefix",
+      "attempts": 2,
+      "tests": "65 shared +42 web passes before later suffix extension"
+    },
+    "settings": {
+      "attempts": 2,
+      "tests": "56 formatter +9 actual settings component passes",
+      "scope": "security activity and avatar upload; no live remote-storage avatar upload"
+    },
+    "sourceFiles": [
+      "packages/ui/unified-chat/src/lib/network-error.ts",
+      "packages/ui/unified-chat/src/components/ProjectGallery.tsx",
+      "apps/web/lib/services/free-plan-entitlements.ts",
+      "apps/web/features/settings/components/AuditLogPanel.tsx",
+      "apps/web/features/settings/sections/GeneralSection.tsx"
+    ],
+    "genericTimeout": {
+      "source": "packages/platform/utils/src/errors.ts",
+      "validation": "14 shared error tests pass",
+      "change": "Generic page timeout suggests retry/support, not a shorter prompt; chat-specific advice retained."
+    },
+    "workspaceSwitch": {
+      "repairAttempts": 1,
+      "before": "Empty/malformed body showed transport status; all five new tests failed before normalization/status preservation.",
+      "after": "10 hook/menu tests passed after waiting for asynchronous React Query state notification. Empty/malformed/validation/internal responses normalize through shared formatter; HTTP status retained internally. Existing global mutation toast remains sole owner.",
+      "validation": "Focused lint passed. No real fault injection into owner browser.",
+      "sourceHash": "ebaa318e7687c319081b297e74ef1ef33632f00ec6b4a99e0dfc33f6f1b6e632"
+    },
+    "globalNotifications": {
+      "repairAttempts": 1,
+      "before": "Three actual MutationCache toast regressions failed for raw HTTP400/503 and SQL/internal messages.",
+      "after": "18 mutation/cache/workspace tests pass; shared notification selection delegates canonical formatter, safe validation text and resource-not-found retained; local onError retains ownership and receives no duplicate toast.",
+      "validation": "Focused lint and raw-error guard passed.",
+      "sourceHash": "6e95d829b038f6a3b635fb6bc288f1092b1cee0bd3d431802c2f63a23c571690"
+    }
+  },
+  "naturalFreeProjects": {
+    "attempts": 1,
+    "tests": "46 route/resolver +21 sharing/pagination tests",
+    "browser": "Demo without subscription created first project; second denied",
+    "database": "One project and no subscription confirmed before Enterprise upgrade",
+    "source": "apps/web/app/api/projects/route.ts"
+  },
+  "usagePresentation": {
+    "tests": "14 usage/failure-state plus navigation regression; 15 navigation/usage/Help tests passed at checkpoint",
+    "browser": "Enterprise settings renders contract explanation instead of four100%-remaining bars",
+    "purchasedLabel": "Purchased credits explicitly separate from plan allowance",
+    "workspaceDestination": "Browser active Enterprise usage rendered after recovery; zero spend/turns and monthly limit controls. No metered contract claim.",
+    "source": "apps/web/features/settings/sections/UsageSection.tsx"
+  },
+  "help": {
+    "repairAttempts": {
+      "staleSearch": 1,
+      "excerptPresentation": 1
+    },
+    "before": "Two delayed-result regressions and one Markdown-rendering regression failed before repair.",
+    "verification": "13 Help component/collection tests pass; Browser credits search displays formatted excerpts, no nested paragraphs or horizontal overflow, and 41 articles across 18 collections.",
+    "remaining": "Broader article content accuracy remains unverified; full article access repaired.",
+    "sources": [
+      "apps/web/features/support/components/HelpSearch.tsx",
+      "apps/web/app/help/page.tsx"
+    ],
+    "typecheck": "Full web tsc passed after fetch-mock typing correction; final Help formatting additions checked by focused tests/lint.",
+    "articleAccess": {
+      "repairAttempts": 1,
+      "verification": "22 focused Help route/collection/helper/component tests passed; full web typecheck and focused lint passed. Browser credits search opened all six article sections; missing slug returned404.",
+      "content": "Voice audio-transcription boundary and Enterprise contract usage wording corrected and observed in Browser. Canonical rebuild41 documents/215 chunks; corpus consistency check and18 retrieval/helper/collection tests passed.",
+      "scope": "No inference or media generation; content accuracy of all41 articles is not claimed.",
+      "sourceHashes": {
+        "apps/web/lib/support/help-articles.ts": "abd140f625cb7283de8edfc57f07bd717cb9b51c90fd70f132306bd72fc0e05f",
+        "apps/web/app/help/[slug]/page.tsx": "caaaf5ddf8d83aa412107c3fcaeea6deda8e1067252133d3e56b4d89324b2f5a",
+        "apps/web/content/support/voice.md": "92169f0f3f46fafc04ebdc9257576d93273241e6c4b753965bc3c03613334db2",
+        "apps/web/content/support/usage-and-credits.md": "e449094dbf1812e954ffa59c2f507afb800306734ff2f3cb3086c8bb0d165820",
+        "apps/web/lib/support/agent/corpus.generated.json": "d36d32a4393e12a6cc87c8ab31b76265d0ede43b4d959f2ccd14a93f6c109d4f",
+        "apps/web/content/support/accounts-and-sign-in.md": "9f978c0ec95ae05805b74eecbf2132bce1ac5251b454f7718ebe5dbbfdb3952f",
+        "apps/web/content/support/install-desktop-and-mobile.md": "6babe49cf02954e5551d936edbe5b7380625d11c930ce6ac51c172e3d2fcf45c"
+      },
+      "additionalContent": "Account guide now matches password/email-code controls and workspace-specific saved history; links to canonical release status. Installation guide qualifies plan/workspace/browser requirements. Browser account guide verified; corpus consistency and15helper/retrieval tests passed."
+    }
+  },
+  "voiceAndNotifications": {
+    "dictation": {
+      "repairAttempts": 1,
+      "before": "Two new hook regressions failed; Browser off setting left mic enabled.",
+      "after": "46 hook/store/button tests pass; Browser explanatory disabled microphone verified; original on restored. Late microphone grants released, canceled transcripts ignored.",
+      "limitations": "No hardware capture or provider transcription; live voice mode not invoked."
+    },
+    "notifications": {
+      "repairAttempts": 1,
+      "before": "Four load/save/retry regressions failed.",
+      "after": "41 settings tests pass; Browser reply-ready Off saved, persisted after reload, and original Browser choice restored with Saved confirmation.",
+      "delivery": "Browser push permission blocked; no external notification sent."
+    },
+    "copy": "General read-aloud description now scopes itself rather than denying separate live voice mode.",
+    "sourceHashes": {
+      "apps/web/features/chat/hooks/use-dictation.ts": "f31016380d75790c575ad1d6cfb08c4362065936fcfbced47e220d7f2d3a0765",
+      "apps/web/features/chat/stores/voice-input-store.ts": "1d1f77bf8fcb0a6a7de6ed960d10d6b0c7c11b4f9e9f44f1638bc49c41021bf3",
+      "apps/web/features/chat/components/Composer/VoiceInputButton.tsx": "9d6ef4326c2fbd097c3119b5ce3307ea444434dcaadb8349991909be3b06ae5b",
+      "apps/web/features/chat/components/Composer/ChatComposerNew.tsx": "b3e0924419296b08eec5103c1813dd2a2751c7d5193100d5c58d02cd5f66d366",
+      "apps/web/features/settings/sections/NotificationsSection.tsx": "3878fe59bb43e0b7c097872835e1910a7546011a002da4baa8efb5cb06a37cf5",
+      "apps/web/features/settings/sections/GeneralSection.tsx": "d5bd6ce415f863925beee429039ace83eb1a4a5a918829a97a17e1ab9174b40c"
+    },
+    "layout": {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "browser": "Notification dialog screenshot inspected; no clipped controls or horizontal overflow.",
+      "limitation": "Narrow/mobile viewport not verified."
+    },
+    "typecheck": "Full web typecheck passed after voice/notifications changes and again after full Help article route."
+  },
+  "browserPermissionRecovery": {
+    "repairAttempts": 1,
+    "before": "After browser notification permission was denied, the Settings switch remained disabled even when the user restored site permission in browser settings while the page stayed open. The new regression failed before repair.",
+    "after": "The notification hook re-reads browser permission and the current push subscription when the app regains focus or becomes visible. Restored permission makes the switch usable without a page reload; denied permission remains inert and least-privilege.",
+    "verification": "5 notification and settings files passed 43 tests. Focused ESLint, diff validation and full Web typecheck passed.",
+    "limitations": "Deterministic browser-API fixtures; no external push delivery was sent and browser settings cannot be opened programmatically.",
+    "jev": {
+      "priorityChoice": "permission_recovery",
+      "priorityConfidence": 0.29,
+      "priorityRequestHash": "4b4d748cd1459d041831863080ee2295a5110fc46b2da96b574b2e6d26eb9b54",
+      "approachChoice": "focus_refresh",
+      "approachConfidence": 0.92,
+      "approachRequestHash": "32ece9512193cee5c85745f5d27018466c1e2bc0fb05502fb66fc37fe075a270"
+    },
+    "sourceHashes": {
+      "apps/web/features/notifications/components/WebPushToggle.tsx": "25892620a89ed678a695ed062629a66e3a32903811f13b8d8eaf6c2bf8c5b794",
+      "apps/web/features/notifications/components/__tests__/WebPushToggle.test.tsx": "70bef3dfbcfb032794eabfc94c4a853121e8e73856ce5247e54bf73a750e1a2e"
+    }
+  },
+  "telemetryPrivacy": {
+    "repairAttempts": 1,
+    "before": "Three behavioral regressions failed: control editable before load, consent enabled before save, failed opt-out had no retry and stale mirror could restore it.",
+    "after": "83 affected privacy/consent/sync tests passed; focused lint and raw-error guard passed. Added pending local opt-out gate also covers initial document consent.",
+    "browser": "Opt-in Saved, opt-out Saved, reload shows telemetry false and temporary false; original choices restored. No remote telemetry enabled in runtime process.",
+    "typecheck": "Full web typecheck passed after correcting fixture version to string|null and including Enterprise team gate.",
+    "limitations": "Actual external telemetry delivery not exercised. Failed account save requires retry for other devices; local opt-out remains enforced.",
+    "sourceHashes": {
+      "apps/web/lib/sentry-shared.ts": "d022ec9488e3df9ff3927f0a9d2ea165ca2f41b151fc468b12df857e2004ff82",
+      "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06"
+    },
+    "claimsRepair": {
+      "repairAttempts": 1,
+      "before": "Settings, Help and the public privacy policy said all Sentry reporting was opt-in and that no message or prompt content could be sent. The implementation consent-gates browser Sentry, but configured server and edge Sentry is operational, and arbitrary free-text diagnostics can remain after secret-shaped values are masked.",
+      "after": "The product now distinguishes browser consent from server and edge operational reporting. It states the exact scrubbed request fields, the free-text diagnostic boundary, stable browser user identifiers, and the absence of server-side user attachment.",
+      "verification": "7 focused privacy, Sentry and support-corpus files passed 171 tests; 8 broader privacy, legal, Help and surface-claim files passed 120 tests. Support corpus check, focused ESLint, Web typecheck, i18n parity, docs:check, residual phrase scan and diff validation passed.",
+      "limitations": "Deterministic source and behavior tests; no external Sentry delivery was generated.",
+      "jev": {
+        "choice": "narrow_claims",
+        "confidence": 0.94,
+        "requestHash": "68eb7f8459af558bcd0e47b7d23062fbd045531c366592aaa5f128d5c9805758"
+      },
+      "sourceHashes": {
+        "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06",
+        "apps/web/app/privacy/page.tsx": "3838ff43fa3b14af962b452e964757500f0cc6ab5b306f81fff10b2ccc606b5f",
+        "apps/web/content/support/privacy-controls.md": "d6e834fb617df8ea0284ed2d3945dc765c514bc3416d030f2fe3d7bb1cb3415a",
+        "apps/web/lib/support/agent/corpus.generated.json": "d36d32a4393e12a6cc87c8ab31b76265d0ede43b4d959f2ccd14a93f6c109d4f",
+        "apps/web/__tests__/privacy-claims.spec.ts": "bb8e33a5e35e34026cf236d2be1ff5e489991068245cffdab43685f9a751a8b4",
+        "apps/web/features/settings/sections/__tests__/PrivacySection.density.test.tsx": "9c2f481644584a8eab7834d26592a987933a75f82341dee61f7fdea44e60ba94"
+      }
+    }
+  },
+  "approvalRecovery": {
+    "repairAttempts": 1,
+    "regression": "Two HTTP/auth failures reproduced hidden pending controls before fix.42 approval hook/inbox/route tests pass after;19 final hook tests include four temporary/persisted failure cases, restored projections and successful explicit denial after recovery.",
+    "implementation": "Failed HTTP/auth decisions reset canonical pending projection and tool state. Partial decisions remain persisted; final submitted decisions are not prematurely persisted before server acceptance. Authentication failure gives sign-in instruction. No automatic execution retry.",
+    "scope": "Simulated stream/provider responses with real frontend store and selector; no paid inference or real tool action. Browser end-to-end approval remains unverified.",
+    "sourceHashes": {
+      "apps/web/lib/hooks/useChatStream.ts": "24fdac257b897369ac388b214a5f40ad4abf34fde3b223cacaa26bc82c485f13",
+      "apps/web/lib/hooks/useChatStream.approval.test.tsx": "b9924b16bd8cf4499f3a8bf65a2606177bf86fcb86b93435819dfa86c308f009",
+      "apps/web/features/chat/components/approvals/ApprovalInbox.tsx": "413dbe2950db28c0d55a3842dd8433023302af846e98dfc5a047b58c151503c5"
+    }
+  },
+  "generalPreferences": {
+    "verification": "One personalization-load regression failed before;23 tests pass after guard. Two save-order/immediate-manual-save regressions failed before;26 final tests pass including failure retention and no automatic retry loop. Focused lint passes. Browser immediate Formal selection/Save profile shows Saved; reload verification in progress.",
+    "implementation": "Existing load retry guards both namespaces. One component-local pending save coalesces latest draft and awaits both namespace results. Manual Save joins same path; failed draft retained for explicit retry. Unmount flush uses existing keepalive option and reports failure. No new orchestration layer.",
+    "sourceHashes": {
+      "apps/web/features/settings/sections/GeneralSection.tsx": "d5bd6ce415f863925beee429039ace83eb1a4a5a918829a97a17e1ab9174b40c",
+      "apps/web/features/settings/sections/GeneralSection.test.tsx": "da85cfa5c13a9ee4fb1354d42e344b87e856f6b18d1433fcc871ac8a8fabcd4c"
+    },
+    "browser": "Formal response style saved immediately with Save profile, Saved shown, reload retained Formal. Restored Default, Saved shown, reopened Default selected. Default model Luna persists. No inference. Visible main text no horizontal overflow; sr-only description excluded from clipping finding.",
+    "validation": "26 tests, focused lint and full web typecheck49648 pass."
+  },
+  "settingsCloseLayout": {
+    "verification": "Desktop screenshot reproduced overlap. Existing close bottom70.6px; corrected scroll-pane top78.6px:8px clearance even when textarea focused/viewport scrolled.1280px viewport no horizontal overflow.56 shared-modal tests pass. Mobile rule unchanged; mobile rendering not newly verified.",
+    "sourceHashes": {
+      "packages/ui/ui/src/settings-modal/SettingsModal.tsx": "46891b3cbf524f4d51c6086ecaac2c4eb92dfc512840a38c5edd33dfa349577e"
+    }
+  },
+  "workspaceCacheIsolation": {
+    "repairAttempts": 1,
+    "before": "The workspace-switch cleanup retained the previous effective-policy cache and pending MCP context selection. A focused regression failed on the retained policy before the repair.",
+    "after": "Workspace switches remove both values while retaining account-level model preferences. This prevents a stale workspace policy or connector resource handoff from crossing into the next workspace.",
+    "verification": "21 Web workspace/cache tests, 2 Web policy-hook tests and 5 client-runtime policy tests pass. Focused ESLint, diff checks and full Web typecheck pass.",
+    "limitations": "Deterministic browser-storage and hook tests; no production cache or provider execution is inferred.",
+    "jev": {
+      "choice": "data_controls",
+      "confidence": 0.99,
+      "requestHash": "59275ffa95c7b4c6d1eeeb5f0284df6009de5ffa08a9b1ccbd0377bf3f096a10"
+    },
+    "sourceHashes": {
+      "apps/web/shared/stores/authentication-store.ts": "6bf43b5951240ca5afa9cc536f1f5b97ee59fca1c3cfd66061d00445b1113107",
+      "apps/web/shared/stores/__tests__/authentication-store.cache-scope.test.ts": "a366f51390975e14edffa8148e24088bd4e6dbc1478d91229ad2a98eea1bc018"
+    }
+  },
+  "releaseFreshnessValidation": {
+    "recordedAt": "2026-09-19T15:42:30Z",
+    "verification": [
+      "Release dependency pass: 191 web test files and 1780 tests passed.",
+      "Shared UI package pass: 69 test files and 500 tests passed.",
+      "Support corpus rebuilt through the canonical command; 41 documents and 215 chunks; drift check passed.",
+      "Message activation and direct project loading focused pass: 4 files and 48 tests passed."
+    ],
+    "limitations": [
+      "No hardware audio capture, downloaded export-byte inspection, provider generation or production behavior is inferred from these deterministic tests.",
+      "The aggregate release gate remains pending until every required CI check passes against the final main commit."
+    ],
+    "messageActivation": {
+      "behavior": "The first user message stamps activation and titles without an unconditional message count; later messages skip count and title work.",
+      "sourceHashes": {
+        "apps/web/app/api/chat/conversations/[id]/messages/route.ts": "389beb3e800ea1590b51ce752c8e9c0592f735a5a9ed8e3e7b3fa72fa6f5ab20",
+        "apps/web/app/api/chat/conversations/[id]/messages/route.activation.test.ts": "282c4d55730c41098553ea9682bb4d188bffa9a0010f59d3a3f09b0339d4adfb"
+      }
+    },
+    "directProjectLoad": {
+      "behavior": "A direct project URL settles to fetched project content, a final not-found state, or a sanitized retryable error after list hydration.",
+      "sourceHashes": {
+        "apps/web/app/chat/projects/[id]/page.tsx": "8d2305d2b722a997073d80656277e5a3effd1ee5c71613301b4b212c1789d326",
+        "apps/web/app/chat/projects/[id]/page.test.tsx": "48388377b42f8791dce20fc8ce0c5c872148f2efddeba306bdf28b3bc2d4b4a8",
+        "apps/web/app/chat/projects/[id]/page.org-shared.test.tsx": "30a359f1d87e876dfbd3ca6d70e23f92dc338fa93dd2ce74d4e40a09b1cfeaf6"
+      }
+    }
+  },
+  "mobileSettingsLayout": {
+    "status": "partial",
+    "repairAttempts": 1,
+    "before": "At 390×844, Privacy and Workspace fit the 388px settings pane without visible horizontal overflow. Account rendered a 597px active-sessions table inside that pane, leaving the action column outside the initial viewport.",
+    "after": "Account keeps Device and the action column visible below the small breakpoint, and moves Location, Created and Last active into an inline mobile detail list. The desktop table retains the full columns at the small breakpoint and above.",
+    "verification": "The new regression failed before repair and now passes. Four Account suites pass 24 tests; focused ESLint and diff validation pass.",
+    "liveBrowser": "The pre-repair 390×844 defect was measured in the authenticated local browser. Three bounded post-repair attempts reached the repaired page but the in-app browser connection dropped while the local development process was under database and filesystem load, so post-repair pixel geometry is not claimed.",
+    "limitations": "Post-repair authenticated browser geometry at 390×844 and 320×700 remains unverified. Other settings sections were not exhaustively remeasured.",
+    "jev": {
+      "priorityChoice": "mobile_data_controls",
+      "priorityConfidence": 1,
+      "priorityRequestHash": "5f72630ebb574a21f3f7eb225525b28aa9ddaa0d9a91e4752ca5d50104b51c4a",
+      "approachChoice": "collapse_metadata",
+      "approachConfidence": 0.79,
+      "approachRequestHash": "17ab1bec62c00f7723960355d22cf91343b184f612cdad3c89f43273cf17f1ee"
+    },
+    "sourceHashes": {
+      "apps/web/features/settings/sections/AccountSection.tsx": "2172465419fdfa5eb83f1c8bf9444b9859a5388b21ceb948a3354e8495483b5c",
+      "apps/web/features/settings/sections/AccountSection.sessions.test.tsx": "bd24c368abe384ddcbccaece9ac1b82cea6398e72d4121b4c4269c6a3f3f4918"
+    }
+  },
+  "downloadTargetBytes": {
+    "status": "passed",
+    "scope": "Deterministic authenticated route fixtures for project source bytes, project export JSON, account-export media links and media target bytes.",
+    "verification": [
+      "Project source GET returned exact private no-store bytes; active-workspace ownership stayed in the query; executable document types were forced to opaque attachments.",
+      "Project source UI refused HTTP errors, reported network failure, and reused the successful response Blob on retry without opening an error body.",
+      "Project export returned a downloadable no-store JSON snapshot containing the source metadata and extracted text.",
+      "Account export assigned every media row an authenticated /api/files/{id} link and documented authorization and non-expiry.",
+      "The media target denied unauthenticated/out-of-workspace access, served the exact stored bytes with matching SHA-256, and forced active document types to opaque attachments."
+    ],
+    "tests": "6 focused files passed 46 tests in 2.48 seconds.",
+    "limitations": "Safe route/storage fixtures; no owner file was written to disk and no production object storage was contacted.",
+    "jev": {
+      "initialRequestHash": "f91a204c1c6803347dccc6be862a61348659e119f3e96112145b07289f049704",
+      "initialStatus": "priority below required confidence; no task selected",
+      "selectedRequestHash": "9c2907db0ba865596c203fae8a27d0dffc55b6e1e7f764456183398c89dcba12",
+      "choice": "verify_download_route_chain",
+      "confidence": 1
+    },
+    "sourceHashes": {
+      "apps/web/app/api/projects/[id]/knowledge-files/[fileId]/route.ts": "bbaa6b902446cdac219178421be6589e463be86f60cb13d2e56bf691d25099f8",
+      "apps/web/app/api/projects/[id]/knowledge-files/__tests__/file-route.test.ts": "2dedf9f0c22572799b1aee05a2b9bf48b5ce28e0bd4760efc471806d5d7d38be",
+      "apps/web/features/projects/components/FilePreviewModal.tsx": "751d3bda95253aacdd20e81273473099d62f145703a5c02b48037ce4bf5497b6",
+      "apps/web/features/projects/components/__tests__/FilePreviewModal.download.test.tsx": "bce0e152d4bba1237c1d2308e01a2426d84da4e9707ff057984b7492535b1514",
+      "apps/web/app/api/files/[id]/route.ts": "f7b8349fcb67a91d7f37300151ff3481d26239e791f75da77283ca2fabc28a5e",
+      "apps/web/app/api/files/[id]/__tests__/route.test.ts": "3b9a2cedf5125704816d01cc318f4695b6f29624b0fddb3cb07bc793b0876a2f",
+      "apps/web/app/api/user/export/route.ts": "a0fa34901b8a29dff005d6c1c8e7c6a3871400fbe9b826c0c18e9ed1e763e7da",
+      "apps/web/app/api/user/export/__tests__/export-media-download-links.test.ts": "3fbe1a23ecec4804ee3ee727d7f2f790c165dbe7f499efef4f586ac74c4d0c89",
+      "apps/web/app/api/user/__tests__/export-completeness.test.ts": "4574efee1a14582e989dea3ead3bd18ec3310b2ef66d0acf5f62eb11012548b9",
+      "apps/web/app/api/projects/[id]/export/route.ts": "d127d7cfcde6f9ec006e7a7199d8307a9c00a293bcefd0f398c4c7c429205747",
+      "apps/web/app/api/projects/[id]/export/route.test.ts": "de086881ca26cdd0c795b07c410f5362153123dfbcc35689449ff536b445e91e"
+    }
+  }
+}

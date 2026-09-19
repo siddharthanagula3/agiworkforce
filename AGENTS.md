@@ -2,17 +2,14 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-08-29
+Last updated: 2026-09-19
 
-The canonical, tool-neutral operating contract for every coding agent in this
-repository. `CLAUDE.md` is a thin adapter over this file and may not weaken it.
-Path-scoped rules live in `.claude/rules/`; machine-readable ownership lives in
-`docs/agent-context/lanes.json`.
+The canonical, tool-neutral operating contract for every coding agent in this repository.
+`CLAUDE.md` is a thin adapter and may not weaken it. Path-scoped rules live in
+`.claude/rules/`; machine-readable ownership lives in `docs/agent-context/lanes.json`.
 
-This file states rules. It does not mirror facts that live in code, the
-previous agent-doc corpus was deleted in August 2026 because it did exactly
-that and rotted. Every mutable value below is a pointer to the thing that
-enforces it.
+This file states rules, not mutable facts that belong in code. Every mutable
+value below points to the thing that enforces it.
 
 ## 1. Verification
 
@@ -29,6 +26,9 @@ enforces it.
   counted as the product's, a check that passed over an input it never read.
 - **A second opinion sharing the first one's question is not independent.**
   Verification catches fabrication, not a premise both parties assumed.
+- Use Jev for explicit task classification, skill selection, prioritization, and approach choices
+  via `pnpm -s agent:decide`; follow [the workflow](docs/development/agent-workflow.md#jev-decisions).
+  Failed or abstained decisions pause; never silently replace them with your own selection.
 
 ## 2. Source-of-truth precedence
 

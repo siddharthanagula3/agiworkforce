@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -47,9 +48,20 @@ async function handleClose(request: NextRequest, context: RouteContext) {
   const subscription = await SubscriptionService.getSubscription(db, userId);
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
   try {
-    return NextResponse.json({
-      session: await closeCloudCodeSession(db, { userId, organizationId }, sessionId, planTier),
+    const session = await closeCloudCodeSession(
+      db,
+      { userId, organizationId },
+      sessionId,
+      planTier,
+    );
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      request,
+      eventType: 'code_session_lifecycle_changed',
+      detail: { resourceType: 'code_session', resourceId: sessionId, status: 'closed' },
     });
+    return NextResponse.json({ session });
   } catch (error) {
     rethrowCloudCodeError(error);
   }

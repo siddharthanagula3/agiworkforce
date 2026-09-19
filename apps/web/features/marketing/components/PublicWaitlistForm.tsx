@@ -17,7 +17,7 @@ type FormState = 'idle' | 'submitting' | 'success' | 'error';
 export function PublicWaitlistForm({
   source = 'website',
   ctaLabel = 'Join Waitlist',
-  successMessage = "You're on the list. We'll email you when the Enterprise program opens for your requirements.",
+  successMessage = "You're on the list. A person will contact you to discuss contract-scoped Enterprise access for your requirements.",
   purposes = WAITLIST_CONSENT_PURPOSES,
 }: {
   source?: WaitlistModalSource;

@@ -12,6 +12,7 @@ const {
   deprecatePluginVersionMock,
   suspendPluginVersionMock,
   rollbackPluginMock,
+  recordAuditEventMock,
 } = vi.hoisted(() => ({
   requirePlatformAdminMock: vi.fn(),
   csrfMock: vi.fn(),
@@ -24,6 +25,7 @@ const {
   deprecatePluginVersionMock: vi.fn(),
   suspendPluginVersionMock: vi.fn(),
   rollbackPluginMock: vi.fn(),
+  recordAuditEventMock: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -31,6 +33,11 @@ vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: requirePlatformAdmin
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
+  recordAuditEvent: recordAuditEventMock,
+}));
 vi.mock('@/lib/services/plugin-lifecycle', () => ({
   listPluginVersions: listPluginVersionsMock,
   listPluginLifecycleEvents: listPluginLifecycleEventsMock,
@@ -68,6 +75,7 @@ beforeEach(() => {
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
   getNeonDbMock.mockReturnValue({ query: vi.fn() });
+  recordAuditEventMock.mockResolvedValue(undefined);
 });
 
 describe('GET /api/plugins/[id]/lifecycle', () => {
@@ -135,13 +143,74 @@ describe('POST /api/plugins/[id]/lifecycle', () => {
   });
 
   it('rolls back the plugin', async () => {
-    rollbackPluginMock.mockResolvedValue({ restoredVersion: '1.0.0' });
+    rollbackPluginMock.mockResolvedValue({
+      restored: { version: '1.0.0' },
+      from: '1.1.0',
+      installationsMoved: 2,
+    });
     const response = await POST(post(PLUGIN_ID, { action: 'rollback' }), params(PLUGIN_ID));
     expect(response.status).toBe(200);
     expect(rollbackPluginMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ pluginId: PLUGIN_ID, actorUserId: 'admin-1' }),
     );
+  });
+
+  it('records every lifecycle action in the platform audit trail', async () => {
+    suspendPluginVersionMock.mockResolvedValue({
+      version: { version: '1.1.0', status: 'suspended' },
+      installationsStopped: 3,
+    });
+    const response = await POST(
+      post(PLUGIN_ID, { action: 'suspend', version: '1.1.0', reason: 'Leaks its token.' }),
+      params(PLUGIN_ID),
+    );
+
+    expect(response.status).toBe(200);
+    expect(recordAuditEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'admin-1',
+        eventType: 'admin_policy_changed',
+        severity: 'warning',
+        detail: expect.objectContaining({
+          resourceType: 'plugin',
+          resourceId: PLUGIN_ID,
+          version: '1.1.0',
+          status: 'suspend',
+          reason: 'Leaks its token.',
+          count: 3,
+        }),
+      }),
+    );
+  });
+
+  it('audits a deprecation with the reason members are owed', async () => {
+    deprecatePluginVersionMock.mockResolvedValue({ version: '1.0.0', status: 'deprecated' });
+    const response = await POST(
+      post(PLUGIN_ID, { action: 'deprecate', version: '1.0.0', reason: 'Superseded.' }),
+      params(PLUGIN_ID),
+    );
+
+    expect(response.status).toBe(200);
+    expect(recordAuditEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'admin_policy_changed',
+        detail: expect.objectContaining({
+          resourceId: PLUGIN_ID,
+          version: '1.0.0',
+          status: 'deprecate',
+          reason: 'Superseded.',
+        }),
+      }),
+    );
+  });
+
+  it('does not audit an action the lifecycle refused', async () => {
+    publishPluginVersionMock.mockRejectedValue(new Error('cannot publish'));
+    await POST(post(PLUGIN_ID, { action: 'publish', version: '1.1.0' }), params(PLUGIN_ID)).catch(
+      () => undefined,
+    );
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
   });
 
   it('rejects an unknown action with 400 and never mutates', async () => {

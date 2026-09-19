@@ -14,6 +14,7 @@ import {
   SyncState,
 } from '@/lib/offline/offlineSync';
 import type { SyncManagerState } from '@/lib/offline/offlineSync';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface OfflineIndicatorProps {
   position?: 'top' | 'bottom';
@@ -140,7 +141,9 @@ export function OfflineIndicator({
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium">{message}</p>
             {state.state === SyncState.ERROR && state.error && (
-              <p className="text-xs opacity-75">{state.error.message}</p>
+              <p className="text-xs opacity-75">
+                {toUserMessage(state.error, 'Sync did not finish. Retry when you are online.')}
+              </p>
             )}
             {state.lastSyncTime && state.state === SyncState.ONLINE && (
               <p className="text-xs opacity-75">Last synced: {formatTime(state.lastSyncTime)}</p>

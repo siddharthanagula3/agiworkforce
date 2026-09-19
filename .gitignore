@@ -292,3 +292,7 @@ tmp/qa/
 
 # swc plugin cache written by next dev at whichever cwd ran it
 .swc/
+
+# Local launch coordinator state and advisory lock files
+/.codex/launch-runs/
+/.codex/hooks/__pycache__/

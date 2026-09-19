@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type ConnectionStatus =
   | 'awaiting_domain_verification'
@@ -93,12 +94,51 @@ const monoStyle = {
   color: 'var(--text-1)',
 } as const;
 
-async function readError(response: Response, fallback: string): Promise<string> {
+interface SsoRequestError {
+  message: string;
+  field: string | null;
+}
+
+const FIELD_ELEMENT_IDS: Readonly<Record<string, string>> = {
+  domain: 'sso-domain',
+  metadata_url: 'sso-metadata-url',
+  oidc_discovery_url: 'sso-discovery-url',
+  oidc_client_id: 'sso-client-id',
+};
+
+function ssoErrorMessage(
+  raw: string,
+  field: string | null,
+  status: number,
+  fallback: string,
+): string {
+  if (field === 'domain' || /public mailbox provider/i.test(raw)) {
+    return /public mailbox provider/i.test(raw)
+      ? 'Use a company domain your organization controls. Public email domains cannot be claimed.'
+      : 'Enter a company domain, such as example.com.';
+  }
+  if (field === 'metadata_url') return 'Use an HTTPS metadata URL from your identity provider.';
+  if (field === 'oidc_discovery_url') {
+    return 'Use the HTTPS discovery URL from your identity provider.';
+  }
+  if (field === 'oidc_client_id') return 'Enter the client ID from your identity provider.';
+  return toUserMessage(Object.assign(new Error(raw), { status }), fallback);
+}
+
+async function readError(response: Response, fallback: string): Promise<SsoRequestError> {
   try {
-    const body = (await response.json()) as { error?: string };
-    return typeof body.error === 'string' && body.error.length > 0 ? body.error : fallback;
+    const body = (await response.json()) as { error?: string; field?: string };
+    const raw = typeof body.error === 'string' && body.error.length > 0 ? body.error : fallback;
+    const field = typeof body.field === 'string' ? body.field : null;
+    return { message: ssoErrorMessage(raw, field, response.status, fallback), field };
   } catch {
-    return fallback;
+    return {
+      message: toUserMessage(
+        Object.assign(new Error(fallback), { status: response.status }),
+        fallback,
+      ),
+      field: null,
+    };
   }
 }
 
@@ -122,6 +162,7 @@ export function SSOPanel({
   const [connections, setConnections] = useState<Connection[] | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorField, setErrorField] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [domain, setDomain] = useState('');
@@ -161,6 +202,7 @@ export function SSOPanel({
     async (url: string, method: string, body?: unknown, fallback = 'Request failed') => {
       setBusy(true);
       setError(null);
+      setErrorField(null);
       try {
         const csrfToken = await getCsrfToken();
         const response = await fetch(url, {
@@ -170,13 +212,18 @@ export function SSOPanel({
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         });
         if (!response.ok) {
-          setError(await readError(response, fallback));
+          const failure = await readError(response, fallback);
+          setError(failure.message);
+          setErrorField(failure.field);
+          const elementId = failure.field ? FIELD_ELEMENT_IDS[failure.field] : undefined;
+          if (elementId) requestAnimationFrame(() => document.getElementById(elementId)?.focus());
           return false;
         }
         await load();
         return true;
       } catch {
         setError(fallback);
+        setErrorField(null);
         return false;
       } finally {
         setBusy(false);
@@ -262,7 +309,7 @@ export function SSOPanel({
         </div>
 
         <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {error ? (
+          {error && errorField === null ? (
             <p
               role="alert"
               style={{
@@ -396,12 +443,20 @@ export function SSOPanel({
                           disabled={busy}
                           style={secondaryButtonStyle}
                           onClick={() =>
-                            void mutate(
-                              '/api/admin/sso/verify-domain',
-                              'PUT',
-                              { connectionId: connection.id },
-                              'Could not reissue the domain challenge.',
-                            )
+                            confirm({
+                              title: 'Reissue this domain challenge?',
+                              description:
+                                'The current DNS TXT value will stop working immediately. You must replace it with the new value in DNS before this domain can be verified.',
+                              confirmLabel: 'Reissue challenge',
+                              destructive: false,
+                              onConfirm: () =>
+                                mutate(
+                                  '/api/admin/sso/verify-domain',
+                                  'PUT',
+                                  { connectionId: connection.id },
+                                  'Could not reissue the domain challenge.',
+                                ),
+                            })
                           }
                         >
                           Reissue challenge
@@ -462,13 +517,21 @@ export function SSOPanel({
               <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
                 Email domain
                 <input
+                  id="sso-domain"
                   aria-label="Email domain"
+                  aria-invalid={errorField === 'domain'}
+                  aria-describedby={errorField === 'domain' ? 'sso-domain-error' : undefined}
                   value={domain}
                   onChange={(event) => setDomain(event.target.value)}
                   placeholder="example.com"
                   required
                   style={controlStyle}
                 />
+                {errorField === 'domain' ? (
+                  <span id="sso-domain-error" role="alert">
+                    {error}
+                  </span>
+                ) : null}
               </label>
 
               <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
@@ -499,36 +562,66 @@ export function SSOPanel({
                 <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
                   IdP metadata URL
                   <input
+                    id="sso-metadata-url"
                     aria-label="IdP metadata URL"
+                    aria-invalid={errorField === 'metadata_url'}
+                    aria-describedby={
+                      errorField === 'metadata_url' ? 'sso-metadata-url-error' : undefined
+                    }
                     value={metadataUrl}
                     onChange={(event) => setMetadataUrl(event.target.value)}
                     placeholder="https://example.okta.com/app/.../sso/saml/metadata"
                     required
                     style={controlStyle}
                   />
+                  {errorField === 'metadata_url' ? (
+                    <span id="sso-metadata-url-error" role="alert">
+                      {error}
+                    </span>
+                  ) : null}
                 </label>
               ) : (
                 <>
                   <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
                     OIDC discovery URL
                     <input
+                      id="sso-discovery-url"
                       aria-label="OIDC discovery URL"
+                      aria-invalid={errorField === 'oidc_discovery_url'}
+                      aria-describedby={
+                        errorField === 'oidc_discovery_url' ? 'sso-discovery-url-error' : undefined
+                      }
                       value={discoveryUrl}
                       onChange={(event) => setDiscoveryUrl(event.target.value)}
                       placeholder="https://idp.example.com/.well-known/openid-configuration"
                       required
                       style={controlStyle}
                     />
+                    {errorField === 'oidc_discovery_url' ? (
+                      <span id="sso-discovery-url-error" role="alert">
+                        {error}
+                      </span>
+                    ) : null}
                   </label>
                   <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
                     OIDC client ID
                     <input
+                      id="sso-client-id"
                       aria-label="OIDC client ID"
+                      aria-invalid={errorField === 'oidc_client_id'}
+                      aria-describedby={
+                        errorField === 'oidc_client_id' ? 'sso-client-id-error' : undefined
+                      }
                       value={clientId}
                       onChange={(event) => setClientId(event.target.value)}
                       required
                       style={controlStyle}
                     />
+                    {errorField === 'oidc_client_id' ? (
+                      <span id="sso-client-id-error" role="alert">
+                        {error}
+                      </span>
+                    ) : null}
                   </label>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
                     The client secret is requested when you activate the connection. It is passed to

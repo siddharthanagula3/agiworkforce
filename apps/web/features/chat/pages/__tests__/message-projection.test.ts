@@ -101,9 +101,50 @@ describe('WebChatPage account identity', () => {
       email: 'clerk@example.com',
     };
 
-    expect(resolveChatAccountUser(canonicalUser, compatibilityUser, clerkUser)).toBe(canonicalUser);
-    expect(resolveChatAccountUser(null, compatibilityUser, clerkUser)).toBe(compatibilityUser);
-    expect(resolveChatAccountUser(null, null, clerkUser)).toBe(clerkUser);
+    expect(resolveChatAccountUser(canonicalUser, compatibilityUser, clerkUser)).toEqual(
+      canonicalUser,
+    );
+    expect(resolveChatAccountUser(null, compatibilityUser, clerkUser)).toEqual(compatibilityUser);
+    expect(resolveChatAccountUser(null, null, clerkUser)).toEqual(clerkUser);
+  });
+
+  it('enriches an incomplete canonical profile from the same provider identity', () => {
+    expect(
+      resolveChatAccountUser(
+        {
+          id: 'user-1',
+          name: 'User',
+          profile: { display_name: 'demo' },
+        },
+        { id: 'user-1', name: 'User' },
+        { id: 'user-1', name: 'Provider Name', email: 'signed-in@example.com' },
+      ),
+    ).toEqual({
+      id: 'user-1',
+      name: 'demo',
+      email: 'signed-in@example.com',
+      profile: { display_name: 'demo' },
+    });
+  });
+
+  it('does not let the API fallback name suppress a richer provider identity during hydration', () => {
+    expect(
+      resolveChatAccountUser(
+        null,
+        { id: 'user-1', name: 'User' },
+        { id: 'user-1', name: 'Demo Person', email: 'demo@example.com' },
+      ),
+    ).toEqual({ id: 'user-1', name: 'Demo Person', email: 'demo@example.com' });
+  });
+
+  it('never merges identity fields across different accounts', () => {
+    expect(
+      resolveChatAccountUser({ id: 'user-1', name: 'Canonical' }, null, {
+        id: 'user-2',
+        name: 'Other Person',
+        email: 'other@example.com',
+      }),
+    ).toEqual({ id: 'user-1', name: 'Canonical' });
   });
 
   it('shows authenticated identity immediately without guessing a tier while policy loads', () => {

@@ -2124,13 +2124,39 @@ if (__AgiApp) {
         {canPreview && (
           <TabsContent value="preview" className="m-0 p-0">
             <div className={cn('bg-white', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}>
-              <SandboxedIframe
-                payload={sandboxPayload}
-                fallbackSrcDoc={getPreviewHTML()}
-                title={artifact.title || 'Artifact Preview'}
-                className="h-full w-full border-0"
-                refreshKey={refreshKey}
-              />
+              {renderError ? (
+                <div
+                  className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center"
+                  data-testid="artifact-render-error"
+                >
+                  <AlertTriangle className="h-7 w-7 text-amber-500" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      This artifact couldn&apos;t be rendered.
+                    </p>
+                    <p className="mt-1 max-w-sm text-xs text-muted-foreground">{renderError}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setActiveTab('code')}>
+                      <Code className="mr-1 h-3.5 w-3.5" />
+                      View source
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleRefresh}>
+                      <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                      Retry
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <SandboxedIframe
+                  payload={sandboxPayload}
+                  fallbackSrcDoc={getPreviewHTML()}
+                  title={artifact.title || 'Artifact Preview'}
+                  className="h-full w-full border-0"
+                  refreshKey={refreshKey}
+                  onRenderError={setRenderError}
+                />
+              )}
             </div>
           </TabsContent>
         )}

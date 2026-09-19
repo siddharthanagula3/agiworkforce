@@ -4,28 +4,36 @@ title: Accounts and signing in
 path: /support
 category: account
 tags: sign in, login, sign up, password, email, verification, verify email, account, multiple devices, sync
-updated: 2026-08-05
+updated: 2026-09-19
 scope: public
 ---
 
 ## Signing in
 
-Sign in with the email address you registered. If a sign-in link or verification
-email has not arrived, check the spam folder first, then request a new one from the
-sign-in screen.
+Open [Sign in](https://agiworkforce.com/login) and use the email address or sign-in provider associated
+with your account. Follow the password or email-code option shown on screen.
+
+If a verification code has not arrived, check your spam folder and confirm the
+email address, then use **Resend code** when it becomes available. If you forgot
+your account password, choose **Forgot password?** on the password screen.
 
 ## Using AGI on several devices
 
-Your conversations sync across web, desktop, mobile, and the browser extension when
-you are signed in. Local-mode conversations are the exception: they stay on the
-device that created them.
+To reopen saved web conversations on another device, sign in to the web app with
+the same account and select the same workspace. Personal and Enterprise workspaces
+are separate, so check the workspace menu if expected conversations are missing.
 
-## The desktop master password is separate
+Check [Downloads](https://agiworkforce.com/download) for the current release status of other clients before
+trying to install them. Local-mode conversations stay on the device that created
+them. Temporary chats do not appear in saved history.
 
-The desktop master password is not your account password. It protects the encrypted
-provider keys stored on your machine, AGI never has it, and it cannot be recovered.
+## CLI provider credentials are separate
 
-## Getting a human
+The released CLI stores provider keys in the operating system credential store.
+Those keys are separate from your AGI account credential. Desktop accepts no
+provider key, and VS Code BYOK is coming soon.
 
-A real person reads contact@agiworkforce.com. The support page lists what is covered
-for each plan.
+## Contacting support
+
+Send support requests to contact@agiworkforce.com. The support page lists the
+available channels and any plan-specific response commitments.

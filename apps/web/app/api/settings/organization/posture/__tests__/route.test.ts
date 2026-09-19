@@ -25,6 +25,9 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 }));
 vi.mock('@/lib/server/admin-data-access', () => ({ logAdminDataAccess: vi.fn(async () => {}) }));
 vi.mock('@/lib/services/org-entitlements', () => ({
+  getOrganizationEntitlements: vi.fn(async () => ({})),
+  getSharedProjectLimitErrorMessage: vi.fn(() => ''),
+  isOrgResourceLimitError: vi.fn(() => false),
   resolveOrganizationEntitlementPlan: vi.fn(async () => 'enterprise'),
 }));
 vi.mock('@/lib/server/organization-encryption-keys', () => ({

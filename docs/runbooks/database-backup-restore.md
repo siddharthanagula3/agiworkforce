@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-17
+Last updated: 2026-09-19
 
 Neon's point-in-time branch is the recovery mechanism today; there is no
 separate `pg_dump` schedule, and until this document existed no restore had
@@ -290,17 +290,13 @@ scratch database. Record every real run here.
 
 | Date       | Drill   | Recovery point / source → target                                            | Result                                                                       | Operator               |
 | ---------- | ------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------- |
-| _unfilled_ | Neon    |                                                                             |                                                                              |                        |
+| 2026-09-19 | Neon    | production at `2026-09-19T07:37:44.535Z` → disposable branch                | PASS, all five core tables readable with expected row counts; branch deleted | Codex release engineer |
 | 2026-09-05 | Logical | local Postgres 17, `agiworkforce_dev` → scratch database on the same server | PASS, 1457 ms, all `CORE_TABLES` and the migration ledger (168 rows) matched | Claude Code (Sonnet 5) |
 
-`BLOCKED_BY_HUMAN`: the Neon drill has never been run. `NEON_API_KEY` and
-`NEON_PROJECT_ID` are not currently provisioned in any environment this
-repository controls, so `scripts/db-restore-drill.mjs` cannot run until an
-operator creates a scoped Neon API key and records where it lives, the same
-way the custody inventory in section 4 of `docs/security/security.md` tracks
-the updater signing key. The logical drill has no such blocker: it ran
-against local Postgres 17 the same day this section was written, and runs
-weekly in CI against a disposable `postgres:17` container.
+The first Neon drill ran through an authenticated operator session on
+2026-09-19. The project reported a 21,600-second history-retention window at
+that time. The logical drill runs weekly in CI against a disposable
+`postgres:17` container.
 
 ## Object storage backups
 
@@ -337,14 +333,12 @@ restore does to it.
 
 ## Open gaps
 
-- This project's actual `history_retention_seconds` has never been read and
-  recorded here. Do that the first time the drill runs.
 - No RPO/RTO has been published to customers. The only recovery time this
   repository has measured is the logical drill's, on a container-sized
-  database in CI; that number says nothing about restoring production-sized
-  data, and no restore of production data has ever been run. Publishing either
-  objective requires a real drill against a production-sized copy, which is
-  blocked on the same Neon credential as the Neon drill.
+  database in CI; that number says nothing about an in-place production
+  restore. The Neon branch drill proves recent production data is recoverable,
+  but it does not measure the outage window or reconnection time of an in-place
+  restore. Publishing either objective requires a timed incident rehearsal.
 - **Object versioning and the backup bucket are not provisioned.** The
   replication code path is complete and runs hourly, but it replicates nothing
   until the five `AGI_STORAGE_BACKUP_*` variables are set, and object
@@ -366,16 +360,11 @@ restore does to it.
   is built per request and streamed, so neither is a stored object. Adding a
   third class is a row in `BACKUP_SOURCES` in
   `apps/web/app/api/cron/replicate-object-backups/route.ts`.
-- **The erasure ledger sync has no caller yet.** `syncErasureLedger` mirrors
-  `erasure_tombstones` into the backup bucket and is covered by its own tests,
-  but nothing schedules it: it belongs in
-  `apps/web/app/api/cron/purge-deleted-accounts/route.ts` after the sweep, one
-  call. Until it runs, the ledger the replay reads is whatever was last written,
-  and the replay's protection extends only to subjects in it. The weekly
-  logical-restore CI job should likewise assert the replay re-arms a subject
+- The purge cron synchronizes the erasure ledger after each sweep. The weekly
+  logical-restore CI job does not yet assert that replay re-arms a subject
   erased before the recovery point; the unit coverage in
-  `apps/web/lib/server/erasure-tombstones.test.ts` proves the logic but not the
-  wiring.
+  `apps/web/lib/server/erasure-tombstones.test.ts` proves the replay logic, while
+  the live restore drill remains the required promotion evidence.
 - No third-party uptime monitor calls `/api/health`, so an outage that
   triggers a restore may be detected only by `docs/runbooks/incident-response.md`'s
   existing daily cron, not sooner.

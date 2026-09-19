@@ -508,7 +508,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     return {
       title: 'Taking Too Long',
       message: 'The request is taking longer than expected.',
-      suggestion: 'Please try again in a moment. If this continues, try a shorter request.',
+      suggestion: 'Please try again in a moment. If the problem continues, contact support.',
       icon: 'warning',
     };
   }

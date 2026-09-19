@@ -13,6 +13,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   CloudAgentRunNotArchivableError,
   CloudAgentRunNotFoundError,
@@ -55,13 +56,20 @@ async function handleArchive(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'agent-run-follow');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   const runId = await resolveRunId(context);
 
   try {
     const run = await archiveCloudAgentRun(db, { userId, runId });
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      eventType: 'agent_run_lifecycle_changed',
+      request,
+      detail: { resourceId: runId, status: 'archived' },
+    });
     return NextResponse.json(
       { run },
       { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
@@ -75,13 +83,20 @@ async function handleUnarchive(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'agent-run-follow');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   const runId = await resolveRunId(context);
 
   try {
     const run = await unarchiveCloudAgentRun(db, { userId, runId });
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      eventType: 'agent_run_lifecycle_changed',
+      request,
+      detail: { resourceId: runId, status: 'unarchived' },
+    });
     return NextResponse.json(
       { run },
       { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },

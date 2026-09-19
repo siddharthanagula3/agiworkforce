@@ -10,6 +10,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
+import { resolveOrganizationMembershipId } from '@/lib/services/active-workspace-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow, ProfileRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -71,13 +72,7 @@ async function handleList(request: NextRequest) {
 
   const db = getNeonDb();
 
-  const [requesterMembership] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where organization_id = $1 and user_id = $2
-     limit 1`,
-    [organizationId, userId],
-  );
+  const requesterMembership = await resolveOrganizationMembershipId(db, userId, organizationId);
 
   if (!requesterMembership) {
     throw createError.forbidden('You are not a member of this organization');
@@ -90,7 +85,7 @@ async function handleList(request: NextRequest) {
        p.email, p.display_name, p.avatar_url
      from public.organization_members om
      left join public.profiles p on p.id = om.user_id
-     where om.organization_id = $1
+     where om.organization_id = $1 and om.status = 'active'
      order by om.joined_at asc`,
     [organizationId],
   );

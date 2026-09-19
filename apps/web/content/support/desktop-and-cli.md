@@ -5,7 +5,7 @@ path: /cli
 category: surfaces
 tags: desktop, cli, terminal, install, download, macos, windows, linux, agi install, command line
 platforms: desktop, cli, macos, windows, linux
-updated: 2026-08-13
+updated: 2026-09-19
 scope: public
 ---
 
@@ -17,18 +17,24 @@ the current install guide for the `agi` command.
 
 ## The desktop app
 
-Desktop installers for macOS, Windows, and Linux are published as release assets on
-the download page as they become available. Desktop is the surface that supports
-Local mode and BYOK.
+The current Desktop application is an Electron shell for managed-cloud account
+work. It does not accept provider keys or run a local model. No Desktop installer
+has been published yet; the download page reports release availability instead of
+offering an unverified asset.
 
 ## What the desktop app adds
 
-- Desktop Local mode through Ollama, LM Studio, llama.cpp, or vLLM. The CLI
-  supports its documented local integrations, currently Ollama and LM Studio.
-- BYOK provider keys, encrypted at rest on your machine behind the master password.
-- Offline operation with no managed-cloud dependency.
+- A dedicated managed-cloud window for your AGI account.
+- Approved-folder workflows and one-step computer-use approvals on supported
+  macOS builds.
+- The optional Chrome native bridge.
+
+Local and BYOK are available in the released CLI. The CLI's documented local
+integrations are Ollama and LM Studio, and `agi login <provider>` stores provider
+keys in the OS credential store.
 
 ## Managed cloud from developer surfaces
 
-Managed cloud access from the CLI, the Chrome extension, and VS Code is part of the
-higher paid tiers. Current plan details live on the pricing page.
+Desktop itself is managed-cloud-only. Managed cloud access from the CLI, Chrome,
+and VS Code depends on release availability and the current plan details shown on
+the pricing page.

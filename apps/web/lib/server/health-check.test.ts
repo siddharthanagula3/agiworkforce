@@ -44,9 +44,64 @@ function fakeRedis() {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env['DATABASE_URL'] = 'postgresql://test:test@localhost/test';
+  process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.example.test';
+  process.env['UPSTASH_REDIS_REST_TOKEN'] = 'test-token';
+  process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_health';
+  process.env['CLERK_SECRET_KEY'] = 'sk_test_health';
   delete process.env['STRIPE_SECRET_KEY'];
   mocks.neonQuery.mockResolvedValue([{ '?column?': 1 }]);
   mocks.getKeyValueStore.mockReturnValue(null);
+});
+
+describe('runHealthChecks core dependency readiness', () => {
+  it('is unhealthy when key-value configuration is missing', async () => {
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['KV_REST_API_URL'];
+    delete process.env['KV_REST_API_TOKEN'];
+
+    const result = await runHealthChecks();
+
+    expect(result.status).toBe('unhealthy');
+    expect(result.checks.environment.status).toBe('unhealthy');
+    expect(result.checks.environment.unreadyDependencies).toContainEqual(
+      expect.objectContaining({ id: 'key_value', criticality: 'core' }),
+    );
+  });
+
+  it('is unhealthy when identity configuration is missing', async () => {
+    delete process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'];
+    delete process.env['CLERK_SECRET_KEY'];
+
+    const result = await runHealthChecks();
+
+    expect(result.status).toBe('unhealthy');
+    expect(result.checks.environment.status).toBe('unhealthy');
+    expect(result.checks.environment.missingCount).toBe(1);
+    expect(result.checks.environment.unreadyDependencies).toContainEqual(
+      expect.objectContaining({ id: 'identity', criticality: 'core' }),
+    );
+  });
+
+  it('keeps degradable and optional configuration gaps out of core health', async () => {
+    delete process.env['OBJECT_STORAGE_ENDPOINT'];
+    delete process.env['OBJECT_STORAGE_ACCESS_KEY_ID'];
+    delete process.env['OBJECT_STORAGE_SECRET_ACCESS_KEY'];
+    delete process.env['R2_ACCOUNT_ID'];
+    delete process.env['R2_ACCESS_KEY_ID'];
+    delete process.env['R2_SECRET_ACCESS_KEY'];
+    delete process.env['E2B_API_KEY'];
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.environment.status).toBe('healthy');
+    expect(result.checks.environment.unreadyDependencies).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'object_storage', criticality: 'degradable' }),
+        expect.objectContaining({ id: 'code_execution', criticality: 'optional' }),
+      ]),
+    );
+  });
 });
 
 describe('runHealthChecks database throttle', () => {
@@ -71,7 +126,11 @@ describe('runHealthChecks database throttle', () => {
 
     const result = await runHealthChecks();
 
-    expect(mocks.neonQuery).not.toHaveBeenCalled();
+    expect(mocks.neonQuery).not.toHaveBeenCalledWith('select 1');
+    expect(mocks.neonQuery).toHaveBeenCalledWith(
+      expect.stringContaining('from public.background_jobs'),
+      [],
+    );
     expect(result.checks.database.status).toBe('healthy');
     expect(mocks.redisSet).not.toHaveBeenCalled();
   });

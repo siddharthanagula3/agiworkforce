@@ -21,10 +21,8 @@ import {
   type ContentReportStatus,
 } from '@/lib/server/content-report-triage';
 
-// The reporter-facing surfaces promise a human reads these: the mobile report
-// sheet says the report went "to the AGI safety team for review". POST
-// /api/mobile/content-report only durably records one, so this route is the
-// half that keeps the promise, the reviewer's queue and disposition write.
+// POST /api/mobile/content-report durably records a report. This route exposes
+// the review queue and disposition write to authorized platform admins.
 
 const ReviewSchema = z.object({
   reportId: z.string().trim().min(1).max(128),

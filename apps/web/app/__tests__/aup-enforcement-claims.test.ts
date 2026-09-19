@@ -109,7 +109,7 @@ describe('Q-2 · "A Block is absolute" and does not hide the tool', () => {
   });
 
   it('leaves the blocked tool in the list handed to the model', () => {
-    expect(TOOL_LOOP).toContain('const openAiTools: unknown[] = mcpTools.map(toOpenAiToolDef);');
+    expect(TOOL_LOOP).toContain('const stepMcpTools = offeredMcpToolDefs().map(toOpenAiToolDef);');
     expect(toolCallGateSource()).not.toContain('mcpTools');
   });
 });
@@ -219,7 +219,10 @@ describe('Q-8 · the Chrome debugger sentence matches the extension permissions 
 
   it('claims the same two grants cover reading the page, because one gate serves all of them', () => {
     const GATE = readExtension('src/features/browser-tools/tabAuthority.ts');
-    expect(GATE).toContain('allowlist.has(origin)');
+    const SITE_POLICY = readExtension('src/features/site-policy/store.ts');
+    expect(GATE).toContain("assertSiteAccess(url, 'automation'");
+    expect(SITE_POLICY).toContain('SITE_ALLOWLIST_STORAGE_KEY');
+    expect(SITE_POLICY).toContain('evaluateSitePolicy(await loadSitePolicyInput()');
     expect(GATE).toContain('hasBrowserControlConsent(origin)');
     for (const caller of [
       'src/features/browser-tools/pageWatch.ts',

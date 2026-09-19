@@ -89,6 +89,18 @@ describe('WorkspaceEnterpriseContract', () => {
     expect(container.textContent).toBe('');
   });
 
+  it('explains a missing record for a contract-priced workspace', () => {
+    state({ contract: null, invoices: [] });
+    render(<WorkspaceEnterpriseContract showMissingContract />);
+    expect(screen.getByText('No contract is on record for this workspace.')).toBeVisible();
+  });
+
+  it('does not describe denied contract access as a missing contract', () => {
+    state(null);
+    const { container } = render(<WorkspaceEnterpriseContract showMissingContract />);
+    expect(container.textContent).toBe('');
+  });
+
   it('states when no invoices have been issued', () => {
     state({ contract: contract({ paymentTermsDays: null }), invoices: [] });
 

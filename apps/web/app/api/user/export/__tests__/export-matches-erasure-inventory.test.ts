@@ -7,7 +7,9 @@ vi.mock('server-only', () => ({}));
 import { USER_SCOPED_TABLES } from '@/lib/server/account-erasure';
 import { UNEXPORTED_USER_TABLES } from '../route';
 
-const source = readFileSync(join(process.cwd(), 'app/api/user/export/route.ts'), 'utf8');
+const source = ['app/api/user/export/route.ts', 'lib/server/restricted-user-export-reader.ts']
+  .map((path) => readFileSync(join(process.cwd(), path), 'utf8'))
+  .join('\n');
 
 // The tables the export actually reads, taken from the queries rather than from
 // a hand-kept list: a section whose SQL names the wrong table is a section that

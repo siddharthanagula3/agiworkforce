@@ -260,7 +260,7 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     expect(response.status).toBe(501);
     expect(await response.json()).toMatchObject({
       connectorId: 'local-filesystem',
-      error: expect.stringContaining('Desktop Local settings'),
+      error: expect.stringContaining('released CLI'),
     });
     expect(mocks.query).not.toHaveBeenCalled();
   });

@@ -72,4 +72,20 @@ describe('a drop on the window', () => {
 
     expect(messageBoxes).toHaveLength(0);
   });
+
+  it('asks once for a folder a touch drag delivered twice', async () => {
+    await handleWorkspaceDrop(window, [THIS_DIRECTORY, THIS_DIRECTORY]);
+
+    expect(messageBoxes).toHaveLength(1);
+    expect(grantRoot).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops prompting once the window this drop landed on is gone', async () => {
+    const closing = { isDestroyed: () => messageBoxes.length >= 1 } as never;
+    messageBoxResponse.value = 1;
+
+    await handleWorkspaceDrop(closing, [THIS_DIRECTORY, dirname(THIS_DIRECTORY)]);
+
+    expect(messageBoxes).toHaveLength(1);
+  });
 });

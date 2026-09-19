@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileCode2, FolderGit2, MessagesSquare, Plug, Share2, Users } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
+import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
   useOrganizationSharedOverview,
@@ -94,6 +95,17 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>{children}</p>;
 }
 
+function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <span style={{ color: 'var(--settings-destructive-text)', fontSize: 12 }}>{message}</span>
+      <button type="button" style={buttonStyle} onClick={onRetry}>
+        Retry
+      </button>
+    </div>
+  );
+}
+
 interface OwnProject {
   id: string;
   name: string;
@@ -153,7 +165,16 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
       title="Shared projects"
       description="Members can open a shared project and read its instructions and knowledge files. Give someone Can edit and they can also change its name, instructions, appearance and sources; archiving and deleting stay with the owner, and conversations stay private to each member."
     >
-      {overview.canManageSharing ? (
+      {overview.canManageSharing && ownProjects.isError ? (
+        <LoadError
+          message={toUserMessage(
+            ownProjects.error,
+            'Your projects could not be loaded. Try again.',
+          )}
+          onRetry={() => void ownProjects.refetch()}
+        />
+      ) : null}
+      {overview.canManageSharing && !ownProjects.isError ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <label htmlFor="org-share-project" style={{ position: 'absolute', left: -9999 }}>
             Project to share
@@ -479,7 +500,16 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
       title="Shared connectors"
       description="Connect a remote MCP server once and every member can use it in chat. Members can invoke it but never see its stored credential, and they cannot change or remove it."
     >
-      {overview.canManageSharing ? (
+      {overview.canManageSharing && ownConnectors.isError ? (
+        <LoadError
+          message={toUserMessage(
+            ownConnectors.error,
+            'Your connectors could not be loaded. Try again.',
+          )}
+          onRetry={() => void ownConnectors.refetch()}
+        />
+      ) : null}
+      {overview.canManageSharing && !ownConnectors.isError ? (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <label htmlFor="org-share-connector" style={{ position: 'absolute', left: -9999 }}>
             Connector to share
@@ -578,7 +608,7 @@ export function OrganizationSharingSection() {
   if (overviewQuery.isError) {
     return (
       <p role="alert" style={{ color: 'var(--settings-destructive-text)', fontSize: 12 }}>
-        {overviewQuery.error.message}
+        {toUserMessage(overviewQuery.error, 'Organization sharing could not be loaded. Try again.')}
       </p>
     );
   }

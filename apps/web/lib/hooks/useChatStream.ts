@@ -9,13 +9,17 @@ import {
   type MutableRefObject,
 } from 'react';
 import {
+  INITIAL_STREAM_SEQUENCE_STATE,
   INTERACTIVE_CARD_DELTA_KEY,
   INTERACTIVE_CARD_REQUEST_KEY,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
+  inspectStreamSequence,
+  isStreamEnvelope,
   type InteractiveCard,
   type InteractiveCardClientCapability,
   type InteractiveCardResponsePayload,
   type KnownInteractiveCardKind,
+  type StreamSequenceState,
 } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
@@ -970,6 +974,45 @@ interface ConsumeStreamContext {
  * on the event identity, which is reproduced exactly when the turn is replayed.
  */
 const appliedAgentEvents = new Map<string, AgentEventLedger>();
+
+const STREAM_RESUME_ATTEMPTS = 3;
+const STREAM_RESUME_RETRY_MS = 500;
+
+function turnResumeEndpoint(turnId: string): string {
+  return `/api/llm/v1/chat/completions/runs/${encodeURIComponent(turnId)}/resume/stream`;
+}
+
+/** Reads the replay leg and returns only the assistant text the cursor did not cover. */
+async function readTurnResumeRemainder(body: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let out = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = done ? '' : (lines.pop() ?? '');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        const parsed = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: unknown } }>;
+        };
+        for (const choice of parsed.choices ?? []) {
+          if (typeof choice.delta?.content === 'string') out += choice.delta.content;
+        }
+      } catch {
+        // A partial frame completes on the next read.
+      }
+    }
+    if (done) break;
+  }
+  return out;
+}
 
 function admitAgentEvent(
   turnKey: string,
@@ -2009,6 +2052,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   let inThinkingBlock = false;
   let contentBuffer = '';
   let unacknowledgedPublicText = '';
+  let streamSequence: StreamSequenceState = INITIAL_STREAM_SEQUENCE_STATE;
+  let deliveredCharacters = 0;
+  let sequenceGapSeen = false;
 
   openFirstTokenWait();
 
@@ -2043,6 +2089,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       seamBuffer = '';
       if (!repaired) return;
       fullAssistantContent += repaired;
+      deliveredCharacters += repaired.length;
       unacknowledgedPublicText += repaired;
       coalescedAppends.append('content', assistantMessageId, repaired);
       return;
@@ -2050,6 +2097,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
     if (!text) return;
     fullAssistantContent += text;
+    deliveredCharacters += text.length;
     unacknowledgedPublicText += text;
     coalescedAppends.append('content', assistantMessageId, text);
   };
@@ -2110,6 +2158,82 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   if (toolTimeline.length > 0) publishToolTimeline();
+
+  /**
+   * Fills in what a dropped or gapped connection never delivered, from the turn
+   * the server persisted. The cursor is what this client already rendered, so
+   * the replay can only ever append.
+   */
+  const resumeFromCursor = async (): Promise<boolean> => {
+    if (isTurnContinuation || isTemporaryConversation || runHandle) return false;
+
+    for (let attempt = 0; attempt < STREAM_RESUME_ATTEMPTS; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, STREAM_RESUME_RETRY_MS));
+      }
+      let response: Response;
+      try {
+        response = await fetch(turnResumeEndpoint(assistantMessageId), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${await getAuthToken()}`,
+          },
+          body: JSON.stringify({
+            conversation_id: conversationId,
+            cursor: {
+              sequence: streamSequence.lastSequence ?? 0,
+              characters: deliveredCharacters,
+            },
+          }),
+        });
+      } catch {
+        continue;
+      }
+      // The turn is written once the server's own leg settles, which can be
+      // after the client noticed the drop.
+      if (response.status === 404) continue;
+      if (!response.ok || !response.body) return false;
+
+      const remainder = await readTurnResumeRemainder(response.body);
+      if (remainder) {
+        emitPublicText(remainder, true);
+        coalescedAppends.flush();
+      }
+      if (!finishReason) {
+        finishReason = response.headers.get('X-AGI-Stream-Truncation')
+          ? STOPPED_FINISH_REASON
+          : 'stop';
+      }
+      return true;
+    }
+    return false;
+  };
+
+  const settleStream = (): StreamOutcome => {
+    flushContentBuffer(true);
+    if (inThinkingBlock) {
+      closeThinkingSegment();
+      inThinkingBlock = false;
+    }
+    finishRunningTools();
+    if (finishReason) {
+      patchMessageMeta({ finishReason });
+    }
+    if (streamErrorInfo) {
+      patchMessageMeta({ streamError: streamErrorInfo });
+    }
+    settleAgentActivity();
+    forgetAgentEvents(assistantMessageId);
+    publishCloudRunReference({
+      state: finalCloudRunState(streamErrorInfo ? 'failed' : 'ready_for_review'),
+    });
+    persistAssistant(fullAssistantContent);
+    stopStreaming(conversationId);
+    setLoading(false, conversationId);
+    return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
+  };
 
   const replayDurableRun = async (): Promise<StreamOutcome> => {
     if (!runHandle) throw new Error('Managed Cloud run handle is unavailable');
@@ -2272,6 +2396,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
       for (const data of drainEventPayloads(done)) {
         if (data === '[DONE]') {
+          // A terminator only says the producer is finished. If this client
+          // missed an earlier frame, settlement must wait for cursor replay.
+          if (sequenceGapSeen) continue;
           flushContentBuffer(true);
           if (inThinkingBlock) {
             closeThinkingSegment();
@@ -2299,6 +2426,23 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
         try {
           const parsed = JSON.parse(data);
+
+          // A frame with no envelope is an older producer, not a broken one, so
+          // `unsequenced` reads the stream exactly as this client always has.
+          if (sequenceGapSeen) continue;
+          const nextStreamSequence = inspectStreamSequence(
+            streamSequence,
+            isStreamEnvelope(parsed.envelope) ? parsed.envelope : null,
+          );
+          if (nextStreamSequence.verdict === 'duplicate') continue;
+          if (nextStreamSequence.verdict === 'gap') {
+            sequenceGapSeen = true;
+            continue;
+          }
+          // Once a gap appears, later frames are no longer a contiguous prefix
+          // of the persisted answer. Rendering them would make a character
+          // cursor skip the missing middle and duplicate the tail on resume.
+          streamSequence = nextStreamSequence;
 
           const agentEnvelope = parseAgentEventDelta(parsed.choices?.[0]?.delta?.x_agent_event);
           if (agentEnvelope) {
@@ -2751,27 +2895,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       if (done) break;
     }
 
-    flushContentBuffer(true);
-    if (inThinkingBlock) {
-      closeThinkingSegment();
-      inThinkingBlock = false;
+    // A gap means frames the transport lost, so the text this turn rendered is
+    // short of what the server has. The cursor replay is what closes it.
+    if (sequenceGapSeen) {
+      flushContentBuffer(false);
+      if (!(await resumeFromCursor())) {
+        throw new Error('The answer stream lost events and could not be resumed.');
+      }
     }
-    finishRunningTools();
-    if (finishReason) {
-      patchMessageMeta({ finishReason });
-    }
-    if (streamErrorInfo) {
-      patchMessageMeta({ streamError: streamErrorInfo });
-    }
-    settleAgentActivity();
-    forgetAgentEvents(assistantMessageId);
-    publishCloudRunReference({
-      state: finalCloudRunState(streamErrorInfo ? 'failed' : 'ready_for_review'),
-    });
-    persistAssistant(fullAssistantContent);
-    stopStreaming(conversationId);
-    setLoading(false, conversationId);
-    return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
+    return settleStream();
   } catch (error) {
     const isAbort =
       typeof error === 'object' &&
@@ -2785,6 +2917,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       } catch (replayError) {
         terminalError = replayError;
       }
+    }
+
+    // A plain streaming turn has no run to follow, so the persisted turn is the
+    // only record of what the connection was carrying when it dropped.
+    if (!isAbort && !runHandle && (await resumeFromCursor())) {
+      return settleStream();
     }
 
     if (currentAgentActivity) {
@@ -3858,7 +3996,11 @@ export function useResolveToolApproval(
         if (!token) throw new Error('Not authenticated');
         return token;
       };
-      if (!turn.isTemporaryConversation && selectedMessage) {
+      if (
+        turn.decisions.size < turn.calls.length &&
+        !turn.isTemporaryConversation &&
+        selectedMessage
+      ) {
         await saveMessageToDb(
           turn.conversationId,
           {
@@ -3896,17 +4038,15 @@ export function useResolveToolApproval(
         );
       }
 
-      let authToken: string;
-      try {
-        authToken = await getAuthToken();
-      } catch {
+      const restoreApprovalControls = async () => {
         turn.resolving = false;
+        turn.decisions.clear();
         for (const call of turn.calls) {
           updateToolEntry(
             assistantMessageId,
             call.toolCallId,
             {
-              approved: turn.decisions.get(call.toolCallId) === 'approved',
+              approved: undefined,
               status: 'awaiting_approval',
               requiresApproval: true,
               error: undefined,
@@ -3915,7 +4055,33 @@ export function useResolveToolApproval(
             turn.conversationId,
           );
         }
-        setError('Not authenticated', turn.conversationId);
+        const message = findConversationMessage(turn.conversationId, assistantMessageId);
+        const metadata: MessageMetadata = {
+          ...message?.metadata,
+          cloudApproval: projectPendingTurn(turn),
+        };
+        updateMessage(assistantMessageId, { metadata, isStreaming: false }, turn.conversationId);
+        if (!turn.isTemporaryConversation && message) {
+          await saveMessageToDb(
+            turn.conversationId,
+            {
+              id: assistantMessageId,
+              role: message.role,
+              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              model: message.model ?? turn.model,
+              metadata,
+            },
+            getAuthToken,
+          ).catch((error) => notifyPersistenceFailure('assistant', error));
+        }
+      };
+
+      let authToken: string;
+      try {
+        authToken = await getAuthToken();
+      } catch {
+        await restoreApprovalControls();
+        setError('Your session has expired. Please sign in again.', turn.conversationId);
         return;
       }
 
@@ -4031,23 +4197,7 @@ export function useResolveToolApproval(
         }
       } catch (error) {
         if (error instanceof ChatApiError) {
-          turn.resolving = false;
-          for (const call of turn.calls) {
-            const callDecision = turn.decisions.get(call.toolCallId);
-            updateToolEntry(
-              assistantMessageId,
-              call.toolCallId,
-              {
-                approved: callDecision === undefined ? undefined : callDecision === 'approved',
-                status: 'awaiting_approval',
-                requiresApproval: true,
-                error: undefined,
-                result: undefined,
-              },
-              turn.conversationId,
-            );
-          }
-          updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
+          await restoreApprovalControls();
           setError(getVisibleErrorMessage(error), turn.conversationId);
           stopStreaming(turn.conversationId);
           setLoading(false, turn.conversationId);

@@ -4,7 +4,11 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/hosting', () => ({ releaseSha: () => 'release-sha' }));
+vi.mock('@/lib/server/hosting', () => ({
+  deployEnvironment: vi.fn(() => undefined),
+  deployRegion: vi.fn(() => undefined),
+  releaseSha: () => 'release-sha',
+}));
 
 const store = new Map<string, unknown>();
 const recordCacheHit = vi.fn(async (_input: unknown) => undefined);

@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { logger } from '@/lib/logger';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
@@ -16,7 +17,7 @@ import {
 
 const GITHUB_STATE_PATTERN = /^[a-f0-9]{64}$/i;
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -103,3 +104,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.redirect(authorizationUrl);
 }
+
+export const GET = withPrivateNoStore(handleGet);

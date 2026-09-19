@@ -21,10 +21,12 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
+const { mockGetClerkAuthUser } = vi.hoisted(() => ({
+  mockGetClerkAuthUser: vi.fn(),
+}));
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockClerkAuth(),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: mockGetClerkAuthUser,
 }));
 
 vi.mock('@/lib/neon-db', () => ({
@@ -85,12 +87,13 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 
 import { GET, OPTIONS } from '@/app/api/me/route';
+import { createError } from '@/lib/errors';
 
 describe('Me API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: null });
 
     mockNeonQuery.mockResolvedValue([{ routing_preferences: null }]);
 
@@ -126,7 +129,7 @@ describe('Me API', () => {
       });
 
       it('should return 401 for unauthenticated request', async () => {
-        mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
+        mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/me', {
           method: 'GET',

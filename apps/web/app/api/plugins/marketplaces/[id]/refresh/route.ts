@@ -8,6 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   isMissingPluginMarketplaceSchema,
   refreshMarketplaceSource,
@@ -22,7 +23,7 @@ const ParamsSchema = z.object({ id: z.string().uuid() });
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handlePost(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -49,6 +50,13 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
       { status: 404 },
     );
   }
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'plugin_marketplace_changed',
+    request,
+    detail: { resourceId: params.data.id, status: 'refreshed' },
+  });
   return NextResponse.json({ source });
 }
 

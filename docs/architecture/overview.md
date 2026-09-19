@@ -21,7 +21,9 @@ Last updated: 2026-09-18
 
 - Web product features live under `apps/web/features`.
 - Mobile product features live under `apps/mobile/src/features`.
-- Desktop product features live under `apps/desktop/src/features`.
+- Public Desktop host features live under `apps/desktop/electron`; its hosted
+  product UI lives under `apps/web`. `apps/desktop/src/features` belongs to the
+  retained Tauri implementation and is not a second public Desktop surface.
 - CLI is Rust-module based under `apps/cli/src`; reusable runtime moves to `crates/` only when a second consumer needs it.
 
 `pnpm check:structure-conventions` enforces the Web feature-root decision and protects completed Mobile feature moves from regressing.
@@ -118,9 +120,16 @@ Local -> BYOK handoffs are preview-only transfers. A confirmed fork persists the
 
 ## Generated Files And Compute
 
-Desktop is the first local heavy-compute surface. Web and Mobile should request, track, preview, download, and share generated files. Mobile should not be the first heavy local PDF/PPTX/DOCX compute surface. Generated-file status, source, checksum, action availability, and Local/BYOK/Managed labels are derived from the shared `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` presentation helpers instead of surface-local copy.
+The retained Tauri implementation contains the repository's first local
+heavy-compute paths, but D-2026-09-15-04 makes Electron the sole public Desktop
+and that shell is managed-cloud-only for inference. The Tauri details below are
+implementation inventory, not public release evidence. Web and Mobile should
+request, track, preview, download, and share generated files. Mobile should not
+be the first heavy local PDF/PPTX/DOCX compute surface. Generated-file status,
+source, checksum, action availability, and Local/BYOK/Managed labels are derived
+from shared contracts instead of surface-local copy.
 
-Desktop document generation now has manifest-producing command paths for PDF, DOCX, XLSX, and PPTX. These return the legacy file path plus `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata with local privacy, checksum, byte count, MIME type, and file URI. Each generated-document session also creates a local app-data work directory with `manifest.json`, append-only `audit.jsonl`, and compute-session TTL metadata.
+Retained Tauri document generation has manifest-producing command paths for PDF, DOCX, XLSX, and PPTX. These return the legacy file path plus `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` metadata with local privacy, checksum, byte count, MIME type, and file URI. Each generated-document session also creates a local app-data work directory with `manifest.json`, append-only `audit.jsonl`, and compute-session TTL metadata.
 
 Provider-hosted generated files use the same manifest contract after provider-specific file citations are materialized. The OpenAI provider adapter extracts Code Interpreter `container_file_citation` annotations but does not create `GeneratedFile` records until the caller supplies URI, byte count, checksum, privacy mode, provider mode, storage scope, owner, and source context.
 
@@ -128,27 +137,27 @@ Generated-file trust-boundary validation lives in `@agiworkforce/types`. It prov
 
 The active Web chat route mounts the artifact workbench sidecar next to the conversation. Assistant messages show compact artifact cards; detected code artifacts and generated-file manifests sync into the sidecar store for inspection instead of rendering duplicate full previews inline.
 
-The active Web chat route and Desktop Cloud runtime project runtime-validated, monotonically sequenced `x_agent_event` envelopes into one durable activity state per assistant turn. Both mount the same shared inline activity spine, collapsed by default and expandable in bounded pages for long runs, with structured tool details and approvals plus sources, artifacts, context compaction, cancellation, and failure without exposing provider scratchpads. Desktop carries the projection through approval resumes and settles direct failures or user stops before saving it with the assistant message, so reloaded conversations preserve the run. The older compact tool timeline remains only as a fallback while non-canonical emitters and Mobile Cloud are migrated.
+The active Web chat route projects runtime-validated, monotonically sequenced `x_agent_event` envelopes into one durable activity state per assistant turn. Public Electron Desktop loads that same hosted Managed Cloud surface, including the shared inline activity spine, structured tool details, approvals, sources, artifacts, context compaction, cancellation, and failures without provider scratchpads. Retained Tauri and other non-canonical emitters keep their older fallback timeline until they are migrated or removed.
 
-Desktop/Web UI direction uses the latest Claude desktop modal references as the default baseline: common settings, connector, plugin, search, project edit, and file-preview flows should open as focused overlays before escalating users into full-screen workspaces. Full-screen/split-pane surfaces are for deep artifact viewing, code dashboards, project indexes, and long-running research or agent traces.
+Web and public Electron UI direction uses focused overlays for common settings, connector, plugin, search, project-edit, and file-preview flows before escalating users into full-screen workspaces. Full-screen/split-pane surfaces are for deep artifact viewing, code dashboards, project indexes, and long-running research or agent traces.
 
-The Desktop settings surface now implements the first pass of that baseline: settings stay in a focused centered modal, the left rail has search, and settings are grouped into primary account/preferences, customization, and desktop-app sections without changing save behavior.
+Public Electron Desktop uses the hosted web settings surface. Shell-owned settings such as launch-at-login and shortcuts cross the origin-gated preload contract; account, privacy, billing, connector, and workspace settings remain owned by the web application.
 
-Desktop file previews also use the shared focused dialog shell, keeping generated/local file inspection in a modal unless the user explicitly opens a deeper artifact workspace.
+Public Electron file previews use the hosted web dialog shell; approved device-file operations cross the Electron dispatcher and remain bounded to approved roots.
 
-Desktop chat artifact cards now use the persistent artifact workbench as their primary click target. `ChatStream` checks for already persisted artifact ids, promotes legacy message artifacts into the Tauri artifact store when needed, records the persisted id back onto message artifact metadata, and opens `ArtifactPanel`; the preview sidecar remains only as a fallback for artifacts without panel-backed content.
+Public Electron chat artifact cards use the same hosted artifact workbench as Web. The retained Tauri `ChatStream` and artifact store are internal compatibility paths, not the public persistence owner.
 
-Multi-artifact Desktop responses expose a `Download all` action at the card stack, matching the verified Claude batch-artifact pattern while using the same artifact type mapping and file-extension helpers as the workbench path.
+Multi-artifact responses in Web and public Electron expose the shared card-stack and download behavior owned by the hosted surface.
 
-The Desktop artifact workbench keeps artifact selection scoped to the side panel, then exposes preview/source switching and primary actions in the viewer toolbar itself. This matches the verified Claude artifact viewer direction where the split pane is a working surface with title/type context, source toggle, copy/download, refresh, close, and deeper version/history controls.
+The hosted artifact workbench used by Web and public Electron keeps artifact selection scoped to the side panel and exposes preview/source switching plus primary actions in the viewer toolbar.
 
-Desktop Local and legacy non-canonical tool activity uses the compact event-rail direction as a fallback. `ToolTimeline` keeps the existing live tool-event store and expand/collapse behavior, but presents completed runs as short action summaries and expanded runs as icon-specific steps with result/error pills instead of large generic cards; Desktop Cloud uses the canonical shared activity spine above.
+Retained Tauri Local and legacy non-canonical tool activity uses the compact event-rail direction as a fallback. `ToolTimeline` keeps the existing live tool-event store and expand/collapse behavior, but presents completed runs as short action summaries and expanded runs as icon-specific steps with result/error pills instead of large generic cards; public Electron Desktop uses the canonical managed-cloud activity spine above.
 
-Desktop inline search results follow the same compact trace pattern. `InlineSearchResults` keeps registering citations for assistant responses, but renders completed searches as visible favicon/title/domain rows with a result count instead of expanding into large cards by default.
+Hosted inline search results used by Web and public Electron follow the same compact trace pattern and keep citations attached to assistant responses.
 
-Desktop connector customization now follows the same modal-first rule. The connector gallery owns the browse/connect surface, while `CustomRemoteMcpConnectorDialog` creates remote HTTP MCP server configs through the existing MCP config API instead of sending users into a broad settings detour. The default view exposes only name and URL, with bearer token, headers, timeout, and SSL controls behind collapsed advanced settings. Bearer tokens are stored through the encrypted API-key path and referenced from MCP config placeholders. Connector gallery ownership is single-sourced under `apps/desktop/src/features/connectors/ConnectorGallery.tsx`.
+Public Electron connector customization uses the hosted account-scoped connector service and its web settings UI. It reports `localMcp: false`; retained Tauri `ConnectorGallery` and local MCP configuration remain internal and do not authorize public Desktop local-MCP claims.
 
-Desktop project editing separates common detail edits from deep configuration. `ProjectEditDetailsDialog` owns the focused name/description modal, while `ProjectSettingsDialog` stays available for files, instructions, knowledge, memory, and conversation settings.
+Public Electron project editing uses the hosted Web project and settings owners, so project state stays on the shared account contract rather than a private Desktop copy.
 
 Generated files need:
 

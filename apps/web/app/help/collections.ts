@@ -1,4 +1,5 @@
 import { getSupportCorpus } from '@/lib/support/agent/corpus';
+import { helpArticlePath } from '@/lib/support/help-articles';
 
 export interface SupportCollectionArticle {
   docId: string;
@@ -32,7 +33,11 @@ export function supportCollectionIndex(): SupportCollectionIndex {
     const articles = byCategory.get(chunk.category) ?? new Map();
     byCategory.set(chunk.category, articles);
     if (!articles.has(chunk.docId)) {
-      articles.set(chunk.docId, { docId: chunk.docId, title: chunk.docTitle, href: chunk.path });
+      articles.set(chunk.docId, {
+        docId: chunk.docId,
+        title: chunk.docTitle,
+        href: helpArticlePath(chunk.docId),
+      });
     }
   }
 

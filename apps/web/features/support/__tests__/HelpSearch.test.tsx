@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,6 +27,39 @@ describe('HelpSearch', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  it.each(['', 'privacy'])(
+    'discards pending results when the query changes to %j',
+    async (query) => {
+      let resolveBody!: (body: unknown) => void;
+      const body = new Promise((resolve) => {
+        resolveBody = resolve;
+      });
+      fetchMock.mockResolvedValue({ ok: true, status: 200, json: () => body });
+      render(<HelpSearch initialQuery="billing" />);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const signal = fetchMock.mock.calls[0]?.[1].signal as AbortSignal;
+      fireEvent.change(screen.getByLabelText('Search the help centre'), {
+        target: { value: query },
+      });
+      await act(async () => {
+        resolveBody({
+          results: [
+            {
+              docId: 'old',
+              title: 'Old billing answer',
+              path: '/pricing',
+              category: 'billing',
+              snippet: 'Old result',
+            },
+          ],
+        });
+        await body;
+      });
+      expect(screen.queryByRole('link', { name: 'Old billing answer' })).not.toBeInTheDocument();
+      expect(signal.aborted).toBe(true);
+    },
+  );
 
   it('does not search until the query is long enough to mean anything', async () => {
     const user = userEvent.setup();
@@ -63,6 +96,31 @@ describe('HelpSearch', () => {
     const link = await screen.findByRole('link', { name: 'Bring your own key' });
     expect(link).toHaveAttribute('href', '/byok');
     expect(await screen.findByText('1 page matches.')).toBeInTheDocument();
+  });
+
+  it('renders readable excerpt formatting without embedded links, images or HTML', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        results: [
+          {
+            docId: 'credits',
+            title: 'Credits',
+            path: '/pricing',
+            category: 'billing',
+            snippet:
+              '**Top-up purchase** uses `credits`. [Credit history](/billing) ![remote](https://example.invalid/image.png) <img src="https://example.invalid/raw.png">',
+          },
+        ],
+      }),
+    );
+    const { container } = render(<HelpSearch initialQuery="credits" />);
+    const emphasis = await screen.findByText('Top-up purchase');
+    expect(emphasis.tagName).toBe('STRONG');
+    expect(screen.getByText('credits').tagName).toBe('CODE');
+    expect(container.textContent).not.toContain('**');
+    expect(screen.getAllByRole('link')).toHaveLength(1);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('p p')).toBeNull();
   });
 
   it('searches a query it was opened with, so a contextual link lands on the answer', async () => {

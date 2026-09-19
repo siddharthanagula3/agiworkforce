@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
+import ReactMarkdown from 'react-markdown';
 
 import { Prose, Stack } from '@/features/marketing/components/system';
 import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
@@ -37,6 +38,7 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
         signal: controller.signal,
         headers: { accept: 'application/json' },
       });
+      if (controller.signal.aborted) return;
       if (response.status === 503) {
         setState({ kind: 'unavailable' });
         return;
@@ -46,6 +48,7 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
         return;
       }
       const body = (await response.json()) as { results?: HelpSearchResult[] };
+      if (controller.signal.aborted) return;
       const results = body.results ?? [];
       setState(results.length > 0 ? { kind: 'results', results } : { kind: 'empty' });
     } catch (error) {
@@ -55,6 +58,7 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
   }, []);
 
   useEffect(() => {
+    inFlight.current?.abort();
     const text = query.trim();
     if (text.length < MIN_QUERY_LENGTH) {
       inFlight.current?.abort();
@@ -62,7 +66,10 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
       return;
     }
     const timer = setTimeout(() => void run(text), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      inFlight.current?.abort();
+    };
   }, [query, run]);
 
   useEffect(() => () => inFlight.current?.abort(), []);
@@ -85,7 +92,11 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
           spellCheck={false}
           placeholder="Billing, local models, bring your own key"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            inFlight.current?.abort();
+            setState({ kind: 'idle' });
+            setQuery(event.target.value);
+          }}
           aria-describedby={statusId}
         />
       </div>
@@ -108,13 +119,13 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
         ) : null}
         {state.kind === 'empty' ? (
           <Prose size="sm">
-            Nothing here covers that yet. Email contact@agiworkforce.com and a human will answer.
+            Nothing here covers that yet. Email contact@agiworkforce.com for support.
           </Prose>
         ) : null}
         {isUnavailable ? (
           <Prose size="sm">
-            Search is not answering right now. The links below still work, and
-            contact@agiworkforce.com reaches a human.
+            Search is not answering right now. The links below still work, and you can email
+            contact@agiworkforce.com for support.
           </Prose>
         ) : null}
         {isError ? (
@@ -130,7 +141,15 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
             meta: result.category,
             title: result.title,
             href: result.path,
-            body: result.snippet,
+            body: (
+              <ReactMarkdown
+                allowedElements={['strong', 'em', 'code', 'br']}
+                unwrapDisallowed
+                skipHtml
+              >
+                {result.snippet}
+              </ReactMarkdown>
+            ),
           }))}
         />
       ) : null}

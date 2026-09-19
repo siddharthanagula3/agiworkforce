@@ -15,6 +15,7 @@ const {
   mockGetSubscription,
   mockResolveActiveOrganizationId,
   mockWorkspaceFeatureGate,
+  mockSeatCandidates,
 } = vi.hoisted(() => {
   const mockSingle = vi.fn();
   const mockSelect = vi.fn();
@@ -27,6 +28,7 @@ const {
   const mockNeonExecute = vi.fn();
   const mockGetSubscription = vi.fn();
   const mockResolveActiveOrganizationId = vi.fn();
+  const mockSeatCandidates = vi.fn(async (..._args: unknown[]) => [] as Record<string, unknown>[]);
   const mockWorkspaceFeatureGate = vi.fn(async () => null);
   return {
     mockFrom,
@@ -41,6 +43,7 @@ const {
     mockGetSubscription,
     mockResolveActiveOrganizationId,
     mockWorkspaceFeatureGate,
+    mockSeatCandidates,
   };
 });
 
@@ -65,7 +68,10 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => {
     const adapter = {
-      query: (...args: unknown[]) => mockNeonQuery(...args),
+      query: (...args: unknown[]) =>
+        String(args[0]).includes('from public.organization_members membership')
+          ? mockSeatCandidates(...args)
+          : mockNeonQuery(...args),
       execute: (...args: unknown[]) => mockNeonExecute(...args),
       transaction: vi.fn(),
       withUser: vi.fn(() => ({})),
@@ -152,8 +158,9 @@ function makeListProjectsRequest(): NextRequest {
 function wireAuthAndDb() {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockNeonExecute.mockResolvedValue(1);
-  mockGetSubscription.mockResolvedValue({ plan_tier: 'free' });
+  mockGetSubscription.mockResolvedValue({ plan_tier: 'free', status: 'active' });
   mockResolveActiveOrganizationId.mockResolvedValue(null);
+  mockSeatCandidates.mockResolvedValue([]);
 }
 
 function setupUpdateChain(resolvedValue: { data: unknown; error: unknown }) {
@@ -552,7 +559,7 @@ describe('POST /api/projects · round-10 fields', () => {
   });
 
   it('uses the Pro project limit from the shared billing catalog', async () => {
-    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-paid' }, error: null });
 
     const res = await POST(makePostRequest({ name: 'Paid project' }));
@@ -564,7 +571,7 @@ describe('POST /api/projects · round-10 fields', () => {
   });
 
   it('keeps Max project creation unlimited', async () => {
-    mockGetSubscription.mockResolvedValue({ plan_tier: 'max' });
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'max', status: 'active' });
     setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-max' }, error: null });
 
     const res = await POST(makePostRequest({ name: 'Max project' }));
@@ -574,16 +581,55 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(params).toContain(null);
   });
 
-  it('fails closed for a missing subscription before inserting', async () => {
+  it('uses the canonical Free allowance when no subscription or seat exists', async () => {
     mockGetSubscription.mockResolvedValue(null);
+    setupInsertChain({ data: { ...BASE_DB_ROW, id: 'first-free-project' }, error: null });
+    const res = await POST(makePostRequest({ name: 'First project' }));
+    expect(res.status).toBe(201);
+    expect(mockSeatCandidates).toHaveBeenCalled();
+    const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain("assert_user_resource_limit('projects'");
+    expect(params.at(-1)).toBe(1);
+  });
 
-    const res = await POST(makePostRequest({ name: 'Blocked project' }));
+  it.each(['past_due', 'canceled', 'expired'])(
+    'does not grant paid limits for %s subscriptions',
+    async (status) => {
+      mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status });
+      setupInsertChain({ data: BASE_DB_ROW, error: null });
+      expect((await POST(makePostRequest({ name: 'Baseline project' }))).status).toBe(201);
+      expect(mockNeonQuery.mock.calls[0]?.[1].at(-1)).toBe(1);
+    },
+  );
 
-    expect(res.status).toBe(400);
+  it('propagates a subscription lookup failure without creating a project', async () => {
+    mockGetSubscription.mockRejectedValueOnce(new Error('database unavailable'));
+    expect((await POST(makePostRequest({ name: 'Do not create' }))).status).toBe(500);
     expect(mockNeonQuery).not.toHaveBeenCalled();
-    expect((await res.json()).error.message).toBe(
-      'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.',
+  });
+
+  it('resolves an eligible organization seat instead of provisioning a personal Free row', async () => {
+    mockGetSubscription.mockResolvedValue(null);
+    mockSeatCandidates.mockResolvedValueOnce([
+      {
+        organization_id: 'org-seat',
+        owner_user_id: 'owner',
+        billing_plan_tier: 'team',
+        licensed_seats: 2,
+        seat_rank: 2,
+        subscription_id: 'owner-subscription',
+        status: 'active',
+        current_period_start: new Date(),
+        current_period_end: new Date(Date.now() + 86400000),
+        stripe_subscription_id: 'sub_fixture',
+      },
+    ]);
+    setupInsertChain({ data: BASE_DB_ROW, error: null });
+    expect((await POST(makePostRequest({ name: 'Seat project' }))).status).toBe(201);
+    const insertion = mockNeonQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into user_projects'),
     );
+    expect(insertion?.[1].at(-1)).toBe(25);
   });
 
   it('POST returns 400 for invalid importedFrom enum', async () => {

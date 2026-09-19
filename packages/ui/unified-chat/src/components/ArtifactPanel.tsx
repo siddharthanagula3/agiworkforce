@@ -25,6 +25,7 @@ import {
 } from '../lib/artifact-sandbox';
 import { artifactDownloadFile } from '../lib/artifact-download';
 import { SCRIPTS_BLOCKED_NOTICE } from '../lib/artifact-preview-capability';
+import { toUserMessage } from '../lib/network-error';
 import { useSameDocumentScriptSupport } from '../hooks/useSameDocumentScriptSupport';
 import { Button, useMenuKeyboard } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
@@ -74,9 +75,7 @@ export interface ArtifactCloudUnavailablePublishResult {
 }
 
 export type ArtifactPublishResult =
-  | ArtifactLocalPublishResult
-  | ArtifactCloudPublishResult
-  | ArtifactCloudUnavailablePublishResult;
+  ArtifactLocalPublishResult | ArtifactCloudPublishResult | ArtifactCloudUnavailablePublishResult;
 
 export interface ArtifactPanelProps {
   artifact: Artifact | null;
@@ -437,7 +436,7 @@ export function ArtifactPanel({
         const result = await publishArtifactProp();
         setPublishResult(result);
       } catch (err) {
-        setPublishError(err instanceof Error ? err.message : 'Failed to publish artifact');
+        setPublishError(toUserMessage(err, 'Could not publish this artifact. Try again.'));
       } finally {
         setIsPublishing(false);
       }
@@ -514,7 +513,7 @@ export function ArtifactPanel({
     } catch (err) {
       return {
         srcDoc: '',
-        error: err instanceof Error ? err.message : 'Could not prepare this HTML for preview.',
+        error: toUserMessage(err, 'Could not prepare this HTML for preview.'),
       };
     }
   }, [artifact, htmlPreviewRunning]);

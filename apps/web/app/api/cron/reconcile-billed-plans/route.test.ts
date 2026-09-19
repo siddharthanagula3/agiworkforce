@@ -15,6 +15,7 @@ vi.mock('@/lib/services/billing-reconciliation', () => ({
   reconcileBilledPlans: vi.fn(),
 }));
 vi.mock('@/lib/support/handoff/config', () => ({
+  isValidEmail: vi.fn(() => true),
   getHandoffConfig: vi.fn(() => ({ fallbackEmail: 'ops@agiworkforce.com' })),
 }));
 vi.mock('@/lib/support/handoff/resend-client', () => ({

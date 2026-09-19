@@ -70,7 +70,7 @@ test('a PKCS#8 header with no key material is library code, not a secret', () =>
 
 test('a real private key block in the bundle fails the guard', () => {
   const result = runOnSandbox({
-    'apps/web/.next/static/chunks/main.js': `var k="-----BEGIN PRIVATE KEY-----\\n${'MIIEvQIBADANBg'.repeat(4)}";\n`,
+    'apps/web/.next/static/chunks/main.js': `var k="-----BEGIN PRIVATE KEY-----\\n${'EXAMPLE'.repeat(8)}";\n`,
   });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /private key block/);

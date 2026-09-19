@@ -25,8 +25,8 @@ function og(meta: ReturnType<typeof buildMetadata>) {
 
 describe('buildMetadata', () => {
   const meta = buildMetadata({
-    title: 'BYOK: Bring Your Own Keys to Desktop & CLI',
-    description: 'Bring your own provider API keys to AGI Desktop and the CLI.',
+    title: 'BYOK: Bring Your Own Keys to the CLI',
+    description: 'Bring your own provider API keys to the AGI CLI.',
     path: '/byok',
   });
 
@@ -35,7 +35,7 @@ describe('buildMetadata', () => {
   });
 
   it('emits a complete, page-specific Open Graph block (not the home card)', () => {
-    expect(og(meta).title).toBe('BYOK: Bring Your Own Keys to Desktop & CLI');
+    expect(og(meta).title).toBe('BYOK: Bring Your Own Keys to the CLI');
     expect(og(meta).title).not.toBe('AGI | One AI workspace across models and tools.');
     expect(og(meta).url).toBe(`${SITE_URL}/byok`);
   });
@@ -50,7 +50,7 @@ describe('buildMetadata', () => {
   it('emits a Twitter summary_large_image card mirroring the OG title', () => {
     const twitter = meta.twitter as { card?: string; title?: string };
     expect(twitter.card).toBe('summary_large_image');
-    expect(twitter.title).toBe('BYOK: Bring Your Own Keys to Desktop & CLI');
+    expect(twitter.title).toBe('BYOK: Bring Your Own Keys to the CLI');
   });
 
   it('honors ogTitle/ogDescription overrides', () => {

@@ -12,13 +12,14 @@ import {
   isGitHubInstallationLinkingAvailable,
 } from '@/lib/github-app';
 import { logger } from '@/lib/logger';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 const OAUTH_COOKIE_PATH = '/api/github/oauth/callback';
 const GITHUB_STATE_PATTERN = /^[a-f0-9]{64}$/i;
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -145,3 +146,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.redirect(new URL('/connectors?github=connected', request.url));
 }
+
+export const GET = withPrivateNoStore(handleGet);

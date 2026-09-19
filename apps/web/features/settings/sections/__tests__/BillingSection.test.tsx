@@ -278,8 +278,12 @@ describe('BillingSection', () => {
 
     render(<BillingSection />);
 
-    expect(await screen.findByText('Payment methods could not be loaded (503).')).toBeTruthy();
-    expect(await screen.findByText('Invoices could not be loaded (401).')).toBeTruthy();
+    expect(
+      await screen.findByText('Something went wrong on our side. Try again shortly.'),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText('Your session has expired. Sign in again to continue.'),
+    ).toBeTruthy();
     expect(screen.queryByText('No card on file')).toBeNull();
     expect(
       screen.queryByText(

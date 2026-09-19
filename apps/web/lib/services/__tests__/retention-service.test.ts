@@ -92,8 +92,11 @@ function harness(fixture: Fixture = {}) {
     return [];
   });
 
+  const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+  db.transaction = vi.fn(async (operation) => operation(db));
+
   return {
-    db: { query, execute: vi.fn() } as unknown as DatabaseAdapter,
+    db,
     query,
     sweepInserts,
     deletes,
@@ -450,6 +453,7 @@ describe('legal holds', () => {
     expect(h.custodianInserts.map((params) => params[1])).toEqual(['a', 'b']);
     expect(h.holdInserts[0]?.[5]).toEqual(['conversation', 'file']);
     expect(created.custodianUserIds).toEqual(['a', 'b']);
+    expect(h.db.transaction).toHaveBeenCalledTimes(1);
   });
 });
 

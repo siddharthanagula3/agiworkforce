@@ -555,7 +555,7 @@ impl CliConfig {
             }
         }
         config.merge_env_overrides();
-        config.apply_managed_overrides();
+        config.apply_managed_overrides()?;
         Ok(config)
     }
 
@@ -567,9 +567,13 @@ impl CliConfig {
     /// a repository's config by forgetting to ask.
     fn project_config_allowed() -> bool {
         let managed = crate::platform::policy::managed::load_managed_policy();
-        let managed_allows = match managed.document().and_then(|doc| doc.config.as_ref()) {
-            Some(config) => config.allow_project_config.unwrap_or(true),
-            None => true,
+        let managed_allows = match &managed {
+            crate::platform::policy::managed::ManagedPolicyState::Invalid(_) => false,
+            _ => managed
+                .document()
+                .and_then(|doc| doc.config.as_ref())
+                .and_then(|config| config.allow_project_config)
+                .unwrap_or(true),
         };
         if !managed_allows {
             return false;
@@ -581,11 +585,20 @@ impl CliConfig {
 
     /// Apply the managed (organization) layer last, so neither the user's
     /// config, a repository's config, nor an environment override can loosen it.
-    pub fn apply_managed_overrides(&mut self) {
+    pub fn apply_managed_overrides(&mut self) -> Result<()> {
         let state = crate::platform::policy::managed::load_managed_policy();
-        if let Some(managed) = state.document().and_then(|doc| doc.config.as_ref()) {
-            self.apply_managed_config(managed);
+        match state {
+            crate::platform::policy::managed::ManagedPolicyState::Invalid(error) => {
+                bail!("Managed policy is invalid: {error}")
+            }
+            crate::platform::policy::managed::ManagedPolicyState::Loaded { document, .. } => {
+                if let Some(managed) = document.config.as_ref() {
+                    self.apply_managed_config(managed);
+                }
+            }
+            crate::platform::policy::managed::ManagedPolicyState::Absent => {}
         }
+        Ok(())
     }
 
     pub(crate) fn apply_managed_config(
@@ -609,7 +622,7 @@ impl CliConfig {
     pub fn load_without_project() -> Result<Self> {
         let mut config = Self::load()?;
         config.merge_env_overrides();
-        config.apply_managed_overrides();
+        config.apply_managed_overrides()?;
         Ok(config)
     }
 

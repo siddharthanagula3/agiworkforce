@@ -95,21 +95,6 @@ const REVOKE: { k: string; v: string }[] = [
   },
 ];
 
-const DESKTOP_SCOPES: { k: string; v: string }[] = [
-  {
-    k: 'Gmail',
-    v: 'gmail.readonly (read mail), gmail.send (send mail as you), gmail.modify (change and delete mail, including labels and trash), userinfo.email and userinfo.profile (identify which account you connected). gmail.modify is broader than reading and sending: it permits modifying and deleting messages.',
-  },
-  {
-    k: 'Google Calendar',
-    v: 'calendar.readonly (read events), calendar.events (read and write events), and auth/calendar: the unrestricted calendar scope, which is broader than the other two and makes them redundant.',
-  },
-  {
-    k: 'Outlook Calendar',
-    v: 'User.Read (basic profile), Calendars.Read, and Calendars.ReadWrite (read and write your calendars).',
-  },
-];
-
 export default function AgentPermissionsPage() {
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -411,24 +396,18 @@ export default function AgentPermissionsPage() {
                     active. It holds no tokens and no endpoint URLs.
                   </Prose>
 
-                  <h3 className="agi-ds-h3">Desktop OAuth scopes, in full.</h3>
+                  <h3 className="agi-ds-h3">Desktop uses the managed connector service.</h3>
                   <Prose>
-                    On Desktop, Gmail and calendar integrations use <em>your own</em> OAuth client
-                    credentials with PKCE, and the resulting tokens are encrypted with a key derived
-                    from your machine and stored in local SQLite on that device. The
-                    provider&rsquo;s own consent screen shows these scopes when you authorize; we
-                    list them here so you see them before you get there.
+                    The current Electron Desktop opens the same account-scoped connector
+                    authorization flow as the web app. It does not store connector OAuth tokens in a
+                    local SQLite database. The provider&rsquo;s consent screen is the authoritative
+                    list of scopes for a configured connector, and authorization does not finish
+                    unless the managed service verifies that connection.
                   </Prose>
-                  <Ledger
-                    caption="Desktop OAuth scopes"
-                    rows={DESKTOP_SCOPES.map((row) => ({ label: row.k, value: row.v }))}
-                  />
                   <Prose>
-                    Two of those requests are broader than the feature needs: Gmail&rsquo;s modify
-                    scope and Google Calendar&rsquo;s unrestricted scope. We are naming them rather
-                    than describing the narrower scope we wish we asked for. Narrowing them changes
-                    behaviour for existing connections, so it is tracked as engineering work, not a
-                    wording change.
+                    A directory entry is not proof that a connector is available. The app asks the
+                    managed service which connectors are configured and reports an unavailable or
+                    incomplete setup explicitly instead of inventing a successful connection.
                   </Prose>
 
                   <h3 className="agi-ds-h3">A custom MCP server is your trust boundary.</h3>

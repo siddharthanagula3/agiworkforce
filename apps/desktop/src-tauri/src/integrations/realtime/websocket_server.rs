@@ -1507,7 +1507,7 @@ impl RealtimeServer {
 
                 if execution.is_ok() {
                     let renegotiated = match native_type.as_str() {
-                        "connect" => Some(Self::negotiated_capabilities(&payload)),
+                        "connect" => Some(Self::negotiated_capabilities(payload)),
                         "disconnect" => Some(ExtensionCapabilities::none()),
                         _ => None,
                     };

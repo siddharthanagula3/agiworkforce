@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedHealthChecks } from '@/lib/server/health-check';
+import { getCachedHealthChecks, type HealthCheckResult } from '@/lib/server/health-check';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 
@@ -14,6 +14,21 @@ export const runtime = 'nodejs';
  * for a health endpoint during the incident it exists to reveal.
  */
 export const maxDuration = 30;
+
+function toPublicHealthCheck(healthCheck: HealthCheckResult) {
+  const missingCount = healthCheck.checks.environment.missingCount;
+
+  return {
+    ...healthCheck,
+    checks: {
+      ...healthCheck.checks,
+      environment: {
+        status: healthCheck.checks.environment.status,
+        ...(missingCount === undefined ? {} : { missingCount }),
+      },
+    },
+  };
+}
 
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'health-check');
@@ -32,7 +47,7 @@ export async function GET(request: NextRequest) {
 
   const statusCode = healthCheck.status === 'unhealthy' ? 503 : 200;
 
-  return NextResponse.json(healthCheck, {
+  return NextResponse.json(toPublicHealthCheck(healthCheck), {
     status: statusCode,
     headers: {
       ...getCorsHeaders(request),

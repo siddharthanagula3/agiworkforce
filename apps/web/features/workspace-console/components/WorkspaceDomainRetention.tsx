@@ -217,7 +217,7 @@ export function WorkspaceDomainRetention() {
           className="px-5 pb-4 text-xs"
           style={{ color: 'var(--settings-destructive-text)' }}
         >
-          {save.error.message}
+          {toUserMessage(save.error, 'Could not update retention policy. Try again.')}
         </p>
       ) : null}
       {data.sweeps.length > 0 ? (

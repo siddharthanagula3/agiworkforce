@@ -84,6 +84,7 @@ import { TooltipProvider } from './ui/Tooltip';
 import { errorReportingService } from './services/errorReporting';
 import { initializeCoworkDispatchRuntime } from './services/coworkDispatch';
 import { initializeDeviceRegistryHeartbeat } from './services/deviceRegistryHeartbeat';
+import { initializeAutomationAuditOutbox } from './services/automationAuditOutbox';
 import { initializeWebAuth, cloudAccountAuth } from './services/cloudAccountAuth';
 import {
   canUseDesktopCloudCodeExecution,
@@ -691,6 +692,7 @@ const DesktopShell = () => {
       );
       registerCleanup(initCloudSyncScheduler());
       registerCleanup(initializeDeviceRegistryHeartbeat());
+      registerCleanup(initializeAutomationAuditOutbox());
     }
 
     if (isTauri) {

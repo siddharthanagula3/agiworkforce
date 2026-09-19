@@ -239,6 +239,31 @@ describe('ImageGenerationCard revision panel', () => {
       modelId: OPENAI_IMAGE_MODEL_ID,
     });
   });
+
+  it('does not expose provider diagnostics when a new version fails', async () => {
+    const onRegenerate = vi
+      .fn()
+      .mockRejectedValue(new Error('HTTP 500: SELECT secret FROM users trace 0xdeadbeef'));
+    render(
+      <ImageGenerationCard
+        imageUrl="/api/files/original"
+        isGenerating={false}
+        prompt="Draw a star"
+        onRegenerate={onRegenerate}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /new version/i }));
+    fireEvent.change(
+      screen.getByPlaceholderText('Describe a change to generate a new version...'),
+      { target: { value: 'add a moon' } },
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /generate a new version/i }));
+    });
+
+    expect(await screen.findByText(/something went wrong on our side/i)).toBeVisible();
+    expect(screen.queryByText(/SELECT|deadbeef/i)).toBeNull();
+  });
 });
 
 describe('ImageGenerationCard model disclosure', () => {

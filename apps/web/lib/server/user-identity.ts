@@ -242,25 +242,30 @@ export function readAccountInstructionBlocks(
   ];
 }
 
-export async function backfillDisplayNameFromUpstream(
+export async function backfillProfileFromUpstream(
   db: DatabaseAdapter,
   userId: string,
-  candidateName: string,
+  candidateName: string | null | undefined,
+  verifiedEmail?: string | null,
 ): Promise<void> {
   const name = normalizeText(candidateName, 120);
-  if (!name) return;
+  const email = normalizeText(verifiedEmail, 254);
+  if (!name && !email) return;
   try {
     await db.query(
-      `insert into public.profiles (id, display_name, updated_at)
-       values ($1, $2, now())
+      `insert into public.profiles (id, display_name, email, updated_at)
+       values ($1, $2, $3, now())
        on conflict (id)
-       do update set display_name = $2, updated_at = now()
-        where public.profiles.display_name is null
-           or btrim(public.profiles.display_name) = ''`,
-      [userId, name],
+       do update set
+         display_name = coalesce(nullif(btrim(public.profiles.display_name), ''), excluded.display_name),
+         email = coalesce(nullif(btrim(public.profiles.email), ''), excluded.email),
+         updated_at = now()
+       where (nullif(btrim(public.profiles.display_name), '') is null and excluded.display_name is not null)
+          or (nullif(btrim(public.profiles.email), '') is null and excluded.email is not null)`,
+      [userId, name, email],
     );
   } catch (error) {
-    logger.warn({ userId, error }, 'Failed to backfill display_name from upstream profile');
+    logger.warn({ userId, error }, 'Failed to backfill upstream profile identity');
   }
 }
 

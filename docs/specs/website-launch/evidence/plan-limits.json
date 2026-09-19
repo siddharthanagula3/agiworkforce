@@ -1,0 +1,572 @@
+{
+  "recordedAt": "2026-09-19T09:10:13.012755+00:00",
+  "scope": "Local manual billing fixtures only; tier order follows user request",
+  "tiers": [
+    {
+      "tier": "free",
+      "projectBoundary": {
+        "atLimit": "allowed",
+        "overLimit": "denied"
+      },
+      "browser": [
+        "Free plan displayed",
+        "Second project rejected with Free one-project message",
+        "Image/video upgrade-gated; Deep Research disabled"
+      ]
+    },
+    {
+      "tier": "basic",
+      "label": "Basic",
+      "limits": {
+        "projects": 5,
+        "knowledgeStorageBytes": 1073741824,
+        "customMcpServers": 5,
+        "maxConcurrentTurns": 2,
+        "maxSandboxes": 2,
+        "sandboxTtlMs": 600000,
+        "maxConnectorTools": 50,
+        "maxScheduledTasks": 2,
+        "codeHarnessDailyCeilingCents": 100
+      },
+      "usage": {
+        "monthlyUnits": 400,
+        "weeklyUnits": 100,
+        "fiveHourUnits": 20,
+        "dailyUnits": 0,
+        "unlimited": false
+      },
+      "capabilities": {
+        "managed_chat": true,
+        "chat_tools": true,
+        "projects": true,
+        "memory_personalization": true,
+        "skills_connectors": true,
+        "cloud_sync": true,
+        "agi_work": false,
+        "image_generation": false,
+        "video_generation": false,
+        "managed_api": false,
+        "developer_surfaces": false,
+        "team_admin": false,
+        "enterprise_controls": false
+      },
+      "projectBoundary": {
+        "atLimit": "allowed",
+        "overLimit": "denied"
+      },
+      "credit": [
+        {
+          "credits_allocated_microusd": "2000000",
+          "credits_used_microusd": "0"
+        }
+      ],
+      "quotaFixtureRolledBack": true,
+      "browser": [
+        "Second project created after upgrading local fixture",
+        "Image/video upgrade-gated; Deep Research selectable"
+      ]
+    },
+    {
+      "tier": "pro",
+      "label": "Pro",
+      "limits": {
+        "projects": 25,
+        "knowledgeStorageBytes": 10737418240,
+        "customMcpServers": 25,
+        "maxConcurrentTurns": 4,
+        "maxSandboxes": 5,
+        "sandboxTtlMs": 1200000,
+        "maxConnectorTools": 150,
+        "maxScheduledTasks": 5,
+        "codeHarnessDailyCeilingCents": 500
+      },
+      "usage": {
+        "monthlyUnits": 2000,
+        "weeklyUnits": 500,
+        "fiveHourUnits": 100,
+        "dailyUnits": 0,
+        "unlimited": false
+      },
+      "capabilities": {
+        "managed_chat": true,
+        "chat_tools": true,
+        "projects": true,
+        "memory_personalization": true,
+        "skills_connectors": true,
+        "cloud_sync": true,
+        "agi_work": true,
+        "image_generation": true,
+        "video_generation": false,
+        "managed_api": true,
+        "developer_surfaces": true,
+        "team_admin": false,
+        "enterprise_controls": false
+      },
+      "projectBoundary": {
+        "atLimit": "allowed",
+        "overLimit": "denied"
+      },
+      "credit": [
+        {
+          "credits_allocated_microusd": "10000000",
+          "credits_used_microusd": "0"
+        }
+      ],
+      "quotaFixtureRolledBack": true,
+      "browser": ["AGI Work and image exposed; video upgrade-gated"]
+    },
+    {
+      "tier": "max",
+      "label": "Max 5x",
+      "limits": {
+        "projects": "unlimited",
+        "knowledgeStorageBytes": "unlimited",
+        "customMcpServers": "unlimited",
+        "maxConcurrentTurns": 8,
+        "maxSandboxes": 5,
+        "sandboxTtlMs": 1800000,
+        "maxConnectorTools": 300,
+        "maxScheduledTasks": 10,
+        "codeHarnessDailyCeilingCents": 2500
+      },
+      "usage": {
+        "monthlyUnits": 10000,
+        "weeklyUnits": 2500,
+        "fiveHourUnits": 500,
+        "dailyUnits": 0,
+        "unlimited": false
+      },
+      "capabilities": {
+        "managed_chat": true,
+        "chat_tools": true,
+        "projects": true,
+        "memory_personalization": true,
+        "skills_connectors": true,
+        "cloud_sync": true,
+        "agi_work": true,
+        "image_generation": true,
+        "video_generation": false,
+        "managed_api": true,
+        "developer_surfaces": true,
+        "team_admin": false,
+        "enterprise_controls": false
+      },
+      "projectBoundary": {
+        "atLimit": "allowed",
+        "overLimit": "allowed under unlimited policy"
+      },
+      "credit": [
+        {
+          "credits_allocated_microusd": "50000000",
+          "credits_used_microusd": "0"
+        }
+      ],
+      "quotaFixtureRolledBack": true,
+      "browser": ["AGI Work and image exposed; video upgrade-gated"]
+    },
+    {
+      "tier": "max_15x",
+      "label": "Max 15x",
+      "limits": {
+        "projects": "unlimited",
+        "knowledgeStorageBytes": "unlimited",
+        "customMcpServers": "unlimited",
+        "maxConcurrentTurns": 12,
+        "maxSandboxes": 5,
+        "sandboxTtlMs": 3600000,
+        "maxConnectorTools": 500,
+        "maxScheduledTasks": 25,
+        "codeHarnessDailyCeilingCents": 7500
+      },
+      "usage": {
+        "monthlyUnits": 30000,
+        "weeklyUnits": 7500,
+        "fiveHourUnits": 1500,
+        "dailyUnits": 0,
+        "unlimited": false
+      },
+      "capabilities": {
+        "managed_chat": true,
+        "chat_tools": true,
+        "projects": true,
+        "memory_personalization": true,
+        "skills_connectors": true,
+        "cloud_sync": true,
+        "agi_work": true,
+        "image_generation": true,
+        "video_generation": true,
+        "managed_api": true,
+        "developer_surfaces": true,
+        "team_admin": false,
+        "enterprise_controls": false
+      },
+      "projectBoundary": {
+        "atLimit": "allowed",
+        "overLimit": "allowed under unlimited policy"
+      },
+      "credit": [
+        {
+          "credits_allocated_microusd": "150000000",
+          "credits_used_microusd": "0"
+        }
+      ],
+      "quotaFixtureRolledBack": true,
+      "browser": [
+        "AGI Work, image and video exposed",
+        "Billing shows Max15x active with manual billing ownership",
+        "Usage shows375 included credits per5hours and1875 weekly; purchased top-up balance0 is distinct from included allowance"
+      ]
+    }
+  ],
+  "paidUsageBoundaryProbe": {
+    "results": [
+      {
+        "tier": "basic",
+        "boundary": "fiveHour",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "basic",
+        "boundary": "fiveHour",
+        "position": "oneMicrousdAbove",
+        "decision": "session_limit"
+      },
+      {
+        "tier": "basic",
+        "boundary": "weekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "basic",
+        "boundary": "weekly",
+        "position": "oneMicrousdAbove",
+        "decision": "weekly_limit"
+      },
+      {
+        "tier": "basic",
+        "boundary": "flagshipWeekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "basic",
+        "boundary": "flagshipWeekly",
+        "position": "oneMicrousdAbove",
+        "decision": "flagship_weekly_limit"
+      },
+      {
+        "tier": "pro",
+        "boundary": "fiveHour",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "pro",
+        "boundary": "fiveHour",
+        "position": "oneMicrousdAbove",
+        "decision": "session_limit"
+      },
+      {
+        "tier": "pro",
+        "boundary": "weekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "pro",
+        "boundary": "weekly",
+        "position": "oneMicrousdAbove",
+        "decision": "weekly_limit"
+      },
+      {
+        "tier": "pro",
+        "boundary": "flagshipWeekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "pro",
+        "boundary": "flagshipWeekly",
+        "position": "oneMicrousdAbove",
+        "decision": "flagship_weekly_limit"
+      },
+      {
+        "tier": "max",
+        "boundary": "fiveHour",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "max",
+        "boundary": "fiveHour",
+        "position": "oneMicrousdAbove",
+        "decision": "session_limit"
+      },
+      {
+        "tier": "max",
+        "boundary": "weekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "max",
+        "boundary": "weekly",
+        "position": "oneMicrousdAbove",
+        "decision": "weekly_limit"
+      },
+      {
+        "tier": "max",
+        "boundary": "flagshipWeekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "max",
+        "boundary": "flagshipWeekly",
+        "position": "oneMicrousdAbove",
+        "decision": "flagship_weekly_limit"
+      },
+      {
+        "tier": "max_15x",
+        "boundary": "fiveHour",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "max_15x",
+        "boundary": "fiveHour",
+        "position": "oneMicrousdAbove",
+        "decision": "session_limit"
+      },
+      {
+        "tier": "max_15x",
+        "boundary": "weekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "max_15x",
+        "boundary": "weekly",
+        "position": "oneMicrousdAbove",
+        "decision": "weekly_limit"
+      },
+      {
+        "tier": "max_15x",
+        "boundary": "flagshipWeekly",
+        "position": "atLimit",
+        "decision": "acquired"
+      },
+      {
+        "tier": "max_15x",
+        "boundary": "flagshipWeekly",
+        "position": "oneMicrousdAbove",
+        "decision": "flagship_weekly_limit"
+      }
+    ],
+    "rolledBack": true,
+    "providerCalls": 0
+  },
+  "tests": [
+    "44 tests: billing policy, Free entitlements, usage policy, connector permissions",
+    "59 tests: credit durability, managed usage and spend caps, run routes",
+    "41 tests: Free trial and model policy gates/evaluation",
+    "68 tests: custom connector entitlement, knowledge storage metering/routes, schedule service and cadence"
+  ],
+  "sourceHashes": {
+    "packages/contracts/types/src/billing-catalog.ts": "02236bc67b530b9bedb8a695a35bbd2c6670a1fee3146c6d952ba4793e9790a1",
+    "apps/web/lib/server/managed-usage-policy.ts": "aef2ef94d2b26bf3c685c0b64bb74948618928b74e4f94f81e5a1cf94f971819",
+    "apps/web/lib/billing/managed-usage-caps.ts": "c92505036789a51b427cfde74d1f1ff8372e502aa25dbc91215a8a5e4f5dfd55",
+    "apps/web/lib/services/credit-service.ts": "ec31dcb993f2ba8a048b6f71c9a071831ec821170ef1e2f5e8506000f3c9de9c"
+  },
+  "fixtureSnapshot": "/tmp/agi-launch-billing-snapshot.json",
+  "fixtureScripts": ["/tmp/agi-launch-plan-fixture.ts", "/tmp/agi-launch-usage-boundaries.ts"],
+  "instrumentCorrections": [
+    "Initial probe supplied UUID instead of required request hash; corrected to SHA256",
+    "Success decision is acquired per canonical service and SQL, not reserved; corrected harness before accepting results"
+  ],
+  "remaining": [
+    "Actual model/image/video/research generation unverified due provider credit exhaustion",
+    "Storage, custom connector and scheduler end-to-end limits not all exercised",
+    "UI gate visibility is not proof of successful execution"
+  ],
+  "finalLocalState": "Max15x manual subscription with canonical credit allocation, prior usage preserved; two synthetic projects retained; all quota and reservation probe rows rolled back",
+  "max15Comparison": {
+    "result": "passed for monthly, weekly and five-hour managed usage budgets",
+    "ratios": {
+      "monthlyUnits": 15.0,
+      "weeklyUnits": 15.0,
+      "fiveHourUnits": 15.0
+    },
+    "basis": "Canonical MANAGED_USAGE_LIMITS and prior real database boundary probes; existing published-usage-claims.test.ts verifies comparison resolver.",
+    "exclusions": "Not a claim that concurrency, storage, tools, or every model yields exactly15 times as many prompts."
+  },
+  "enterprise": {
+    "status": "partially verified",
+    "environment": "loopback database with manual Enterprise subscription; no payment identifiers",
+    "browser": [
+      "Existing demo identity signed in successfully with owner-supplied password",
+      "Terms gate completed through UI",
+      "No prior-account projects/history appeared",
+      "Natural Free first project succeeded without subscription; second rejected",
+      "Enterprise plan visible after local fixture",
+      "Workspace created through UI; personal project absent in workspace scope",
+      "One licensed seat occupied; invitation disabled when no seats available",
+      "Malformed SSO domain rejected",
+      "Public mailbox domain rejected",
+      "Mixed-case company domain normalized; connection remains unverified and inactive",
+      "DNS check without matching TXT record refused verification with propagation guidance"
+    ],
+    "tests": {
+      "identityAndDomainVerification": 62,
+      "ssoHostileMetadataRoundtripEntitlementAndPanel": 115
+    },
+    "notVerified": [
+      "New-account signup/email challenge",
+      "Successful external IdP SSO",
+      "Live contract/payment collection",
+      "Multi-member permissions and cross-tenant enforcement"
+    ],
+    "constraints": "No DNS changes, no real IdP connected, no external messages or generation. Local inactive SSO test connection retained."
+  },
+  "enterpriseMembershipAuthorization": {
+    "before": {
+      "suspendedPermissionCount": 46,
+      "policyManage": true
+    },
+    "after": {
+      "checks": [
+        {
+          "status": "active",
+          "permissionCount": 46,
+          "role": "owner",
+          "visible": true,
+          "writable": true
+        },
+        {
+          "status": "suspended",
+          "permissionCount": 0,
+          "role": null,
+          "visible": false,
+          "writable": false
+        },
+        {
+          "status": "deprovisioned",
+          "permissionCount": 0,
+          "role": null,
+          "visible": false,
+          "writable": false
+        }
+      ],
+      "nonMemberDenied": true,
+      "personalIsolation": {
+        "own": true,
+        "other": false
+      },
+      "transactionRolledBack": true
+    },
+    "migration": "0272_active_membership_authorization.sql",
+    "migrationState": {
+      "applied": 272,
+      "pending": 0,
+      "drift": 0,
+      "target": "local"
+    },
+    "validation": [
+      "37 permission/workspace/RLS route tests passed",
+      "6 existing RLS probe structural checks passed",
+      "Canonical probeMembershipAuthorization executed against local PostgreSQL with synthetic transaction fixtures",
+      "Neon migration guard passed",
+      "49 additional workspace/role consumers passed",
+      "40 entitlement/sharing tests passed after active candidate filter",
+      "Full web typecheck passed after authorization changes; later seat SQL/copy edits covered by focused tests",
+      "Focused TypeScript lint passed"
+    ],
+    "remaining": ["Production migration and multi-browser revocation remain unverified"],
+    "repairAttempts": 1,
+    "jev": {
+      "choice": "canonical_boundaries",
+      "confidence": 1,
+      "requestHash": "14a34e504bf0f2ceb1d8fc9bddf8307c72598496d33d65a43bc03c8b48f5f3e5"
+    },
+    "browser": "After one owned dev restart, active Enterprise workspace usage rendered; route200 in174ms, usage analytics200. Restart recovery is not a proven transport root-cause fix.",
+    "seatCandidates": {
+      "results": [
+        {
+          "status": "active",
+          "candidates": 1
+        },
+        {
+          "status": "suspended",
+          "candidates": 0
+        },
+        {
+          "status": "deprovisioned",
+          "candidates": 0
+        }
+      ],
+      "transactionRolledBack": true
+    },
+    "sourceHashes": {
+      "apps/web/db/neon/0272_active_membership_authorization.sql": "0be9a5e83e4feb2d50dbcfae0615d37d60b624ba5a90fd00c184da01361ca4d3",
+      "apps/web/lib/services/active-workspace-service.ts": "d8ba0a6139f138e2b23131d9882066f1bf954fef48a95a32562ef2ddf1bba103",
+      "apps/web/lib/services/organization-permission-service.ts": "8c2fd69c000a35f64464d519bdf55997177af23a431711eaf7a7b1633b5e2a95",
+      "apps/web/lib/services/entitlement-resolution.ts": "4c57db6b6d19a30ad4231c447b781715839bf2f427e9b4da6e7d6ceefc401def",
+      "apps/web/lib/services/org-sharing-service.ts": "5e2393d66e986b71189a8019103eaa7bd316d37d5c17b805d58cd48ff1b99b32",
+      "apps/web/lib/server/rls-db.ts": "a1651bf2e9e4511a28ae7256ebda287debd58e8516c31119d40eff2ee363daad",
+      "apps/web/scripts/rls-probe.mjs": "934516bae81f0cfffcf5d361e2bafd63ea01a05784efcb280ac7ddf7de4989ab"
+    }
+  },
+  "workspaceSelection": {
+    "repairAttempts": 1,
+    "before": "Enterprise selection persisted but account list always reported Personal; one new route regression failed.",
+    "verification": "23 route/menu/active-workspace tests passed; full web typecheck, focused lint and formatting passed. Browser Enterprise selected after reload; Personal switch settled and stored personal; Enterprise restored.",
+    "database": "Both canonical listing SQL queries return active membership1, suspended0, deprovisioned0; transaction rolled back.",
+    "sourceHashes": {
+      "apps/web/app/api/settings/workspaces/route.ts": "2816f4e71dd0c744bb0d4e1506e73717cea46fb30a056d8f3f6601921ebe6ebc",
+      "apps/web/features/workspaces/server/workspace-service.ts": "e969f9bae5ba38cc1292c40a6676a0c276e806c2b6386c9606e8fbce2aebb0c5"
+    }
+  },
+  "teamMembershipList": {
+    "repairAttempts": 1,
+    "before": "Three inactive-requester tests returned200 before repair. Independent privileged route omitted active status.",
+    "after": "38 team/privacy tests pass; canonical membership resolver gates privileged profile list. Active-only TeamMember contract preserved by filtering list rows. Real PostgreSQL active allowed/listed; suspended/deprovisioned denied/not listed, transaction rolled back. Active owner Browser list remains available.",
+    "validation": "Focused lint and full web typecheck passed including privacy fixture corrections.",
+    "sourceHashes": {
+      "apps/web/app/api/settings/team/route.ts": "0fff06d6f56e324da691f364e131f753a977fd4c3b32248900297ce505047050",
+      "apps/web/lib/services/active-workspace-service.ts": "d8ba0a6139f138e2b23131d9882066f1bf954fef48a95a32562ef2ddf1bba103"
+    }
+  },
+  "memberIdentity": {
+    "repairAttempts": 2,
+    "cause": "Email-only upstream account supplies no name; canonical profile backfill skipped account, leaving opaque ID in team list.",
+    "verification": "26 me/profile tests passed;14 final verified/unverified email and backfill tests pass. Real SQL email-only provisioning, missing-name fill and existing-identity preservation passed under rollback.",
+    "identityBoundary": "Metadata-only read of Clerk test identity confirms email verification absent. No verification changed; primary email remains absent in local profile. Display-only fallback uses existing visible-name resolver; verified emails alone may fill profile email.",
+    "sourceHashes": {
+      "apps/web/lib/server/user-identity.ts": "a78c53e8a1d9c2af5482dc1cb7781dffd0a8e29a7efd9d2cf3bb33af9d5351d9",
+      "apps/web/app/api/me/route.ts": "d362f6c15345095dd0bc1e48555e0455367e77619f6e23debd3cad7d51bd53d7"
+    },
+    "browser": "Enterprise list now shows demo (you), not raw identity ID. Email remains unverified and absent in local profile."
+  },
+  "enterpriseBillingPresentation": {
+    "recordedAt": "2026-09-19T10:44:33.335332+00:00",
+    "verification": "25 Team/BillingSummary tests and 18 Contract/BillingSummary tests passed; focused lint passed. Browser rendered missing-contract state, recorded seat allowance and workspace usage link. Full web typecheck passed before final optional missing-contract prop; final prop awaiting fresh typecheck. Full web typecheck55273 now passed including final contract prop and approval recovery.",
+    "browser": "Enterprise Review contract opens /workspace/billing. No contract is on record for this workspace. Usage points to /workspace/usage. No checkout or external billing mutation.",
+    "sourceHashes": {
+      "apps/web/features/settings/sections/TeamSection.tsx": "1433b8d33cd511bcaecf37d212c7eae45cb467d85dea17b3b809937ecb18c4ed",
+      "apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx": "135173e836e8ec6d7b8fbe1d8c8d0ed5f4a42b113050c67f4c0ae6af132ef982",
+      "apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx": "c729d9dfecd625f449e364e7b487f312250b94a53528d9c1d4798e050b7b4e4e"
+    },
+    "canonicalPlanLabel": "Uses existing billing catalog label; five BillingSummary tests pass."
+  },
+  "workspaceUsagePresentation": {
+    "repairAttempts": 1,
+    "verification": "Two rendered regressions failed before.26 API/service tests pass; two final component tests pass after correcting overly broad negative text query to target live status. Browser shows settled totals, as-of time, scoped Local/BYOK wording.1280px DOM no horizontal overflow or clipped paragraphs/headings. Pending count verified in fixture, not live charged usage.",
+    "sourceHashes": {
+      "apps/web/features/workspace-console/hooks/use-workspace-usage.ts": "78600d1c5f0d4aa823c190b4677aee3f58cb44d40e837566480764a36e442a96",
+      "apps/web/features/workspace-console/components/WorkspaceUsageAnalytics.tsx": "bf941952176cc173b4ee8fb487c7227101e73a883e9c6cfe2bd8ed70846733a7"
+    },
+    "errorRecovery": "Four hook regressions failed before; seven final usage hook/component tests and focused lint pass.403 permission result preserved;401/no-token offers sign-in;429/500 friendly canonical messages retain status."
+  }
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { SettingsPageLink } from '../components/SettingsSectionLink';
 import { ChevronRight } from 'lucide-react';
 
 /**
@@ -14,7 +14,7 @@ import { ChevronRight } from 'lucide-react';
  */
 export function WorkspaceConsolePointer() {
   return (
-    <Link
+    <SettingsPageLink
       href="/workspace"
       style={{
         display: 'flex',
@@ -31,6 +31,6 @@ export function WorkspaceConsolePointer() {
         aria-hidden="true"
         style={{ width: 16, height: 16, flexShrink: 0, color: 'var(--text-3)' }}
       />
-    </Link>
+    </SettingsPageLink>
   );
 }

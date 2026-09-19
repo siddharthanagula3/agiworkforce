@@ -28,6 +28,8 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/support/actions/service', () => ({
   proposeSupportAction: mocks.propose,
   confirmSupportAction: mocks.confirm,
+}));
+vi.mock('@/lib/support/actions/catalog', () => ({
   listAvailableSupportActions: mocks.listAvailable,
 }));
 

@@ -58,8 +58,17 @@ function ShareConversationDialogImpl({
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [expiryDays, setExpiryDays] = useState<ShareExpiryDays>(7);
   const [copied, setCopied] = useState(false);
-  const { share, revoke, setAudience, isSharing, isTemporary, activeShare, error, clearError } =
-    useShareConversation(conversationTitle, modelId, conversationId);
+  const {
+    share,
+    revoke,
+    setAudience,
+    isSharing,
+    isTemporary,
+    activeShare,
+    error,
+    cancelPending,
+    clearError,
+  } = useShareConversation(conversationTitle, modelId, conversationId);
   const expiryLabel = useMemo(
     () => EXPIRY_OPTIONS.find((option) => option.days === expiryDays)?.label ?? '7 days',
     [expiryDays],
@@ -67,6 +76,12 @@ function ShareConversationDialogImpl({
 
   const workspaceMembers = activeShare?.workspace?.memberCount ?? 0;
   const memberLabel = `${workspaceMembers} ${workspaceMembers === 1 ? 'member' : 'members'}`;
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) cancelPending();
+    if (nextOpen) clearError();
+    onOpenChange(nextOpen);
+  };
 
   const handleAudienceChange = (next: ShareAudience) => {
     if (!activeShare || next === activeShare.audience) return;
@@ -112,13 +127,7 @@ function ShareConversationDialogImpl({
   return (
     <>
       {confirmDialog}
-      <Dialog
-        open={open}
-        onOpenChange={(nextOpen) => {
-          if (!isSharing) onOpenChange(nextOpen);
-          if (nextOpen) clearError();
-        }}
-      >
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -269,13 +278,13 @@ function ShareConversationDialogImpl({
                   <Trash2 className="mr-2 h-4 w-4" />
                   {isSharing ? 'Revoking…' : 'Revoke share'}
                 </Button>
-                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSharing}>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   Done
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSharing}>
+                <Button variant="outline" onClick={() => handleOpenChange(false)}>
                   Cancel
                 </Button>
                 <Button onClick={() => void share(expiryDays)} disabled={isSharing || isTemporary}>

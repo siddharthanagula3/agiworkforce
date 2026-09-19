@@ -492,7 +492,7 @@ async function handleCreateConnector(request: NextRequest) {
   if (isLocal) {
     return NextResponse.json(
       {
-        error: 'This connector is device-local. Connect it from Desktop Local settings instead.',
+        error: 'This connector is device-local. Connect it from the released CLI instead.',
         connectorId: body.connectorId,
       },
       { status: 501 },

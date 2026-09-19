@@ -17,6 +17,10 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn(() => null),
 }));
 
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(),
+}));
+
 vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
@@ -70,11 +74,17 @@ const mockUser = {
 void mockUser;
 
 import { GET, PUT } from '@/app/api/me/routing-preferences/route';
+import { createError } from '@/lib/errors';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 
 beforeEach(() => {
   vi.clearAllMocks();
 
   mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
+  vi.mocked(getUserScopedDb).mockResolvedValue({
+    db: { query: mockQuery, execute: mockExecute },
+    userId: 'user-123',
+  } as never);
 
   mockQuery.mockResolvedValue([{ routing_preferences: {} }]);
 
@@ -121,7 +131,7 @@ describe('GET /api/me/routing-preferences', () => {
   });
 
   it('rejects unauthenticated requests with 401', async () => {
-    mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
+    vi.mocked(getUserScopedDb).mockRejectedValueOnce(createError.unauthorized());
 
     const response = await GET(buildSessionRequest());
     expect(response.status).toBe(401);
@@ -189,7 +199,7 @@ describe('PUT /api/me/routing-preferences', () => {
   });
 
   it('rejects unauthenticated request with 401', async () => {
-    mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
+    vi.mocked(getUserScopedDb).mockRejectedValueOnce(createError.unauthorized());
 
     const response = await PUT(buildPutRequest({ us_only: true }));
     expect(response.status).toBe(401);

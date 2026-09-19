@@ -168,7 +168,7 @@ export default function WebSurfacePage() {
         <FinalCta
           eyebrow="Start"
           title="Open it in a tab, or take it with you."
-          body="Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds local models, encrypted keys, connectors and scheduled work on the same account."
+          body="Free to try in the browser. Every reply names the model that answered in its actions menu, and prints a receipt line under itself whenever Auto left the model you pinned. Desktop adds approved folders, computer use, connectors and scheduled work on the same managed-cloud account; Local and BYOK are available from the CLI."
           ctas={[
             { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
             { href: '/download', label: 'Get AGI Desktop' },

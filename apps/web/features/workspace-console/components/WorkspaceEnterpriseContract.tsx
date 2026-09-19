@@ -198,7 +198,11 @@ function InvoiceTable({ invoices }: { invoices: EnterpriseInvoiceSummary[] }) {
   );
 }
 
-export function WorkspaceEnterpriseContract() {
+export function WorkspaceEnterpriseContract({
+  showMissingContract = false,
+}: {
+  showMissingContract?: boolean;
+}) {
   const { data, isPending, isError, error, refetch } = useEnterpriseContract();
 
   if (isPending) {
@@ -235,7 +239,21 @@ export function WorkspaceEnterpriseContract() {
   }
 
   const contract = data?.contract ?? null;
-  if (!contract) return null;
+  if (!contract) {
+    if (!showMissingContract || !data) return null;
+    return (
+      <section style={cardStyle} aria-labelledby="enterprise-contract-heading">
+        <SectionHeading id="enterprise-contract-heading" title="Enterprise contract" />
+        <div className="px-5 py-4 text-sm" style={{ color: 'var(--text-2)' }}>
+          <p>No contract is on record for this workspace.</p>
+          <p className="mt-2 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+            Contact your account team to confirm the agreement and seat allowance. Contract terms
+            and invoices appear here once they are recorded.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">

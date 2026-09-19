@@ -200,11 +200,11 @@ mod tests {
     #[test]
     fn tool_output_redacts_command_output_carrying_an_api_key() {
         let transcript = redact_tool_output(
-            "Exit code: 0\nOPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz0123\nDATABASE_URL=postgres://alice:hunter2@db.internal:5432/app\n",
+            "Exit code: 0\nOPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz0123\nDATABASE_URL=postgres://alice:PLACEHOLDER@db.example.com:5432/app\n",
         );
 
         assert!(!transcript.contains("sk-proj-abcdefghijklmnopqrstuvwxyz0123"));
-        assert!(!transcript.contains("hunter2"));
+        assert!(!transcript.contains("PLACEHOLDER"));
         assert!(transcript.contains("[REDACTED_API_KEY]"));
         assert!(transcript.contains("[CREDENTIALS_REDACTED]"));
         assert!(transcript.starts_with("Exit code: 0\n"));

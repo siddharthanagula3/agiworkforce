@@ -173,6 +173,7 @@ export function RightsRequestForm() {
           type="email"
           autoComplete="email"
           required
+          maxLength={254}
           spellCheck={false}
           value={email}
           disabled={state === 'submitting'}

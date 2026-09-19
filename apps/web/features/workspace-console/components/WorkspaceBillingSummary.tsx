@@ -1,7 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { isOrganizationAdminRole } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  isBillingPlanTier,
+  isContractPricedPlan,
+  isOrganizationAdminRole,
+} from '@agiworkforce/types';
 
 import { useOrganizationOverview } from '@/features/settings/hooks/use-settings-queries';
 import { EnterpriseCollectionBanner } from '@/features/settings/components/EnterpriseCollectionBanner';
@@ -88,10 +93,10 @@ export function WorkspaceBillingSummary() {
 
   const seatsNote =
     access.seatSource === 'billing'
-      ? 'Seat count is written by the billing webhook and cannot be lowered below occupied seats.'
-      : access.seatSource === 'unprovisioned'
-        ? 'No licensed seat quantity has been recorded for this workspace yet, so the ceiling is unknown.'
-        : 'Seat provenance is unknown for this workspace.';
+      ? 'The seat allowance follows your billing agreement and cannot be lowered below occupied seats.'
+      : typeof access.maxMembers === 'number'
+        ? 'A seat allowance is recorded for this workspace; billing is managed separately.'
+        : 'No licensed seat allowance has been recorded for this workspace yet.';
 
   return (
     <div className="flex flex-col gap-6">
@@ -108,7 +113,14 @@ export function WorkspaceBillingSummary() {
           </h2>
         </div>
         <div className="divide-y" style={{ borderColor: 'var(--settings-border)' }}>
-          <Row label="Plan" value={access.plan} />
+          <Row
+            label="Plan"
+            value={
+              isBillingPlanTier(access.plan)
+                ? getBillingPlanPricing(access.plan).label
+                : access.plan
+            }
+          />
           <Row
             label="Seats used"
             value={
@@ -123,7 +135,7 @@ export function WorkspaceBillingSummary() {
       </section>
 
       {isOrganizationAdminRole(organization.currentUserRole) ? (
-        <WorkspaceEnterpriseContract />
+        <WorkspaceEnterpriseContract showMissingContract={isContractPricedPlan(access.plan)} />
       ) : null}
 
       <section style={cardStyle} aria-labelledby="manage-heading">
@@ -150,7 +162,7 @@ export function WorkspaceBillingSummary() {
               Billing settings
             </Link>
             <Link
-              href="/settings/usage"
+              href="/workspace/usage"
               className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
             >
@@ -161,8 +173,7 @@ export function WorkspaceBillingSummary() {
       </section>
 
       <p className="px-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-        Per-member and per-model cost attribution is recorded in the workspace usage ledger but has
-        no admin read path yet, so it is not shown here rather than being estimated.
+        View workspace usage for recorded spend by member, model and provider.
       </p>
     </div>
   );

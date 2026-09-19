@@ -1,6 +1,6 @@
 'use client';
 
-import { isOrganizationAdminRole } from '@agiworkforce/types';
+import { isContractPricedPlan, isOrganizationAdminRole } from '@agiworkforce/types';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Building2, Copy, Mail, RefreshCw, RotateCw, Trash2, Users, X } from 'lucide-react';
 import {
@@ -235,6 +235,7 @@ export function TeamSection() {
   const seatsConsumed = invitationsQuery.data?.seats?.seatsConsumed ?? access.seatsConsumed;
   const seatsAvailable = invitationsQuery.data?.seats?.seatsAvailable ?? access.seatsAvailable;
   const seatSource = invitationsQuery.data?.seats?.seatSource ?? access.seatSource;
+  const contractPriced = isContractPricedPlan(access.plan);
   const workspaces = overview.workspaces ?? [];
 
   const workspacePicker =
@@ -545,9 +546,13 @@ export function TeamSection() {
       <SectionCard
         title="Seats & billing"
         description={
-          seatSource === 'billing'
-            ? 'Licensed seat totals are synchronized from Stripe billing.'
-            : 'Seat totals are not linked to a Stripe subscription yet.'
+          contractPriced
+            ? 'Your workspace agreement determines seat allowances and billing.'
+            : seatSource === 'billing'
+              ? 'Licensed seat totals follow your billing agreement.'
+              : typeof licensedSeats === 'number'
+                ? 'This workspace has a recorded seat allowance.'
+                : 'A seat allowance has not been configured yet.'
         }
       >
         <div
@@ -561,31 +566,33 @@ export function TeamSection() {
           <div>
             <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Licensed</div>
             <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
-              {licensedSeats ?? ', '}
+              {licensedSeats ?? 'Not set'}
             </div>
           </div>
           <div>
             <div style={{ color: 'var(--text-3)', fontSize: 12 }}>In use</div>
             <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
-              {seatsConsumed ?? ', '}
+              {seatsConsumed ?? 'Unavailable'}
             </div>
           </div>
           <div>
             <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Available</div>
             <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
-              {seatsAvailable ?? ', '}
+              {seatsAvailable ?? 'Unknown'}
             </div>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 8 }}>
             <SettingsPageLink
               href={
-                typeof licensedSeats === 'number'
-                  ? `/pricing?seats=${licensedSeats}#pricing-team-title`
-                  : '/pricing#pricing-team-title'
+                contractPriced
+                  ? '/workspace/billing'
+                  : typeof licensedSeats === 'number'
+                    ? `/pricing?seats=${licensedSeats}#pricing-team-title`
+                    : '/pricing#pricing-team-title'
               }
               style={{ ...secondaryButtonStyle, display: 'inline-flex', textDecoration: 'none' }}
             >
-              Change seats
+              {contractPriced ? 'Review contract' : 'Change seats'}
             </SettingsPageLink>
             <SettingsSectionLink
               section="billing"

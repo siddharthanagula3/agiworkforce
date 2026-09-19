@@ -553,29 +553,26 @@ async function generateWithImagen(
     return generateWithGeminiImage(apiKey, model, prompt, aspectRatio, n, outputMimeType);
   }
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        instances: [
-          {
-            prompt,
-            ...(negativePrompt && { negativePrompt }),
-          },
-        ],
-        parameters: {
-          sampleCount: Math.min(n, 4),
-          aspectRatio,
-        },
-      }),
-      signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
+  const response = await fetch(providerApiUrl('google', `models/${model}:predict`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
     },
-  );
+    body: JSON.stringify({
+      instances: [
+        {
+          prompt,
+          ...(negativePrompt && { negativePrompt }),
+        },
+      ],
+      parameters: {
+        sampleCount: Math.min(n, 4),
+        aspectRatio,
+      },
+    }),
+    signal: AbortSignal.timeout(IMAGE_GENERATION_PROVIDER_DEADLINE_MS),
+  });
 
   if (!response.ok) {
     await throwImageProviderHttpError(

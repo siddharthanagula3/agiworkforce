@@ -53,7 +53,7 @@ export type ConnectorActionSource =
    */
   | 'runtime-discovered'
   /**
-   * The Desktop Local runtime owns the tool surface on the user's machine. The
+   * The device runtime owns the tool surface on the user's machine. The
    * cloud app neither enumerates nor runs these.
    */
   | 'device-local';

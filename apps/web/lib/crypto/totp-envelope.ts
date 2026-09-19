@@ -6,30 +6,14 @@ import {
   platformKeyProviderId,
   platformKeyRing,
 } from './platform-keys';
+import { assertValidTotpKeysource } from './totp-keysource';
 
 const TOTP_KEY_ENV = 'TOTP_ENCRYPTION_KEY';
 const TOTP_LEGACY_LAYOUT = 'b64-iv-ct-tag';
-const MIN_KEYSOURCE_BYTES = 64;
-const HEX_LOOKALIKE_RE = /^[0-9a-fA-F]{64}$/;
-const SINGLE_REPEATED_CHAR_RE = /^([\x20-\x7e])\1+$/;
 const PLAINTEXT_BASE32_SECRET_RE = /^[A-Z2-7]+$/;
 
 const TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE =
   'TOTP secret encryption is not configured. Set TOTP_ENCRYPTION_KEY before enabling 2FA setup.';
-
-function assertHighEntropyKeysource(value: string): void {
-  if (HEX_LOOKALIKE_RE.test(value)) return;
-  if (new TextEncoder().encode(value).length < MIN_KEYSOURCE_BYTES) {
-    throw new Error(
-      `${TOTP_KEY_ENV} too short: the first 32 characters are used verbatim as the AES-256 key, ` +
-        `so it must be 64 hex characters or at least ${MIN_KEYSOURCE_BYTES} UTF-8 bytes. ` +
-        "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
-    );
-  }
-  if (SINGLE_REPEATED_CHAR_RE.test(value)) {
-    throw new Error(`${TOTP_KEY_ENV} appears to be a single repeated character`);
-  }
-}
 
 // Under a KMS provider the environment holds an envelope, so the entropy checks
 // would be measuring ciphertext and belong to the env-backed provider alone.
@@ -38,7 +22,7 @@ function totpKeyRing(): KeyRing {
   if (!raw) {
     throw new Error(TOTP_ENCRYPTION_UNAVAILABLE_MESSAGE);
   }
-  if (platformKeyProviderId() === 'env') assertHighEntropyKeysource(raw);
+  if (platformKeyProviderId() === 'env') assertValidTotpKeysource(raw);
   try {
     return platformKeyRing(TOTP_KEY_ENV, { encoding: 'utf8' });
   } catch (error) {

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Plus, Search, Smile } from 'lucide-react';
 import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
+import { toUserMessage } from '../lib/network-error';
 import { useProjectStore } from '../stores/projectStore';
 import { ProjectCard } from './ProjectCard';
 import type { Project } from '../lib/types';
@@ -194,7 +195,7 @@ export function ProjectGallery({
         setCreating(false);
         handleSelect(project);
       } catch (error) {
-        setCreateError(error instanceof Error ? error.message : 'Failed to create project');
+        setCreateError(toUserMessage(error, 'Could not create this project. Try again.'));
       } finally {
         setSubmitting(false);
       }

@@ -45,6 +45,7 @@ function renderCard(schedule: ScheduleTask) {
   render(
     <ScheduleCard
       schedule={schedule}
+      readOnly={false}
       operation={null}
       error={null}
       isRunningNow={false}
@@ -62,6 +63,30 @@ function renderCard(schedule: ScheduleTask) {
       onViewResult={vi.fn()}
     />,
   );
+}
+
+function runHistory(error: string): ScheduleHistoryState {
+  return {
+    ...EMPTY_HISTORY,
+    status: 'success',
+    runs: [
+      {
+        id: 'run-1',
+        taskId: baseSchedule.id,
+        status: 'failed',
+        triggerSource: 'manual',
+        scheduledFor: null,
+        startedAt: '2026-07-01T00:00:00.000Z',
+        completedAt: '2026-07-01T00:00:01.000Z',
+        durationMs: 1000,
+        result: null,
+        error,
+        idempotencyKey: 'manual:test-run',
+        leaseExpiresAt: null,
+        attemptCount: 1,
+      },
+    ],
+  };
 }
 
 describe('ScheduleCard timing', () => {
@@ -115,5 +140,43 @@ describe('ScheduleCard summary line (slice E item 6)', () => {
 
     expect(screen.queryByText(/^Next run /)).toBeNull();
     expect(screen.queryByText('Paused')).toBeNull();
+  });
+});
+
+describe('ScheduleCard failure presentation', () => {
+  const hostile = 'HTTP 500: upstream exploded: trace 0xdeadbeef';
+
+  it('does not render stored operator diagnostics in the card', () => {
+    renderCard({ ...baseSchedule, lastError: hostile });
+
+    expect(screen.getByText(/something went wrong on our side/i)).toBeInTheDocument();
+    expect(screen.queryByText(/deadbeef|upstream exploded/i)).toBeNull();
+  });
+
+  it('does not render stored operator diagnostics in run history', () => {
+    render(
+      <ScheduleCard
+        schedule={baseSchedule}
+        readOnly={false}
+        operation={null}
+        error={null}
+        isRunningNow={false}
+        historyExpanded
+        history={runHistory(hostile)}
+        onToggleEnabled={vi.fn()}
+        onRunNow={vi.fn()}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleHistory={vi.fn()}
+        onRetryHistory={vi.fn()}
+        onLoadMoreHistory={vi.fn()}
+        onShare={vi.fn()}
+        onOpenNotificationSettings={vi.fn()}
+        onViewResult={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/something went wrong on our side/i)).toBeInTheDocument();
+    expect(screen.queryByText(/deadbeef|upstream exploded/i)).toBeNull();
   });
 });

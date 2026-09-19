@@ -26,6 +26,13 @@ const {
 const BYTES = new TextEncoder().encode('hello world');
 
 vi.mock('@/lib/server/object-storage', () => ({
+  deleteObject: vi.fn(async () => undefined),
+  getObject: vi.fn(async () => null),
+  getObjectStream: vi.fn(async () => null),
+  getPrivateObject: vi.fn(async () => null),
+  getPrivateObjectStream: vi.fn(async () => null),
+  isObjectStorageConfigured: vi.fn(() => true),
+  putPrivateObject: vi.fn(async () => undefined),
   deletePrivateObject: mockDeletePrivateObject,
   getBoundedPrivateObject: vi.fn(async () => ({
     data: BYTES,
@@ -61,7 +68,11 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   resolveSecretHandlingPolicy: mockResolveSecretHandlingPolicy,
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockRecordAuditEvent }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
+  recordAuditEvent: mockRecordAuditEvent,
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/server/product-analytics', () => ({

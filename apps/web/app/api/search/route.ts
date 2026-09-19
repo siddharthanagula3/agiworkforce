@@ -30,6 +30,11 @@ import {
 } from '@features/chat/lib/new-chat-entry';
 
 const PG_UNDEFINED_FUNCTION = '42883';
+const DEFAULT_RESULT_LIMIT = 50;
+const MAX_RESULT_LIMIT = 100;
+const DEFAULT_POPULAR_DAYS = 7;
+const MAX_POPULAR_DAYS = 365;
+const SearchRoleSchema = z.enum(['user', 'assistant', 'system']);
 
 const TrackSearchSchema = z.object({
   query: z.string().min(1).max(500),
@@ -99,6 +104,30 @@ const CONTEXT_LENGTH = 50;
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
+function boundedInteger(
+  raw: string | null,
+  fallback: number,
+  maximum: number,
+  name: string,
+): number {
+  const parsed = z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(maximum)
+    .safeParse(raw ?? fallback);
+  if (!parsed.success) throw createError.validation(`Invalid ${name} query param`);
+  return parsed.data;
+}
+
+function optionalDate(raw: string | null, name: string): string | null {
+  if (raw === null) return null;
+  if (raw.trim().length === 0 || Number.isNaN(Date.parse(raw))) {
+    throw createError.validation(`Invalid ${name} query param`);
+  }
+  return raw;
+}
+
 /** The refusal reaches the reader, so it names the region and nothing else. */
 async function assertProductSearchRegion(
   db: ScopedDb,
@@ -162,7 +191,12 @@ async function handleGet(request: NextRequest) {
   const url = new URL(request.url);
   const type = url.searchParams.get('type');
   const q = url.searchParams.get('q') ?? '';
-  const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 100);
+  const limit = boundedInteger(
+    url.searchParams.get('limit'),
+    DEFAULT_RESULT_LIMIT,
+    MAX_RESULT_LIMIT,
+    'limit',
+  );
 
   if (type === 'recent') {
     const rows = await db.query<RecentSearchRow>('select * from get_recent_searches($1, $2, $3)', [
@@ -174,7 +208,12 @@ async function handleGet(request: NextRequest) {
   }
 
   if (type === 'popular') {
-    const days = parseInt(url.searchParams.get('days') ?? '7', 10);
+    const days = boundedInteger(
+      url.searchParams.get('days'),
+      DEFAULT_POPULAR_DAYS,
+      MAX_POPULAR_DAYS,
+      'days',
+    );
     try {
       const rows = await db.query<PopularSearchRow>(
         'select * from get_popular_searches($1, $2, $3, $4)',
@@ -204,9 +243,15 @@ async function handleGet(request: NextRequest) {
   if (!q.trim()) throw createError.validation('q query param required for search');
 
   const includeArchived = url.searchParams.get('includeArchived') === 'true';
-  const role = url.searchParams.get('role') as 'user' | 'assistant' | 'system' | null;
-  const startDate = url.searchParams.get('startDate');
-  const endDate = url.searchParams.get('endDate');
+  const rawRole = url.searchParams.get('role');
+  const parsedRole = rawRole === null ? null : SearchRoleSchema.safeParse(rawRole);
+  if (parsedRole && !parsedRole.success) throw createError.validation('Invalid role query param');
+  const role = parsedRole?.data ?? null;
+  const startDate = optionalDate(url.searchParams.get('startDate'), 'startDate');
+  const endDate = optionalDate(url.searchParams.get('endDate'), 'endDate');
+  if (startDate && endDate && Date.parse(startDate) > Date.parse(endDate)) {
+    throw createError.validation('startDate must not be after endDate');
+  }
 
   const sessionParams: unknown[] = [userId, `%${q}%`, organizationId];
   const sessionClauses: string[] = [
@@ -497,6 +542,8 @@ async function handleDelete(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
+
+  await assertProductSearchRegion(db, organizationId);
 
   const [result] = await db.query<{ clear_search_history: number }>(
     'select clear_search_history($1, $2)',

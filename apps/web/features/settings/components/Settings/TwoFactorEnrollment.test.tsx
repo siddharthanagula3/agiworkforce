@@ -145,6 +145,24 @@ describe('TwoFactorEnrollmentPanel · enable', () => {
 
     expect(await screen.findByText(/Too many attempts/i)).toBeInTheDocument();
   });
+
+  it('explains a temporary setup outage without exposing configuration details', async () => {
+    const user = userEvent.setup();
+    service.setup2FA.mockResolvedValue({
+      error: 'An unexpected error occurred',
+      status: 503,
+    });
+
+    render(<TwoFactorEnrollmentPanel />);
+    await user.click(await screen.findByRole('button', { name: /set up authenticator app/i }));
+
+    expect(
+      await screen.findByText(
+        'Authenticator setup is temporarily unavailable. Try again later or contact support.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('totp-secret')).toBeNull();
+  });
 });
 
 describe('TwoFactorEnrollmentPanel · backup codes', () => {

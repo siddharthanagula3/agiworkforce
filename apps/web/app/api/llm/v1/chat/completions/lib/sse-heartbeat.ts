@@ -1,17 +1,37 @@
 import 'server-only';
 
+import { logger } from '@/lib/logger';
+import { recordFailure } from '@/lib/observability/metrics';
+
+export interface SseDisconnect {
+  /** Bytes forwarded before the reader went away, so a drop at zero is visible. */
+  bytesDelivered: number;
+  elapsedMs: number;
+  reason: string;
+}
+
+export type SseDisconnectObserver = (disconnect: SseDisconnect) => void;
+
+function reportSseDisconnect(disconnect: SseDisconnect): void {
+  recordFailure('api', 'stream_disconnected');
+  logger.warn({ event: 'sse_stream_disconnected', ...disconnect }, 'SSE stream dropped by client');
+}
+
 export function withSseHeartbeat(
   source: ReadableStream<Uint8Array>,
   intervalMs = 15_000,
+  onDisconnect: SseDisconnectObserver = reportSseDisconnect,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const heartbeat = encoder.encode(': keepalive\n\n');
   const reader = source.getReader();
   const checkEveryMs = Math.min(intervalMs, 5_000);
 
-  let lastActivityAt = Date.now();
+  const openedAt = Date.now();
+  let lastActivityAt = openedAt;
   let timer: ReturnType<typeof setInterval> | null = null;
   let settled = false;
+  let bytesDelivered = 0;
 
   function stopTimer(): void {
     if (timer !== null) {
@@ -40,6 +60,7 @@ export function withSseHeartbeat(
           if (done) break;
           if (value) {
             controller.enqueue(value);
+            bytesDelivered += value.byteLength;
             lastActivityAt = Date.now();
           }
         }
@@ -53,6 +74,15 @@ export function withSseHeartbeat(
       }
     },
     async cancel(reason) {
+      // Cancel before the source ended is the client leaving mid-answer, which
+      // is the only disconnect this layer can see. A finished stream is not one.
+      if (!settled) {
+        onDisconnect({
+          bytesDelivered,
+          elapsedMs: Date.now() - openedAt,
+          reason: reason === undefined ? 'client_cancelled' : String(reason),
+        });
+      }
       settled = true;
       stopTimer();
       await reader.cancel(reason);

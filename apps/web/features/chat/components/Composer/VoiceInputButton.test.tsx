@@ -43,6 +43,21 @@ describe('VoiceInputButton · dictation trigger', () => {
     expect(onStart).not.toHaveBeenCalled();
   });
 
+  it('explains when dictation is disabled in settings', () => {
+    const onStart = vi.fn();
+    render(
+      <VoiceInputButton
+        onStart={onStart}
+        disabled
+        disabledReason="Dictation is off in Voice settings"
+      />,
+    );
+    const button = screen.getByRole('button', { name: 'Dictation is off in Voice settings' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
   it('explains itself instead of opening when capture is unsupported', () => {
     setMediaDevices(undefined);
     const onStart = vi.fn();

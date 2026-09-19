@@ -15,6 +15,7 @@ import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { CreateMessageSchema } from '@/lib/validations/chat';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { buildPage, clampPageSize, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveSavedMessageSourceUrls } from './lib/resolve-source-urls';
 import { scheduleConversationTitleGeneration } from './lib/generate-title';
@@ -31,6 +32,113 @@ import {
 } from './lib/message-thread';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const MESSAGE_SORT_COLUMN = 'page_sort_key';
+const MESSAGE_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+
+async function assertConversationReadable(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+  scope: { conversationId: string; userId: string; organizationId: string | null },
+): Promise<void> {
+  const [conversation] = await db.query<{ id: string }>(
+    `select id
+       from web_conversations
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and deleted_at is null
+      limit 1`,
+    [scope.conversationId, scope.userId, scope.organizationId],
+  );
+  if (!conversation) throw createError.notFound('Conversation not found');
+}
+
+const PG_UNDEFINED_COLUMN = '42703';
+
+/**
+ * Set once, by the first user message, and never cleared. Absent until 0268 is
+ * applied, and a send must not fail on a column the database does not have yet.
+ */
+async function markConversationActivated(
+  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
+  scope: { conversationId: string; userId: string; organizationId: string | null },
+): Promise<boolean | null> {
+  try {
+    const updated = await db.execute(
+      `update web_conversations
+          set activated_at = now()
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3
+          and activated_at is null`,
+      [scope.conversationId, scope.userId, scope.organizationId],
+    );
+    return updated > 0;
+  } catch (error) {
+    if ((error as { code?: string } | null)?.code !== PG_UNDEFINED_COLUMN) throw error;
+    logger.warn(
+      { conversationId: scope.conversationId },
+      '[chat] web_conversations.activated_at is missing (migration 0268 not applied?)',
+    );
+    return null;
+  }
+}
+
+/**
+ * Keyset rather than offset: a conversation is written to while it is read, and
+ * an offset window shifts under every new turn.
+ */
+async function handleListMessages(request: NextRequest, context: RouteContext) {
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { id: conversationId } = await context.params;
+  await assertConversationReadable(db, { conversationId, userId, organizationId });
+
+  const url = new URL(request.url);
+  const limit = clampPageSize(Number.parseInt(url.searchParams.get('limit') ?? '', 10));
+  const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
+  const keyset = keysetSql({
+    sortColumn: MESSAGE_SORT_COLUMN,
+    idColumn: 'id',
+    direction: 'asc',
+    ...(cursor ? { cursor } : {}),
+    firstParamIndex: 3,
+  });
+
+  try {
+    const rows = await db.query<ChatMessageRow & { page_sort_key: string }>(
+      `
+        select * from (
+          select id, parent_id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata,
+            to_char(created_at at time zone 'utc', ${MESSAGE_SORT_KEY_FORMAT}) as ${MESSAGE_SORT_COLUMN}
+          from web_messages
+          where conversation_id = $1
+            and deleted_at is null
+        ) messages
+        ${keyset.where ? `where ${keyset.where}` : ''}
+        ${keyset.orderBy}
+        limit $2
+      `,
+      [conversationId, limit + 1, ...keyset.params],
+    );
+
+    const page = buildPage(rows, limit, (row) => ({ sortValue: row.page_sort_key, id: row.id }));
+    const messages = page.items.map(({ page_sort_key: _sortKey, ...row }) => row);
+
+    return NextResponse.json({
+      messages: withIsoTimestamps(messages).map((message) =>
+        ManagedCloudMessageWireSchema.parse(message),
+      ),
+      hasMore: page.hasMore,
+      nextCursor: page.nextCursor,
+    });
+  } catch (error) {
+    logger.error({ error, conversationId }, 'Failed to page conversation messages');
+    throw createError.internal('Failed to fetch messages');
+  }
+}
 
 async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
@@ -169,13 +277,22 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   // sit blank), then a short LLM-generated title that replaces it in the
   // background once ready (agentic-modes-gap-06). Generation is fire-and-forget
   // so a slow or failing provider can never delay or break this response.
-  if (role === 'user') {
-    const [row] = await db.query<{ count: string }>(
-      'select count(*)::text as count from web_messages where conversation_id = $1',
-      [conversationId],
-    );
+  if (role === 'user' && message?.id) {
+    const activated = await markConversationActivated(db, {
+      conversationId,
+      userId,
+      organizationId,
+    });
+    let isFirstUserMessage = activated === true;
+    if (activated === null) {
+      const [row] = await db.query<{ count: string }>(
+        'select count(*)::text as count from web_messages where conversation_id = $1',
+        [conversationId],
+      );
+      isFirstUserMessage = Number(row?.count ?? 0) <= 1;
+    }
 
-    if (Number(row?.count ?? 0) <= 1) {
+    if (isFirstUserMessage) {
       // First message - immediate truncated title
       const truncatedTitle = content.slice(0, 50) + (content.length > 50 ? '...' : '');
       await db.execute(
@@ -208,6 +325,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   });
 }
 
+export const GET = withCorsRoute(withErrorHandler(handleListMessages));
 export const POST = withCorsRoute(withErrorHandler(handleSendMessage));
 
 export function OPTIONS(request: NextRequest): NextResponse {

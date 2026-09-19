@@ -105,7 +105,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 91 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66, nothing checked it. A test now derives it from the code. As of 2026-08-14.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 93 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-19.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -168,17 +168,17 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Local mode isolation',
     value:
-      'Implemented. Local chats run on your own hardware and are written to an encrypted database on your disk. No AGI infrastructure and no subprocessor is in the request path. As of 2026-08-05.',
+      'Implemented in the released CLI for Ollama and LM Studio on loopback. AGI infrastructure and subprocessors are not in that model request path. Desktop and web use Managed Cloud and do not expose Local inference. As of 2026-09-19.',
   },
   {
-    label: 'Device encryption at rest',
+    label: 'Desktop credential storage',
     value:
-      'Implemented. SQLCipher is compiled into every desktop build, not an option. New installs key the database with 256 bits from the OS random source, held in the OS credential service and namespaced per build identity. As of 2026-08-05.',
+      'Implemented. Electron Desktop refuses to store account credentials unless operating-system encryption is available. Desktop uses Managed Cloud and does not accept provider API keys. As of 2026-09-19.',
   },
   {
-    label: 'Secret storage',
+    label: 'CLI provider-key storage',
     value:
-      'Implemented. Provider keys are sealed with AES-256-GCM under purpose-separated PBKDF2-HMAC-SHA256 keys at 600,000 iterations. The optional master password uses Argon2id at OWASP parameters and cannot be recovered by us. As of 2026-08-05.',
+      'Implemented. The released CLI saves each provider credential in the operating system credential store and keeps only provider names in its on-disk index. The CLI sends BYOK traffic directly to the selected provider. As of 2026-09-19.',
   },
   {
     label: 'Transport security',
@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 164 of 267 database-backed hosted API route files. Counted against the 267 route files that reach the database; the other 108 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 103 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-18.',
+      'Partial: 171 of 266 database-backed hosted API route files. Counted against the 266 route files that reach the database; the other 114 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 95 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-19.',
   },
   {
     label: 'Authentication and CSRF',
@@ -266,7 +266,7 @@ const VERIFY = [
   },
   {
     title: 'Check Local mode with a packet capture',
-    body: 'This is the claim worth testing, because it is the one that most differentiates us. Put the desktop app in Local mode with a local model and watch the network. Chat traffic to AGI infrastructure should be absent.',
+    body: 'Run the CLI against Ollama or LM Studio and watch the network. Chat traffic should stay between the CLI and the loopback model server; the current public Desktop does not offer Local mode.',
   },
   {
     title: 'Check the live health signal',
@@ -381,6 +381,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-19',
+                        value:
+                          'Re-measured for the production release after the current route and authorization changes. The row-level-isolation count moved from 164 to 171 of 266 database-backed routes and the owner-connection remainder from 103 to 95. The number of hosted routes that touch no database moved from 108 to 114. Each figure is derived from the deciding route source by a test, not maintained independently from the implementation.',
+                      },
                       {
                         label: '2026-09-18',
                         value:

@@ -29,6 +29,7 @@ import {
   PluginMarketplaceManifestPluginSchema,
   type PluginSourceInstallResponse,
 } from '@agiworkforce/cloud-contracts';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -83,7 +84,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrf = await requireCsrfToken(request);
   if (csrf) return csrf as NextResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
   if (limited) return limited;
 
@@ -146,6 +147,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       kind: SOURCE_KIND_AUTHORED,
       plugins,
     };
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      eventType: 'plugin_marketplace_changed',
+      request,
+      detail: { resourceId: declared.id, status: 'authored', count: plugins.length },
+    });
     return NextResponse.json(body, { status: 201 });
   } catch (error) {
     if (isMissingPluginMarketplaceSchema(error)) return installsDisabledResponse();

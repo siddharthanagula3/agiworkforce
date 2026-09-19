@@ -18,6 +18,7 @@ import {
 import { isShadowSourceName } from '@/features/plugins/server/directory/constants';
 import { marketplaceUnavailableError } from '@/features/plugins/server/directory/install-responses';
 import type { PluginMarketplaceSourceListResponse } from '@agiworkforce/cloud-contracts';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -52,7 +53,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -76,6 +77,13 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       repositoryUrl: parsed.data.repositoryUrl,
       ref: parsed.data.ref ?? null,
       name: parsed.data.name ?? null,
+    });
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      eventType: 'plugin_marketplace_changed',
+      request,
+      detail: { resourceId: source.id, status: 'registered' },
     });
     return NextResponse.json({ source }, { status: 201 });
   } catch (error) {

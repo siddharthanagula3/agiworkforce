@@ -34,9 +34,9 @@ const HERO_STATUS_ROWS = HERO_STATUS_SURFACES.map((surface) => ({
 }));
 
 export const metadata = buildMetadata({
-  title: 'AGI Cloud is open: enterprise governance early access',
+  title: 'AGI Cloud is open: Enterprise contract access',
   description:
-    'AGI managed cloud is open by default: sign in and start, no waitlist. Pricing shows current Team checkout availability. Join the list for contract-scoped Enterprise SSO, custom retention, and governance requirements.',
+    'AGI managed cloud is open by default: sign in and start, no waitlist. Pricing shows current Team checkout availability. Request a conversation about contract-scoped Enterprise access and additional governance requirements.',
   path: '/waitlist',
 });
 
@@ -86,10 +86,10 @@ export default function WaitlistPage() {
               <Link href="/pricing" className="agi-ds-link">
                 See team pricing and checkout availability
               </Link>
-              . This list is for <strong>enterprise early access</strong>: advanced org controls,
-              SSO, custom retention, and centralized governance beyond the self-serve team scope.
-              Leave your email and we will reach out as those land. If you want builds before they
-              ship instead,{' '}
+              . This list is for <strong>contract-scoped Enterprise access</strong>. SSO, SCIM,
+              audit export, and retention controls are live for entitled workspaces; leave your
+              email to discuss contracts, custom governance, and additional capabilities beyond
+              self-serve Team. If you want builds before they ship instead,{' '}
               <Link href="/beta" className="agi-ds-link">
                 apply to the beta programme
               </Link>
@@ -107,7 +107,7 @@ export default function WaitlistPage() {
 
         <Section id="join" size="sm">
           <Stack gap="tight">
-            <PublicWaitlistForm source="website" ctaLabel="Request org/SSO early access" />
+            <PublicWaitlistForm source="website" ctaLabel="Discuss Enterprise access" />
             <Prose size="sm">
               To come off the list, record a withdrawal at{' '}
               <Link href="/privacy/requests" className="agi-ds-link">

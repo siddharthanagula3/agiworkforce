@@ -451,7 +451,7 @@ impl CostCalculator {
                     .cache_write_multiplier
                     .map(|multiplier| input_rate * multiplier)
             })
-            .unwrap_or_else(|| {
+            .unwrap_or({
                 if pricing.cache_tokens_disjoint_from_input {
                     input_rate * ANTHROPIC_CACHE_WRITE_FALLBACK_MULTIPLIER
                 } else {

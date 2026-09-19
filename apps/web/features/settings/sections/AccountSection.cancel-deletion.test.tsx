@@ -181,6 +181,29 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     expect(screen.queryByTestId('delete-account-trigger')).not.toBeInTheDocument();
   });
 
+  it('does not expose operator details from a failed cancellation', async () => {
+    stubFetch(
+      {
+        pending: true,
+        canCancel: true,
+        requestedAt: new Date().toISOString(),
+        scheduledFor: FUTURE_DEADLINE,
+      },
+      (url, init) =>
+        url === '/api/user/delete-account/cancel' && init?.method === 'POST'
+          ? jsonResponse({ error: 'HTTP 500: SELECT secret FROM profiles' }, 500)
+          : null,
+    );
+
+    renderAccountSection();
+
+    fireEvent.click(await screen.findByTestId('cancel-deletion-trigger'));
+    fireEvent.click(await screen.findByTestId('cancel-deletion-confirm'));
+
+    expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
+    expect(screen.queryByText(/SELECT secret/i)).not.toBeInTheDocument();
+  });
+
   it('shows the normal delete-account trigger when nothing is pending', async () => {
     stubFetch({ pending: false, canCancel: false, requestedAt: null, scheduledFor: null });
 

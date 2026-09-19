@@ -16,7 +16,7 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 export const metadata = buildMetadata({
   title: 'API docs: the OpenAI-compatible gateway',
   description:
-    'API reference for the AGI gateway. OpenAI-compatible endpoints, BYOK across providers.',
+    'API reference for the managed AGI gateway: OpenAI-compatible endpoints authenticated with a session token or an AGI developer API key.',
   path: '/api-docs',
 });
 
@@ -99,10 +99,10 @@ export default function ApiDocsPage() {
           eyebrow="API docs"
           title="OpenAI-compatible endpoints."
           em="endpoints."
-          lede="Bring your own key, route to any of the wired providers, stream tokens back. The gateway is the same engine the apps use; the API just exposes it."
+          lede="Use a session token or an AGI developer API key, route through the managed gateway, and stream tokens back. Calls consume the managed-cloud credits attached to the account."
           ctas={[
             { href: '/openapi.json', label: 'OpenAPI bundle' },
-            { href: '/docs/byok-env', label: 'BYOK setup', variant: 'secondary' },
+            { href: '#quickstart', label: 'Authentication and scopes', variant: 'secondary' },
           ]}
           visual={<CodeTabs tabs={HERO_TABS} title="One chat completion against the gateway" />}
         />
@@ -148,11 +148,11 @@ export default function ApiDocsPage() {
             </div>
             <ButtonRow>
               <Button href="/openapi.json">OpenAPI bundle</Button>
-              <Button href="/docs/byok-env" variant="secondary">
-                BYOK setup
+              <Button href="#quickstart" variant="secondary">
+                Authentication and scopes
               </Button>
               <Button href="/waitlist" variant="secondary">
-                Enterprise SSO early access
+                Discuss Enterprise access
               </Button>
             </ButtonRow>
           </Stack>

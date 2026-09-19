@@ -620,6 +620,14 @@
       "declaredVersion": "1.0.0",
       "computedHash": "sha256-tree-v1:7058bc70a85ac1e7aa7ad8b92f967e2a40aeb57d5ae0b4f7d9c301237d77d225"
     },
+    "typesafe-ai": {
+      "path": ".agents/skills/typesafe-ai",
+      "source": "https://github.com/typesafe-ai/skills @ 65a39f393687675ce170e6094757de20370365b9 (skills/typesafe-ai)",
+      "sourceType": "github",
+      "audience": "developer",
+      "declaredVersion": null,
+      "computedHash": "sha256-tree-v1:087554737ed3d773bfadf6885559b6ecbfa0a0366fa709ce545f95767a1a4df3"
+    },
     "vercel-composition-patterns": {
       "path": ".agents/skills/vercel-composition-patterns",
       "source": "https://github.com/vercel-labs/agent-skills @ 063bee94c3f4df8453406c830b0a7df0f2860278 (skills/composition-patterns)",

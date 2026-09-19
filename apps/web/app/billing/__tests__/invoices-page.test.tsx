@@ -35,7 +35,10 @@ describe('billing invoices page', () => {
     render(<InvoiceList />);
 
     await waitFor(() => expect(screen.getByText('AGI-0001')).toBeInTheDocument());
-    expect(fetchMock).toHaveBeenCalledWith('/api/billing/invoices', { credentials: 'include' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/billing/invoices',
+      expect.objectContaining({ credentials: 'include' }),
+    );
     expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute(
       'href',
       PAID_INVOICE.hosted_invoice_url,
@@ -73,7 +76,8 @@ describe('billing invoices page', () => {
     render(<InvoiceList />);
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('500');
+    expect(alert).toHaveTextContent('Something went wrong on our side. Try again shortly.');
+    expect(alert).not.toHaveTextContent('500');
     expect(alert).toHaveTextContent(/billing portal/u);
   });
 });

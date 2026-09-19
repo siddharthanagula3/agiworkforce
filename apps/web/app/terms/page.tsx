@@ -334,9 +334,10 @@ export default function TermsPage() {
                     04 · Your account
                   </h2>
                   <Prose>
-                    You are responsible for keeping your account credentials and your master
-                    password secure, and for the activity that occurs through your account. We
-                    cannot recover the master password used to encrypt your local key vault. See the{' '}
+                    You are responsible for keeping your account credentials and provider API keys
+                    secure, and for the activity that occurs through your account. The released CLI
+                    stores provider credentials in your operating system credential store; AGI Cloud
+                    does not receive those keys. See the{' '}
                     <Link href="/byok" className="agi-ds-link">
                       BYOK posture
                     </Link>

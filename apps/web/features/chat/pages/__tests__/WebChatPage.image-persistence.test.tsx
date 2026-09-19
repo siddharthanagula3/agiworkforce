@@ -19,8 +19,7 @@ const mocks = vi.hoisted(() => ({
   startVideoGeneration: vi.fn(),
   watchVideoGeneration: vi.fn(),
   regenerateImage: undefined as
-    | undefined
-    | ((messageId: string, options: ImageRevisionRequest) => Promise<string>),
+    undefined | ((messageId: string, options: ImageRevisionRequest) => Promise<string>),
   deleteMessage: undefined as undefined | ((messageId: string) => void),
   routerReplace: vi.fn(),
   openSettings: vi.fn(),
@@ -188,8 +187,7 @@ vi.mock('../../components/messages/ChatMessageList', async () => {
                 ? metadata['imageGenPrompt']
                 : undefined;
             const aspectRatio = metadata['imageGenAspect'] as
-              | Parameters<typeof ImageGenerationCard>[0]['aspectRatio']
-              | undefined;
+              Parameters<typeof ImageGenerationCard>[0]['aspectRatio'] | undefined;
             const modelId =
               typeof metadata['imageGenModel'] === 'string' ? metadata['imageGenModel'] : undefined;
             const retryAt =
@@ -242,6 +240,8 @@ vi.mock('../../hooks/use-conversation-branches', () => ({
   }),
 }));
 vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
+  findShortcutDoc: vi.fn(() => undefined),
+  formatShortcutKeys: vi.fn(() => []),
   KEYBOARD_SHORTCUT_DOCS: [],
   useKeyboardShortcuts: vi.fn(),
 }));
@@ -485,9 +485,9 @@ describe('WebChatPage paid image transcript recovery', () => {
       expect(
         useChatStore
           .getState()
-          .messagesByConversation[
-            CONVERSATION_ID
-          ]?.some((message) => message.id === assistantMessage!.id),
+          .messagesByConversation[CONVERSATION_ID]?.some(
+            (message) => message.id === assistantMessage!.id,
+          ),
       ).toBe(false);
     });
     mocks.deleteMessage?.(userMessage!.id);
@@ -495,6 +495,30 @@ describe('WebChatPage paid image transcript recovery', () => {
       expect(useChatStore.getState().messagesByConversation[CONVERSATION_ID]).toEqual([]);
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not show or persist raw diagnostics from an image provider failure', async () => {
+    const savedBodies: Record<string, unknown>[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        savedBodies.push(body);
+        return jsonResponse(200, { message: { id: body['id'] } });
+      }),
+    );
+    mocks.generateImage.mockRejectedValue(
+      new Error('HTTP 500: SELECT secret FROM customer_records trace 0xdeadbeef'),
+    );
+    render(<WebChatPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger image generation' }));
+
+    expect(
+      await screen.findByText(/Image generation failed:.*something went wrong on our side/i),
+    ).toBeVisible();
+    const serialized = JSON.stringify(savedBodies);
+    expect(serialized).not.toMatch(/SELECT|deadbeef|customer_records/i);
   });
 
   it('persists server-returned catalog provenance instead of a retired requested model', async () => {
@@ -567,9 +591,9 @@ describe('WebChatPage paid image transcript recovery', () => {
     expect(
       useChatStore
         .getState()
-        .messagesByConversation[
-          CONVERSATION_ID
-        ]?.some((message) => message.id === pendingUserMessage!.id),
+        .messagesByConversation[CONVERSATION_ID]?.some(
+          (message) => message.id === pendingUserMessage!.id,
+        ),
     ).toBe(true);
     expect(mocks.generateImage).not.toHaveBeenCalled();
 
@@ -665,18 +689,18 @@ describe('WebChatPage paid image transcript recovery', () => {
     await waitFor(() => expect(mocks.deleteMessage).toBeTypeOf('function'));
     const pendingAssistant = useChatStore
       .getState()
-      .messagesByConversation[
-        CONVERSATION_ID
-      ]?.find((message) => message.role === 'assistant' && message.isStreaming);
+      .messagesByConversation[CONVERSATION_ID]?.find(
+        (message) => message.role === 'assistant' && message.isStreaming,
+      );
     expect(pendingAssistant).toBeDefined();
     capturedDeleteMessage()(pendingAssistant!.id);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(
       useChatStore
         .getState()
-        .messagesByConversation[
-          CONVERSATION_ID
-        ]?.some((message) => message.id === pendingAssistant!.id),
+        .messagesByConversation[CONVERSATION_ID]?.some(
+          (message) => message.id === pendingAssistant!.id,
+        ),
     ).toBe(true);
 
     pendingPage.unmount();
@@ -695,9 +719,9 @@ describe('WebChatPage paid image transcript recovery', () => {
     const assistantMessageId = String(assistantBodies[0]?.['id']);
     const storedAssistant = useChatStore
       .getState()
-      .messagesByConversation[
-        CONVERSATION_ID
-      ]?.find((message) => message.id === assistantMessageId);
+      .messagesByConversation[CONVERSATION_ID]?.find(
+        (message) => message.id === assistantMessageId,
+      );
     expect(storedAssistant?.metadata?.imageUrl).toBe(GENERATED_ASSET_URL);
     expect(storedAssistant?.isStreaming).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Retry saving chat card' }));
@@ -784,9 +808,9 @@ describe('WebChatPage paid image transcript recovery', () => {
     expect(
       useChatStore
         .getState()
-        .messagesByConversation[
-          CONVERSATION_ID
-        ]?.some((message) => message.id === assistantMessageId),
+        .messagesByConversation[CONVERSATION_ID]?.some(
+          (message) => message.id === assistantMessageId,
+        ),
     ).toBe(true);
     await expect(
       regenerateImage!(assistantMessageId, {
@@ -920,9 +944,9 @@ describe('WebChatPage paid image transcript recovery', () => {
     expect(
       useChatStore
         .getState()
-        .messagesByConversation[
-          CONVERSATION_ID
-        ]?.find((message) => message.id === assistantMessageId)?.content,
+        .messagesByConversation[CONVERSATION_ID]?.find(
+          (message) => message.id === assistantMessageId,
+        )?.content,
     ).toBe('');
   });
 

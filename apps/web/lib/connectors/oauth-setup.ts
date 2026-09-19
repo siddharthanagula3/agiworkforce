@@ -148,7 +148,7 @@ function deviceLocalRequirement(
     connectorId,
     'device-local',
     [],
-    `${displayName} runs on your own machine, so it is connected from Desktop or the CLI rather than from the browser.`,
+    `${displayName} runs on your own machine, so connect it from the released CLI rather than from the browser. The current public Desktop reports no local MCP capability.`,
   );
 }
 

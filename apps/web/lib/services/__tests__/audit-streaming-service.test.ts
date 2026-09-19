@@ -18,12 +18,29 @@ const { mockGetKeyValueStore } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mockGetKeyValueStore }));
 
+const { mockOrganizationKeyRing, testKeyRing } = vi.hoisted(() => {
+  const ring = { active: { id: 'test-key', material: Buffer.alloc(32, 7) }, retired: [] };
+  return {
+    testKeyRing: ring,
+    mockOrganizationKeyRing: vi.fn(async () => ({
+      ring,
+      source: 'platform_derived',
+      descriptor: null,
+      keyVersion: ring.active.id,
+    })),
+  };
+});
+vi.mock('@/lib/server/organization-encryption-keys', () => ({
+  organizationKeyRing: mockOrganizationKeyRing,
+}));
+
 import {
   createUpstashKeyValueStore,
   type KeyValueStore,
   type UpstashRedisLike,
 } from '@agiworkforce/key-value';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { sealEnvelope } from '@/lib/crypto/envelope';
 
 function asKeyValueStore(client: unknown): KeyValueStore {
   return createUpstashKeyValueStore(client as UpstashRedisLike);
@@ -41,6 +58,7 @@ import {
   AUDIT_STREAM_SCHEMA_VERSION,
   drainAuditDestination,
   generateSigningSecret,
+  hashSecret,
   hasActiveAuditStreamDestinations,
   signPayload,
   upsertAuditDestination,
@@ -52,6 +70,13 @@ import { formatAuditEvent } from '../enterprise-audit-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const NOW = new Date('2026-08-23T12:00:00.000Z');
+const SIGNING_SECRET = 'fixture-audit-signing-secret';
+const SIGNING_CIPHERTEXT = sealEnvelope(
+  testKeyRing,
+  SIGNING_SECRET,
+  'versioned',
+  `organization-audit-destination:${ORG}`,
+);
 
 function event(i: number, at = '2026-08-23T10:00:00.000Z') {
   return {
@@ -72,7 +97,7 @@ function event(i: number, at = '2026-08-23T10:00:00.000Z') {
 function harness({
   destination = {
     endpoint_url: 'https://siem.example.test/hook',
-    secret_hash: 'a'.repeat(64),
+    secret_ciphertext: SIGNING_CIPHERTEXT,
     last_delivered_at: null as string | null,
     last_delivered_id: null as string | null,
     consecutive_failures: 0,
@@ -161,6 +186,35 @@ describe('upsertAuditDestination', () => {
     ).rejects.toThrow();
 
     expect(h.query).not.toHaveBeenCalled();
+  });
+
+  it('stores a workspace-bound ciphertext and signs with the one-time secret it returns', async () => {
+    const query = vi.fn(async (_sql: string, _params?: unknown[]) => [
+      {
+        organization_id: ORG,
+        endpoint_url: 'https://siem.example.test/hook',
+        secret_prefix: 'ignored',
+        enabled: true,
+        last_delivered_at: null,
+        last_delivered_id: null,
+        last_attempt_at: null,
+        last_status: null,
+        consecutive_failures: 0,
+        created_at: NOW.toISOString(),
+      },
+    ]);
+    const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+
+    const saved = await upsertAuditDestination(db, ORG, {
+      endpointUrl: 'https://siem.example.test/hook',
+      enabled: true,
+      createdByUserId: 'user-1',
+    });
+
+    const params = query.mock.calls[0]?.[1] ?? [];
+    expect(params[2]).toBe(hashSecret(saved.secret));
+    expect(params[3]).not.toBe(saved.secret);
+    expect(String(params[3])).not.toContain(saved.secret);
   });
 });
 
@@ -318,7 +372,7 @@ describe('drainAuditDestination', () => {
     const h = harness({
       destination: {
         endpoint_url: 'https://siem.example.test/hook',
-        secret_hash: 'a'.repeat(64),
+        secret_ciphertext: SIGNING_CIPHERTEXT,
         last_delivered_at: null,
         last_delivered_id: null,
         consecutive_failures: AUDIT_STREAM_FAILURE_CEILING,
@@ -338,6 +392,27 @@ describe('drainAuditDestination', () => {
     expect(h.fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('fails closed until a pre-0269 destination rotates its signing secret', async () => {
+    const h = harness({
+      destination: {
+        endpoint_url: 'https://siem.example.test/hook',
+        secret_ciphertext: null,
+        last_delivered_at: null,
+        last_delivered_id: null,
+        consecutive_failures: 0,
+      },
+    });
+
+    const result = await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
+
+    expect(result).toMatchObject({ status: 'failed', delivered: 0 });
+    expect(result.error).toMatch(/rotate its secret/i);
+    expect(h.fetchImpl).not.toHaveBeenCalled();
+    expect(h.updates.some((update) => String(update[0]).includes('consecutive_failures + 1'))).toBe(
+      true,
+    );
+  });
+
   it('signs the delivery and advances the cursor on success', async () => {
     const h = harness();
     const result = await drainAuditDestination(h.db, ORG, { now: NOW, fetchImpl: h.fetchImpl });
@@ -351,6 +426,14 @@ describe('drainAuditDestination', () => {
     ];
     expect(init.headers['X-AGI-Audit-Signature']).toMatch(/^sha256=[0-9a-f]{64}$/);
     expect(init.headers['X-AGI-Audit-Timestamp']).toBe(NOW.toISOString());
+    expect(
+      verifySignature(
+        SIGNING_SECRET,
+        NOW.toISOString(),
+        String(init.body),
+        init.headers['X-AGI-Audit-Signature']!.replace(/^sha256=/u, ''),
+      ),
+    ).toBe(true);
 
     const advanced = h.updates.find((u) => advancesCursor(String(u[0])));
     expect(advanced, 'the cursor must advance after a 2xx').toBeDefined();
@@ -437,7 +520,7 @@ describe('drainAuditDestination', () => {
     const h = harness({
       destination: {
         endpoint_url: 'https://siem.example.test/hook',
-        secret_hash: 'a'.repeat(64),
+        secret_ciphertext: SIGNING_CIPHERTEXT,
         last_delivered_at: '2026-08-23T09:00:00.000Z',
         last_delivered_id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001',
         consecutive_failures: 0,
@@ -464,7 +547,7 @@ describe('drainAuditDestination', () => {
     const h = harness({
       destination: {
         endpoint_url: 'https://siem.example.test/hook',
-        secret_hash: 'a'.repeat(64),
+        secret_ciphertext: SIGNING_CIPHERTEXT,
         last_delivered_at: new Date('2026-08-23T09:00:00.000Z'),
         last_delivered_id: 'aaaaaaaa-aaaa-4aaa-8aaa-000000000001',
         consecutive_failures: 0,

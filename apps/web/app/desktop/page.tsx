@@ -11,13 +11,13 @@ import { LedgerSection } from '@/features/marketing/components/LandingSections';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
-import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
 export const metadata = buildMetadata({
   title: 'AGI Desktop | Your account, on your Mac',
-  description: `The AGI app for macOS: the web app in a window that stays open, plus the folders you approve, ${DESKTOP_LOCAL_RUNTIMES.label} models already running on the machine, computer use one step at a time, and a menu bar shortcut. Signed and notarized per architecture; check installer availability.`,
+  description:
+    'The AGI app for macOS: managed-cloud chat in a window that stays open, plus the folders you approve, computer use one step at a time, and a menu bar shortcut. The current public Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
   path: '/desktop',
 });
 
@@ -41,8 +41,9 @@ export default function DesktopPage() {
               <p className="agi-fl-lede">
                 The AGI app for macOS. Sign in once and the desktop app carries the web app in a
                 window that stays open, then adds what a browser cannot reach: the folders you
-                approve, models already running on this machine, the screen and the pointer when you
-                allow a step, and a menu bar shortcut that is one keystroke away.
+                approve, the screen and the pointer when you allow a step, and a menu bar shortcut
+                that is one keystroke away. Chat uses your AGI managed-cloud account; this public
+                Desktop does not accept provider keys or local-model connections.
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
@@ -52,14 +53,14 @@ export default function DesktopPage() {
                   Use AGI Web
                 </Link>
                 <WaitlistTrigger
-                  label="Enterprise early access"
+                  label="Discuss Enterprise access"
                   source="website"
                   className="agi-fl-cta agi-fl-cta--ghost"
                 />
               </div>
               <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
                 <li>Cloud · your AGI account</li>
-                <li>Local · models on this Mac</li>
+                <li>Device access · explicit grants</li>
                 <li>Consent · every device step asks</li>
               </ul>
             </div>
@@ -80,10 +81,10 @@ export default function DesktopPage() {
               href: '/features/tools',
             },
             {
-              meta: 'Local',
-              title: 'Models on this Mac',
-              body: `${DESKTOP_LOCAL_RUNTIMES.label} models already running here answer on the device. A local thread never leaves it on its own.`,
-              href: '/local',
+              meta: 'Inference',
+              title: 'Managed route, named',
+              body: 'Desktop chat uses the same managed-cloud account as the web app. It has no provider-key or local-model entry path.',
+              href: '/providers',
             },
             {
               meta: 'Computer use',
@@ -130,16 +131,16 @@ export default function DesktopPage() {
               cta: { href: '/get-started', label: 'Get Started' },
             },
             {
-              mode: 'Local',
+              mode: 'Boundary',
               glyph: '◆',
-              title: 'Models on this Mac stay here.',
-              body: `${DESKTOP_LOCAL_RUNTIMES.label} models already running answer on the device.`,
+              title: 'Device access stays explicit.',
+              body: 'The current Desktop contract is cloud-only for inference. Local model servers and provider keys are not accepted.',
               points: [
-                'A local thread never silently leaves the machine',
-                'A local turn carries no attachments',
-                'Leaving local mode is a labelled step you take',
+                'Approved folders are the only local files a step can reach',
+                'The selected managed model and route stay visible',
+                'Use the released CLI when you need Local or BYOK today',
               ],
-              cta: { href: '/local', label: 'Run AGI Locally' },
+              cta: { href: '/local', label: 'Run Local from the CLI' },
             },
             {
               mode: 'Consent',
@@ -168,7 +169,7 @@ export default function DesktopPage() {
               k: 'Account',
               v: 'Your AGI account · sign-in in the browser · tokens encrypted with the system keychain',
             },
-            { k: 'Local runtimes', v: DESKTOP_LOCAL_RUNTIMES.compact },
+            { k: 'Inference', v: 'AGI managed cloud · no local-model or provider-key entry' },
             { k: 'Local access', v: 'Approved folders and programs · each grant is explicit' },
             {
               k: 'Computer use',
@@ -195,7 +196,7 @@ export default function DesktopPage() {
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
             { href: WEB_CHAT_ENTRY_HREF, label: 'Use AGI Web' },
-            { label: 'Enterprise early access', waitlist: true },
+            { label: 'Discuss Enterprise access', waitlist: true },
           ]}
           stamp="macOS · verification required before download"
         />

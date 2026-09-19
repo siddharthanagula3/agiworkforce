@@ -23,7 +23,7 @@ import {
 describe('plan labels in entitlement messages follow the catalog', () => {
   it('uses the renamed label while the plan id stays the lookup key', () => {
     expect(getProjectLimitErrorMessage('pro')).toBe(
-      'Renamed Pro accounts can have up to 25 Projects. Delete a Project or upgrade to add another.',
+      'Your Renamed Pro plan includes 25 project folders. Upgrade your plan to add more, or delete an existing folder to make room.',
     );
   });
 

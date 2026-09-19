@@ -277,6 +277,17 @@ describe('account erasure inventory', () => {
     }
   });
 
+  it('deletes personal voice and automation records while preserving shared audit provenance', () => {
+    const deleted = new Set(USER_SCOPED_TABLES.map((entry) => entry.table));
+    const retained = new Set(Object.keys(UNDELETED_USER_TABLES));
+
+    expect(deleted.has('voice_sessions')).toBe(true);
+    expect(deleted.has('automation_audit_events')).toBe(true);
+    expect(retained.has('cloud_agent_run_budgets')).toBe(true);
+    expect(retained.has('legal_hold_custodians')).toBe(true);
+    expect(retained.has('plugin_registry_lifecycle_events')).toBe(true);
+  });
+
   it('classifies every financial table the retention schedule names', () => {
     const scoped = userScopedSchemaTables();
     const classified = new Set([
@@ -738,6 +749,7 @@ describe('eraseUserAccountData', () => {
       .map((call) => String(call[0]))
       .find((sql) => sql.includes('public.legal_holds'));
     expect(holdSql).toMatch(/scope = 'member'[\s\S]*subject_user_id = \$1/);
+    expect(holdSql).toMatch(/scope = 'custodian'[\s\S]*legal_hold_custodians/);
     expect(holdSql).toMatch(/scope = 'organization'[\s\S]*organization_members/);
     expect(holdSql).toMatch(/released_at is null/);
   });

@@ -70,6 +70,7 @@ import { useMediaStore } from '@shared/stores/media-store';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { useUIStore } from '@shared/stores/layout-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { resolveNewChatTemporary } from '@/lib/temporary-chat-policy';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
@@ -129,6 +130,10 @@ import {
   SETTINGS_DEEP_LINK_QUERY_KEY,
 } from '@features/settings/lib/web-settings-sections';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
+import {
+  resolveAccountIdentity,
+  type AccountIdentity,
+} from '@shared/components/layout/account-identity';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { ComposerFeedbackDialog } from '../components/Composer/ComposerFeedbackDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
@@ -424,27 +429,21 @@ type PendingByokHandoff = {
   candidates: WebHandoffContextCandidate[];
 };
 
-interface ChatAccountIdentity {
-  id: string;
-  email?: string;
-  name?: string;
-}
-
 /**
  * `/api/me` is the canonical identity source. Keep the compatibility auth
  * store only as a short-lived fallback while it finishes hydrating, never as
  * the preferred source for the account footer or checkout metadata.
  */
 export function resolveChatAccountUser(
-  canonicalUser: ChatAccountIdentity | null,
-  compatibilityUser: ChatAccountIdentity | null,
-  providerUser: ChatAccountIdentity | null = null,
-): ChatAccountIdentity | null {
-  return canonicalUser ?? compatibilityUser ?? providerUser;
+  canonicalUser: AccountIdentity | null,
+  compatibilityUser: AccountIdentity | null,
+  providerUser: AccountIdentity | null = null,
+): AccountIdentity | null {
+  return resolveAccountIdentity(canonicalUser, compatibilityUser, providerUser);
 }
 
 export function resolveChatAccountDisplay(
-  user: ChatAccountIdentity | null,
+  user: AccountIdentity | null,
   subscriptionTier: BillingPlanTier | null | undefined,
   billingPolicyReady: boolean,
 ): {
@@ -1019,7 +1018,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const { isUnread, toggleUnread } = useUnreadConversations();
   const { user: compatibilityUser, logout } = useAuthStore();
   const canonicalUser = useBillingStore((s) => s.user);
-  const clerkAccountUser = useMemo<ChatAccountIdentity | null>(() => {
+  const clerkAccountUser = useMemo<AccountIdentity | null>(() => {
     if (!identityUser) return null;
     const name =
       identityUser.fullName ||
@@ -1228,6 +1227,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const pendingTemporaryChat = useChatStore((s) => s.pendingTemporaryChat);
+  const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
@@ -1454,7 +1454,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   useDocumentTitleSync(activeConversationId, activeConversationTitle);
   const temporaryChatActive = displayedConversation
     ? Boolean(displayedConversation.isTemporary)
-    : pendingTemporaryChat;
+    : resolveNewChatTemporary(pendingTemporaryChat, newChatsTemporary);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
@@ -1753,7 +1753,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         // its turns are answered here and never uploaded, so a durable
         // conversation row would only ever hold an empty transcript.
         const temporaryIntent =
-          useChatStore.getState().pendingTemporaryChat || localModelSelection !== null;
+          resolveNewChatTemporary(
+            useChatStore.getState().pendingTemporaryChat,
+            useSettingsStore.getState().newChatsTemporary,
+          ) || localModelSelection !== null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -1768,12 +1771,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
         const ensureConversationId = clientConvId
           ? async (): Promise<string | null> => {
-              const c = await createConversation(
-                NEW_CHAT_TITLE,
-                cloudModelId,
-                sendProjectId,
-                temporaryIntent ? { isTemporary: true } : undefined,
-              );
+              const c = await createConversation(NEW_CHAT_TITLE, cloudModelId, sendProjectId, {
+                isTemporary: temporaryIntent,
+              });
               if (!c) return null;
               resolvedFreshConvId = c.id;
               adoptPendingComposerToggles(c.id);
@@ -1970,7 +1970,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       conversationId: string,
     ): { content: string; metadata: MessageMetadata } => {
       const apiError = error instanceof MediaGenerationApiError ? error : null;
-      const raw = toUserMessage(error, String(error));
+      const raw = toUserMessage(error, 'Image generation could not be completed. Try again.');
       const paywall = apiError
         ? resolveMediaPaywallSlot({
             feature: 'image',
@@ -2901,7 +2901,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                     usage: managedUsageSummary,
                   })
                 : null;
-            const publicError = toUserMessage(err, String(err));
+            const publicError = toUserMessage(
+              err,
+              'Video generation could not be started. Try again.',
+            );
 
             // A MediaGenerationApiError proves that an HTTP response arrived.
             // Persist that definite rejection only through the server CAS: if
@@ -3330,6 +3333,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   ]);
 
   const handleNewChat = useCallback(() => {
+    useChatStore.getState().setPendingTemporaryChat(null);
     setActiveConversation(null);
     setBareChatSessionId(null);
     setComposerPrefill(undefined);

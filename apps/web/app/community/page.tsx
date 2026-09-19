@@ -24,7 +24,7 @@ export default function CommunityPage() {
           eyebrow="Community"
           title="Where to find us."
           em="find us."
-          lede={`We do not run a Discord, a forum, or a Slack workspace yet. Follow the changelog for what ships, and email ${CONTACT_EMAIL} for everything else. A real human reads it.`}
+          lede={`We do not run a Discord, a forum, or a Slack workspace yet. Follow the changelog for what ships, and use ${CONTACT_EMAIL} as the published contact channel. No response time is promised.`}
           ctas={[
             { href: '/changelog', label: 'Follow the changelog' },
             { href: contactMailto(), label: 'Email us', variant: 'secondary' },
@@ -65,7 +65,7 @@ export default function CommunityPage() {
                   meta: 'Email',
                   title: 'Email us',
                   href: contactMailto(),
-                  body: `${CONTACT_EMAIL}. A real human reads it. Use it for billing, partnerships, press, and anything the changelog does not answer.`,
+                  body: `${CONTACT_EMAIL}. Use it for billing, partnerships, press, and anything the changelog does not answer. No response time is promised.`,
                   external: true,
                 },
               ]}

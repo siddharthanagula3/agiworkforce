@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
@@ -103,18 +103,26 @@ export function NotificationsSection() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasChanged, setHasChanged] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [failedChange, setFailedChange] = useState<Record<NotifKey, boolean> | null>(null);
+  const saveInFlight = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setSaveError(null);
     fetchPreferenceNamespace<Record<NotifKey, boolean>>(NAMESPACE, defaultNotificationState())
       .then((value) => {
         if (!cancelled) {
-          setState(value);
+          setState({ ...defaultNotificationState(), ...value });
+          setLoadError(false);
           setSaveError(null);
         }
       })
       .catch((error) => {
         if (!cancelled) {
+          setLoadError(true);
           setSaveError(toUserMessage(error, 'Failed to load notifications'));
         }
       })
@@ -124,24 +132,35 @@ export function NotificationsSection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
+
+  async function saveChange(next: Record<NotifKey, boolean>) {
+    if (loading || loadError || saveInFlight.current) return;
+    saveInFlight.current = true;
+    const previous = state;
+    setState(next);
+    setSaving(true);
+    setSaveError(null);
+    setFailedChange(null);
+    try {
+      await savePreferenceNamespace(NAMESPACE, next);
+      setHasChanged(true);
+    } catch (error) {
+      setState(previous);
+      setFailedChange(next);
+      setSaveError(toUserMessage(error, 'Your notification preferences could not be saved.'));
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
+    }
+  }
 
   function setEventChannels(event: EventSpec, enabledIds: NotifKey[]) {
-    setState((prev) => {
-      const next = { ...prev };
-      for (const channel of event.channels) {
-        next[channel.id] = enabledIds.includes(channel.id);
-      }
-      setSaving(true);
-      setSaveError(null);
-      setHasChanged(true);
-      savePreferenceNamespace(NAMESPACE, next)
-        .catch((error) => {
-          setSaveError(toUserMessage(error, 'Failed to save notifications'));
-        })
-        .finally(() => setSaving(false));
-      return next;
-    });
+    const next = { ...state };
+    for (const channel of event.channels) {
+      next[channel.id] = enabledIds.includes(channel.id);
+    }
+    void saveChange(next);
   }
 
   return (
@@ -165,9 +184,25 @@ export function NotificationsSection() {
               : saving
                 ? 'Saving...'
                 : saveError
-                  ? `Save failed: ${saveError}`
+                  ? `${loadError ? 'Could not load preferences' : 'Changes were not saved'}: ${saveError}`
                   : 'Saved'}
           </p>
+        ) : null}
+        {saveError && !loading && !saving ? (
+          <button
+            type="button"
+            className="text-sm underline underline-offset-4"
+            onClick={() => {
+              if (loadError) {
+                setLoading(true);
+                setLoadAttempt((attempt) => attempt + 1);
+              } else if (failedChange) {
+                void saveChange(failedChange);
+              }
+            }}
+          >
+            {loadError ? 'Retry loading' : 'Retry saving'}
+          </button>
         ) : null}
       </div>
 
@@ -201,6 +236,7 @@ export function NotificationsSection() {
               </div>
               <select
                 aria-label={event.heading}
+                disabled={loading || saving || loadError}
                 value={value}
                 onChange={(changeEvent) => {
                   const option = options.find((o) => o.value === changeEvent.target.value);

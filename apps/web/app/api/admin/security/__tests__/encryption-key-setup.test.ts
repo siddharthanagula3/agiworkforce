@@ -10,6 +10,7 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
 vi.mock('@/lib/server/request-context-cache', () => ({ setCachedAccountStatus: vi.fn() }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityUser: vi.fn(async () => null),
   getIdentityProvider: () => ({ setUserSuspended: vi.fn() }),
 }));
 vi.mock('@/lib/server/security-log-retention', () => ({ purgeExpiredSecurityAuditLogs: vi.fn() }));

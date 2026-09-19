@@ -436,13 +436,16 @@ export function BillingSection() {
     void (async () => {
       const [paymentResult, invoiceResult] = await Promise.allSettled([
         fetch('/api/billing/payment-methods', { credentials: 'include' }).then(async (response) => {
-          if (!response.ok)
-            throw new Error(`Payment methods could not be loaded (${response.status}).`);
+          if (!response.ok) {
+            throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+          }
           const json = (await response.json()) as { payment_methods?: PaymentMethod[] };
           return json.payment_methods ?? [];
         }),
         fetch('/api/billing/invoices', { credentials: 'include' }).then(async (response) => {
-          if (!response.ok) throw new Error(`Invoices could not be loaded (${response.status}).`);
+          if (!response.ok) {
+            throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+          }
           const json = (await response.json()) as { invoices?: Invoice[] };
           return json.invoices ?? [];
         }),
@@ -454,10 +457,7 @@ export function BillingSection() {
           : {
               status: 'error',
               items: [],
-              message:
-                paymentResult.reason instanceof Error
-                  ? paymentResult.reason.message
-                  : 'Payment methods could not be loaded.',
+              message: toUserMessage(paymentResult.reason, 'Payment methods could not be loaded.'),
             },
       );
       setInvoices(
@@ -466,10 +466,7 @@ export function BillingSection() {
           : {
               status: 'error',
               items: [],
-              message:
-                invoiceResult.reason instanceof Error
-                  ? invoiceResult.reason.message
-                  : 'Invoices could not be loaded.',
+              message: toUserMessage(invoiceResult.reason, 'Invoices could not be loaded.'),
             },
       );
     })();

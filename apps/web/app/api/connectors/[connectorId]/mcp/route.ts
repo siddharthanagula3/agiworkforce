@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -63,7 +64,7 @@ async function handlePost(
     throw createError.validation('MCP operation payload is too large');
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const permissions = await loadConnectorToolPermissions(db, userId);
   const output = await withUserConnectorMcpHandle(userId, connectorRef, async (connection) => {
     const { handle } = connection;
@@ -129,6 +130,22 @@ async function handlePost(
     }
   });
   if (!output) throw createError.notFound('Connected MCP connector not found');
+  const readOperation = ['readResource', 'getPrompt', 'taskGet'].includes(body.operation);
+  const approvalOnly = body.operation === 'callTool' && output.approvalRequired === true;
+  if (!approvalOnly) {
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      request,
+      eventType: readOperation ? 'data_accessed' : 'tool_executed',
+      detail: {
+        resourceType: 'connector',
+        resourceId: output.connectorId,
+        connectorId: output.connectorId,
+        status: body.operation,
+      },
+    });
+  }
   return NextResponse.json(output, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 

@@ -19,6 +19,7 @@ import settingsService, {
 } from '@features/settings/services/user-preferences';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@features/settings/hooks/use-step-up';
+import { toUserMessage } from '@/lib/user-error-message';
 
 type Stage =
   | { name: 'idle' }
@@ -44,6 +45,13 @@ function describeCodeFailure(error: string | undefined, status: number | undefin
       : 'The server rejected the request. Start the setup again to get a fresh secret.';
   }
   return error ?? 'The request failed.';
+}
+
+function describeSetupFailure(error: string | undefined, status: number | undefined): string {
+  if (status === 503) {
+    return 'Authenticator setup is temporarily unavailable. Try again later or contact support.';
+  }
+  return describeCodeFailure(error, status);
 }
 
 async function readRouteFailure(response: Response): Promise<string> {
@@ -127,7 +135,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
     const { data, error, status: httpStatus } = await settingsService.setup2FA();
     setBusy(false);
     if (!data) {
-      setActionError(describeCodeFailure(error, httpStatus));
+      setActionError(describeSetupFailure(error, httpStatus));
       return;
     }
     setCode('');
@@ -170,7 +178,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
       await refreshStatus();
     } catch (error) {
       if (!isStepUpCancelled(error)) {
-        setActionError(error instanceof Error ? error.message : 'The request failed.');
+        setActionError(toUserMessage(error, 'The request failed.'));
       }
     } finally {
       setBusy(false);
@@ -195,7 +203,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
       await refreshStatus();
     } catch (error) {
       if (!isStepUpCancelled(error)) {
-        setActionError(error instanceof Error ? error.message : 'The request failed.');
+        setActionError(toUserMessage(error, 'The request failed.'));
       }
     } finally {
       setBusy(false);

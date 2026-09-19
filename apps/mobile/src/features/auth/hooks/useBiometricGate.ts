@@ -12,6 +12,12 @@ interface BiometricGateResult {
   authenticate: () => Promise<boolean>;
 }
 
+/**
+ * Below this the app was never really away: the OS puts it inactive for the
+ * unlock sheet itself, and re-locking there would prompt in a loop.
+ */
+const APP_SWITCH_RELOCK_GRACE_MS = 1_500;
+
 export function useBiometricGate(): BiometricGateResult {
   const visualQaBiometricBypassEnabled =
     __DEV__ && process.env.EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC === '1';
@@ -19,8 +25,19 @@ export function useBiometricGate(): BiometricGateResult {
   const hydrated = useBiometricFlag((s) => s.hydrated);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isCovered, setIsCovered] = useState(false);
-  const previousStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const [isForeground, setIsForeground] = useState(AppState.currentState !== 'background');
+  const awaySinceRef = useRef<number | null>(null);
+  const reachedBackgroundRef = useRef(false);
+  const authenticationSettledAtRef = useRef(0);
   const authenticationPromiseRef = useRef<Promise<boolean> | null>(null);
+  // What the gate last decided, which survives the cover the app puts up while
+  // it is away. Only an authentication or the flag moves it.
+  const gateRef = useRef(false);
+
+  const applyGate = useCallback((next: boolean): void => {
+    gateRef.current = next;
+    setIsUnlocked(next);
+  }, []);
 
   const authenticate = useCallback(async (): Promise<boolean> => {
     if (authenticationPromiseRef.current) {
@@ -29,17 +46,17 @@ export function useBiometricGate(): BiometricGateResult {
 
     const authenticationPromise = (async (): Promise<boolean> => {
       if (!hydrated) {
-        setIsUnlocked(false);
+        applyGate(false);
         return false;
       }
 
       if (visualQaBiometricBypassEnabled) {
-        setIsUnlocked(true);
+        applyGate(true);
         return true;
       }
 
       if (!biometricLockEnabled) {
-        setIsUnlocked(true);
+        applyGate(true);
         return true;
       }
 
@@ -54,10 +71,10 @@ export function useBiometricGate(): BiometricGateResult {
             disableDeviceFallback: false,
           });
           if (fallbackResult.success) {
-            setIsUnlocked(true);
+            applyGate(true);
             return true;
           }
-          setIsUnlocked(false);
+          applyGate(false);
           return false;
         }
 
@@ -68,75 +85,105 @@ export function useBiometricGate(): BiometricGateResult {
         });
 
         if (result.success) {
-          setIsUnlocked(true);
+          applyGate(true);
           return true;
         }
-        setIsUnlocked(false);
+        applyGate(false);
         return false;
       } catch (err) {
         console.warn('[biometric] Authentication error, staying locked:', err);
-        setIsUnlocked(false);
+        applyGate(false);
         return false;
       }
     })();
 
     authenticationPromiseRef.current = authenticationPromise;
-    void authenticationPromise.then(
-      () => {
-        if (authenticationPromiseRef.current === authenticationPromise) {
-          authenticationPromiseRef.current = null;
-        }
-      },
-      () => {
-        if (authenticationPromiseRef.current === authenticationPromise) {
-          authenticationPromiseRef.current = null;
-        }
-      },
-    );
+    const settle = (): void => {
+      authenticationSettledAtRef.current = Date.now();
+      if (authenticationPromiseRef.current === authenticationPromise) {
+        authenticationPromiseRef.current = null;
+      }
+    };
+    void authenticationPromise.then(settle, settle);
     return authenticationPromise;
-  }, [hydrated, biometricLockEnabled, visualQaBiometricBypassEnabled]);
+  }, [hydrated, biometricLockEnabled, visualQaBiometricBypassEnabled, applyGate]);
 
   useEffect(() => {
     if (visualQaBiometricBypassEnabled) {
-      setIsUnlocked(true);
+      applyGate(true);
       return;
     }
 
-    if (hydrated && biometricLockEnabled && !isUnlocked) {
+    // Never prompt while the app is away: the sheet would land behind the
+    // switcher and the user would meet it on a screen they did not open.
+    if (hydrated && biometricLockEnabled && !isUnlocked && isForeground) {
       void authenticate();
     }
-  }, [hydrated, biometricLockEnabled, isUnlocked, authenticate, visualQaBiometricBypassEnabled]);
+  }, [
+    hydrated,
+    biometricLockEnabled,
+    isUnlocked,
+    isForeground,
+    authenticate,
+    visualQaBiometricBypassEnabled,
+    applyGate,
+  ]);
 
   useEffect(() => {
     if (!hydrated || !biometricLockEnabled || visualQaBiometricBypassEnabled) return;
 
     const handleAppState = (nextState: AppStateStatus) => {
-      const prev = previousStateRef.current;
-      previousStateRef.current = nextState;
-
       // iOS snapshots the app as it leaves the foreground, and that snapshot is
       // what the app switcher shows. Locking only on the way back meant the
       // switcher carried the user's conversation the whole time the app was
-      // away. Cover first, without prompting: the prompt still belongs to the
-      // return trip.
+      // away. Cover first, without prompting: the prompt belongs to the return.
       setIsCovered(nextState !== 'active');
+      setIsForeground(nextState === 'active');
 
-      if (prev === 'background' && nextState === 'active') {
+      if (nextState !== 'active') {
+        if (awaySinceRef.current === null) awaySinceRef.current = Date.now();
+        if (nextState === 'background') reachedBackgroundRef.current = true;
+        // Fail closed on the way out, so nothing gated stays readable while the
+        // app sits in the switcher or the OS suspends it. The decision itself is
+        // untouched, so a brief peek comes back to where the user left it.
         setIsUnlocked(false);
-        void authenticate();
+        return;
       }
+
+      const awayMs = awaySinceRef.current === null ? 0 : Date.now() - awaySinceRef.current;
+      const reachedBackground = reachedBackgroundRef.current;
+      awaySinceRef.current = null;
+      reachedBackgroundRef.current = false;
+
+      // The unlock sheet itself takes the app inactive, and a slow one looks
+      // like an app switch. The authentication is the authority there, not this
+      // transition, so the gate goes back to what it decided.
+      if (authenticationPromiseRef.current !== null) return;
+      if (Date.now() - authenticationSettledAtRef.current < APP_SWITCH_RELOCK_GRACE_MS) {
+        setIsUnlocked(gateRef.current);
+        return;
+      }
+
+      // An iPad switcher peek and a quick hop to another app never reach
+      // 'background', so elapsed time decides when the transition cannot.
+      if (reachedBackground || awayMs >= APP_SWITCH_RELOCK_GRACE_MS) {
+        applyGate(false);
+        void authenticate();
+        return;
+      }
+      setIsUnlocked(gateRef.current);
     };
 
     const subscription = AppState.addEventListener('change', handleAppState);
     return () => subscription.remove();
-  }, [hydrated, biometricLockEnabled, authenticate, visualQaBiometricBypassEnabled]);
+  }, [hydrated, biometricLockEnabled, authenticate, visualQaBiometricBypassEnabled, applyGate]);
 
   // pre-hydration we treat the gate as engaged for fail-closed safety).
   useEffect(() => {
     if (hydrated && (!biometricLockEnabled || visualQaBiometricBypassEnabled)) {
-      setIsUnlocked(true);
+      applyGate(true);
     }
-  }, [hydrated, biometricLockEnabled, visualQaBiometricBypassEnabled]);
+  }, [hydrated, biometricLockEnabled, visualQaBiometricBypassEnabled, applyGate]);
 
   if (!hydrated) {
     return {

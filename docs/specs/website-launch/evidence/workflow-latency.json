@@ -1,0 +1,66 @@
+{
+  "recordedAt": "2026-09-19T18:08:24Z",
+  "kind": "targeted-verification",
+  "log": "\n> @agiworkforce/web@0.1.1 test /Users/siddhartha/Desktop/agiworkforce/apps/web\n> vitest run \"lib/workflows/cloud-agent-workflow.device-clearance.test.ts\" \"lib/workflows/cloud-agent-workflow-input.test.ts\" \"lib/workflows/cloud-agent-workflow.unread-stream.test.ts\" \"lib/workflows/cloud-agent-workflow.tool-permission.test.ts\" \"lib/workflows/cloud-agent-workflow.settle.test.ts\"\n\n\n RUN  v5.0.1 /Users/siddhartha/Desktop/agiworkforce/apps/web\n\n\n Test Files  5 passed (5)\n      Tests  59 passed (59)\n   Start at  03:43:05\n   Duration  4.57s (transform 43%, import 34%, environment 15%, setup 6%, tests 3%)\n\n     Import  809 modules were evaluated 2260 times · 2.77s total, 34% of tracked time\n             ~427ms faster with isolate: false; shared modules are evaluated once per worker instead of once per file\n             learn more: https://vitest.dev/guide/improving-performance#test-isolation\n\n",
+  "sourceHashes": {
+    "apps/web/lib/workflows/cloud-agent-workflow.ts": "560cc1eb91af343fabcc8c9eda076b8ad3c6adb15049d377864aec10cf028264",
+    "apps/web/lib/workflows/cloud-agent-workflow.device-clearance.test.ts": "11061a7934957b11b41298d1125441059952eaa34b829f7b0712353eea025576"
+  },
+  "limitations": "Unit/contract validation only; runtime Browser assertions remain separately tracked.",
+  "browserAttempt": {
+    "recordedAt": "2026-09-19T09:00:10.163091+00:00",
+    "result": "provider credit exhaustion; no successful changed-path response",
+    "assertions": [
+      "Request sent once with explicit Luna Medium",
+      "UI transitioned to Response failed and displayed model picker/regenerate recovery controls",
+      "Existing session usage remained80percent; no quota reset or model rotation"
+    ],
+    "observations": {
+      "messageSaveMs": 3600,
+      "messageSaveCompilationMs": 2900,
+      "chatRouteMs": 15800,
+      "durableFirstEventMs": 2045,
+      "fallback": true,
+      "ownershipSafetyMs": 3137,
+      "catalogMs": 24
+    },
+    "limitations": "Cold dev compilation and failed provider call prevent successful latency comparison. Text wait timed out; no first-visible-text measurement."
+  },
+  "localTransportRecovery": {
+    "recordedAt": "2026-09-19T10:36:38.730189+00:00",
+    "before": "Second recurring Neon WebSocket pool checkout timeout10s in terms gate despite healthy local PostgreSQL; prior restart was only temporary recovery.",
+    "change": "Owned dev process restarted once with AGI_DATABASE_PROVIDER=postgres; same loopback database and unchanged auth/RLS/pool timeouts/isolation overrides. No production provider change.",
+    "contract": "13 live PostgreSQL adapter tests passed;13 Neon cases skipped because WS proxy test config not supplied.",
+    "browser": "Authenticated chat recovered. One warm reload reached visible composer in1148ms; /chat HTTP200300ms, compilation100ms/application168ms. Cold /chat12.1s includes10.9s dev compilation.",
+    "limitations": "Single page navigation sample, not model response/production benchmark or long-run stability certification. Underlying Neon-proxy failure not identified.",
+    "runtime": {
+      "session": 65593,
+      "pid": 89149,
+      "log": "/tmp/agi-website-launch-native-postgres.log",
+      "provider": "postgres"
+    }
+  },
+  "localConfigurationRepair": {
+    "status": "validated-directly",
+    "before": "The project-local web environment pointed at loopback PostgreSQL but selected the Neon WebSocket adapter, and selected a shared remote Upstash REST key-value service despite loopback Redis being available. The fresh local process reproduced remote rate-limiter timeouts, multi-second database spans and 12-41 second request paths under load.",
+    "change": "Both ignored project-local env files now select AGI_DATABASE_PROVIDER=postgres, AGI_KV_PROVIDER=redis and AGI_KV_REDIS_URL=redis://127.0.0.1:6379. The database URL and data are unchanged; production configuration and remote state were not modified.",
+    "validation": [
+      "Native PostgreSQL adapter, factory and loopback contract: 3 files passed, 41 tests passed and 13 Neon-only cases skipped.",
+      "Key-value provider and circuit breaker: 2 files and 19 tests passed.",
+      "Loopback Redis returned PONG.",
+      "Both env files are covered by existing .gitignore rules."
+    ],
+    "memory": "The dev process and a separate 2.6-4.2 GB affected-build tree were stopped at the user request. System-reported free memory rose from 48 percent to 71 percent; the full web process stayed stopped.",
+    "limitations": "The repaired configuration was not followed by another full-app Browser run so RAM would remain free. Existing process-only live evidence above measures the same native PostgreSQL path and a local non-remote KV path; provider-response latency remains blocked by exhausted provider credit.",
+    "jev": {
+      "preliminaryRequestHash": "8b9986fee0c9c80adb6ac2c2e93d4f2632f3de5ba8be8e3ba2150b80c22ff4d6",
+      "preliminaryStatus": "database-versus-compile priority below the required confidence; no repair selected",
+      "methodChoice": "config_and_direct_probes",
+      "methodConfidence": 1,
+      "repairRequestHash": "f1b13e7f515e06f009b9d4dacd644f15de480117ea0046c082f0fa1eaa44d5de",
+      "repairChoice": "persist_local_native_backends",
+      "repairConfidence": 0.99
+    },
+    "startupEnvironment": "The project-local TOTP key is valid 64-character hex, but this Codex host inherits a separate 48-byte TOTP_ENCRYPTION_KEY that overrides dotenv. Global configuration was not changed; future owned local starts must remove only that inherited value so the project-local key loads."
+  }
+}

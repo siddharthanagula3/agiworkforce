@@ -127,14 +127,15 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
     setUploadState({ status: 'uploading', fileName: file.name, progress: 0 });
 
     try {
-      const registeredFile = await uploadProjectKnowledgeFile({
+      await uploadProjectKnowledgeFile({
         projectId,
         file,
         onProgress: (progress) =>
           setUploadState({ status: 'uploading', fileName: file.name, progress }),
       });
-      setFiles((previous) => [registeredFile, ...previous]);
       setUploadState({ status: 'idle' });
+      setLoadState('loading');
+      setRetryToken((token) => token + 1);
     } catch (err) {
       setUploadState({
         status: 'error',

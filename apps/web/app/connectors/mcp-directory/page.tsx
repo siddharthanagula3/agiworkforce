@@ -98,7 +98,8 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
                 These are the remote servers this deployment indexes, from the official Model
                 Context Protocol registry and from vendors who publish their own. Each entry says
                 who published it. Sign in to connect one to a conversation. Servers that run as a
-                local process have no URL, so those are added from Desktop or the CLI instead.
+                local process have no URL, so those are added from the released CLI instead. The
+                current public Desktop reports no local MCP capability.
               </Prose>
               <ButtonRow>
                 <Button href={SIGN_IN_HREF}>Sign in to connect</Button>

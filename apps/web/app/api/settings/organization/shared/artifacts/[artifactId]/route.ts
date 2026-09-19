@@ -10,6 +10,7 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { unshareArtifactFromOrganization } from '@/lib/services/org-shared-artifact-service';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +58,14 @@ async function handleUnshare(
   if (!removed) {
     throw createError.notFound('That artifact is not shared with your organization');
   }
+
+  await recordAuditEvent({
+    userId,
+    organizationId: membership.organizationId,
+    eventType: 'organization_share_revoked',
+    request,
+    detail: { resourceType: 'artifact', resourceId: publishedArtifactId },
+  });
 
   return NextResponse.json({ success: true });
 }

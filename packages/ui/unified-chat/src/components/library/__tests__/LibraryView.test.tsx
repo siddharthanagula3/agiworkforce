@@ -377,6 +377,32 @@ describe('shared LibraryView', () => {
       await waitFor(() => expect(transport.fetchAsset).toHaveBeenCalledWith('/api/files/asset-1'));
     });
 
+    it('turns a failed download status into useful user copy', async () => {
+      const transport = makeTransport({ fetchAsset: vi.fn(async () => jsonResponse({}, false)) });
+      render(<LibraryView transport={transport} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Download' }));
+
+      const message = await screen.findByText(/went wrong on our side/i);
+      expect(message.textContent).not.toMatch(/HTTP\s+\d/i);
+    });
+
+    it('turns a failed delete status into useful user copy', async () => {
+      const transport = makeTransport({ deleteItem: vi.fn(async () => jsonResponse({}, false)) });
+      render(<LibraryView transport={transport} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+      const message = await screen.findByText(/went wrong on our side/i);
+      expect(message.textContent).not.toMatch(/HTTP\s+\d/i);
+      expect(screen.getByText('quarterly-report.pdf')).toBeTruthy();
+    });
+
     it('closes the row menu on Escape and returns focus to its trigger', async () => {
       render(<LibraryView transport={makeTransport()} />);
       await screen.findByText('quarterly-report.pdf');
@@ -807,17 +833,25 @@ describe('shared LibraryView', () => {
       expect(screen.queryByTestId('library-file-viewer')).toBeNull();
     });
 
-    it('reports an artifact that cannot be read instead of an empty viewer', async () => {
-      const transport = makeTransport({
-        listPage: pageOf([ARTIFACT_ITEM]),
-        fetchAsset: vi.fn(async () => ({ ok: false, status: 500 }) as Response),
-      });
-      render(<LibraryView transport={transport} />);
+    it.each([
+      [401, /session has expired/i],
+      [500, /went wrong on our side/i],
+    ])(
+      'reports an artifact that returns HTTP %s without exposing the status code',
+      async (status, expectedMessage) => {
+        const transport = makeTransport({
+          listPage: pageOf([ARTIFACT_ITEM]),
+          fetchAsset: vi.fn(async () => ({ ok: false, status }) as Response),
+        });
+        render(<LibraryView transport={transport} />);
 
-      fireEvent.click(await screen.findByRole('button', { name: 'Open dashboard.html' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Open dashboard.html' }));
 
-      expect(await screen.findByTestId('library-artifact-error-asset-artifact')).toBeTruthy();
-    });
+        const error = await screen.findByTestId('library-artifact-error-asset-artifact');
+        expect(error.textContent).toMatch(expectedMessage);
+        expect(error.textContent).not.toContain(`HTTP ${status}`);
+      },
+    );
 
     it('refuses to inline an artifact large enough to hang the tab', async () => {
       render(<LibraryView transport={artifactTransport('x'.repeat(512 * 1024 + 1))} />);

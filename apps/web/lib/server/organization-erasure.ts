@@ -50,7 +50,9 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'legal_holds', column: 'organization_id' },
   { table: 'support_cases', column: 'organization_id' },
   { table: 'support_access_grants', column: 'organization_id' },
+  { table: 'automation_audit_events', column: 'organization_id' },
   { table: 'web_conversations', column: 'organization_id' },
+  { table: 'voice_sessions', column: 'organization_id' },
   { table: 'web_artifacts', column: 'organization_id' },
   { table: 'user_memories', column: 'organization_id' },
   { table: 'media_assets', column: 'organization_id' },
@@ -149,6 +151,8 @@ export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
     'Append-only break-glass trail (0229_support_access_grants), hash-chained on previous_hash. support_access_events_are_append_only() refuses DELETE from every role including the owner connection this module uses, organization_id is NOT NULL so it cannot be detached either, and the table deliberately carries no foreign key: the record of what support looked at has to outlive the workspace it names, which is exactly the workspace a deletion would otherwise clear the evidence for. account-erasure.ts fences the same table for an erased user.',
   routing_decision_traces:
     'organization_id is ON DELETE SET NULL (0212_routing_decision_traces). The trace records which model this product routed a request to and how that turn ended, which is platform routing telemetry rather than workspace content; the workspace reference is detached and the row retires on the routing-trace retention window that deletes every trace.',
+  ediscovery_exports:
+    'Cascades from organizations after 0273. Direct mutation remains blocked while the workspace exists; the cascade is the deletion behavior 0262 declares for a decommissioned tenant.',
 };
 
 const PG_UNDEFINED_TABLE = '42P01';

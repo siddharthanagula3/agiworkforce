@@ -66,7 +66,9 @@ The signature is `HMAC-SHA256(secret, "<timestamp>.<body>")`. The timestamp is
 inside the signed material rather than merely alongside it, so a captured
 delivery cannot be replayed later under a fresh header. Reject a timestamp
 outside your tolerance. Verify in constant time. The shared secret is shown
-once when the destination is saved and is stored here only as a hash.
+once when the destination is saved. Its fingerprint is stored as a hash; the
+key needed for delivery is retained only as workspace-bound authenticated
+ciphertext.
 
 Header values are asserted printable ASCII before the request is built
 (`auditDeliveryHeaders`), so a value carrying a carriage return refuses the

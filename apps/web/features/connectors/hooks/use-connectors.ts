@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export type ConnectorSource = 'user' | 'github-app' | 'custom' | 'oauth';
 
@@ -92,7 +93,7 @@ function fetchConnectorsShared(): Promise<ConnectorsResponse> {
   const request = fetch('/api/connectors')
     .then(async (res) => {
       if (!res.ok) {
-        throw new Error(`Failed to fetch connectors: ${res.status}`);
+        throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
       }
       const json = (await res.json()) as ConnectorsResponse;
       if (generation === connectorsGeneration) {
@@ -380,9 +381,7 @@ export function useConnectors(): ConnectorStatus {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'Could not load connectors. Try again later.',
-          );
+          setError(toUserMessage(err, 'Could not load connectors. Try again later.'));
         }
       } finally {
         if (!cancelled) setLoading(false);

@@ -119,6 +119,8 @@ export const REGISTERED_COMMANDS: ReadonlySet<string> = new Set([
   'auth_store_session',
   'auto_save_decision',
   'automation_click',
+  'automation_audit_outbox_ack',
+  'automation_audit_outbox_list',
   'automation_clipboard_get',
   'automation_clipboard_set',
   'automation_delete_script',

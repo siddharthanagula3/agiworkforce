@@ -36,7 +36,6 @@ fn decode_html_entities(text: &str) -> String {
         .replace("&#x27;", "'")
         .replace("&apos;", "'")
         .replace("&nbsp;", " ")
-        .replace(", ", ", ")
         .replace("&ndash;", "–")
         .replace("&hellip;", "…")
         .replace("&copy;", "©")

@@ -31,6 +31,7 @@ import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from './use-step-up';
+import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -396,12 +397,13 @@ function readDeleteAccountMessage(data: unknown, fallback: string): string {
   return fallback;
 }
 
-function readDeleteAccountError(data: unknown, fallback: string): string {
+function readDeleteAccountError(data: unknown, fallback: string, status: number): string {
+  let raw = '';
   if (data !== null && typeof data === 'object' && 'error' in data) {
     const error = (data as { error?: unknown }).error;
-    if (typeof error === 'string' && error.trim()) return error;
+    if (typeof error === 'string' && error.trim()) raw = error;
   }
-  return fallback;
+  return toUserMessage(Object.assign(new Error(raw || `HTTP ${status}`), { status }), fallback);
 }
 
 /**
@@ -438,7 +440,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
       const res = await fetch('/api/user/delete-account', { method: 'DELETE', headers });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(readDeleteAccountError(data, 'Account deletion failed.'));
+        throw new Error(readDeleteAccountError(data, 'Account deletion failed.', res.status));
       }
       const scheduledFor =
         data !== null && typeof data === 'object' && 'scheduledFor' in data
@@ -531,7 +533,9 @@ export function useAccountDeletionStatus(): UseQueryResult<AccountDeletionStatus
       });
       const data: unknown = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(readDeleteAccountError(data, 'Unable to check account deletion status.'));
+        throw new Error(
+          readDeleteAccountError(data, 'Unable to check account deletion status.', response.status),
+        );
       }
       return parseAccountDeletionStatus(data);
     },
@@ -568,7 +572,9 @@ export function useCancelAccountDeletion(): UseMutationResult<
       const res = await fetch('/api/user/delete-account/cancel', { method: 'POST', headers });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(readDeleteAccountError(data, 'Could not cancel account deletion.'));
+        throw new Error(
+          readDeleteAccountError(data, 'Could not cancel account deletion.', res.status),
+        );
       }
       const record =
         data !== null && typeof data === 'object' ? (data as Record<string, unknown>) : {};
@@ -759,11 +765,9 @@ export function useSwitchWorkspace(): UseMutationResult<void, Error, string | nu
       });
       if (!response.ok) throw new Error(await readApiError(response));
     },
-    onSuccess: async () => {
-      await queryClient.cancelQueries();
-      queryClient.clear();
+    onSuccess: async (_data, organizationId) => {
       toast.success('Workspace switched');
-      window.location.reload();
+      await finalizeWorkspaceSwitch(queryClient, organizationId);
     },
     onError: (error) => toast.error(toUserMessage(error, 'Failed to switch workspace')),
   });
@@ -1477,17 +1481,15 @@ export function useUserActivity(
  */
 export interface AuditLogEntry {
   id: string;
-  userId: string | null;
   action: string;
-  resourceType: string | null;
-  resourceId: string | null;
-  details: Record<string, unknown>;
-  ipAddress: string | null;
+  sentence: string;
+  device: string | null;
   createdAt: string;
-  user?: {
-    email: string;
-    name: string;
-  };
+}
+
+export interface AuditLogPage {
+  entries: AuditLogEntry[];
+  hasMore: boolean;
 }
 
 /**
@@ -1509,7 +1511,7 @@ export interface AuditLogFilters {
  * @param filters - Filter options for audit logs
  * @returns UseQueryResult with array of AuditLogEntry
  */
-export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLogEntry[], Error> {
+export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLogPage, Error> {
   const {
     userId,
     action,
@@ -1520,7 +1522,7 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
     offset = 0,
   } = filters || {};
 
-  return useQuery<AuditLogEntry[], Error>({
+  return useQuery<AuditLogPage, Error>({
     queryKey: [
       'audit',
       'logs',
@@ -1534,7 +1536,7 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
         offset,
       },
     ],
-    queryFn: async (): Promise<AuditLogEntry[]> => {
+    queryFn: async (): Promise<AuditLogPage> => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
 
@@ -1554,8 +1556,11 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
         throw new Error(statusMessage(res.status));
       }
 
-      const json = (await res.json()) as { entries: AuditLogEntry[] };
-      return json.entries ?? [];
+      const json = (await res.json()) as Partial<AuditLogPage>;
+      return {
+        entries: Array.isArray(json.entries) ? json.entries : [],
+        hasMore: json.hasMore === true,
+      };
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes

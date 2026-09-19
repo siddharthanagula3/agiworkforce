@@ -112,7 +112,7 @@ const EXTEND = [
   {
     meta: 'Integrations',
     title: 'Integrations',
-    body: 'MCP plugins, the native messaging bridge, and BYOK provider keys, wired the same way on Desktop, CLI, and VS Code.',
+    body: 'MCP plugins, the native messaging bridge, and BYOK provider keys in the released CLI. VS Code BYOK is coming soon.',
     href: '/integrations',
   },
 ] as const;

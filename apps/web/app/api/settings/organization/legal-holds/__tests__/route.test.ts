@@ -24,7 +24,13 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
+  getNeonDb: () => {
+    const db = { query: (...args: unknown[]) => mockQuery(...args) };
+    return {
+      ...db,
+      transaction: (run: (tx: typeof db) => unknown) => run(db),
+    };
+  },
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mockRecordAuditEvent,

@@ -32,7 +32,10 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: () => ({}) }));
+vi.mock('@/lib/server/identity', () => ({
+  getRequestIdentity: vi.fn(async () => null),
+  getIdentityProvider: () => ({}),
+}));
 vi.mock('@/lib/services/identity-events', () => ({
   handleIdentitySecurityEvent: (...args: unknown[]) => mocks.identityEvent(...(args as [])),
 }));

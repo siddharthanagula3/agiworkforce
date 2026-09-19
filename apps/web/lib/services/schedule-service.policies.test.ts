@@ -18,12 +18,22 @@ vi.mock('@/lib/jobs/job-service', () => ({ enqueueJob: mocks.enqueueJob }));
 
 import {
   claimDueScheduleRuns,
-  createSchedule,
+  createSchedule as createScheduleWithPlan,
   finalizeScheduleRun,
   processClaimedScheduleRun,
   retryDelaySeconds,
   type ClaimedScheduleRun,
+  type ScheduleInput,
 } from './schedule-service';
+
+function createSchedule(
+  db: DatabaseAdapter,
+  userId: string,
+  input: ScheduleInput,
+  options: { now?: Date } = {},
+) {
+  return createScheduleWithPlan(db, userId, input, { planTier: 'max', ...options });
+}
 
 function database(
   query: ReturnType<typeof vi.fn>,

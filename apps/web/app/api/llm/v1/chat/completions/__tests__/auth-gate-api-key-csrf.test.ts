@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -14,11 +13,10 @@ vi.mock('@/lib/rate-limit', () => ({
 
 vi.mock('@/lib/csrf', async (importOriginal) => importOriginal());
 
-const mockGetSubscription = vi.fn();
-vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: {
-    getSubscription: (...args: unknown[]) => mockGetSubscription(...args),
-  },
+const mockResolveEffectiveSubscription = vi.fn();
+vi.mock('@/lib/services/effective-subscription-service', async (importOriginal) => ({
+  ...(await importOriginal()),
+  resolveEffectiveSubscription: (...args: unknown[]) => mockResolveEffectiveSubscription(...args),
 }));
 
 const mockAuth = vi.fn();
@@ -52,6 +50,9 @@ function makeFakeDb() {
 
   async function query(sql: string, params: unknown[] = []): Promise<FakeRow[]> {
     const s = sql.toLowerCase();
+    if (s.includes('account_status')) {
+      return [{ account_status: null, deletion_scheduled_for: null, erased: false }];
+    }
     if (s.includes('from profiles')) return [];
     if (s.includes('count(*)') && s.includes('api_keys')) {
       const userId = params[0] as string;
@@ -149,7 +150,7 @@ function makeCompletionsRequest(bearerToken: string): NextRequest {
 describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BLOCK-01)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSubscription.mockResolvedValue({
+    mockResolveEffectiveSubscription.mockResolvedValue({
       id: 'sub-pro',
       user_id: 'completions-user',
       plan_tier: 'pro',
@@ -202,7 +203,7 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
         error: { code: 'insufficient_scope' },
       });
     }
-    expect(mockGetSubscription).not.toHaveBeenCalled();
+    expect(mockResolveEffectiveSubscription).not.toHaveBeenCalled();
   });
 
   it('a garbage sk_-shaped bearer is rejected as invalid authentication', async () => {
@@ -217,6 +218,6 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     if (!result.ok) {
       expect(result.response.status).toBe(401);
     }
-    expect(mockGetSubscription).not.toHaveBeenCalled();
+    expect(mockResolveEffectiveSubscription).not.toHaveBeenCalled();
   });
 });

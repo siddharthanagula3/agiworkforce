@@ -1,10 +1,19 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
-import { SchedulesPage } from './SchedulesPage';
+import { SchedulesPage as ProductionSchedulesPage } from './SchedulesPage';
 import type { ScheduleApi } from '../services/schedule-api';
 import type { ScheduleRun, ScheduleTask } from '../types';
+
+function SchedulesPage(
+  props: Omit<ComponentProps<typeof ProductionSchedulesPage>, 'subscriptionTier'> & {
+    subscriptionTier?: ComponentProps<typeof ProductionSchedulesPage>['subscriptionTier'];
+  },
+) {
+  return <ProductionSchedulesPage subscriptionTier="pro" {...props} />;
+}
 
 const schedule: ScheduleTask = {
   id: 'schedule-1',
@@ -115,6 +124,21 @@ describe('SchedulesPage', () => {
     expect(screen.queryByText('Managed Models')).not.toBeInTheDocument();
     expect(screen.queryByText('No Chat Memory')).not.toBeInTheDocument();
     expect(screen.queryByText('No Tools')).not.toBeInTheDocument();
+  });
+
+  it('keeps Free-plan schedules readable without offering creation or mutation controls', async () => {
+    const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
+    render(<SchedulesPage api={api} subscriptionTier="free" onOpenChat={() => undefined} />);
+
+    await screen.findByRole('heading', { name: schedule.name });
+    expect(
+      screen.getByText(/Scheduled tasks are available on Basic and higher plans/),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Upgrade plan' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Create Schedule' })).toBeNull();
+    expect(screen.getByRole('button', { name: `Edit ${schedule.name}` })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: `Pause ${schedule.name}` })).toBeDisabled();
+    expect(screen.getByRole('button', { name: `View History for ${schedule.name}` })).toBeEnabled();
   });
 
   it('opens the run history of the schedule a notification link names', async () => {

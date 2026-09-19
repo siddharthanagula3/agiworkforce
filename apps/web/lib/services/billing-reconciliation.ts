@@ -1,6 +1,5 @@
 import 'server-only';
 
-import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   getBillingPlanPricing,
@@ -48,6 +47,24 @@ export interface BillingPriceObservation {
   priceId: string | null;
   unitAmount: number | null;
   currency: string | null;
+}
+
+interface BillingSubscription {
+  items: {
+    data: Array<{
+      price?: {
+        id: string;
+        unit_amount: number | null;
+        currency: string;
+      };
+    }>;
+  };
+}
+
+interface BillingSubscriptionClient {
+  subscriptions: {
+    retrieve(subscriptionId: string): Promise<BillingSubscription>;
+  };
 }
 
 interface StoredSubscriptionRow {
@@ -114,7 +131,7 @@ export function compareBilledPrice(observation: BillingPriceObservation): {
   return { fields, stripePlanTier: entry.tier, expected };
 }
 
-function firstRecurringItem(subscription: Stripe.Subscription): {
+function firstRecurringItem(subscription: BillingSubscription): {
   priceId: string | null;
   unitAmount: number | null;
   currency: string | null;
@@ -133,7 +150,7 @@ function toInterval(value: string | null): BillingInterval | null {
 
 export async function reconcileBilledPlans(options: {
   db: DatabaseAdapter;
-  stripe: Stripe;
+  stripe: BillingSubscriptionClient;
   batch?: number;
 }): Promise<BillingReconciliationReport> {
   const rows = await options.db.query<StoredSubscriptionRow>(SELECT_STRIPE_BILLED_SUBSCRIPTIONS, [
@@ -145,7 +162,7 @@ export async function reconcileBilledPlans(options: {
   let uncomparable = 0;
 
   for (const row of rows) {
-    let subscription: Stripe.Subscription;
+    let subscription: BillingSubscription;
     try {
       subscription = await options.stripe.subscriptions.retrieve(row.stripe_subscription_id);
     } catch (error) {

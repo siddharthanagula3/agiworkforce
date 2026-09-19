@@ -1,6 +1,6 @@
-# Desktop local runtime
+# Desktop device runtime
 
-> **Path:** `apps/desktop/electron/runtime/` · **Contract:** `packages/contracts/local-runtime` · **Owner:** founder · **Status:** Phase 1 complete, Phase 2 filesystem and git landed · **Updated:** 2026-09-08.
+> **Path:** `apps/desktop/electron/runtime/` · **Contract:** `packages/contracts/local-runtime` · **Owner:** founder · **Status:** current Electron device-capability host · **Updated:** 2026-09-19.
 
 ## What this is
 
@@ -10,7 +10,11 @@ local machine, and the typed boundary the renderer talks to them through.
 It is not a second product. The renderer is the existing web application, the
 chat UI is `@agiworkforce/unified-chat`, authentication is Clerk through the
 cloud, and conversations live in the cloud exactly as they do in a browser.
-What desktop adds is a local runtime the same UI can call.
+What Desktop adds is a local device-capability runtime the same UI can call.
+“Local” in this document means privileged work on the device, not Local model
+inference. The public Electron dispatcher rejects every local-inference command,
+reports `localModels: false` and `localMcp: false`, and accepts no provider API
+key. Conversation inference remains Managed Cloud.
 
 ## Why the seam is `command()` and nothing else
 

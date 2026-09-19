@@ -20,7 +20,7 @@ import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 export const metadata = buildMetadata({
   title: 'Partners',
   description:
-    'There is no formal partner program yet. What does exist today: AGI speaks MCP, so connectors built against the open protocol work with it now. Here is what we are looking for.',
+    'There is no formal partner program yet. The released CLI speaks MCP, so connectors built against the open protocol work with it now. Here is what we are looking for.',
   path: '/partners',
 });
 
@@ -28,7 +28,7 @@ const OPPORTUNITIES = [
   {
     meta: 'Available today',
     title: 'Build on MCP',
-    body: 'AGI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with AGI Desktop now, behind the same explicit tool-approval prompts as anything else. You do not need an agreement with us, or our permission, to build one.',
+    body: 'The released AGI CLI implements the Model Context Protocol, so a connector or tool server you build against the open spec works with it now, behind explicit tool-approval prompts. Desktop is coming soon. You do not need an agreement with us, or our permission, to build one.',
   },
   {
     meta: 'Looking for',
@@ -38,7 +38,7 @@ const OPPORTUNITIES = [
   {
     meta: 'Looking for',
     title: 'Local runtime and model ecosystems',
-    body: 'AGI already routes to Ollama, LM Studio, llama.cpp, and vLLM as first-class local runtimes. If you build a local runtime or distribute open models and want AGI to work well with yours, that is a conversation we want.',
+    body: 'The released CLI routes to Ollama and LM Studio as local runtimes. If you build a local runtime or distribute open models and want AGI to work well with yours, that is a conversation we want.',
   },
 ] as const;
 

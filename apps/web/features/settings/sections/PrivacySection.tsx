@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useRouter } from 'next/navigation';
 import { Switch, useConfirm } from '@agiworkforce/ui';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { setTelemetryConsentCache } from '@/lib/sentry-shared';
+import {
+  confirmTelemetryConsent,
+  hasPendingTelemetryOptOut,
+  requestTelemetryOptOut,
+  setTelemetryConsentCache,
+} from '@/lib/sentry-shared';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import {
   fetchPreferenceNamespace,
@@ -47,7 +52,7 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     id: 'shareTelemetry',
     label: 'Share crash and usage telemetry',
     description:
-      'Send anonymized error reports and usage counts so we can fix bugs faster. Message content is never included.',
+      'Allow browser error reports and consent-gated usage counts so we can fix problems faster. Sensitive request fields are removed from error reports before they are sent.',
     defaultValue: false,
   },
 ];
@@ -156,30 +161,46 @@ export function PrivacySection() {
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
   const [loadingPreferences, setLoadingPreferences] = useState(true);
   const [hasChanged, setHasChanged] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [pendingPreference, setPendingPreference] = useState<Record<ToggleKey, boolean> | null>(
+    null,
+  );
+  const saveInFlight = useRef(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [bulkAction, setBulkAction] = useState<BulkConversationAction | null>(null);
   const [conversationActionError, setConversationActionError] = useState<string | null>(null);
   const [conversationActionNotice, setConversationActionNotice] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadingPreferences(true);
+    setLoadFailed(false);
+    setPreferenceError(null);
     fetchPreferenceNamespace<Record<ToggleKey, boolean>>(NAMESPACE, defaultPrivacyState())
       .then((value) => {
-        if (!cancelled) {
-          setState(value);
-          setPreferenceError(null);
-          // Sync the server-authoritative value to this device's synchronous
-          // localStorage cache so instrumentation-client.ts's next page load
-          // (which runs before this fetch could resolve) respects it.
-          setTelemetryConsentCache(value.shareTelemetry);
+        if (cancelled) return;
+        const loaded = { ...defaultPrivacyState(), ...value };
+        setTelemetryConsentCache(loaded.shareTelemetry);
+        if (hasPendingTelemetryOptOut()) {
+          const pending = { ...loaded, shareTelemetry: false };
+          setState(pending);
+          setPendingPreference(pending);
+          setPreferenceError(
+            'Telemetry is off on this browser. Retry saving to update your account.',
+          );
+        } else {
+          setState(loaded);
+          setPendingPreference(null);
         }
       })
       .catch((error) => {
-        if (!cancelled) {
-          setPreferenceError(toUserMessage(error, 'Failed to load privacy settings'));
-        }
+        if (cancelled) return;
+        setLoadFailed(true);
+        setPreferenceError(toUserMessage(error, 'We could not load privacy settings. Try again.'));
       })
       .finally(() => {
         if (!cancelled) setLoadingPreferences(false);
@@ -187,35 +208,48 @@ export function PrivacySection() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
+
+  async function savePrivacy(next: Record<ToggleKey, boolean>) {
+    if (saveInFlight.current || loadingPreferences || loadFailed) return;
+    saveInFlight.current = true;
+    setSavingPreferences(true);
+    setPreferenceError(null);
+    setHasChanged(true);
+    if (!next.shareTelemetry) {
+      requestTelemetryOptOut();
+      setState(next);
+    }
+    try {
+      await savePreferenceNamespace(NAMESPACE, next);
+      confirmTelemetryConsent(next.shareTelemetry);
+      setState(next);
+      setPendingPreference(null);
+    } catch (error) {
+      setPendingPreference(next);
+      setPreferenceError(
+        next.shareTelemetry
+          ? toUserMessage(error, 'We could not save privacy settings. Try again.')
+          : 'Telemetry is off on this browser. Retry saving to update your account.',
+      );
+    } finally {
+      saveInFlight.current = false;
+      setSavingPreferences(false);
+    }
+  }
 
   function toggle(key: ToggleKey) {
-    setState((prev) => {
-      const next = { ...prev, [key]: !prev[key] };
-      setSavingPreferences(true);
-      setPreferenceError(null);
-      setHasChanged(true);
-      // Mirror immediately, matching the optimistic setState above (this
-      // component doesn't roll UI state back on save failure, it only shows
-      // an error banner, so the cache must track what the switch displays,
-      // not server-confirmed state, or the switch and the actual gate could
-      // silently disagree).
-      setTelemetryConsentCache(next.shareTelemetry);
-      savePreferenceNamespace(NAMESPACE, next)
-        .catch((error) => {
-          setPreferenceError(toUserMessage(error, 'Failed to save privacy settings'));
-        })
-        .finally(() => setSavingPreferences(false));
-      return next;
-    });
+    void savePrivacy({ ...state, [key]: !state[key] });
   }
 
   async function handleExport() {
     setExporting(true);
     setExportError(null);
+    setExportNotice(null);
     try {
-      const res = await fetch('/api/user/data', { method: 'GET' });
+      const res = await fetch('/api/user/data?download=true', { method: 'GET' });
       if (!res.ok) throw new Error('Export failed');
+      const status = res.headers.get('X-Export-Status');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -225,6 +259,11 @@ export function PrivacySection() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      if (status === 'partial') {
+        setExportNotice(
+          'Your export downloaded, but some account data was unavailable. Try again later for a complete copy.',
+        );
+      }
     } catch (err) {
       setExportError(toUserMessage(err, 'Export failed. Please try again.'));
     } finally {
@@ -282,7 +321,7 @@ export function PrivacySection() {
         : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in your account, active and archived, will be removed from your history`;
     const confirmed = await confirmDestructive({
       title: 'Delete all chats?',
-      description: `${scope}. You can restore them from Settings > Deleted chats until they are purged.`,
+      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted until they are purged.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
@@ -329,9 +368,22 @@ export function PrivacySection() {
               : savingPreferences
                 ? 'Saving...'
                 : preferenceError
-                  ? `Save failed: ${preferenceError}`
+                  ? preferenceError
                   : 'Saved'}
           </p>
+        ) : null}
+        {preferenceError ? (
+          <button
+            type="button"
+            disabled={savingPreferences || loadingPreferences}
+            onClick={() => {
+              if (loadFailed) setLoadAttempt((attempt) => attempt + 1);
+              else if (pendingPreference) void savePrivacy(pendingPreference);
+            }}
+            className="mt-2 text-sm underline underline-offset-4"
+          >
+            {loadFailed ? 'Retry loading' : 'Retry saving'}
+          </button>
         ) : null}
       </div>
 
@@ -374,10 +426,11 @@ export function PrivacySection() {
               neither, app/settings/byok says so in as many words, and the
               three trust boundaries are the one thing that must not blur.
             */}
-            On Desktop, CLI and VS Code, Local Mode conversations stay on your device and are never
-            transmitted to AGI servers, and BYOK conversations go directly to your chosen provider
-            using your own API key. Hosted Web has neither mode: it stores no provider keys of
-            yours, so everything you send here is a Managed Cloud request.
+            In the CLI, Local Mode conversations stay on your device and are never transmitted to
+            AGI servers, and BYOK conversations go directly to your chosen provider using your own
+            API key. VS Code BYOK is coming soon. Hosted Web and Desktop have neither mode: they
+            store no provider keys of yours, so everything you send there is a Managed Cloud
+            request.
           </p>
           <p style={{ margin: 0 }}>
             Managed Cloud conversations are encrypted in transit and at rest. We do not sell your
@@ -397,8 +450,9 @@ export function PrivacySection() {
 
         <ExpandableSection title="How we use your data">
           <p style={{ margin: '0 0 8px' }}>
-            Crash reports and anonymized usage counts (no message content) help us fix bugs faster.
-            These are disabled by default and can be turned off at any time below.
+            Browser crash reports and consent-gated usage counts help us fix bugs faster. Sensitive
+            request fields are removed before error reports are sent. This setting does not control
+            server operational logs.
           </p>
           {/*
             The "opt into model-improvement sharing" paragraph that used to sit
@@ -448,7 +502,12 @@ export function PrivacySection() {
             </div>
             <Switch
               checked={state[spec.id]}
-              disabled={spec.managedOnly && !hasHostedCloud}
+              disabled={
+                loadingPreferences ||
+                savingPreferences ||
+                loadFailed ||
+                (spec.managedOnly && !hasHostedCloud)
+              }
               onCheckedChange={() => toggle(spec.id)}
               aria-label={spec.label}
             />
@@ -609,7 +668,8 @@ export function PrivacySection() {
               Delete all chats
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              Permanently delete every active and archived conversation.
+              Remove every active and archived conversation from history. Restore them from Recently
+              deleted until they are purged.
             </div>
           </div>
           <button
@@ -815,7 +875,7 @@ export function PrivacySection() {
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Export data</div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              Download all your conversations as JSON.
+              Download a copy of your account data as JSON. Store it somewhere private.
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -839,8 +899,13 @@ export function PrivacySection() {
               {exporting ? 'Preparing...' : 'Export data'}
             </button>
             {exportError && (
-              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary-text)' }}>
+              <span role="alert" style={{ fontSize: 12, color: 'var(--chat-accent-primary-text)' }}>
                 {exportError}
+              </span>
+            )}
+            {exportNotice && (
+              <span role="status" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                {exportNotice}
               </span>
             )}
           </div>

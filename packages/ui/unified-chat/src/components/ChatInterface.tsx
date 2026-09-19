@@ -53,6 +53,7 @@ import { ArtifactPanel } from './ArtifactPanel';
 import { RewindTimeline } from './RewindTimeline';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { cn } from '../lib/utils';
+import { toUserMessage } from '../lib/network-error';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -83,7 +84,7 @@ class ChatErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundary
             Something went wrong in the chat.
           </p>
           <p className="text-xs text-[var(--chat-text-muted)]">
-            {this.state.error?.message ?? 'An unexpected error occurred.'}
+            {toUserMessage(this.state.error, 'An unexpected error occurred. Try again.')}
           </p>
           <button
             type="button"
@@ -459,7 +460,7 @@ export function ChatInterface({
         if (cancelled) return;
         setMessageLoadState({
           status: 'error',
-          message: error instanceof Error ? error.message : 'Could not load this conversation.',
+          message: toUserMessage(error, 'Could not load this conversation. Try again.'),
         });
       });
 

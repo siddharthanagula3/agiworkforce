@@ -91,6 +91,18 @@ describe('WebPushToggle', () => {
     expect(screen.getByRole('switch', SWITCH)).toBeDisabled();
   });
 
+  it('recovers when permission is restored while browser settings are open', async () => {
+    mocks.readNotificationPermission.mockReturnValue('denied');
+    render(<WebPushToggle />);
+    await waitFor(() => expect(screen.getByRole('switch', SWITCH)).toBeDisabled());
+
+    mocks.readNotificationPermission.mockReturnValue('default');
+    window.dispatchEvent(new Event('focus'));
+
+    await waitFor(() => expect(screen.getByRole('switch', SWITCH)).toBeEnabled());
+    expect(screen.getByText(/Get told when a run finishes/)).toBeInTheDocument();
+  });
+
   it('reports an unsupported browser rather than offering a switch that does nothing', () => {
     mocks.isWebPushSupported.mockReturnValue(false);
 

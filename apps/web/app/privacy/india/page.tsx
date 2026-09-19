@@ -53,11 +53,11 @@ const MODES: readonly LedgerRow[] = [
     label: 'Local',
     value: (
       <>
-        Where it goes: to a model runtime on your own machine. Nothing is transmitted to us and
-        nothing is silently routed to BYOK or Managed Cloud.
+        Where it goes: from the released CLI to Ollama or LM Studio on loopback. Nothing is
+        transmitted to us and nothing is silently routed to BYOK or Managed Cloud.
         <br />
-        What we hold: nothing about the conversation. It lives in SQLite on your disk, where this
-        notice has nothing to describe.
+        What we hold: nothing about the local model request. The current Desktop and web apps use
+        Managed Cloud and do not expose Local inference.
       </>
     ),
   },
@@ -68,8 +68,10 @@ const MODES: readonly LedgerRow[] = [
         Where it goes: from your client straight to the provider you targeted, on your own API key.
         We are not in that request path.
         <br />
-        What we hold: your account and settings. Not the prompt traffic. Your key is encrypted on
-        your device and the master password is not recoverable by us.
+        What we hold: not the provider key or prompt traffic. BYOK is available in the released CLI,
+        which stores provider credentials in the operating system credential store and calls the
+        provider directly. The VS Code extension is coming soon; Desktop and web do not expose
+        provider-key entry.
       </>
     ),
   },
@@ -113,9 +115,9 @@ const PROCESSING: readonly LedgerRow[] = [
       'Purpose: understanding which parts of the product get used. Basis: your consent, recorded per purpose. The gate fails closed: if your choice cannot be read, analytics stays off.',
   },
   {
-    label: 'Email address given on the early-access list',
+    label: 'Email address given for Enterprise access',
     value:
-      'Purpose: telling you when enterprise features open. Optionally, product updates: a separate box you can leave unticked or withdraw on its own. Basis: your consent, recorded before the address is stored.',
+      'Purpose: discussing contract-scoped Enterprise access and additional Enterprise capabilities with you. Optionally, product updates: a separate box you can leave unticked or withdraw on its own. Basis: your consent, recorded before the address is stored.',
   },
   {
     label: 'Server logs and an append-only security audit log',
@@ -206,7 +208,7 @@ const RIGHTS: readonly LedgerRow[] = [
   {
     label: 'Erasure',
     value:
-      'Request account deletion in the product. Erasure is scheduled 24 hours later and then performed. Two limits, stated plainly: you get no confirmation email, because the only email this product sends is support-escalation and scheduled-task notification: there is no account-lifecycle email path; and there is no self-serve way to cancel a scheduled deletion, so inside that 24-hour window you must reach us.',
+      'Request account deletion in the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email, because the only email this product sends is support-escalation and scheduled-task notification: there is no account-lifecycle email path. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins.',
   },
   {
     label: 'Withdraw consent',

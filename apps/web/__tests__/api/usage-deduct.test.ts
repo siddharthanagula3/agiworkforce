@@ -15,8 +15,10 @@ vi.mock('@/lib/rate-limit', () => ({
     },
 }));
 
-const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-auth-id' }));
-vi.mock('@clerk/nextjs/server', () => ({ auth: () => mockClerkAuth() }));
+const mockClerkAuth = vi.fn((..._args: unknown[]) => Promise.resolve({ userId: 'user-auth-id' }));
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockClerkAuth(...args),
+}));
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({

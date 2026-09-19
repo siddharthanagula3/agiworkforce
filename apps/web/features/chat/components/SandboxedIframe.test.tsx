@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { SandboxedIframe } from './SandboxedIframe';
+import { ARTIFACT_RENDER_FAILURE_MESSAGE, SandboxedIframe } from './SandboxedIframe';
 
 describe('SandboxedIframe', () => {
   afterEach(() => {
@@ -44,6 +44,7 @@ describe('SandboxedIframe', () => {
   it('ignores a render-error posted by any origin other than the sandbox', () => {
     vi.stubEnv('NEXT_PUBLIC_SANDBOX_ORIGIN', 'https://sandbox.agiworkforce.com');
     const onRenderError = vi.fn();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     const { container } = render(
       <SandboxedIframe
@@ -73,7 +74,9 @@ describe('SandboxedIframe', () => {
         source,
       }),
     );
-    expect(onRenderError).toHaveBeenCalledWith('genuine');
+    expect(onRenderError).toHaveBeenCalledWith(ARTIFACT_RENDER_FAILURE_MESSAGE);
+    expect(onRenderError).not.toHaveBeenCalledWith('genuine');
+    expect(console.error).toHaveBeenCalledWith('[artifact-preview] render failed', 'genuine');
   });
 
   it('refuses a sandbox origin that is the app’s own origin', () => {

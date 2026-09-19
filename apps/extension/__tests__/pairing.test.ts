@@ -129,6 +129,76 @@ describe('loadPairingState', () => {
   });
 });
 
+describe('a pairing is a credential of the signed-in account', () => {
+  function signedInAs(accountId: string, authIncarnation = 'sess_1'): void {
+    chromeMock.runtime.sendMessage.mockResolvedValue({
+      success: true,
+      token: 'cloud-token',
+      owner: { accountId, authIncarnation },
+    });
+  }
+
+  function seedPairedTo(accountId: string): void {
+    sessionStore['agi_pair_token'] = DESKTOP_PAIR_TOKEN;
+    sessionStore['agi_pairing_fingerprint'] = 'ab12';
+    sessionStore['agi_pair_account'] = accountId;
+    localStore['connectedToDesktop'] = true;
+  }
+
+  it('is released when the account signs out', async () => {
+    seedPairedTo('acct_1');
+    chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
+
+    const state = await loadPairingState();
+
+    expect(state.phase).toBe('idle');
+    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(sessionStore['agi_pair_account']).toBeUndefined();
+    expect(localStore['connectedToDesktop']).toBeUndefined();
+  });
+
+  it('never carries over to a different account', async () => {
+    seedPairedTo('acct_1');
+    signedInAs('acct_2');
+
+    expect((await loadPairingState()).phase).toBe('idle');
+    expect(sessionStore['agi_pair_token']).toBeUndefined();
+  });
+
+  it('survives a session refresh, which rotates the incarnation but not the account', async () => {
+    seedPairedTo('acct_1');
+    signedInAs('acct_1', 'sess_rotated');
+
+    expect((await loadPairingState()).phase).toBe('paired');
+    expect(sessionStore['agi_pair_token']).toBe(DESKTOP_PAIR_TOKEN);
+  });
+
+  it('is left alone when the background cannot say who is signed in', async () => {
+    seedPairedTo('acct_1');
+    chromeMock.runtime.sendMessage.mockRejectedValue(new Error('worker asleep'));
+
+    expect((await loadPairingState()).phase).toBe('paired');
+    expect(sessionStore['agi_pair_token']).toBe(DESKTOP_PAIR_TOKEN);
+  });
+
+  it('binds a pairing issued while signed in, so the next sign-out releases it', async () => {
+    signedInAs('acct_1');
+    const token = 'secret-token-' + 'a'.repeat(28);
+
+    await confirmPairing(token, 'ab12');
+
+    expect(sessionStore['agi_pair_account']).toBe('acct_1');
+  });
+
+  it('adopts a pairing that predates the binding rather than dropping it', async () => {
+    sessionStore['agi_pair_token'] = DESKTOP_PAIR_TOKEN;
+    signedInAs('acct_1');
+
+    expect((await loadPairingState()).phase).toBe('paired');
+    expect(sessionStore['agi_pair_account']).toBe('acct_1');
+  });
+});
+
 describe('confirmPairing', () => {
   it('stores token in session storage and transitions to paired', async () => {
     const token = 'secret-token-' + 'a'.repeat(28);

@@ -191,7 +191,7 @@ export function ResearchWindow() {
 
 const MEMORY_FACTS = [
   { text: 'Prefers answers in British English.', source: 'You · Settings' },
-  { text: 'The launch demo runs on Desktop in Local mode.', source: 'Chat · Launch plan' },
+  { text: 'The launch demo runs from the CLI in Local mode.', source: 'Chat · Launch plan' },
   {
     text: 'The weekly report goes out Friday at 4pm to the leadership list.',
     source: 'Chat · Reporting',

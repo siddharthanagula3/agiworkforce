@@ -4,14 +4,16 @@ title: Talk to AGI: voice mode and dictation
 path: /chat
 category: voice
 tags: voice, voice mode, dictation, microphone, speech to text, transcript, voices, marin, mute, microphone denied, speak
-updated: 2026-09-17
+updated: 2026-09-19
 scope: public
 ---
 
 ## Two different things
 
-**Dictation** turns speech into text in the composer. You review the transcript
-and press send, so nothing is sent until you send it.
+**Dictation** turns speech into text in the composer. On web, finishing a recording
+sends its audio to AGI's transcription service. You review the resulting text
+before sending it as a chat message. Cancel before finishing the recording to
+discard it without requesting transcription.
 
 **Voice mode** is a spoken conversation: AGI listens and answers out loud, and a
 transcript of both sides appears as you go.
@@ -20,16 +22,15 @@ transcript of both sides appears as you go.
 
 Turn it on in Settings, Voice: "Turn speech into composer text with the
 microphone button. Review the transcript before sending." The same page sets the
-language dictation transcribes into. With dictation off, the language control is
-disabled because there is nothing to transcribe.
+language dictation transcribes into. Turning dictation off disables its microphone
+button and language control, and discards any recording still in progress.
 
 ## Voice mode
 
 Start it with the **Start voice mode** button in the composer. Voice settings
 choose the spoken voice, how much intelligence a voice turn gets, and its
-language, which can be left on **Auto-detect**. Several voices are offered,
-including Marin, Meridian, Gleam, Quartz, Ripple, Vesper, Willow, Stone, Delta,
-Cinder, Beacon, Bossa and Tempo.
+language, which can be left on **Auto-detect**. Choose from the voices available
+in the voice settings.
 
 ## When voice will not start
 

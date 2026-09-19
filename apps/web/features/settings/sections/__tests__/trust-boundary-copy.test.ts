@@ -16,19 +16,22 @@ const capabilities = readFileSync(
 // user to believe this browser can keep a conversation on-device.
 describe('privacy copy names the surface each trust boundary applies to', () => {
   it('scopes Local Mode and BYOK to the surfaces that have them', () => {
-    expect(privacy).toMatch(/On Desktop, CLI and VS Code/);
+    expect(privacy).toMatch(/In the CLI, Local Mode conversations/);
+    expect(privacy).toMatch(/VS Code BYOK is coming soon/);
   });
 
   it('says plainly that hosted web has neither', () => {
-    expect(privacy).toMatch(/Hosted Web has neither mode/);
-    expect(privacy).toMatch(/everything you send here is a Managed Cloud request/);
+    expect(privacy).toMatch(/Hosted Web and Desktop have neither mode/);
+    expect(privacy).toMatch(/everything you send there is a Managed Cloud\s+request/);
   });
 
   it('says the same thing where a reader asks about their own provider keys', () => {
     // The BYOK settings page was deleted with the rest of the web BYOK surface,
     // so this section is where the question now gets its answer.
-    expect(capabilities).toMatch(/Desktop, CLI and VS Code/);
-    expect(capabilities).toMatch(/never stores a provider key of yours/);
+    expect(capabilities).toMatch(/available in the CLI/);
+    expect(capabilities).toMatch(/VS Code support is coming\s+soon/);
+    expect(capabilities).toMatch(/Hosted Web and Desktop are Managed Cloud only/);
+    expect(capabilities).toMatch(/never store a provider key of yours/);
     expect(capabilities).not.toMatch(/\/settings\/byok/);
   });
 

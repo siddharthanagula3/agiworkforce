@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
+import { withErrorHandler } from '@/lib/error-handler';
 import {
   PLAN_LABEL,
   effectivePlanTier,
@@ -55,7 +56,7 @@ async function resolvePlanTier(request: NextRequest): Promise<string> {
   }
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
 
@@ -95,6 +96,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+export const GET = withErrorHandler(handleGet);
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return (

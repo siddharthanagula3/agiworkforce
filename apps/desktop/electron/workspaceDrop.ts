@@ -9,7 +9,9 @@ const REFUSED_TITLE = 'That folder was not approved';
 
 async function directoriesAmong(paths: readonly string[]): Promise<string[]> {
   const directories: string[] = [];
-  for (const candidate of paths) {
+  // A touch drag and a multi-select drop both repeat a path, and one folder
+  // must not ask for the same grant twice in the same drop.
+  for (const candidate of new Set(paths)) {
     try {
       if ((await stat(candidate)).isDirectory()) directories.push(candidate);
     } catch {
@@ -32,6 +34,8 @@ export async function handleWorkspaceDrop(
   if (directories.length === 0 || !window || window.isDestroyed()) return;
 
   for (const directory of directories) {
+    // Each prompt awaits the user, and the window can be closed while it is up.
+    if (window.isDestroyed()) return;
     const { response } = await dialog.showMessageBox(window, {
       type: 'question',
       title: GRANT_TITLE,

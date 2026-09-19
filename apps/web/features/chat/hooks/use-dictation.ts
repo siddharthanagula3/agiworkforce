@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import {
   ANALYSER_FFT_SIZE,
@@ -65,8 +66,10 @@ export function useDictation({ onInsert, onSend }: UseDictationOptions): Dictati
   const reducedMotion = usePrefersReducedMotion();
   const captureStream = useVoiceInputStore((state) => state.captureStream);
   const runIdRef = useRef(0);
+  const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
 
   const start = useCallback(() => {
+    if (!useSettingsStore.getState().dictationEnabled) return;
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
     dispatch({ type: DICTATION_EVENT.start });
@@ -85,6 +88,7 @@ export function useDictation({ onInsert, onSend }: UseDictationOptions): Dictati
 
   const finish = useCallback(
     (intent: DictationIntent) => {
+      if (!useSettingsStore.getState().dictationEnabled) return;
       const runId = runIdRef.current;
       dispatch({ type: DICTATION_EVENT.stop, intent });
       setAnnouncement(ANNOUNCEMENT.stopped);
@@ -93,6 +97,7 @@ export function useDictation({ onInsert, onSend }: UseDictationOptions): Dictati
         .stopListening()
         .then(() => {
           if (runIdRef.current !== runId) return;
+          if (!useSettingsStore.getState().dictationEnabled) return;
           const store = useVoiceInputStore.getState();
           const { transcript, error, mode } = store;
           store.clearTranscript();
@@ -130,6 +135,10 @@ export function useDictation({ onInsert, onSend }: UseDictationOptions): Dictati
   }, []);
 
   const retry = start;
+
+  useEffect(() => {
+    if (!dictationEnabled && isDictationActive(machine.status)) cancel();
+  }, [dictationEnabled, machine.status, cancel]);
 
   useEffect(
     () => () => {

@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-09-19T15:42:30Z",
+  "regression": "Default temporary preference persisted but composer showed off; explicit false could not override default true. Both regression tests failed before fix.",
+  "verification": [
+    "48 tests passed across4 suites",
+    "27 creation-hook tests passed after adding inherited-default and captured-false regressions",
+    "Focused ESLint passed",
+    "Browser default true shows temporary banner and checked menu; explicit off clears both; fresh New chat inherits true again; original default false restored",
+    "Release dependency pass revalidated the temporary-chat store, composer, page and conversation hook within 191 web test files and 1780 passing tests"
+  ],
+  "sourceHashes": {
+    "apps/web/lib/temporary-chat-policy.ts": "48038f336cf28525d2e1ba960959bbb8d60306ea70be2f901146c9c584abb94b",
+    "apps/web/shared/stores/web-chat-store.ts": "cb074611d4cacdde2fde3baf97d4ad8feda0338746e8b88ca768ed812126e665",
+    "apps/web/features/chat/pages/WebChatPage.tsx": "9405c5962073c0e36d8aa048f1fbcd44fbcf26be6a1ea68ef2b7460f25a527e3",
+    "apps/web/features/chat/components/Composer/ChatComposerNew.tsx": "b3e0924419296b08eec5103c1813dd2a2751c7d5193100d5c58d02cd5f66d366",
+    "apps/web/lib/hooks/useConversations.ts": "44bee75094e7a6d6923a5764a312910f5d644d9dd631698bddf54dd021d8e9c0"
+  },
+  "limitations": [
+    "No provider calls for privacy verification",
+    "Web typecheck found concurrent connector audit organizationId binding errors; minimal binding correction applied, rerun pending"
+  ]
+}

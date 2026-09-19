@@ -6,10 +6,16 @@ vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/e2b/runtime', () => ({
+  killE2BSession: vi.fn(async () => undefined),
   getE2BExecutor: vi.fn(),
   revokeE2BSessionCredentials: vi.fn(),
 }));
 vi.mock('@/lib/e2b/session-store', () => ({
+  CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
+  deleteE2BSession: vi.fn(async () => undefined),
+  getE2BSession: vi.fn(async () => null),
+  saveE2BSession: vi.fn(async () => undefined),
+  withUserSandboxLock: vi.fn(async (_userId: string, fn: () => Promise<unknown>) => fn()),
   MANAGED_CLOUD_E2B_TENANT_ID: 'managed-cloud',
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
 }));

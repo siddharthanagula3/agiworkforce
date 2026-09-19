@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { HostBridgeContext, type ChatHostBridge } from '../../lib/hostBridge';
@@ -145,7 +144,8 @@ describe('MessageGeneratedFiles', () => {
     fireEvent.click(screen.getByRole('button', { name: /^preview$/i }));
 
     expect(await screen.findByText(/preview couldn.t load/i)).toBeDefined();
-    expect(screen.getByText(/HTTP 401/)).toBeDefined();
+    expect(screen.getByText(/session has expired/i)).toBeDefined();
+    expect(screen.queryByText(/HTTP 401/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /retry preview/i }));
     await waitFor(() => expect(fetchCloudFile).toHaveBeenCalledTimes(2));
   });
@@ -197,7 +197,8 @@ describe('MessageGeneratedFiles', () => {
     fireEvent.click(screen.getByRole('button', { name: /download generated file/i }));
 
     const error = await screen.findByTestId('generated-file-download-error');
-    expect(error.textContent).toContain('HTTP 401');
+    expect(error.textContent).toContain('Your session has expired');
+    expect(error.textContent).not.toContain('HTTP 401');
   });
 });
 
@@ -383,6 +384,7 @@ describe('download all', () => {
     await waitFor(() => expect(fetchCloudFile).toHaveBeenCalledTimes(2));
     const errors = await screen.findAllByTestId('generated-file-download-error');
     expect(errors).toHaveLength(1);
-    expect(errors[0]?.textContent).toContain('HTTP 500');
+    expect(errors[0]?.textContent).toContain('Something went wrong on our side');
+    expect(errors[0]?.textContent).not.toContain('HTTP 500');
   });
 });

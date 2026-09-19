@@ -33,7 +33,7 @@ async function readMembershipAccess(
   const [row] = await getNeonDb().query<{ role: OrganizationRole | null; permissions: unknown }>(
     `select (select role
                from public.organization_members
-              where organization_id = $1 and user_id = $2) as role,
+              where organization_id = $1 and user_id = $2 and status = 'active') as role,
             public.organization_member_permissions($1::uuid, $2) as permissions`,
     [organizationId, userId],
   );
@@ -114,7 +114,7 @@ export async function resolveOrganizationAccess(
   const [membership] = await getNeonDb().query<{ role: OrganizationRole }>(
     `select role
        from public.organization_members
-      where organization_id = $1 and user_id = $2
+      where organization_id = $1 and user_id = $2 and status = 'active'
       limit 1`,
     [organizationId, userId],
   );

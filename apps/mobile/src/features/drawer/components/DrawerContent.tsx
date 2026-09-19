@@ -40,6 +40,14 @@ import {
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
+import {
+  isDrawerOpen,
+  ShellCapabilityShortcuts,
+  useDrawerDismiss,
+  useDrawerScrollMemory,
+  type ShellShortcutRoute,
+} from '@/src/features/shell';
+import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 
 type RoutePath =
   | '/(app)/chats'
@@ -57,7 +65,8 @@ type RoutePath =
   | '/(app)/about'
   | '/(app)/profile'
   | '/(app)/projects/[id]'
-  | '/(app)/chat/[id]';
+  | '/(app)/chat/[id]'
+  | ShellShortcutRoute;
 
 interface PrimaryItem {
   key: 'chats' | 'projects' | 'library' | 'reports' | 'skills' | 'schedules' | 'remote' | 'tasks';
@@ -264,9 +273,15 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   // a plan that includes AGI Work. The server is still authoritative.
   const showAgiWork = appMode === 'cloud' && canUseBillingPlanCapability(tier, 'agi_work');
 
+  const { usesPersistentDrawer } = useTabletLayout();
+  const drawerOpen = isDrawerOpen(props.state);
+
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
   }, [props.navigation]);
+
+  useDrawerDismiss(drawerOpen && !usesPersistentDrawer, closeDrawer);
+  const scrollMemory = useDrawerScrollMemory(drawerOpen);
 
   const navigate = useCallback(
     (route: RoutePath, params?: Record<string, string>) => {
@@ -395,7 +410,12 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           />
         </View>
 
+        <ShellCapabilityShortcuts onOpen={(route) => navigate(route)} />
+
         <ScrollView
+          ref={scrollMemory.ref}
+          onScroll={scrollMemory.onScroll}
+          scrollEventThrottle={scrollMemory.scrollEventThrottle}
           style={{ flex: 1, marginTop: 14 }}
           contentContainerStyle={{ paddingBottom: 96 }}
           showsVerticalScrollIndicator={false}

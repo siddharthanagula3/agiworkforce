@@ -159,7 +159,31 @@ describe('active workspace persistence', () => {
 describe('active workspace persistence, warm Redis cache', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('resolves the active organization from Postgres once across two consecutive calls', async () => {
+  it.each([true, false])(
+    'rejects a revoked cached membership with explicit selector %s',
+    async (explicit) => {
+      const h = harness();
+      mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeCacheRedis()));
+      await persistProvenActiveWorkspaceSelection(h.db, 'user-1', ORGANIZATION_ID);
+      h.query.mockResolvedValue([]);
+      const request = explicit
+        ? { headers: new Headers({ 'x-agi-organization-id': ORGANIZATION_ID }) }
+        : undefined;
+      if (explicit) {
+        await expect(resolveActiveOrganizationId(h.db, 'user-1', request)).rejects.toMatchObject({
+          statusCode: 403,
+        });
+      } else {
+        await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBeNull();
+      }
+      expect(h.query).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
+        ORGANIZATION_ID,
+        'user-1',
+      ]);
+    },
+  );
+
+  it('caches selection but re-proves membership on consecutive calls', async () => {
     const h = harness();
     h.query.mockResolvedValue([{ organization_id: ORGANIZATION_ID }]);
     mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeCacheRedis()));
@@ -167,19 +191,22 @@ describe('active workspace persistence, warm Redis cache', () => {
     await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
     await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
 
-    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(h.query).toHaveBeenCalledTimes(2);
   });
 
-  it('refreshes the cache immediately when the selection is written', async () => {
+  it('refreshes selection immediately and re-proves membership before reuse', async () => {
     const h = harness();
-    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]);
+    h.query.mockResolvedValue([{ organization_id: ORGANIZATION_ID }]);
     mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeCacheRedis()));
 
     await persistActiveWorkspaceSelection(h.db, 'user-1', ORGANIZATION_ID);
     h.query.mockClear();
 
     await expect(resolveActiveOrganizationId(h.db, 'user-1')).resolves.toBe(ORGANIZATION_ID);
-    expect(h.query).not.toHaveBeenCalled();
+    expect(h.query).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
+      ORGANIZATION_ID,
+      'user-1',
+    ]);
   });
 });
 

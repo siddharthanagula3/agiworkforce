@@ -148,10 +148,16 @@ DNS-resolution SSRF validation (`assertResolvedPublicHostname`).
 
 ---
 
-### 1.3 Desktop (Local), the only place real OAuth scopes are requested
+### 1.3 Retained Tauri implementation, not a public Desktop capability
 
-User's **own** OAuth client id/secret, PKCE, tokens encrypted with a
-machine-derived key into local SQLite.
+The files below remain in the retained Tauri source tree and are not reachable
+from the public Electron Desktop selected by D-2026-09-15-04. The public Desktop
+is managed-cloud-only and exposes neither Local/BYOK inference nor these OAuth
+connector flows. This inventory records the security properties of retained
+code; it must not be used as evidence of a shipped Desktop feature.
+
+The retained implementation uses the user's **own** OAuth client id/secret,
+PKCE, and tokens encrypted with a machine-derived key into local SQLite.
 
 | Provider         | File                                                                                 | Scopes requested                                                     |
 | ---------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |

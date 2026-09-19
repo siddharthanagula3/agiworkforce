@@ -210,11 +210,9 @@ export {
   DEFAULT_CAPABILITY_HEALTH_CONFIG,
   honouredCapabilitySnapshot,
   resolveCapabilityHealthConfig,
-  resolveServiceNetworkState,
   unhonouredCapabilitiesByRoute,
   CAPABILITY_HEALTH_MISS_THRESHOLD_ENV,
   CAPABILITY_HEALTH_WINDOW_ENV,
-  SERVICE_NETWORK_STATES,
 } from './capability-health';
 export type {
   CapabilityHealthByRoute,
@@ -226,9 +224,6 @@ export type {
   CapabilityHealthStoreOptions,
   CapabilityObservationEvent,
   ObservedCapability,
-  ServiceNetworkState,
-  ServiceNetworkStateInput,
-  ServiceNetworkStatus,
 } from './capability-health';
 export type {
   AutoCapabilityEnvelope,

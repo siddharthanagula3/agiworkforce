@@ -17,7 +17,8 @@ const routerState = vi.hoisted(() => ({
 
 const shellState = vi.hoisted(() => ({
   auth: {
-    user: { name: 'Sid', email: 'sid@example.com' } as {
+    user: { id: 'user-1', name: 'Sid', email: 'sid@example.com' } as {
+      id: string;
       name: string;
       email: string;
     } | null,
@@ -25,6 +26,12 @@ const shellState = vi.hoisted(() => ({
     initialized: true,
   },
   billing: {
+    user: null as {
+      id: string;
+      name?: string;
+      email?: string;
+      profile?: { display_name?: string | null };
+    } | null,
     subscription: { tier: 'free' } as { tier: string } | null,
     isLoading: false,
     initialized: true,
@@ -36,7 +43,20 @@ const shellState = vi.hoisted(() => ({
   fetchConversations: vi.fn(),
 }));
 
+const providerState = vi.hoisted(() => ({
+  user: null as {
+    id: string;
+    fullName: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    username: string | null;
+    email: string | null;
+    emails: string[];
+  } | null,
+}));
+
 const settingsModalState = vi.hoisted(() => ({ openSettings: vi.fn() }));
+const upgradeFlowState = vi.hoisted(() => ({ openUpgradeDialog: vi.fn() }));
 
 /** Stable stub for the shared `useConfirmAction` destructive-confirm hook. */
 const confirmStub = vi.hoisted(() => ({
@@ -62,6 +82,12 @@ vi.mock('next/navigation', () => ({
   usePathname: () => routerState.pathname,
 }));
 
+vi.mock('@/lib/identity/client', () => ({
+  useSignOut: () => vi.fn(),
+  useCurrentUser: () => ({ user: providerState.user }),
+  useSession: () => ({ isLoaded: true, isSignedIn: true, userId: 'user-1' }),
+}));
+
 vi.mock('@clerk/nextjs', () => ({
   useClerk: () => ({ signOut: vi.fn() }),
   // The rail asks whether the signed-in user is an admin before offering the
@@ -74,7 +100,11 @@ vi.mock('@clerk/nextjs', () => ({
 // stand up. Stubbed so the menu can be asserted on without dragging the whole
 // workspace stack into a layout test.
 vi.mock('@/features/workspaces/components/WorkspaceMenuItems', () => ({
-  WorkspaceMenuItems: () => null,
+  WorkspaceMenuItems: ({ onManage }: { onManage: () => void }) => (
+    <button type="button" onClick={onManage}>
+      Manage workspace
+    </button>
+  ),
 }));
 
 // The account menu's Upgrade item drives the same upgrade flow as
@@ -82,14 +112,18 @@ vi.mock('@/features/workspaces/components/WorkspaceMenuItems', () => ({
 // this shared hook. Stubbed for the same reason WorkspaceMenuItems is: this
 // is a layout test, not a billing-flow one.
 vi.mock('@features/billing/hooks/use-upgrade-plan-flow', () => ({
-  useUpgradePlanFlow: () => ({ openUpgradeDialog: vi.fn(), upgradeDialogs: null }),
+  useUpgradePlanFlow: () => ({
+    openUpgradeDialog: upgradeFlowState.openUpgradeDialog,
+    upgradeDialogs: null,
+  }),
 }));
 
 // Same reasoning as the upgrade flow above, the shortcuts reference dialog
 // pulls in the settings store's shortcut-preference wiring, which this
 // layout test has no reason to stand up.
 vi.mock('@/features/chat/components/dialogs/KeyboardShortcutsDialog', () => ({
-  KeyboardShortcutsDialog: () => null,
+  KeyboardShortcutsDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="keyboard-shortcuts-dialog" /> : null,
 }));
 
 vi.mock('@/features/chat/components/dialogs/GlobalSearchDialog', () => ({
@@ -101,6 +135,7 @@ vi.mock('@agiworkforce/ui', async () => {
   const React = await import('react');
   return {
     MOBILE_NAV_DRAWER_WIDTH: 280,
+    OPEN_SEARCH_SHORTCUT: { key: 'F', ctrl: true, meta: true, shift: true },
     Sidebar: (props: {
       collapsed?: boolean;
       isLoading?: boolean;
@@ -214,7 +249,22 @@ vi.mock('@agiworkforce/ui', async () => {
     // its own policies. `asChild` is accepted and ignored; the child is already
     // the element we want in the tree.
     DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-    DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    DropdownMenuItem: ({
+      asChild,
+      children,
+      onClick,
+    }: {
+      asChild?: boolean;
+      children?: React.ReactNode;
+      onClick?: () => void;
+    }) =>
+      asChild ? (
+        <>{children}</>
+      ) : (
+        <button type="button" onClick={onClick}>
+          {children}
+        </button>
+      ),
     DropdownMenuLabel: () => null,
     DropdownMenuSeparator: () => null,
     // The collapsed rail's account trigger wraps itself in a Tooltip so a
@@ -309,26 +359,35 @@ const mediaState = vi.hoisted(() => ({
 
 function setNarrowViewport(narrow: boolean) {
   mediaState.matches = narrow;
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: narrow ? 640 : 1280,
+  });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
   for (const listener of mediaState.listeners) listener({ matches: narrow });
+  window.dispatchEvent(new Event('resize'));
 }
 
 beforeEach(() => {
   routerState.push = vi.fn();
   routerState.pathname = '/chat/projects';
-  mediaState.matches = false;
   mediaState.listeners.clear();
-  shellState.auth.user = { name: 'Sid', email: 'sid@example.com' };
+  setNarrowViewport(false);
+  shellState.auth.user = { id: 'user-1', name: 'Sid', email: 'sid@example.com' };
   shellState.auth.isLoading = false;
   shellState.auth.initialized = true;
   shellState.billing.subscription = { tier: 'free' };
+  shellState.billing.user = null;
   shellState.billing.isLoading = false;
   shellState.billing.initialized = true;
   shellState.billing.error = null;
   shellState.billing.unauthenticated = false;
+  providerState.user = null;
   shellState.conversationsLoading = false;
   shellState.conversationsListError = null;
   shellState.fetchConversations = vi.fn();
   settingsModalState.openSettings = vi.fn();
+  upgradeFlowState.openUpgradeDialog = vi.fn();
   menuEscape.keepOpenForMenuEscape.mockReset();
   menuEscape.handler = null;
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -352,6 +411,34 @@ beforeEach(() => {
 const LIST_FAILURE = 'Too many requests. Please wait before trying again.';
 
 describe('WebAppShell responsive navigation', () => {
+  it('settles the account footer from canonical profile and provider email', () => {
+    shellState.auth.user = { id: 'user-1', name: 'User', email: '' };
+    shellState.billing.user = {
+      id: 'user-1',
+      name: 'User',
+      profile: { display_name: 'demo' },
+    };
+    providerState.user = {
+      id: 'user-1',
+      fullName: 'Provider Name',
+      firstName: 'Provider',
+      lastName: 'Name',
+      username: null,
+      email: 'signed-in@example.com',
+      emails: ['signed-in@example.com'],
+    };
+
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Account menu for Demo' })).toBeInTheDocument();
+    expect(screen.getByText('signed-in@example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Account menu for User' })).toBeNull();
+  });
+
   it('renders honest loading chrome while account and conversations hydrate', () => {
     shellState.auth.user = null;
     shellState.auth.isLoading = true;
@@ -453,7 +540,7 @@ describe('WebAppShell responsive navigation', () => {
     expect(screen.queryByRole('button', { name: 'Open navigation' })).toBeNull();
 
     cleanup();
-    mediaState.matches = true;
+    setNarrowViewport(true);
 
     render(
       <WebAppShell rail={false}>
@@ -478,7 +565,7 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('narrow: hides the persistent sidebar behind an Open navigation control', () => {
-    mediaState.matches = true;
+    setNarrowViewport(true);
     render(
       <WebAppShell>
         <main>content</main>
@@ -490,13 +577,14 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('narrow: opens a modal navigation drawer and closes it with Escape, restoring focus', () => {
-    mediaState.matches = true;
+    setNarrowViewport(true);
     render(
       <WebAppShell>
         <main>content</main>
       </WebAppShell>,
     );
     const trigger = screen.getByRole('button', { name: 'Open navigation' });
+    trigger.focus();
     fireEvent.click(trigger);
 
     const dialog = screen.getByRole('dialog', { name: 'Navigation' });
@@ -511,7 +599,7 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('narrow: keeps the drawer open when a row-action menu claims the Escape', () => {
-    mediaState.matches = true;
+    setNarrowViewport(true);
     menuEscape.keepOpenForMenuEscape.mockImplementation((event) => event.preventDefault());
     render(
       <WebAppShell>
@@ -529,7 +617,7 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('narrow: the next Escape closes the drawer once no menu claims it', () => {
-    mediaState.matches = true;
+    setNarrowViewport(true);
     menuEscape.keepOpenForMenuEscape.mockImplementation((event) => event.preventDefault());
     render(
       <WebAppShell>
@@ -548,7 +636,7 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('narrow: takes the page behind the open drawer out of the tab order', () => {
-    mediaState.matches = true;
+    setNarrowViewport(true);
     render(
       <WebAppShell>
         <main>
@@ -568,7 +656,7 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('narrow: closes the drawer when the backdrop is clicked', () => {
-    mediaState.matches = true;
+    setNarrowViewport(true);
     render(
       <WebAppShell>
         <main>content</main>
@@ -580,7 +668,7 @@ describe('WebAppShell responsive navigation', () => {
   });
 
   it('narrow: closes the drawer after navigation (pathname change)', () => {
-    mediaState.matches = true;
+    setNarrowViewport(true);
     const { rerender } = render(
       <WebAppShell>
         <main>content</main>
@@ -596,6 +684,70 @@ describe('WebAppShell responsive navigation', () => {
       </WebAppShell>,
     );
     expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+  });
+
+  it.each([
+    ['common:settings', 'general'],
+    ['Manage workspace', 'team'],
+  ])('narrow: closes navigation before opening %s in place', (label, section) => {
+    setNarrowViewport(true);
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    const trigger = screen.getByRole('button', { name: 'Open navigation' });
+    fireEvent.click(trigger);
+
+    fireEvent.click(screen.getByRole('button', { name: label }));
+
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+    expect(settingsModalState.openSettings).toHaveBeenCalledWith(section);
+    expect(document.activeElement).not.toBe(trigger);
+  });
+
+  it('narrow: closes navigation before opening feedback', () => {
+    setNarrowViewport(true);
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:navSendFeedback' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+    expect(document.body.textContent).toContain('Share feedback');
+  });
+
+  it('narrow: closes navigation before opening keyboard shortcuts', () => {
+    setNarrowViewport(true);
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:navKeyboardShortcuts /' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+    expect(screen.getByTestId('keyboard-shortcuts-dialog')).toBeInTheDocument();
+  });
+
+  it('narrow: closes navigation before opening the upgrade flow', () => {
+    setNarrowViewport(true);
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'common:navUpgrade' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+    expect(upgradeFlowState.openUpgradeDialog).toHaveBeenCalledOnce();
   });
 
   /**

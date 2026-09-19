@@ -359,7 +359,7 @@ export function WorkspaceAuditStreaming() {
             color: 'var(--settings-destructive-text)',
           }}
         >
-          {mutationError.message}
+          {toUserMessage(mutationError, 'Could not update audit streaming. Try again.')}
         </p>
       ) : null}
 

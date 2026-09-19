@@ -48,6 +48,7 @@ export async function resolveOrgMembership(
     `select organization_id, role
        from public.organization_members
       where organization_id = $1 and user_id = $2
+        and status = 'active'
       limit 1`,
     [organizationId, userId],
   );

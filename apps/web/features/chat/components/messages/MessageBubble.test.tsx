@@ -288,6 +288,32 @@ describe('MessageBubble', () => {
       expect(screen.queryByRole('link', { name: /https:\/\/example\.com\/research/ })).toBeNull();
     });
 
+    it('renders the previous chats that informed an assistant turn', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'A recalled answer.',
+            metadata: {
+              pastChatSources: [
+                {
+                  id: 'past_chat:web_messages/message-1',
+                  conversationId: 'conversation-1',
+                  messageId: 'message-1',
+                  title: 'Sailing notes',
+                  createdAt: '2026-09-08T10:00:00.000Z',
+                },
+              ],
+            },
+          })}
+        />,
+      );
+
+      expect(
+        screen.getByRole('link', { name: /Open the source conversation Sailing notes/ }),
+      ).toHaveAttribute('href', '/chat/conversation-1?highlightMessage=message-1');
+    });
+
     it('uses the image provider progress card without a duplicate Thinking indicator', () => {
       render(
         <MessageBubble

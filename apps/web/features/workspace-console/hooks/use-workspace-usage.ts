@@ -2,45 +2,12 @@
 
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import { httpStatusMessage } from '@/lib/user-error-message';
 
-export interface UsageTotals {
-  requests: number;
-  inputTokens: number;
-  outputTokens: number;
-  costCents: number;
-}
+import type { OrganizationUsageResponse } from '@/app/api/settings/organization/usage-analytics/route';
+export type { UsageBreakdownRow, UsageDayRow } from '@/lib/services/organization-usage-service';
 
-export interface UsageBreakdownRow {
-  key: string;
-  requests: number;
-  inputTokens: number;
-  outputTokens: number;
-  costCents: number;
-}
-
-export interface UsageDayRow {
-  day: string;
-  requests: number;
-  costCents: number;
-}
-
-export interface WorkspaceUsage {
-  organizationId: string;
-  from: string;
-  to: string;
-  totals: UsageTotals;
-  byMember: UsageBreakdownRow[];
-  byModel: UsageBreakdownRow[];
-  byProvider: UsageBreakdownRow[];
-  byWorkload: UsageBreakdownRow[];
-  byProject: UsageBreakdownRow[];
-  daily: UsageDayRow[];
-}
-
-export interface WorkspaceUsageResult {
-  currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
-  usage: WorkspaceUsage;
-}
+type WorkspaceUsageResult = OrganizationUsageResponse;
 
 export const WORKSPACE_USAGE_QUERY_KEY = ['workspace', 'usage-analytics'] as const;
 
@@ -51,7 +18,7 @@ export function useWorkspaceUsage(
     queryKey: [...WORKSPACE_USAGE_QUERY_KEY, days],
     queryFn: async () => {
       const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
+      if (!token) throw Object.assign(new Error(httpStatusMessage(401)!), { status: 401 });
 
       const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
       const res = await fetch(
@@ -59,7 +26,14 @@ export function useWorkspaceUsage(
         { headers: { Authorization: `Bearer ${token}` } },
       );
       if (res.status === 403) return null;
-      if (!res.ok) throw new Error(`Failed to load workspace usage (${res.status})`);
+      if (!res.ok) {
+        throw Object.assign(
+          new Error(
+            httpStatusMessage(res.status) ?? 'We could not load workspace usage. Try again.',
+          ),
+          { status: res.status },
+        );
+      }
       return (await res.json()) as WorkspaceUsageResult;
     },
     staleTime: 60 * 1000,

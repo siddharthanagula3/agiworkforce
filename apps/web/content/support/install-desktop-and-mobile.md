@@ -5,7 +5,7 @@ path: /download
 category: surfaces
 tags: install, download, desktop app, macos, windows, linux, dmg, installer, mobile app, ios, android, release notes, signature, notarized, get notified
 platforms: desktop, mobile, macos, windows, linux, ios, android
-updated: 2026-09-17
+updated: 2026-09-19
 scope: public
 ---
 
@@ -38,9 +38,10 @@ running it; the download page shows a verification session end to end.
 
 ## What desktop adds once it ships
 
-Desktop is the surface for Local mode through Ollama, LM Studio, llama.cpp and
-vLLM, for BYOK provider keys encrypted at rest behind a master password, and for
-offline operation with no managed-cloud dependency.
+Desktop adds a dedicated managed-cloud account window, approved-folder workflows,
+one-step computer-use approvals on supported macOS builds, and the optional Chrome
+native bridge. It does not accept provider keys or run local models. Local and BYOK
+are available through the released CLI.
 
 ## Mobile
 
@@ -50,5 +51,7 @@ surface, Library, projects and settings all work at phone width.
 
 ## In the meantime
 
-Everything in this help centre that is not marked desktop-only or CLI-only works
-in the web app today, on any modern browser, signed in with the same account.
+Use the web app while waiting for another client. Check each guide for its
+platform and setup requirements: access can depend on your plan, workspace
+permissions and browser capabilities. The [download page](https://agiworkforce.com/download) is the
+place to check current client release availability.

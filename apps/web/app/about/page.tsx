@@ -50,7 +50,7 @@ const PRINCIPLES = [
   },
   {
     title: 'Your keys, your bill, no markup.',
-    body: 'Bring your own provider keys on Desktop, CLI, and VS Code. Traffic goes straight to your provider; the keys stay encrypted on your machine. We do not sit in the middle of your spend.',
+    body: 'Bring your own provider keys from the released CLI today; VS Code support is coming soon. Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, and Desktop remains managed-cloud only.',
   },
   {
     title: 'One contract layer, six surfaces at different stages.',

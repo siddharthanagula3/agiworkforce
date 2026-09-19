@@ -1,3 +1,8 @@
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const ts = require('typescript');
+
 /**
  * Sinks whose argument is rendered to a person, so a raw exception message
  * reaching one of them puts the browser's own wording on screen: "Failed to
@@ -21,18 +26,63 @@ const SINK_ALTERNATION = USER_VISIBLE_SINKS.map((s) => s.replace('.', '\\.')).jo
  * caught value's own message straight to a person. `toUserMessage` exists for
  * this; the check is that it was used.
  */
-const RAW_TO_SINK = new RegExp(
-  `(?:${SINK_ALTERNATION})\\(\\s*[^)]*?\\binstanceof Error\\s*\\?\\s*\\w+\\.message`,
-);
+const RAW_TO_SINK = new RegExp(`^(?:${SINK_ALTERNATION})$`);
+
+function callName(expression, sourceFile) {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (ts.isPropertyAccessExpression(expression)) return expression.getText(sourceFile);
+  return '';
+}
+
+function isUserVisibleSink(expression, sourceFile) {
+  const name = callName(expression, sourceFile);
+  return RAW_TO_SINK.test(name) || /^set[A-Z][A-Za-z0-9]*$/.test(name);
+}
+
+function containsUnsanitizedMessage(node, sourceFile) {
+  if (
+    ts.isCallExpression(node) &&
+    /^(?:toUserMessage|toUserMessageWithStatus)$/.test(callName(node.expression, sourceFile))
+  ) {
+    return false;
+  }
+  if (ts.isPropertyAccessExpression(node) && node.name.text === 'message') {
+    const owner = node.expression.getText(sourceFile).split('.').at(-1) ?? '';
+    if (/^(?:e|err|error|caught|cause|reason)$/i.test(owner) || /Error$/.test(owner)) return true;
+  }
+  return node
+    .getChildren(sourceFile)
+    .some((child) => containsUnsanitizedMessage(child, sourceFile));
+}
 
 export function findRawErrorSinks(source, file) {
+  const sourceFile = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
   const results = [];
-  source.split('\n').forEach((line, index) => {
-    if (line.trimStart().startsWith('//')) return;
-    if (RAW_TO_SINK.test(line)) {
-      results.push({ file, line: index + 1, text: line.trim().slice(0, 120) });
+
+  function visit(node) {
+    if (ts.isCallExpression(node) && isUserVisibleSink(node.expression, sourceFile)) {
+      const rawArgument = node.arguments.find((argument) =>
+        containsUnsanitizedMessage(argument, sourceFile),
+      );
+      if (rawArgument) {
+        const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+        results.push({
+          file,
+          line,
+          text: node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 120),
+        });
+      }
     }
-  });
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
   return results;
 }
 

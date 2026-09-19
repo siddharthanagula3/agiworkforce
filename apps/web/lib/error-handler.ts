@@ -35,6 +35,7 @@ import {
   runWithTraceContext,
   type TraceContext,
 } from './observability/trace-context';
+import { applySensitiveNoStore } from './private-cache-policy';
 
 const HTTP_SERVER_SPAN = 'http.server';
 const HTTP_SERVER_SPAN_KIND: SpanKind = 'server';
@@ -322,6 +323,7 @@ export function withErrorHandler<T extends unknown[]>(
         serverSpan.end();
 
         try {
+          applySensitiveNoStore(args[0], response);
           response.headers.set('x-request-id', requestId);
           response.headers.set('traceparent', formatTraceparent(context));
           response.headers.set(API_VERSION_RESPONSE_HEADER, API_CONTRACT_VERSION);

@@ -7,6 +7,7 @@ import type {
   NotebookCellOutput,
 } from '@agiworkforce/types';
 import type { NotebookApi } from '../services/notebook-api';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export type NotebookCellStatus = 'idle' | 'running' | 'ok' | 'error';
 
@@ -159,7 +160,7 @@ export function useNotebookCells({
               ? {
                   ...cell,
                   status: 'error',
-                  error: error instanceof Error ? error.message : 'Cell execution failed',
+                  error: toUserMessage(error, 'Cell execution failed'),
                 }
               : cell,
           ),
@@ -223,7 +224,7 @@ export function useNotebookCells({
       setCells((current) =>
         current.map((cell) => (cell.status === 'running' ? { ...cell, status: 'idle' } : cell)),
       );
-      setRunAllError(error instanceof Error ? error.message : 'Run all failed');
+      setRunAllError(toUserMessage(error, 'Could not run the notebook. Try again.'));
     }
   }, [api, onSession, runningCellId, sessionId]);
 

@@ -580,7 +580,7 @@ mod tests {
         .unwrap();
         std::fs::create_dir_all(dir.path().join("packages/alpha")).unwrap();
         std::fs::write(
-            dir.path().join("packages/alpha/package.json"),
+            dir.path().join("packages/alpha").join("package.json"),
             r#"{"name":"alpha"}"#,
         )
         .unwrap();

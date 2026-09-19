@@ -65,8 +65,8 @@ describe('landing, the Desktop surface card', () => {
   /**
    * Since D-2026-09-15-04 the desktop is the Electron app for macOS
    * (apps/desktop/electron): the hosted app in a shell, plus approved folders,
-   * local models already running on the Mac and computer use. The card must
-   * describe that app, not the Tauri build it replaced.
+   * computer use, and the Chrome bridge. The card must describe that app, not
+   * the retained internal Tauri build.
    */
   it('describes the Electron app rather than the Tauri build', () => {
     const source = collapsed(LANDING);

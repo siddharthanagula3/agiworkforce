@@ -11,6 +11,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireSharingManager, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { shareConnector, unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 export const runtime = 'nodejs';
 
@@ -45,6 +46,14 @@ async function handleShare(
     actorUserId: userId,
   });
 
+  await recordAuditEvent({
+    userId,
+    organizationId: membership.organizationId,
+    eventType: 'organization_share_granted',
+    request,
+    detail: { resourceType: 'connector', resourceId: parsedConnectorId },
+  });
+
   return NextResponse.json({ sharedConnector: shared });
 }
 
@@ -70,6 +79,14 @@ async function handleUnshare(
   }
 
   await evictOrgSharedConnectorCaches(membership.organizationId, parsedConnectorId);
+
+  await recordAuditEvent({
+    userId,
+    organizationId: membership.organizationId,
+    eventType: 'organization_share_revoked',
+    request,
+    detail: { resourceType: 'connector', resourceId: parsedConnectorId },
+  });
 
   return NextResponse.json({ success: true });
 }

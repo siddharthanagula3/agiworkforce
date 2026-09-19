@@ -81,7 +81,8 @@ function row(overrides: Record<string, unknown> = {}) {
 
 describe('reading a device out of the registry', () => {
   it('derives presence and capabilities from the registered row', async () => {
-    const device = await readRegisteredDevice(database([row()]), {
+    const db = database([row()]);
+    const device = await readRegisteredDevice(db, {
       userId: 'user-1',
       surface: 'desktop',
       installId: INSTALL_ID,
@@ -95,6 +96,9 @@ describe('reading a device out of the registry', () => {
       authenticated: true,
     });
     expect(device?.capabilities.computerUse).toBe(true);
+    expect(vi.mocked(db.query).mock.calls[0]?.[0]).toContain(
+      't.family_id::text = r.credential_family_id',
+    );
   });
 
   it('reads a device whose credential family was revoked as unauthenticated', async () => {

@@ -7,11 +7,13 @@ import { after, test } from 'node:test';
 
 import {
   ALLOWLIST_PATH,
+  APPLIED_STATE_PATH,
   MIGRATIONS_DIR,
   REPO_ROOT,
   SCAN_ROOT,
   findMigrationDependencyReferences,
   loadAllowlist,
+  loadAppliedThrough,
   loadDraftMigrations,
   parseDraftMigration,
 } from './check-migration-dependencies.mjs';
@@ -38,23 +40,56 @@ test('the real guard passes on the repository as it stands', () => {
   assert.equal(result.status, 0, `expected clean repo, got:\n${result.stderr}${result.stdout}`);
 });
 
-test('the real allowlist is valid and every entry names a migration this repo still has as a draft', () => {
+test('a migration at or below the recorded mark is not pending and an untracked later migration is', () => {
+  const applied = [
+    '-- 0200 widgets',
+    '-- NOT YET APPLIED, draft only.',
+    'begin;',
+    'create table if not exists public.widgets (id uuid);',
+    'commit;',
+  ].join('\n');
+  const pending = applied.replace('0200 widgets', '0201 gadgets').replace('widgets', 'gadgets');
+  const sandbox = makeSandbox({
+    [`${MIGRATIONS_DIR}/0200_widgets.sql`]: applied,
+    [`${MIGRATIONS_DIR}/0201_gadgets.sql`]: pending,
+    [APPLIED_STATE_PATH]: { schemaVersion: 1, appliedThrough: 200, recordedAt: '2026-09-18' },
+  });
+  spawnSync('git', ['init', '-q'], { cwd: sandbox });
+  spawnSync('git', ['add', APPLIED_STATE_PATH, `${MIGRATIONS_DIR}/0200_widgets.sql`], {
+    cwd: sandbox,
+  });
+  assert.equal(loadAppliedThrough({ repoRoot: sandbox }), 200);
+  assert.deepEqual(
+    loadDraftMigrations({ repoRoot: sandbox }).map((m) => m.number),
+    [201],
+  );
+});
+
+test('loadAppliedThrough rejects a config with no integer mark', () => {
+  const sandbox = makeSandbox({
+    [APPLIED_STATE_PATH]: { schemaVersion: 1, appliedThrough: 'all of them' },
+  });
+  assert.throws(() => loadAppliedThrough({ repoRoot: sandbox }), /integer appliedThrough/);
+});
+
+test('every real allowlist entry names a migration still pending in production', () => {
   const allowlist = loadAllowlist();
-  assert.ok(allowlist.length > 0, 'expected the seeded allowlist to carry entries');
   const migrations = loadDraftMigrations();
-  const draftNumbers = new Set(migrations.map((m) => m.number));
+  const pendingNumbers = new Set(migrations.map((m) => m.number));
   for (const entry of allowlist) {
     assert.ok(
-      draftNumbers.has(entry.migration),
-      `${entry.file} allowlists migration ${entry.migration}, which is not a currently-draft migration`,
+      pendingNumbers.has(entry.migration),
+      `${entry.file} allowlists migration ${entry.migration}, which is not currently pending`,
     );
   }
 });
 
-test('parseDraftMigration ignores a migration with no NOT YET APPLIED marker', () => {
+test('parseDraftMigration reads a numbered migration without relying on header prose', () => {
   const text =
     '-- 0001 applied\n\nbegin;\ncreate table if not exists public.widgets (id uuid);\ncommit;\n';
-  assert.equal(parseDraftMigration('0001_widgets.sql', text), null);
+  const parsed = parseDraftMigration('0001_widgets.sql', text);
+  assert.equal(parsed.number, 1);
+  assert.deepEqual(parsed.tables, ['widgets']);
 });
 
 test('parseDraftMigration extracts a new table', () => {

@@ -64,7 +64,7 @@
       "switchTo": "{{mode}} に切り替える",
       "soon": "近日公開",
       "cloudUnavailable": "AGI Cloud はデスクトップでご利用いただけます。ログインするとマネージドモデルと同期されたチャットを使えます。",
-      "localUnavailable": "ローカルモードは AGI Workforce デスクトップアプリで動作します。チャットとファイルをこの端末に保つにはダウンロードしてください。"
+      "localUnavailable": "ローカルモードは AGI Workforce CLI で Ollama または LM Studio を通じて動作します。デスクトップの会話はマネージドクラウドを使用します。"
     },
     "groups": {
       "lastHour": "Last hour",

@@ -239,7 +239,7 @@ impl StreamingCostGuard {
             );
         self.fallback_completion_tokens = self
             .fallback_completion_tokens
-            .saturating_add(u32::try_from(estimated_chunk_tokens).unwrap_or(u32::MAX));
+            .saturating_add(estimated_chunk_tokens);
 
         if let Some(incoming) = chunk.usage.as_ref() {
             let latest = self.latest_usage.get_or_insert_with(|| incoming.clone());
@@ -2680,10 +2680,9 @@ impl LLMRouter {
                         cumulative_cost: Arc::clone(&self.cumulative_cost),
                         provider: candidate.provider,
                         model: candidate.model.clone(),
-                        fallback_prompt_tokens: u32::try_from(
-                            TokenCounter::estimate_prompt_tokens(&request.messages),
-                        )
-                        .unwrap_or(u32::MAX),
+                        fallback_prompt_tokens: TokenCounter::estimate_prompt_tokens(
+                            &request.messages,
+                        ),
                         fallback_completion_tokens: 0,
                         latest_usage: None,
                         latest_authoritative_cost: None,

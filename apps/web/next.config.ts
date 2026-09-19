@@ -190,6 +190,10 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/api/cron/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
+      },
+      {
         source: '/api/files/:id',
         has: [{ type: 'query', key: 'preview', value: 'pdf' }],
         headers: [{ key: 'X-Frame-Options', value: 'SAMEORIGIN' }],

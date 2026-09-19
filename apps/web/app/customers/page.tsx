@@ -14,7 +14,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BILLING_PLAN_PRICING, BILLING_PLAN_PRODUCT_LIMITS } from '@agiworkforce/types';
-import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Customers',
@@ -65,7 +65,7 @@ const SCENARIOS: Scenario[] = [
     mechanics: [
       {
         label: 'Model picker',
-        value: `Desktop keeps one server URL per runtime (${DESKTOP_LOCAL_RUNTIMES.label}) and fills its model picker from whatever that server answers with.`,
+        value: `The CLI discovers each loopback runtime (${CLI_LOCAL_RUNTIMES.label}) and lists whatever models that server answers with.`,
       },
       {
         label: 'Server discovery',
@@ -84,8 +84,8 @@ const SCENARIOS: Scenario[] = [
     ],
     caveat:
       'AGI supplies neither the hardware nor the weights, and a model you host will lose to a frontier hosted model on the hardest problems. That is capability traded for containment, and it is a trade you have to want.',
-    meta: `Desktop · ${SURFACE_STATUS.desktop}`,
-    status: `CLI · ${SURFACE_STATUS.cli}`,
+    meta: `CLI · ${SURFACE_STATUS.cli}`,
+    status: 'Local inference · available',
     href: '/local',
     hrefLabel: 'How Local mode works',
   },

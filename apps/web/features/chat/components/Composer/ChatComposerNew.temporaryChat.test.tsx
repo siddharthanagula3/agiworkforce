@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew } from './ChatComposerNew';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { EyeOff } from '@agiworkforce/icons';
 import {
   TEMPORARY_CHAT_END_CONFIRMATION,
@@ -47,6 +48,7 @@ function openPlusMenu(): void {
 
 beforeEach(() => {
   useChatStore.getState().reset();
+  useSettingsStore.getState().setNewChatsTemporary(false);
   routerPush.mockClear();
 });
 
@@ -70,6 +72,17 @@ function temporaryRow(): HTMLElement {
 }
 
 describe('temporary chat armed before a conversation exists', () => {
+  it('shows the enabled default and lets a new chat explicitly opt out', () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    openPlusMenu();
+    expect(temporaryRow()).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(temporaryRow());
+    openPlusMenu();
+    expect(temporaryRow()).toHaveAttribute('aria-pressed', 'false');
+    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+  });
+
   it('offers the toggle on a brand-new chat with no onSetTemporaryChat host wiring', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     openPlusMenu();
@@ -215,7 +228,7 @@ describe('ending a temporary chat', () => {
 
     await vi.waitFor(() => expect(useChatStore.getState().conversations).toHaveLength(0));
     expect(useChatStore.getState().activeConversationId).toBeNull();
-    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+    expect(useChatStore.getState().pendingTemporaryChat).toBeNull();
     expect(routerPush).toHaveBeenCalledWith('/chat');
   });
 });

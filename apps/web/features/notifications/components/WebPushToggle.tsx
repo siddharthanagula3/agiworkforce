@@ -35,19 +35,32 @@ export function useWebPushToggle(): WebPushToggleState {
     if (!isWebPushSupported()) return undefined;
 
     let active = true;
-    void (async () => {
+    let refreshId = 0;
+    const refresh = async () => {
+      const currentRefreshId = ++refreshId;
       const registration = await registerNotificationWorker();
       const subscription = await registration?.pushManager.getSubscription();
-      if (!active) return;
+      if (!active || currentRefreshId !== refreshId) return;
       if (readNotificationPermission() === 'denied') {
         setState('blocked');
         return;
       }
       setState(subscription ? 'on' : 'off');
-    })();
+    };
+    const refreshOnFocus = () => void refresh();
+    const refreshOnVisibility = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+
+    void refresh();
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnVisibility);
 
     return () => {
       active = false;
+      refreshId += 1;
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnVisibility);
     };
   }, []);
 

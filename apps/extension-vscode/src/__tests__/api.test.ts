@@ -18,10 +18,12 @@ import {
   getAccountAuthState,
   getAccountToken,
   getApiKey,
+  getAccountRefreshToken,
   getCloudGatewayOrigin,
   parseCloudCompletionError,
   parseAccountIdentityResponse,
   parseTierInfoResponse,
+  renewAccountSession,
   setAccountToken,
   setApiKey,
   clearAccountToken,
@@ -31,6 +33,9 @@ import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
 
 vi.mock('https', () => ({ request: vi.fn() }));
+
+const { refreshDeviceSession } = vi.hoisted(() => ({ refreshDeviceSession: vi.fn() }));
+vi.mock('../features/account-auth/deviceAuth', () => ({ refreshDeviceSession }));
 import { Config } from '../platform/config';
 
 afterEach(() => {
@@ -142,6 +147,88 @@ describe('AGI Cloud account session expiry', () => {
       status: 'signed-in',
       expiresAt: now + 60_000,
     });
+  });
+});
+
+describe('AGI Cloud silent reauthentication', () => {
+  const NOW = 1_750_000_000_000;
+
+  function expiredSession() {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    vi.spyOn(Date, 'now').mockReturnValue(NOW);
+    return secrets;
+  }
+
+  beforeEach(() => {
+    refreshDeviceSession.mockReset();
+  });
+
+  it('keeps the renewal credential when the access token expires', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'device-token', NOW + 60_000, 'renewal-credential');
+
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('renewal-credential');
+    await clearAccountToken(secrets);
+    await expect(getAccountRefreshToken(secrets)).resolves.toBeUndefined();
+  });
+
+  it('never inherits the previous grant renewal credential on a fresh sign-in', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'first-token', NOW + 60_000, 'first-renewal');
+    await setAccountToken(secrets, 'second-token', NOW + 60_000);
+
+    await expect(getAccountRefreshToken(secrets)).resolves.toBeUndefined();
+  });
+
+  it('rotates an expired session in place rather than repeating the device-code flow', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    refreshDeviceSession.mockResolvedValue({
+      kind: 'renewed',
+      token: 'rotated-token',
+      expiresAt: NOW + 600_000,
+      refreshToken: 'next-renewal-credential',
+    });
+
+    await expect(getAccountToken(secrets)).resolves.toBe('rotated-token');
+    expect(refreshDeviceSession).toHaveBeenCalledWith(
+      'https://agiworkforce.com',
+      'renewal-credential',
+    );
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('next-renewal-credential');
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({
+      status: 'signed-in',
+      expiresAt: NOW + 600_000,
+    });
+  });
+
+  it('holds the renewal credential when the rotation endpoint is unreachable', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    refreshDeviceSession.mockResolvedValue({ kind: 'unavailable' });
+
+    await expect(renewAccountSession(secrets)).resolves.toBe('unavailable');
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('renewal-credential');
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+  });
+
+  it('drops a revoked renewal credential and reports the session as expired', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    refreshDeviceSession.mockResolvedValue({ kind: 'revoked' });
+
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+    await expect(getAccountRefreshToken(secrets)).resolves.toBeUndefined();
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+  });
+
+  it('does not rotate when the caller asked for the stored credential as it is', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+
+    await expect(getAccountToken(secrets, { renew: false })).resolves.toBeUndefined();
+    expect(refreshDeviceSession).not.toHaveBeenCalled();
   });
 });
 

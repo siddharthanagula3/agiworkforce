@@ -104,7 +104,7 @@ export function ProjectSettingsDialog({
     const trimmedDescription = description.trim();
     const updates = {
       name: name.trim(),
-      instructions: instructions.trim() || undefined,
+      instructions: instructions.trim() || null,
       usesGlobalMemory,
     };
     setIsSaving(true);
@@ -114,7 +114,11 @@ export function ProjectSettingsDialog({
         description: trimmedDescription || null,
       });
 
-      onUpdate(project.id, { ...updates, description: trimmedDescription || undefined });
+      onUpdate(project.id, {
+        ...updates,
+        instructions: updates.instructions ?? undefined,
+        description: trimmedDescription || undefined,
+      });
       toast.success('Project updated');
       onOpenChange(false);
     } catch (error) {

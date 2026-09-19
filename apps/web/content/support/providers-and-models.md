@@ -3,8 +3,8 @@ id: providers-and-models
 title: Providers and models
 path: /providers
 category: providers
-tags: providers, models, switch model, model picker, anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu, ollama, lm studio, llama.cpp, vllm, routing
-updated: 2026-08-13
+tags: providers, models, switch model, model picker, anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu, ollama, lm studio, routing
+updated: 2026-09-19
 scope: public
 ---
 
@@ -12,9 +12,10 @@ scope: public
 
 AGI supports {{MARKETING.providers.display}} provider integrations, including
 Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and
-custom OpenAI-compatible endpoints. Desktop Local mode supports four verified
-runtimes: Ollama, LM Studio, llama.cpp, and vLLM. The in-product catalog is the
-current source of truth.
+custom OpenAI-compatible endpoints. The released CLI supports the Ollama and LM
+Studio local runtimes. Desktop runs on your AGI account and does not accept a
+provider key or run a local model. The in-product catalog is the current source
+of truth.
 
 ## How many models
 

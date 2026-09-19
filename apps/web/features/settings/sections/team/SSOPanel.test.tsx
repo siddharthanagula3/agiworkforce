@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
@@ -225,15 +225,16 @@ describe('SSOPanel for an entitled organization', () => {
     expect(screen.getByText(/never stored here/i)).toBeVisible();
   });
 
-  it('surfaces the server’s refusal verbatim instead of a generic failure', async () => {
-    fetchMock
-      .mockResolvedValueOnce(jsonResponse({ connections: [] }))
-      .mockResolvedValueOnce(
-        jsonResponse(
-          { error: 'domain is a public mailbox provider and cannot be claimed for enterprise SSO' },
-          400,
-        ),
-      );
+  it('explains and focuses a public mailbox domain refusal', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ connections: [] })).mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: 'domain is a public mailbox provider and cannot be claimed for enterprise SSO',
+          field: 'domain',
+        },
+        400,
+      ),
+    );
 
     render(<SSOPanel organizationId={ORG_ID} isOwner />);
 
@@ -246,8 +247,32 @@ describe('SSOPanel for an entitled organization', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'domain is a public mailbox provider',
+      'Use a company domain your organization controls',
     );
+    await waitFor(() => expect(screen.getByLabelText('Email domain')).toHaveFocus());
+  });
+
+  it('explains and focuses an unsafe metadata URL', async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ connections: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse({ error: 'metadata_url must use https', field: 'metadata_url' }, 400),
+      );
+
+    render(<SSOPanel organizationId={ORG_ID} isOwner />);
+
+    fireEvent.change(await screen.findByLabelText('Email domain'), {
+      target: { value: 'example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('IdP metadata URL'), {
+      target: { value: 'http://idp.example.com/metadata' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Use an HTTPS metadata URL from your identity provider',
+    );
+    await waitFor(() => expect(screen.getByLabelText('IdP metadata URL')).toHaveFocus());
   });
 
   it('triggers domain verification against the connection id', async () => {
@@ -262,6 +287,39 @@ describe('SSOPanel for an entitled organization', () => {
         '/api/admin/sso/verify-domain',
         expect.objectContaining({
           method: 'POST',
+          body: JSON.stringify({ connectionId: CONNECTION_ID }),
+        }),
+      ),
+    );
+  });
+
+  it('explains the DNS consequence before replacing a domain challenge', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ connections: [connection()] }));
+
+    render(<SSOPanel organizationId={ORG_ID} isOwner />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reissue challenge' }));
+
+    expect(screen.getByRole('heading', { name: 'Reissue this domain challenge?' })).toBeVisible();
+    expect(screen.getByText(/current DNS TXT value will stop working immediately/i)).toBeVisible();
+    expect(screen.getByText(/replace it with the new value in DNS/i)).toBeVisible();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reissue challenge' }));
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', {
+        name: 'Reissue challenge',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/sso/verify-domain',
+        expect.objectContaining({
+          method: 'PUT',
           body: JSON.stringify({ connectionId: CONNECTION_ID }),
         }),
       ),

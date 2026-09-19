@@ -87,8 +87,8 @@ export function CapabilitiesSection() {
       <LockdownModePanel />
 
       <p className="text-xs text-muted-foreground">
-        Running models on your own provider keys is a Desktop, CLI and VS Code feature. Hosted web
-        is Managed Cloud only and never stores a provider key of yours.
+        Running models on your own provider keys is available in the CLI; VS Code support is coming
+        soon. Hosted Web and Desktop are Managed Cloud only and never store a provider key of yours.
       </p>
     </div>
   );

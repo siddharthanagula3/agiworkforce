@@ -21,6 +21,10 @@ const db = {
 };
 
 vi.mock('workflow', () => ({ sleep: mocks.sleep }));
+vi.mock('../device-steps/device-clearance-step', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../device-steps/device-clearance-step')>();
+  return { ...actual, clearCloudAgentDevice: vi.fn(actual.clearCloudAgentDevice) };
+});
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -40,6 +44,7 @@ vi.mock('./steps/execute-cloud-agent-invocation', () => ({
 }));
 
 import { cloudAgentWorkflow } from './cloud-agent-workflow';
+import { clearCloudAgentDevice } from '../device-steps/device-clearance-step';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
@@ -133,8 +138,42 @@ describe('a durable run consults the device registry before offering device tool
     await cloudAgentWorkflow(makeInput(false));
 
     expect(mocks.query).not.toHaveBeenCalled();
+    expect(clearCloudAgentDevice).not.toHaveBeenCalled();
+    expect(mocks.ensurePlan).not.toHaveBeenCalled();
+    expect(mocks.settlePlan).not.toHaveBeenCalled();
     expect(executeInvocation).toHaveBeenCalledTimes(1);
   });
+
+  it('preserves plan initialization and settlement for AGI Work', async () => {
+    const input = makeInput(false);
+    input.processed.chatRequest.work_mode = 'agiwork';
+
+    await cloudAgentWorkflow(input);
+
+    expect(mocks.ensurePlan).toHaveBeenCalledWith(input);
+    expect(mocks.settlePlan).toHaveBeenCalledWith(input, 'completed');
+    expect(mocks.closeStream).toHaveBeenCalledWith(RUN_ID);
+  });
+
+  it.each(['chat', 'agiwork'] as const)(
+    'settles failed %s runs without losing stream cleanup',
+    async (workMode) => {
+      const input = makeInput(false);
+      input.processed.chatRequest.work_mode = workMode;
+      const failure = new Error('provider unavailable');
+      executeInvocation.mockRejectedValueOnce(failure);
+
+      await expect(cloudAgentWorkflow(input)).rejects.toThrow(failure);
+
+      expect(mocks.fail).toHaveBeenCalledWith(input, failure);
+      expect(mocks.closeStream).toHaveBeenCalledWith(RUN_ID);
+      if (workMode === 'agiwork') {
+        expect(mocks.settlePlan).toHaveBeenCalledWith(input, 'failed');
+      } else {
+        expect(mocks.settlePlan).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it('waits for a sleeping device instead of failing the run', async () => {
     const asleep = new Date(Date.now() - 3 * 60 * 60_000).toISOString();

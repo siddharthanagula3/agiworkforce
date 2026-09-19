@@ -269,10 +269,10 @@ export default function SubprocessorsPage() {
             </Prose>
             <Prose>
               <strong>Which surface that applies to, precisely.</strong> BYOK is a capability of the
-              desktop app, the CLI and the VS Code extension.{' '}
+              released CLI. The VS Code extension is coming soon.{' '}
               <strong>
-                The web app at agiworkforce.com is cloud-only: it has no user-supplied-key path at
-                all.
+                The web app at agiworkforce.com and the current Desktop app are cloud-only: neither
+                has a user-supplied-key path.
               </strong>{' '}
               Every model request you make in a browser is a Managed Cloud request on our keys,
               through the recipients listed above. We used to state the BYOK posture here without

@@ -6,8 +6,8 @@ beforeEach(() => {
 });
 
 describe('pendingTemporaryChat', () => {
-  it('defaults to off', () => {
-    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+  it('defaults to inheriting the privacy preference', () => {
+    expect(useChatStore.getState().pendingTemporaryChat).toBeNull();
   });
 
   it('arms and disarms from the composer toggle', () => {
@@ -29,7 +29,7 @@ describe('pendingTemporaryChat', () => {
     useChatStore.getState().setPendingTemporaryChat(true);
     useChatStore.getState().setActiveConversation('conv-1');
 
-    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+    expect(useChatStore.getState().pendingTemporaryChat).toBeNull();
   });
 
   it('clears when switching to a different existing conversation', () => {
@@ -37,6 +37,6 @@ describe('pendingTemporaryChat', () => {
     useChatStore.getState().setPendingTemporaryChat(true);
     useChatStore.getState().setActiveConversation('conv-2');
 
-    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+    expect(useChatStore.getState().pendingTemporaryChat).toBeNull();
   });
 });

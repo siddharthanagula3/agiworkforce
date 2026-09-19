@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface Invoice {
   id: string;
@@ -36,26 +37,31 @@ function formatDate(iso: string): string {
 export function InvoiceList() {
   const [state, setState] = useState<ListState>({ status: 'loading' });
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const response = await fetch('/api/billing/invoices', { credentials: 'include' });
-        if (!response.ok) throw new Error(`Invoices could not be loaded (${response.status}).`);
-        const body = (await response.json()) as { invoices?: Invoice[] };
-        if (!cancelled) setState({ status: 'ready', invoices: body.invoices ?? [] });
-      } catch (error) {
-        if (cancelled) return;
-        setState({
-          status: 'error',
-          message: error instanceof Error ? error.message : 'Invoices could not be loaded.',
-        });
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setState({ status: 'loading' });
+    try {
+      const response = await fetch('/api/billing/invoices', { credentials: 'include', signal });
+      if (!response.ok) {
+        throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+      const body = (await response.json()) as { invoices?: Invoice[] };
+      setState({ status: 'ready', invoices: body.invoices ?? [] });
+    } catch (error) {
+      if (signal?.aborted) return;
+      setState({
+        status: 'error',
+        message: toUserMessage(error, 'Invoices could not be loaded.'),
+      });
+    }
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+
+  const loadError = state.status === 'error' ? state.message : null;
 
   if (state.status === 'loading') {
     return (
@@ -66,13 +72,24 @@ export function InvoiceList() {
     );
   }
 
-  if (state.status === 'error') {
+  if (loadError) {
     return (
-      <p role="alert" className="py-6 text-sm text-destructive-text">
-        {state.message} Your receipts are also available from the billing portal in Settings.
-      </p>
+      <div role="alert" className="py-6 text-sm">
+        <p className="text-destructive-text">
+          {loadError} Your receipts are also available from the billing portal in Settings.
+        </p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          Try again
+        </button>
+      </div>
     );
   }
+
+  if (state.status !== 'ready') return null;
 
   if (state.invoices.length === 0) {
     return (

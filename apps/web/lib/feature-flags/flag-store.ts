@@ -25,6 +25,10 @@ interface DefinitionRow {
   default_variant: string;
   rules: unknown;
   expires_at: string | Date | null;
+  maturity: FlagDefinitionInput['maturity'] | null;
+  release_channel: FlagDefinitionInput['channel'] | null;
+  availability: FlagDefinitionInput['availability'] | null;
+  owner_name: string | null;
   archived_at: string | Date | null;
   version: number;
   created_at: string | Date;
@@ -64,6 +68,10 @@ function toDefinition(row: DefinitionRow): FlagDefinition | null {
     defaultVariant: row.default_variant,
     rules: rules.data,
     expiresAt: isoOrNull(row.expires_at),
+    ...(row.maturity === null ? {} : { maturity: row.maturity }),
+    ...(row.release_channel === null ? {} : { channel: row.release_channel }),
+    ...(row.availability === null ? {} : { availability: row.availability }),
+    ...(row.owner_name === null ? {} : { owner: row.owner_name }),
     archivedAt: isoOrNull(row.archived_at),
     version: row.version,
     createdAt: isoOrNull(row.created_at) ?? new Date(0).toISOString(),
@@ -91,7 +99,8 @@ function toOverride(row: OverrideRow): FlagOverride {
 }
 
 const DEFINITION_COLUMNS = `key, description, kill_switch, variants, default_variant, rules,
-  expires_at, archived_at, version, created_at, updated_at`;
+  expires_at, maturity, release_channel, availability, owner_name, archived_at, version,
+  created_at, updated_at`;
 
 let cachedDefinitions: { definitions: readonly FlagDefinition[]; expiresAtMs: number } | null =
   null;
@@ -175,8 +184,9 @@ export async function insertFlagDefinition(
 ): Promise<FlagDefinition | null> {
   const [row] = await db.query<DefinitionRow>(
     `insert into public.feature_flag_definitions
-       (key, description, kill_switch, variants, default_variant, rules, expires_at)
-     values ($1, $2, $3, $4::text[], $5, $6::jsonb, $7)
+       (key, description, kill_switch, variants, default_variant, rules, expires_at,
+        maturity, release_channel, availability, owner_name)
+     values ($1, $2, $3, $4::text[], $5, $6::jsonb, $7, $8, $9, $10, $11)
      on conflict (key) do nothing
      returning ${DEFINITION_COLUMNS}`,
     [
@@ -187,6 +197,10 @@ export async function insertFlagDefinition(
       input.defaultVariant,
       JSON.stringify(input.rules),
       input.expiresAt,
+      input.maturity ?? null,
+      input.channel ?? null,
+      input.availability ?? null,
+      input.owner ?? null,
     ],
   );
   resetFlagDefinitionCache();
@@ -217,8 +231,9 @@ export async function updateFlagDefinition(
   const [row] = await db.query<DefinitionRow>(
     `update public.feature_flag_definitions
         set description = $2, kill_switch = $3, variants = $4::text[], default_variant = $5,
-            rules = $6::jsonb, expires_at = $7, version = version + 1, updated_at = now()
-      where key = $1 and version = $8 and archived_at is null
+            rules = $6::jsonb, expires_at = $7, maturity = $8, release_channel = $9,
+            availability = $10, owner_name = $11, version = version + 1, updated_at = now()
+      where key = $1 and version = $12 and archived_at is null
       returning ${DEFINITION_COLUMNS}`,
     [
       input.key,
@@ -228,6 +243,10 @@ export async function updateFlagDefinition(
       input.defaultVariant,
       JSON.stringify(input.rules),
       input.expiresAt,
+      input.maturity ?? null,
+      input.channel ?? null,
+      input.availability ?? null,
+      input.owner ?? null,
       expectedVersion,
     ],
   );

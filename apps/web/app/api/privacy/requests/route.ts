@@ -20,6 +20,7 @@ import {
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const CreateRequestSchema = z.object({
   requestType: z.string().refine(isDataRightsRequestType, 'Unknown request type'),
@@ -132,6 +133,17 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       'Data-rights request was recorded but the operator alert threw',
     );
     return false;
+  });
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'privacy_request_submitted',
+    request,
+    detail: {
+      resourceId: created.reference,
+      status: created.status,
+      variant: created.requestType,
+    },
   });
 
   return NextResponse.json({

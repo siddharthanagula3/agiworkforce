@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
@@ -188,14 +189,25 @@ export function GeneralSection() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   const hydratedRef = useRef(false);
+  const mountedRef = useRef(false);
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
+  const saveFailedRef = useRef(false);
+  const keepaliveRef = useRef(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   function markDirty() {
     dirtyRef.current = true;
+    saveFailedRef.current = false;
+    setSavedAt(null);
   }
 
   useEffect(() => {
+    mountedRef.current = true;
+    keepaliveRef.current = false;
     setMounted(true);
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const hydrateProfilePreferences = useCallback(async () => {
@@ -228,9 +240,10 @@ export function GeneralSection() {
       setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
       setInstructionsEnabled(stored.instructionsEnabled !== false);
 
-      const storedStyle = await fetchStoredPreferenceNamespace<Partial<PersonalizationSettings>>(
-        PERSONALIZATION_NAMESPACE,
-      ).catch(() => ({}) as Partial<PersonalizationSettings>);
+      const storedStyle =
+        await fetchStoredPreferenceNamespace<Partial<PersonalizationSettings>>(
+          PERSONALIZATION_NAMESPACE,
+        );
       setPersonalization({
         style: storedChoice(storedStyle.style, RESPONSE_STYLES, 'default'),
         technicalLevel: storedChoice(storedStyle.technicalLevel, TECHNICAL_LEVELS, 'unspecified'),
@@ -279,23 +292,60 @@ export function GeneralSection() {
     personalization,
   };
 
-  const flushPendingSave = useCallback(() => {
-    if (!dirtyRef.current) return;
+  const flushPendingSave = useCallback((): Promise<void> => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    dirtyRef.current = false;
-    const values = latestFormValuesRef.current;
-    void Promise.all([
-      savePreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, {
-        preferredName: values.preferredName.trim(),
-        workDescription: values.workDescription,
-        instructions: values.instructions,
-        instructionsEnabled: values.instructionsEnabled,
-      }),
-      savePreferenceNamespace(PERSONALIZATION_NAMESPACE, values.personalization),
-    ]).catch(() => {});
+    if (saveInFlightRef.current) return saveInFlightRef.current;
+    if (!dirtyRef.current) return Promise.resolve();
+
+    const operation = (async () => {
+      try {
+        while (dirtyRef.current) {
+          dirtyRef.current = false;
+          const values = latestFormValuesRef.current;
+          const options = { keepalive: keepaliveRef.current };
+          const results = await Promise.allSettled([
+            savePreferenceNamespace<GeneralSettings>(
+              PREF_NAMESPACE,
+              {
+                preferredName: values.preferredName.trim(),
+                workDescription: values.workDescription,
+                instructions: values.instructions,
+                instructionsEnabled: values.instructionsEnabled,
+              },
+              options,
+            ),
+            savePreferenceNamespace(PERSONALIZATION_NAMESPACE, values.personalization, options),
+          ]);
+          const failure = results.find((result) => result.status === 'rejected');
+          if (failure?.status === 'rejected') {
+            dirtyRef.current = true;
+            throw failure.reason;
+          }
+          await refreshProfileConsumers();
+        }
+        saveFailedRef.current = false;
+        if (mountedRef.current) {
+          setSaveError(null);
+          if (!dirtyRef.current) setSavedAt(Date.now());
+        }
+      } catch (error) {
+        saveFailedRef.current = true;
+        const message = toUserMessage(
+          error,
+          'We could not save your preferences. Try Save profile again.',
+        );
+        if (mountedRef.current) setSaveError(message);
+        else toast.error(message);
+        throw error;
+      } finally {
+        saveInFlightRef.current = null;
+      }
+    })();
+    saveInFlightRef.current = operation;
+    return operation;
   }, []);
 
   useEffect(() => {
@@ -303,29 +353,13 @@ export function GeneralSection() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
-      const next: GeneralSettings = {
-        preferredName: preferredName.trim(),
-        workDescription,
-        instructions,
-        instructionsEnabled,
-      };
-      void Promise.all([
-        savePreferenceNamespace(PREF_NAMESPACE, next),
-        savePreferenceNamespace(PERSONALIZATION_NAMESPACE, personalization),
-      ])
-        .then(() => {
-          dirtyRef.current = false;
-          setSaveError(null);
-          return refreshProfileConsumers();
-        })
-        .catch((error) => {
-          setSaveError(toUserMessage(error, 'Failed to save preferences'));
-        });
+      void flushPendingSave().catch(() => {});
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [
+    flushPendingSave,
     instructions,
     instructionsEnabled,
     loadError,
@@ -336,7 +370,13 @@ export function GeneralSection() {
     workDescription,
   ]);
 
-  useEffect(() => () => flushPendingSave(), [flushPendingSave]);
+  useEffect(
+    () => () => {
+      keepaliveRef.current = true;
+      if (!saveFailedRef.current) void flushPendingSave().catch(() => {});
+    },
+    [flushPendingSave],
+  );
 
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
@@ -366,7 +406,7 @@ export function GeneralSection() {
     try {
       const { error } = await settingsService.uploadAvatar(file);
       if (error) {
-        setAvatarError(error);
+        setAvatarError(toUserMessage(new Error(error), 'Could not upload your photo. Try again.'));
         return;
       }
       await refreshProfileConsumers();
@@ -402,15 +442,15 @@ export function GeneralSection() {
     setSaving(true);
     setSaveError(null);
     try {
-      await saveDisplayName(trimmedFull);
-      await savePreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, {
+      latestFormValuesRef.current = {
+        ...latestFormValuesRef.current,
         preferredName: trimmedPreferred,
-        workDescription,
-        instructions,
-        instructionsEnabled,
-      });
+      };
+      dirtyRef.current = true;
+      saveFailedRef.current = false;
+      await flushPendingSave();
+      await saveDisplayName(trimmedFull);
       setPreferredName(trimmedPreferred);
-
       await refreshProfileConsumers();
       setSavedAt(Date.now());
     } catch (err) {
@@ -733,7 +773,7 @@ export function GeneralSection() {
           </div>
 
           {/* Save row */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleSave}
@@ -742,7 +782,7 @@ export function GeneralSection() {
             >
               {saving ? 'Saving...' : 'Save profile'}
             </button>
-            {savedAt !== null && saveError === null && (
+            {savedAt !== null && saveError === null && !saving && (
               <span className="text-xs text-muted-foreground">Saved</span>
             )}
             {saveError !== null && <span className="text-xs text-danger">{saveError}</span>}
@@ -1320,8 +1360,7 @@ function ReadAloudVoiceRow() {
       <p className="-mt-3 text-xs leading-relaxed text-muted-foreground">
         Read-aloud uses your browser&apos;s built-in speech. It always plays through your system
         default output device, browsers give web pages no way to choose one, so change it in your
-        operating system&apos;s sound settings. AGI reads a reply on request and then stops; web has
-        no hands-free voice conversation that listens back between turns.
+        operating system&apos;s sound settings. Read-aloud plays a reply on request and then stops.
       </p>
     </>
   );

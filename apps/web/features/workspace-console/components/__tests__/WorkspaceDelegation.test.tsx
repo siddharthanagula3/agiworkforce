@@ -138,6 +138,24 @@ describe('WorkspaceDelegation', () => {
     expect(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')).toBeUndefined();
   });
 
+  it('turns a rejected grant request into actionable network copy', async () => {
+    fetchMock.mockImplementation((input: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Promise.reject(new TypeError('Failed to fetch'));
+      return route(body())(input, init);
+    });
+    renderPanel();
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText(/Member/u),
+      await screen.findByRole('option', { name: /Finance/u }),
+    );
+    await userEvent.click(screen.getByRole('checkbox', { name: 'admin.billing.view' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Grant delegation' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach the server.');
+    expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
+  });
+
   it('names the consequence before revoking', async () => {
     fetchMock.mockImplementation(route(body()));
     renderPanel();

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getModelsForTierAndSurface } from '@agiworkforce/types';
 
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: vi.fn((db: DatabaseAdapter) => db),
@@ -13,7 +14,7 @@ import {
   ScheduleValidationError,
   claimDueScheduleRuns,
   countSchedules,
-  createSchedule,
+  createSchedule as createScheduleWithPlan,
   createManualScheduleRun,
   deleteSchedule,
   finalizeScheduleRun,
@@ -23,11 +24,31 @@ import {
   processClaimedScheduleRun,
   processDueScheduleRuns,
   setScheduleEnabled,
-  updateSchedule,
+  updateSchedule as updateScheduleWithPlan,
   type ClaimedScheduleRun,
+  type ScheduleInput,
   type ScheduledExecutionResult,
   type ScheduledTaskExecutor,
 } from './schedule-service';
+
+function createSchedule(
+  db: DatabaseAdapter,
+  userId: string,
+  input: ScheduleInput,
+  options: { now?: Date } = {},
+) {
+  return createScheduleWithPlan(db, userId, input, { planTier: 'max', ...options });
+}
+
+function updateSchedule(
+  db: DatabaseAdapter,
+  userId: string,
+  taskId: string,
+  patch: Partial<ScheduleInput>,
+  options: { now?: Date } = {},
+) {
+  return updateScheduleWithPlan(db, userId, taskId, patch, { planTier: 'max', ...options });
+}
 
 function database(
   query: ReturnType<typeof vi.fn>,
@@ -78,6 +99,15 @@ const claim: ClaimedScheduleRun = {
     updatedAt: '2026-07-15T12:00:00.000Z',
   },
 };
+
+const freeScheduleModelIds = new Set(
+  getModelsForTierAndSurface('free', 'web/cloud-chat', {
+    modelTypes: ['chat', 'code', 'reasoning', 'multimodal'],
+  }).map((model) => model.id),
+);
+const maxOnlyScheduleModel = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+  modelTypes: ['chat', 'code', 'reasoning', 'multimodal'],
+}).find((model) => !freeScheduleModelIds.has(model.id));
 
 const taskRow = {
   id: 'task-1',
@@ -200,6 +230,28 @@ describe('schedule service persistence', () => {
     expect(sql).not.toMatch(/\brecurrence\b|time_of_day|is_active|next_run_at/i);
     expect(params).toContain('0 12 * * *');
     expect(params).toContain('2026-07-15T12:00:00.000Z');
+  });
+
+  it('rejects a manual model that managed scheduling cannot run for the current plan', async () => {
+    expect(maxOnlyScheduleModel).toBeDefined();
+    const query = vi.fn();
+
+    await expect(
+      createScheduleWithPlan(
+        database(query),
+        'user-1',
+        {
+          name: 'Daily briefing',
+          prompt: 'Brief me',
+          model: maxOnlyScheduleModel!.id,
+          recurrence: 'daily',
+          timeOfDay: '12:00',
+          timezone: 'UTC',
+        },
+        { planTier: 'free', now: new Date('2026-07-15T11:00:00.000Z') },
+      ),
+    ).rejects.toThrow(/not available for Managed Cloud schedules on the current plan/);
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('verifies project ownership before persisting a project-scoped schedule', async () => {
@@ -418,6 +470,37 @@ describe('schedule service persistence', () => {
     expect(query.mock.calls[0]?.[0]).toMatch(/for update/i);
     expect(sql).toMatch(/where id = \$1 and user_id = \$2/i);
     expect(params.slice(0, 2)).toEqual(['task-1', 'user-1']);
+  });
+
+  it('keeps an unchanged legacy model during an unrelated edit but rejects selecting it anew', async () => {
+    expect(maxOnlyScheduleModel).toBeDefined();
+    const legacyTask = { ...taskRow, model: maxOnlyScheduleModel!.id };
+    const legacyQuery = vi
+      .fn()
+      .mockResolvedValueOnce([legacyTask])
+      .mockResolvedValueOnce([{ ...legacyTask, name: 'Updated' }]);
+
+    await expect(
+      updateScheduleWithPlan(
+        database(legacyQuery),
+        'user-1',
+        'task-1',
+        { name: 'Updated' },
+        { planTier: 'free', now: new Date('2026-07-15T11:00:00.000Z') },
+      ),
+    ).resolves.toMatchObject({ model: maxOnlyScheduleModel!.id, name: 'Updated' });
+
+    const currentQuery = vi.fn().mockResolvedValueOnce([taskRow]);
+    await expect(
+      updateScheduleWithPlan(
+        database(currentQuery),
+        'user-1',
+        'task-1',
+        { model: maxOnlyScheduleModel!.id },
+        { planTier: 'free', now: new Date('2026-07-15T11:00:00.000Z') },
+      ),
+    ).rejects.toThrow(/not available for Managed Cloud schedules on the current plan/);
+    expect(currentQuery).toHaveBeenCalledTimes(1);
   });
 
   it('re-verifies project ownership when moving a schedule to a different project', async () => {

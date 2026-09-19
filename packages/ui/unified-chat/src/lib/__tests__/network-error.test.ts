@@ -218,3 +218,51 @@ describe('marker matching stays linear on hostile input', () => {
     expect(performance.now() - started).toBeLessThan(500);
   });
 });
+
+describe('HTTP validation explanations', () => {
+  it('preserves an actionable explanation without the transport prefix', () => {
+    const message = 'Your Free plan includes 1 project folder. Upgrade your plan to add more.';
+    expect(
+      toUserMessage(Object.assign(new Error(`HTTP 400: ${message}`), { status: 400 }), 'fallback'),
+    ).toBe(message);
+    expect(toUserMessage(new Error(`HTTP 400: ${message}`), 'fallback')).toBe(message);
+  });
+
+  it.each([
+    'Bad Request',
+    'SELECT secret FROM vault_keys',
+    'at handler (/usr/app/server.js:1)',
+    'TypeError: invalid query',
+    'request 9f2c1a7b4e8d0c6f5a3b2e1d0c9b8a77 failed',
+    '',
+  ])('continues to hide machine detail: %s', (detail) => {
+    expect(toUserMessage(new Error(`HTTP 400: ${detail}`), 'Try again.')).toBe('Try again.');
+  });
+
+  it('does not unwrap server failures or contradict an explicit status', () => {
+    expect(toUserMessage(new Error('HTTP 500: private service response'), 'fallback')).toContain(
+      'on our side',
+    );
+    expect(
+      toUserMessage(
+        Object.assign(new Error('HTTP 400: private service response'), { status: 500 }),
+        'fallback',
+      ),
+    ).toContain('on our side');
+  });
+});
+
+describe('HTTP status suffixes', () => {
+  it.each(['Upload failed (HTTP 500)', 'Download failed (HTTP 503)'])(
+    'does not expose %s',
+    (message) => {
+      expect(toUserMessage(new Error(message), 'fallback')).toBe(
+        'Something went wrong on our side. Try again shortly.',
+      );
+    },
+  );
+  it('keeps useful input validation that merely mentions a status in prose', () => {
+    const message = 'The report describes HTTP 400 errors.';
+    expect(toUserMessage(new Error(message), 'fallback')).toBe(message);
+  });
+});

@@ -19,7 +19,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
-import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Security: three boundaries, three different answers',
@@ -50,7 +50,7 @@ const BOUNDARIES = [
   {
     meta: 'Local',
     title: 'Nothing we operate is in the path.',
-    body: `Desktop Local mode runs the model on your own hardware through ${DESKTOP_LOCAL_RUNTIMES.label}. Chats, files, and sessions are written to a SQLite database on your disk. No AGI server, no subprocessor, and no network egress to us is involved in the request, so there is nothing on our side to breach, subpoena, or retain.`,
+    body: `CLI Local mode runs the model on your own hardware through ${CLI_LOCAL_RUNTIMES.label}. The request stays between the CLI and the loopback runtime, with no AGI server or subprocessor in the path. The current public Desktop is managed-cloud only.`,
   },
   {
     meta: 'BYOK',
@@ -68,7 +68,7 @@ const DATA_ROWS: { label: string; value: string }[] = [
   {
     label: 'Chats and messages',
     value:
-      'Local: SQLite file on your device. BYOK: device, plus your provider. Managed Cloud: Neon Postgres (United States).',
+      'Local: CLI JSON and JSONL session files on your device. BYOK: those local files, plus your provider. Managed Cloud: Neon Postgres (United States).',
   },
   {
     label: 'Artifacts and generated files',
@@ -131,24 +131,14 @@ const TRANSIT: { label: string; value: string }[] = [
 
 const AT_REST: { label: string; value: string }[] = [
   {
-    label: 'Desktop database',
+    label: 'Desktop account data',
     value:
-      'SQLCipher is compiled into the desktop build unconditionally. It is not an option you switch on. The local database is encrypted at rest on every install.',
+      'The current Electron Desktop is a managed-cloud account shell. Conversations, projects, and account state use the same encrypted hosted stores as Web; this public Desktop does not keep a separate Local or BYOK chat database.',
   },
   {
-    label: 'Desktop database key',
+    label: 'CLI provider credentials',
     value:
-      'A new install generates a 256-bit key from the operating system CSPRNG and stores it in the OS credential service, namespaced by the validated application bundle identifier so debug, test, and production builds can never share a key. A database created by an older build is adopted only after a read-only proof that its key opens it, and is never blindly rekeyed.',
-  },
-  {
-    label: 'Desktop secrets',
-    value:
-      'Provider API keys and connector credentials are sealed with AES-256-GCM under a key derived by PBKDF2-HMAC-SHA256 at 600,000 iterations, derived separately per purpose so a key that protects settings cannot open the credential store.',
-  },
-  {
-    label: 'Desktop master password',
-    value:
-      'The optional master password is verified with Argon2id at OWASP-recommended parameters, with a 12-character minimum and PHC-encoded storage so the parameters recorded at enrolment govern every later verification. We do not hold it and cannot recover it for you.',
+      'The released CLI stores provider credentials in the operating system credential store and keeps only a non-secret provider index on disk. A bare agi login signs in to managed cloud; agi login followed by a provider name is the BYOK key path.',
   },
   {
     label: 'Hosted API keys',
@@ -303,7 +293,7 @@ const DELETION: { label: string; value: string }[] = [
   {
     label: 'The list is enumerated, not implied',
     value:
-      'Erasure walks a hardcoded, foreign-key-ordered list of 91 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
+      'Erasure walks a hardcoded, foreign-key-ordered list of 93 user-scoped tables covering conversations, artifacts, folders, tags, branches, bookmarks, reactions, shares, memories, settings, projects, shortcuts, search history, schedules, work plans, connectors, connector permissions, notifications, feedback, support tickets and their replies, API keys, two-factor enrolment, sessions, voice sessions, automation audit events, credits, redemptions, usage and billing records, mobile store transactions, video generation jobs, image generation jobs, consent records, data-rights requests, beta applications, email preferences, device registrations, connector call logs, sync data, routing decision traces, product analytics events, workspace membership, subscriptions, and finally the profile row. Child tables that cascade are deliberately left out of the list so there is one source of truth, not two.',
   },
   {
     label: 'Bytes before rows',

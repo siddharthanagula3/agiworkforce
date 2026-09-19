@@ -16,7 +16,10 @@ vi.mock('@/lib/csrf', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: () => ({ id: 'identity' }) }));
+vi.mock('@/lib/server/identity', () => ({
+  getRequestIdentity: vi.fn(async () => null),
+  getIdentityProvider: () => ({ id: 'identity' }),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.getUserScopedDb(...(args as [])),
 }));

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { StrictMode } from 'react';
 
 import { NotificationsSection } from './NotificationsSection';
 
@@ -35,6 +36,55 @@ beforeEach(() => {
 });
 
 describe('NotificationsSection grouping', () => {
+  it('waits for the saved preferences before allowing changes', () => {
+    mocks.fetchPreferenceNamespace.mockReturnValue(new Promise(() => {}));
+    render(<NotificationsSection />);
+    expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeDisabled();
+  });
+
+  it('submits once and locks channels until the write settles, including strict rendering', async () => {
+    mocks.savePreferenceNamespace.mockReturnValue(new Promise(() => {}));
+    render(
+      <StrictMode>
+        <NotificationsSection />
+      </StrictMode>,
+    );
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), {
+      target: { value: 'off' },
+    });
+    expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('combobox', { name: 'Scheduled task finished' })).toBeDisabled();
+  });
+
+  it('restores the saved choice after a failed write and retries the intended change', async () => {
+    mocks.savePreferenceNamespace.mockRejectedValueOnce(new Error('HTTP 503: Service unavailable'));
+    render(<NotificationsSection />);
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), {
+      target: { value: 'off' },
+    });
+    const retry = await screen.findByRole('button', { name: 'Retry saving' });
+    expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('browserReplyReady');
+    expect(screen.getByRole('status').textContent).not.toContain('HTTP');
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
+    expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('off');
+    expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps channels locked after a failed read and offers a load retry', async () => {
+    mocks.fetchPreferenceNamespace.mockRejectedValueOnce(new Error('offline'));
+    render(<NotificationsSection />);
+    const retry = await screen.findByRole('button', { name: 'Retry loading' });
+    expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeDisabled();
+    fireEvent.click(retry);
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled(),
+    );
+    expect(mocks.savePreferenceNamespace).not.toHaveBeenCalled();
+  });
+
   it('lists each event once as a row with a channel select', async () => {
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());

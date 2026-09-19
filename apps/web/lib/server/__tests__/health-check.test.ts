@@ -47,6 +47,10 @@ function healthyQueue(queue: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env['DATABASE_URL'] = 'postgresql://test:test@localhost/test';
+  process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.example.test';
+  process.env['UPSTASH_REDIS_REST_TOKEN'] = 'test-token';
+  process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_health';
+  process.env['CLERK_SECRET_KEY'] = 'sk_test_health';
   mocks.getKeyValueStore.mockReturnValue(null);
   mocks.neonQuery.mockImplementation(async (sql: string) =>
     sql.includes('to_regclass') ? [{ missing: 0 }] : [{ '?column?': 1 }],
