@@ -14,20 +14,20 @@ release to a separate comprehensive production QA session.
 
 ## Release ledger
 
-| Item                   | Current evidence                                                                                                 | State                                                                                                                                             |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local candidate        | `c8ed5c61728588a29be380468b06342963c0657a`, currently checked out as `codex/website-launch-preparation-20260919` | Local `main` and `codex/release-2026-09-19` point at the same base; 16 commits ahead of `origin/main`, with additional intended work under review |
-| Remote `main`          | `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`                                                                       | Latest push CI is failing                                                                                                                         |
-| Production web         | `/api/version` reports `eb09a3242df1e003d72702ff6b51b5f641412440` in `production`                                | Healthy response, but behind both remote and local `main`                                                                                         |
-| GitHub protection      | Branch protection endpoint returns `404`; repository rulesets list is empty                                      | No enforced protected merge process is configured                                                                                                 |
-| Production deploy path | `.github/workflows/deploy-production.yml`                                                                        | Requires successful push-triggered `CI` for the exact `main` SHA and the same-SHA staging verdict                                                 |
-| Database release path  | staging applies pending migrations; production verifies the ledger before deployment                             | Production is clean through 0248 with 25 pending migrations, 0249 through 0273                                                                    |
-| Production smoke       | Not started                                                                                                      | Requires the deployed exact SHA; interactive model smoke must use Luna                                                                            |
+| Item                   | Current evidence                                                                                                                                                              | State                                                                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Local candidate        | `codex/website-launch-preparation-20260919`; integration commit `c4097d64ad20ba65c29e7d337ae5da6814352cde`, corpus/evidence commit `9c465d7c736c5ce47e6537b4a9ea5d9a2a0d7eb8` | The branch containing this report is clean and 19 commits ahead of `origin/main`; all 759 paths are classified in the inclusion inventory |
+| Remote `main`          | `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`                                                                                                                                    | Latest push CI is failing                                                                                                                 |
+| Production web         | `/api/version` reports `eb09a3242df1e003d72702ff6b51b5f641412440` in `production`                                                                                             | Healthy response, but behind both remote and local `main`                                                                                 |
+| GitHub protection      | Branch protection endpoint returns `404`; repository rulesets list is empty                                                                                                   | No enforced protected merge process is configured                                                                                         |
+| Production deploy path | `.github/workflows/deploy-production.yml`                                                                                                                                     | Requires successful push-triggered `CI` for the exact `main` SHA and the same-SHA staging verdict                                         |
+| Database release path  | staging applies pending migrations; production verifies the ledger before deployment                                                                                          | Production is clean through 0248 with 25 pending migrations, 0249 through 0273                                                            |
+| Production smoke       | Not started                                                                                                                                                                   | Requires the deployed exact SHA; interactive model smoke must use Luna                                                                    |
 
 ## Inclusion inventory
 
-The local release candidate currently consists of three distinct sets that are
-being reconciled separately so none can be silently lost:
+The local release candidate reconciles three distinct sets so none is silently
+lost:
 
 1. Sixteen local commits already on local `main` but not on `origin/main`.
 2. Tracked staged and unstaged edits across CLI, desktop, browser and VS Code
