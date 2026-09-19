@@ -178,8 +178,7 @@ export interface EscalateTicketInput {
 
 /**
  * Carries a ticket out of the support queue and into engineering. A p0 or p1
- * pages the on-call rotation through the same dispatch an incident uses, so a
- * contracted customer's outage reaches a human rather than a second queue.
+ * uses the on-call tracker while lower severities use support engineering.
  */
 export async function escalateTicket(input: EscalateTicketInput): Promise<TicketEscalation> {
   const ticket = await getTicketForStaff(input.ticketId);

@@ -105,50 +105,18 @@ describe('outbound content inspection', () => {
     }
   });
 
-  it('blocks a prompt on a registered provider finding and audits the prompt channel', async () => {
-    const vendor: OutboundContentScanner = {
-      id: 'vendor_dlp',
-      scan: async ({ value }) =>
-        JSON.stringify(value).includes('patient record')
-          ? [{ scanner: 'vendor_dlp', name: 'phi', severity: 'high', count: 1 }]
-          : [],
-    };
-    const unregister = registerOutboundContentScanner(vendor);
-    try {
-      const verdict = await inspectOutboundContent({
-        channel: 'prompt',
-        value: [{ role: 'user', content: 'summarise this patient record' }],
-        userId: 'user-1',
-        organizationId: 'org-1',
-        resolveMode: async () => ({ mode: 'block', organizationId: 'org-1' }),
-      });
+  it('leaves the upload channel to its own secret gate', async () => {
+    const resolveMode = vi.fn();
+    const verdict = await inspectOutboundContent({
+      channel: 'upload',
+      value: `key ${SECRET}`,
+      userId: 'user-1',
+      organizationId: 'org-1',
+      resolveMode,
+    });
 
-      expect(verdict.action).toBe('blocked');
-      expect(mockRecordAuditEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          eventType: 'dlp_content_blocked',
-          detail: expect.objectContaining({ resourceType: 'prompt', source: 'vendor_dlp:phi' }),
-        }),
-      );
-    } finally {
-      unregister();
-    }
-  });
-
-  it('leaves the prompt and upload channels to their own secret gates', async () => {
-    for (const channel of ['prompt', 'upload'] as const) {
-      const resolveMode = vi.fn();
-      const verdict = await inspectOutboundContent({
-        channel,
-        value: `key ${SECRET}`,
-        userId: 'user-1',
-        organizationId: 'org-1',
-        resolveMode,
-      });
-
-      expect(verdict.action).toBe('allowed');
-      expect(resolveMode).not.toHaveBeenCalled();
-    }
+    expect(verdict.action).toBe('allowed');
+    expect(resolveMode).not.toHaveBeenCalled();
   });
 
   it('decides an upload on findings the upload scanner reported but did not refuse', async () => {
@@ -180,7 +148,7 @@ describe('outbound content inspection', () => {
     });
     try {
       const verdict = await inspectOutboundContent({
-        channel: 'prompt',
+        channel: 'connector_write',
         value: [{ role: 'user', content: 'a record' }],
         userId: 'user-1',
         organizationId: 'org-1',

@@ -4,6 +4,9 @@ import { NextRequest } from 'next/server';
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(() => null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: { getSubscription: vi.fn() },
+}));
 vi.mock('@/lib/services/schedule-service', () => ({
   ScheduleConflictError: class ScheduleConflictError extends Error {},
   ScheduleNotFoundError: class ScheduleNotFoundError extends Error {},
@@ -22,6 +25,7 @@ import {
   setScheduleEnabled,
   updateSchedule,
 } from '@/lib/services/schedule-service';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { DELETE, GET, PATCH, PUT } from '@/app/api/schedules/[id]/route';
 
 const db = { query: vi.fn() };
@@ -36,6 +40,7 @@ describe('/api/schedules/[id]', () => {
     vi.mocked(updateSchedule).mockResolvedValue(schedule as never);
     vi.mocked(setScheduleEnabled).mockResolvedValue(schedule as never);
     vi.mocked(deleteSchedule).mockResolvedValue();
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({ plan_tier: 'pro' } as never);
   });
 
   it('loads through an owner-scoped lookup', async () => {
@@ -60,7 +65,15 @@ describe('/api/schedules/[id]', () => {
       context,
     );
     expect(response.status).toBe(200);
-    expect(updateSchedule).toHaveBeenCalledWith(db, 'user-1', 'task-1', { name: 'Updated' });
+    expect(updateSchedule).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      'task-1',
+      { name: 'Updated' },
+      {
+        planTier: 'pro',
+      },
+    );
   });
 
   it('requires a boolean isActive toggle', async () => {

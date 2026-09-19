@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -48,6 +48,47 @@ function stubFiles(files: unknown[]) {
 beforeEach(() => {
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+  service.list.mockReset();
+  service.upload.mockReset();
+});
+
+describe('SourcesPanel source replacement', () => {
+  it('shows only the current version while preserving unrelated sources', async () => {
+    const unrelated = { ...FILE, id: 'other', fileName: 'notes.txt' };
+    const replacement = { ...FILE, id: 'file-2', byteCount: 4096 };
+    service.list.mockResolvedValueOnce([FILE, unrelated]);
+    service.list.mockResolvedValueOnce([replacement, unrelated]);
+    service.upload.mockResolvedValueOnce(replacement);
+    render(<SourcesPanel projectId="project-1" />);
+
+    await screen.findByText('brief.pdf');
+    fireEvent.change(screen.getByTestId('sources-file-input'), {
+      target: { files: [new File(['updated'], 'brief.pdf', { type: 'application/pdf' })] },
+    });
+
+    await waitFor(() => expect(screen.getByText('4.0 KB')).toBeTruthy());
+    expect(screen.getAllByRole('button', { name: 'Preview brief.pdf' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Preview notes.txt' })).toBeTruthy();
+  });
+
+  it('retries a failed refresh without uploading the successful replacement again', async () => {
+    const replacement = { ...FILE, id: 'file-2', byteCount: 4096 };
+    service.list.mockResolvedValueOnce([FILE]);
+    service.list.mockRejectedValueOnce(new Error('Listing unavailable'));
+    service.list.mockResolvedValueOnce([replacement]);
+    service.upload.mockResolvedValueOnce(replacement);
+    render(<SourcesPanel projectId="project-1" />);
+
+    await screen.findByText('brief.pdf');
+    fireEvent.change(screen.getByTestId('sources-file-input'), {
+      target: { files: [new File(['updated'], 'brief.pdf', { type: 'application/pdf' })] },
+    });
+
+    await screen.findByText('Failed to load sources.');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText('4.0 KB');
+    expect(service.upload).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**

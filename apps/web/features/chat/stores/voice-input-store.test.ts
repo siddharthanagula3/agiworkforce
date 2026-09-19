@@ -236,6 +236,32 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().mode).toBe('error');
       expect(useVoiceInputStore.getState().error).toContain('microphone');
     });
+
+    it.each([
+      ['NotReadableError', /busy or unavailable/i],
+      ['TrackStartError', /busy or unavailable/i],
+      ['AbortError', /interrupted/i],
+      ['SecurityError', /browser blocked/i],
+    ])('gives an actionable message for %s', async (name, expected) => {
+      installFailingCapture(new DOMException('host detail', name));
+
+      await useVoiceInputStore.getState().startListening();
+
+      expect(useVoiceInputStore.getState().error).toMatch(expected);
+      expect(useVoiceInputStore.getState().error).not.toContain('host detail');
+    });
+
+    it('does not expose an unknown microphone failure', async () => {
+      installFailingCapture(
+        new DOMException('SELECT token FROM credentials trace 0xdeadbeef', 'UnknownError'),
+      );
+
+      await useVoiceInputStore.getState().startListening();
+
+      expect(useVoiceInputStore.getState().error).toBe(
+        'Could not start the microphone. Check your device and browser permissions, then try again.',
+      );
+    });
   });
 
   describe('stopListening', () => {
@@ -309,6 +335,52 @@ describe('voiceInputStore', () => {
   });
 
   describe('cancelListening', () => {
+    it('does not let an older microphone grant replace a newer recording', async () => {
+      installCapture();
+      let grant!: (stream: MediaStream) => void;
+      const pending = new Promise<MediaStream>((resolve) => {
+        grant = resolve;
+      });
+      vi.mocked(navigator.mediaDevices.getUserMedia).mockReturnValueOnce(pending);
+      const first = useVoiceInputStore.getState().startListening();
+      useVoiceInputStore.getState().cancelListening();
+      await useVoiceInputStore.getState().startListening();
+      const current = useVoiceInputStore.getState().captureStream;
+      const stopOld = vi.fn();
+      grant({ getTracks: () => [{ stop: stopOld }] } as unknown as MediaStream);
+      await first;
+      expect(stopOld).toHaveBeenCalledOnce();
+      expect(useVoiceInputStore.getState().captureStream).toBe(current);
+      expect(useVoiceInputStore.getState().mode).toBe('listening');
+    });
+
+    it('does not restore a transcript after cancellation', async () => {
+      installCapture();
+      let resolveText!: (body: unknown) => void;
+      const body = new Promise((resolve) => {
+        resolveText = resolve;
+      });
+      let began!: () => void;
+      const started = new Promise<void>((resolve) => {
+        began = resolve;
+      });
+      stubFetch(() => ({
+        ok: true,
+        json: () => {
+          began();
+          return body;
+        },
+      }));
+      await useVoiceInputStore.getState().startListening();
+      const stopping = useVoiceInputStore.getState().stopListening();
+      await started;
+      useVoiceInputStore.getState().cancelListening();
+      resolveText({ text: 'discarded speech' });
+      await stopping;
+      expect(useVoiceInputStore.getState().transcript).toBe('');
+      expect(useVoiceInputStore.getState().mode).toBe('idle');
+    });
+
     it('releases the microphone and drops the recording', async () => {
       const { stop } = installCapture();
       await useVoiceInputStore.getState().startListening();

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
@@ -62,7 +62,8 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
   savePreferenceNamespace: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/lib/sentry-shared', () => ({
+vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/sentry-shared')>()),
   setTelemetryConsentCache: vi.fn(),
 }));
 
@@ -132,6 +133,11 @@ describe('Web conversation data settings', () => {
       streamingConversationIds: [],
       loadingConversationIds: [],
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('lists archived chats and restores them through the real manager contract', async () => {
@@ -275,6 +281,33 @@ describe('Web conversation data settings', () => {
     await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
     expect(mocks.routerReplace).toHaveBeenCalledWith('/chat');
     expect(useChatStore.getState().conversations).toEqual([]);
+  });
+
+  it('downloads the reviewed export variant and reports a partial result', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response('{"export_metadata":{"completeness":{"status":"partial"}}}', {
+        headers: { 'X-Export-Status': 'partial', 'Content-Type': 'application/json' },
+      }),
+    );
+    const createObjectURL = vi.fn(() => 'blob:https://agiworkforce.com/export');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    render(<PrivacySection />);
+    expect(screen.getByText(/download a copy of your account data as JSON/i)).toBeInTheDocument();
+    expect(screen.queryByText(/all your conversations as JSON/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/user/data?download=true', { method: 'GET' }),
+    );
+    expect(
+      await screen.findByText(/downloaded, but some account data was unavailable/i),
+    ).toBeInTheDocument();
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).toHaveBeenCalledOnce();
   });
 
   it('scopes delete-all by the account total, not the pages the sidebar happens to hold', async () => {

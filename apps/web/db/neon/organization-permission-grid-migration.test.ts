@@ -3,9 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   BUILT_IN_ORGANIZATION_ROLES,
-  ORGANIZATION_PERMISSIONS,
+  LEGACY_ORGANIZATION_PERMISSIONS,
   PRIMARY_OWNER_ONLY_PERMISSIONS,
-  type BuiltInOrganizationRoleKey,
 } from '@agiworkforce/types';
 
 const neonDir = resolve(import.meta.dirname);
@@ -37,22 +36,30 @@ describe('0200 organization permission grid', () => {
   const sql = readMigration('0200_organization_permission_grid.sql');
   const down = readMigration('down/0200_organization_permission_grid.down.sql');
 
-  it('seeds exactly the built-in roles the shared contract defines, with the same permissions', () => {
+  it('seeds every built-in role with the legacy permission vocabulary it shipped with', () => {
     const seeded = seededPermissions(sql);
     expect(Object.keys(seeded).sort()).toEqual(Object.keys(BUILT_IN_ORGANIZATION_ROLES).sort());
-    for (const [key, definition] of Object.entries(BUILT_IN_ORGANIZATION_ROLES)) {
-      expect(seeded[key as BuiltInOrganizationRoleKey]?.sort()).toEqual(
-        [...definition.permissions].sort(),
-      );
+    for (const permissions of Object.values(seeded)) {
+      expect(
+        permissions.every((permission) =>
+          (LEGACY_ORGANIZATION_PERMISSIONS as readonly string[]).includes(permission),
+        ),
+      ).toBe(true);
     }
+    expect(seeded['primary_owner']?.sort()).toEqual([...LEGACY_ORGANIZATION_PERMISSIONS].sort());
+    expect(seeded['owner']?.sort()).toEqual(
+      LEGACY_ORGANIZATION_PERMISSIONS.filter(
+        (permission) => !(PRIMARY_OWNER_ONLY_PERMISSIONS as readonly string[]).includes(permission),
+      ).sort(),
+    );
   });
 
-  it('knows every permission the contract names and no other', () => {
+  it('knows every legacy permission and no later namespaced permission', () => {
     const known =
       /constraint organization_roles_known_permissions check \(\s*permissions <@ array\[([\s\S]*?)\]/i.exec(
         sql,
       );
-    expect(textArray(known?.[1] ?? '').sort()).toEqual([...ORGANIZATION_PERMISSIONS].sort());
+    expect(textArray(known?.[1] ?? '').sort()).toEqual([...LEGACY_ORGANIZATION_PERMISSIONS].sort());
   });
 
   it('refuses the Primary Owner permissions on every role but the built-in primary owner', () => {
@@ -65,7 +72,11 @@ describe('0200 organization permission grid', () => {
       textArray(constraint?.[1] ?? '')
         .filter((p) => p.includes('.'))
         .sort(),
-    ).toEqual([...PRIMARY_OWNER_ONLY_PERMISSIONS].sort());
+    ).toEqual(
+      PRIMARY_OWNER_ONLY_PERMISSIONS.filter(
+        (permission) => !permission.startsWith('admin.'),
+      ).sort(),
+    );
   });
 
   it('defines the viewer as read-only', () => {

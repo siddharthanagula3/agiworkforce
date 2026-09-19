@@ -181,19 +181,22 @@ impl ProjectRegistry {
     }
 
     /// Look up the entry that governs `path`: the identity-keyed grant first,
-    /// the path-keyed entry second, so a registry written before grants carried
-    /// an identity still resolves.
+    /// then a legacy path-only entry. A path entry for another identity must
+    /// not survive a remote change.
     pub fn entry_for(&self, path: &Path, identity: &str) -> Option<&ProjectEntry> {
         let path_key = Self::path_key(path);
-        if let Some(entry) = self.projects.get(&path_key) {
-            return Some(entry);
-        }
-        if identity.is_empty() {
-            return None;
+        if !identity.is_empty() {
+            if let Some(entry) = self
+                .projects
+                .values()
+                .find(|entry| entry.identity.as_deref() == Some(identity))
+            {
+                return Some(entry);
+            }
         }
         self.projects
-            .values()
-            .find(|entry| entry.identity.as_deref() == Some(identity))
+            .get(&path_key)
+            .filter(|entry| entry.identity.is_none())
     }
 
     fn path_key(path: &Path) -> String {
@@ -419,6 +422,22 @@ mod tests {
             .to_string_lossy()
             .to_string();
         assert_eq!(registry.get_project(&key).unwrap().trust_level, "trusted");
+    }
+
+    #[test]
+    fn a_path_entry_for_another_repository_identity_is_not_reused() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(dir.path(), "git:example.test/owner/first", "ada", "laptop")
+            .unwrap();
+
+        assert!(registry
+            .entry_for(dir.path(), "git:example.test/owner/second")
+            .is_none());
+        assert!(registry
+            .entry_for(dir.path(), "git:example.test/owner/first")
+            .is_some());
     }
 
     #[test]

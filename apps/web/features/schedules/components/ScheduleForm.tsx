@@ -5,8 +5,9 @@ import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
+import type { ScheduleModelOption } from '@/lib/schedules/schedule-models';
 import type { IntervalUnit, ScheduleDraft, ScheduleFormErrors } from '../types';
-import { AVAILABLE_MODELS, DAYPART_PRESETS, DAYS_OF_WEEK } from '../types';
+import { DAYPART_PRESETS, DAYS_OF_WEEK } from '../types';
 
 interface ScheduleFormProps {
   draft: ScheduleDraft;
@@ -14,6 +15,7 @@ interface ScheduleFormProps {
   submitError: string | null;
   saving: boolean;
   isEdit: boolean;
+  modelOptions: readonly ScheduleModelOption[];
   onChange: (patch: Partial<ScheduleDraft>) => void;
   onSubmit: () => void;
   onCancel: () => void;
@@ -71,6 +73,7 @@ export function ScheduleForm({
   submitError,
   saving,
   isEdit,
+  modelOptions,
   onChange,
   onSubmit,
   onCancel,
@@ -189,8 +192,8 @@ export function ScheduleForm({
               aria-invalid={Boolean(errors.model)}
               aria-describedby={describedBy('model', errors, 'schedule-model-helper')}
             >
-              {AVAILABLE_MODELS.map((model) => (
-                <option key={model.value} value={model.value}>
+              {modelOptions.map((model) => (
+                <option key={model.value} value={model.value} disabled={model.disabled}>
                   {model.label}
                 </option>
               ))}

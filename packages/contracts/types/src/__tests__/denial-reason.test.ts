@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { PlatformCapability } from '../capabilities';
 import {
-  CAPABILITY_DENIAL_ATTRIBUTE,
   CAPABILITY_DENIAL_REASONS,
   CAPABILITY_DENIAL_TAXONOMY,
-  capabilityDenialAttributes,
   capabilityDenialErrorCode,
   capabilityDenialHttpStatus,
-  capabilityDenialTelemetry,
   describeCapabilityDenial,
   type CapabilityDenialReason,
 } from '../reason-codes';
@@ -189,51 +186,5 @@ describe('the copy is a lookup, not a literal', () => {
     for (const reason of CAPABILITY_DENIAL_REASONS as readonly CapabilityDenialReason[]) {
       expect(CAPABILITY_DENIAL_TAXONOMY[reason].messageKey).toBe(`capability.denial.${reason}`);
     }
-  });
-});
-
-describe('the denial reaches telemetry as dimensions', () => {
-  it('records the cause and the remedy under stable attribute names', () => {
-    const attributes = capabilityDenialAttributes(
-      capabilityDenialTelemetry('requires_seat', {
-        capabilityId: CAPABILITY,
-        policySource: 'tier:team',
-        requiredPlan: 'team',
-        requiredPermission: 'billing.read',
-      }),
-    );
-
-    expect(attributes).toEqual({
-      'agi.denial.reason': 'requires_seat',
-      'agi.denial.decided_by': 'entitlement',
-      'agi.denial.error_code': 'SEAT_REQUIRED',
-      'agi.denial.capability_id': CAPABILITY,
-      'agi.denial.policy_source': 'tier:team',
-      'agi.denial.required_plan': 'team',
-      'agi.denial.required_permission': 'billing.read',
-    });
-  });
-
-  it('omits an absent dimension rather than emitting an empty one', () => {
-    const attributes = capabilityDenialAttributes(capabilityDenialTelemetry('offline'));
-
-    expect(Object.keys(attributes).sort()).toEqual([
-      'agi.denial.decided_by',
-      'agi.denial.error_code',
-      'agi.denial.reason',
-    ]);
-  });
-
-  it('never carries the sentence a reader sees', () => {
-    for (const reason of CAPABILITY_DENIAL_REASONS) {
-      const values = Object.values(capabilityDenialAttributes(capabilityDenialTelemetry(reason)));
-      expect(values).not.toContain(CAPABILITY_DENIAL_TAXONOMY[reason].message);
-    }
-  });
-
-  it('gives every attribute name one distinct key', () => {
-    const names = Object.values(CAPABILITY_DENIAL_ATTRIBUTE);
-    expect(new Set(names).size).toBe(names.length);
-    for (const name of names) expect(name.startsWith('agi.denial.')).toBe(true);
   });
 });

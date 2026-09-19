@@ -12,6 +12,9 @@ import {
 
 const SANDBOX_CONNECT_TIMEOUT_MS = 3000;
 
+export const ARTIFACT_RENDER_FAILURE_MESSAGE =
+  'The preview could not start. Review the source or try again.';
+
 const FALLBACK_MESSAGE_MARKER = '__agiArtifactSandbox';
 
 const FALLBACK_ERROR_REPORTER = `<script>
@@ -160,7 +163,8 @@ export function SandboxedIframe({
       } else if (data.type === 'render-error') {
         const message = data.error ?? 'unknown render error';
         setRenderError(message);
-        onRenderError?.(message);
+        console.error('[artifact-preview] render failed', message);
+        onRenderError?.(ARTIFACT_RENDER_FAILURE_MESSAGE);
       }
     };
     window.addEventListener('message', onMessage);
@@ -188,13 +192,13 @@ export function SandboxedIframe({
       const frame = iframeRef.current;
       if (!frame || !event.source || event.source !== frame.contentWindow) return;
       const data = event.data as
-        | { [FALLBACK_MESSAGE_MARKER]?: boolean; type?: string; error?: string }
-        | undefined;
+        { [FALLBACK_MESSAGE_MARKER]?: boolean; type?: string; error?: string } | undefined;
       if (!data || typeof data !== 'object' || data[FALLBACK_MESSAGE_MARKER] !== true) return;
       if (data.type !== 'render-error') return;
       const message = data.error || 'The artifact failed to render.';
       setRenderError(message);
-      onRenderError(message);
+      console.error('[artifact-preview] fallback render failed', message);
+      onRenderError(ARTIFACT_RENDER_FAILURE_MESSAGE);
     };
     window.addEventListener('message', onFallbackMessage);
     return () => window.removeEventListener('message', onFallbackMessage);

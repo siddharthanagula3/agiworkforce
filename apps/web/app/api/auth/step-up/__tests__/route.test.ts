@@ -15,7 +15,11 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
+  recordAuditEvent,
+}));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb }));
 vi.mock('@/lib/server/step-up/verify-factor', () => ({
   verifySecondFactor,

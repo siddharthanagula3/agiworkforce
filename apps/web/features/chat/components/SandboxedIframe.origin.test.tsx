@@ -95,7 +95,11 @@ describe('SandboxedIframe trusts only its own frame', () => {
       error: 'real failure',
     });
 
-    await waitFor(() => expect(onRenderError).toHaveBeenCalledWith('real failure'));
+    await waitFor(() =>
+      expect(onRenderError).toHaveBeenCalledWith(
+        'The preview could not start. Review the source or try again.',
+      ),
+    );
   });
 });
 

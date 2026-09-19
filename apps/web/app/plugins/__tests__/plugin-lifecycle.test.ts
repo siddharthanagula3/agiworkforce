@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   PluginLifecycleError,
+  applyPluginUpdate,
   deprecatePluginVersion,
   diffPluginVersionRecords,
   listPluginUpdateOffers,
@@ -343,5 +344,122 @@ describe('the update flow shows what changes before it applies', () => {
       installedVersionStopped: true,
     });
     expect(offers[0]?.diff.addedPermissions).toEqual(['network']);
+  });
+});
+
+describe('applying an update moves one installation and nothing else', () => {
+  function updateWorld(
+    installedVersion: string,
+    versions: Record<string, VersionFixture>,
+  ): { db: DatabaseAdapter; writes: unknown[][] } {
+    const writes: unknown[][] = [];
+    const db = {
+      query: vi.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('select installed_version from public.plugin_installations')) {
+          return installedVersion ? [{ installed_version: installedVersion }] : [];
+        }
+        if (sql.includes('and version = $2')) {
+          const found = versions[String(params[1])];
+          return found ? [versionRow(found)] : [];
+        }
+        return [];
+      }),
+      execute: vi.fn(async (sql: string, params: unknown[] = []) => {
+        if (sql.includes('update public.plugin_installations')) writes.push(params);
+        return [];
+      }),
+      transaction: vi.fn(),
+      withUser: vi.fn(),
+      dispose: vi.fn(),
+    } as unknown as DatabaseAdapter;
+    return { db, writes };
+  }
+
+  const published = (version: string, permissions: string[] = []): VersionFixture => ({
+    version,
+    status: 'published',
+    permissions,
+  });
+
+  it('repins the installation when nothing new is asked for', async () => {
+    const { db, writes } = updateWorld('1.0.0', {
+      '1.0.0': published('1.0.0', ['network']),
+      '1.1.0': published('1.1.0', ['network']),
+    });
+
+    const applied = await applyPluginUpdate(db, {
+      userId: 'user_1',
+      pluginId: PLUGIN_ID,
+      toVersion: '1.1.0',
+    });
+
+    expect(applied).toMatchObject({ fromVersion: '1.0.0', toVersion: '1.1.0', reEnabled: false });
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', false]);
+  });
+
+  it('refuses a version that adds a permission the member has not approved', async () => {
+    const { db, writes } = updateWorld('1.0.0', {
+      '1.0.0': published('1.0.0', ['network']),
+      '1.1.0': published('1.1.0', ['network', 'connectors']),
+    });
+
+    await expect(
+      applyPluginUpdate(db, { userId: 'user_1', pluginId: PLUGIN_ID, toVersion: '1.1.0' }),
+    ).rejects.toBeInstanceOf(PluginLifecycleError);
+    expect(writes).toHaveLength(0);
+  });
+
+  it('applies the same update once the added permission is acknowledged', async () => {
+    const { db, writes } = updateWorld('1.0.0', {
+      '1.0.0': published('1.0.0', ['network']),
+      '1.1.0': published('1.1.0', ['network', 'connectors']),
+    });
+
+    const applied = await applyPluginUpdate(db, {
+      userId: 'user_1',
+      pluginId: PLUGIN_ID,
+      toVersion: '1.1.0',
+      acknowledgedPermissions: ['connectors'],
+    });
+
+    expect(applied.diff.addedPermissions).toEqual(['connectors']);
+    expect(writes).toHaveLength(1);
+  });
+
+  it('re-enables an install whose pinned version was suspended', async () => {
+    const { db, writes } = updateWorld('1.0.0', {
+      '1.0.0': { version: '1.0.0', status: 'suspended' },
+      '1.1.0': published('1.1.0'),
+    });
+
+    const applied = await applyPluginUpdate(db, {
+      userId: 'user_1',
+      pluginId: PLUGIN_ID,
+      toVersion: '1.1.0',
+    });
+
+    expect(applied.reEnabled).toBe(true);
+    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', true]);
+  });
+
+  it('refuses to move onto a version that is not published', async () => {
+    const { db, writes } = updateWorld('1.0.0', {
+      '1.0.0': published('1.0.0'),
+      '1.1.0': { version: '1.1.0', status: 'suspended' },
+    });
+
+    await expect(
+      applyPluginUpdate(db, { userId: 'user_1', pluginId: PLUGIN_ID, toVersion: '1.1.0' }),
+    ).rejects.toBeInstanceOf(PluginLifecycleError);
+    expect(writes).toHaveLength(0);
+  });
+
+  it('refuses an update for a plugin the member has not installed', async () => {
+    const { db } = updateWorld('', { '1.1.0': published('1.1.0') });
+
+    await expect(
+      applyPluginUpdate(db, { userId: 'user_1', pluginId: PLUGIN_ID, toVersion: '1.1.0' }),
+    ).rejects.toBeInstanceOf(PluginLifecycleError);
   });
 });

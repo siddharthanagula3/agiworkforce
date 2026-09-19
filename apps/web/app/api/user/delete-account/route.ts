@@ -5,6 +5,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
@@ -130,7 +131,7 @@ interface DeletionScheduleRow {
   deletion_scheduled_for: string | null;
 }
 
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'account-deletion-status');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -181,7 +182,7 @@ export async function GET(request: NextRequest) {
   );
 }
 
-export async function DELETE(request: NextRequest) {
+async function handleDelete(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'user-data-delete');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -379,6 +380,9 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+export const GET = withPrivateNoStore(handleGet);
+export const DELETE = withPrivateNoStore(handleDelete);
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

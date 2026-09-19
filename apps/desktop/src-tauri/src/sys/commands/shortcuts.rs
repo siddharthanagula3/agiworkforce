@@ -630,10 +630,10 @@ pub async fn shortcuts_update(
             let mut registered = shortcuts_state.registered_keys.lock().await;
             registered.retain(|k| k != &rejected_key);
 
-            if was_enabled {
-                if register_global_shortcut(&app, &old_key, shortcut.action.clone()).is_ok() {
-                    registered.push(old_key);
-                }
+            if was_enabled
+                && register_global_shortcut(&app, &old_key, shortcut.action.clone()).is_ok()
+            {
+                registered.push(old_key);
             }
 
             return Err(error);

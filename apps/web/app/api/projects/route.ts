@@ -10,7 +10,7 @@ import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { buildPage, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   getProjectLimit,
   getProjectLimitErrorMessage,
@@ -131,8 +131,7 @@ async function handleCreateProject(request: NextRequest) {
     throw createError.validation('Invalid request body');
   }
   const body = parseProjectRequest(ManagedCloudProjectCreateRequestSchema, rawBody);
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const planTier = subscription?.plan_tier;
+  const planTier = await resolveEntitledPlanTier(db, userId);
   const projectLimit = getProjectLimit(planTier);
   if (projectLimit === 0) {
     throw createError.validation(getProjectLimitErrorMessage(planTier));

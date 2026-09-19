@@ -437,7 +437,7 @@ export async function readWorkspacePosture(
           value: plural(memberCount, 'member', 'members'),
           state: 'ok',
           enforcement: 'enforced',
-          detail: `${plural(adminCount, 'owner or admin', 'owners and admins')}. Membership is enforced in the database, not only in the application.`,
+          detail: `${plural(adminCount, 'owner or admin', 'owners and admins')}. Only current workspace members receive workspace access.`,
           href: '/workspace/people',
         },
         {
@@ -447,7 +447,7 @@ export async function readWorkspacePosture(
           state: pendingInvitations === 0 ? 'ok' : 'attention',
           enforcement: 'enforced',
           detail:
-            'Invitation tokens are hashed and expire. There is no transactional email provider configured, so invitations are delivered as a copyable link.',
+            'Invitations use secure, expiring links that an owner or admin can copy and send.',
           href: '/workspace/people',
         },
         {
@@ -461,7 +461,7 @@ export async function readWorkspacePosture(
             licensedSeats !== null && (seatsConsumed ?? 0) >= licensedSeats ? 'attention' : 'ok',
           enforcement: licensedSeats === null ? 'unconfigured' : 'enforced',
           detail:
-            'Seat count is written only by the billing webhook and cannot be lowered below occupied seats.',
+            'The licensed seat count follows the active subscription and cannot be set below the number already in use.',
           href: '/workspace/people',
         },
       ],
@@ -477,8 +477,8 @@ export async function readWorkspacePosture(
           state: configured ? 'ok' : 'attention',
           enforcement: configured ? 'enforced' : 'unconfigured',
           detail: configured
-            ? 'This workspace has its own saved policy row. It is read on every managed-compute request.'
-            : 'No policy row exists for this workspace. Requests fall through to the shipped default until an owner or admin saves one.',
+            ? 'Workspace-specific rules are active for managed cloud work.'
+            : 'This workspace is using the default rules. Review and save workspace rules to make its requirements explicit.',
           href: '/workspace/policy',
         },
         {
@@ -488,7 +488,7 @@ export async function readWorkspacePosture(
           state: 'ok',
           enforcement: 'enforced',
           detail:
-            'Checked on all seven managed-compute routes before a turn runs. A denial is written to the audit trail and holds regardless of which client sent the request.',
+            'This setting is applied before managed cloud work begins on every supported client. Blocked attempts appear in the audit trail.',
           href: '/workspace/policy',
         },
         {
@@ -497,7 +497,7 @@ export async function readWorkspacePosture(
           value: effectivePolicy.allowedPrivacyModes.join(', '),
           state: 'ok',
           enforcement: 'enforced',
-          detail: `Default is ${effectivePolicy.defaultPrivacyMode}. A mode outside this list is refused server-side, not merely hidden in the picker.`,
+          detail: `Default is ${effectivePolicy.defaultPrivacyMode}. Members can use only the privacy modes listed here.`,
           href: '/workspace/policy',
         },
         {
@@ -511,8 +511,8 @@ export async function readWorkspacePosture(
           enforcement: modelRules === 0 ? 'unconfigured' : 'enforced',
           detail:
             modelRules === 0
-              ? 'No model or provider restriction is saved, so members may use any model in the catalog. A saved row with empty lists would also mean unrestricted, restriction is something an administrator states.'
-              : 'Checked server-side after auto-routing resolves, so a blocked model cannot be reached by asking for Auto. A named model outranks a blocked provider, which is how "no Provider X except this one model" is expressed.',
+              ? 'No model or provider restriction is active, so members may use any model in the catalog.'
+              : 'These rules also apply after Auto chooses a model. An explicitly allowed model can remain available when its provider is otherwise blocked.',
           href: '/workspace/models',
         },
         {
@@ -553,7 +553,7 @@ export async function readWorkspacePosture(
           state: 'ok',
           enforcement: 'enforced',
           detail:
-            'Sharing is granted per resource with an explicit read or write level, enforced by row-level security rather than by a flag on the content row.',
+            'Each shared resource has an explicit read or write level, limited to the workspace members who receive access.',
           href: '/workspace/sharing',
         },
         {
@@ -564,7 +564,7 @@ export async function readWorkspacePosture(
           enforcement: 'enforced',
           detail: effectivePolicy.externalSharingEnabled
             ? 'Members may publish a chat or an artifact to an anonymous public link. Both paths check this before minting one.'
-            : 'New public links are refused on both the chat-share and artifact-publish paths. Links already published stay reachable, revoking those is a separate action.',
+            : 'Members cannot create new public chat or artifact links. Existing links stay reachable until an owner revokes them.',
           href: '/workspace/policy',
         },
         {
@@ -648,8 +648,7 @@ export async function readWorkspacePosture(
           value: auditEvents === 0 ? 'None recorded' : String(auditEvents),
           state: 'ok',
           enforcement: 'enforced',
-          detail:
-            'Written through a security-definer function; direct INSERT is revoked from the application role, so an admin cannot rewrite history.',
+          detail: 'Workspace admins can read the audit history but cannot rewrite it.',
           href: '/workspace/audit',
         },
         {

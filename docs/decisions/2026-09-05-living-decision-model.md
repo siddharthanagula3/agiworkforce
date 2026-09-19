@@ -109,10 +109,10 @@ go at the top. Model names are omitted by rule; families and slots only.
 - Options: ship the Tauri app as the product; port capabilities into Electron with native
   modules; run the Tauri host as a sidecar the shell launches and talks to over a local
   authenticated socket with the same command names, so the renderer's invoke routes to it.
-- Decision (amended the same evening): the Tauri app becomes the desktop product and the Electron
-  shell is retired after a parity week, recommended to the founder and awaiting confirmation
-  because the 2026-09-04 launch decision named the Electron shell. The sidecar option is dropped
-  on evidence: macOS permission grants attach to one signed bundle, and the Tauri bundle already
+- Decision at the time: the Tauri app was proposed as the desktop product and the Electron shell
+  would have been retired after a parity week. **Superseded by D-2026-09-15-04:** Electron is the
+  only public Desktop product and Tauri is retained only for internal value. The sidecar option was
+  dropped on evidence: macOS permission grants attach to one signed bundle, and the Tauri bundle already
   declares accessibility, screen recording, apple events, camera and microphone usage strings on
   one executable, so a sidecar would need its own signature and duplicate every prompt. The Tauri
   release pipeline already ships signed, notarized, updater verified builds for macOS, Linux and
@@ -181,8 +181,8 @@ go at the top. Model names are omitted by rule; families and slots only.
   hundreds; a band mapping calibrated against the 18 named models disagreed on 8 and always gated
   higher than the product's own pricing, which is why the named-ceiling rule replaced it. D-09's
   measure is restated as managed-eligible growth: adding managed-eligible models changes the
-  catalogue and nothing on the face; BYOK-only entries belong to the desktop, CLI and extension
-  key lanes.
+  catalogue and nothing on the face; BYOK-only entries belong to the CLI and the unpublished VS
+  Code extension key lanes. The public Electron Desktop has no provider-key lane.
 - Why: the ceilings make spend safe by construction, the commercial status field already encodes
   the contract question, and the rule lives in the one function every enforcement point calls.
 - Tradeoff: a long tail of models a user can pick by hand with no curation of quality; Auto stays
@@ -287,7 +287,8 @@ go at the top. Model names are omitted by rule; families and slots only.
   are consumer scrapes (docs/research/omniroute-learnings-2026-09-05.md); our terms workbook
   (docs/research/free-inference-tos-workbook-2026-09-01.md) found one clean company pool candidate.
 - Current implementation: free lane with a hard terms gate (packages/ai/routing/src/free-auto.ts);
-  BYOK on desktop and CLI only; no web key custody by design.
+  BYOK in the released CLI, with VS Code support coming soon; the public Electron Desktop and web
+  app are Managed Cloud only and have no provider-key custody path.
 - Options: company pool only; bring your own account with client held keys; web key custody.
 - Decision: pending Stage 1 market research on OAuth and account linking mechanisms; the company pool
   keeps the hard terms gate regardless; consumer scrapes and rate limit evasion are out.

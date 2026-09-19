@@ -117,7 +117,7 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'environment',
     label: 'Configuration',
-    what: 'A database connection string is present in the serving environment.',
+    what: 'Core service configuration is present in the serving environment.',
   },
   {
     key: 'database',
@@ -385,12 +385,12 @@ export default async function StatusPage() {
                 {
                   meta: 'Local',
                   title: 'No dependency on AGI’s servers.',
-                  body: 'Local chats, files, and sessions run on your own hardware through Ollama or LM Studio. They keep working during any hosted incident, including a full outage.',
+                  body: 'CLI Local sessions run on your own hardware through Ollama or LM Studio. They keep working during a hosted incident, including a full outage.',
                 },
                 {
                   meta: 'BYOK',
                   title: 'Traffic goes straight to your provider.',
-                  body: 'BYOK requests on Desktop, CLI, and VS Code travel directly from the local runtime to the provider you chose. If a model misbehaves, the provider’s own status page is the source of truth.',
+                  body: 'BYOK requests from the released CLI travel directly to the provider you chose. VS Code support is coming soon; Desktop does not accept provider keys. If a model misbehaves, the provider’s own status page is the source of truth.',
                 },
                 {
                   meta: 'AGI Cloud',
@@ -459,8 +459,8 @@ export default async function StatusPage() {
                 Something looks wrong?
               </h2>
               <Prose>
-                Release notes live in the changelog, and a human reads every incident report. Tell
-                us what you saw and when. We would rather hear it twice than not at all.
+                Release notes live in the changelog. Email an incident report with what you saw and
+                when; the support page states the available channels and response commitments.
               </Prose>
             </div>
             <ButtonRow>

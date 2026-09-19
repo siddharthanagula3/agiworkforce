@@ -10,7 +10,10 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { persistActiveWorkspaceSelection } from '@/lib/services/active-workspace-service';
+import {
+  persistActiveWorkspaceSelection,
+  resolveActiveOrganizationId,
+} from '@/lib/services/active-workspace-service';
 import {
   listAccountWorkspaces,
   organizationForWorkspace,
@@ -26,9 +29,10 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request, {
+  const { db, userId } = await getUserScopedDb(request, {
     resolveOrganization: false,
   });
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const workspaces = await listAccountWorkspaces(db, userId);
   const active = organizationId
     ? (workspaces.find((workspace) => workspace.organizationId === organizationId) ?? null)

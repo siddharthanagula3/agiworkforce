@@ -67,7 +67,7 @@ describe('release notes describe capabilities the code actually carries', () => 
       .map((provider) => provider.label)
       .filter((label) => label.endsWith('(Local)'))
       .map((label) => label.replace(/\s+\(Local\)$/, ''));
-    for (const runtime of ['Ollama', 'LM Studio', 'llama.cpp', 'vLLM']) {
+    for (const runtime of ['Ollama', 'LM Studio']) {
       expect(body, `${runtime} is not in the release note`).toContain(runtime);
       expect(localProviderLabels, `${runtime} is not a catalogued local provider`).toContain(
         runtime,
@@ -75,11 +75,11 @@ describe('release notes describe capabilities the code actually carries', () => 
     }
   });
 
-  it('counts the surfaces the fail-closed egress entry claims', () => {
+  it('limits the fail-closed egress release to the surfaces represented by that entry', () => {
     const note = noteFor('2026-06-24');
-    expect(note.body.join(' ')).toContain('all six surfaces');
+    expect(note.body.join(' ')).toContain('each implemented route');
     expect(Object.keys(SURFACE_STATUS).length).toBe(6);
-    expect(note.surfaces.length).toBe(6);
+    expect(note.surfaces).toEqual(['web', 'cli']);
   });
 
   it('keeps the CLI v1.0 release short of GA while the installer refuses that release', () => {

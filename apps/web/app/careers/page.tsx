@@ -60,7 +60,7 @@ export default function CareersPage() {
                   meta: 'Write',
                   title: 'Stay in touch',
                   href: contactMailto(),
-                  body: "Email us and tell us what you're building. A real human reads it.",
+                  body: "Email us and tell us what you're building. This is an open contact channel, not a response-time promise.",
                   external: true,
                 },
               ]}

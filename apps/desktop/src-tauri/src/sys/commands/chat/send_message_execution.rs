@@ -708,8 +708,7 @@ fn spawn_streaming_chat(
                 persistence_usage.record_request(
                     provider_enum,
                     initial_model,
-                    u32::try_from(TokenCounter::estimate_prompt_tokens(&llm_request.messages))
-                        .unwrap_or(u32::MAX),
+                    TokenCounter::estimate_prompt_tokens(&llm_request.messages),
                     stream_data.estimated_output_tokens,
                     stream_data.usage.as_ref(),
                     stream_data.credits.as_ref(),
@@ -1080,12 +1079,9 @@ fn spawn_streaming_chat(
                                             persistence_usage.record_request(
                                                 provider_enum,
                                                 followup_model,
-                                                u32::try_from(
-                                                    TokenCounter::estimate_prompt_tokens(
-                                                        &followup_request.messages,
-                                                    ),
-                                                )
-                                                .unwrap_or(u32::MAX),
+                                                TokenCounter::estimate_prompt_tokens(
+                                                    &followup_request.messages,
+                                                ),
                                                 followup_data.estimated_output_tokens,
                                                 followup_data.usage.as_ref(),
                                                 followup_data.credits.as_ref(),

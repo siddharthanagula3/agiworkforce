@@ -24,6 +24,7 @@ import {
 } from '@agiworkforce/ui';
 import type { ChatMessage, GeneratedFileEntry } from '../lib/types';
 import { useHostBridge } from '../lib/hostBridge';
+import { toUserMessageWithStatus } from '../lib/network-error';
 import { GeneratedFileCard } from './GeneratedFileCard';
 
 const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set([
@@ -321,7 +322,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
         if (!cancelled) {
           setPreviewState({
             status: 'error',
-            error: error instanceof Error ? error.message : String(error),
+            error: toUserMessageWithStatus(error, 'Preview could not be loaded. Try again.'),
           });
         }
       }
@@ -353,7 +354,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
       } catch (err) {
         setDownloadErrors((prev) => ({
           ...prev,
-          [entry.id]: err instanceof Error ? err.message : String(err),
+          [entry.id]: toUserMessageWithStatus(err, 'Download failed. Try again.'),
         }));
       } finally {
         setInFlightIds((prev) => {
@@ -427,7 +428,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
                 className="text-[12px] text-[var(--chat-destructive-text)]"
                 data-testid="generated-file-download-error"
               >
-                Download failed: {downloadErrors[entry.id]}
+                {downloadErrors[entry.id]}
               </span>
               <Button
                 variant="ghost"

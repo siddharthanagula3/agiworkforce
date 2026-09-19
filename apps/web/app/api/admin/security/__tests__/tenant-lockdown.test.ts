@@ -7,10 +7,16 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/server/data-region', () => ({ managedCloudDataRegion: () => 'us-east-1' }));
+vi.mock('@/lib/server/data-region', () => ({
+  assertCustomerKeyRegion: vi.fn(() => undefined),
+  keyManagementRegions: vi.fn(() => []),
+  readOrganizationRegion: vi.fn(async () => null),
+  managedCloudDataRegion: () => 'us-east-1',
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
 vi.mock('@/lib/server/request-context-cache', () => ({ setCachedAccountStatus: vi.fn() }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityUser: vi.fn(async () => null),
   getIdentityProvider: () => ({ setUserSuspended: vi.fn() }),
 }));
 vi.mock('@/lib/server/security-log-retention', () => ({ purgeExpiredSecurityAuditLogs: vi.fn() }));

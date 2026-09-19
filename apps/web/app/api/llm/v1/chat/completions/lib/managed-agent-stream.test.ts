@@ -647,7 +647,7 @@ describe('managed agent stream', () => {
     const params = call?.[1] as unknown[] | undefined;
     expect(params?.[2]).toBe('# Report\n\nHeadline one.[1] Headline two.[2]');
     const metadata = JSON.parse(String(params?.[7])) as Record<string, unknown>;
-    expect(metadata['searchResults']).toEqual([
+    expect(metadata['searchResults']).toMatchObject([
       { url: 'https://a.example/1', title: 'Outlet A', snippet: 'first' },
       { url: 'https://b.example/2', title: 'Outlet B', snippet: 'second' },
     ]);

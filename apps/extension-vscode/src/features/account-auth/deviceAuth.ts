@@ -11,12 +11,14 @@ import {
   setAccountToken,
 } from '../../utils/api';
 import { getExtensionUserAgent } from '../../platform/version';
+import { describeRemoteEnvironment } from '../../platform/remoteEnvironment';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const MIN_POLL_INTERVAL_MS = 3_000;
 const MAX_POLL_INTERVAL_MS = 10_000;
 const MAX_AUTH_WINDOW_MS = 15 * 60 * 1000;
 const BROWSER_OPEN_CONFIRM_TIMEOUT_MS = 2_500;
+const REMOTE_BROWSER_OPEN_CONFIRM_TIMEOUT_MS = 8_000;
 
 export type DeviceAuthPost = (
   url: string,
@@ -36,11 +38,34 @@ export interface DeviceAuthorizationRequest {
 }
 
 export type DeviceAuthorizationPollResult =
-  | { kind: 'approved'; token: string; expiresAt: number }
+  | { kind: 'approved'; token: string; expiresAt: number; refreshToken?: string }
   | { kind: 'pending' }
   | { kind: 'denied' }
   | { kind: 'expired' }
   | { kind: 'rejected'; message: string };
+
+export type DeviceSessionRefreshResult =
+  | { kind: 'renewed'; token: string; expiresAt: number; refreshToken: string }
+  | { kind: 'unavailable' }
+  | { kind: 'revoked' }
+  | { kind: 'terms-required'; acceptanceUrl: string | null };
+
+/**
+ * A remote window forwards openExternal to the local client, so the round trip
+ * is slower than a local one and a short confirm window reads as a failure.
+ */
+export function deviceAuthorizationOpenTimeoutMs(remoteName: string | undefined): number {
+  return describeRemoteEnvironment(remoteName).kind === 'local'
+    ? BROWSER_OPEN_CONFIRM_TIMEOUT_MS
+    : REMOTE_BROWSER_OPEN_CONFIRM_TIMEOUT_MS;
+}
+
+export function describeDeviceAuthorizationBrowser(remoteName: string | undefined): string {
+  const remote = describeRemoteEnvironment(remoteName);
+  return remote.kind === 'local'
+    ? 'The approval page opens in the browser on this computer.'
+    : `VS Code is connected to ${remote.label}, so the approval page opens in the browser on your own computer and not on ${remote.label}.`;
+}
 
 const postJson: DeviceAuthPost = (urlString, payload, headers) =>
   new Promise((resolve, reject) => {
@@ -181,11 +206,55 @@ export async function pollDeviceAuthorization(
   if (tokenResponse.token_type.toLowerCase() !== 'bearer') {
     return { kind: 'rejected', message: 'AGI Cloud returned an unsupported token type.' };
   }
+  const refreshToken = typeof body['refresh_token'] === 'string' ? body['refresh_token'] : '';
   return {
     kind: 'approved',
     token: tokenResponse.access_token,
     expiresAt: Date.now() + tokenResponse.expires_in * 1000,
+    ...(refreshToken === '' ? {} : { refreshToken }),
   };
+}
+
+/**
+ * Rotates a device session against the same endpoint every other surface uses.
+ * A transport failure is 'unavailable', not 'revoked': losing the credential
+ * because the network blinked would send the editor back through device code.
+ */
+export async function refreshDeviceSession(
+  origin: string,
+  refreshToken: string,
+  post: DeviceAuthPost = postJson,
+): Promise<DeviceSessionRefreshResult> {
+  let response: { status: number; body: string };
+  try {
+    response = await post(`${new URL(origin).origin}/api/auth/device/refresh`, {
+      refresh_token: refreshToken,
+    });
+  } catch {
+    return { kind: 'unavailable' };
+  }
+
+  const body = parseRecord(response.body);
+  const error = typeof body['error'] === 'string' ? body['error'] : undefined;
+  if (error === 'terms_acceptance_required') {
+    const url = body['acceptance_url'];
+    return { kind: 'terms-required', acceptanceUrl: typeof url === 'string' ? url : null };
+  }
+  if (error === 'invalid_grant') return { kind: 'revoked' };
+  if (response.status < 200 || response.status >= 300) return { kind: 'unavailable' };
+
+  try {
+    const tokenType = requiredString(body, 'token_type');
+    if (tokenType.toLowerCase() !== 'bearer') return { kind: 'unavailable' };
+    return {
+      kind: 'renewed',
+      token: requiredString(body, 'access_token'),
+      expiresAt: Date.now() + requiredPositiveNumber(body, 'expires_in') * 1000,
+      refreshToken: requiredString(body, 'refresh_token'),
+    };
+  } catch {
+    return { kind: 'unavailable' };
+  }
 }
 
 export async function revokeDeviceAuthorization(
@@ -250,20 +319,22 @@ export async function signInToAgiCloud(
     return false;
   }
 
+  const whereTheBrowserOpens = describeDeviceAuthorizationBrowser(vscode.env.remoteName);
   const browserOpenResult = await tryOpenDeviceAuthorizationUrl(
     authorization.verificationUrl,
     openExternal,
+    deviceAuthorizationOpenTimeoutMs(vscode.env.remoteName),
   );
   if (browserOpenResult === 'rejected') {
     vscode.window.showErrorMessage(
-      `Open ${authorization.verificationUrl} and enter ${authorization.userCode}.`,
+      `${whereTheBrowserOpens} Open ${authorization.verificationUrl} and enter ${authorization.userCode}.`,
     );
     return false;
   }
   if (browserOpenResult === 'unconfirmed') {
     void vscode.window
       .showWarningMessage(
-        'VS Code could not confirm that the AGI sign-in page opened. Device approval is still waiting.',
+        `VS Code could not confirm that the AGI sign-in page opened. ${whereTheBrowserOpens} Device approval is still waiting.`,
         'Copy sign-in link',
       )
       .then(async (action) => {
@@ -281,7 +352,7 @@ export async function signInToAgiCloud(
     },
     async (progress, cancelToken) => {
       progress.report({
-        message: `Approve code ${authorization.userCode} in your browser.`,
+        message: `Approve code ${authorization.userCode}. ${whereTheBrowserOpens}`,
       });
       const maxPolls = Math.max(
         1,
@@ -295,7 +366,7 @@ export async function signInToAgiCloud(
 
         const result = await pollDeviceAuthorization(origin, authorization.deviceCode, post);
         if (result.kind === 'approved') {
-          await setAccountToken(secrets, result.token, result.expiresAt);
+          await setAccountToken(secrets, result.token, result.expiresAt, result.refreshToken);
           vscode.window.showInformationMessage('Signed in to AGI Cloud.');
           return true;
         }
@@ -323,7 +394,7 @@ export async function signOutOfAgiCloud(
   secrets: vscode.SecretStorage,
   post: DeviceAuthPost = postJson,
 ): Promise<boolean> {
-  const token = await getAccountToken(secrets);
+  const token = await getAccountToken(secrets, { renew: false });
   const revoked =
     token === undefined
       ? true

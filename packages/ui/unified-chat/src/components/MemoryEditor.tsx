@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { Pin, PinOff, Trash2 } from 'lucide-react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
+import { toUserMessage } from '../lib/network-error';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
 
 const MAX_FACT_CHARS = 280;
@@ -86,7 +87,7 @@ export function MemoryEditor({
     } catch (error) {
       // The adapter has already put the list back; this says why, so a row that
       // reappears (or vanishes again) is not mistaken for a glitch.
-      setMutationError(error instanceof Error ? error.message : 'Could not update memory.');
+      setMutationError(toUserMessage(error, 'Could not update memory. Try again.'));
     } finally {
       setMutating(false);
     }

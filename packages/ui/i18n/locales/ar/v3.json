@@ -64,7 +64,7 @@
       "switchTo": "التبديل إلى {{mode}}",
       "soon": "قريبًا",
       "cloudUnavailable": "يتوفر AGI Cloud على سطح المكتب, سجّل الدخول لاستخدام النماذج المُدارة والمحادثات المتزامنة.",
-      "localUnavailable": "يعمل الوضع المحلي في تطبيق AGI Workforce لسطح المكتب. نزّله للاحتفاظ بالمحادثات والملفات على هذا الجهاز."
+      "localUnavailable": "يعمل الوضع المحلي في واجهة أوامر AGI Workforce عبر Ollama أو LM Studio. تستخدم محادثات سطح المكتب السحابة المُدارة."
     },
     "groups": {
       "lastHour": "Last hour",

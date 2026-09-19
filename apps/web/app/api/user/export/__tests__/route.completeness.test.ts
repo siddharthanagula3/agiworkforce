@@ -95,6 +95,8 @@ describe('GET /api/user/export completeness', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('X-Export-Status')).toBe('complete');
     expect(body.success).toBe(true);
     expect(body.status).toBe('complete');
     expect(body.data.export_metadata.completeness).toMatchObject({
@@ -146,6 +148,7 @@ describe('GET /api/user/export completeness', () => {
     );
 
     expect(response.headers.get('X-Export-Status')).toBe('partial');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     const body = JSON.parse(await response.text());
     expect(body.export_metadata.completeness.status).toBe('partial');
   });

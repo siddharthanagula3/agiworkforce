@@ -17,6 +17,7 @@ interface VoiceInputButtonProps {
   onStart: () => void;
   active?: boolean;
   disabled?: boolean;
+  disabledReason?: string;
   className?: string;
 }
 
@@ -33,6 +34,7 @@ export function VoiceInputButton({
   onStart,
   active = false,
   disabled,
+  disabledReason,
   className,
 }: VoiceInputButtonProps) {
   const { t } = useTranslation('chat');
@@ -58,10 +60,13 @@ export function VoiceInputButton({
         type="button"
         onClick={handleClick}
         disabled={disabled}
+        title={disabled ? disabledReason : undefined}
         aria-label={
-          isSupported
-            ? t('composer.voiceStart', { defaultValue: LABEL.start })
-            : t('composer.voiceUnsupportedBrowser', { defaultValue: LABEL.unsupported })
+          disabled && disabledReason
+            ? disabledReason
+            : isSupported
+              ? t('composer.voiceStart', { defaultValue: LABEL.start })
+              : t('composer.voiceUnsupportedBrowser', { defaultValue: LABEL.unsupported })
         }
         aria-pressed={active}
         className={cn(

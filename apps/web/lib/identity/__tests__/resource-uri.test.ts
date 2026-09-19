@@ -6,6 +6,7 @@ import {
   formatResourceUri,
   isCanonicalResourceId,
   parseResourceUri,
+  resourceUriFor,
 } from '../resource-uri';
 
 const UUID = '2f1c8a64-9d3b-4f7a-8e21-0b5d6c7a8f90';
@@ -54,6 +55,16 @@ describe('resource uri', () => {
       /canonical AGI id/,
     );
     expect(parseResourceUri('agi://artifact/chatcmpl-9xQdE1t')).toBeNull();
+  });
+
+  it('answers null for a pair no canonical address covers, instead of throwing', () => {
+    expect(resourceUriFor({ kind: 'project', id: UUID })).toBe(`agi://project/${UUID}`);
+    expect(resourceUriFor({ kind: 'project', id: UUID, workspaceId: 'ws_01' })).toBe(
+      `agi://project/${UUID}?workspace=ws_01`,
+    );
+    expect(resourceUriFor({ kind: 'legal_hold', id: UUID })).toBeNull();
+    expect(resourceUriFor({ kind: 'project', id: 'chatcmpl-9xQdE1t' })).toBeNull();
+    expect(resourceUriFor({ kind: 'project', id: null })).toBeNull();
   });
 
   it('refuses another scheme, a nested path and a malformed value', () => {

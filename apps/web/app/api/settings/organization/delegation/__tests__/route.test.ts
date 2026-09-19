@@ -20,7 +20,11 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
+  recordAuditEvent: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/services/org-sharing-service', () => ({
   resolveOrgMembership: vi.fn(async () => ({
     organizationId: '11111111-1111-4111-8111-111111111111',

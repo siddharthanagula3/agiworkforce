@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -80,7 +79,7 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('debounce branch: only debounces on status=pending (allows legitimate re-mention after completed)', () => {
-    expect(routeSource).toMatch(/recent\.status === 'pending'/);
+    expect(routeSource).toMatch(/recentSamePR\[0\]\?\.status === 'pending'/);
   });
 
   it('debounce branch: writes a skipped_debounce row when the LLM call is skipped', () => {
@@ -110,11 +109,11 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('happy path: inserts a pending row BEFORE the LLM fetch call', () => {
-    const fetchIdx = routeSource.indexOf("await fetch(providerApiUrl('anthropic', 'messages')");
-    expect(fetchIdx).toBeGreaterThan(0);
-    const beforeFetch = routeSource.slice(0, fetchIdx);
-    expect(beforeFetch).toMatch(/insert into github_pr_review_attempts/);
-    expect(beforeFetch).toMatch(/'pending'/);
+    const reviewIdx = routeSource.indexOf('await reviewPullRequestDiff({');
+    expect(reviewIdx).toBeGreaterThan(0);
+    const beforeReview = routeSource.slice(0, reviewIdx);
+    expect(beforeReview).toMatch(/insert into github_pr_review_attempts/);
+    expect(beforeReview).toMatch(/'pending'/);
   });
 
   it('happy path: marks the pending row completed after the LLM returns', () => {
@@ -123,7 +122,7 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('failure path: marks the pending row failed in the catch block', () => {
-    const catchIdx = routeSource.indexOf("logger.error({ error }, 'PR review processing error')");
+    const catchIdx = routeSource.indexOf("'PR review processing error'");
     expect(catchIdx).toBeGreaterThan(0);
     const catchBlock = routeSource.slice(catchIdx, catchIdx + 600);
     expect(catchBlock).toMatch(/'failed'/);
@@ -134,7 +133,7 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('attemptId is hoisted ABOVE the try block (so the catch can mark failed)', () => {
-    const fnIdx = routeSource.indexOf('const processReview = async');
+    const fnIdx = routeSource.indexOf('async function runAutomatedReview');
     expect(fnIdx).toBeGreaterThan(0);
     const sliceStart = routeSource.slice(fnIdx);
     const tryIdx = sliceStart.indexOf('try {');

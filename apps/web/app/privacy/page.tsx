@@ -187,11 +187,12 @@ const MODE_LEDGER: readonly LedgerRow[] = [
     label: 'Local',
     value: (
       <>
-        <strong>Where your prompts go:</strong> to a model runtime on your own machine. Nothing is
-        transmitted to us and nothing is silently routed to BYOK or Managed Cloud.
+        <strong>Where your prompts go:</strong> from the released CLI to Ollama or LM Studio on
+        loopback. Nothing is transmitted to us and nothing is silently routed to BYOK or Managed
+        Cloud.
         <br />
-        <strong>What we hold:</strong> nothing about the conversation. Conversations live in SQLite
-        on your disk.
+        <strong>What we hold:</strong> nothing about the local model request. The current Desktop
+        and web apps use Managed Cloud; they do not expose Local inference.
       </>
     ),
   },
@@ -202,12 +203,12 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         <strong>Where your prompts go:</strong> from your client straight to the provider you
         targeted, on your own API key. We are not in that request path.{' '}
         <strong>
-          Available on the desktop app, the CLI and the VS Code extension. The web app is cloud-only
-          and has no user-key path, so anything you do in a browser is Managed Cloud.
+          Available in the released CLI. The VS Code extension is coming soon. Desktop and web are
+          cloud-only and have no user-key path, so work on those surfaces is Managed Cloud.
         </strong>
         <br />
-        <strong>What we hold:</strong> your account and settings. Not the prompt traffic. Your key
-        is encrypted on your device and the master password is not recoverable by us.
+        <strong>What we hold:</strong> not the provider key or prompt traffic. The CLI stores the
+        key in the operating system credential store and calls the provider directly.
       </>
     ),
   },
@@ -289,9 +290,10 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     label: 'Conversations (Local)',
     value: (
       <>
-        <strong>Examples:</strong> SQLite on disk. Not silently routed to BYOK or Managed Cloud.
+        <strong>Examples:</strong> CLI sessions sent to Ollama or LM Studio on loopback. Not
+        silently routed to BYOK or Managed Cloud.
         <br />
-        <strong>Why, and how it is protected:</strong> we hold none of it.
+        <strong>Why, and how it is protected:</strong> AGI Cloud is not in the model request path.
       </>
     ),
   },
@@ -299,9 +301,11 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     label: 'BYOK keys',
     value: (
       <>
-        <strong>Examples:</strong> encrypted on device. Master password unrecoverable by us.
+        <strong>Examples:</strong> provider credentials saved by the released CLI in the operating
+        system credential store.
         <br />
-        <strong>Why, and how it is protected:</strong> you stay in control of provider auth.
+        <strong>Why, and how it is protected:</strong> the CLI reads the key locally and sends
+        requests directly to the selected provider; AGI Cloud does not receive it.
       </>
     ),
   },
@@ -309,14 +313,15 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     label: 'Telemetry',
     value: (
       <>
-        <strong>Examples:</strong> error and performance reports via Sentry, and page-view analytics
-        via Google Analytics. Both are opt-in and load only after you consent; the consent gate
-        fails closed, so a failure to read your choice means analytics stays off. No prompt content
-        is sent to either.
+        <strong>Examples:</strong> Browser error and performance reports via Sentry use the
+        telemetry consent in Settings; Google Analytics page views use the analytics choice in the
+        cookie banner. Both browser gates fail closed. Server and edge operational error reporting
+        can run when Sentry is configured and does not use the browser setting.
         <br />
-        <strong>Why, and how it is protected:</strong> operational visibility. Error reports are
-        content-scrubbed and send no default personal data, but they <em>do</em> retain a stable
-        user id so a crash can be tied to a session, so they are pseudonymous, not anonymous.
+        <strong>Why, and how it is protected:</strong> operational visibility. Request bodies, query
+        strings, cookies, headers and prompt- or content-named fields are removed. Free-text
+        diagnostic messages may remain after secrets are masked. Consented browser reports retain a
+        stable user id so a crash can be tied to a session; server and edge reports do not.
       </>
     ),
   },
@@ -372,11 +377,11 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Early-access list',
+    label: 'Enterprise contact list',
     value: (
       <>
-        <strong>Examples:</strong> your email address, if you ask us to tell you when enterprise
-        features open.
+        <strong>Examples:</strong> your email address, if you ask us to discuss contract-scoped
+        Enterprise access or additional Enterprise capabilities with you.
         <br />
         <strong>Why, and how it is protected:</strong> only what you consented to, recorded per
         purpose before the address is stored. You can be asked about product updates separately and
@@ -498,8 +503,8 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
     label: 'Keeping the service secure and available',
     value: (
       <>
-        <strong>Data used:</strong> server logs, the security audit log, rate-limiting state,
-        account status.
+        <strong>Data used:</strong> server logs, server and edge operational error reports, the
+        security audit log, rate-limiting state, account status.
         <br />
         <strong>Basis:</strong> <strong>legitimate interests.</strong> Every user has an interest in
         the service not being taken over or abused, the data is operational rather than content, and
@@ -524,10 +529,12 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
     label: 'Crash and error reporting',
     value: (
       <>
-        <strong>Data used:</strong> error reports with a stable user id, content-scrubbed.
+        <strong>Data used:</strong> consented browser error reports with a stable user id. Sensitive
+        request fields are removed and free-text diagnostics are masked for secret-shaped values.
         <br />
         <strong>Basis:</strong> <strong>your consent.</strong> Off unless you turn it on in
-        settings. No prompt content is sent.
+        settings. Server and edge operational error reporting falls under Keeping the service secure
+        and available above and does not attach a stable user id.
       </>
     ),
   },
@@ -745,7 +752,7 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Export your data',
     value:
-      'Account settings. Returns your account data as a download. It is rate limited, and every export is written to the security audit log. It does not yet cover every category this page lists. Where something is missing, use the access request in the next section.',
+      'Account settings. Downloads the reviewed personal and account-data sections with a completeness record. Complete means every reviewed section was read without skipped or truncated rows; partial names anything unavailable, skipped, or truncated. Live secrets, credential verifiers, and product-internal cost ledgers are intentionally excluded. Every export is rate limited and written to the security audit log. Where something is missing, use the access request in the next section.',
   },
   {
     label: 'Delete your account',
@@ -803,7 +810,7 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Choose where a request goes',
     value:
-      'The mode selector. Local keeps the conversation on your machine and sends us nothing; BYOK goes from your client straight to your provider on your key. Both are desktop, CLI and VS Code capabilities: the web app is cloud-only.',
+      'In the released CLI, Local keeps the conversation on your machine and sends us nothing; BYOK goes straight to your provider on your key. VS Code BYOK is coming soon. Web and Desktop are cloud-only.',
   },
 ];
 
@@ -1029,7 +1036,7 @@ export default function PrivacyPage() {
                         What deliberately survives deleting your account
                       </h3>
                       <Prose size="sm">
-                        &ldquo;Delete my account&rdquo; erases an enumerated list of 91 user-scoped
+                        &ldquo;Delete my account&rdquo; erases an enumerated list of 93 user-scoped
                         tables and your stored files. A short list of things is kept on purpose, and
                         you should know what before you decide, not after.
                       </Prose>

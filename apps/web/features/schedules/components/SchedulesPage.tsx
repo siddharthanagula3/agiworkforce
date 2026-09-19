@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { toUserMessageWithStatus } from '@agiworkforce/unified-chat';
+import { getPlanMaxScheduledTasks, type BillingPlanTier } from '@agiworkforce/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +43,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { toUserMessage } from '@/lib/user-error-message';
+import { getScheduleModelOptions } from '@/lib/schedules/schedule-models';
 import {
   formatDateTime,
   scheduleResultText,
@@ -119,6 +121,7 @@ interface SchedulesPageProps {
   createIdempotencyKey?: () => string;
   scope?: ScheduleProjectScope | null;
   projects?: ScheduleProjectOption[];
+  subscriptionTier: BillingPlanTier;
   onOpenChat: (schedule: ScheduleTask) => void;
 }
 
@@ -150,6 +153,7 @@ export function SchedulesPage({
   createIdempotencyKey = defaultIdempotencyKey,
   scope = null,
   projects = [],
+  subscriptionTier,
   onOpenChat,
   focusScheduleId = null,
 }: SchedulesPageProps) {
@@ -178,6 +182,11 @@ export function SchedulesPage({
   const manualRunKeys = useRef<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<ScheduleStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
+  const modelOptions = useMemo(
+    () => getScheduleModelOptions(subscriptionTier, editing?.model),
+    [subscriptionTier, editing?.model],
+  );
+  const canCreateSchedules = getPlanMaxScheduledTasks(subscriptionTier) !== 0;
   const [runningScheduleIds, setRunningScheduleIds] = useState<Set<string>>(new Set());
 
   const { openSettings } = useSettingsModal();
@@ -671,11 +680,29 @@ export function SchedulesPage({
               </p>
             </div>
           )}
-          <Button type="button" onClick={openCreate} className="shrink-0">
-            <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-            {scope ? 'New task in this project' : 'Create Schedule'}
-          </Button>
+          {canCreateSchedules ? (
+            <Button type="button" onClick={openCreate} className="shrink-0">
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              {scope ? 'New task in this project' : 'Create Schedule'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0"
+              onClick={() => openSettings('billing')}
+            >
+              Upgrade plan
+            </Button>
+          )}
         </header>
+
+        {!canCreateSchedules && (
+          <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            Scheduled tasks are available on Basic and higher plans. Existing schedules remain
+            available to review.
+          </p>
+        )}
 
         <div
           role="status"
@@ -719,11 +746,15 @@ export function SchedulesPage({
               {scope ? 'No scheduled tasks in this project yet' : 'No schedules yet'}
             </h2>
             <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
-              Create a self-contained Managed Cloud text task and choose exactly when it can run.
+              {canCreateSchedules
+                ? 'Create a self-contained Managed Cloud text task and choose exactly when it can run.'
+                : 'Upgrade to automate unattended work from this account.'}
             </p>
-            <Button type="button" className="mt-5" onClick={openCreate}>
-              {scope ? 'Create Your First Scheduled Task' : 'Create Your First Schedule'}
-            </Button>
+            {canCreateSchedules && (
+              <Button type="button" className="mt-5" onClick={openCreate}>
+                {scope ? 'Create Your First Scheduled Task' : 'Create Your First Schedule'}
+              </Button>
+            )}
 
             {/*
               Starting from a blank prompt is the reason most people never make
@@ -731,28 +762,32 @@ export function SchedulesPage({
               draft pre-filled, so it is a starting point the user still reviews
               and edits, never a schedule created behind their back.
             */}
-            <div className="mt-10 text-left">
-              <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Or start from one of these
-              </h3>
-              <ul className="mx-auto mt-4 grid max-w-3xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {SCHEDULE_TEMPLATES.map((template) => (
-                  <li key={template.id}>
-                    <button
-                      type="button"
-                      onClick={() => openCreateFromTemplate(template)}
-                      className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
-                    >
-                      <span className="text-sm font-medium text-foreground">{template.name}</span>
-                      <span className="text-xs text-muted-foreground">{template.description}</span>
-                      <span className="mt-1 text-[12px] text-muted-foreground">
-                        {template.cadenceLabel}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            {canCreateSchedules && (
+              <div className="mt-10 text-left">
+                <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Or start from one of these
+                </h3>
+                <ul className="mx-auto mt-4 grid max-w-3xl gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {SCHEDULE_TEMPLATES.map((template) => (
+                    <li key={template.id}>
+                      <button
+                        type="button"
+                        onClick={() => openCreateFromTemplate(template)}
+                        className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-foreground/30 hover:bg-muted/40"
+                      >
+                        <span className="text-sm font-medium text-foreground">{template.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {template.description}
+                        </span>
+                        <span className="mt-1 text-[12px] text-muted-foreground">
+                          {template.cadenceLabel}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </section>
         )}
 
@@ -857,6 +892,7 @@ export function SchedulesPage({
                       : (projectNameById.get(schedule.projectId) ?? null)
                   }
                   schedule={schedule}
+                  readOnly={!canCreateSchedules}
                   operation={operations[schedule.id] ?? null}
                   error={rowErrors[schedule.id] ?? null}
                   isRunningNow={
@@ -927,6 +963,7 @@ export function SchedulesPage({
             submitError={submitError}
             saving={saving}
             isEdit={Boolean(editing)}
+            modelOptions={modelOptions}
             onChange={(patch) => {
               setDraft((current) => ({ ...current, ...patch }));
               setFormErrors((current) => {

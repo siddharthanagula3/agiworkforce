@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/support/agent/corpus', () => ({ getSupportCorpus: mocks.getSupportCorpus }));
+vi.mock('@/lib/support/agent/corpus', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/support/agent/corpus')>()),
+  getSupportCorpus: mocks.getSupportCorpus,
+}));
 vi.mock('@/lib/support/agent/retrieval/retrieve', () => ({
   retrieveSupportChunks: mocks.retrieveSupportChunks,
 }));
@@ -61,6 +64,18 @@ describe('GET /api/help/search', () => {
     expect(response.status).toBe(200);
     expect(body.results.map((result: { docId: string }) => result.docId)).toEqual(['byok', 'cli']);
     expect(body.results[0].title).toBe('Bring your own key');
+  });
+
+  it('links a markdown match to its full article rather than the related product page', async () => {
+    const hit = chunk('usage-and-credits', 'Usage and credits');
+    mocks.retrieveSupportChunks.mockReturnValue({
+      chunks: [{ ...hit, chunk: { ...hit.chunk, origin: 'markdown', path: '/pricing' } }],
+      passedFloor: true,
+    });
+    const response = await GET(request('q=credits') as never);
+    const body = await response.json();
+    expect(body.results[0].path).toBe('/help/usage-and-credits');
+    expect(new URL(body.results[0].url).pathname).toBe('/help/usage-and-credits');
   });
 
   /**

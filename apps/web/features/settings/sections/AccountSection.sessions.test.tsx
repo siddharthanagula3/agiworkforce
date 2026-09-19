@@ -175,6 +175,37 @@ describe('AccountSection active sessions', () => {
     expect(screen.queryByText(/Showing \d+ of \d+ sessions/)).not.toBeInTheDocument();
   });
 
+  it('keeps session actions reachable while moving table metadata into the mobile device cell', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({ sessions, totalCount: sessions.length });
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
+    });
+
+    render(<AccountSection />);
+
+    await screen.findByText('Mobile Safari 19');
+    expect(screen.getByRole('columnheader', { name: 'Location' })).toHaveClass(
+      'hidden',
+      'sm:table-cell',
+    );
+    expect(screen.getByRole('columnheader', { name: 'Created' })).toHaveClass(
+      'hidden',
+      'sm:table-cell',
+    );
+    expect(screen.getByRole('columnheader', { name: 'Last active' })).toHaveClass(
+      'hidden',
+      'sm:table-cell',
+    );
+    const mobileDetails = screen.getByTestId('mobile-session-details-sess_phone');
+    expect(mobileDetails).toHaveClass('sm:hidden');
+    expect(mobileDetails).toHaveTextContent('Chicago, US');
+    expect(mobileDetails).toHaveTextContent(/Created Jul 2, 2026/);
+    expect(mobileDetails).toHaveTextContent(/Last active Jul 4, 2026/);
+    expect(screen.getByRole('button', { name: 'Revoke iPhone session' })).toBeInTheDocument();
+  });
+
   it('shows account-wide device activity and revokes a single non-current session', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
@@ -189,7 +220,7 @@ describe('AccountSection active sessions', () => {
     render(<AccountSection />);
 
     expect(await screen.findByText('Mobile Safari 19')).toBeInTheDocument();
-    expect(screen.getByText('Chicago, US')).toBeInTheDocument();
+    expect(screen.getAllByText('Chicago, US')).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Revoke iPhone session' }));
     // Revoking now asks first: nothing is sent until the dialog is accepted.
     expect(await screen.findByText('Revoke the iPhone session?')).toBeInTheDocument();

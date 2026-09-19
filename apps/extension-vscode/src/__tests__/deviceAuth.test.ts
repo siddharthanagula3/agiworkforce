@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
 import {
+  describeDeviceAuthorizationBrowser,
+  deviceAuthorizationOpenTimeoutMs,
   pollDeviceAuthorization,
+  refreshDeviceSession,
   requestDeviceAuthorization,
   revokeDeviceAuthorization,
   signInToAgiCloud,
@@ -9,11 +12,12 @@ import {
   tryOpenDeviceAuthorizationUrl,
   type DeviceAuthPost,
 } from '../features/account-auth/deviceAuth';
-import { getAccountToken } from '../utils/api';
+import { getAccountRefreshToken, getAccountToken } from '../utils/api';
 
 const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
+const ACCOUNT_REFRESH_TOKEN_KEY = 'agiWorkforce.accountRefreshToken';
 
 /// A SecretStorage double that records every write, so a test can assert both
 /// that the credential went here and that nothing else ever saw it.
@@ -212,6 +216,98 @@ describe('VS Code AGI Cloud device authorization', () => {
   });
 });
 
+describe('VS Code device session renewal', () => {
+  const REFRESH_URL = 'https://agiworkforce.com/api/auth/device/refresh';
+
+  it('rotates the session and hands back the next renewal credential', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_750_000_000_000);
+    const post = vi.fn<DeviceAuthPost>().mockResolvedValue({
+      status: 200,
+      body: JSON.stringify({
+        access_token: 'rotated-token',
+        refresh_token: 'next-renewal-credential',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      }),
+    });
+
+    await expect(
+      refreshDeviceSession('https://agiworkforce.com', 'renewal-credential', post),
+    ).resolves.toEqual({
+      kind: 'renewed',
+      token: 'rotated-token',
+      expiresAt: 1_750_003_600_000,
+      refreshToken: 'next-renewal-credential',
+    });
+    expect(post).toHaveBeenCalledWith(REFRESH_URL, { refresh_token: 'renewal-credential' });
+  });
+
+  it('treats a transport failure as unavailable, never as a revocation', async () => {
+    const post = vi.fn<DeviceAuthPost>().mockRejectedValue(new Error('offline'));
+
+    await expect(
+      refreshDeviceSession('https://agiworkforce.com', 'renewal-credential', post),
+    ).resolves.toEqual({ kind: 'unavailable' });
+  });
+
+  it('reports a rejected or replayed credential as revoked', async () => {
+    const post = vi.fn<DeviceAuthPost>().mockResolvedValue({
+      status: 400,
+      body: JSON.stringify({ error: 'invalid_grant' }),
+    });
+
+    await expect(
+      refreshDeviceSession('https://agiworkforce.com', 'renewal-credential', post),
+    ).resolves.toEqual({ kind: 'revoked' });
+  });
+
+  it('carries the acceptance page through when terms moved on', async () => {
+    const post = vi.fn<DeviceAuthPost>().mockResolvedValue({
+      status: 403,
+      body: JSON.stringify({
+        error: 'terms_acceptance_required',
+        acceptance_url: 'https://agiworkforce.com/login/complete?redirectTo=%2F',
+      }),
+    });
+
+    await expect(
+      refreshDeviceSession('https://agiworkforce.com', 'renewal-credential', post),
+    ).resolves.toEqual({
+      kind: 'terms-required',
+      acceptanceUrl: 'https://agiworkforce.com/login/complete?redirectTo=%2F',
+    });
+  });
+
+  it('refuses a rotation that came back without a replacement credential', async () => {
+    const post = vi.fn<DeviceAuthPost>().mockResolvedValue({
+      status: 200,
+      body: JSON.stringify({ access_token: 'rotated', token_type: 'Bearer', expires_in: 3600 }),
+    });
+
+    await expect(
+      refreshDeviceSession('https://agiworkforce.com', 'renewal-credential', post),
+    ).resolves.toEqual({ kind: 'unavailable' });
+  });
+});
+
+describe('VS Code device authorization in a remote window', () => {
+  it('says where the approval page opens for SSH, WSL and dev containers', () => {
+    expect(describeDeviceAuthorizationBrowser(undefined)).toContain('this computer');
+    for (const remoteName of ['ssh-remote', 'wsl', 'dev-container', 'attached-container']) {
+      expect(describeDeviceAuthorizationBrowser(remoteName)).toContain('your own computer');
+    }
+    expect(describeDeviceAuthorizationBrowser('wsl')).toContain('WSL');
+    expect(describeDeviceAuthorizationBrowser('ssh-remote')).toContain('the SSH host');
+  });
+
+  it('waits longer for a launch the remote has to forward to the local client', () => {
+    const local = deviceAuthorizationOpenTimeoutMs(undefined);
+    for (const remoteName of ['ssh-remote', 'wsl', 'dev-container', 'codespaces', 'tunnel']) {
+      expect(deviceAuthorizationOpenTimeoutMs(remoteName)).toBeGreaterThan(local);
+    }
+  });
+});
+
 describe('VS Code AGI Cloud credential storage', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -258,6 +354,32 @@ describe('VS Code AGI Cloud credential storage', () => {
     expect(secrets.entries.get(ACCOUNT_TOKEN_KEY)).toBe('signed-developer-token');
   });
 
+  it('stores the renewal credential the approval returned, in SecretStorage only', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_750_000_000_000);
+    const secrets = createSecretStorage();
+    const post = vi.fn<DeviceAuthPost>(async (url) =>
+      url.endsWith('/api/auth/device/code')
+        ? { status: 200, body: startBody }
+        : {
+            status: 200,
+            body: JSON.stringify({
+              access_token: 'signed-developer-token',
+              refresh_token: 'renewal-credential',
+              token_type: 'Bearer',
+              expires_in: 604800,
+            }),
+          },
+    );
+
+    const signedIn = signInToAgiCloud(secrets, post, vi.fn().mockResolvedValue(true));
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    await expect(signedIn).resolves.toBe(true);
+    expect(secrets.entries.get(ACCOUNT_REFRESH_TOKEN_KEY)).toBe('renewal-credential');
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('renewal-credential');
+  });
+
   it('keeps a denied sign-in out of storage entirely', async () => {
     vi.useFakeTimers();
     const secrets = createSecretStorage();
@@ -288,6 +410,7 @@ describe('VS Code AGI Cloud credential storage', () => {
         ACCOUNT_TOKEN_KEY,
         ACCOUNT_TOKEN_EXPIRES_AT_KEY,
         ACCOUNT_TOKEN_EXPIRED_KEY,
+        ACCOUNT_REFRESH_TOKEN_KEY,
       ]),
     );
     expect(secrets.entries.size).toBe(0);

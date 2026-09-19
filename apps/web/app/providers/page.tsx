@@ -18,7 +18,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
-import { CATALOG_AS_OF, DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CATALOG_AS_OF, CLI_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 interface ProviderRow {
   id: string;
@@ -46,7 +46,7 @@ const PROVIDER_ROWS: ProviderRow[] = BYOK_PROVIDER_IDS.flatMap((id) => {
   ];
 });
 
-const LOCAL_RUNTIMES = DESKTOP_LOCAL_RUNTIMES.names;
+const LOCAL_RUNTIMES = CLI_LOCAL_RUNTIMES.names;
 
 const CATALOGUED_MODEL_COUNT = PROVIDER_ROWS.reduce((total, row) => total + row.modelCount, 0);
 
@@ -56,7 +56,7 @@ function formatPrice(usd: number): string {
 
 export const metadata = buildMetadata({
   title: 'Providers: the catalog AGI routes to',
-  description: `Every cloud provider AGI takes a key for and every local runtime it takes a URL for, generated from the shared model catalog that the CLI and Desktop compile into their binaries. Catalog dated ${CATALOG_AS_OF}.`,
+  description: `Every cloud provider and local runtime available to the CLI, generated from the shared model catalog the CLI compiles into its binary. Desktop uses managed cloud and accepts no provider key or local-runtime URL. Catalog dated ${CATALOG_AS_OF}.`,
   path: '/providers',
 });
 
@@ -92,7 +92,7 @@ const SOURCE_TABS = [
     label: 'Rust',
     language: 'rust',
     code: 'const CATALOG: &str = include_str!("../../packages/contracts/types/src/models.json");\n\nlet catalog: ModelCatalog = serde_json::from_str(CATALOG)?;\nlet provider = catalog.providers.get(&args.provider)?;',
-    note: 'The CLI and the Desktop Rust runtime embed the file at compile time.',
+    note: 'The CLI embeds the file at compile time.',
   },
   {
     label: 'TypeScript',
@@ -131,7 +131,7 @@ export default function ProvidersPage() {
           eyebrow="Provider catalog"
           title="Every provider, from the one catalogue the apps compile in."
           em="the apps compile in."
-          lede="A cloud provider needs a key you own; a local runtime needs a URL you already run. Every row reads its label, default model and list price from the shared catalog."
+          lede="A BYOK provider needs a key you own; a local runtime needs a URL you already run. The released CLI supports both. Every row reads its label, default model and list price from the shared catalog."
           ctas={[
             { href: '/byok', label: 'Add a provider key' },
             { href: '/local', label: 'Point at a local runtime', variant: 'secondary' },
@@ -147,7 +147,7 @@ export default function ProvidersPage() {
             stats={[
               { value: `${PROVIDER_ROWS.length}`, label: 'providers that take your key' },
               { value: `${CATALOGUED_MODEL_COUNT}`, label: 'catalogued models' },
-              { value: `${LOCAL_RUNTIMES.length}`, label: 'local runtimes on Desktop' },
+              { value: `${LOCAL_RUNTIMES.length}`, label: 'local runtimes in the CLI' },
               {
                 value: '$0',
                 label: 'markup on any of them',
@@ -175,9 +175,8 @@ export default function ProvidersPage() {
             <div>
               <Eyebrow>Local runtimes</Eyebrow>
               <Prose>
-                Desktop also talks to {DESKTOP_LOCAL_RUNTIMES.label}. None of them carry catalogued
-                models, because AGI asks the server you started what it is holding rather than
-                assuming.
+                The CLI also talks to {CLI_LOCAL_RUNTIMES.label}. Neither carries catalogued models,
+                because AGI asks the server you started what it is holding rather than assuming.
               </Prose>
             </div>
             <ProviderGrid tiles={LOCAL_TILES} label="Local runtimes" />
@@ -188,13 +187,12 @@ export default function ProvidersPage() {
           <SplitFeature
             id="agi-providers-source-title"
             eyebrow="The source file"
-            title="The CLI and Desktop compile this catalog into their binaries."
+            title="The CLI compiles this catalog; the web app imports it."
             body={
               <p>
-                <code>packages/contracts/types/src/models.json</code> is embedded in the CLI and in
-                the Desktop Rust runtime, and the web app imports the same module. Adding a provider
-                or moving a price moves every surface and this page at once. The CLI surface itself
-                is {SURFACE_STATUS.cli.toLowerCase()}.
+                <code>packages/contracts/types/src/models.json</code> is embedded in the CLI, and
+                the web app imports the same module. Adding a provider or moving a price moves both
+                and this page at once. The CLI surface itself is {SURFACE_STATUS.cli.toLowerCase()}.
               </p>
             }
             visual={<CodeTabs tabs={SOURCE_TABS} title="How each surface reads the catalog" />}

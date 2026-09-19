@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-07-14
+Last updated: 2026-09-19
 Purpose: define how AGI Workforce should be built in a future where humans direct and review work while coding agents perform most exploration, implementation, refactoring, verification, and PR preparation.
 
 ## Operating Assumption
@@ -27,6 +27,82 @@ This repo therefore needs to be easy for agents to search, split, edit, test, an
 - Keep product orchestration in actions/routes/commands and repeated mechanics in service functions as defined by `docs/standards/service-layer.md`.
 - Run the smallest useful checks, then broader checks when shared contracts changed.
 - Summarize changed files, verification, and remaining risk.
+
+## Jev Decisions
+
+Coding agents delegate explicit task classification, skill selection, prioritization,
+and implementation approach choices to Jev through `pnpm -s agent:decide`.
+Read the installed [TypeSafe skill](../../.agents/skills/typesafe-ai/SKILL.md) when
+preparing questions. Gather evidence and reasonable alternatives, let Jev select,
+then implement and verify the selection. Do not frame the options to rubber-stamp
+a preferred answer. Batch independent questions sharing the same evidence; ask
+dependent questions after their prerequisite answers or new evidence are available.
+
+The helper reads `TYPESAFE_API_KEY` from the process environment, or from the
+repository-root `.env.local` if the environment variable is absent. It reads that
+file as data, uses only the key, and never prints it. Keep it out of tracked files.
+The official SDK supplies the endpoint and default model; this developer helper
+rejects endpoint/model environment overrides and does not change product routing.
+
+Pass a JSON object on stdin with `state` and named `questions`. Each question has
+`type: "choice"`, meaningful `instructions`, and descriptive `criteria`, including
+`no_suitable_choice`. Question IDs are response keys; include the complete meaning
+in instructions because Jev does not see the IDs. Example:
+
+```sh
+pnpm -s agent:decide <<'JSON'
+{
+  "state": {
+    "goal": "Choose the next investigation.",
+    "evidence": "An isolated test reproduces acceptance of expired sessions. Another test reports a heading spacing mismatch."
+  },
+  "questions": {
+    "next_investigation": {
+      "type": "choice",
+      "instructions": "Which investigation should be prioritized given the observed failures?",
+      "criteria": {
+        "session_expiry": "Investigate acceptance of expired sessions.",
+        "heading_spacing": "Investigate the heading spacing mismatch.",
+        "no_suitable_choice": "The evidence does not justify selecting either investigation."
+      }
+    }
+  }
+}
+JSON
+```
+
+Only the supplied state and questions are sent to TypeSafe using the developer's
+account. Send the minimum relevant evidence; never send credentials, environment
+file contents, customer data, or Local/BYOK session content through this helper.
+It does not read repository content automatically or execute the selected action.
+
+The JSON result includes each choice, probabilities, confidence, actual model,
+token usage, and a hash of the input including any local confidence policy.
+Report Jev's choice and confidence when the decision materially affects the work.
+Keep evidence freshness in view: a selection applies to the state submitted.
+
+When invoked directly with `node scripts/jev-decide.mjs`, exit code `0` means all
+choices were selected, `2` means at least one choice needs review, and `1` means
+the request failed. The pnpm script wrapper may normalize nonzero exit codes to
+`1`; consume the JSON `status` to distinguish review from failure. Abstention or
+tied leading options pause the affected choice. A question may specify
+`minimumConfidence` between 0 and 1;
+derive that policy from evaluated cases and consequences, not an invented universal
+threshold. A result below that threshold also needs review. On malformed answers,
+missing credentials, service failure, or exhausted time/retry budgets, report the
+failure and pause the affected choice. Gather missing evidence or ask the user;
+never silently substitute the coding agent's choice or retry until a preferred
+answer appears. Independent work may continue.
+
+Explicit user instructions, repository rules, permissions, deterministic checks,
+and observed facts govern execution. Jev does not authorize actions or replace
+tests, and confidence is not proof of correctness. This is an agent workflow
+instruction, not an interceptor that can force every internal model decision or
+tool call through Jev. The helper validates its own requests and responses.
+
+Operational limits live in `scripts/config/jev-decisions.json`. Run
+`pnpm test:agent-decisions` for offline validation; the example above makes a paid
+live API call. SDK logging is disabled and raw provider errors are not echoed.
 
 ## Standard Task Shape
 

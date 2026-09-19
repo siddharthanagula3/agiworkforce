@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { modelsCatalogJson } from '@agiworkforce/types';
 import {
   CATALOG_AS_OF,
+  CLI_LOCAL_RUNTIMES,
   COMING_SOON_LABEL,
-  DESKTOP_LOCAL_RUNTIMES,
   LAUNCH,
   MARKETING,
   MARKETING_FEATURE_MATRIX,
@@ -90,9 +90,9 @@ describe('model and provider counts', () => {
     expect(CATALOG_AS_OF).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('derives the two Desktop local-runtime labels from the catalog', () => {
-    expect(DESKTOP_LOCAL_RUNTIMES.names).toEqual(['Ollama', 'LM Studio']);
-    expect(DESKTOP_LOCAL_RUNTIMES.label).toBe('Ollama and LM Studio');
+  it('derives the two CLI local-runtime labels from the catalog', () => {
+    expect(CLI_LOCAL_RUNTIMES.names).toEqual(['Ollama', 'LM Studio']);
+    expect(CLI_LOCAL_RUNTIMES.label).toBe('Ollama and LM Studio');
     for (const providerId of ['ollama', 'lmstudio'] as const) {
       expect(modelsCatalogJson.providers[providerId].label).toContain('(Local)');
     }

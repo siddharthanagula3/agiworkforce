@@ -23,6 +23,7 @@ vi.mock('@/lib/services/plugin-marketplace-installation-service', () => ({
   updateMarketplaceInstallationSettings: updateMarketplaceInstallationSettingsMock,
 }));
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
+  getMarketplaceEntryForUser: vi.fn(async () => null),
   isMissingPluginMarketplaceSchema: (error: unknown) =>
     (error as { code?: string } | null)?.code === '42P01',
 }));

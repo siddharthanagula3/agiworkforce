@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 import { isBillingPortalAvailable, isVerificationEmailSendable } from './availability';
 import type {
-  SupportActionAuditBinding,
   SupportActionAvailability,
   SupportActionDescription,
   SupportActionEndpoint,
@@ -21,7 +20,6 @@ export interface SupportActionDefinition<TParams = unknown> {
   describe: (params: TParams) => SupportActionDescription;
   resolveAvailability: () => SupportActionAvailability;
   perDayLimit: number;
-  audit: SupportActionAuditBinding;
   endpoint?: SupportActionEndpoint;
 }
 
@@ -70,11 +68,6 @@ export const SUPPORT_ACTIONS: Readonly<{
               'This deployment cannot send verification email yet, so the assistant will not claim to have sent one. Use “Resend verification” in account settings instead.',
           },
     perDayLimit: 5,
-    audit: {
-      proposeEventType: 'login',
-      executeEventType: 'login',
-      resourceType: 'email_verification',
-    },
   } satisfies SupportActionDefinition<Record<string, never>>),
 
   revoke_connector: Object.freeze({
@@ -95,11 +88,6 @@ export const SUPPORT_ACTIONS: Readonly<{
     }),
     resolveAvailability: (): SupportActionAvailability => ({ available: true }),
     perDayLimit: 20,
-    audit: {
-      proposeEventType: 'connector_removed',
-      executeEventType: 'connector_removed',
-      resourceType: 'connector',
-    },
   } satisfies SupportActionDefinition<z.infer<typeof ConnectorParams>>),
 
   regenerate_api_key: Object.freeze({
@@ -121,11 +109,6 @@ export const SUPPORT_ACTIONS: Readonly<{
     }),
     resolveAvailability: (): SupportActionAvailability => ({ available: true }),
     perDayLimit: 5,
-    audit: {
-      proposeEventType: 'api_key_revoked',
-      executeEventType: 'api_key_created',
-      resourceType: 'api_key',
-    },
   } satisfies SupportActionDefinition<z.infer<typeof ApiKeyParams>>),
 
   export_account_data: Object.freeze({
@@ -144,11 +127,6 @@ export const SUPPORT_ACTIONS: Readonly<{
     }),
     resolveAvailability: (): SupportActionAvailability => ({ available: true }),
     perDayLimit: 3,
-    audit: {
-      proposeEventType: 'data_exported',
-      executeEventType: 'data_exported',
-      resourceType: 'account_export',
-    },
     endpoint: { method: 'GET', path: '/api/user/export?download=true' },
   } satisfies SupportActionDefinition<Record<string, never>>),
 
@@ -174,11 +152,6 @@ export const SUPPORT_ACTIONS: Readonly<{
             reason: 'Billing is not configured in this deployment.',
           },
     perDayLimit: 10,
-    audit: {
-      proposeEventType: 'billing_portal_opened',
-      executeEventType: 'billing_portal_opened',
-      resourceType: 'billing_portal',
-    },
     endpoint: { method: 'POST', path: '/api/portal' },
   } satisfies SupportActionDefinition<Record<string, never>>),
 });

@@ -14,12 +14,16 @@ const controller = vi.hoisted(() => ({
 }));
 
 vi.mock('@features/chat/hooks/use-voice-session', () => ({
+  liveVoiceOutputRef: { current: null },
   useVoiceSession: (options: { onTranscript: (id: string, turn: LiveTranscriptTurn) => void }) => {
     controller.options = options;
     return controller.current;
   },
 }));
-vi.mock('../VoiceOrb', () => ({ VoiceOrb: () => <div data-testid="voice-orb" /> }));
+vi.mock('../VoiceOrb', () => ({
+  VoiceOrbPreview: () => null,
+  VoiceOrb: () => <div data-testid="voice-orb" />,
+}));
 vi.mock('../VoiceChatDock', () => ({ VoiceChatDock: () => null }));
 vi.mock('../VoiceSettingsModal', () => ({ VoiceSettingsModal: () => null }));
 

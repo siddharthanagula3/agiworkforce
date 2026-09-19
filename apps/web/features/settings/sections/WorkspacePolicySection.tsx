@@ -359,7 +359,7 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Preview before Local leaves the device"
-        description="Members must review the exact payload before a Local chat continues on your own provider keys. The server states this requirement on every decision; the Desktop client that owns the transition does not read it yet, so today it binds policy rather than the client."
+        description="Members must review the exact payload before a Local chat continues on your own provider keys. The server states this requirement on every decision; the released CLI owns that transition but does not consume this workspace policy yet, so today it binds policy rather than the client."
         control={
           <Toggle
             label="Require a preview before Local moves to your own keys"

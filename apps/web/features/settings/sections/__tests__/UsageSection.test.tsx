@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 
 vi.mock('@agiworkforce/ui', () => ({
@@ -14,6 +14,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 
 import { __resetManagedUsageSummaryForTest } from '@/lib/hooks/useManagedUsageSummary';
 import { UsageSection } from '../UsageSection';
+import { SettingsSectionNavigationProvider } from '../../components/SettingsSectionLink';
 
 const originalFetch = global.fetch;
 
@@ -170,7 +171,11 @@ describe('UsageSection stated in credits', () => {
 
   it('shows the purchased balance and no currency anywhere', async () => {
     render(React.createElement(UsageSection));
-    expect(await screen.findByText('Balance 423.7 credits remaining')).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'Purchased credits: 423.7 credits remaining, separate from your plan allowance.',
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText(/\$\d/)).toBeNull();
   });
 
@@ -179,5 +184,36 @@ describe('UsageSection stated in credits', () => {
     await screen.findByText(managedUsageBucketLabel('session'));
     const values = screen.getAllByTestId('progress').map((el) => el.getAttribute('data-value'));
     expect(values).toEqual(['60', '40', '10', '20']);
+  });
+});
+
+describe('UsageSection contract-priced plans', () => {
+  it('directs Enterprise members to workspace usage without inventing a remaining percentage', async () => {
+    const fetchUsage = global.fetch;
+    global.fetch = vi.fn(async (...args: Parameters<typeof fetch>) => {
+      const response = await fetchUsage(...args);
+      return {
+        ok: true,
+        json: async () => ({ ...(await response.json()), plan_tier: 'enterprise', credits: null }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    const onExit = vi.fn();
+    render(
+      <SettingsSectionNavigationProvider onNavigate={vi.fn()} onExit={onExit}>
+        <UsageSection />
+      </SettingsSectionNavigationProvider>,
+    );
+    expect(
+      await screen.findByText(
+        'Your usage allowances and billing are set by your workspace contract.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View workspace usage' }).getAttribute('href')).toBe(
+      '/workspace/usage',
+    );
+    expect(screen.queryByText('100% left')).toBeNull();
+    expect(screen.queryAllByTestId('progress')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('link', { name: 'View workspace usage' }));
+    expect(onExit).toHaveBeenCalledOnce();
   });
 });

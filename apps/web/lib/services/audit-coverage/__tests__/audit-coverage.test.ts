@@ -4,7 +4,11 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { buildAuditCoverageReport } from '../index';
-import { SURFACE_AUDIT_COVERAGE, UNAUDITED_MUTATING_ROUTES } from '../registry';
+import {
+  REQUIRED_ROUTE_AUDIT_EVENTS,
+  SURFACE_AUDIT_COVERAGE,
+  UNAUDITED_MUTATING_ROUTES,
+} from '../registry';
 import { isAudited, resolveAuditCoverageRoot, sweepRouteAuditCoverage } from '../sweep';
 
 function appRoot(): string {
@@ -108,6 +112,28 @@ describe('workspace-governed subtrees audit every mutating route', () => {
 
     expect(wrong).toEqual([]);
   });
+});
+
+describe('closed audit gaps retain their required events', () => {
+  const byRoute = new Map(COVERAGE.map((coverage) => [coverage.route, coverage]));
+
+  for (const required of REQUIRED_ROUTE_AUDIT_EVENTS) {
+    it(required.route, () => {
+      const coverage = byRoute.get(required.route);
+      expect(coverage, `${required.route} no longer exists`).toBeDefined();
+      expect(coverage && isAudited(coverage), `${required.route} no longer audits`).toBe(true);
+
+      const sources = coverage?.emitters.map((emitter) => {
+        const absolute =
+          emitter === required.route ? join(APP_ROOT, 'app/api', emitter) : join(APP_ROOT, emitter);
+        return readFileSync(absolute, 'utf8');
+      });
+      const text = sources?.join('\n') ?? '';
+      for (const eventType of required.eventTypes) {
+        expect(text, `${required.route} does not name ${eventType}`).toContain(`'${eventType}'`);
+      }
+    });
+  }
 });
 
 describe('non-web surfaces are covered by the same trail', () => {

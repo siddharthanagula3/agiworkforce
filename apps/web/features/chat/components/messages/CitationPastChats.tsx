@@ -1,17 +1,10 @@
 'use client';
 
 import { MessagesSquare } from 'lucide-react';
-
-export interface PastChatCitationView {
-  id: string;
-  conversationId: string;
-  messageId: string;
-  title: string;
-  createdAt: string;
-}
+import type { PastChatCitation } from '@/lib/past-chat-citation';
 
 /** Where the reader goes to check the claim: the chat it came from, at that message. */
-export function pastChatCitationHref(citation: PastChatCitationView): string {
+export function pastChatCitationHref(citation: PastChatCitation): string {
   const params = new URLSearchParams({ highlightMessage: citation.messageId });
   return `/chat/${encodeURIComponent(citation.conversationId)}?${params.toString()}`;
 }
@@ -27,7 +20,7 @@ function citationDate(createdAt: string): string | null {
  * this the reader cannot tell a remembered fact from an invented one, nor open
  * the conversation it came from.
  */
-export function CitationPastChats({ citations }: { citations: readonly PastChatCitationView[] }) {
+export function CitationPastChats({ citations }: { citations: readonly PastChatCitation[] }) {
   if (citations.length === 0) return null;
 
   return (

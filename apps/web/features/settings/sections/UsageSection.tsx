@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { SettingsPageLink } from '../components/SettingsSectionLink';
 import {
   formatCreditWindowUsage,
   formatCredits,
@@ -9,6 +10,7 @@ import {
   formatUsageResetIn,
   getBillingPlanPricing,
   isBillingPlanTier,
+  isContractPricedPlan,
   managedUsageBucketLabel,
   type ManagedUsageCreditWindow,
 } from '@agiworkforce/types';
@@ -225,7 +227,7 @@ export function UsageSection() {
           )}
           {credits && credits.purchased.remaining !== null && (
             <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>
-              {`Balance ${formatCredits(credits.purchased.remaining)} remaining`}
+              {`Purchased credits: ${formatCredits(credits.purchased.remaining)} remaining, separate from your plan allowance.`}
             </p>
           )}
         </div>
@@ -239,50 +241,64 @@ export function UsageSection() {
             here, "Current session" on mobile, "Token Budget Usage" on desktop.
             so the same limit was unrecognisable between surfaces.
           */}
-          <UsageBar
-            unknown={usageUnknown}
-            label={managedUsageBucketLabel('session')}
-            percent={sessionUsedPercent}
-            detail={usageDetail(
-              100 - sessionUsedPercent,
-              usage?.session_reset_at ?? null,
-              nowMs,
-              credits?.five_hour,
-            )}
-          />
-          <UsageBar
-            unknown={usageUnknown}
-            label={managedUsageBucketLabel('weekly')}
-            percent={weeklyUsedPercent}
-            detail={usageDetail(
-              100 - weeklyUsedPercent,
-              usage?.weekly_reset_at ?? null,
-              nowMs,
-              credits?.weekly,
-            )}
-          />
-          <UsageBar
-            unknown={usageUnknown}
-            label={managedUsageBucketLabel('weeklyFlagship')}
-            percent={flagshipWeeklyUsedPercent}
-            detail={usageDetail(
-              100 - flagshipWeeklyUsedPercent,
-              usage?.flagship_weekly_reset_at ?? null,
-              nowMs,
-              credits?.flagship_weekly,
-            )}
-          />
-          <UsageBar
-            unknown={usageUnknown}
-            label={managedUsageBucketLabel('period')}
-            percent={usedPercent}
-            detail={usageDetail(
-              100 - usedPercent,
-              usage?.usage_reset_at ?? null,
-              nowMs,
-              credits?.monthly,
-            )}
-          />
+          {usage && isContractPricedPlan(usage.plan_tier) ? (
+            <div className="space-y-3 text-sm text-[var(--text-2)]">
+              <p>Your usage allowances and billing are set by your workspace contract.</p>
+              <SettingsPageLink
+                href="/workspace/usage"
+                className="text-primary underline underline-offset-4"
+              >
+                View workspace usage
+              </SettingsPageLink>
+            </div>
+          ) : (
+            <>
+              <UsageBar
+                unknown={usageUnknown}
+                label={managedUsageBucketLabel('session')}
+                percent={sessionUsedPercent}
+                detail={usageDetail(
+                  100 - sessionUsedPercent,
+                  usage?.session_reset_at ?? null,
+                  nowMs,
+                  credits?.five_hour,
+                )}
+              />
+              <UsageBar
+                unknown={usageUnknown}
+                label={managedUsageBucketLabel('weekly')}
+                percent={weeklyUsedPercent}
+                detail={usageDetail(
+                  100 - weeklyUsedPercent,
+                  usage?.weekly_reset_at ?? null,
+                  nowMs,
+                  credits?.weekly,
+                )}
+              />
+              <UsageBar
+                unknown={usageUnknown}
+                label={managedUsageBucketLabel('weeklyFlagship')}
+                percent={flagshipWeeklyUsedPercent}
+                detail={usageDetail(
+                  100 - flagshipWeeklyUsedPercent,
+                  usage?.flagship_weekly_reset_at ?? null,
+                  nowMs,
+                  credits?.flagship_weekly,
+                )}
+              />
+              <UsageBar
+                unknown={usageUnknown}
+                label={managedUsageBucketLabel('period')}
+                percent={usedPercent}
+                detail={usageDetail(
+                  100 - usedPercent,
+                  usage?.usage_reset_at ?? null,
+                  nowMs,
+                  credits?.monthly,
+                )}
+              />
+            </>
+          )}
         </div>
 
         <div

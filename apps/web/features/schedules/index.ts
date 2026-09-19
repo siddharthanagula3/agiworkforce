@@ -3,10 +3,12 @@ export { ScheduleForm } from './components/ScheduleForm';
 export { ScheduleRunHistory } from './components/ScheduleRunHistory';
 export { SchedulesPage } from './components/SchedulesPage';
 export type { ScheduleProjectOption, ScheduleProjectScope } from './components/SchedulesPage';
-export { SchedulesPageWithProjects } from './components/SchedulesPageWithProjects';
+export {
+  SchedulesEntitlementLoading,
+  SchedulesPageWithProjects,
+} from './components/SchedulesPageWithProjects';
 export { scheduleApi, ScheduleApiError } from './services/schedule-api';
 export {
-  AVAILABLE_MODELS,
   DAYS_OF_WEEK,
   formatDateTime,
   recurrenceLabel,

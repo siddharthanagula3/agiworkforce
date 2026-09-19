@@ -3,9 +3,9 @@ import './motion/motion.css';
 import { Typewriter, type TypedLine, type TypedLineClasses } from './motion/Typewriter';
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
-import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
-const LOCAL_RUNTIME_LABEL = `${(DESKTOP_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
+const LOCAL_RUNTIME_LABEL = `${(CLI_LOCAL_RUNTIMES.names[0] ?? '').toLowerCase()}(local)`;
 
 export type DeviceType = 'desktop' | 'web' | 'chrome' | 'editor' | 'terminal' | 'panel' | 'phone';
 
@@ -402,7 +402,7 @@ export function ChromeWindow({ badge = 'Chrome', className }: DeviceWindowProps)
                 <span className="agi-mk-btn">Insert as comment</span>
                 <span className="agi-mk-btn">Copy</span>
               </span>
-              <p className="agi-cr-msg-fade">Paired with AGI Desktop · Local mode · 1.9 s</p>
+              <p className="agi-cr-msg-fade">AGI Managed Cloud · 1.9 s</p>
             </div>
           </div>
           <PanelComposer />
@@ -733,7 +733,7 @@ export function PhoneDevice({
             <div className="agi-mk-agi">
               <ToolRow state="done" label="Memory" meta="3 facts" />
               <p>
-                From your memory: the demo runs on Desktop in Local mode, the deck lives in the
+                From your memory: the demo runs from the CLI in Local mode, the deck lives in the
                 Investor project, and the dry run is Thursday at 4pm. Want a reminder?
               </p>
               <Receipt

@@ -742,6 +742,65 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       expect(response.headers.get('Content-Type')).toBe('application/json');
     });
 
+    it('serializes the downloaded bytes with portable account data and no live credentials', async () => {
+      mockNeonQuery.mockImplementation((sql: unknown) => {
+        const statement = String(sql);
+        if (statement.includes('from profiles')) {
+          return Promise.resolve([
+            {
+              id: mockUser.id,
+              email: mockUser.email,
+              display_name: 'Portable download marker',
+              avatar_url: null,
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              stripe_customer_id: 'cus_must_not_download',
+            },
+          ]);
+        }
+        if (statement.includes('from device_authorization_codes')) {
+          return Promise.resolve([
+            {
+              id: 'device_auth_download',
+              device_id: 'device_download',
+              device_name: 'Portable laptop',
+              device_type: 'desktop',
+              status: 'approved',
+              expires_at: '2024-02-01T00:00:00Z',
+              created_at: mockUser.created_at,
+              updated_at: mockUser.updated_at,
+              user_code: 'PRIVATE-USER-CODE',
+              access_token: 'private-access-token',
+              refresh_token: 'private-refresh-token',
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const { GET } = await import('@/app/api/user/export/route');
+      const response = await GET(
+        new NextRequest('http://localhost/api/user/export?download=true', {
+          headers: { authorization: 'Bearer valid_token' },
+        }),
+      );
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const downloadedText = new TextDecoder().decode(bytes);
+      const downloaded = JSON.parse(downloadedText);
+
+      expect(bytes.byteLength).toBeGreaterThan(0);
+      expect(response.headers.get('Content-Disposition')).toMatch(
+        /^attachment; filename="user-data-export-\d{4}-\d{2}-\d{2}\.json"$/,
+      );
+      expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+      expect(response.headers.get('X-Export-Status')).toBe('complete');
+      expect(downloaded.profile.display_name).toBe('Portable download marker');
+      expect(downloaded.device_authorizations[0].device_name).toBe('Portable laptop');
+      expect(downloadedText).not.toMatch(
+        /cus_must_not_download|PRIVATE-USER-CODE|private-access-token|private-refresh-token/,
+      );
+    });
+
     it('should return downloadable file when Accept header is application/octet-stream', async () => {
       const { GET } = await import('@/app/api/user/export/route');
 

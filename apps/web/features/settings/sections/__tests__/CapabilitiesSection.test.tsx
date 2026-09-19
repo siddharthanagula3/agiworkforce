@@ -5,6 +5,7 @@ const fetchPreferenceNamespace = vi.fn(async (_namespace: string, fallback: unkn
 const savePreferenceNamespace = vi.fn(async (_namespace: string, _value: unknown) => undefined);
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
+  readAutonomousToolApprovalsAllowed: vi.fn(() => false),
   fetchPreferenceNamespace: (...args: unknown[]) =>
     fetchPreferenceNamespace(...(args as [string, unknown])),
   savePreferenceNamespace: (...args: unknown[]) =>

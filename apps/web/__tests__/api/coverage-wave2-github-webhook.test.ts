@@ -46,6 +46,8 @@ const mockGetPrDiff = vi.fn();
 const mockPostIssueComment = vi.fn();
 
 vi.mock('@/lib/github-app', () => ({
+  listPrReviewCommentBodies: vi.fn(async () => []),
+  postPrReview: vi.fn(async () => undefined),
   verifyGitHubWebhookSignature: (...args: unknown[]) => mockVerifySignature(...args),
   getInstallationAccessToken: (...args: unknown[]) => mockGetInstallationAccessToken(...args),
   getPrDiff: (...args: unknown[]) => mockGetPrDiff(...args),

@@ -41,7 +41,10 @@ vi.mock('@shared/stores/web-chat-store', () => ({
     }),
 }));
 
-vi.mock('@/lib/sentry-shared', () => ({ setTelemetryConsentCache: vi.fn() }));
+vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/sentry-shared')>()),
+  setTelemetryConsentCache: vi.fn(),
+}));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
   fetchPreferenceNamespace: vi.fn(async () => ({})),
@@ -81,6 +84,7 @@ describe('PrivacySection row density', () => {
     render(<PrivacySection />);
     expect(screen.queryByText(/sentry/i)).toBeNull();
     expect(screen.queryByText(/beforeSend/i)).toBeNull();
-    expect(screen.getByText(/message content is never included/i)).toBeInTheDocument();
+    expect(screen.getByText(/sensitive request fields are removed/i)).toBeInTheDocument();
+    expect(screen.queryByText(/message content is never included/i)).toBeNull();
   });
 });

@@ -3,8 +3,8 @@ import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import {
   AVAILABLE_NOW_LABEL,
   BYOK_SURFACES,
+  CLI_LOCAL_RUNTIMES,
   COMING_SOON_LABEL,
-  DESKTOP_LOCAL_RUNTIMES,
   SURFACE_STATUS,
 } from '@/lib/marketing-constants';
 import { LANE_NAMES, type LaneId } from '../system/lanes';
@@ -154,7 +154,8 @@ export const SURFACES = [
     status: SURFACE_STATUS.desktop,
     state: surfaceState(SURFACE_STATUS.desktop),
     href: '/desktop',
-    blurb: `Your account on your Mac: ${DESKTOP_LOCAL_RUNTIMES.label} models, approved folders and computer use.`,
+    blurb:
+      'Your managed-cloud account on your Mac, with approved folders and computer use. No provider-key or local-model entry.',
   },
   {
     name: 'Mobile',
@@ -162,7 +163,8 @@ export const SURFACES = [
     status: SURFACE_STATUS.mobile,
     state: surfaceState(SURFACE_STATUS.mobile),
     href: '/mobile',
-    blurb: 'Local mode by default. Chats and memory stay on the phone until you move them.',
+    blurb:
+      'Coming soon. The planned app keeps Local chats and memory on the phone until you move them.',
   },
   {
     name: 'Chrome',
@@ -196,8 +198,8 @@ export const listLiveSurfaces = (candidates: readonly SurfaceName[]): string => 
 };
 
 const LANE_SURFACES: Record<LaneId, readonly SurfaceName[]> = {
-  local: ['Desktop', 'CLI'],
-  byok: ['Desktop', 'CLI', 'VS Code'],
+  local: ['CLI'],
+  byok: ['CLI', 'VS Code'],
   cloud: ['Web', 'Desktop', 'Mobile'],
 };
 
@@ -303,7 +305,7 @@ export const ROUTES = {
     {
       label: 'Where it runs',
       values: [
-        `Your hardware, through ${DESKTOP_LOCAL_RUNTIMES.label}`,
+        `Your hardware, through ${CLI_LOCAL_RUNTIMES.label} in the CLI`,
         `Your account at one of ${BYOK_PROVIDERS.length} providers, from one key list`,
         'Capacity we run. The router names the provider and model on the answer',
       ],

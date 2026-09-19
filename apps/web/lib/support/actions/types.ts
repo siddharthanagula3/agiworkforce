@@ -1,5 +1,3 @@
-import type { AuditEventType } from '@/lib/security-audit';
-
 export type SupportActionId =
   | 'resend_verification_email'
   | 'revoke_connector'
@@ -98,10 +96,4 @@ export class SupportActionRefusal extends Error {
     if (extra?.control) this.control = extra.control;
     if (extra?.explain) this.explain = extra.explain;
   }
-}
-
-export interface SupportActionAuditBinding {
-  proposeEventType: AuditEventType;
-  executeEventType: AuditEventType;
-  resourceType: string;
 }

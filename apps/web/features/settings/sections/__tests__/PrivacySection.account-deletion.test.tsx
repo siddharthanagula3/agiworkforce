@@ -44,7 +44,10 @@ vi.mock('@shared/stores/web-chat-store', () => ({
     }),
 }));
 
-vi.mock('@/lib/sentry-shared', () => ({ setTelemetryConsentCache: vi.fn() }));
+vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/sentry-shared')>()),
+  setTelemetryConsentCache: vi.fn(),
+}));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
   fetchPreferenceNamespace: vi.fn(async () => ({})),

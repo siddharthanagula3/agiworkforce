@@ -39,7 +39,7 @@ vi.mock('@/lib/support/agent', () => ({
 vi.mock('@/lib/support/account/context-resolver', () => ({
   resolveSupportAccountContext: mocks.resolveContext,
 }));
-vi.mock('@/lib/support/actions/service', () => ({
+vi.mock('@/lib/support/actions/catalog', () => ({
   listAvailableSupportActions: mocks.listActions,
 }));
 vi.mock('@/lib/security/bot-challenge', () => ({

@@ -254,9 +254,7 @@ export function AccountSection() {
       setSessionsError(
         timeoutSignal.aborted
           ? 'Active sessions took too long to load. Please try again.'
-          : error instanceof Error
-            ? error.message
-            : 'Unable to load active sessions.',
+          : toUserMessage(error, 'Unable to load active sessions.'),
       );
     } finally {
       if (!signal?.aborted) setSessionsLoading(false);
@@ -446,7 +444,10 @@ export function AccountSection() {
                 )}
               </AccountRow>
             ) : (
-              <AccountRow label="Delete account" hint="This cannot be undone.">
+              <AccountRow
+                label="Delete account"
+                hint="Deletion is scheduled for 24 hours later. You can cancel before erasure begins."
+              >
                 <button
                   type="button"
                   data-testid="delete-account-trigger"
@@ -543,10 +544,17 @@ export function AccountSection() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--settings-border)' }}>
-                      {['Device', 'Location', 'Created', 'Last active', ''].map((col, index) => (
+                      {[
+                        { label: 'Device', className: undefined },
+                        { label: 'Location', className: 'hidden sm:table-cell' },
+                        { label: 'Created', className: 'hidden sm:table-cell' },
+                        { label: 'Last active', className: 'hidden sm:table-cell' },
+                        { label: '', className: undefined },
+                      ].map(({ label, className }, index) => (
                         <th
-                          key={col || `actions-${index}`}
+                          key={label || `actions-${index}`}
                           scope="col"
+                          className={className}
                           style={{
                             padding: '0 16px 10px 0',
                             textAlign: 'left',
@@ -558,7 +566,7 @@ export function AccountSection() {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {col || <span className="sr-only">Actions</span>}
+                          {label || <span className="sr-only">Actions</span>}
                         </th>
                       ))}
                     </tr>
@@ -609,8 +617,26 @@ export function AccountSection() {
                               Current
                             </span>
                           )}
+                          <dl
+                            data-testid={`mobile-session-details-${row.id}`}
+                            className="mt-2 space-y-0.5 text-xs font-normal text-muted-foreground sm:hidden"
+                          >
+                            <div>
+                              <dt className="inline font-medium">Location</dt>
+                              <dd className="inline"> {row.location ?? 'Not available'}</dd>
+                            </div>
+                            <div>
+                              <dt className="inline font-medium">Created</dt>
+                              <dd className="inline"> {formatSessionDateTime(row.createdAt)}</dd>
+                            </div>
+                            <div>
+                              <dt className="inline font-medium">Last active</dt>
+                              <dd className="inline"> {formatSessionDateTime(row.lastActiveAt)}</dd>
+                            </div>
+                          </dl>
                         </td>
                         <td
+                          className="hidden sm:table-cell"
                           style={{
                             padding: '12px 16px 12px 0',
                             color: 'var(--text-3)',
@@ -620,6 +646,7 @@ export function AccountSection() {
                           {row.location ?? 'Not available'}
                         </td>
                         <td
+                          className="hidden sm:table-cell"
                           style={{
                             padding: '12px 16px 12px 0',
                             color: 'var(--text-3)',
@@ -629,6 +656,7 @@ export function AccountSection() {
                           {formatSessionDateTime(row.createdAt)}
                         </td>
                         <td
+                          className="hidden sm:table-cell"
                           style={{
                             padding: '12px 16px 12px 0',
                             color: 'var(--text-3)',
@@ -786,7 +814,9 @@ export function AccountSection() {
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
                 />
                 {deleteAccountMutation.error && (
-                  <p className="mt-2 text-xs text-danger">{deleteAccountMutation.error.message}</p>
+                  <p className="mt-2 text-xs text-danger">
+                    {toUserMessage(deleteAccountMutation.error, 'Account deletion failed.')}
+                  </p>
                 )}
               </div>
               <AlertDialogFooter>
@@ -802,7 +832,7 @@ export function AccountSection() {
                   disabled={deleteConfirmInput !== 'DELETE' || deleteAccountMutation.isPending}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                 >
-                  {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete account'}
+                  {deleteAccountMutation.isPending ? 'Scheduling…' : 'Schedule deletion'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </>
@@ -825,7 +855,9 @@ export function AccountSection() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {cancelDeletionMutation.error && (
-            <p className="text-xs text-danger">{cancelDeletionMutation.error.message}</p>
+            <p className="text-xs text-danger">
+              {toUserMessage(cancelDeletionMutation.error, 'Could not cancel account deletion.')}
+            </p>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={cancelDeletionMutation.isPending}>

@@ -34,9 +34,6 @@ import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 import { withManagedTurnSlot } from './lib/turn-slot';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { applySecretHandlingToRequest } from './lib/secret-handling-gate';
-import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
-import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { buildAdapterStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 import { runToolLoop, loadMcpToolDefs } from './lib/tool-loop';
@@ -449,31 +446,6 @@ async function dispatchChatCompletions(
   }
   if (secretHandling.action === 'redacted') {
     processed.secretRedactionCount = secretHandling.matchCount;
-  }
-
-  const promptInspection = await inspectOutboundContent({
-    channel: 'prompt',
-    value: processed.llmRequest.messages,
-    userId,
-    organizationId: processed.organizationId ?? null,
-    ...(processed.conversationId ? { resourceId: processed.conversationId } : {}),
-    resolveMode: () => resolveSecretHandlingPolicy(getNeonDb(), userId),
-  });
-  if (promptInspection.action === 'blocked') {
-    await refundFailedReservation(userId, processed, 'request_failure');
-    return NextResponse.json(
-      {
-        error: {
-          message: promptInspection.message,
-          type: 'invalid_request_error',
-          code: 'dlp_content_blocked',
-        },
-      },
-      { status: 400, headers: getSecurityHeaders() },
-    );
-  }
-  if (promptInspection.action === 'redacted') {
-    processed.llmRequest.messages = promptInspection.value;
   }
 
   // Persist the external-side-effect boundary before any provider/tool loop

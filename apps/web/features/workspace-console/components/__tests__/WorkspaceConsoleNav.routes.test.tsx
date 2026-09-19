@@ -32,8 +32,9 @@ describe('workspace console navigation', () => {
   it('offers the Code controls beside the other workspace controls', () => {
     render(<WorkspaceConsoleNav />);
 
-    const code = screen.getByRole('link', { name: /^code/i });
-    expect(code).toHaveAttribute('href', '/workspace/code');
+    const codeLinks = screen.getAllByRole('link', { name: /^code/i });
+    expect(codeLinks).toHaveLength(2);
+    for (const code of codeLinks) expect(code).toHaveAttribute('href', '/workspace/code');
   });
 
   it('offers the workspace MCP servers as a section of its own', () => {

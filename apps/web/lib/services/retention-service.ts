@@ -200,40 +200,42 @@ export async function createLegalHold(
     ? Array.from(new Set(input.resourceTypes))
     : null;
 
-  const [row] = await db.query<{ id: string }>(
-    `insert into public.legal_holds
-       (organization_id, name, reason, scope, subject_user_id, resource_types, created_by_user_id)
-     values ($1, $2, $3, $4, $5, $6::text[], $7)
-     returning id`,
-    [
-      input.organizationId,
-      input.name,
-      input.reason,
-      input.scope,
-      input.scope === 'member' ? input.subjectUserId : null,
-      resourceTypes,
-      input.createdByUserId,
-    ],
-  );
-  if (!row) throw new Error(`legal_holds insert returned no row for ${input.organizationId}`);
-
-  for (const userId of custodians) {
-    await db.query(
-      `insert into public.legal_hold_custodians (hold_id, user_id, added_by_user_id)
-       values ($1, $2, $3)
-       on conflict (hold_id, user_id) do nothing`,
-      [row.id, userId, input.createdByUserId],
+  return db.transaction(async (tx) => {
+    const [row] = await tx.query<{ id: string }>(
+      `insert into public.legal_holds
+         (organization_id, name, reason, scope, subject_user_id, resource_types, created_by_user_id)
+       values ($1, $2, $3, $4, $5, $6::text[], $7)
+       returning id`,
+      [
+        input.organizationId,
+        input.name,
+        input.reason,
+        input.scope,
+        input.scope === 'member' ? input.subjectUserId : null,
+        resourceTypes,
+        input.createdByUserId,
+      ],
     );
-  }
+    if (!row) throw new Error(`legal_holds insert returned no row for ${input.organizationId}`);
 
-  const [created] = await db.query<HoldRow>(
-    `select ${HOLD_COLUMNS}
-       from public.legal_holds h
-      where h.id = $1 and h.organization_id = $2`,
-    [row.id, input.organizationId],
-  );
-  if (!created) throw new Error(`legal_holds row ${row.id} disappeared during creation`);
-  return formatHold(created);
+    for (const userId of custodians) {
+      await tx.query(
+        `insert into public.legal_hold_custodians (hold_id, user_id, added_by_user_id)
+         values ($1, $2, $3)
+         on conflict (hold_id, user_id) do nothing`,
+        [row.id, userId, input.createdByUserId],
+      );
+    }
+
+    const [created] = await tx.query<HoldRow>(
+      `select ${HOLD_COLUMNS}
+         from public.legal_holds h
+        where h.id = $1 and h.organization_id = $2`,
+      [row.id, input.organizationId],
+    );
+    if (!created) throw new Error(`legal_holds row ${row.id} disappeared during creation`);
+    return formatHold(created);
+  });
 }
 
 /**

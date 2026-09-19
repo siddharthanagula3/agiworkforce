@@ -30,7 +30,7 @@ import type {
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard, ProjectFileCitation, ResearchStep } from '@agiworkforce/types';
-import type { PastChatCitationView } from '@/features/chat/components/messages/CitationPastChats';
+import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import type {
   PaywallSlot,
@@ -261,7 +261,7 @@ export interface MessageMetadata {
    * The earlier conversations this turn's recall quoted. Server-decided, so the
    * client only carries it.
    */
-  pastChatSources?: PastChatCitationView[];
+  pastChatSources?: PastChatCitation[];
   /**
    * The client's post-stream metadata save failed and was not retried, so what
    * is on screen is richer than what a reload will show.
@@ -719,7 +719,7 @@ interface ChatState {
    * plus menu to `createConversation`'s POST body; `setActiveConversation`
    * clears it the moment a real conversation (new or existing) takes over.
    */
-  pendingTemporaryChat: boolean;
+  pendingTemporaryChat: boolean | null;
 
   // Actions - Conversations
   setConversations: (conversations: Conversation[]) => void;
@@ -728,7 +728,7 @@ interface ChatState {
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
   deleteConversation: (id: string) => void;
   setActiveConversation: (id: string | null) => void;
-  setPendingTemporaryChat: (value: boolean) => void;
+  setPendingTemporaryChat: (value: boolean | null) => void;
   setActiveConversationWithMessages: (
     id: string,
     messages: Message[],
@@ -784,7 +784,7 @@ interface ChatState {
   ) => void;
   setPastChatSources: (
     id: string,
-    sources: PastChatCitationView[] | undefined,
+    sources: PastChatCitation[] | undefined,
     conversationId?: string,
   ) => void;
   setSearchResults: (
@@ -927,6 +927,7 @@ interface ChatState {
   setSidebarCollapsed: (collapsed: boolean) => void;
 
   // Utility
+  resetOnWorkspaceSwitch: () => void;
   reset: () => void;
 }
 
@@ -952,7 +953,7 @@ const initialState = {
   memoryDisabledByConversation: {} as Record<string, boolean>,
   workModeByConversation: {} as Record<string, CloudWorkMode>,
   sidebarCollapsed: false,
-  pendingTemporaryChat: false,
+  pendingTemporaryChat: null,
 };
 
 /**
@@ -1223,7 +1224,7 @@ export const useChatStore = create<ChatState>()(
                 draftContent: state.draftsByConversation[conversationKey(id)] ?? '',
                 error: null,
                 isLoading: deriveIsLoading({ ...state, activeConversationId }),
-                ...(id !== null ? { pendingTemporaryChat: false } : {}),
+                ...(id !== null ? { pendingTemporaryChat: null } : {}),
               };
             },
             undefined,
@@ -1948,6 +1949,17 @@ export const useChatStore = create<ChatState>()(
           set({ pendingTemporaryChat: value }, undefined, 'chat/setPendingTemporaryChat'),
 
         // Reset
+        resetOnWorkspaceSwitch: () =>
+          set(
+            (state) => ({
+              ...initialState,
+              selectedModel: state.selectedModel,
+              selectedModelTier: state.selectedModelTier,
+              sidebarCollapsed: state.sidebarCollapsed,
+            }),
+            undefined,
+            'chat/resetOnWorkspaceSwitch',
+          ),
         reset: () => set(initialState, undefined, 'chat/reset'),
       }),
       {

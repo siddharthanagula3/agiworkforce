@@ -5258,7 +5258,7 @@ impl ToolExecutionGuard {
         if chars[dot] != '.' {
             return false;
         }
-        !Self::previous_code_char(chars, dot).is_some_and(|index| chars[index] == '.')
+        Self::previous_code_char(chars, dot).is_none_or(|index| chars[index] != '.')
     }
 
     /// True when the name is a key in an object literal (`{ count: n }`), which

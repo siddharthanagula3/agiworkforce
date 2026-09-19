@@ -16,7 +16,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { resolveSupportAccountContext } from '@/lib/support/account/context-resolver';
 import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
 import { toModelSafeAccountFacts } from '@/lib/support/account/model-safe-facts';
-import { listAvailableSupportActions } from '@/lib/support/actions/service';
+import { listAvailableSupportActions } from '@/lib/support/actions/catalog';
 import {
   answerSupportQuestion,
   isSupportAgentEnabled,

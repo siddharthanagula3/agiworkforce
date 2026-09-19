@@ -3,6 +3,7 @@
 import { useOrganizationOverview } from '@/features/settings/hooks/use-settings-queries';
 import { SSOPanel } from '@/features/settings/sections/team/SSOPanel';
 import DirectorySyncAdminPage from '@/features/admin/pages/DirectorySyncAdminPage';
+import { toUserMessage } from '@/lib/user-error-message';
 import { WorkspaceServicePrincipals } from './WorkspaceServicePrincipals';
 
 const noticeStyle = {
@@ -39,7 +40,7 @@ export function WorkspaceIdentityPanels() {
           We could not load your identity configuration
         </p>
         <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          {overviewQuery.error.message}
+          {toUserMessage(overviewQuery.error, 'Identity configuration could not be loaded.')}
         </p>
         <button
           type="button"

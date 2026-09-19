@@ -71,7 +71,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/blog', label: 'Blog' },
       { href: '/contact', label: 'Contact' },
       { href: '/contact-sales', label: 'Contact sales' },
-      { href: '/waitlist', label: 'Enterprise early access' },
+      { href: '/waitlist', label: 'Discuss Enterprise access' },
       { href: '/beta', label: 'Beta programme' },
     ],
   },

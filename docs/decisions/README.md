@@ -2,8 +2,8 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last reviewed: 2026-07-11
-Last updated: 2026-09-03
+Last reviewed: 2026-09-19
+Last updated: 2026-09-19
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -14,7 +14,7 @@ Current sources of truth:
 - `docs/product/definition.md` - single product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
 - `docs/product/requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
 - `docs/work/implementation-status.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
-- `docs/architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and Desktop model-selector rules.
+- `docs/architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and developer-surface model-selector rules.
 - `docs/product/suite.md` - product thesis, surfaces, trust modes, and sync boundary.
 - `docs/architecture/overview.md` - monorepo shape, runtime boundaries, provider strategy, generated files, and enterprise control plane.
 - `docs/product/commercial.md` - Local/BYOK/Managed launch posture, waitlist, payment, and enterprise gates.
@@ -39,7 +39,7 @@ Archived source material:
 3. The six-surface product boundary is Web, Desktop, Mobile, CLI, VS Code, and Chrome.
    Evidence: `docs/product/suite.md`, `docs/architecture/desktop.md`, `PLAN.md`.
 
-4. Normal synced app chat is shared by Web, Mobile Cloud, and both Desktop Cloud shells. Chrome remains cloud-only and keeps `chrome.storage.local` authoritative, but every conversation whose turns all carry Managed Cloud provenance automatically mirrors into the same signed-in account conversation store so it is available on Web, Mobile Cloud, Tauri Cloud, and Electron Cloud. Unknown-provenance or any Local/BYOK turn fails closed and permanently disqualifies that Chrome conversation. CLI and VS Code remain local/workspace/task scoped unless the user explicitly hands off selected, redacted context. (Founder decision, 2026-08-13; supersedes Chrome's separate-store rule.)
+4. Normal synced app chat is shared by Web, Mobile Cloud, and the public Electron Desktop. Chrome remains cloud-only and keeps `chrome.storage.local` authoritative, but every conversation whose turns all carry Managed Cloud provenance automatically mirrors into the same signed-in account conversation store so it is available on Web, Mobile Cloud, and Desktop. Unknown-provenance or any Local/BYOK turn fails closed and permanently disqualifies that Chrome conversation. CLI and VS Code remain local/workspace/task scoped unless the user explicitly hands off selected, redacted context. D-2026-09-15-04 supersedes the earlier two-Desktop-shell language.
    Evidence: `docs/product/suite.md`, `docs/architecture/trust-boundaries.md`, `apps/extension/docs/threat-model.md`.
 
 5. Mobile v1 ships as Local + Cloud; Mobile does not expose BYOK (see `docs/product/definition.md` surface roles, updated 2026-07-08; the earlier "Local + explicit BYOK" mobile wording was stale). Managed Cloud / AGI Compute Credits / subscriptions are in public alpha and open by default (founder decision 2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. Ledgering, payment rails, fraud, refund, chargeback, and provider-term controls must keep pace with public usage but no longer gate access; managed access stays subscription/entitlement-gated, and Local/BYOK are never silently routed into managed cloud. (Updated 2026-06-27: superseded the prior "remain waitlist or private beta until ... verified" wording.)
@@ -84,10 +84,10 @@ Archived source material:
 18. `docs/product/definition.md` is the first product read for agents and humans, and `docs/work/implementation-status.md` is the first implementation read for feature/component parity. Older PRDs, generated parity reports, removed corpora retrievable only from git history (`tasks/**`, `reports/**`, `docs/archive/**`), and local screenshot/reference corpora are evidence or working notes unless current docs explicitly promote a conclusion.
     Evidence: `docs/product/definition.md`, `docs/work/implementation-status.md`, `docs/README.md`, `docs/agent-context/doc-status.json`.
 
-19. BYOK provider/model work must use provider-plus-model-plus-capability metadata, not model names alone. `docs/architecture/byok-provider-strategy.md` is the current priority map for direct provider keys, hosted open-model APIs, local runtimes, model families, and Desktop model-selector grouping.
+19. BYOK provider/model work must use provider-plus-model-plus-capability metadata, not model names alone. `docs/architecture/byok-provider-strategy.md` is the current priority map for direct provider keys, hosted open-model APIs, local runtimes, model families, and developer-surface model-selector grouping. The public Electron Desktop accepts no provider key.
     Evidence: `docs/architecture/byok-provider-strategy.md`, `packages/contracts/types/src/models.json`, `docs/architecture/provider-routing.md`.
 
-20. Surface completion ordering (updated 2026-08-05, founder decision, supersedes both the 2026-07-11 serial order "Mobile, Website, Desktop, CLI, Chrome, VS Code" and the 2026-08-01 "Desktop to zero first" note): the six surfaces are completed shortest-remaining-work-first, estimate remaining Class-1 (partial/unwired/stub/broken) work per surface, complete the fastest surface first, then the next fastest, until all six are at zero. The routing substrate (registry dated pricing + cache-write billing, ExecutionPlan/CPST design, CPST telemetry, rules-based router) completes before surface closure begins. The Electron cloud-only desktop shell is in scope for the completion bar alongside Tauri (founder decision 2026-08-05). The mobile README's 2026-08-06 target date no longer implies mobile-first ordering.
+20. Surface completion ordering (updated 2026-08-05, founder decision, supersedes both the 2026-07-11 serial order "Mobile, Website, Desktop, CLI, Chrome, VS Code" and the 2026-08-01 "Desktop to zero first" note): the six surfaces are completed shortest-remaining-work-first, estimate remaining Class-1 (partial/unwired/stub/broken) work per surface, complete the fastest surface first, then the next fastest, until all six are at zero. The routing substrate (registry dated pricing + cache-write billing, ExecutionPlan/CPST design, CPST telemetry, rules-based router) completes before surface closure begins. D-2026-09-15-04 later made Electron the sole public Desktop; retained Tauri work is not part of the public Desktop completion claim. The mobile README's 2026-08-06 target date no longer implies mobile-first ordering.
     Evidence: `docs/work/implementation-status.md` (2026-08-05 founder decisions section), `audit/capability-gaps.csv` (CAP-045..CAP-047), apps/mobile/README.md.
 
 21. BYOK tool orchestration defaults to Native First when BYOK is active and the selected provider/model supports native tools, but only with visible provider/model/tool labels, retention/cost disclosure, and consent for risky payloads. Native First never applies to Local mode.

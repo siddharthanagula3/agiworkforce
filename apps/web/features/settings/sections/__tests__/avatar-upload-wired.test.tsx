@@ -149,7 +149,10 @@ describe('avatar upload is reachable from General settings', () => {
 
     await userEvent.upload(screen.getByLabelText('Profile photo'), png());
 
-    expect(await screen.findByText('Upload failed (HTTP 500)')).toBeVisible();
+    expect(
+      await screen.findByText('Something went wrong on our side. Try again shortly.'),
+    ).toBeVisible();
+    expect(screen.queryByText('Upload failed (HTTP 500)')).not.toBeInTheDocument();
     expect(mocks.refreshProfileConsumers).not.toHaveBeenCalled();
   });
 

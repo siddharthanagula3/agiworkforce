@@ -12,6 +12,7 @@ export interface PairingState {
 
 import { isBridgePairingCode, normalizePairingCode } from '@agiworkforce/types';
 import { ALLOWED_BRIDGE_HOSTS, DEFAULT_AGI_BRIDGE_URL } from '../../background/policy';
+import { normalizeManagedCloudOwner } from '../cloud-bridge/managedCloudAuthority';
 
 // SEC-11: two separate credentials, two separate keys. The bridge secret is
 // pasted by the operator and only ever leaves as X-Bridge-Token; the pair token
@@ -20,6 +21,9 @@ const STORAGE_KEY_BRIDGE_SECRET = 'agi_bridge_secret';
 const STORAGE_KEY_PAIR_TOKEN = 'agi_pair_token';
 const STORAGE_KEY_FINGERPRINT = 'agi_pairing_fingerprint';
 const STORAGE_KEY_PAIR_REQUEST = 'agi_pair_request';
+// The account the pairing was issued to. A pair token authorises Desktop to act
+// for whoever is signed in, so it must not outlive that sign-in.
+const STORAGE_KEY_PAIR_ACCOUNT = 'agi_pair_account';
 // Owned by the background worker, which reads it to decide whether a worker
 // start should attempt connectNative at all.
 const STORAGE_KEY_DESKTOP_PAIRED = 'connectedToDesktop';
@@ -128,18 +132,72 @@ function readStoredPairRequest(data: Record<string, unknown>): StoredPairRequest
   };
 }
 
+/**
+ * A pairing survives a session refresh, which rotates the incarnation, but not
+ * a sign-out or a switch of account. An unbound pairing was issued where there
+ * is no account to bind to, so this check has nothing to say about it.
+ */
+export function pairingBelongsTo(
+  boundAccountId: string | null,
+  signedInAccountId: string | null,
+): boolean {
+  return boundAccountId === null || boundAccountId === signedInAccountId;
+}
+
+/** `undefined` means the background could not answer, which is not a sign-out. */
+async function readSignedInAccountId(): Promise<string | null | undefined> {
+  if (typeof chrome.runtime?.sendMessage !== 'function') return undefined;
+  try {
+    const response = (await chrome.runtime.sendMessage({ type: 'GET_CLOUD_AUTH_TOKEN' })) as
+      { success?: unknown; owner?: unknown } | undefined;
+    if (response?.success !== true) return undefined;
+    return normalizeManagedCloudOwner(response.owner)?.accountId ?? null;
+  } catch {
+    return undefined;
+  }
+}
+
+async function releasePairedCredentials(): Promise<void> {
+  try {
+    await removeSession([
+      STORAGE_KEY_PAIR_TOKEN,
+      STORAGE_KEY_FINGERPRINT,
+      STORAGE_KEY_PAIR_ACCOUNT,
+    ]);
+  } catch {
+    // A storage failure must still leave this worker refusing the pairing.
+  }
+  try {
+    await chrome.storage.local.remove(STORAGE_KEY_DESKTOP_PAIRED);
+  } catch {
+    // The background falls back to a failed connect attempt.
+  }
+}
+
 export async function loadPairingState(): Promise<PairingState> {
   try {
     const sessionData = await readSession([
       STORAGE_KEY_PAIR_TOKEN,
       STORAGE_KEY_FINGERPRINT,
       STORAGE_KEY_PAIR_REQUEST,
+      STORAGE_KEY_PAIR_ACCOUNT,
     ]);
 
     const token = sessionData[STORAGE_KEY_PAIR_TOKEN] as string | undefined;
     const fingerprint = sessionData[STORAGE_KEY_FINGERPRINT] as string | undefined;
 
     if (token) {
+      const stored = sessionData[STORAGE_KEY_PAIR_ACCOUNT];
+      const boundAccountId = typeof stored === 'string' && stored !== '' ? stored : null;
+      const signedInAccountId = await readSignedInAccountId();
+      if (signedInAccountId !== undefined && !pairingBelongsTo(boundAccountId, signedInAccountId)) {
+        await releasePairedCredentials();
+        _state = { ...IDLE_STATE };
+        return getPairingState();
+      }
+      if (boundAccountId === null && typeof signedInAccountId === 'string') {
+        await writeSession({ [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId });
+      }
       _state = { ...IDLE_STATE, phase: 'paired', fingerprint: fingerprint ?? null };
       return getPairingState();
     }
@@ -224,9 +282,13 @@ async function storeIssuedPairToken(data: Record<string, unknown>): Promise<Pair
     return fail('Desktop returned a malformed fingerprint');
   }
 
+  const signedInAccountId = await readSignedInAccountId();
   await writeSession({
     [STORAGE_KEY_PAIR_TOKEN]: token,
     [STORAGE_KEY_FINGERPRINT]: rawFingerprint,
+    ...(typeof signedInAccountId === 'string'
+      ? { [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId }
+      : {}),
   });
   await removeSession([STORAGE_KEY_PAIR_REQUEST]);
 
@@ -366,20 +428,11 @@ export async function unpair(): Promise<PairingState> {
   }
 
   try {
-    await removeSession([
-      STORAGE_KEY_PAIR_TOKEN,
-      STORAGE_KEY_FINGERPRINT,
-      STORAGE_KEY_PAIR_REQUEST,
-    ]);
+    await removeSession([STORAGE_KEY_PAIR_REQUEST]);
   } catch {
     // Storage removal failure should not block state reset
   }
-
-  try {
-    await chrome.storage.local.remove(STORAGE_KEY_DESKTOP_PAIRED);
-  } catch {
-    // The background falls back to a failed connect attempt; do not block reset.
-  }
+  await releasePairedCredentials();
 
   _state = { ...IDLE_STATE };
   return getPairingState();
@@ -420,9 +473,13 @@ export async function confirmPairing(token: string, fingerprint?: string): Promi
   }
 
   try {
+    const signedInAccountId = await readSignedInAccountId();
     await writeSession({
       [STORAGE_KEY_PAIR_TOKEN]: trimmed,
       [STORAGE_KEY_FINGERPRINT]: fp,
+      ...(typeof signedInAccountId === 'string'
+        ? { [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId }
+        : {}),
     });
     _state = { ...IDLE_STATE, phase: 'paired', fingerprint: fp };
   } catch (err) {

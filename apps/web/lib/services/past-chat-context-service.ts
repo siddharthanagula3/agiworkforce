@@ -1,5 +1,7 @@
 import 'server-only';
 
+import type { PastChatCitation } from '@/lib/past-chat-citation';
+
 import { contextFenceTag, contextSource, type ContextSource } from '@agiworkforce/context';
 import type { ContextCandidate, ContextSourceLoader } from '@agiworkforce/context-engine';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -77,15 +79,6 @@ export interface PastChatExcerptSource extends PastChatExcerpt {
   source: ContextSource;
   /** The index's score when it answered; absent leaves ranking to term overlap. */
   score?: number;
-}
-
-/** What a user is shown, and what the turn's manifest records, for one excerpt. */
-export interface PastChatCitation {
-  id: string;
-  conversationId: string;
-  messageId: string;
-  title: string;
-  createdAt: string;
 }
 
 export interface PastChatContextResult {

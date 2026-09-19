@@ -4,15 +4,19 @@ title: Usage limits, credits and top-ups
 path: /pricing
 category: billing
 tags: usage, limit, quota, capacity, allowance, reset, credits, top up, buy credits, overage, ran out, rate limit, out of capacity
-updated: 2026-09-17
+updated: 2026-09-19
 scope: public
 ---
 
 ## How usage is measured
 
-Managed cloud usage is metered. Each plan carries a capacity allowance, and the
-usage view in Settings shows how much of the current allowance you have used and
-when it resets, as a percentage and a reset time.
+Managed cloud usage is metered. For plans with included allowances, Settings,
+Usage shows consumption, remaining allowance and reset times. Purchased credits
+are shown separately from the plan allowance.
+
+Enterprise allowances and billing follow the workspace contract. Use **View
+workspace usage** to see organization consumption; the contract determines the
+applicable allowance rather than a personal-plan percentage bar.
 
 ## When the allowance runs out
 

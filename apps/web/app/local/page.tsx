@@ -10,11 +10,11 @@ import {
   Transcript,
   type TranscriptLine,
 } from '@/features/marketing/components/system';
-import { DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CLI_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Local: run AGI on your own hardware, at no cost',
-  description: `Run AGI locally with ${DESKTOP_LOCAL_RUNTIMES.label} on Desktop, or against a local model server from the CLI. No account is required for local mode, and nothing leaves the device unless you explicitly send it out.`,
+  description: `Run AGI locally from the CLI with ${CLI_LOCAL_RUNTIMES.label}. No account is required for local mode, and nothing leaves the device unless you explicitly send it out.`,
   path: '/local',
 });
 
@@ -27,14 +27,14 @@ const HERO_TRANSCRIPT: TranscriptLine[] = [
 
 const SURFACE_FACTS = [
   {
-    meta: `Desktop · ${SURFACE_STATUS.desktop}`,
-    title: 'Models already running on this Mac',
-    body: `Desktop finds ${DESKTOP_LOCAL_RUNTIMES.label} on loopback, lists the models each one reports, and answers a local thread on the device. A local turn carries no attachments and never moves to the cloud on its own.`,
-  },
-  {
     meta: `CLI · ${SURFACE_STATUS.cli}`,
     title: 'agi models scan',
     body: 'The CLI probes Ollama and LM Studio on loopback, prints every installed model beside its base URL, and blocks any address that is not loopback before a request is built.',
+  },
+  {
+    meta: `Desktop · ${SURFACE_STATUS.desktop}`,
+    title: 'Managed Cloud only',
+    body: 'The current public Electron Desktop contract does not accept local-inference commands or provider keys. Use the released CLI for Local mode.',
   },
   {
     meta: 'Mobile · not shipped',
@@ -199,9 +199,9 @@ export default function LocalPage() {
                 The machine you own <em className="agi-ds-accent">can run the model.</em>
               </h2>
               <Prose size="lg">
-                Desktop and the CLI both answer from {DESKTOP_LOCAL_RUNTIMES.label} on the machine
-                you own. BYOK on the CLI is the reviewed way out on the days a local model is not
-                enough.
+                The released CLI answers from {CLI_LOCAL_RUNTIMES.label} on the machine you own.
+                BYOK on the CLI is the reviewed way out on the days a local model is not enough; the
+                current public Desktop is managed-cloud only.
               </Prose>
               <ButtonRow>
                 <Button href="/desktop" variant="secondary">

@@ -30,38 +30,40 @@ routing, runtime, artifacts, and a unified chat protocol.
   runtimes Ollama, LM Studio, llama.cpp, and vLLM. Counts and provider names
   come from `packages/contracts/types/src/models.json`; `pnpm check:readme-facts`
   fails when this section drifts from it.
-- **Local-first privacy and BYOK**: Desktop and mobile run local models via
-  Ollama, LM Studio, and on-device inference (llama.rn, ExecuTorch), with no
-  data leaving the device in Local mode; BYOK sends requests straight to a
-  user's own provider account with their own key.
+- **Local-first privacy and BYOK**: the released CLI runs local models through
+  Ollama or LM Studio and sends BYOK requests straight to a user's own provider
+  account. The public Electron Desktop is managed-cloud-only; Mobile and VS
+  Code are not yet published.
 - **Agentic execution and tools**: Swarm-based orchestration (task
   decomposition, parallel sub-agent spawning, dependency-graph execution,
-  result aggregation), an MCP client in desktop/CLI/web/extension, and a tool
-  engine covering file operations, code execution, PTY terminal, git, web
-  search, document extraction, calendar, email, and clipboard. The CLI adds
-  an interactive TUI and a one-shot mode.
-- **Computer use and browser automation**: Desktop includes screen capture,
-  vision planning, input simulation (enigo/rdev), OCR (Tesseract), and a
-  screen watcher; the Chrome Extension adds page capture, content extraction,
-  and a native messaging bridge to the desktop app.
-- **Voice, skills, and sync**: audio capture and optional local
-  speech-to-text (Whisper.cpp) on desktop; a loadable skill and plugin
-  system with a marketplace; and a WebRTC signaling server syncing
-  conversations across web, mobile, and desktop.
+  result aggregation), MCP support in the released CLI and managed remote
+  connectors on hosted surfaces, and a tool engine covering file operations,
+  code execution, PTY terminal, git, web search, document extraction,
+  calendar, email, and clipboard. The CLI adds an interactive TUI and a
+  one-shot mode. Public Electron Desktop reports no local-MCP capability.
+- **Computer use and browser automation**: Electron Desktop provides approved,
+  step-at-a-time screen and input actions. The Chrome Extension adds page
+  capture, content extraction, and an optional native messaging bridge for
+  selections, captures, and queued messages; panel inference remains Managed
+  Cloud.
+- **Voice, skills, and sync**: the CLI supports audio capture and optional
+  local transcription; a loadable skill and plugin system has a marketplace;
+  and a WebRTC signaling server supports cross-device coordination. Retained
+  Tauri Whisper.cpp code is internal and is not a public Desktop capability.
 
 ## Surfaces
 
 Every surface below is under active development. Status is a plain
 description of what runs today, not a shipped-feature claim.
 
-| Surface           | Version | Status                                                                                                                                                                  |
-| ----------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mobile            | 1.2.0   | Local-first chat runs on device. No build has reached TestFlight, Play Internal Testing, or a store listing. In-app purchase is fail-closed.                            |
-| Web               | 0.1.1   | The deepest surface: product site, chat, and billing run in production.                                                                                                 |
-| Desktop           | 1.2.0   | Tauri 2 app with a Rust backend. The latest published release ships Linux `.AppImage`/`.deb`/`.rpm` only; macOS and Windows installers are not yet published.           |
-| CLI               | 1.7.1   | Interactive TUI and one-shot mode. `release-cli.yml` only cuts a release from a git tag matching `Cargo.toml`; the last published release predates this repo's version. |
-| Chrome Extension  | 1.2.0   | Manifest V3 with browser automation and a side panel. Not yet published to the Chrome Web Store.                                                                        |
-| VS Code Extension | 0.3.0   | IDE-native surface. Not yet published to the VS Code Marketplace; depends on a CLI release that has not shipped.                                                        |
+| Surface           | Version | Status                                                                                                                                                                                                  |
+| ----------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mobile            | 1.2.0   | On-device Local chat exists in the codebase, but no build has reached TestFlight, Play Internal Testing, or a store listing. In-app purchase is fail-closed.                                            |
+| Web               | 0.1.1   | The deepest surface: product site, chat, and billing run in production.                                                                                                                                 |
+| Desktop           | 1.2.0   | Electron is the only public Desktop product: a managed-cloud shell with approved folders and computer use. No current public installer has been published; retained Tauri code is not a public product. |
+| CLI               | 1.7.1   | Interactive TUI and one-shot mode. `release-cli.yml` only cuts a release from a git tag matching `Cargo.toml`; the last published release predates this repo's version.                                 |
+| Chrome Extension  | 1.2.0   | Manifest V3 with browser automation and a side panel. Not yet published to the Chrome Web Store.                                                                                                        |
+| VS Code Extension | 0.3.0   | IDE-native surface. Not yet published to the VS Code Marketplace; depends on a CLI release that has not shipped.                                                                                        |
 
 `services/signaling-server` (WebRTC/WebSocket relay for cross-device sync,
 deployed continuously to Fly.io and Railway) and `infrastructure/sandbox`
@@ -75,18 +77,20 @@ providers, MCP, runtime, sync, unified-chat, design-tokens, skills, utils).
 Web and the signaling server are the two server-side entry points: the
 Next.js web app hosts the LLM proxy, auth, and rate limiting; the Express
 signaling server relays WebRTC/WebSocket sync. Both sit in front of Neon
-PostgreSQL (the ledgered database) and, on desktop and CLI, a set of Rust
-crates (protocol, sandbox-policy, command-registry, app-server, llm, mcp).
+PostgreSQL (the ledgered database). The CLI and retained internal Tauri host
+also consume Rust crates for protocol, sandbox policy, command registry, the
+app server, LLM access, and MCP; public Electron Desktop is TypeScript and uses
+the hosted web runtime for conversation inference.
 
 | Directory                   | Contents                                                                                                                                                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `apps/mobile`               | Expo 57 / React Native iOS + Android app with on-device LLM support                                                                                                                                          |
 | `apps/web`                  | Next.js 16 web application: product site, chat, billing, docs, admin                                                                                                                                         |
-| `apps/desktop`              | Tauri 2 desktop app: React 19 frontend + Rust native backend                                                                                                                                                 |
+| `apps/desktop`              | Public Electron managed-cloud shell plus retained, non-public Tauri/Rust implementation                                                                                                                      |
 | `apps/cli`                  | Rust CLI binary (`agi`): interactive TUI, one-shot exec, daemon mode                                                                                                                                         |
 | `apps/extension`            | Chrome Extension (Manifest V3): browser automation, side panel, native messaging                                                                                                                             |
 | `apps/extension-vscode`     | VS Code extension: IDE-native AI surface                                                                                                                                                                     |
-| `packages/`                 | 34 shared TypeScript packages outside the provider adapters (types, routing, model-registry, runtime, MCP, artifacts, UI, etc.)                                                                              |
+| `packages/`                 | 38 shared TypeScript packages outside the provider adapters (types, routing, model-registry, runtime, MCP, artifacts, UI, etc.)                                                                              |
 | `packages/ai/providers/`    | 18 per-provider adapter packages (Anthropic, DeepSeek, Factory, Google, Groq, LM Studio, MiniMax, Moonshot, NVIDIA, Ollama, OpenAI, OpenRouter, Perplexity, Qwen, Vercel AI Gateway, Workers AI, xAI, Zhipu) |
 | `crates/`                   | 12 Rust crates (protocol, llm, agent-core, mcp, sandbox-policy, execpolicy, etc.)                                                                                                                            |
 | `services/signaling-server` | Express 5 WebRTC/WebSocket signaling server for cross-device sync                                                                                                                                            |
@@ -148,9 +152,12 @@ plus a per-request explain view.
   Expo 57 (mobile), Tailwind CSS 4, Radix UI, Framer Motion, Zustand 5,
   React Router 7 (desktop), Expo Router (mobile), Next.js App Router (web),
   Monaco Editor, xterm.js, Mermaid/KaTeX/react-markdown, i18next.
-- **Desktop native**: Rust (edition 2021, toolchain 1.94.0), Tauri 2.11,
-  SQLite via rusqlite with SQLCipher, enigo/rdev/xcap, portable-pty, git2,
-  cpal, keyring (OS keychain), reqwest, tokio.
+- **Desktop**: the public macOS application is an Electron 44 shell over the
+  shared React client. The repository also retains the Rust/Tauri 2.11 shell
+  for internal value; it is not a second public Desktop product.
+- **Native and local runtime**: Rust (edition 2021, toolchain 1.94.0),
+  enigo/rdev/xcap, portable-pty, git2, cpal, keyring (OS credential store),
+  reqwest, and tokio support the retained native shell and released CLI.
 - **Services**: Express 5 (signaling server), Clerk (web auth), Stripe
   (billing), Neon PostgreSQL with ordered, checksummed SQL migrations
   (`apps/web/db/neon`), Upstash Redis (rate limiting/cache), Vercel (web
@@ -186,9 +193,12 @@ pnpm install
 ```
 
 ```bash
-# Desktop (Tauri)
+# Public Desktop (Electron; start the web app separately)
+pnpm --filter @agiworkforce/desktop dev:electron
+
+# Retained internal Tauri host
 rustup install 1.94.0 && rustup default 1.94.0
-brew install llvm tesseract   # macOS, only if building with OCR
+brew install llvm tesseract   # macOS, only if working on retained OCR code
 pnpm dev:desktop
 
 # Web (Next.js)
@@ -266,10 +276,11 @@ run checks that production is serving the current `main` commit.
 
 - **Signaling server**: `deploy-signaling-server.yml` deploys to Railway and
   Fly.io behind the same successful-CI, exact-SHA gate.
-- **Desktop**: `release-desktop.yml` and `build-windows-release.yml` are
-  built to ship Linux `.AppImage`/`.deb`/`.rpm`, a notarized macOS `.dmg`,
-  and a signed Windows NSIS installer from a version tag; the most recently
-  published release contains Linux artifacts only.
+- **Desktop**: `release-desktop-cloud.yml` builds, signs, notarizes, and staples
+  the public Electron macOS application from a `v-cloud-desktop-*` tag. No
+  public Electron installer has been published yet. The Tauri
+  `release-desktop.yml` and `build-windows-release.yml` paths are retained
+  internal workflows and do not define the public Desktop product.
 - **CLI**: `release-cli.yml` publishes a signed GitHub Release and the
   `@agiworkforce/cli` npm package from a git tag matching
   `apps/cli/Cargo.toml`; not every commit to `apps/cli` has one.
@@ -289,8 +300,10 @@ vulnerability privately through GitHub's advisory flow: [`SECURITY.md`](SECURITY
 - **Trust boundary enforcement**: Local, BYOK, and Managed Cloud are separate;
   local chats never silently route to cloud providers, and BYOK transitions
   require explicit consent with payload preview and secret scanning.
-- **Encrypted local storage**: SQLCipher-encrypted SQLite on desktop;
-  credentials in the OS keychain (Keychain, Credential Manager, Secret Service).
+- **Credential storage**: Electron Desktop refuses to persist account
+  credentials when operating-system encryption is unavailable; the CLI saves
+  provider credentials in the OS keyring and keeps only provider names in its
+  on-disk index.
 - **Sandbox policies**: `crates/agiworkforce-sandbox-policy` enforces
   execution policy; the CLI supports optional Linux seccomp filtering.
 - **Input validation**: Zod schemas on API boundaries; Helmet and rate

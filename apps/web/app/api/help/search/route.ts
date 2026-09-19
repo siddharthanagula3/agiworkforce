@@ -9,6 +9,8 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getSupportCorpus } from '@/lib/support/agent/corpus';
 import { retrieveSupportChunks } from '@/lib/support/agent/retrieval/retrieve';
+import { helpResultPath } from '@/lib/support/help-articles';
+import { absoluteUrl } from '@/lib/seo/site';
 
 export const runtime = 'nodejs';
 
@@ -80,8 +82,8 @@ async function handleSearch(request: NextRequest) {
     results.push({
       docId: hit.chunk.docId,
       title: hit.citation.title,
-      url: hit.citation.url,
-      path: hit.chunk.path,
+      url: absoluteUrl(helpResultPath(hit.chunk)),
+      path: helpResultPath(hit.chunk),
       category: hit.chunk.category,
       snippet: hit.citation.snippet,
     });

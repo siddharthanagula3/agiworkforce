@@ -31,6 +31,7 @@ const CUSTOMER_CONTENT = [
   'cloud_agent_approval_checkpoints',
   'cloud_agent_events',
   'cloud_agent_execution_operations',
+  'cloud_agent_run_budgets',
   'cloud_agent_runs',
   'cloud_code_agent_turns',
   'cloud_code_sessions',
@@ -71,6 +72,7 @@ const CUSTOMER_CONTENT = [
   'user_shortcuts',
   'user_skills',
   'video_generation_jobs',
+  'voice_sessions',
   'web_artifacts',
   'web_conversations',
   'web_messages',
@@ -123,6 +125,7 @@ const OPERATIONAL_RECORD = [
   'github_installations',
   'identities',
   'legal_holds',
+  'legal_hold_custodians',
   'managed_usage_request_extensions',
   'managed_usage_requests',
   'mcp_task_bindings',
@@ -185,11 +188,14 @@ const OPERATIONAL_RECORD = [
 ];
 
 const AUDIT_TRAIL = [
+  'automation_audit_events',
   'directory_sync_events',
+  'ediscovery_exports',
   'enterprise_audit_events',
   'organization_domain_retention_sweeps',
   'organization_retention_sweeps',
   'security_audit_logs',
+  'plugin_registry_lifecycle_events',
   'support_access_events',
 ];
 

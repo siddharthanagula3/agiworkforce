@@ -48,31 +48,6 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'chat/conversations/route.ts', reason: 'own_content' },
   { route: 'chat/sync/route.ts', reason: 'no_governed_state' },
   { route: 'claim-offer/route.ts', reason: 'pre_account' },
-  {
-    route: 'code/sessions/[sessionId]/agent/cancel/route.ts',
-    reason: 'gap',
-    expectedEvent: 'code_session_lifecycle_changed',
-  },
-  {
-    route: 'code/sessions/[sessionId]/close/route.ts',
-    reason: 'gap',
-    expectedEvent: 'code_session_lifecycle_changed',
-  },
-  {
-    route: 'code/sessions/[sessionId]/route.ts',
-    reason: 'gap',
-    expectedEvent: 'code_session_lifecycle_changed',
-  },
-  {
-    route: 'connectors/[connectorId]/mcp/route.ts',
-    reason: 'gap',
-    expectedEvent: 'connector_setting_changed',
-  },
-  {
-    route: 'connectors/permissions/route.ts',
-    reason: 'gap',
-    expectedEvent: 'connector_setting_changed',
-  },
   { route: 'consent/route.ts', reason: 'dedicated_record' },
   { route: 'device/poll/route.ts', reason: 'no_governed_state' },
   { route: 'devices/heartbeat/route.ts', reason: 'no_governed_state' },
@@ -82,19 +57,8 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'github/issues/route.ts', reason: 'own_content' },
   { route: 'interactive-cards/respond/route.ts', reason: 'own_content' },
   {
-    route: 'llm/v1/chat/completions/runs/[runId]/archive/route.ts',
-    reason: 'gap',
-    expectedEvent: 'agent_run_lifecycle_changed',
-  },
-  {
-    route: 'llm/v1/chat/completions/runs/[runId]/pause/route.ts',
-    reason: 'gap',
-    expectedEvent: 'agent_run_lifecycle_changed',
-  },
-  {
-    route: 'llm/v1/chat/completions/runs/[runId]/route.ts',
-    reason: 'gap',
-    expectedEvent: 'agent_run_lifecycle_changed',
+    route: 'llm/v1/chat/completions/runs/[runId]/resume/stream/route.ts',
+    reason: 'no_governed_state',
   },
   { route: 'llm/v1/route/preview/route.ts', reason: 'no_governed_state' },
   { route: 'me/routing-preferences/route.ts', reason: 'own_content' },
@@ -110,46 +74,8 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'mobile/feedback/route.ts', reason: 'own_content' },
   { route: 'mobile/iap/apple-notifications/route.ts', reason: 'inbound_callback' },
   { route: 'mobile/iap/google-notifications/route.ts', reason: 'inbound_callback' },
-  { route: 'mobile/iap/verify/route.ts', reason: 'gap', expectedEvent: 'plan_changed' },
   { route: 'mobile/push-token/route.ts', reason: 'no_governed_state' },
   { route: 'notifications/route.ts', reason: 'own_content' },
-  { route: 'plugins/[id]/lifecycle/route.ts', reason: 'gap', expectedEvent: 'plugin_installed' },
-  {
-    route: 'plugins/[id]/settings/route.ts',
-    reason: 'gap',
-    expectedEvent: 'plugin_setting_changed',
-  },
-  {
-    route: 'plugins/authored/route.ts',
-    reason: 'gap',
-    expectedEvent: 'plugin_marketplace_changed',
-  },
-  {
-    route: 'plugins/marketplace-installations/[id]/settings/route.ts',
-    reason: 'gap',
-    expectedEvent: 'plugin_setting_changed',
-  },
-  {
-    route: 'plugins/marketplaces/[id]/refresh/route.ts',
-    reason: 'gap',
-    expectedEvent: 'plugin_marketplace_changed',
-  },
-  {
-    route: 'plugins/marketplaces/[id]/route.ts',
-    reason: 'gap',
-    expectedEvent: 'plugin_marketplace_changed',
-  },
-  {
-    route: 'plugins/marketplaces/route.ts',
-    reason: 'gap',
-    expectedEvent: 'plugin_marketplace_changed',
-  },
-  { route: 'plugins/uploads/route.ts', reason: 'gap', expectedEvent: 'plugin_marketplace_changed' },
-  {
-    route: 'privacy/requests/route.ts',
-    reason: 'gap',
-    expectedEvent: 'privacy_request_submitted',
-  },
   { route: 'projects/[id]/duplicate/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/[fileId]/reindex/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/[fileId]/route.ts', reason: 'own_content' },
@@ -159,41 +85,11 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'search/route.ts', reason: 'own_content' },
   { route: 'settings/2fa/setup/route.ts', reason: 'no_governed_state' },
   { route: 'settings/organization/active/route.ts', reason: 'no_governed_state' },
-  {
-    route: 'settings/organization/shared/artifacts/[artifactId]/route.ts',
-    reason: 'gap',
-    expectedEvent: 'organization_share_revoked',
-  },
-  {
-    route: 'settings/organization/shared/connectors/[connectorId]/route.ts',
-    reason: 'gap',
-    expectedEvent: 'organization_share_revoked',
-  },
-  {
-    route: 'settings/organization/shared/conversations/[sharedSessionId]/route.ts',
-    reason: 'gap',
-    expectedEvent: 'organization_share_revoked',
-  },
   { route: 'settings/preferences/route.ts', reason: 'own_content' },
   { route: 'settings/sync/route.ts', reason: 'no_governed_state' },
-  {
-    route: 'settings/team/invitations/accept/route.ts',
-    reason: 'gap',
-    expectedEvent: 'member_joined',
-  },
   { route: 'settings/workspaces/route.ts', reason: 'no_governed_state' },
   { route: 'stripe-webhook/route.ts', reason: 'inbound_callback' },
   { route: 'study/sessions/route.ts', reason: 'own_content' },
-  {
-    route: 'support/actions/confirm/route.ts',
-    reason: 'gap',
-    expectedEvent: 'support_action_confirmed',
-  },
-  {
-    route: 'support/actions/propose/route.ts',
-    reason: 'gap',
-    expectedEvent: 'support_action_proposed',
-  },
   { route: 'support/ask/route.ts', reason: 'own_content' },
   { route: 'support/diagnostics/route.ts', reason: 'dedicated_record' },
   { route: 'support/handoff/[sessionId]/messages/route.ts', reason: 'own_content' },
@@ -220,6 +116,94 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'webhooks/gmail/route.ts', reason: 'inbound_callback' },
   { route: 'webhooks/google-calendar/route.ts', reason: 'inbound_callback' },
   { route: 'webhooks/slack/route.ts', reason: 'inbound_callback' },
+] as const;
+
+export interface RequiredRouteAuditEvents {
+  route: string;
+  eventTypes: readonly AuditEventType[];
+}
+
+export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = [
+  {
+    route: 'code/sessions/[sessionId]/agent/cancel/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  {
+    route: 'code/sessions/[sessionId]/close/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  {
+    route: 'code/sessions/[sessionId]/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  {
+    route: 'connectors/[connectorId]/mcp/route.ts',
+    eventTypes: ['data_accessed', 'tool_executed'],
+  },
+  {
+    route: 'connectors/permissions/route.ts',
+    eventTypes: ['connector_setting_changed'],
+  },
+  {
+    route: 'llm/v1/chat/completions/runs/[runId]/archive/route.ts',
+    eventTypes: ['agent_run_lifecycle_changed'],
+  },
+  {
+    route: 'llm/v1/chat/completions/runs/[runId]/pause/route.ts',
+    eventTypes: ['agent_run_lifecycle_changed'],
+  },
+  {
+    route: 'llm/v1/chat/completions/runs/[runId]/route.ts',
+    eventTypes: ['agent_run_lifecycle_changed'],
+  },
+  { route: 'mobile/iap/verify/route.ts', eventTypes: ['mobile_purchase_verified'] },
+  { route: 'plugins/[id]/settings/route.ts', eventTypes: ['plugin_setting_changed'] },
+  {
+    route: 'plugins/authored/route.ts',
+    eventTypes: ['plugin_marketplace_changed'],
+  },
+  {
+    route: 'plugins/marketplace-installations/[id]/settings/route.ts',
+    eventTypes: ['plugin_setting_changed'],
+  },
+  {
+    route: 'plugins/marketplaces/[id]/refresh/route.ts',
+    eventTypes: ['plugin_marketplace_changed'],
+  },
+  {
+    route: 'plugins/marketplaces/[id]/route.ts',
+    eventTypes: ['plugin_marketplace_changed'],
+  },
+  {
+    route: 'plugins/marketplaces/route.ts',
+    eventTypes: ['plugin_marketplace_changed'],
+  },
+  { route: 'plugins/uploads/route.ts', eventTypes: ['plugin_marketplace_changed'] },
+  { route: 'privacy/requests/route.ts', eventTypes: ['privacy_request_submitted'] },
+  {
+    route: 'settings/organization/shared/artifacts/[artifactId]/route.ts',
+    eventTypes: ['organization_share_revoked'],
+  },
+  {
+    route: 'settings/organization/shared/connectors/[connectorId]/route.ts',
+    eventTypes: ['organization_share_granted', 'organization_share_revoked'],
+  },
+  {
+    route: 'settings/organization/shared/conversations/[sharedSessionId]/route.ts',
+    eventTypes: ['organization_share_revoked'],
+  },
+  {
+    route: 'settings/team/invitations/accept/route.ts',
+    eventTypes: ['member_joined', 'member_invitation_declined'],
+  },
+  {
+    route: 'support/actions/confirm/route.ts',
+    eventTypes: ['support_action_confirmed'],
+  },
+  {
+    route: 'support/actions/propose/route.ts',
+    eventTypes: ['support_action_proposed'],
+  },
 ] as const;
 
 export type AuditedSurface = 'chrome' | 'vscode' | 'cli' | 'desktop' | 'mobile';

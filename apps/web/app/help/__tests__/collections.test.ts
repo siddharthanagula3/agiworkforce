@@ -32,7 +32,7 @@ describe('the /help collection index is derived from the support corpus', () => 
       const chunk = documents.get(article.docId);
       expect(chunk, `${article.docId} is not a corpus document`).toBeDefined();
       expect(article.title).toBe(chunk?.docTitle);
-      expect(article.href).toBe(chunk?.path);
+      expect(article.href).toBe(`/help/${article.docId}`);
       expect(collection.id).toBe(chunk?.category);
     }
   });

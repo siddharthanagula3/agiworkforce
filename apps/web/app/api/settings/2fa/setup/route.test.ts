@@ -32,6 +32,7 @@ vi.mock('@/lib/crypto/totp-envelope', () => ({
 }));
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { sealTotpSecret } from '@/lib/crypto/totp-envelope';
 import { POST } from './route';
 
 function request() {
@@ -47,6 +48,7 @@ function existingRow(enabled: boolean | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(sealTotpSecret).mockReturnValue('encrypted-secret');
 });
 
 describe('POST /api/settings/2fa/setup', () => {
@@ -109,5 +111,22 @@ describe('POST /api/settings/2fa/setup', () => {
       mfaGateExemptForOwner: true,
       resolveOrganization: false,
     });
+  });
+
+  it('returns safe availability guidance when secret encryption is misconfigured', async () => {
+    mocks.query.mockResolvedValueOnce(existingRow(null));
+    vi.mocked(sealTotpSecret).mockImplementationOnce(() => {
+      throw new Error('TOTP_ENCRYPTION_KEY too short: internal configuration detail');
+    });
+
+    const response = await POST(request());
+    const body = (await response.json()) as { error: { message: string } };
+
+    expect(response.status).toBe(503);
+    expect(body.error.message).toBe(
+      'Authenticator setup is temporarily unavailable. Try again later or contact support.',
+    );
+    expect(body.error.message).not.toContain('TOTP_ENCRYPTION_KEY');
+    expect(mocks.query).toHaveBeenCalledTimes(1);
   });
 });

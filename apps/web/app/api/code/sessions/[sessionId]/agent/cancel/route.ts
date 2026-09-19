@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireCsrfToken } from '@/lib/csrf';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -58,9 +59,20 @@ async function handleCancel(request: NextRequest, context: RouteContext) {
   const turnId = await optionalTurnId(request);
   const { sessionId } = await context.params;
   try {
-    return NextResponse.json(
-      await requestCloudCodeTurnCancellation(db, { userId, organizationId }, sessionId, turnId),
+    const result = await requestCloudCodeTurnCancellation(
+      db,
+      { userId, organizationId },
+      sessionId,
+      turnId,
     );
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      request,
+      eventType: 'code_session_lifecycle_changed',
+      detail: { resourceType: 'code_session', resourceId: sessionId, status: 'cancel_requested' },
+    });
+    return NextResponse.json(result);
   } catch (error) {
     rethrowCloudCodeError(error);
   }

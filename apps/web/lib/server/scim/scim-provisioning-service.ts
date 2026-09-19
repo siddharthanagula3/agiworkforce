@@ -576,7 +576,7 @@ export async function reconcileMembership(
   };
 }
 
-const USER_COLUMNS = `id, connection_id, organization_id, external_id, user_name, email,
+export const SCIM_USER_SELECT_COLUMNS = `id, connection_id, organization_id, external_id, user_name, email,
        given_name, family_name, display_name, active, linked_user_id, linked_at,
        raw_attributes, version, created_at, updated_at`;
 
@@ -613,7 +613,7 @@ export async function listScimUsers(
   }
 
   const rows = await db.query<ScimProvisionedUserRow>(
-    `select ${USER_COLUMNS}
+    `select ${SCIM_USER_SELECT_COLUMNS}
        from scim_provisioned_users
       where ${whereSql}
       order by created_at asc, id asc
@@ -631,7 +631,7 @@ export async function getScimUser(
 ): Promise<ScimProvisionedUserRow | null> {
   assertResourceId(userId, 'User');
   const rows = await db.query<ScimProvisionedUserRow>(
-    `select ${USER_COLUMNS}
+    `select ${SCIM_USER_SELECT_COLUMNS}
        from scim_provisioned_users
       where id = $1 and connection_id = $2 and organization_id = $3
       limit 1`,
@@ -721,7 +721,7 @@ export async function createScimUser(
          (connection_id, organization_id, external_id, user_name, email,
           given_name, family_name, display_name, active, raw_attributes)
        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb)
-       returning ${USER_COLUMNS}`,
+       returning ${SCIM_USER_SELECT_COLUMNS}`,
         [
           ctx.connectionId,
           ctx.organizationId,
@@ -812,7 +812,7 @@ export async function replaceScimUser(
               version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
           ${expectedVersion === null ? '' : 'and version = $12'}
-        returning ${USER_COLUMNS}`,
+        returning ${SCIM_USER_SELECT_COLUMNS}`,
         [
           userId,
           ctx.connectionId,
@@ -1003,6 +1003,8 @@ async function revokeCredentialsAfterScimRemoval(
 ): Promise<string[]> {
   if (!linkedUserId) return [];
 
+  let errors: string[];
+  let sessionsRevoked = 0;
   try {
     const { getIdentityProvider } = await import('@/lib/server/identity');
     const { deprovisionMember } = await import('@/lib/services/deprovision-service');
@@ -1010,7 +1012,8 @@ async function revokeCredentialsAfterScimRemoval(
       userId: linkedUserId,
       organizationId,
     });
-    return result.errors;
+    errors = result.errors;
+    sessionsRevoked = result.sessionsRevoked;
   } catch (error) {
     return [
       `Credential revocation did not run: ${
@@ -1018,6 +1021,29 @@ async function revokeCredentialsAfterScimRemoval(
       }`,
     ];
   }
+
+  // The person whose sessions just ended learns it from the same place every
+  // other session revocation is announced, and the risk engine sees it too.
+  if (sessionsRevoked > 0) {
+    try {
+      const { emitIdentitySecurityEvent } = await import('@/lib/services/identity-events');
+      await emitIdentitySecurityEvent(db, {
+        userId: linkedUserId,
+        event: 'all_sessions_revoked',
+        organizationId,
+        surface: 'scim',
+        context: 'Your workspace removed your access through its directory sync.',
+        detail: { count: sessionsRevoked },
+      });
+    } catch (error) {
+      errors = [
+        ...errors,
+        `Revocation was not announced: ${error instanceof Error ? error.message : String(error)}`,
+      ];
+    }
+  }
+
+  return errors;
 }
 
 export async function patchScimUser(
@@ -1052,7 +1078,7 @@ export async function patchScimUser(
               version = version + 1
         where id = $1 and connection_id = $2 and organization_id = $3
           ${expectedVersion === null ? '' : 'and version = $11'}
-        returning ${USER_COLUMNS}`,
+        returning ${SCIM_USER_SELECT_COLUMNS}`,
         [
           userId,
           ctx.connectionId,
@@ -1339,7 +1365,7 @@ export async function reconcileGroupMembers(
 
   const unique = [...new Set(scimUserIds)];
   const rows = await db.query<ScimProvisionedUserRow>(
-    `select ${USER_COLUMNS}
+    `select ${SCIM_USER_SELECT_COLUMNS}
        from scim_provisioned_users
       where id = any($1::uuid[]) and connection_id = $2 and organization_id = $3`,
     [unique, ctx.connectionId, ctx.organizationId],

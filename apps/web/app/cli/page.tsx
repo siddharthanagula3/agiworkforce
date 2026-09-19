@@ -219,7 +219,7 @@ export default function CliPage() {
           ctas={[
             { href: '/download#cli-downloads', label: 'Check availability' },
             { href: '/agi-code', label: 'Explore AGI Code' },
-            { label: 'Enterprise early access', waitlist: true },
+            { label: 'Discuss Enterprise access', waitlist: true },
           ]}
         />
 

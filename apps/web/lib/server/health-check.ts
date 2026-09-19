@@ -65,8 +65,6 @@ export interface UnreadyDependency {
   missing: readonly string[];
 }
 
-const DATABASE_DEPENDENCY_ID = 'database';
-
 export interface HealthCheckResult {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -176,14 +174,14 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
       criticality: state.dependency.criticality,
       missing: state.missing,
     }));
-  const database = readiness.find((state) => state.dependency.id === DATABASE_DEPENDENCY_ID);
-  if (database?.ready !== false) {
+  const unreadyCore = unready.filter(({ criticality }) => criticality === 'core');
+  if (unreadyCore.length === 0) {
     checks.environment.status = 'healthy';
   } else {
-    checks.environment.missingCount = database.missing.length;
+    checks.environment.missingCount = unreadyCore.length;
     logger.warn(
-      { missingEnvVars: database.missing },
-      'Health check: missing Neon environment variables',
+      { unreadyCoreDependencies: unreadyCore },
+      'Health check: core dependency configuration is incomplete',
     );
   }
   if (unready.length > 0) {

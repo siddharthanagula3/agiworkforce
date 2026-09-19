@@ -2,7 +2,58 @@
 
 import { randomUUID } from 'node:crypto';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict';
 import { Client } from 'pg';
+
+export async function probeMembershipAuthorization(client) {
+  const organizationId = randomUUID();
+  const userId = `membership-probe-${randomUUID()}`;
+  const results = [];
+  await client.query('BEGIN');
+  try {
+    await client.query(
+      'insert into public.organizations (id, name, slug, created_by) values ($1, $2, $3, $4)',
+      [organizationId, 'Membership authorization probe', `probe-${organizationId}`, userId],
+    );
+    await client.query(
+      "insert into public.organization_members (organization_id, user_id, role) values ($1, $2, 'owner')",
+      [organizationId, userId],
+    );
+    await client.query(
+      "select set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.org_id', $2, true)",
+      [userId, organizationId],
+    );
+    for (const status of ['active', 'suspended', 'deprovisioned']) {
+      await client.query(
+        'update public.organization_members set status = $3 where organization_id = $1 and user_id = $2',
+        [organizationId, userId, status],
+      );
+      const {
+        rows: [row],
+      } = await client.query(
+        `select public.organization_member_permissions($1, $2) as permissions,
+                public.current_app_org_role() as role,
+                public.app_row_is_visible($2, $1) as visible,
+                public.app_row_is_writable($2, $1) as writable`,
+        [organizationId, userId],
+      );
+      assert.equal(row.permissions.length > 0, status === 'active', `${status} permissions`);
+      assert.equal(row.role !== null, status === 'active', `${status} role`);
+      assert.equal(row.visible, status === 'active', `${status} read access`);
+      assert.equal(row.writable, status === 'active', `${status} write access`);
+      results.push({
+        status,
+        permissionCount: row.permissions.length,
+        visible: row.visible,
+        writable: row.writable,
+      });
+    }
+    return results;
+  } finally {
+    await client.query('ROLLBACK');
+  }
+}
 
 const RLS_TABLES = [
   'sso_connections',
@@ -459,6 +510,7 @@ async function main() {
 
   await client.connect();
   try {
+    await probeMembershipAuthorization(client);
     await seed(client, fixture);
     await runProbe(client, fixture, failures);
   } finally {
@@ -477,7 +529,8 @@ async function main() {
   console.log(`RLS probe passed: ${RLS_TABLES.length} tables isolate two seeded tenants`);
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  });

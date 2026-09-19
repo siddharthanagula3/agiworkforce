@@ -1168,13 +1168,17 @@ jobs:
           PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
         run: |
           pnpm exec playwright test \
+            auth-accessibility.spec.ts \
+            auth-flow-states.spec.ts \
             checkout.spec.ts \
             enterprise-surface.spec.ts \
+            landing-keyboard.spec.ts \
             marketing-mobile-nav.spec.ts \
             marketing-mount-scroll.spec.ts \
             marketing-stage-contrast.spec.ts \
             public-auth-clean.spec.ts \
             qa-14-public-route-contrast.spec.ts \
+            release-notes.spec.ts \
             --project=chromium --workers=2 --retries=1 --global-timeout=1500000
 
       - name: Print Web app log on failure

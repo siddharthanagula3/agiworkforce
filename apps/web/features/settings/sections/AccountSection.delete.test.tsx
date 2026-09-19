@@ -192,4 +192,26 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     expect(mockSignOut).not.toHaveBeenCalled();
     expect(mockRouterReplace).not.toHaveBeenCalled();
   });
+
+  it('does not expose operator details from a failed deletion', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({ sessions: [], totalCount: 0 });
+      }
+      if (url === '/api/user/delete-account' && init?.method === 'GET') {
+        return jsonResponse({ pending: false, canCancel: false });
+      }
+      if (url === '/api/user/delete-account' && init?.method === 'DELETE') {
+        return jsonResponse({ error: 'upstream exploded: trace 0xdeadbeef' }, 500);
+      }
+      throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
+    });
+
+    renderAccountSection();
+    await openAndSubmitDelete();
+
+    expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0xdeadbeef/i)).not.toBeInTheDocument();
+  });
 });

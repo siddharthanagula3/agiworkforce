@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![warn(warnings)]
+#![deny(warnings)]
 #![allow(unused_qualifications)]
 #![allow(clippy::should_implement_trait)]
 #![allow(clippy::too_many_arguments)]
@@ -504,6 +504,11 @@ pub fn run() {
             }
 
             let db_conn_arc = Arc::new(Mutex::new(conn));
+            if let Err(error) =
+                crate::automation::audit::configure_audit_store(db_conn_arc.clone())
+            {
+                tracing::error!(error, "Failed to configure the automation audit store");
+            }
             app.manage(AppDatabase {
                 conn: db_conn_arc.clone(),
             });
@@ -1528,6 +1533,8 @@ pub fn run() {
             crate::sys::commands::automation_send_keys,
             crate::sys::commands::automation_hotkey,
             crate::sys::commands::automation_click,
+            crate::sys::commands::automation_audit_outbox_list,
+            crate::sys::commands::automation_audit_outbox_ack,
             crate::sys::commands::automation_clipboard_get,
             crate::sys::commands::automation_clipboard_set,
             crate::sys::commands::automation_record_start,

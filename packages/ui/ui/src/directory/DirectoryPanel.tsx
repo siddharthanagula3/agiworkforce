@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { cn } from '../cn';
+import { toUserMessage } from '../lib/network-error';
 import { Spinner } from '../primitives/Spinner';
 import { useConfirmAction } from '../primitives/ConfirmAction';
 import { isDirectoryActionNotice } from './action-notice';
@@ -174,7 +175,7 @@ function DirectorySectionPanel({
       try {
         await adapter.refreshMarketplace(id);
       } catch (caught: unknown) {
-        setActionError(caught instanceof Error ? caught.message : GENERIC_ERROR_COPY);
+        setActionError(toUserMessage(caught, GENERIC_ERROR_COPY));
       } finally {
         setRefreshingSourceId(null);
       }
@@ -244,7 +245,7 @@ function DirectorySectionPanel({
       })
       .catch((caught: unknown) => {
         if (cancelled) return;
-        setDetailError(caught instanceof Error ? caught.message : GENERIC_ERROR_COPY);
+        setDetailError(toUserMessage(caught, GENERIC_ERROR_COPY));
       })
       .finally(() => {
         if (!cancelled) setDetailLoading(false);
@@ -287,8 +288,9 @@ function DirectorySectionPanel({
       try {
         await action(section, id);
       } catch (caught: unknown) {
-        if (isDirectoryActionNotice(caught)) setActionNotice(caught.message);
-        else setActionError(caught instanceof Error ? caught.message : GENERIC_ERROR_COPY);
+        if (isDirectoryActionNotice(caught))
+          setActionNotice(toUserMessage(caught, GENERIC_ERROR_COPY));
+        else setActionError(toUserMessage(caught, GENERIC_ERROR_COPY));
       } finally {
         setBusyId(null);
       }

@@ -320,7 +320,7 @@ export function WorkspaceApiKeys() {
                 className="text-xs"
                 style={{ color: 'var(--settings-destructive-text)' }}
               >
-                {create.error.message}
+                {toUserMessage(create.error, 'Could not create this API key. Try again.')}
               </span>
             ) : null}
             {revoke.isError ? (
@@ -329,7 +329,7 @@ export function WorkspaceApiKeys() {
                 className="text-xs"
                 style={{ color: 'var(--settings-destructive-text)' }}
               >
-                {revoke.error.message}
+                {toUserMessage(revoke.error, 'Could not revoke this API key. Try again.')}
               </span>
             ) : null}
           </div>

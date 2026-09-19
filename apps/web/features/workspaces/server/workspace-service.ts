@@ -33,6 +33,7 @@ export async function listAccountWorkspaces(
          join public.organization_members m
            on m.organization_id = w.organization_id
           and m.user_id = $1
+          and m.status = 'active'
         where w.kind = 'organization'
         union all
        select w.id, w.kind, w.organization_id, w.name, w.slug, w.is_primary, null
@@ -53,7 +54,7 @@ export async function listAccountWorkspaces(
               true as is_primary, m.role
          from public.organization_members m
          join public.organizations o on o.id = m.organization_id
-        where m.user_id = $1
+        where m.user_id = $1 and m.status = 'active'
         order by lower(o.name)`,
       [userId],
     );

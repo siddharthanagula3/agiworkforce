@@ -122,7 +122,7 @@ describe('enrichPastChatContext', () => {
     const query = vi.fn().mockResolvedValue([0, 1, 2, 3, 4].map(pastChatRow));
     const chatRequest = makeRecallRequest();
 
-    const injected = await enrichPastChatContext({
+    const recall = await enrichPastChatContext({
       db: { query },
       userId: 'user-1',
       chatRequest,
@@ -132,7 +132,8 @@ describe('enrichPastChatContext', () => {
       conversationId: 'conversation-current',
     });
 
-    expect(injected).toBe(true);
+    expect(recall).toMatchObject({ injected: true });
+    expect(recall.citations).toHaveLength(3);
     const prompt = String(chatRequest.messages[0]?.content);
     expect(chatRequest.messages[0]).toMatchObject({ role: 'system' });
     expect(prompt).toContain('<past_chats>');
@@ -173,7 +174,7 @@ describe('enrichPastChatContext', () => {
         surface: 'web',
         policy: RECALL_POLICY,
       }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ injected: false, citations: [] });
     expect(query).not.toHaveBeenCalled();
   });
 
@@ -190,7 +191,7 @@ describe('enrichPastChatContext', () => {
         surface: 'web',
         policy: RECALL_POLICY,
       }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ injected: false, citations: [] });
     expect(query).not.toHaveBeenCalled();
     expect(chatRequest.messages).toHaveLength(1);
   });
@@ -207,7 +208,7 @@ describe('enrichPastChatContext', () => {
         surface: 'web',
         policy: { ...RECALL_POLICY, searchPastChats: false },
       }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ injected: false, citations: [] });
     expect(query).not.toHaveBeenCalled();
   });
 
@@ -223,7 +224,7 @@ describe('enrichPastChatContext', () => {
         surface: 'api',
         policy: RECALL_POLICY,
       }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ injected: false, citations: [] });
     expect(query).not.toHaveBeenCalled();
   });
 });

@@ -14,7 +14,7 @@ const APP_ROOT = resolve(__dirname, '../../..');
 
 // Packages with no deployment-side dependency of their own: they are pure
 // libraries, so there is nothing for a readiness probe to reach.
-const PURE_LIBRARIES = new Set(['utils']);
+const PURE_LIBRARIES = new Set(['files', 'utils']);
 
 function platformPackages(): readonly string[] {
   return readdirSync(PLATFORM_ROOT, { withFileTypes: true })

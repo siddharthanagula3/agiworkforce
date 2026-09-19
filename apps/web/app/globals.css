@@ -1253,9 +1253,7 @@
     [class*='dropdown-content'],
     [role='listbox'],
     [role='menu'] {
-      max-width: calc(100vw - 16px); /* Prevent overflow with padding */
-      left: 8px !important;
-      right: 8px !important;
+      max-width: calc(100vw - 16px);
     }
   }
 

@@ -115,9 +115,10 @@ function WaitlistDialog({
             </span>
             <DialogTitle className="agi-ds-h3">You&rsquo;re on the list.</DialogTitle>
             <DialogDescription className="agi-ds-prose">
-              We&rsquo;ll email you when the Enterprise program opens for your requirements. Managed
-              Cloud is already open by default, and current availability for Local and BYOK is
-              listed on each surface page. Changed your mind? Record a withdrawal at{' '}
+              A person will contact you to discuss contract-scoped Enterprise access for your
+              requirements. Managed Cloud is already open by default, and current availability for
+              Local and BYOK is listed on each surface page. Changed your mind? Record a withdrawal
+              at{' '}
               <a href="/privacy/requests" className="agi-ds-link">
                 /privacy/requests
               </a>{' '}
@@ -126,7 +127,7 @@ function WaitlistDialog({
           </div>
         ) : (
           <>
-            <Eyebrow>Enterprise · early access</Eyebrow>
+            <Eyebrow>Enterprise · contract access</Eyebrow>
             <DialogTitle className="agi-ds-h3">Discuss Enterprise access</DialogTitle>
             <DialogDescription className="agi-ds-prose">
               Managed Cloud is open by default. Team pricing and current checkout availability are
@@ -189,9 +190,9 @@ function WaitlistDialog({
             ) : null}
 
             <p className="agi-ds-hint" style={{ marginTop: 16 }}>
-              One email when access opens, sent by a person, nothing here mails this list
-              automatically, so there is no unsubscribe link in a message to click. No marketing
-              drip. To come off the list, record a withdrawal at{' '}
+              One personal follow-up about your Enterprise requirements; nothing here mails this
+              list automatically, so there is no unsubscribe link in a message to click. No
+              marketing drip. To come off the list, record a withdrawal at{' '}
               <a href="/privacy/requests" className="agi-ds-link">
                 /privacy/requests
               </a>
@@ -233,7 +234,7 @@ export function WaitlistModalProvider({ children }: { children: ReactNode }) {
 }
 
 export function WaitlistTrigger({
-  label = 'Enterprise early access',
+  label = 'Discuss Enterprise access',
   source = 'website',
   className,
 }: {

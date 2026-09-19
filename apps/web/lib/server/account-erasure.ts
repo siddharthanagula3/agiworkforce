@@ -41,6 +41,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'conversation_branches', column: 'user_id' },
   { table: 'message_bookmarks', column: 'user_id' },
   { table: 'message_reactions', column: 'user_id' },
+  { table: 'voice_sessions', column: 'user_id' },
   { table: 'shared_conversations', column: 'user_id' },
   { table: 'shared_sessions', column: 'owner_id' },
   { table: 'cloud_agent_runs', column: 'user_id' },
@@ -68,6 +69,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'agent_tool_executions', column: 'user_id' },
   { table: 'agent_tools', column: 'user_id' },
   { table: 'agent_approval_requests', column: 'user_id' },
+  { table: 'automation_audit_events', column: 'user_id' },
   { table: 'notifications', column: 'user_id' },
   { table: 'feedback', column: 'user_id' },
   { table: 'api_keys', column: 'user_id' },
@@ -235,6 +237,7 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   cloud_agent_events: 'Cascades from cloud_agent_runs.',
   cloud_agent_approval_checkpoints: 'Cascades from cloud_agent_runs.',
   cloud_agent_execution_operations: 'Cascades from cloud_agent_runs.',
+  cloud_agent_run_budgets: 'Cascades from cloud_agent_runs (0258).',
   cloud_code_terminal_entries: 'Cascades from cloud_code_sessions.',
   image_generation_job_assets:
     'Cascades from image_generation_jobs (0226), and from media_assets via asset_id, so eraseUserMedia already takes it.',
@@ -279,6 +282,10 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'Cascades from published_artifacts (0257), which carries every version of an artifact this account published.',
   organization_admin_delegations:
     'Cascades from profiles (0256) on delegate_user_id and on granted_by_user_id. A delegation this user granted to somebody else is workspace configuration, and revoking it when the grantor leaves would drop the other member’s admin access.',
+  legal_hold_custodians:
+    'Legal preservation scope (0261). Active custodians block erasure; released-hold rows remain matter history, and added_by_user_id is legal provenance.',
+  plugin_registry_lifecycle_events:
+    'Global extension audit history (0259). actor_user_id identifies the operator behind a lifecycle change affecting other accounts.',
 };
 
 export interface AccountErasureReport {
@@ -710,6 +717,15 @@ async function isSubjectUnderLegalHold(userId: string): Promise<{ held: boolean;
           where hold.released_at is null
             and (
               (hold.scope = 'member' and hold.subject_user_id = $1)
+              or (
+                hold.scope = 'custodian'
+                and exists (
+                  select 1
+                    from public.legal_hold_custodians custodian
+                   where custodian.hold_id = hold.id
+                     and custodian.user_id = $1
+                )
+              )
               or (
                 hold.scope = 'organization'
                 and hold.organization_id in (

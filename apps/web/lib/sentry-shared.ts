@@ -57,9 +57,43 @@ export function getSentryEnvironment(): string {
 }
 
 export const TELEMETRY_CONSENT_STORAGE_KEY = 'agi.privacy.shareTelemetry';
+const TELEMETRY_PENDING_OPT_OUT_KEY = 'agi.privacy.pendingTelemetryOptOut';
+
+export function hasPendingTelemetryOptOut(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(TELEMETRY_PENDING_OPT_OUT_KEY) === 'true';
+  } catch {
+    return true;
+  }
+}
+
+export function requestTelemetryOptOut(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(TELEMETRY_PENDING_OPT_OUT_KEY, 'true');
+    window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, 'false');
+  } catch {
+    // Unavailable storage is treated as no consent by the read gates.
+  }
+}
+
+export function confirmTelemetryConsent(value: boolean): void {
+  if (!value) {
+    requestTelemetryOptOut();
+    return;
+  }
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(TELEMETRY_PENDING_OPT_OUT_KEY);
+    setTelemetryConsentCache(true);
+  } catch {
+    // Keep the prior denial when consent cannot be persisted locally.
+  }
+}
 
 export function hasTelemetryConsent(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || hasPendingTelemetryOptOut()) return false;
   try {
     return window.localStorage.getItem(TELEMETRY_CONSENT_STORAGE_KEY) === 'true';
   } catch {
@@ -70,7 +104,9 @@ export function hasTelemetryConsent(): boolean {
 export function setTelemetryConsentCache(value: boolean): void {
   if (typeof window === 'undefined') return;
   try {
+    if (value && hasPendingTelemetryOptOut()) return;
     window.localStorage.setItem(TELEMETRY_CONSENT_STORAGE_KEY, value ? 'true' : 'false');
+    if (!value) window.localStorage.removeItem(TELEMETRY_PENDING_OPT_OUT_KEY);
   } catch {
     // noop
   }
@@ -90,6 +126,7 @@ export function shouldInitializeSentry(): boolean {
   if (!isSentryConfigured()) return false;
   const documentConsent = readDocumentTelemetryConsent();
   if (documentConsent !== null) setTelemetryConsentCache(documentConsent);
+  if (hasPendingTelemetryOptOut()) return false;
   return documentConsent ?? hasTelemetryConsent();
 }
 

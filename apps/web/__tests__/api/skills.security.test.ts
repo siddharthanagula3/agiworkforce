@@ -35,9 +35,11 @@ vi.mock('@/lib/services/plugin-installation-service', () => ({
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi
-    .fn()
-    .mockResolvedValue({ db: { query: vi.fn() }, userId: 'user_test', organizationId: null }),
+  getUserScopedDb: vi.fn().mockResolvedValue({
+    db: { query: vi.fn().mockResolvedValue([]) },
+    userId: 'user_test',
+    organizationId: null,
+  }),
 }));
 
 vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
@@ -70,7 +72,7 @@ describe('skills API security contract', () => {
     vi.mocked(listEnabledPluginIds).mockResolvedValue(new Set(['research-pack']));
     const { getUserScopedDb } = await import('@/lib/server/rls-db');
     vi.mocked(getUserScopedDb).mockResolvedValue({
-      db: { query: vi.fn() },
+      db: { query: vi.fn().mockResolvedValue([]) },
       userId: 'user_test',
       organizationId: null,
     } as never);
@@ -126,15 +128,15 @@ describe('skills API security contract', () => {
   });
 
   it('requires auth before listing skills', async () => {
-    const { getClerkAuthUser } = await import('@/lib/api-auth');
-    vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new Error('Unauthorized'));
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockRejectedValueOnce(new Error('Unauthorized'));
 
     await expect(listSkills(request('/api/skills'))).rejects.toThrow('Unauthorized');
   });
 
   it('requires auth before returning a skill body', async () => {
-    const { getClerkAuthUser } = await import('@/lib/api-auth');
-    vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new Error('Unauthorized'));
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockRejectedValueOnce(new Error('Unauthorized'));
 
     await expect(
       getSkillBody(request('/api/skills/design-review'), {

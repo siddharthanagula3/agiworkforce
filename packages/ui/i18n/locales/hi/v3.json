@@ -64,7 +64,7 @@
       "switchTo": "{{mode}} पर स्विच करें",
       "soon": "जल्द ही",
       "cloudUnavailable": "AGI Cloud डेस्कटॉप पर उपलब्ध है, प्रबंधित मॉडल और सिंक की गई चैट उपयोग करने के लिए साइन इन करें।",
-      "localUnavailable": "लोकल मोड AGI Workforce डेस्कटॉप ऐप में चलता है। चैट और फ़ाइलें इसी मशीन पर रखने के लिए इसे डाउनलोड करें।"
+      "localUnavailable": "लोकल मोड AGI Workforce CLI में Ollama या LM Studio के ज़रिए चलता है। डेस्कटॉप बातचीत मैनेज्ड क्लाउड का उपयोग करती है।"
     },
     "groups": {
       "lastHour": "Last hour",

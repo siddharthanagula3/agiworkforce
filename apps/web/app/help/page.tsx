@@ -46,7 +46,7 @@ export default async function HelpPage({
           eyebrow="Help"
           title="Get unstuck, fast."
           em="fast."
-          lede="Search everything we have written, or browse it by collection. For anything else, email contact@agiworkforce.com. A real human reads it."
+          lede="Search every help article, or browse the help centre by collection. For anything else, email contact@agiworkforce.com; no response time is promised unless your plan says otherwise."
           ctas={[]}
         />
 
@@ -55,7 +55,7 @@ export default async function HelpPage({
         <Section id="search" labelledBy="agi-help-search-title" rule>
           <Stack gap="loose">
             <h2 className="agi-ds-h2" id="agi-help-search-title">
-              Search everything we have written.
+              Search every help article.
             </h2>
             <HelpSearch initialQuery={initialQuery} />
           </Stack>
@@ -67,7 +67,7 @@ export default async function HelpPage({
               Browse every collection.
             </h2>
             <Prose>
-              {`${articleCount} collections, grouped the way the product is. Where a surface differs, the collection says so: bring your own provider keys on ${BYOK_SURFACES.label}. The CLI has a published release; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion}`}
+              {`${articleCount} articles across ${collections.length} collections, grouped the way the product is. Where a surface differs, the collection says so: bring your own provider keys on ${BYOK_SURFACES.label}. The CLI has a published release; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion}`}
             </Prose>
             {collections.length > 0 ? (
               <Ledger
@@ -86,8 +86,8 @@ export default async function HelpPage({
               />
             ) : (
               <Prose>
-                The collection index is not loading right now. Email contact@agiworkforce.com and a
-                human will answer.
+                The collection index is not loading right now. Email contact@agiworkforce.com for
+                support.
               </Prose>
             )}
           </Stack>
@@ -96,7 +96,7 @@ export default async function HelpPage({
         <Section id="more" labelledBy="agi-help-more-title" rule ground="2">
           <Stack>
             <h2 className="agi-ds-h2" id="agi-help-more-title">
-              Still stuck? Ask a human.
+              Still stuck? Contact support.
             </h2>
             <Prose>
               The FAQ covers the questions that come up most, and support explains what each tier

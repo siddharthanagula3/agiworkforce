@@ -8,9 +8,11 @@
 //! shape that route already ingests, so a receipt survives the process.
 
 use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use uuid::Uuid;
 
 /// Free text is capped everywhere it enters a row: an audit trail is not a
 /// place for page content, and an unbounded reason is how it gets there.
@@ -90,6 +92,7 @@ impl AuditOutcome {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationAuditEvent {
+    pub event_id: String,
     pub run_id: String,
     pub actor: String,
     pub device_id: String,
@@ -107,6 +110,8 @@ pub struct AutomationAuditEvent {
 /// a report, not a verdict: the server settles it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutomationOutcomeReport {
+    #[serde(rename = "eventId")]
+    pub event_id: String,
     #[serde(rename = "runId")]
     pub run_id: String,
     pub action: String,
@@ -129,6 +134,7 @@ pub struct AutomationOutcomeReport {
 impl AutomationAuditEvent {
     pub fn outcome_report(&self) -> AutomationOutcomeReport {
         AutomationOutcomeReport {
+            event_id: self.event_id.clone(),
             run_id: self.run_id.clone(),
             action: format!("{}.{}", self.surface.as_str(), self.action),
             surface: DESKTOP_REPORT_SURFACE.to_string(),
@@ -213,10 +219,52 @@ pub fn kill_switch_reason() -> Option<String> {
     KILL_SWITCH.read().ok().and_then(|switch| switch.clone())
 }
 
-static AUDIT_LOG: Mutex<VecDeque<AutomationAuditEvent>> = Mutex::new(VecDeque::new());
+static AUDIT_STORE: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
+static FALLBACK_AUDIT_LOG: Mutex<VecDeque<AutomationAuditEvent>> = Mutex::new(VecDeque::new());
+
+pub fn configure_audit_store(connection: Arc<Mutex<Connection>>) -> Result<(), &'static str> {
+    AUDIT_STORE
+        .set(connection)
+        .map_err(|_| "automation audit store was already configured")
+}
+
+fn persist_event(connection: &Connection, event: &AutomationAuditEvent) -> Result<(), String> {
+    let payload =
+        serde_json::to_string(&event.outcome_report()).map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO automation_audit_outbox (payload_json) VALUES (?1)",
+            params![payload],
+        )
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "DELETE FROM automation_audit_outbox
+             WHERE id IN (
+                 SELECT id FROM automation_audit_outbox
+                 ORDER BY id DESC
+                 LIMIT -1 OFFSET ?1
+             )",
+            params![MAX_BUFFERED_EVENTS],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
 
 pub fn record_event(event: AutomationAuditEvent) {
-    let Ok(mut log) = AUDIT_LOG.lock() else {
+    if let Some(store) = AUDIT_STORE.get() {
+        match store.lock() {
+            Ok(connection) => {
+                if let Err(error) = persist_event(&connection, &event) {
+                    tracing::error!(error, "Failed to persist an automation audit receipt");
+                }
+            }
+            Err(error) => tracing::error!(%error, "Automation audit store lock was poisoned"),
+        }
+        return;
+    }
+
+    let Ok(mut log) = FALLBACK_AUDIT_LOG.lock() else {
         return;
     };
     while log.len() >= MAX_BUFFERED_EVENTS {
@@ -225,10 +273,9 @@ pub fn record_event(event: AutomationAuditEvent) {
     log.push_back(event);
 }
 
-/// Hands the oldest buffered rows to the caller that ships them, and keeps
-/// nothing it handed over.
+/// Test-only access to receipts written before a durable store is configured.
 pub fn drain_events(max: usize) -> Vec<AutomationAuditEvent> {
-    let Ok(mut log) = AUDIT_LOG.lock() else {
+    let Ok(mut log) = FALLBACK_AUDIT_LOG.lock() else {
         return Vec::new();
     };
     let take = max.min(log.len());
@@ -236,7 +283,64 @@ pub fn drain_events(max: usize) -> Vec<AutomationAuditEvent> {
 }
 
 pub fn buffered_event_count() -> usize {
-    AUDIT_LOG.lock().map(|log| log.len()).unwrap_or(0)
+    FALLBACK_AUDIT_LOG.lock().map(|log| log.len()).unwrap_or(0)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutomationAuditOutboxRow {
+    pub id: i64,
+    pub report: AutomationOutcomeReport,
+}
+
+pub fn list_outbox(
+    connection: &Connection,
+    max: usize,
+) -> Result<Vec<AutomationAuditOutboxRow>, String> {
+    let limit = max.clamp(1, 200) as i64;
+    let mut statement = connection
+        .prepare(
+            "SELECT id, payload_json
+             FROM automation_audit_outbox
+             ORDER BY id ASC
+             LIMIT ?1",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![limit], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| error.to_string())?;
+
+    rows.map(|row| {
+        let (id, payload) = row.map_err(|error| error.to_string())?;
+        let report = serde_json::from_str(&payload).map_err(|error| error.to_string())?;
+        Ok(AutomationAuditOutboxRow { id, report })
+    })
+    .collect()
+}
+
+pub fn acknowledge_outbox(connection: &Connection, ids: &[i64]) -> Result<usize, String> {
+    if ids.is_empty() || ids.len() > 200 || ids.iter().any(|id| *id <= 0) {
+        return Err("automation audit acknowledgement ids are invalid".to_string());
+    }
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let deleted = {
+        let mut statement = transaction
+            .prepare("DELETE FROM automation_audit_outbox WHERE id = ?1")
+            .map_err(|error| error.to_string())?;
+        let mut deleted = 0usize;
+        for id in ids {
+            deleted += statement
+                .execute(params![id])
+                .map_err(|error| error.to_string())?;
+        }
+        deleted
+    };
+    transaction.commit().map_err(|error| error.to_string())?;
+    Ok(deleted)
 }
 
 #[derive(Debug, Clone)]
@@ -304,13 +408,13 @@ impl AutomationDecision {
     }
 }
 
-/// An authorised action that has not finished yet. Dropping it without settling
-/// leaves nothing in the trail, so every path that takes one settles it.
+/// An authorised action that has not finished yet. Dropping it records failure.
 #[derive(Debug)]
 pub struct AuditTicket {
     request: AutomationRequest,
     profile_id: Option<String>,
     started_at: DateTime<Utc>,
+    settled: bool,
 }
 
 impl AuditTicket {
@@ -340,17 +444,43 @@ impl AuditTicket {
         });
     }
 
-    fn settle(self, outcome: AuditOutcome) {
+    fn settle(mut self, outcome: AuditOutcome) {
+        self.settled = true;
         record_event(AutomationAuditEvent {
-            run_id: self.request.run_id,
-            actor: self.request.actor,
-            device_id: self.request.device_id,
+            event_id: Uuid::new_v4().to_string(),
+            run_id: self.request.run_id.clone(),
+            actor: self.request.actor.clone(),
+            device_id: self.request.device_id.clone(),
             surface: self.request.surface,
-            target: self.request.target,
-            action: self.request.action,
-            capability: self.request.capability,
-            profile_id: self.profile_id,
+            target: self.request.target.clone(),
+            action: self.request.action.clone(),
+            capability: self.request.capability.clone(),
+            profile_id: self.profile_id.clone(),
             outcome,
+            started_at: self.started_at,
+            settled_at: Utc::now(),
+        });
+    }
+}
+
+impl Drop for AuditTicket {
+    fn drop(&mut self) {
+        if self.settled {
+            return;
+        }
+        record_event(AutomationAuditEvent {
+            event_id: Uuid::new_v4().to_string(),
+            run_id: self.request.run_id.clone(),
+            actor: self.request.actor.clone(),
+            device_id: self.request.device_id.clone(),
+            surface: self.request.surface,
+            target: self.request.target.clone(),
+            action: self.request.action.clone(),
+            capability: self.request.capability.clone(),
+            profile_id: self.profile_id.clone(),
+            outcome: AuditOutcome::Failed {
+                reason: "The authorized action ended without reporting an outcome.".to_string(),
+            },
             started_at: self.started_at,
             settled_at: Utc::now(),
         });
@@ -388,12 +518,14 @@ pub fn authorize_automation_action(
         request,
         profile_id: authority.id(),
         started_at: gates.now,
+        settled: false,
     })
 }
 
 fn refuse(request: AutomationRequest, now: DateTime<Utc>, reason: String) -> AutomationDecision {
     let reason = clamp(&reason);
     record_event(AutomationAuditEvent {
+        event_id: Uuid::new_v4().to_string(),
         run_id: request.run_id,
         actor: request.actor,
         device_id: request.device_id,
@@ -566,10 +698,13 @@ mod tests {
             }),
             ..denied
         };
-        assert!(authorize_automation_action(on_the_desktop, approved)
-            .refusal()
-            .is_none());
-        assert_eq!(drain_events(10).len(), 1);
+        let AutomationDecision::Allowed(ticket) =
+            authorize_automation_action(on_the_desktop, approved)
+        else {
+            panic!("approved app should be allowed");
+        };
+        ticket.succeeded("the input was delivered", true, None);
+        assert_eq!(drain_events(10).len(), 2);
     }
 
     #[test]
@@ -624,6 +759,73 @@ mod tests {
         assert_eq!(report.target.as_deref(), Some("https://example.com"));
         assert_eq!(report.profile_id.as_deref(), Some("profile_1"));
         assert!(report.settled_at_ms >= report.started_at_ms);
+    }
+
+    #[test]
+    fn dropping_an_allowed_ticket_records_a_failed_outcome() {
+        let _serial = serial();
+        let held = profile();
+        let AutomationDecision::Allowed(ticket) =
+            authorize_automation_action(request(), gates(Some(&held)))
+        else {
+            panic!("expected the action to be allowed");
+        };
+
+        drop(ticket);
+
+        let events = drain_events(1);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].outcome.claim(), "failed");
+        assert!(events[0]
+            .outcome
+            .reason()
+            .contains("without reporting an outcome"));
+    }
+
+    #[test]
+    fn durable_outbox_is_read_without_deletion_and_acknowledged_explicitly() {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        connection
+            .execute_batch(
+                "CREATE TABLE automation_audit_outbox (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );",
+            )
+            .expect("outbox schema");
+        let now = Utc::now();
+        let event = AutomationAuditEvent {
+            event_id: Uuid::new_v4().to_string(),
+            run_id: "run_durable".to_string(),
+            actor: "user_1".to_string(),
+            device_id: "device_1".to_string(),
+            surface: AutomationSurface::ComputerUse,
+            target: "com.example.notes".to_string(),
+            action: "type".to_string(),
+            capability: "automation".to_string(),
+            profile_id: Some("com.example.notes".to_string()),
+            outcome: AuditOutcome::Failed {
+                reason: "the target closed".to_string(),
+            },
+            started_at: now,
+            settled_at: now,
+        };
+
+        persist_event(&connection, &event).expect("persist receipt");
+        let first = list_outbox(&connection, 200).expect("first read");
+        let second = list_outbox(&connection, 200).expect("retry read");
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert_eq!(first[0].report.event_id, event.event_id);
+
+        assert_eq!(
+            acknowledge_outbox(&connection, &[first[0].id]).expect("ack receipt"),
+            1
+        );
+        assert!(list_outbox(&connection, 200)
+            .expect("read after ack")
+            .is_empty());
     }
 
     #[test]

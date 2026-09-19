@@ -415,7 +415,7 @@ function EditPanel({
         setRevisionAnnouncement('The new version of this image is ready');
         onImageUpdated(newUrl, request.aspectRatio, request.prompt);
       } catch (err) {
-        const msg = toUserMessage(err, String(err));
+        const msg = toUserMessage(err, 'Could not generate a new image. Try again.');
         setGenError(msg.includes('upgrade') || msg.includes('403') ? 'Upgrade required' : msg);
       } finally {
         setGenerating(false);
@@ -465,7 +465,7 @@ function EditPanel({
     try {
       edit = await buildEdit(maskFile ? 'inpaint' : 'edit');
     } catch (err) {
-      setGenError(toUserMessage(err, String(err)));
+      setGenError(toUserMessage(err, 'Could not prepare this image for editing. Try again.'));
       setGenerating(false);
       return;
     }
@@ -494,7 +494,7 @@ function EditPanel({
     try {
       edit = await buildEdit('variation');
     } catch (err) {
-      setGenError(toUserMessage(err, String(err)));
+      setGenError(toUserMessage(err, 'Could not prepare this image for editing. Try again.'));
       setGenerating(false);
       return;
     }

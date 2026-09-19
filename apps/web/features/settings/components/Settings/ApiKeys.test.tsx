@@ -97,4 +97,36 @@ describe('ApiKeysManager', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(refetch).toHaveBeenCalledOnce();
   });
+
+  it('does not expose a raw HTTP status when loading keys fails', () => {
+    mockApiKeysQuery.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: true,
+      error: new Error('HTTP 500'),
+      refetch: vi.fn(),
+    });
+
+    render(<ApiKeysManager />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong on our side');
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/HTTP\s+\d/i);
+  });
+
+  it('opens the create form without render-phase updates and stays bounded on narrow screens', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const user = userEvent.setup();
+
+    render(<ApiKeysManager />);
+    await user.click(screen.getByRole('button', { name: 'New Key' }));
+
+    expect(screen.getByRole('alertdialog')).toHaveClass('max-w-[calc(100vw-2rem)]');
+    expect(
+      consoleError.mock.calls.some(([message]) =>
+        /Cannot update a component.*while rendering a different component/.test(String(message)),
+      ),
+    ).toBe(false);
+
+    consoleError.mockRestore();
+  });
 });

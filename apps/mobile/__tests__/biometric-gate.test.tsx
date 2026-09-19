@@ -193,6 +193,78 @@ describe('useBiometricGate, switcher cover', () => {
   });
 });
 
+describe('useBiometricGate, app-switch recovery', () => {
+  async function mountUnlockedAt(clock: jest.SpyInstance, at: number) {
+    mockHasHardwareAsync.mockResolvedValue(true);
+    mockIsEnrolledAsync.mockResolvedValue(true);
+    mockAuthenticateAsync.mockResolvedValue({ success: true });
+    clock.mockReturnValue(at);
+
+    const { result } = renderHook(() => useBiometricGate());
+    await act(async () => {
+      for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
+    });
+    expect(result.current.isUnlocked).toBe(true);
+    return { result, listener: appStateListeners.at(-1)! };
+  }
+
+  it('locks on the way out, not only on the way back', async () => {
+    const clock = jest.spyOn(Date, 'now');
+    try {
+      const { result, listener } = await mountUnlockedAt(clock, 1_000_000);
+      const promptsBefore = mockAuthenticateAsync.mock.calls.length;
+
+      act(() => listener('background'));
+
+      expect(result.current.isUnlocked).toBe(false);
+      expect(result.current.isLocked).toBe(true);
+      expect(mockAuthenticateAsync.mock.calls.length).toBe(promptsBefore);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('re-locks after a switcher peek that never reached background', async () => {
+    const clock = jest.spyOn(Date, 'now');
+    try {
+      const { result, listener } = await mountUnlockedAt(clock, 1_000_000);
+      const promptsBefore = mockAuthenticateAsync.mock.calls.length;
+
+      act(() => listener('inactive'));
+      clock.mockReturnValue(1_020_000);
+      await act(async () => {
+        listener('active');
+        await Promise.resolve();
+      });
+
+      expect(mockAuthenticateAsync.mock.calls.length).toBeGreaterThan(promptsBefore);
+      expect(result.current.isCovered).toBe(false);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('does not re-prompt when the unlock sheet itself takes the app inactive', async () => {
+    const clock = jest.spyOn(Date, 'now');
+    try {
+      const { result, listener } = await mountUnlockedAt(clock, 1_000_000);
+      const promptsBefore = mockAuthenticateAsync.mock.calls.length;
+
+      act(() => listener('inactive'));
+      clock.mockReturnValue(1_000_400);
+      await act(async () => {
+        listener('active');
+        await Promise.resolve();
+      });
+
+      expect(mockAuthenticateAsync.mock.calls.length).toBe(promptsBefore);
+      expect(result.current.isUnlocked).toBe(true);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+});
+
 describe('useBiometricGate, visual QA bypass', () => {
   it('unlocks in dev visual QA mode without calling OS authentication', async () => {
     process.env.EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC = '1';

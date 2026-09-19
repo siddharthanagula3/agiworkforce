@@ -87,9 +87,10 @@ export function PublishedArtifactView({
           role="alert"
           className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-danger"
         >
-          {t('artifactPublish.renderFailed', 'This artifact failed to render: {{error}}', {
-            error: renderError,
-          })}
+          {t(
+            'artifactPublish.renderFailed',
+            'This artifact could not be rendered. Try again later or return to AGI.',
+          )}
         </div>
       ) : null}
 

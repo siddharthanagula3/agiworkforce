@@ -13,22 +13,22 @@ import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { LAUNCH, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
+  title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
   description:
-    'AGI Mobile runs chat on your phone in Local Mode by default. Chats, memory, projects, and files stay on-device unless you choose otherwise. AGI managed cloud is in public alpha.',
+    'AGI Mobile is coming soon. The planned app is designed for on-device Local chat by default, with explicit managed-cloud continuation.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
-    title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
+    title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
     description:
-      'On-device Local chat by default. Your data stays on the phone unless you explicitly choose otherwise. AGI managed cloud is public alpha.',
+      'AGI Mobile is not published. Preview the planned on-device Local experience and explicit cloud boundary.',
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
     images: [{ url: '/api/og', width: 1200, height: 630, alt: 'AGI app preview' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Mobile | Private, Local-First AI for iPhone & Android',
-    description: `Local Mode by default. AGI managed cloud is public alpha. ${LAUNCH.publicLabel}.`,
+    title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
+    description: `The app is not published. Local Mode is the planned default. ${LAUNCH.publicLabel}.`,
     images: ['/api/og'],
   },
 };
@@ -36,44 +36,44 @@ export const metadata: Metadata = {
 const LOCAL_STORIES = [
   {
     name: 'Chat that runs on the phone',
-    tagline: 'Local Mode is the default, not a setting.',
-    body: 'Open the app and start talking. Inference runs on-device through AGI Standard. No account required. No network call during a Local chat.',
+    tagline: 'Planned default: Local Mode, not a setting.',
+    body: 'The planned app opens directly into Local chat, with on-device inference through AGI Standard and no account required.',
     capabilities: [
-      'On-device Local chat',
-      'Works offline',
-      'AGI Standard runtime',
-      'Clear model availability states',
+      'Planned on-device Local chat',
+      'Planned offline operation',
+      'Planned AGI Standard runtime',
+      'Planned model availability states',
     ],
     platforms: 'iPhone · Android',
-    status: 'Local by default',
+    status: 'Planned: Local by default',
     frame: { title: 'AGI Mobile', badge: 'Local' },
   },
   {
     name: 'Your data stays on the phone',
     tagline: 'No silent routes. No surprise sync.',
-    body: 'Chats, memory, projects, and files live on-device. Nothing moves to a server unless you choose it. When you do, the route is labeled before anything leaves.',
+    body: 'The planned app keeps chats, memory, projects, and files on-device. Nothing is designed to move to a server unless you choose it; the route is labeled before anything leaves.',
     capabilities: [
-      'Chats & memory on-device',
-      'Projects & files on-device',
-      'Personalization on-device',
-      'Explicit, labeled continuation',
+      'Planned chats & memory on-device',
+      'Planned projects & files on-device',
+      'Planned personalization on-device',
+      'Planned explicit, labeled continuation',
     ],
     platforms: 'iPhone · Android',
-    status: 'On-device by default',
+    status: 'Planned: on-device by default',
     frame: { title: 'AGI Mobile', badge: 'On-device' },
   },
   {
     name: 'A complete workspace, not a companion app',
     tagline: 'The full AGI workspace. One hand.',
-    body: 'Switch models from the picker. Organize work with the projects drawer. Tune memory, appearance, and safety from full settings. All without leaving Local Mode.',
+    body: 'The planned app includes a model picker, projects drawer, and settings for memory, appearance, and safety without leaving Local Mode.',
     capabilities: [
-      'Model picker',
-      'Projects & recents drawer',
-      'Full settings',
-      'Memory & personalization controls',
+      'Planned model picker',
+      'Planned projects & recents drawer',
+      'Planned full settings',
+      'Planned memory & personalization controls',
     ],
     platforms: 'iPhone · Android',
-    status: 'Local + Cloud (public alpha)',
+    status: 'Planned Local + Cloud',
     frame: { title: 'AGI Mobile', badge: 'Local' },
   },
 ] as const;
@@ -113,16 +113,16 @@ export default function MobilePage() {
                 </span>
               </h1>
               <p className="agi-fl-lede">
-                Every chat starts in Local Mode. The model runs on your phone. Chats, memory, and
-                files stay on-device unless you say otherwise. AGI Cloud is public alpha, opt-in,
-                never by default.
+                AGI Mobile is not published. The planned app starts each chat in Local Mode, keeps
+                chats, memory, and files on-device, and makes managed-cloud continuation an explicit
+                choice.
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
                   Get notified
                 </Link>
                 <WaitlistTrigger
-                  label="Enterprise early access"
+                  label="Discuss Enterprise access"
                   source="website"
                   className="agi-fl-cta agi-fl-cta--secondary"
                 />
@@ -144,8 +144,8 @@ export default function MobilePage() {
             The phone is the computer.
           </h2>
           <p className="agi-fl-section-lede">
-            Inference, memory, and your workspace live on the device. The cloud is an explicit,
-            public-alpha option. Not the default route.
+            The planned runtime keeps inference, memory, and your workspace on the device. Managed
+            cloud is designed as an explicit continuation, not the default route.
           </p>
 
           <ul className="agi-fl-surface-list">
@@ -180,13 +180,13 @@ export default function MobilePage() {
         <TrustTriptych
           eyebrow="Trust boundary"
           title="Two modes. One hard line between them."
-          lede="AGI Mobile keeps Local and AGI Cloud separate by design. A Local thread stays Local. Continuing one in the cloud is an explicit, labeled choice."
+          lede="The planned AGI Mobile design keeps Local and AGI Cloud separate. The app is not published, and these are previewed boundaries rather than current availability."
           cards={[
             {
               mode: 'Local',
               glyph: '◆',
               title: 'Yours alone, free forever.',
-              body: 'On-device chat is the default on every install.',
+              body: 'On-device chat is planned as the default when the app is published.',
               points: [
                 'Conversations run on the phone',
                 'Works offline',
@@ -226,42 +226,42 @@ export default function MobilePage() {
 
         <CapabilityGrid
           eyebrow="In the app"
-          title="The full feature set. Your phone."
+          title="The planned feature set. Your phone."
           items={[
             {
               meta: 'Chat',
               title: 'Local Chat',
-              body: 'Fast on-device conversations with the AGI Standard runtime. Online or off.',
+              body: 'Planned on-device conversations with the AGI Standard runtime, online or off.',
               href: '/features/ai-chat',
             },
             {
               meta: 'Models',
               title: 'Model Picker',
-              body: 'Choose your model and see clear installed, downloadable, and locked states.',
+              body: 'The planned picker shows installed, downloadable, and locked model states.',
               href: '/local',
             },
             {
               meta: 'Projects',
               title: 'Projects & Recents',
-              body: 'A drawer that keeps work organized by topic and one tap away.',
+              body: 'The planned drawer keeps work organized by topic and one tap away.',
               href: '/features/projects',
             },
             {
               meta: 'Memory',
               title: 'Memory',
-              body: 'On-device memory and personalization you can inspect and control.',
+              body: 'Planned on-device memory and personalization you can inspect and control.',
               href: '/features/memory',
             },
             {
               meta: 'Artifacts',
               title: 'Artifacts',
-              body: 'A gallery and preview for the documents and outputs you generate.',
+              body: 'A planned gallery and preview for generated documents and outputs.',
               href: '/features/artifacts',
             },
             {
               meta: 'Settings',
               title: 'Full Settings',
-              body: 'Appearance, data controls, app lock, and safety. All on the device.',
+              body: 'Planned appearance, data controls, app lock, and safety settings on-device.',
               href: '/security',
             },
           ]}
@@ -269,11 +269,11 @@ export default function MobilePage() {
 
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
-          title="Take AGI with you."
-          body="AGI Mobile launches on iPhone and Android. Local Mode is the default. AGI managed cloud is in public alpha, sign in to use it."
+          title="Get notified when Mobile ships."
+          body="AGI Mobile is not published. The planned iPhone and Android app uses Local Mode by default and offers an explicit managed-cloud continuation."
           ctas={[
             { href: '/download', label: 'Get notified' },
-            { label: 'Enterprise early access', waitlist: true },
+            { label: 'Discuss Enterprise access', waitlist: true },
           ]}
           stamp={`iPhone & Android · ${LAUNCH.shortLabel}`}
         />

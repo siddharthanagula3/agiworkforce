@@ -87,6 +87,29 @@ describe('WorkspaceBillingSummary', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('does not call a recorded manual seat allowance unknown', async () => {
+    ready({
+      access: {
+        plan: 'enterprise',
+        canManageTeam: true,
+        maxMembers: 3,
+        seatsConsumed: 1,
+        seatsAvailable: 2,
+        seatSource: 'unprovisioned',
+      },
+    });
+    render(<WorkspaceBillingSummary />);
+    expect(screen.getByText('1 of 3')).toBeVisible();
+    expect(screen.getByText('Enterprise')).toBeVisible();
+    expect(
+      screen.getByText(
+        'A seat allowance is recorded for this workspace; billing is managed separately.',
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText(/ceiling is unknown/i)).toBeNull();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+  });
+
   it('shows the workspace-wide billing-hold banner above the plan card once overdue', async () => {
     ready();
     fetchMock.mockResolvedValue(

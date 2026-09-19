@@ -26,10 +26,10 @@ const RELEASE_STATE: Readonly<Record<string, ReleaseState>> = Object.freeze({
   '2026-09-15': { maturity: 'beta', surfaces: ['desktop'] },
   '2026-09-05': { maturity: 'ga', surfaces: ['web'] },
   '2026-07-31': { maturity: 'ga', surfaces: ['cli', 'desktop', 'web'] },
-  '2026-07-03': { maturity: 'beta', surfaces: ['desktop'] },
+  '2026-07-03': { maturity: 'beta', surfaces: ['cli'] },
   '2026-06-24': {
     maturity: 'ga',
-    surfaces: ['web', 'desktop', 'cli', 'mobile', 'vscode', 'chrome'],
+    surfaces: ['web', 'cli'],
   },
   '2026-05-08': { maturity: 'ga', surfaces: ['web'] },
   '2026-05-04': { maturity: 'ga', surfaces: ['cli'] },

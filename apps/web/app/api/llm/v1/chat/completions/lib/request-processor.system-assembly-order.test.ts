@@ -342,6 +342,48 @@ describe('canonical instruction precedence', () => {
     expect(instructionOrderProblems(observed)).toEqual([]);
   });
 
+  it('puts the developer layer ahead of recalled memory inside the dynamic block', async () => {
+    mocks.loadPolicy.mockResolvedValue({
+      enabled: true,
+      generateFromHistory: false,
+      allowToolAssistedGeneration: false,
+      searchPastChats: false,
+    });
+    mocks.scopedQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from user_memories')
+        ? [{ content: 'User prefers morning meetings.', category: 'preference', pinned: true }]
+        : [],
+    );
+
+    const result = await processRequest(
+      chatRequestFor('precedence-3', { skill_name: 'design-review' }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const joined = result.llmRequest.messages
+      .filter((message) => message.role === 'system')
+      .map((message) => message.content)
+      .join('\n\n');
+
+    const markers: Array<{ layer: InstructionLayer; needle: string }> = [
+      { layer: 'developer', needle: '<name>design-review</name>' },
+      { layer: 'memory', needle: 'User prefers morning meetings.' },
+    ];
+    for (const marker of markers) {
+      expect(joined.indexOf(marker.needle), marker.layer).toBeGreaterThan(-1);
+    }
+
+    const observed = [...markers]
+      .sort((left, right) => joined.indexOf(left.needle) - joined.indexOf(right.needle))
+      .map((marker) => marker.layer);
+
+    expect(observed).toEqual(markers.map((marker) => marker.layer));
+    expect(instructionOrderProblems(observed)).toEqual([]);
+  });
+
   it('keeps every context-only layer behind the cache boundary, where instructions never sit', async () => {
     mocks.customInstructions.mockResolvedValue('Preferred name: Ada. Keep answers short.');
     mocks.loadPolicy.mockResolvedValue({

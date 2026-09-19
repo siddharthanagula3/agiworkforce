@@ -31,6 +31,7 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 vi.mock('@/lib/security-audit', () => ({
+  logSecurityEvent: vi.fn(async () => undefined),
   recordAuditEvent: vi.fn(async () => undefined),
   BLOCK_APPEAL_PATH: '/support',
   logAuthFailure: vi.fn(async () => undefined),
@@ -59,7 +60,9 @@ import { USER_SCOPED_TABLES } from '@/lib/server/account-erasure';
 import { GET, UNEXPORTED_USER_TABLES } from '../export/route';
 
 const ASSET_ID = '3f1d6c52-9a4e-4f2b-9c1a-2d5e7b8a0c11';
-const source = readFileSync(join(process.cwd(), 'app/api/user/export/route.ts'), 'utf8');
+const source = ['app/api/user/export/route.ts', 'lib/server/restricted-user-export-reader.ts']
+  .map((path) => readFileSync(join(process.cwd(), path), 'utf8'))
+  .join('\n');
 
 /**
  * Content the subject wrote that the export deliberately does not carry.

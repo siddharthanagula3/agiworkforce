@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockGetClerkAuthUser, mockNeonQuery, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
+const {
+  mockGetClerkAuthUser,
+  mockNeonQuery,
+  mockReadOrganizationRegion,
+  mockResolveActiveOrganizationId,
+} = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
+  mockReadOrganizationRegion: vi.fn(),
   mockResolveActiveOrganizationId: vi.fn(),
 }));
 
@@ -35,13 +41,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 
 vi.mock('@/lib/server/data-region', () => ({
-  readOrganizationRegion: async () => ({
-    effective: 'us',
-    requested: null,
-    requestedAt: null,
-    provisioned: true,
-    missing: [],
-  }),
+  readOrganizationRegion: mockReadOrganizationRegion,
 }));
 
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -70,8 +70,16 @@ class PgError extends Error {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
+  mockReadOrganizationRegion.mockResolvedValue({
+    effective: 'us',
+    requested: null,
+    requestedAt: null,
+    provisioned: true,
+    missing: [],
+  });
 });
 
 describe('GET /api/search?type=popular', () => {
@@ -104,6 +112,20 @@ describe('GET /api/search?type=popular', () => {
     mockNeonQuery.mockRejectedValue(new PgError('08006', 'connection failure'));
     const res = await GET(popularRequest());
     expect(res.status).not.toBe(200);
+  });
+
+  it.each([
+    ['limit', 'zero', '0'],
+    ['limit', 'not numeric', 'nope'],
+    ['days', 'negative', '-2'],
+    ['days', 'unbounded', '366'],
+  ])('rejects an invalid %s value that is %s', async (name, _description, value) => {
+    const response = await GET(
+      new NextRequest(`http://localhost/api/search?type=popular&${name}=${value}`),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
 
@@ -147,5 +169,22 @@ describe('search-history workspace scope', () => {
       'user-abc',
       '11111111-1111-4111-8111-111111111111',
     ]);
+  });
+
+  it('refuses to clear history from a workspace whose region is not served here', async () => {
+    mockReadOrganizationRegion.mockResolvedValue({
+      effective: 'eu',
+      requested: 'eu',
+      requestedAt: null,
+      provisioned: true,
+      missing: [],
+    });
+
+    const response = await DELETE(
+      new NextRequest('http://localhost/api/search', { method: 'DELETE' }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });

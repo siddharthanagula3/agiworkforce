@@ -19,6 +19,14 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
     expect(privacySource).toContain('Google Analytics');
   });
 
+  it('distinguishes browser consent from server operational error reporting', () => {
+    expect(privacySource).toMatch(/Browser error and performance reports.*consent/i);
+    expect(privacySource).toMatch(/Server and edge operational error reporting/i);
+    expect(privacySource).toMatch(/free-text diagnostic messages may remain/i);
+    expect(privacySource).not.toContain('Both are opt-in');
+    expect(privacySource).not.toContain('No prompt content is sent');
+  });
+
   it('states data hosting region (United States)', () => {
     expect(privacySource).toContain('United States');
   });

@@ -12,7 +12,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import {
-  backfillDisplayNameFromUpstream,
+  backfillProfileFromUpstream,
   readUserIdentity,
   resolveVisibleName,
 } from '@/lib/server/user-identity';
@@ -35,6 +35,7 @@ import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-bill
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
 import { getIdentityUser } from '@/lib/server/identity';
 import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
+import { linkPendingScimUsersAtSignIn } from '@/lib/server/scim/scim-sign-in-linking';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import {
   buildFlagSubject,
@@ -67,6 +68,7 @@ async function handleGetMe(request: NextRequest) {
     const { userId, email } = await getClerkAuthUser(request);
 
     let clerkName: string | undefined;
+    let verifiedProfileEmail: string | null = null;
     let resolvedEmail = email ?? undefined;
     try {
       let nameTimer: ReturnType<typeof setTimeout> | undefined;
@@ -84,6 +86,9 @@ async function handleGetMe(request: NextRequest) {
       clerkName =
         identityUser?.fullName ?? identityUser?.firstName ?? identityUser?.username ?? undefined;
       resolvedEmail = resolvedEmail ?? identityUser?.primaryEmail ?? undefined;
+      if (identityUser?.primaryEmailVerification === 'verified') {
+        verifiedProfileEmail = identityUser.primaryEmail;
+      }
       if (identityUser && identityUser.enterpriseAccounts.length > 0) {
         await provisionEnterpriseSignIn(getNeonDb(), identityUser).catch((jitError: unknown) => {
           logger.error(
@@ -99,6 +104,16 @@ async function handleGetMe(request: NextRequest) {
       );
     }
 
+    if (resolvedEmail) {
+      const scimLink = await linkPendingScimUsersAtSignIn(getNeonDb(), userId, resolvedEmail);
+      if (scimLink.failed > 0) {
+        logger.error(
+          { userId, failed: scimLink.failed },
+          'One or more pending directory memberships could not be linked at sign-in',
+        );
+      }
+    }
+
     const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
     const [subscription, identity] = await Promise.all([
       SubscriptionService.getSubscription(db, userId),
@@ -106,8 +121,16 @@ async function handleGetMe(request: NextRequest) {
     ]);
     const profile = identity.profile;
 
-    if (!identity.displayName && clerkName) {
-      await backfillDisplayNameFromUpstream(db, userId, clerkName);
+    if (
+      (!identity.displayName && (clerkName || resolvedEmail)) ||
+      (!profile?.email?.trim() && verifiedProfileEmail)
+    ) {
+      await backfillProfileFromUpstream(
+        db,
+        userId,
+        resolveVisibleName(identity, clerkName, resolvedEmail),
+        verifiedProfileEmail,
+      );
     }
 
     const rawRoutingPreferences = profile?.routing_preferences;

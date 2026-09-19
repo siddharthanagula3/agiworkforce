@@ -53,10 +53,10 @@ import {
   buildEffectiveCapabilityDocument,
   canUseBillingPlanCapability,
   computeCapabilityDocumentVersion,
-  getPlatformCapabilities,
   getTierPolicy,
   isCapabilityDocumentStale,
   modelsCatalog,
+  surfaceCapabilityGrant,
   type CapabilityDocumentRef,
   type CapabilityLayerGrant,
   type CapabilityLimit,
@@ -107,10 +107,7 @@ function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGr
 }
 
 function buildSurfaceLayerGrant(surface: SyncedAppSurface): CapabilityLayerGrant {
-  const row = getPlatformCapabilities(surface);
-  const granted = new Set<PlatformCapability>(
-    ALL_PLATFORM_CAPABILITIES.filter((capabilityId) => row[capabilityId]),
-  );
+  const granted = surfaceCapabilityGrant(surface);
   return { layer: 'surface', sourceId: `surface:${surface}`, granted };
 }
 

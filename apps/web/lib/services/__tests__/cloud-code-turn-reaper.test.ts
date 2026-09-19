@@ -4,7 +4,11 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn(), killE2BSession: vi.fn() }));
+vi.mock('@/lib/e2b/runtime', () => ({
+  revokeE2BSessionCredentials: vi.fn(async () => undefined),
+  getE2BExecutor: vi.fn(),
+  killE2BSession: vi.fn(),
+}));
 
 import { CLOUD_CODE_RUN_LEASE_SECONDS } from '../cloud-code-session-service';
 import { CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS } from '../cloud-code-agent-service';

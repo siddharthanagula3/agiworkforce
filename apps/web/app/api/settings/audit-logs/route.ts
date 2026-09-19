@@ -12,6 +12,7 @@ import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SecurityAuditLogRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { presentActivity, type PresentedActivity } from '../activity/activity-presentation';
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
@@ -26,10 +27,7 @@ const QuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-type AuditRowWithProfile = SecurityAuditLogRow & {
-  profile_email: string | null;
-  profile_name: string | null;
-};
+type PresentedAuditEntry = PresentedActivity & { action: string };
 
 async function handleGetAuditLogs(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-audit-logs');
@@ -65,7 +63,7 @@ async function handleGetAuditLogs(request: NextRequest) {
   const effectiveUserId = requesterId;
 
   try {
-    const params: unknown[] = [effectiveUserId, limit, offset];
+    const params: unknown[] = [effectiveUserId, limit + 1, offset];
     const clauses: string[] = [];
 
     if (action) {
@@ -87,14 +85,11 @@ async function handleGetAuditLogs(request: NextRequest) {
 
     const whereExtra = clauses.length > 0 ? `and ${clauses.join(' and ')}` : '';
 
-    const rows = await db.query<AuditRowWithProfile>(
+    const rows = await db.query<SecurityAuditLogRow>(
       `select
          sal.id, sal.user_id, sal.event_type, sal.severity,
-         sal.ip_address, sal.user_agent, sal.endpoint, sal.details, sal.created_at,
-         p.email as profile_email,
-         p.display_name as profile_name
+         sal.ip_address, sal.user_agent, sal.endpoint, sal.details, sal.created_at
        from public.security_audit_logs sal
-       left join public.profiles p on p.id = sal.user_id
        where sal.user_id = $1
          ${whereExtra}
        order by sal.created_at desc
@@ -103,25 +98,22 @@ async function handleGetAuditLogs(request: NextRequest) {
       params,
     );
 
-    const entries = rows.map((row) => ({
-      id: row.id,
-      userId: row.user_id ?? null,
-      action: row.event_type,
-      resourceType: (row.details?.['resource_type'] as string | undefined) ?? null,
-      resourceId: (row.details?.['resource_id'] as string | undefined) ?? null,
-      details: (row.details as Record<string, unknown>) ?? {},
-      ipAddress: row.ip_address ?? null,
-      createdAt: row.created_at,
-      user:
-        row.profile_email || row.profile_name
-          ? {
-              email: row.profile_email ?? '',
-              name: row.profile_name ?? row.profile_email ?? '',
-            }
-          : undefined,
-    }));
+    const hasMore = rows.length > limit;
+    const entries = rows
+      .slice(0, limit)
+      .map((row): PresentedAuditEntry | null => {
+        const presented = presentActivity({
+          id: row.id,
+          event_type: row.event_type,
+          endpoint: row.endpoint ?? null,
+          user_agent: row.user_agent ?? null,
+          created_at: row.created_at,
+        });
+        return presented ? { ...presented, action: row.event_type } : null;
+      })
+      .filter((entry): entry is PresentedAuditEntry => entry !== null);
 
-    return NextResponse.json({ entries, limit, offset });
+    return NextResponse.json({ entries, hasMore, limit, offset });
   } catch (error) {
     logger.error({ error, requesterId }, 'Failed to fetch audit logs');
     throw createError.internal('Failed to fetch audit logs');

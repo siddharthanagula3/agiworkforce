@@ -3,6 +3,8 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { sendTransactionalEmail, type SendEmailResult } from '@/lib/support/handoff/resend-client';
 
+export const TRANSACTIONAL_EMAIL_FOOTER_STYLE = 'color:#666;font-size:12px';
+
 function notificationsFromEmail(): string {
   return process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim() ?? '';
 }
@@ -59,7 +61,7 @@ export async function sendScheduleCompletionEmail(
     html: [
       `<p>Your scheduled task &ldquo;${escapeHtml(input.taskName)}&rdquo; ${verb}.</p>`,
       input.scheduleUrl ? `<p><a href="${escapeHtml(input.scheduleUrl)}">View the run</a></p>` : '',
-      '<p style="color:#666;font-size:12px">You are receiving this because you enabled schedule notifications in Settings.</p>',
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">You are receiving this because you enabled schedule notifications in Settings.</p>`,
     ]
       .filter(Boolean)
       .join(''),

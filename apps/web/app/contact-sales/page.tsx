@@ -23,7 +23,7 @@ const AUDIENCE_ROUTES = [
 export const metadata = buildMetadata({
   title: 'Contact sales',
   description:
-    'Reach a real human about AGI Enterprise readiness, security review needs, account rollout, and managed cloud access.',
+    'Contact AGI sales about Enterprise readiness, security review needs, account rollout, and managed cloud access.',
   path: '/contact-sales',
 });
 
@@ -39,8 +39,8 @@ export default function ContactSalesPage() {
           em="sales."
           lede={
             <>
-              One human, one inbox. Email <strong>{CONTACT_EMAIL}</strong> with what you&rsquo;re
-              trying to do, how big your team is, and what your security review needs.
+              Email <strong>{CONTACT_EMAIL}</strong> with what you&rsquo;re trying to do, how big
+              your team is, and what your security review needs.
             </>
           }
           ctas={[]}

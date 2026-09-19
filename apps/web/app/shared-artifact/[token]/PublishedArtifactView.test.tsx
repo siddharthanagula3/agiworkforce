@@ -1,6 +1,6 @@
 import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { PublishedArtifactView } from './PublishedArtifactView';
 
 vi.mock('react-i18next', () => ({
@@ -14,12 +14,21 @@ vi.mock('@/features/chat/components/SandboxedIframe', () => ({
     payload: { kind: string };
     fallbackSrcDoc: string;
     title: string;
+    onRenderError?: (error: string) => void;
   }) => (
-    <div
-      data-testid="sandboxed-frame"
-      data-kind={props.payload.kind}
-      data-fallback={props.fallbackSrcDoc}
-    />
+    <>
+      <div
+        data-testid="sandboxed-frame"
+        data-kind={props.payload.kind}
+        data-fallback={props.fallbackSrcDoc}
+      />
+      <button
+        type="button"
+        onClick={() => props.onRenderError?.('HTTP 500: SELECT secret FROM users 0xdeadbeef')}
+      >
+        Report render error
+      </button>
+    </>
   ),
 }));
 
@@ -86,6 +95,15 @@ describe('PublishedArtifactView', () => {
       <PublishedArtifactView {...BASE} kind="react" content="const App = () => <div>hi</div>;" />,
     );
     expect(screen.getByTestId('sandboxed-frame')).toHaveAttribute('data-kind', 'react');
+  });
+
+  it('does not expose sandbox diagnostics on the public page', () => {
+    render(<PublishedArtifactView {...BASE} kind="html" content="<h1>hi</h1>" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report render error' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not be rendered/i);
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/HTTP|SELECT|deadbeef/i);
   });
 
   it('serves mermaid through the sandbox frame rather than running the parser here', () => {

@@ -71,15 +71,12 @@ So provisioning is modelled honestly:
   }
   ```
 
-- A pending resource is linked on the next `PUT`/`PATCH` that touches it, once
-  the account exists.
-
-**Known gap.** Linking does not yet happen automatically at the moment the
-person signs in, it happens on the next SCIM write for that resource. Wiring
-sign-in-time linking requires changing a shared identity path
-(`lib/server/user-identity.ts` / `/api/me`), which is outside this change's
-ownership. Until that lands, provisioning is eventually consistent for people
-who do not yet have an AGI account. Deprovisioning has no such gap.
+- A pending resource is linked on the next `PUT`/`PATCH` that touches it, or on
+  the account's next authenticated `/api/me` identity handshake. Sign-in-time
+  linking locks the pending row, rechecks the organization's verified domain,
+  binds the authenticated user id, and reconciles group role and membership in
+  one transaction. A failure is logged without preventing the person from
+  reaching their account, and the next handshake retries it.
 
 ## Deprovisioning is complete
 
@@ -213,7 +210,6 @@ this migration.
 
 ## What is still not true
 
-- Sign-in-time linking of a pending resource (see the known gap above).
 - A settings-modal surface for directory sync. The admin API is complete and
   covered by tests; the console UI lives at `/admin/directory-sync`.
 - `/Bulk`, sort, and ETag, advertised as unsupported rather than stubbed.

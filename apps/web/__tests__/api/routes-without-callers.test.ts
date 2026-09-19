@@ -69,6 +69,60 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   { url: '/api/interactive-cards/respond', why: 'an interactive card posts its response here' },
   { url: '/api/llm/v1/chat/completions/resume-input', why: 'a tool approval resumes a run here' },
 
+  // Platform-admin procedures are deliberately API-only. They are used during
+  // incidents and maintenance, not exposed as ordinary product controls.
+  {
+    url: '/api/admin/cost-operations',
+    why: 'platform-admin incident report for cost loops and rollups with operator-supplied thresholds',
+  },
+  {
+    url: '/api/admin/feature-flags/kill-switches',
+    why: 'platform-admin emergency brake for model, provider and capability incidents',
+  },
+  {
+    url: '/api/admin/feature-flags/stale',
+    why: 'platform-admin maintenance operation for reviewed stale-flag cleanup',
+  },
+  {
+    url: '/api/admin/support-access',
+    why: 'two-operator break-glass procedure called from the production-access runbook',
+  },
+
+  // Authenticated protocol endpoints support API and cross-surface clients.
+  // A first-party web screen is not their only valid consumer.
+  {
+    url: '/api/files/uploads',
+    why: 'cross-surface resumable video-upload protocol creates a multipart upload',
+  },
+  {
+    url: '/api/files/uploads/[uploadId]',
+    why: 'cross-surface resumable video-upload protocol signs, completes and aborts parts',
+  },
+  {
+    url: '/api/github/issues',
+    why: 'authenticated GitHub integration API for issue readers and comment clients',
+  },
+  {
+    url: '/api/media/image/cancel',
+    why: 'cross-surface durable image-job protocol cancels a server-owned job',
+  },
+  {
+    url: '/api/media/image/retry',
+    why: 'cross-surface durable image-job protocol retries the existing billed reservation',
+  },
+  {
+    url: '/api/memory/commands',
+    why: 'cross-surface explicit remember and confirmed-forget command protocol',
+  },
+  {
+    url: '/api/settings/security/compromise',
+    why: 'authenticated emergency account-compromise response, not a routine settings control',
+  },
+  {
+    url: '/api/voice/live/sessions/active',
+    why: 'cross-device voice reconnect and session-history protocol',
+  },
+
   // Built this wave by another executor; their surfaces are still landing.
   { url: '/api/plugins/authored', why: 'plugins directory work in flight' },
   { url: '/api/plugins/installations', why: 'plugins directory work in flight' },
@@ -84,17 +138,9 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   { url: '/api/plugins/marketplaces/[id]/refresh', why: 'plugins directory work in flight' },
   { url: '/api/plugins/marketplaces/entries', why: 'plugins directory work in flight' },
   { url: '/api/plugins/uploads', why: 'plugins directory work in flight' },
-
-  // Live handlers with no caller, kept for a stated reason. The other nine of
-  // this group were deleted; each of these four is here because deleting it
-  // would cost more than it saves.
   {
-    url: '/api/settings/organization/deletion/cancel',
-    why: 'no caller, but it cancels the deletion POST /api/settings/organization schedules; deleting the cancel and leaving the request is a regression',
-  },
-  {
-    url: '/api/me/routing-preferences',
-    why: 'no caller; the preference it persists IS now read on the chat path and enforced by the resolver (AGI-8), so what is missing is a control that writes it, not the reading of it',
+    url: '/api/plugins/updates',
+    why: 'plugins directory work in flight; version offers and permission re-consent are not surfaced yet',
   },
 ];
 

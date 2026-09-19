@@ -10,6 +10,7 @@ import { useDictation } from './use-dictation';
 import { clearCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore, _resetRuntimeRefs } from '@features/chat/stores/voice-input-store';
 import { DICTATION_STATUS } from '@features/chat/lib/dictation-machine';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 const TRANSCRIPT = 'ship the dictation bar';
 
@@ -87,6 +88,7 @@ function mount() {
 
 describe('useDictation', () => {
   beforeEach(() => {
+    useSettingsStore.setState({ dictationEnabled: true });
     _resetRuntimeRefs();
     clearCsrfToken();
     useVoiceInputStore.setState({
@@ -114,6 +116,37 @@ describe('useDictation', () => {
   it('is idle and inactive before the microphone is pressed', () => {
     const { result } = mount();
     expect(result.current.status).toBe(DICTATION_STATUS.idle);
+    expect(result.current.isActive).toBe(false);
+  });
+
+  it('does not request capture when dictation is disabled, including retry', () => {
+    useSettingsStore.setState({ dictationEnabled: false });
+    const { result } = mount();
+    act(() => {
+      result.current.start();
+      result.current.retry();
+    });
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+    expect(result.current.isActive).toBe(false);
+  });
+
+  it('releases a pending microphone grant after dictation is disabled', async () => {
+    let grant!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>((resolve) => {
+      grant = resolve;
+    });
+    vi.mocked(navigator.mediaDevices.getUserMedia).mockReturnValue(pending);
+    const stop = vi.fn();
+    const { result } = mount();
+    act(() => result.current.start());
+    act(() => useSettingsStore.setState({ dictationEnabled: false }));
+    await act(async () => {
+      grant({ getTracks: () => [{ stop }] } as unknown as MediaStream);
+      await pending;
+    });
+    expect(stop).toHaveBeenCalledOnce();
+    expect(currentRecorder.start).not.toHaveBeenCalled();
+    expect(useVoiceInputStore.getState().captureStream).toBeNull();
     expect(result.current.isActive).toBe(false);
   });
 

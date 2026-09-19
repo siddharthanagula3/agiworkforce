@@ -44,7 +44,7 @@ export function buildTauriHeartbeat(input: {
   return parsed.success ? parsed.data : null;
 }
 
-function installId(): string | null {
+export function desktopInstallId(): string | null {
   try {
     const stored = window.localStorage.getItem(INSTALL_ID_KEY);
     if (stored) return stored;
@@ -67,7 +67,7 @@ async function appVersion(): Promise<string | null> {
 
 export async function sendTauriHeartbeat(): Promise<boolean> {
   if (!selectHasCloudAccountSession(useAuthStore.getState())) return false;
-  const id = installId();
+  const id = desktopInstallId();
   if (!id) return false;
   const heartbeat = buildTauriHeartbeat({
     installId: id,

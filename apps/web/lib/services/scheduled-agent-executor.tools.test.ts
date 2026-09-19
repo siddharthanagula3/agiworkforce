@@ -40,7 +40,8 @@ vi.mock(
 );
 
 const mockLoadUserConnectorToolCatalog = vi.fn();
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
   loadUserConnectorToolCatalog: (...args: unknown[]) => mockLoadUserConnectorToolCatalog(...args),
   makeUserConnectorExecutor: vi.fn(() => vi.fn()),
 }));

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useForm, type UseFormReturn } from 'react-hook-form';
+import { useForm, useFormState, type Control, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   AlertDialog,
@@ -41,6 +41,7 @@ import {
   type CreateAPIKeyResult,
 } from '@features/settings/hooks/use-settings-queries';
 import { API_KEY_SCOPE_OPTIONS, type ApiKeyScope } from '@/lib/api-key-scopes';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface ApiKey {
   id: string;
@@ -67,6 +68,30 @@ interface ApiKeysPanelProps {
   onDeleteAPIKey: () => void;
   onCopyAPIKey: (key: string) => void;
   onDismissGeneratedKey: () => void;
+}
+
+interface ApiKeySubmitButtonProps {
+  control: Control<CreateApiKeyFormData>;
+  isCreatePending: boolean;
+}
+
+function ApiKeySubmitButton({ control, isCreatePending }: ApiKeySubmitButtonProps) {
+  const { isValid } = useFormState({ control });
+
+  return (
+    <Button
+      type="submit"
+      disabled={isCreatePending || !isValid}
+      className="bg-green-700 text-white hover:bg-green-800"
+    >
+      {isCreatePending ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <Key className="mr-2 h-4 w-4" />
+      )}
+      Generate Key
+    </Button>
+  );
 }
 
 export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
@@ -174,13 +199,13 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
 
     {/* API Key Generation Dialog */}
     <AlertDialog open={showAPIKeyDialog} onOpenChange={onSetShowAPIKeyDialog}>
-      <AlertDialogContent className="border-border bg-popover">
+      <AlertDialogContent className="max-w-[calc(100vw-2rem)] border-border bg-popover p-4 sm:p-6">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-foreground">
             {generatedAPIKey ? 'API Key Generated' : 'Generate New API Key'}
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="text-muted-foreground">
+            <div className="min-w-0 text-muted-foreground">
               {generatedAPIKey ? (
                 <div className="space-y-4">
                   <p className="text-warning-text">
@@ -261,7 +286,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                         </FormItem>
                       )}
                     />
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         type="button"
                         variant="outline"
@@ -273,18 +298,10 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                       >
                         Cancel
                       </Button>
-                      <Button
-                        type="submit"
-                        disabled={isCreatePending || !apiKeyForm.formState.isValid}
-                        className="bg-green-700 text-white hover:bg-green-800"
-                      >
-                        {isCreatePending ? (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Key className="mr-2 h-4 w-4" />
-                        )}
-                        Generate Key
-                      </Button>
+                      <ApiKeySubmitButton
+                        control={apiKeyForm.control}
+                        isCreatePending={isCreatePending}
+                      />
                     </div>
                   </form>
                 </Form>
@@ -381,7 +398,7 @@ export function ApiKeysManager() {
       keyToDelete={keyToDelete}
       isCreatePending={createMutation.isPending}
       isLoading={isLoading}
-      loadError={isError ? (error?.message ?? 'Unable to load API keys.') : null}
+      loadError={isError ? toUserMessage(error, 'Unable to load API keys. Try again.') : null}
       onRetry={() => void refetch()}
       onSetShowAPIKeyDialog={setDialogOpen}
       onSetKeyToDelete={setKeyToDelete}

@@ -10,11 +10,9 @@ import { CAPABILITY_LAYER_DENIAL_REASONS } from '../capability-handshake/types';
 import {
   CAPABILITY_DENIAL_REASONS,
   CAPABILITY_DENIAL_TAXONOMY,
-  CAPABILITY_DENIAL_TELEMETRY_EVENT,
   DENIAL_DECIDERS,
   capabilityDenialErrorCode,
   capabilityDenialHttpStatus,
-  capabilityDenialTelemetry,
   describeCapabilityDenial,
   isCapabilityDenialReason,
 } from '../reason-codes';
@@ -98,23 +96,6 @@ describe('capability denial taxonomy', () => {
   it('recognises its own reasons and nothing else', () => {
     expect(isCapabilityDenialReason('policy_blocked')).toBe(true);
     expect(isCapabilityDenialReason('forbidden')).toBe(false);
-  });
-
-  it('records the cause in telemetry without the copy', () => {
-    const event = capabilityDenialTelemetry('requires_upgrade', {
-      capabilityId: 'canUseDeepResearch',
-      policySource: 'tier:pro',
-      requiredPlan: 'max',
-    });
-    expect(event).toEqual({
-      event: CAPABILITY_DENIAL_TELEMETRY_EVENT,
-      reason: 'requires_upgrade',
-      decidedBy: 'entitlement',
-      errorCode: 'UPGRADE_REQUIRED',
-      capabilityId: 'canUseDeepResearch',
-      policySource: 'tier:pro',
-      requiredPlan: 'max',
-    });
   });
 });
 

@@ -5,6 +5,7 @@ import { PERSONAL_WORKSPACE_SELECTOR, type WorkspaceSummary } from '@agiworkforc
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
 
 export const WORKSPACES_QUERY_KEY = ['workspaces'] as const;
 
@@ -15,27 +16,40 @@ export interface AccountWorkspaces {
   scope: 'personal' | 'organization';
 }
 
-async function readApiError(res: Response): Promise<string> {
-  const fallback = `Request failed (${res.status}).`;
+async function readApiError(res: Response, fallback: string): Promise<Error> {
+  let raw = '';
   try {
-    const body = (await res.json()) as { error?: { message?: string } | string };
-    const raw = typeof body.error === 'string' ? body.error : (body.error?.message ?? '');
-    if (!raw.trim()) return fallback;
-    return toUserMessage(Object.assign(new Error(raw), { status: res.status }), fallback);
+    const body = (await res.json()) as { error?: { message?: unknown } | string } | null;
+    const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
+    if (typeof message === 'string') raw = message;
   } catch {
-    return fallback;
+    raw = '';
   }
+  const error = Object.assign(new Error(raw), { status: res.status });
+  error.message = toUserMessage(error, fallback);
+  return error;
 }
 
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const token = await getAuthToken();
-  if (!token) throw new Error('User not authenticated');
+  if (!token) {
+    throw Object.assign(new Error('Your session has expired. Sign in again to continue.'), {
+      status: 401,
+    });
+  }
   const method = init.method ?? 'GET';
   const baseHeaders: Record<string, string> = { Authorization: `Bearer ${token}` };
   if (init.body) baseHeaders['Content-Type'] = 'application/json';
   const headers = method === 'GET' ? baseHeaders : await addCsrfHeaders(baseHeaders);
   const res = await fetch(url, { ...init, headers });
-  if (!res.ok) throw new Error(await readApiError(res));
+  if (!res.ok) {
+    throw await readApiError(
+      res,
+      method === 'GET'
+        ? 'We could not load your workspaces. Try again.'
+        : 'We could not switch workspaces. Try again.',
+    );
+  }
   return (await res.json()) as T;
 }
 
@@ -58,8 +72,8 @@ export function useSelectWorkspace() {
         method: 'PUT',
         body: JSON.stringify({ workspaceId: workspaceId ?? PERSONAL_WORKSPACE_SELECTOR }),
       }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries();
+    onSuccess: async ({ activeOrganizationId }) => {
+      await finalizeWorkspaceSwitch(queryClient, activeOrganizationId);
     },
   });
 }

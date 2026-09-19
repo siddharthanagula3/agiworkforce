@@ -55,6 +55,7 @@ vi.mock('@/features/chat/components/Composer/ChatComposerNew', () => ({
 
 vi.mock('@/features/schedules', () => ({
   SchedulesPage: () => <div data-testid="project-schedules-section" />,
+  SchedulesEntitlementLoading: () => <div aria-label="Loading schedule access" role="status" />,
 }));
 
 vi.mock('@/features/projects/components/SourcesPanel', () => ({

@@ -14,6 +14,7 @@ import {
   isGitHubInstallationLinkingAvailable,
 } from '@/lib/github-app';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 
 const GITHUB_SCOPE = { resolveOrganization: false } as const;
 
@@ -43,7 +44,7 @@ function isGithubOwnershipSchemaUnavailable(error: unknown): boolean {
   );
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * review model from the catalog rather than from this column, so a value stored
  * against the installation would be a setting nothing reads.
  */
-export async function PATCH(request: NextRequest): Promise<NextResponse> {
+async function handlePatch(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -199,7 +200,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   });
 }
 
-export async function DELETE(request: NextRequest): Promise<NextResponse> {
+async function handleDelete(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -308,3 +309,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({ success: true, revoked: revocation.status });
 }
+
+export const GET = withPrivateNoStore(handleGet);
+export const PATCH = withPrivateNoStore(handlePatch);
+export const DELETE = withPrivateNoStore(handleDelete);

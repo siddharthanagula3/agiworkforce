@@ -36,21 +36,29 @@ export async function cloudAgentWorkflow(rawInput: CloudAgentWorkflowInput): Pro
 
   let input = rawInput;
   try {
-    await ensureWorkPlanForRun(input);
+    if (input.processed.chatRequest.work_mode === 'agiwork') {
+      await ensureWorkPlanForRun(input);
+    }
     for (;;) {
-      input = await awaitDeviceClearance(input);
+      if (input.processed.deviceHost) {
+        input = await awaitDeviceClearance(input);
+      }
       const result = await executeCloudAgentWorkflowInvocation(input);
       if (result.kind === 'continue') {
         input = result.input;
         continue;
       }
-      await settleWorkPlanForRun(input, 'completed');
+      if (input.processed.chatRequest.work_mode === 'agiwork') {
+        await settleWorkPlanForRun(input, 'completed');
+      }
       await closeCloudAgentWorkflowStream(input.runId);
       return;
     }
   } catch (error) {
     await failCloudAgentWorkflow(input, error);
-    await settleWorkPlanForRun(input, 'failed');
+    if (input.processed.chatRequest.work_mode === 'agiwork') {
+      await settleWorkPlanForRun(input, 'failed');
+    }
     await closeCloudAgentWorkflowStream(input.runId);
     throw error;
   }

@@ -69,6 +69,6 @@ allows the connection.
 
 ## Still stuck
 
-Email contact@agiworkforce.com. A real person reads it. Include your **User ID**
-from Settings, Account, and the **Organization ID** too if the problem is
-workspace-wide.
+Email contact@agiworkforce.com. Include your **User ID** from Settings, Account,
+and the **Organization ID** too if the problem is workspace-wide. The support
+page lists the available channels and response commitments.
