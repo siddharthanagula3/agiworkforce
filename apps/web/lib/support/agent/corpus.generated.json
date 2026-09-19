@@ -332,7 +332,10 @@
         "add key",
         "encrypted"
       ],
-      "platforms": ["cli", "vscode"],
+      "platforms": [
+        "cli",
+        "vscode"
+      ],
       "updated": "2026-09-19",
       "source": "content/support/byok-provider-keys.md",
       "chunks": [
@@ -472,7 +475,9 @@
         "browser automation",
         "computer use"
       ],
-      "platforms": ["chrome"],
+      "platforms": [
+        "chrome"
+      ],
       "updated": "2026-09-17",
       "source": "content/support/chrome-extension.md",
       "chunks": [
@@ -636,7 +641,13 @@
         "agi install",
         "command line"
       ],
-      "platforms": ["cli", "desktop", "linux", "macos", "windows"],
+      "platforms": [
+        "cli",
+        "desktop",
+        "linux",
+        "macos",
+        "windows"
+      ],
       "updated": "2026-09-19",
       "source": "content/support/desktop-and-cli.md",
       "chunks": [
@@ -985,7 +996,15 @@
         "notarized",
         "get notified"
       ],
-      "platforms": ["android", "desktop", "ios", "linux", "macos", "mobile", "windows"],
+      "platforms": [
+        "android",
+        "desktop",
+        "ios",
+        "linux",
+        "macos",
+        "mobile",
+        "windows"
+      ],
       "updated": "2026-09-19",
       "source": "content/support/install-desktop-and-mobile.md",
       "chunks": [
@@ -1055,7 +1074,12 @@
         "cargo",
         "checksum"
       ],
-      "platforms": ["cli", "linux", "macos", "windows"],
+      "platforms": [
+        "cli",
+        "linux",
+        "macos",
+        "windows"
+      ],
       "updated": "2026-09-17",
       "source": "content/support/install-the-cli.md",
       "chunks": [
@@ -1229,7 +1253,9 @@
         "privacy",
         "free"
       ],
-      "platforms": ["cli"],
+      "platforms": [
+        "cli"
+      ],
       "updated": "2026-09-19",
       "source": "content/support/local-mode.md",
       "chunks": [
@@ -2257,7 +2283,9 @@
         "sign in to cloud",
         "local runtime"
       ],
-      "platforms": ["vscode"],
+      "platforms": [
+        "vscode"
+      ],
       "updated": "2026-09-17",
       "source": "content/support/vscode-extension.md",
       "chunks": [

@@ -44,10 +44,10 @@ pushed. Secrets, local environment files, caches, generated build output, and
 temporary audit evidence will not be added merely because they are present.
 
 The final consolidation accounts for every path in
-`docs/work/release-inclusion-inventory-2026-09-19.md`: 758 paths, consisting of
-613 modifications, 134 additions, and 11 audited deletions. The total includes
-the manifest itself and the final secondary-audit comment correction. No
-untracked path remains. The deletions are
+`docs/work/release-inclusion-inventory-2026-09-19.md`: 759 paths, consisting of
+614 modifications, 134 additions, and 11 audited deletions. The total includes
+the manifest itself, the final secondary-audit comment correction, and the
+support-corpus formatter exclusion. No untracked path remains. The deletions are
 the unused or self-only abstractions explicitly described below; none was
 removed merely to make a check pass. After staging, `git diff --cached --check`
 and the repository secret scan passed over 13,324 working-tree files and all 18
@@ -672,9 +672,17 @@ deletion` / `Scheduling…`; the destructive-data detail remains explicit.
   passing. It found one stale non-rendered test comment repeating the retired
   local-Mac-model claim; that comment was corrected, its 21-test suite passed,
   and a read-only delta refresh confirmed all other 40 fingerprints unchanged
-  and no remaining exact retired phrase. The final independent report is
-  `/tmp/agi-public-claims-audit-final-refresh-3.json`, SHA-256
-  `9e0c06597bc2df5dfa12a59cf5dbffc35acd99fdec52e43076b5fac98ca7f7a8`;
+  and no remaining exact retired phrase. The first release commit's formatting
+  hook then changed the privacy-page and generated-corpus bytes. Their prior
+  staged blobs were recovered from Git object storage: repository Prettier
+  converts the prior privacy source byte-for-byte to the committed source, so
+  that delta is proven formatting-only. The corpus was semantically equal but
+  failed its byte-level drift guard; it was regenerated canonically to 41
+  documents / 215 chunks, and `.prettierignore` now leaves its exact
+  generator-owned serialization intact. The 116-test privacy/support set and
+  `check:support-corpus` pass. The final independent report is
+  `/tmp/agi-public-claims-audit-final-refresh-5.json`, SHA-256
+  `50eaceabba18579676887f01d2352bb5d460e0f964324fde044ea24db412135d`;
   its full predecessor is `/tmp/agi-public-claims-audit-final-refresh-2.json`,
   SHA-256
   `fe308995524ccc1acfc4b28fecc228531840efaa9352a6e6d818c5ec329a721d`.
