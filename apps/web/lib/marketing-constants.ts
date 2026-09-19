@@ -22,9 +22,9 @@ export const LAUNCH = {
 } as const;
 
 export const POSITIONING = {
-  wedge: 'Try AGI on the web. Local and BYOK for serious work. Managed cloud, open by default.',
+  wedge: 'Try AGI on the web. Run Local and BYOK from the CLI. Managed cloud, open by default.',
   trustBoundary:
-    'Website users can use AGI managed cloud, with a small free Auto Economy cap and higher-capacity paid plans rolling out. Local and BYOK are supported on desktop and developer surfaces. Managed cloud is open by default, not invite-only.',
+    'Website users can use AGI managed cloud, with a small free Auto Economy cap and higher-capacity paid plans rolling out. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.',
   cloudInvite:
     'Managed cloud is open by default; higher capacity is a paid subscription, not an invite.',
 } as const;
@@ -64,17 +64,17 @@ export const BYOK_SURFACES = {
     'Web, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI account.',
 } as const;
 
-const DESKTOP_LOCAL_RUNTIME_IDS = ['ollama', 'lmstudio'] as const;
-const desktopLocalRuntimeNames = Object.freeze(
-  DESKTOP_LOCAL_RUNTIME_IDS.map((id) =>
+const CLI_LOCAL_RUNTIME_IDS = ['ollama', 'lmstudio'] as const;
+const cliLocalRuntimeNames = Object.freeze(
+  CLI_LOCAL_RUNTIME_IDS.map((id) =>
     modelsCatalogJson.providers[id].label.replace(/\s+\(Local\)$/, ''),
   ),
 );
 
-export const DESKTOP_LOCAL_RUNTIMES = {
-  names: desktopLocalRuntimeNames,
-  label: desktopLocalRuntimeNames.join(' and '),
-  compact: desktopLocalRuntimeNames.join(' · '),
+export const CLI_LOCAL_RUNTIMES = {
+  names: cliLocalRuntimeNames,
+  label: cliLocalRuntimeNames.join(' and '),
+  compact: cliLocalRuntimeNames.join(' · '),
 } as const;
 
 export type PricingTabId = 'individual' | 'team' | 'api';

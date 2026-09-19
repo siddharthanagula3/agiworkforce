@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + provider/platform lead
-Last updated: 2026-08-05
+Last updated: 2026-09-19
 
 This document defines how AGI should think about BYOK providers, open-weight models, hosted open-model APIs, and local model runtimes before implementation agents add or rank models.
 
@@ -10,9 +10,11 @@ Use this with `docs/product/definition.md`, `docs/work/implementation-status.md`
 
 ## Core Decision
 
-BYOK Desktop is not only for OpenAI, Anthropic, and Google keys.
+BYOK developer surfaces are not limited to OpenAI, Anthropic, and Google keys.
 
-AGI Desktop must support three BYOK/open-model classes:
+The released CLI, and VS Code when published, must support three
+BYOK/open-model classes. The public Electron Desktop is managed-cloud-only and
+must not expose these routes:
 
 1. Direct frontier/provider keys: OpenAI, Anthropic, Google, xAI, Mistral, DeepSeek, Qwen/Alibaba Model Studio, Z.ai/GLM, and Bedrock.
 2. Hosted open-model providers: OpenRouter, NVIDIA NIM, Groq, Hugging Face Inference Providers, Replicate, and selected specialist providers that pass a founder-approved implementation review.
@@ -106,9 +108,9 @@ Founder-excluded providers are not catalogue gaps or future targets. They must n
 | Falcon                            | Regional/open models; add if user demand or provider coverage justifies it.                                                 |
 | Image and video generation routes | Not LLM chat, but needed for artifact/media parity through media providers. Keep separate from the LLM chat model selector. |
 
-## Desktop BYOK UX Requirements
+## Developer-surface BYOK UX Requirements
 
-Desktop BYOK should have four clear groups in the model/provider setup:
+Developer-surface BYOK should have four clear groups in model/provider setup:
 
 1. Direct provider keys
    - OpenAI, Anthropic, Google, xAI, Mistral, DeepSeek, Qwen, and Z.ai.
@@ -210,7 +212,7 @@ Current popularity/quality signals from this research:
 
 ## AGI Product Implication
 
-For a user, BYOK Desktop should mean:
+For a user, BYOK on a supported developer surface should mean:
 
 > "Bring any serious model route you already pay for, including open-model clouds and local runtimes, and AGI gives you the Claude/ChatGPT-style application layer on top."
 
@@ -272,4 +274,4 @@ Before adding more models to `packages/contracts/types/src/models.json`, create 
 - deprecation date if any,
 - local-runtime compatibility if any.
 
-Then update the Desktop BYOK model selector to group providers by direct keys, open-model clouds, local runtimes, and managed beta.
+Then update the CLI and forthcoming VS Code model selectors to group providers by direct keys, open-model clouds, local runtimes, and managed cloud.

@@ -719,7 +719,11 @@ fn parse_hunk_resolutions(
         return Err("resolutions is empty; every conflicted hunk needs one".to_string());
     }
     let mut resolutions = Vec::with_capacity(parsed.len());
+    let mut seen = std::collections::HashSet::new();
     for entry in parsed {
+        if !seen.insert(entry.hunk) {
+            return Err(format!("hunk {} has more than one resolution", entry.hunk));
+        }
         let resolution = match entry.choice.as_str() {
             "union" => Resolution::Union,
             "custom" => Resolution::Custom(entry.lines.ok_or_else(|| {
@@ -800,15 +804,51 @@ async fn execute_resolve_conflict(
         }
     }
 
-    let run_tests = args
+    let run_tests_requested = args
         .get("run_tests")
         .is_some_and(|value| matches!(value.trim(), "true" | "1" | "yes"));
+    let run_tests = if run_tests_requested {
+        if !crate::trust::is_trusted(&root) {
+            return refuse(
+                "Post-resolution tests cannot run directly in an untrusted workspace; resolve the file, then run the test through the shell tool's sandbox and approval gate."
+                    .to_string(),
+            );
+        }
+        let Some(test) = crate::merge_conflicts::detect_test_command(&root) else {
+            return refuse(
+                "No repository test command is declared for this workspace.".to_string(),
+            );
+        };
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: test.to_string(),
+            },
+            format!("Run post-resolution tests: {test}"),
+            vec![format!("repository: {}", root.display())],
+        );
+        let allowed = match request_approval(approval_callback, request.clone()).await {
+            Some(decision) => approval_allows(decision),
+            None => Confirm::new()
+                .with_prompt(format!("{} Allow it?", request.summary))
+                .default(false)
+                .interact()
+                .unwrap_or(false),
+        };
+        if !allowed {
+            return refuse(
+                "Post-resolution tests were not approved; no resolution was applied.".to_string(),
+            );
+        }
+        true
+    } else {
+        false
+    };
     match crate::merge_conflicts::resolve_conflicted_file(&root, relative, &resolutions, run_tests)
         .await
     {
         Ok(outcome) => Ok(ToolResult {
             tool_name: "resolve_conflict".to_string(),
-            success: true,
+            success: outcome.tests.as_ref().is_none_or(|tests| tests.success),
             output: outcome.summary(),
         }),
         Err(error) => refuse(format!("{error:#}")),

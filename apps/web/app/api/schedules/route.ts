@@ -25,6 +25,7 @@ import {
   clampSchedulePageOffset,
   clampSchedulePageSize,
 } from '@agiworkforce/cloud-contracts';
+import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 
@@ -34,7 +35,7 @@ function integerQueryValue(value: string | null, fallback: number): number {
 }
 
 function rethrowScheduleError(error: unknown): never {
-  if (error instanceof ScheduleLimitError) throw createError.forbidden(error.message);
+  if (error instanceof ScheduleLimitError) throw createError.forbidden(error.message).asUserSafe();
   if (error instanceof ScheduleValidationError) throw createError.validation(error.message);
   if (error instanceof ScheduleNotFoundError) throw createError.notFound('Schedule not found');
   if (error instanceof ScheduleConflictError) throw createError.conflict(error.message);
@@ -80,6 +81,16 @@ async function handleCreateSchedule(request: NextRequest) {
 
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
+
+  const subscription = await SubscriptionService.getSubscription(db, userId);
+  try {
+    if (getPlanMaxScheduledTasks(subscription?.plan_tier) === 0) {
+      await assertScheduleQuota(db, userId, subscription?.plan_tier);
+    }
+  } catch (error) {
+    rethrowScheduleError(error);
+  }
+
   const featureGate = await buildWorkspaceFeatureGateResponse(
     userId,
     request,
@@ -90,11 +101,12 @@ async function handleCreateSchedule(request: NextRequest) {
   const body = await requestObject(request);
 
   try {
-    const subscription = await SubscriptionService.getSubscription(db, userId);
     const schedule = await db.transaction(async (tx) => {
       await tx.execute('select pg_advisory_xact_lock(hashtext($1))', [`scheduled_tasks:${userId}`]);
       await assertScheduleQuota(tx, userId, subscription?.plan_tier);
-      return createSchedule(tx, userId, body as unknown as ScheduleInput);
+      return createSchedule(tx, userId, body as unknown as ScheduleInput, {
+        planTier: subscription?.plan_tier ?? 'free',
+      });
     });
     return NextResponse.json({ schedule }, { status: 201 });
   } catch (error) {

@@ -314,7 +314,7 @@ describe('Chat Messages API', () => {
       it('should auto-title conversation on first user message', async () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        mockQuery.mockResolvedValueOnce([{ count: '1' }]);
+        mockExecute.mockResolvedValue(1);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
           method: 'POST',
@@ -335,7 +335,7 @@ describe('Chat Messages API', () => {
       it('should truncate long messages for title', async () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        mockQuery.mockResolvedValueOnce([{ count: '1' }]);
+        mockExecute.mockResolvedValue(1);
 
         const longMessage =
           'This is a very long message that should be truncated when used as the conversation title because it exceeds fifty characters';

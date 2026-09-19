@@ -416,12 +416,12 @@ export function WorkspaceDataControls() {
             </button>
             {create.isError ? (
               <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-                {create.error.message}
+                {toUserMessage(create.error, 'Could not place this legal hold. Try again.')}
               </span>
             ) : null}
             {release.isError ? (
               <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-                {release.error.message}
+                {toUserMessage(release.error, 'Could not release this legal hold. Try again.')}
               </span>
             ) : null}
           </div>

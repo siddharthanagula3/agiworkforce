@@ -10,16 +10,20 @@ scope: public
 
 ## What is stored where
 
-In Local mode on Desktop, CLI and VS Code, conversations stay on your device and
-are never uploaded. Managed cloud conversations are encrypted in transit and at
-rest. AGI does not sell your data, and does not use customer conversation
+In Local mode on the CLI, conversations stay on your device and are never
+uploaded. CLI BYOK sends requests directly to the provider you select; VS Code
+BYOK is coming soon. Web, Mobile, Desktop and Chrome use managed cloud and do not
+accept provider keys. Managed cloud conversations are encrypted in transit and
+at rest. AGI does not sell your data, and does not use customer conversation
 content to train AGI-owned models.
 
 ## Diagnostics
 
-Crash reports and anonymised usage counts, with no message content, help fix
-bugs. They are disabled by default and can be turned off at any time in
-Settings, Privacy.
+Browser crash reports and consent-gated usage counts help fix bugs. They are
+disabled by default and can be turned on or off in Settings, Privacy. Sensitive
+request fields are removed before error reports are sent; free-text diagnostic
+messages may remain after secrets are masked. Server-side operational error
+reporting can run when configured and is not controlled by the browser setting.
 
 ## Temporary chats
 

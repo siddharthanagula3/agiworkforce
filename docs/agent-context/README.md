@@ -12,7 +12,7 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 2. `../product/definition.md` - product definition, v1 target, current position, parity baseline, P0 gaps, docs rule, and verification rule.
 3. `../product/requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
 4. `../work/implementation-status.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
-5. `../architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and Desktop model-selector rules.
+5. `../architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and developer-surface model-selector rules.
 6. `repo-map.json` - where product and platform code lives.
 7. `known-flaws.md` - the register of open defects by surface, so agents do not rediscover one as new.
 8. `commands.json` - exact commands by surface.

@@ -393,6 +393,54 @@ export async function patchAssistantTurnSourceUrls(params: {
   }
 }
 
+const SELECT_ASSISTANT_TURN_SQL = `select m.content, m.model, m.metadata
+         from web_messages m
+         join public.web_conversations c on c.id = m.conversation_id
+        where m.id = $1::uuid
+          and c.id = $2::uuid
+          and c.user_id = $3
+          and c.organization_id is not distinct from $4::uuid
+          and c.deleted_at is null
+          and m.role = 'assistant'
+          and m.deleted_at is null
+        limit 1`;
+
+export interface PersistedAssistantTurn {
+  content: string;
+  model: string;
+  truncated: boolean;
+  truncationReason: string | null;
+}
+
+/**
+ * The server's copy of a turn, for a client whose connection dropped before the
+ * stream finished. It is the floor the resume replays from, never a second writer.
+ */
+export async function readPersistedAssistantTurn(params: {
+  userId: string;
+  organizationId: string | null;
+  conversationId: string;
+  messageId: string;
+}): Promise<PersistedAssistantTurn | null> {
+  const { userId, organizationId, conversationId, messageId } = params;
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId });
+  const [row] = await db.query<{ content: string | null; model: string | null; metadata: unknown }>(
+    SELECT_ASSISTANT_TURN_SQL,
+    [messageId, conversationId, userId, organizationId],
+  );
+  if (!row) return null;
+
+  const metadata = asMetadataRecord(row.metadata) ?? {};
+  const truncationReason =
+    typeof metadata['truncationReason'] === 'string' ? metadata['truncationReason'] : null;
+  return {
+    content: row.content ?? '',
+    model: row.model ?? '',
+    truncated: metadata['truncated'] === true,
+    truncationReason,
+  };
+}
+
 export function extractAssistantTextDelta(value: Uint8Array): string {
   const text = new TextDecoder().decode(value);
   let out = '';

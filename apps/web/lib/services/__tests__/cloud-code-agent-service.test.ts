@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn(), killE2BSession: vi.fn() }));
+vi.mock('@/lib/e2b/runtime', () => ({
+  revokeE2BSessionCredentials: vi.fn(async () => undefined),
+  getE2BExecutor: vi.fn(),
+  killE2BSession: vi.fn(),
+}));
 vi.mock('@/lib/e2b/session-store', () => ({
+  MANAGED_CLOUD_E2B_TENANT_ID: 'managed-cloud',
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
   CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
   deleteE2BSession: vi.fn(),

@@ -6,6 +6,7 @@ import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { logger } from '@/lib/logger';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
   buildAuthorizationUrl,
@@ -113,7 +114,7 @@ function failureMessage(
   return started.message;
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -310,3 +311,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   return NextResponse.redirect(authorizeUrl);
 }
+
+export const GET = withPrivateNoStore(handleGet);

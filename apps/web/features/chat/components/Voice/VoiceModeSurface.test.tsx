@@ -8,9 +8,13 @@ import { LIVE_SESSION_MESSAGE } from '@features/chat/lib/live-voice-session';
 const controller = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
 
 vi.mock('@features/chat/hooks/use-voice-session', () => ({
+  liveVoiceOutputRef: { current: null },
   useVoiceSession: () => controller.current,
 }));
-vi.mock('./VoiceOrb', () => ({ VoiceOrb: () => <div data-testid="voice-orb" /> }));
+vi.mock('./VoiceOrb', () => ({
+  VoiceOrbPreview: () => null,
+  VoiceOrb: () => <div data-testid="voice-orb" />,
+}));
 vi.mock('./VoiceComposer', () => ({ VoiceComposer: () => <div data-testid="voice-composer" /> }));
 vi.mock('./VoiceChatDock', () => ({ VoiceChatDock: () => null }));
 vi.mock('./VoiceSettingsModal', () => ({ VoiceSettingsModal: () => null }));

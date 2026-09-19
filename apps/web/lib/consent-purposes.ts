@@ -8,16 +8,16 @@ export interface ConsentPurpose {
 export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
   {
     id: 'enterprise_waitlist',
-    label: 'Store my email address on the enterprise early-access list.',
+    label: 'Store my email address so AGI can discuss contract-scoped Enterprise access with me.',
     description:
-      'Your address is stored so we can reach you when enterprise organisation and SSO features open. It is used for that and nothing else. To be straight about the mechanism: nothing in the product mails this list automatically, so the announcement is sent by a person.',
+      'Your address is stored so a person can discuss contract-scoped Enterprise access and contact you as additional Enterprise capabilities become available. Organisation, SSO, SCIM, audit export, and retention controls are already live for entitled workspaces. It is used for this Enterprise conversation and nothing else; nothing in the product mails this list automatically.',
     necessaryForRequest: true,
   },
   {
     id: 'platform_availability_waitlist',
     label: 'Store my email address so we can tell you when this platform ships.',
     description:
-      'Your address is stored so we can email you once AGI Mobile, AGI in Chrome or AGI in VS Code has a verified installer to download. It is used for that and nothing else, and is unrelated to the enterprise organisation and SSO early-access list.',
+      'Your address is stored so we can email you once AGI Mobile, AGI in Chrome or AGI in VS Code has a verified installer to download. It is used for that and nothing else, and is unrelated to the Enterprise contract-access contact list.',
     necessaryForRequest: true,
   },
   {

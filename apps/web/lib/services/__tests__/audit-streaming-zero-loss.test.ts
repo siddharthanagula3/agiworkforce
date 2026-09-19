@@ -10,12 +10,35 @@ vi.mock('@/lib/egress-policy', () => ({
 }));
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => null }));
 
+const { testKeyRing, mockOrganizationKeyRing } = vi.hoisted(() => {
+  const ring = { active: { id: 'test-key', material: Buffer.alloc(32, 7) }, retired: [] };
+  return {
+    testKeyRing: ring,
+    mockOrganizationKeyRing: vi.fn(async () => ({
+      ring,
+      source: 'platform_derived',
+      descriptor: null,
+      keyVersion: ring.active.id,
+    })),
+  };
+});
+vi.mock('@/lib/server/organization-encryption-keys', () => ({
+  organizationKeyRing: mockOrganizationKeyRing,
+}));
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { sealEnvelope } from '@/lib/crypto/envelope';
 
 import { AUDIT_STREAM_BATCH, drainAuditDestination } from '../audit-streaming-service';
 import { AUDIT_STREAM_MAX_BODY_BYTES } from '../audit-streaming-proxy';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+const SIGNING_CIPHERTEXT = sealEnvelope(
+  testKeyRing,
+  'fixture-audit-signing-secret',
+  'versioned',
+  `organization-audit-destination:${ORG}`,
+);
 
 interface QueuedEvent {
   id: string;
@@ -54,7 +77,7 @@ function queue(count: number, metadata: Record<string, unknown> = {}): QueuedEve
 function siem(events: QueuedEvent[]) {
   const destination = {
     endpoint_url: 'https://siem.example.test/hook',
-    secret_hash: 'a'.repeat(64),
+    secret_ciphertext: SIGNING_CIPHERTEXT,
     last_delivered_at: null as string | null,
     last_delivered_id: null as string | null,
     consecutive_failures: 0,

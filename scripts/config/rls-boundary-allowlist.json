@@ -98,6 +98,10 @@
       "reason": "the client-supplied device id may already be held by another account the caller's scope cannot see, so the ownership probe that answers 403 reads over the schema owner; the upsert and the token clear are caller-scoped"
     },
     {
+      "path": "apps/web/app/api/settings/2fa/route.ts",
+      "reason": "user_two_factor is read and written only through getUserScopedDb; the privileged connection is passed solely to handleIdentitySecurityEvent, whose identity risk signals 0255 requires on the service connection because app_rls reads its own rows and never writes them"
+    },
+    {
       "path": "apps/web/app/api/share/[token]/route.ts",
       "reason": "reading a shared conversation by its unguessable token is the feature, a public share link has no viewer subject to constrain by"
     },
@@ -174,6 +178,14 @@
       "reason": "revocation targets the row resolved from the presented token signature and family id, the credential is the subject"
     },
     {
+      "path": "apps/web/lib/server/generated-file-persist.ts",
+      "reason": "tool output is persisted from the model loop and the sandbox file sweep, neither of which carries the request connection; when the caller has none the privileged connection is wrapped by createClaimedUserScopedDb with the owning user and organization, so every statement still binds the owner"
+    },
+    {
+      "path": "apps/web/lib/server/health-check.ts",
+      "reason": "the search-index probe reads no row of either table, it asks to_regclass whether the relations exist, so the probe sees no user content at all"
+    },
+    {
       "path": "apps/web/lib/server/organization-erasure.ts",
       "reason": "organization erasure engine deletes across every org-owned table by the target organizationId, triggered only by the deletion cron"
     },
@@ -190,8 +202,8 @@
       "reason": "verifyKey resolves the presented credential by its key_prefix before any session exists, so the key is the subject and there is no caller to bind; every other method takes the caller connection"
     },
     {
-      "path": "apps/web/lib/services/effective-subscription-service.ts",
-      "reason": "a seat member's entitlement resolves from the OWNER subscription row, which a member scoped connection cannot see, the same precedent as org-entitlements.ts below; both statements bind explicit user ids and read no row the caller's own membership does not already reach"
+      "path": "apps/web/lib/services/entitlement-resolution.ts",
+      "reason": "a seat member's entitlement resolves from the OWNER subscription row, which a member scoped connection cannot see, the same precedent as org-entitlements.ts; both statements bind explicit user ids and read no row the caller's own membership does not already reach"
     },
     {
       "path": "apps/web/lib/services/free-trial-service.ts",

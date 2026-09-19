@@ -125,7 +125,7 @@ const FEATURE_CARDS = [
   {
     href: '/desktop',
     title: 'AGI Desktop',
-    body: 'The AGI app for macOS. Your account, models already running on the Mac, approved folders, computer use, and the Chrome bridge.',
+    body: 'The planned AGI app for macOS. Your managed-cloud account, approved folders, computer use, and the Chrome bridge.',
     cta: 'AGI.app',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -138,7 +138,7 @@ const FEATURE_CARDS = [
   {
     href: '/mobile',
     title: 'AGI Mobile',
-    body: 'iPhone and Android. On-device Local Mode by default. Dispatch tasks to Desktop for heavier work.',
+    body: 'Planned for iPhone and Android, including on-device Local Mode and handoff to Desktop for heavier work.',
     cta: COMING_SOON_LABEL,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -220,7 +220,7 @@ const REFERENCE_CARDS = [
   {
     href: '/integrations',
     title: 'MCP & Integrations',
-    body: 'Model Context Protocol plugins, the Desktop bridge, BYOK key management, and custom connectors.',
+    body: 'Model Context Protocol plugins, the Desktop bridge, CLI BYOK key management, and custom connectors.',
     cta: 'integrations',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -232,7 +232,7 @@ const REFERENCE_CARDS = [
   {
     href: '/byok',
     title: 'BYOK Mode',
-    body: 'Add a provider key on Desktop or CLI and route work directly. AGI never sees your API keys.',
+    body: 'Add a provider key in the released CLI and route work directly. VS Code support is coming soon; Web and Desktop accept no provider keys.',
     cta: 'byok',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

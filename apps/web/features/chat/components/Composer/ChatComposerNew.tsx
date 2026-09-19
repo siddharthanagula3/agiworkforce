@@ -31,6 +31,7 @@ import {
   Brain,
 } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
+import { toUserMessage } from '@/lib/user-error-message';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
@@ -90,7 +91,10 @@ import {
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useStyleStore, getStyleInstruction } from '@features/chat/stores/style-store';
 import { containsSecrets } from '@/lib/security/secrets-audit';
-import { TEMPORARY_CHAT_END_CONFIRMATION } from '@/lib/temporary-chat-policy';
+import {
+  TEMPORARY_CHAT_END_CONFIRMATION,
+  resolveNewChatTemporary,
+} from '@/lib/temporary-chat-policy';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
@@ -161,6 +165,7 @@ import {
 } from '@/features/connectors/lib/mcp-context-selection';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { useSoftKeyboardInset } from './soft-keyboard-inset';
 
 /**
  * The operations a composer offers for an attached image. `outpaint` is not
@@ -721,6 +726,7 @@ const ChatComposerNewComponent = ({
   } = useAttachments({
     onError: (message) => setLocalNotice(message),
   });
+  const softKeyboardInset = useSoftKeyboardInset();
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   // The Connectors row's own submenu (list of connected connectors, each with
   // an enable/disable checkbox). Collapsed whenever the plus-menu closes, so
@@ -1209,20 +1215,21 @@ const ChatComposerNewComponent = ({
   ]);
 
   const activeConversationId = useChatStore((s) => s.activeConversationId);
-  const pendingTemporaryChat = useChatStore((s) => s.pendingTemporaryChat);
+  const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
+  const dictationEnabled = useSettingsStore((s) => s.dictationEnabled);
   const setPendingTemporaryChat = useChatStore((s) => s.setPendingTemporaryChat);
   const isIncognito = useChatStore((s) => {
     const id = s.activeConversationId;
     return id
       ? (s.conversations.find((c) => c.id === id)?.isTemporary ?? false)
-      : s.pendingTemporaryChat;
+      : resolveNewChatTemporary(s.pendingTemporaryChat, newChatsTemporary);
   });
   const [isSavingIncognito, setIsSavingIncognito] = useState(false);
   const handleIncognitoToggle = useCallback(async () => {
     // No conversation exists yet: arm the flag createConversation reads at
     // creation. Nothing to save server-side until that POST happens.
     if (!activeConversationId) {
-      setPendingTemporaryChat(!pendingTemporaryChat);
+      setPendingTemporaryChat(!isIncognito);
       return;
     }
     if (!onSetTemporaryChat) return;
@@ -1240,13 +1247,7 @@ const ChatComposerNewComponent = ({
     } finally {
       setIsSavingIncognito(false);
     }
-  }, [
-    activeConversationId,
-    isIncognito,
-    onSetTemporaryChat,
-    pendingTemporaryChat,
-    setPendingTemporaryChat,
-  ]);
+  }, [activeConversationId, isIncognito, onSetTemporaryChat, setPendingTemporaryChat]);
   const canToggleIncognito =
     (activeConversationId ? Boolean(onSetTemporaryChat) : true) &&
     !isTurnActive &&
@@ -1531,7 +1532,7 @@ const ChatComposerNewComponent = ({
       onConfirm: () => {
         const ended = activeConversationId;
         clearComposerState();
-        setPendingTemporaryChat(false);
+        setPendingTemporaryChat(null);
         if (ended) deleteConversationFromStore(ended);
         router.push('/chat');
       },
@@ -1666,7 +1667,7 @@ const ChatComposerNewComponent = ({
     } catch (cause) {
       setLocalNotice(
         cause instanceof DesktopRuntimeError
-          ? `The clipboard was not attached. ${cause.message}`
+          ? `The clipboard was not attached. ${toUserMessage(cause, 'The desktop could not read it.')}`
           : 'The clipboard could not be read.',
       );
     } finally {
@@ -3204,9 +3205,16 @@ const ChatComposerNewComponent = ({
 
   // AUDIT-FIX GOV-39: safe-area-bottom-additive keeps the send button clear of
   // the iOS home indicator. layout.tsx sets viewportFit:'cover', which makes a
-  // missing inset worse rather than neutral.
+  // missing inset worse rather than neutral. The inset below is the soft
+  // keyboard on a browser that does not resize the layout viewport for it.
   return (
-    <div className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
+    <div
+      className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none"
+      style={
+        softKeyboardInset > 0 ? { transform: `translateY(-${softKeyboardInset}px)` } : undefined
+      }
+      data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
+    >
       <DragDropOverlay onDrop={handleFileDrop} />
       {leaveLocalModelDialog}
 
@@ -4561,7 +4569,10 @@ const ChatComposerNewComponent = ({
                 <VoiceInputButton
                   onStart={dictation.start}
                   active={dictation.isActive}
-                  disabled={composerDisabled}
+                  disabled={composerDisabled || !dictationEnabled}
+                  disabledReason={
+                    !dictationEnabled ? 'Dictation is off in Voice settings' : undefined
+                  }
                 />
               </div>
 

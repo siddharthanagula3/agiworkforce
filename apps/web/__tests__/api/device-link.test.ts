@@ -3,10 +3,10 @@ import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
+const mockGetClerkAuthUser = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
 
-vi.mock('@clerk/nextjs/server', () => ({
-  auth: () => mockClerkAuth(),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: () => mockGetClerkAuthUser(),
 }));
 
 vi.mock('@/lib/csrf', () => ({
@@ -63,7 +63,7 @@ describe('Device Link API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
   });
 
   describe('POST /api/device/link', () => {

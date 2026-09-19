@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-08-17
+Last updated: 2026-09-19
 
 ## Bootstrap Rule
 
@@ -17,7 +17,7 @@ AGI should not burn founder money on unmanaged cloud usage. Local and BYOK can l
 | Managed cloud | Public alpha, open by default (2026-06-27); subscription/entitlement-gated, not waitlist-gated. Env kill-switch only.                                 |
 | Mobile v1     | Small on-device Local LLMs + Cloud public alpha (open by default). No Mobile BYOK in v1.                                                              |
 | Web           | Subscription-backed account/chat state through Neon. No Web BYOK. Cloud is public alpha, open by default (subscription/entitlement-gated).            |
-| Desktop       | Local and BYOK-local store locally. Desktop Cloud requires a subscription/entitlement (public alpha, open by default) and Neon-backed account state.  |
+| Desktop       | Managed-cloud-only Electron shell. It accepts no provider keys or local-model route; account state is Neon-backed and subscription/entitlement-gated. |
 | CLI/VS Code   | Developer/workspace scoped; no silent global chat sync.                                                                                               |
 | Chrome        | Cloud-only. Eligible Managed Cloud chats automatically mirror to the shared signed-in account conversation history; browser-task state remains local. |
 

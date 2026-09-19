@@ -180,6 +180,17 @@ describe('readWorkspacePosture', () => {
     }
   });
 
+  it('describes outcomes and next actions without exposing implementation internals', async () => {
+    const posture = await readWorkspacePosture(harness().db, ORG);
+    const details = posture.groups.flatMap((group) => group.signals.map((entry) => entry.detail));
+
+    for (const detail of details) {
+      expect(detail).not.toMatch(
+        /billing webhook|database|policy row|managed-compute routes|server-side|saved row|row-level security|security-definer|direct INSERT/i,
+      );
+    }
+  });
+
   it('promotes retention to enforced once the workspace opts in', async () => {
     // The badge must follow the workspace, not a constant. Before 0138 this
     // signal was hardcoded to "stated"; a workspace that turns the sweep on has
@@ -335,7 +346,7 @@ describe('readWorkspacePosture', () => {
 
     expect(s.value).toBe('3 rules in force');
     expect(s.enforcement).toBe('enforced');
-    expect(s.detail).toMatch(/after auto-routing resolves/i);
+    expect(s.detail).toMatch(/after Auto chooses a model/i);
   });
 
   it('marks managed compute and privacy modes as enforced', async () => {

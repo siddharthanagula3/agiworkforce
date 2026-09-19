@@ -25,6 +25,8 @@ vi.mock('@/lib/observability/span', () => ({
     run({ setAttributes: vi.fn() }),
 }));
 vi.mock('@/lib/observability/metrics', () => ({
+  recordFailure: vi.fn(() => undefined),
+  recordSpanMetrics: vi.fn(() => undefined),
   recordQueueDepth: mocks.recordQueueDepth,
   recordQueueWait: mocks.recordQueueWait,
   recordQueueAge: mocks.recordQueueAge,

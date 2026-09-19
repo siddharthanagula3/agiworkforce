@@ -8,12 +8,12 @@ import {
   MarketingFooter,
   Prose,
 } from '@/features/marketing/components/system';
-import { DESKTOP_LOCAL_RUNTIMES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { CLI_LOCAL_RUNTIMES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Integrations: MCP plugins, the browser bridge, and BYOK',
   description:
-    'How AGI connects to other tools: MCP plugins, the native messaging bridge, and BYOK provider keys on Desktop, CLI, and VS Code.',
+    'How AGI connects to other tools: MCP plugins, the native messaging bridge, and BYOK provider keys in the released CLI. VS Code support is coming soon.',
   path: '/integrations',
 });
 
@@ -21,17 +21,17 @@ const PATTERNS = [
   {
     meta: 'Tools',
     title: 'MCP plugins',
-    body: 'Mount Model Context Protocol servers and scope their access. stdio, SSE, and streamable HTTP transports are all supported.',
+    body: 'The released CLI can mount stdio, SSE, and streamable HTTP Model Context Protocol servers. Hosted surfaces use account-scoped remote connectors configured by the managed service.',
   },
   {
     meta: 'Bridge',
     title: 'Native messaging bridge',
-    body: `The Chrome side panel pairs with Desktop on localhost:8787. The browser captures intent. Desktop runs the model and the tool calls. Chrome is ${SURFACE_STATUS.chrome.toLowerCase()}, not on the Chrome Web Store yet.`,
+    body: `The Chrome side panel can pair with Desktop on localhost:8787 for selections, captures, and queued messages. Panel chat remains Managed Cloud. Chrome is ${SURFACE_STATUS.chrome.toLowerCase()}, not on the Chrome Web Store yet.`,
   },
   {
     meta: 'Keys',
     title: 'Provider BYOK',
-    body: 'Bring keys for Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, or Zhipu on Desktop, CLI, and VS Code. Or any OpenAI-compatible endpoint.',
+    body: 'Bring keys for Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, or Zhipu in the released CLI, or use an OpenAI-compatible endpoint. VS Code support is coming soon.',
   },
 ] as const;
 
@@ -55,8 +55,8 @@ export default function IntegrationsPage() {
               <Prose size="lg">
                 Three patterns connect AGI to the tools you already use: MCP plugins for the agent,
                 the native messaging bridge between Chrome and Desktop, and BYOK provider keys on
-                Desktop, CLI, and VS Code. Every connection runs behind explicit, visible
-                permissions.
+                the released CLI. VS Code support is coming soon. Every connection runs behind
+                explicit, visible permissions.
               </Prose>
               <ButtonRow>
                 {HERO_CTAS.map(({ href, label, variant }) => (
@@ -77,11 +77,11 @@ export default function IntegrationsPage() {
                     rows={[
                       {
                         label: 'Providers',
-                        value: `${MARKETING.providers.display} providers, BYOK on Desktop, CLI, and VS Code`,
+                        value: `${MARKETING.providers.display} providers. BYOK is in the released CLI. VS Code is coming soon.`,
                       },
                       {
                         label: 'Local runtimes',
-                        value: `${DESKTOP_LOCAL_RUNTIMES.label} on Desktop`,
+                        value: `${CLI_LOCAL_RUNTIMES.label} in the released CLI`,
                       },
                       { label: 'MCP transports', value: 'stdio, SSE, streamable HTTP' },
                     ]}
@@ -125,11 +125,11 @@ export default function IntegrationsPage() {
               rows={[
                 {
                   label: 'Providers',
-                  value: `${MARKETING.providers.display} providers across cloud APIs and local runtimes. BYOK on Desktop, CLI, and VS Code. Pay providers directly.`,
+                  value: `${MARKETING.providers.display} providers across cloud APIs and local runtimes. BYOK is available in the released CLI. VS Code is coming soon. Pay providers directly.`,
                 },
                 {
                   label: 'Local runtimes',
-                  value: `${DESKTOP_LOCAL_RUNTIMES.label} on Desktop. Free, offline-capable after setup, no account required. CLI runtime support is documented separately.`,
+                  value: `${CLI_LOCAL_RUNTIMES.label} in the released CLI. Free, offline-capable after setup, no account required. Desktop is managed-cloud only.`,
                 },
                 {
                   label: 'MCP transports',
@@ -156,8 +156,8 @@ export default function IntegrationsPage() {
                 Connect one tool, <em className="agi-ds-accent">then the next.</em>
               </h2>
               <Prose size="lg">
-                Start with a provider key or a local runtime, add MCP plugins as the work demands,
-                and keep every permission visible.
+                Start in the released CLI with a provider key or local runtime, add MCP plugins as
+                the work demands, and keep every permission visible.
               </Prose>
               <ButtonRow>
                 <Button href="/providers">See providers</Button>

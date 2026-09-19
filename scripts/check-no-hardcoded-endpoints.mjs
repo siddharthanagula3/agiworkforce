@@ -188,12 +188,6 @@ const BUDGETS = [
     why: 'HARD-003, OpenRouter model-list URL duplicated outside the ModelConfig table.',
   },
   {
-    file: 'apps/web/app/api/media/image/generate/route.ts',
-    max: 3,
-    residue: true,
-    why: 'HARD-005 follow-up, Google/Stability image hosts need declarations of their own.',
-  },
-  {
     file: 'apps/web/app/api/media/video/status/route.ts',
     max: 1,
     residue: true,

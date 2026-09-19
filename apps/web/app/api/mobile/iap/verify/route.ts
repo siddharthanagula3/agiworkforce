@@ -10,6 +10,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 import { verifyMobileIapPurchase } from '@/lib/server/mobile-iap-store-verification';
 import { recordVerifiedMobileIapPurchase } from '@/lib/services/mobile-iap-ledger-service';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const VerifyRequestSchema = z
   .object({
@@ -57,6 +58,17 @@ async function handleVerify(request: NextRequest): Promise<NextResponse<MobileIa
     userId,
     purchaseToken: parsed.data.purchaseToken,
     verified,
+  });
+  await recordAuditEvent({
+    userId,
+    eventType: 'mobile_purchase_verified',
+    request,
+    detail: {
+      resourceId: result.productKey,
+      provider: parsed.data.platform,
+      status: result.status,
+      ...(result.kind === 'subscription' ? { planTier: result.planTier } : {}),
+    },
   });
 
   return NextResponse.json(result);

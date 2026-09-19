@@ -5,7 +5,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 81;
+const CURRENT_VERSION: i32 = 82;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -77,6 +77,7 @@ static ALLOWED_TABLES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "browser_sessions",
         "browser_tabs",
         "browser_automation_history",
+        "automation_audit_outbox",
         // Context & MCP
         "context_items",
         "mcp_servers",
@@ -660,6 +661,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 81 {
         run_migration_in_transaction(conn, 81, apply_migration_v81)?;
+    }
+
+    if current_version < 82 {
+        run_migration_in_transaction(conn, 82, apply_migration_v82)?;
     }
 
     Ok(())
@@ -6465,6 +6470,16 @@ fn apply_migration_v81(conn: &Connection) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn apply_migration_v82(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE automation_audit_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );",
+    )
 }
 
 fn rewrap_machine_only_column(

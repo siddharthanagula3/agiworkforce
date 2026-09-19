@@ -33,9 +33,10 @@ import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSet
 import { useManagedCloudProjects } from '@/features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
-import { SchedulesPage } from '@/features/schedules';
+import { SchedulesEntitlementLoading, SchedulesPage } from '@/features/schedules';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useBillingStore } from '@/shared/stores/web-auth-store';
 
 type Tab = 'chats' | 'artifacts' | 'work' | 'sources' | 'scheduled';
 
@@ -104,6 +105,15 @@ export default function ProjectDetailPage() {
     retry: retryProjects,
   } = useManagedCloudProjects();
   const project = projects.find((candidate) => candidate.id === projectId);
+  const [projectResolution, setProjectResolution] = useState<{
+    key: string;
+    status: 'loading' | 'not-found' | 'error';
+    error?: string;
+  } | null>(null);
+  const [projectResolutionAttempt, setProjectResolutionAttempt] = useState(0);
+  const subscriptionTier = useBillingStore((state) => state.subscription?.tier ?? 'free');
+  const billingIsLoading = useBillingStore((state) => state.isLoading);
+  const billingInitialized = useBillingStore((state) => state.initialized);
   const {
     conversations: projectConversations,
     isLoading: projectChatsLoading,
@@ -114,6 +124,7 @@ export default function ProjectDetailPage() {
     loadMore: loadMoreProjectChats,
   } = useProjectConversations(projectId);
   const updateProject = useProjectStore((s) => s.updateProject);
+  const addProject = useProjectStore((s) => s.addProject);
   const removeProject = useProjectStore((s) => s.removeProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const toggleStar = useProjectStore((s) => s.toggleStar);
@@ -292,10 +303,64 @@ export default function ProjectDetailPage() {
     return summarizeProjectHeader({ project: record });
   }, [accountId, project]);
 
-  if (projectStatus === 'loading' || projectStatus === 'idle') {
+  const projectResolutionKey = accountId && projectId ? `${accountId}:${projectId}` : null;
+
+  useEffect(() => {
+    if (projectStatus !== 'ready' || project || !projectId || !projectResolutionKey) {
+      return;
+    }
+
+    let cancelled = false;
+    setProjectResolution({ key: projectResolutionKey, status: 'loading' });
+    void webManagedCloudProjects
+      .getProject(projectId)
+      .then((resolvedProject) => {
+        if (cancelled) return;
+        if (!useProjectStore.getState().projects.some((candidate) => candidate.id === projectId)) {
+          addProject(resolvedProject);
+        }
+        setProjectResolution(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const status =
+          error && typeof error === 'object' && typeof Reflect.get(error, 'status') === 'number'
+            ? (Reflect.get(error, 'status') as number)
+            : null;
+        setProjectResolution({
+          key: projectResolutionKey,
+          status: status === 404 ? 'not-found' : 'error',
+          error: status === 404 ? undefined : 'Project could not be loaded.',
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    addProject,
+    project,
+    projectId,
+    projectResolutionAttempt,
+    projectResolutionKey,
+    projectStatus,
+  ]);
+
+  const currentProjectResolution =
+    projectResolution?.key === projectResolutionKey ? projectResolution : null;
+
+  if (
+    projectStatus === 'loading' ||
+    projectStatus === 'idle' ||
+    (projectStatus === 'ready' &&
+      !project &&
+      (!currentProjectResolution || currentProjectResolution.status === 'loading'))
+  ) {
     return (
       <WebAppShell>
         <section
+          role="status"
+          aria-label="Loading project"
           data-design="agi"
           style={{
             minHeight: '100%',
@@ -334,6 +399,47 @@ export default function ProjectDetailPage() {
           <button
             type="button"
             onClick={retryProjects}
+            style={{
+              border: '1px solid var(--agi-rule-strong)',
+              background: 'transparent',
+              color: 'var(--agi-ink-2)',
+              padding: '6px 12px',
+              borderRadius: 8,
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </section>
+      </WebAppShell>
+    );
+  }
+
+  if (!project && currentProjectResolution?.status === 'error') {
+    return (
+      <WebAppShell>
+        <section
+          data-design="agi"
+          style={{
+            minHeight: '100%',
+            background: 'hsl(var(--background))',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            color: 'var(--agi-ink-2)',
+            fontSize: 14,
+          }}
+        >
+          <p role="alert">{currentProjectResolution.error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setProjectResolution(null);
+              setProjectResolutionAttempt((attempt) => attempt + 1);
+            }}
             style={{
               border: '1px solid var(--agi-rule-strong)',
               background: 'transparent',
@@ -1060,7 +1166,7 @@ export default function ProjectDetailPage() {
                           >
                             <span
                               style={{
-                                color: 'hsl(var(--foreground))',
+                                color: 'var(--color-foreground)',
                                 fontSize: 13,
                                 fontWeight: 500,
                                 overflow: 'hidden',
@@ -1117,9 +1223,12 @@ export default function ProjectDetailPage() {
               <ProjectWorkPanel projectId={project.id} projectName={project.name} />
             ) : tab === 'sources' ? (
               <SourcesPanel projectId={project.id} readOnly={!canEditProject} />
+            ) : billingIsLoading || !billingInitialized ? (
+              <SchedulesEntitlementLoading />
             ) : (
               <SchedulesPage
                 scope={{ projectId: project.id, projectName: project.name }}
+                subscriptionTier={subscriptionTier}
                 onOpenChat={(schedule) =>
                   router.push(
                     `/chat?projectId=${encodeURIComponent(project.id)}&starterPrompt=${encodeURIComponent(schedule.prompt ?? schedule.name)}`,

@@ -154,6 +154,28 @@ describe('organization erasure inventory', () => {
       ).toBe(true);
     }
   });
+
+  it('deletes organization voice and automation rows while leaving custody to the final cascade', () => {
+    const deleted = new Set(ORGANIZATION_SCOPED_TABLES.map((entry) => entry.table));
+    const retained = new Set(Object.keys(ORGANIZATION_UNDELETED_TABLES));
+
+    expect(deleted.has('voice_sessions')).toBe(true);
+    expect(deleted.has('automation_audit_events')).toBe(true);
+    expect(retained.has('ediscovery_exports')).toBe(true);
+  });
+
+  it('keeps direct eDiscovery mutation blocked while admitting only the parent cascade', () => {
+    const migration = readFileSync(
+      path.join(MIGRATIONS_DIR, '0273_ediscovery_cascade_delete.sql'),
+      'utf8',
+    );
+
+    expect(migration).toContain("tg_op = 'DELETE'");
+    expect(migration).toContain('not exists');
+    expect(migration).toContain('from public.organizations');
+    expect(migration).toContain('where id = old.organization_id');
+    expect(migration).toContain('raise exception');
+  });
 });
 
 describe('eraseOrganizationData', () => {

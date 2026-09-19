@@ -9,6 +9,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   deprecatePluginVersion,
   listPluginLifecycleEvents,
@@ -56,6 +57,37 @@ const ActionSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('rollback') }),
 ]);
+
+// A catalogue action reaches every account that installed the pack, so it lands
+// in the platform audit trail as well as the registry's own history.
+async function auditLifecycleAction(
+  request: NextRequest,
+  input: {
+    userId: string;
+    pluginId: string;
+    action: string;
+    version: string;
+    reason?: string;
+    count?: number;
+  },
+): Promise<void> {
+  await recordAuditEvent({
+    userId: input.userId,
+    eventType: 'admin_policy_changed',
+    severity: input.action === 'suspend' ? 'warning' : 'info',
+    request,
+    detail: {
+      resourceType: 'plugin',
+      resourceId: input.pluginId,
+      version: input.version,
+      status: input.action,
+      changedKeys: ['status'],
+      source: 'registry',
+      ...(input.reason !== undefined ? { reason: input.reason } : {}),
+      ...(input.count !== undefined ? { count: input.count } : {}),
+    },
+  });
+}
 
 function badRequest(message: string): NextResponse {
   return NextResponse.json(
@@ -108,53 +140,86 @@ async function handlePost(
   const actorUserId = auth.userId;
 
   switch (parsed.data.action) {
-    case 'submit':
-      return NextResponse.json({
-        version: await submitPluginVersionForReview(db, {
-          pluginId,
-          version: parsed.data.version,
-          actorUserId,
-        }),
+    case 'submit': {
+      const version = await submitPluginVersionForReview(db, {
+        pluginId,
+        version: parsed.data.version,
+        actorUserId,
       });
-    case 'publish':
-      return NextResponse.json({
-        version: await publishPluginVersion(db, {
-          pluginId,
-          version: parsed.data.version,
-          actorUserId,
-          ...(parsed.data.manifestUrl !== undefined
-            ? { manifestUrl: parsed.data.manifestUrl }
-            : {}),
-          ...(parsed.data.sha256 !== undefined ? { sha256: parsed.data.sha256 } : {}),
-          ...(parsed.data.declaredSkills !== undefined
-            ? { declaredSkills: parsed.data.declaredSkills }
-            : {}),
-          ...(parsed.data.permissions !== undefined
-            ? { permissions: parsed.data.permissions }
-            : {}),
-          ...(parsed.data.changelog !== undefined ? { changelog: parsed.data.changelog } : {}),
-        }),
+      await auditLifecycleAction(request, {
+        userId: actorUserId,
+        pluginId,
+        action: 'submit',
+        version: version.version,
       });
-    case 'deprecate':
-      return NextResponse.json({
-        version: await deprecatePluginVersion(db, {
-          pluginId,
-          version: parsed.data.version,
-          reason: parsed.data.reason,
-          actorUserId,
-        }),
+      return NextResponse.json({ version });
+    }
+    case 'publish': {
+      const version = await publishPluginVersion(db, {
+        pluginId,
+        version: parsed.data.version,
+        actorUserId,
+        ...(parsed.data.manifestUrl !== undefined ? { manifestUrl: parsed.data.manifestUrl } : {}),
+        ...(parsed.data.sha256 !== undefined ? { sha256: parsed.data.sha256 } : {}),
+        ...(parsed.data.declaredSkills !== undefined
+          ? { declaredSkills: parsed.data.declaredSkills }
+          : {}),
+        ...(parsed.data.permissions !== undefined ? { permissions: parsed.data.permissions } : {}),
+        ...(parsed.data.changelog !== undefined ? { changelog: parsed.data.changelog } : {}),
       });
-    case 'suspend':
-      return NextResponse.json(
-        await suspendPluginVersion(db, {
-          pluginId,
-          version: parsed.data.version,
-          reason: parsed.data.reason,
-          actorUserId,
-        }),
-      );
-    case 'rollback':
-      return NextResponse.json(await rollbackPlugin(db, { pluginId, actorUserId }));
+      await auditLifecycleAction(request, {
+        userId: actorUserId,
+        pluginId,
+        action: 'publish',
+        version: version.version,
+      });
+      return NextResponse.json({ version });
+    }
+    case 'deprecate': {
+      const version = await deprecatePluginVersion(db, {
+        pluginId,
+        version: parsed.data.version,
+        reason: parsed.data.reason,
+        actorUserId,
+      });
+      await auditLifecycleAction(request, {
+        userId: actorUserId,
+        pluginId,
+        action: 'deprecate',
+        version: version.version,
+        reason: parsed.data.reason,
+      });
+      return NextResponse.json({ version });
+    }
+    case 'suspend': {
+      const result = await suspendPluginVersion(db, {
+        pluginId,
+        version: parsed.data.version,
+        reason: parsed.data.reason,
+        actorUserId,
+      });
+      await auditLifecycleAction(request, {
+        userId: actorUserId,
+        pluginId,
+        action: 'suspend',
+        version: result.version.version,
+        reason: parsed.data.reason,
+        count: result.installationsStopped,
+      });
+      return NextResponse.json(result);
+    }
+    case 'rollback': {
+      const result = await rollbackPlugin(db, { pluginId, actorUserId });
+      await auditLifecycleAction(request, {
+        userId: actorUserId,
+        pluginId,
+        action: 'rollback',
+        version: result.restored.version,
+        reason: `Rolled back from ${result.from ?? 'no pinned version'}.`,
+        count: result.installationsMoved,
+      });
+      return NextResponse.json(result);
+    }
   }
 }
 

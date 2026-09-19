@@ -5,7 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { NoteList } from '@/features/marketing/components/pages/company/shared';
-import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES, MARKETING } from '@/lib/marketing-constants';
+import { BYOK_SURFACES, CLI_LOCAL_RUNTIMES, MARKETING } from '@/lib/marketing-constants';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
@@ -19,21 +19,21 @@ const HERO_FACTS = [
   `Providers: ${MARKETING.providers.display}`,
   `Models: ${MARKETING.models.display}`,
   `BYOK: ${BYOK_SURFACES.label}`,
-  `Local runtimes: ${DESKTOP_LOCAL_RUNTIMES.names.length}`,
+  `CLI local runtimes: ${CLI_LOCAL_RUNTIMES.names.length}`,
 ];
 
 const QA: { title: string; body: string }[] = [
   {
     title: 'How many providers do you support?',
-    body: `${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot and Zhipu. The CLI can additionally route to a custom OpenAI-compatible endpoint you declare in its own config file, over https or localhost only; Desktop and Web have no setting that points AGI at an arbitrary endpoint, so this is a CLI capability rather than a product-wide one. Desktop Local mode also supports four verified runtimes: ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
+    body: `${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot and Zhipu. The CLI can additionally route to a custom OpenAI-compatible endpoint you declare in its own config file, over https or localhost only, and Local mode supports ${CLI_LOCAL_RUNTIMES.label}. Desktop and Web have no provider-key or local-model entry. The in-product catalog is the current source of truth.`,
   },
   {
     title: 'What does BYOK mean here?',
-    body: `You bring your own API key on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} Keys stay in the local developer or desktop runtime and requests go directly to your provider. Usage is billed by the provider, not by AGI. ${BYOK_SURFACES.exclusion}`,
+    body: `You bring your own API key on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} Keys stay in the local developer runtime and requests go directly to your provider. Usage is billed by the provider, not by AGI. ${BYOK_SURFACES.exclusion}`,
   },
   {
     title: 'Can I run AGI fully offline?',
-    body: 'Yes on Desktop and CLI after a supported local runtime and model are installed. Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Mobile has no published release, so its Local mode is not offered publicly yet.',
+    body: 'Yes in the released CLI after Ollama or LM Studio and a model are installed. Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Desktop uses managed cloud, and Mobile has no published release.',
   },
   {
     title: 'Can I switch models mid-conversation?',
@@ -41,7 +41,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'What does AGI Cloud cost?',
-    body: 'AGI managed cloud is open by default: sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
+    body: 'AGI managed cloud is open by default: sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Enterprise is contract-scoped and sales-assisted, with a contact list for access and additional governance requirements.',
   },
   {
     title: 'How do I upgrade, downgrade, cancel, or get an invoice?',
@@ -76,8 +76,8 @@ const QA: { title: string; body: string }[] = [
     body: 'Those are not badges anyone issues, so a plain yes would be worth nothing. What we publish instead is the working: a per-regime status ledger on the trust page with a date on every line and what would prove it, an India-specific notice under the Digital Personal Data Protection Act, and a security page that lists what we have NOT done alongside what we have. We hold no SOC 2 report and no ISO 27001 certificate, and we say so in the same places we say what we do have.',
   },
   {
-    title: 'What happens to my master password?',
-    body: 'The Desktop master password is unrecoverable by design. We never have it. If you forget it, your encrypted keys cannot be decrypted. Back it up.',
+    title: 'Where does the CLI store my provider key?',
+    body: 'The released CLI stores provider credentials in the operating system credential store. It keeps only non-secret provider names in its local index. Desktop accepts no provider key, and VS Code BYOK remains coming soon.',
   },
   {
     title: 'Is there an Enterprise plan?',
@@ -132,10 +132,11 @@ export default function FaqPage() {
         <Section id="more" labelledBy="agi-faq-more-title" rule ground="2">
           <Stack>
             <h2 className="agi-ds-h2" id="agi-faq-more-title">
-              Still stuck? Ask a human.
+              Still stuck? Contact support.
             </h2>
             <Prose>
-              The help index covers the common how-tos, and a real person reads the inbox.
+              The help index covers the common how-tos. The support page lists the available
+              channels and any plan-specific response commitments.
             </Prose>
             <ButtonRow>
               <Button href="/help">Browse the help index</Button>

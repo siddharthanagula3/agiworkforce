@@ -3,7 +3,10 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
-import { isNotificationEmailConfigured } from '@/lib/services/notification-email-service';
+import {
+  isNotificationEmailConfigured,
+  TRANSACTIONAL_EMAIL_FOOTER_STYLE,
+} from '@/lib/services/notification-email-service';
 import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
 
 export interface InvitationDelivery {
@@ -110,9 +113,9 @@ export async function sendInvitationEmail(
   const html = [
     `<p>You have been invited to join ${escapeHtml(workspace)} as a ${escapeHtml(input.role)}.</p>`,
     `<p><a href="${escapeHtml(url)}">Accept the invitation</a></p>`,
-    `<p style="color:#666;font-size:12px">The link expires on ${escapeHtml(expiresLabel)} and only works for ${escapeHtml(input.to)}.</p>`,
+    `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">The link expires on ${escapeHtml(expiresLabel)} and only works for ${escapeHtml(input.to)}.</p>`,
     input.replacesPreviousLink
-      ? '<p style="color:#666;font-size:12px">Any earlier link for this invitation no longer works.</p>'
+      ? `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">Any earlier link for this invitation no longer works.</p>`
       : '',
   ]
     .filter(Boolean)

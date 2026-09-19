@@ -223,10 +223,8 @@ import {
   type ManagedMemoryContextDb,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
-import {
-  resolvePastChatContext,
-  type PastChatCitation,
-} from '@/lib/services/past-chat-context-service';
+import { resolvePastChatContext } from '@/lib/services/past-chat-context-service';
+import type { PastChatCitation } from '@/lib/past-chat-citation';
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,

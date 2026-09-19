@@ -74,6 +74,17 @@ describe('validateRequiredEnvVars · database URL either-or check', () => {
       ]),
     );
   });
+
+  it('rejects a present but invalid TOTP encryption key before serving requests', () => {
+    process.env['AGI_PLATFORM_KEY_PROVIDER'] = 'env';
+    process.env['TOTP_ENCRYPTION_KEY'] = 'present-but-only-48-bytes-long-xxxxxxxxxxxxxxxx';
+
+    const result = validateRequiredEnvVars();
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([expect.stringMatching(/TOTP_ENCRYPTION_KEY too short/i)]),
+    );
+  });
 });
 
 import { validateProductionKeyTypes, validateStripeKeyModeConsistency } from '../validate-env';

@@ -23,6 +23,7 @@ function makeWebContents() {
 vi.mock('electron', () => {
   class BrowserWindow {
     static fromWebContents = vi.fn(() => null);
+    static getAllWindows = vi.fn(() => []);
     webContents = makeWebContents();
     constructor(public options: unknown) {}
     once = vi.fn((event: string, cb: () => void) => {
@@ -33,9 +34,11 @@ vi.mock('electron', () => {
     show = vi.fn();
     focus = vi.fn();
     restore = vi.fn();
+    getBounds = () => ({ x: 0, y: 0, width: 1280, height: 800 });
     isMinimized = () => false;
     isDestroyed = () => false;
     isMaximized = () => false;
+    isFullScreen = () => false;
   }
 
   const session = {
@@ -82,7 +85,12 @@ vi.mock('electron', () => {
     net: { fetch: vi.fn() },
     protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
     safeStorage: { isEncryptionAvailable: () => false },
-    screen: { getCursorScreenPoint: vi.fn(), getDisplayNearestPoint: vi.fn() },
+    screen: {
+      getAllDisplays: vi.fn(() => [{ workArea: { x: 0, y: 0, width: 1440, height: 900 } }]),
+      getCursorScreenPoint: vi.fn(),
+      getDisplayMatching: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
+      getDisplayNearestPoint: vi.fn(),
+    },
     session: { defaultSession: session, fromPartition: () => session },
     shell: { openExternal: vi.fn() },
     systemPreferences: { getMediaAccessStatus: vi.fn(() => 'granted') },

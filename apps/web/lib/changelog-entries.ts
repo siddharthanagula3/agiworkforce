@@ -9,7 +9,7 @@ export const RELEASES: readonly Release[] = [
     date: '2026-09-15',
     headline: 'Desktop · one desktop app',
     body: [
-      'The macOS app built on Electron is the AGI desktop application: your account in a window that stays open, approved folders, models already running on the Mac, computer use one step at a time, and the Chrome bridge. Its release workflow signs, notarizes and verifies one installer per architecture; no installer has been published yet.',
+      'The macOS app built on Electron is the AGI desktop application: your managed-cloud account in a window that stays open, approved folders, computer use one step at a time, and the Chrome bridge. Its release workflow signs, notarizes and verifies one installer per architecture; no installer has been published yet.',
       'The earlier Tauri build leaves the public download flows, and its Linux packages are no longer offered.',
     ],
   },
@@ -27,22 +27,22 @@ export const RELEASES: readonly Release[] = [
     headline: 'Agent tooling and platform maturity · live',
     body: [
       'CLI: configurable keybindings, live NDJSON event streaming, named-agent runs, session search by pull request, managed-gateway model discovery.',
-      'Desktop: official MCP registry connection, menu bar residency, renderer IPC isolation, secure LLM proxy settings.',
+      'Desktop prototype at the time: MCP registry work alongside menu bar residency and renderer IPC isolation. Local MCP did not carry into the public Electron Desktop selected on 15 September.',
       'Web: centralized approval inbox, live admin security console, virtualized chat transcript, account session management.',
     ],
   },
   {
     date: '2026-07-03',
-    headline: 'Desktop local model providers · live',
+    headline: 'CLI local model providers · live',
     body: [
-      `Desktop now talks to Ollama, LM Studio, llama.cpp and vLLM as local, self-hosted model providers, alongside the existing BYOK provider set.`,
+      'The CLI now talks to Ollama and LM Studio as local, self-hosted model providers, alongside its BYOK provider set. Desktop remains an AGI managed-cloud account shell.',
     ],
   },
   {
     date: '2026-06-24',
     headline: 'Local, BYOK, and cloud trust boundary · live',
     body: [
-      'Fail-closed egress separation enforced across all six surfaces: local mode makes no network call to us, BYOK traffic goes straight to the provider you configured, managed cloud is metered against your plan.',
+      'Fail-closed egress separation enforced by each implemented route: CLI local mode makes no network call to us, BYOK traffic goes straight to the provider you configured, and managed cloud is metered against your plan.',
       'Canonical security policy published on our security page, naming the trust-boundary model and its known gaps.',
     ],
   },

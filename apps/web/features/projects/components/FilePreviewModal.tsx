@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isTextAttachmentMeta, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
+import { toast } from 'sonner';
 
 interface Props {
   file: ProjectKnowledgeFile | null;
@@ -215,6 +216,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
   async function handleDownload() {
     try {
       const r = await fetch(file!.storageUri);
+      if (!r.ok) throw new Error('Source download failed');
       const blob = await r.blob();
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -225,7 +227,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch {
-      window.open(file!.storageUri, '_blank', 'noopener,noreferrer');
+      toast.error("Couldn't download this file. Try again.");
     }
   }
 

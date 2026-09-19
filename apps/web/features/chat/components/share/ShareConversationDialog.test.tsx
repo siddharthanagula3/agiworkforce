@@ -113,6 +113,37 @@ describe('ShareConversationDialog', () => {
     );
     expect(await screen.findByRole('button', { name: /Create public link/ })).toBeInTheDocument();
   });
+
+  it('always lets the user dismiss and abort a request that never resolves', async () => {
+    const onOpenChange = vi.fn();
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+    );
+
+    render(
+      <ShareConversationDialog
+        open
+        onOpenChange={onOpenChange}
+        conversationId="conv-1"
+        conversationTitle="Private plan"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Create public link/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    expect(cancel).toBeEnabled();
+    fireEvent.click(cancel);
+
+    expect(signal?.aborted).toBe(true);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });
 
 describe('ShareConversationDialog temporary chat', () => {

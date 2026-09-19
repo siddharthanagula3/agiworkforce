@@ -46,7 +46,7 @@ export default function GetStartedPage() {
           eyebrow="Get started"
           title="Get started."
           em="started."
-          lede={`Five minutes from zero to a working chat. Managed cloud is open by default with a small free cap, Local runs on Desktop and the CLI today, BYOK on the CLI, with the VS Code extension ${SURFACE_STATUS.vscode.toLowerCase()}.`}
+          lede={`Five minutes from zero to a working chat. Managed cloud is open by default with a small free cap. Local and BYOK run on the CLI today; VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}, and Desktop is managed-cloud only.`}
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'CLI reference', variant: 'secondary' },

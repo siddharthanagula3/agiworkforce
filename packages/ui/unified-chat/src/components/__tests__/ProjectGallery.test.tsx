@@ -125,3 +125,33 @@ describe('ProjectGallery, enhanced create UX', () => {
     expect(screen.getByTestId('project-create-emoji-trigger').textContent).toBe('📁');
   });
 });
+
+describe('ProjectGallery, safe error recovery', () => {
+  it.each([
+    [
+      'HTTP 400: Your Free plan includes 1 project folder. Upgrade to add more.',
+      'Your Free plan includes 1 project folder. Upgrade to add more.',
+    ],
+    [
+      'HTTP 500: SELECT secret FROM accounts',
+      'Something went wrong on our side. Try again shortly.',
+    ],
+    ['Failed to fetch', 'Could not reach the server.'],
+  ])('shows helpful text for %s without losing the draft', async (raw, expected) => {
+    const onCreate = vi.fn().mockRejectedValue(new Error(raw));
+    render(<ProjectGallery onCreate={onCreate} />);
+    await userEvent.click(screen.getByRole('button', { name: /new/i }));
+    await userEvent.type(screen.getByTestId('project-create-name-input'), 'Keep my draft');
+    fireEvent.submit(screen.getByTestId('project-create-form'));
+    expect((await screen.findByRole('alert')).textContent).toBe(expected);
+    expect((screen.getByTestId('project-create-name-input') as HTMLInputElement).value).toBe(
+      'Keep my draft',
+    );
+    expect(useProjectStore.getState().projects).toEqual([]);
+    onCreate.mockResolvedValueOnce({ id: 'recovered-project', name: 'Keep my draft' });
+    fireEvent.submit(screen.getByTestId('project-create-form'));
+    await waitFor(() =>
+      expect(useProjectStore.getState().projects[0]?.id).toBe('recovered-project'),
+    );
+  });
+});

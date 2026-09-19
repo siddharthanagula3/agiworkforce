@@ -34,6 +34,7 @@ interface VoiceInputActions {
 }
 
 interface RuntimeRefs {
+  generation: number;
   mediaStream: MediaStream | null;
   mediaRecorder: MediaRecorder | null;
   audioChunks: Blob[];
@@ -41,6 +42,7 @@ interface RuntimeRefs {
 }
 
 const rt: RuntimeRefs = {
+  generation: 0,
   mediaStream: null,
   mediaRecorder: null,
   audioChunks: [],
@@ -54,6 +56,7 @@ const rt: RuntimeRefs = {
  * @internal
  */
 export function _resetRuntimeRefs(): void {
+  rt.generation += 1;
   rt.mediaStream = null;
   rt.mediaRecorder = null;
   rt.audioChunks = [];
@@ -172,6 +175,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
 
       startListening: async () => {
         if (get().mode !== 'idle') return;
+        const generation = ++rt.generation;
 
         set({ mode: 'listening', error: null, transcript: '' });
 
@@ -183,6 +187,11 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
               autoGainControl: true,
             },
           });
+
+          if (generation !== rt.generation) {
+            stream.getTracks().forEach((track) => track.stop());
+            return;
+          }
 
           rt.mediaStream = stream;
           rt.audioChunks = [];
@@ -203,6 +212,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           recorder.start(RECORDER_TIMESLICE_MS);
           set({ captureStream: stream });
         } catch (err) {
+          if (generation !== rt.generation) return;
           rt.mediaStream?.getTracks()?.forEach((t) => t.stop());
           rt.mediaStream = null;
           rt.mediaRecorder = null;
@@ -213,6 +223,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
       stopListening: async () => {
         const { mode, language } = get();
         if (mode !== 'listening') return;
+        const generation = rt.generation;
 
         if (!rt.mediaRecorder) {
           set({ mode: 'idle', captureStream: null });
@@ -225,6 +236,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
           rt.stopResolve = resolve;
           rt.mediaRecorder!.stop();
         });
+        if (generation !== rt.generation) return;
 
         rt.mediaStream?.getTracks().forEach((t) => t.stop());
         rt.mediaStream = null;
@@ -243,13 +255,16 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
 
         try {
           const text = await transcribeViaServer(blob, language);
+          if (generation !== rt.generation) return;
           set({ transcript: text, mode: 'idle' });
         } catch (err) {
+          if (generation !== rt.generation) return;
           set({ mode: 'error', error: transcriptionErrorMessage(err) });
         }
       },
 
       cancelListening: () => {
+        rt.generation += 1;
         if (get().mode === 'idle') return;
         releaseCapture();
         set({ mode: 'idle', transcript: '', error: null, captureStream: null });
@@ -270,14 +285,24 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
 );
 
 function buildMediaError(err: unknown): string {
-  if (err instanceof DOMException) {
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      return 'Microphone permission denied. Please allow access in your browser settings.';
-    }
-    if (err.name === 'NotFoundError') {
-      return 'No microphone found. Please connect a microphone and try again.';
-    }
-    return `Microphone error: ${err.message}`;
+  const name =
+    typeof err === 'object' && err !== null && typeof (err as { name?: unknown }).name === 'string'
+      ? (err as { name: string }).name
+      : '';
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return 'Microphone permission denied. Please allow access in your browser settings.';
   }
-  return `Unexpected error: ${String(err)}`;
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return 'No microphone found. Please connect a microphone and try again.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return 'Your microphone is busy or unavailable. Close other apps using it, then try again.';
+  }
+  if (name === 'AbortError') {
+    return 'Microphone access was interrupted. Try again.';
+  }
+  if (name === 'SecurityError') {
+    return 'This browser blocked microphone access. Check the site permissions and try again.';
+  }
+  return 'Could not start the microphone. Check your device and browser permissions, then try again.';
 }

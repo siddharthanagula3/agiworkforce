@@ -1,8 +1,4 @@
-import {
-  getAutoRoutingProfiles,
-  getCoreManualModelOptions,
-  getModelMetadataById,
-} from '@agiworkforce/types';
+import { getAutoRoutingProfiles, getModelMetadataById } from '@agiworkforce/types';
 import type {
   ManagedCloudScheduleCondition,
   ManagedCloudScheduleDaypart,
@@ -123,20 +119,12 @@ export interface ScheduleMutation {
 
 export type ScheduleFormErrors = Partial<Record<keyof ScheduleDraft | 'form', string>>;
 
-export const AVAILABLE_MODELS = [
-  ...getAutoRoutingProfiles().map((profile) => ({
-    value: profile.id,
-    label: profile.label,
-  })),
-  ...getCoreManualModelOptions().map((model) => ({ value: model.id, label: model.label })),
-];
-
 export function scheduleModelLabel(modelId: string | null | undefined): string {
   const normalizedModelId = modelId?.trim() ?? '';
   if (!normalizedModelId) return 'Auto';
 
   return (
-    AVAILABLE_MODELS.find((option) => option.value === normalizedModelId)?.label ??
+    getAutoRoutingProfiles().find((profile) => profile.id === normalizedModelId)?.label ??
     getModelMetadataById(normalizedModelId)?.name ??
     'Unavailable model'
   );

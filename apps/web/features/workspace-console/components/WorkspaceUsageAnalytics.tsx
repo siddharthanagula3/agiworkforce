@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, Download } from 'lucide-react';
 
 import { WorkspaceSpendLimit } from './WorkspaceSpendLimit';
 import {
@@ -235,22 +235,33 @@ export function WorkspaceUsageAnalytics() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center gap-2">
-        {WINDOWS.map((window) => (
-          <button
-            key={window.days}
-            type="button"
-            aria-pressed={days === window.days}
-            onClick={() => setDays(window.days)}
-            className="rounded-md border px-3 py-1.5 text-xs transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            style={{
-              borderColor: days === window.days ? 'currentColor' : 'var(--settings-border)',
-              color: days === window.days ? 'var(--text-1)' : 'var(--text-3)',
-            }}
-          >
-            {window.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {WINDOWS.map((window) => (
+            <button
+              key={window.days}
+              type="button"
+              aria-pressed={days === window.days}
+              onClick={() => setDays(window.days)}
+              className="rounded-md border px-3 py-1.5 text-xs transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              style={{
+                borderColor: days === window.days ? 'currentColor' : 'var(--settings-border)',
+                color: days === window.days ? 'var(--text-1)' : 'var(--text-3)',
+              }}
+            >
+              {window.label}
+            </button>
+          ))}
+        </div>
+        <a
+          href={`/api/settings/organization/usage-analytics/export?from=${encodeURIComponent(usage.from)}&to=${encodeURIComponent(usage.to)}&dimension=daily`}
+          download
+          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+        >
+          <Download aria-hidden className="h-3.5 w-3.5" />
+          Export daily CSV
+        </a>
       </div>
 
       <section style={cardStyle} aria-labelledby="totals-heading">
@@ -263,8 +274,8 @@ export function WorkspaceUsageAnalytics() {
             Managed cloud spend
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Settled turns only. A reservation that was declined or is still in flight has cost
-            nothing and is not counted.
+            Completed, settled requests only. Requests still processing or awaiting settlement are
+            not included yet; totals may change when they settle.
           </p>
         </div>
         <div
@@ -276,6 +287,21 @@ export function WorkspaceUsageAnalytics() {
           <Stat label="Tokens in" value={compact(usage.totals.inputTokens)} />
           <Stat label="Tokens out" value={compact(usage.totals.outputTokens)} />
         </div>
+        <div className="px-5 pb-4 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+          <p>
+            Updated{' '}
+            <time dateTime={usage.freshness.asOf}>
+              {new Date(usage.freshness.asOf).toLocaleString()}
+            </time>
+          </p>
+          {usage.freshness.unsettledRequests > 0 ? (
+            <p role="status" className="mt-1">
+              {compact(usage.freshness.unsettledRequests)}{' '}
+              {usage.freshness.unsettledRequests === 1 ? 'request is' : 'requests are'} awaiting
+              settlement. Their final usage is not included above.
+            </p>
+          ) : null}
+        </div>
         <Sparkline days={usage.daily} />
       </section>
 
@@ -283,11 +309,11 @@ export function WorkspaceUsageAnalytics() {
         <div style={cardStyle} className="flex flex-col items-center gap-2 px-5 py-10 text-center">
           <BarChart3 aria-hidden className="h-5 w-5" style={{ color: 'var(--text-3)' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
-            No managed usage in this window
+            No settled managed usage in this window
           </p>
           <p className="max-w-sm text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Only AGI-managed cloud turns are metered here. Work members run locally or on your own
-            provider keys never reaches our infrastructure, so there is nothing for us to meter.
+            This view reports settled AGI-managed cloud usage. Local and BYOK activity is not
+            included in these managed cloud totals.
           </p>
         </div>
       ) : (

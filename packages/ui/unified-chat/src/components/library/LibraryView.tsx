@@ -495,10 +495,7 @@ export function LibraryView({
         URL.revokeObjectURL(url);
         setRowError(item.id, null);
       } catch (err) {
-        setRowError(
-          item.id,
-          `Download failed (${err instanceof Error ? err.message : String(err)}).`,
-        );
+        setRowError(item.id, toUserMessageWithStatus(err, 'That file could not be downloaded.'));
       }
     },
     [transport, setRowError],
@@ -529,7 +526,7 @@ export function LibraryView({
         await requireSuccessfulMutation(await call());
         removeFromPage(id);
       } catch (err) {
-        setRowError(id, `${label} failed (${err instanceof Error ? err.message : String(err)}).`);
+        setRowError(id, toUserMessageWithStatus(err, `${label} failed. Try again.`));
       }
     },
     [removeFromPage, setRowError],
@@ -660,7 +657,10 @@ export function LibraryView({
       } catch (err) {
         setArtifactSources((prev) => ({
           ...prev,
-          [item.id]: { status: 'error', message: err instanceof Error ? err.message : String(err) },
+          [item.id]: {
+            status: 'error',
+            message: toUserMessageWithStatus(err, 'This artifact could not be loaded. Try again.'),
+          },
         }));
       }
     },

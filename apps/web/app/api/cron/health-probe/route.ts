@@ -73,7 +73,7 @@ function checkDetail(
     return ` (${check.message})`;
   }
   if ('missingCount' in check && check.missingCount) {
-    return ` (${check.missingCount} required environment variable(s) missing)`;
+    return ` (${check.missingCount} core dependency configuration gap(s))`;
   }
   return '';
 }

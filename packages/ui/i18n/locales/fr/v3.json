@@ -64,7 +64,7 @@
       "switchTo": "Basculer vers {{mode}}",
       "soon": "Bientôt",
       "cloudUnavailable": "AGI Cloud est disponible sur le bureau, connectez-vous pour utiliser les modèles gérés et les chats synchronisés.",
-      "localUnavailable": "Le mode local fonctionne dans l'application de bureau AGI Workforce. Téléchargez-la pour garder vos chats et fichiers sur cette machine."
+      "localUnavailable": "Le mode Local fonctionne dans la CLI AGI Workforce via Ollama ou LM Studio. Les conversations Desktop utilisent le cloud géré."
     },
     "groups": {
       "lastHour": "Last hour",

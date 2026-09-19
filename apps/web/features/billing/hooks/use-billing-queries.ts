@@ -27,6 +27,7 @@ import {
 } from '@agiworkforce/types';
 import { getBillingPlanDisplay } from '@features/billing/lib/plan-display';
 import { isValidPlan, type PlanTier } from '@features/billing/components/Billing/types';
+import { toUserMessage } from '@/lib/user-error-message';
 
 export type BillingPlan = PlanTier;
 
@@ -494,7 +495,7 @@ export function useUpdatePaymentMethod(): UseMutationResult<
     },
     onError: (error: Error) => {
       logger.error('Failed to open billing portal for payment method update:', error);
-      toast.error(error.message || 'Failed to open billing portal');
+      toast.error(toUserMessage(error, 'Could not open the billing portal. Try again.'));
     },
   });
 }

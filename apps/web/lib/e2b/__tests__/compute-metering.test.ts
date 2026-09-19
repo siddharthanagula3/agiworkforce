@@ -395,9 +395,10 @@ describe('compute pricing is read from the registry, not a literal', () => {
   });
 
   it('reflects a different registry rate for the same sandbox shape', async () => {
-    vi.doMock('@agiworkforce/types', () => ({
+    vi.doMock('@agiworkforce/types', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
       getProviderComputePricing: () => ({
-        unit: 'usd_per_vcpu_second',
+        unit: 'usd_per_vcpu_second' as const,
         ratePerUnit: 0.00005,
         ramRatePerGibSecond: 0.00001,
       }),
@@ -407,8 +408,12 @@ describe('compute pricing is read from the registry, not a literal', () => {
   });
 
   it('refuses to price when the registry declares no memory rate', async () => {
-    vi.doMock('@agiworkforce/types', () => ({
-      getProviderComputePricing: () => ({ unit: 'usd_per_vcpu_second', ratePerUnit: 0.00005 }),
+    vi.doMock('@agiworkforce/types', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+      getProviderComputePricing: () => ({
+        unit: 'usd_per_vcpu_second' as const,
+        ratePerUnit: 0.00005,
+      }),
     }));
     const mod = await loadModule();
     expect(mod.sandboxComputeIsPriceable()).toBe(false);
@@ -416,7 +421,8 @@ describe('compute pricing is read from the registry, not a literal', () => {
   });
 
   it('is unpriced and logs an error when the registry has no compute-pricing entry', async () => {
-    vi.doMock('@agiworkforce/types', () => ({
+    vi.doMock('@agiworkforce/types', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
       getProviderComputePricing: () => null,
     }));
     const mod = await loadModule();

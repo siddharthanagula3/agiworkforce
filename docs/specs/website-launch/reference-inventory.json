@@ -1,0 +1,21 @@
+{
+  "root": "/Users/siddhartha/Desktop/x",
+  "files": 182,
+  "byExtension": {
+    ".txt": 100,
+    ".py": 1,
+    ".swift": 2,
+    ".png": 79
+  },
+  "bytes": 1245065421,
+  "reviewedTextReferences": [
+    {
+      "path": "desktop-research/screencapture-x-ChatGPT-2026-08-27-01_43_04-3.png.txt",
+      "bytes": 10930
+    },
+    {
+      "path": "desktop-research/screencapture-x-claudeai-2026-08-27-01_39_56.png.txt",
+      "bytes": 9415
+    }
+  ]
+}

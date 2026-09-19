@@ -23,6 +23,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
   recordAuditEvent: (...args: unknown[]) => mocks.recordAuditEvent(...(args as [])),
 }));
 vi.mock('@/lib/server/neon-db', () => ({

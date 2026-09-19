@@ -5,6 +5,9 @@ import type { ErrorEvent } from '@sentry/nextjs';
 import type { SpanJSON, TransactionEvent } from '../sentry-shared';
 import {
   commonInitOptions,
+  confirmTelemetryConsent,
+  hasPendingTelemetryOptOut,
+  requestTelemetryOptOut,
   hasTelemetryConsent,
   isSentryConfigured,
   readDocumentTelemetryConsent,
@@ -610,6 +613,28 @@ describe('shouldInitializeSentry (pre-mount init gate)', () => {
 
     afterEach(() => {
       vi.unstubAllEnvs();
+    });
+
+    it('keeps a pending local opt-out off even when the document and mirror report old consent', () => {
+      requestTelemetryOptOut();
+      document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'true');
+      setTelemetryConsentCache(true);
+      expect(shouldInitializeSentry()).toBe(false);
+      expect(hasTelemetryConsent()).toBe(false);
+      expect(hasPendingTelemetryOptOut()).toBe(true);
+    });
+
+    it('clears a pending opt-out only after a server denial or confirmed explicit opt-in', () => {
+      requestTelemetryOptOut();
+      confirmTelemetryConsent(false);
+      expect(hasPendingTelemetryOptOut()).toBe(true);
+      document.documentElement.setAttribute(TELEMETRY_CONSENT_DOCUMENT_ATTRIBUTE, 'false');
+      expect(shouldInitializeSentry()).toBe(false);
+      expect(hasPendingTelemetryOptOut()).toBe(false);
+      requestTelemetryOptOut();
+      confirmTelemetryConsent(true);
+      expect(hasPendingTelemetryOptOut()).toBe(false);
+      expect(hasTelemetryConsent()).toBe(true);
     });
 
     it('initializes on a brand-new device when the server rendered consent true', () => {

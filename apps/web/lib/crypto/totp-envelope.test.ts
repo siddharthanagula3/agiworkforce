@@ -80,6 +80,13 @@ describe('TOTP_ENCRYPTION_KEY entropy gate', () => {
     expect(() => sealTotpSecret('JBSWY3DPEHPK3PXP')).toThrow(/repeated character/i);
   });
 
+  it('rejects a repeated-character key even when it resembles 32-byte hex', async () => {
+    vi.stubEnv('TOTP_ENCRYPTION_KEY', 'a'.repeat(64));
+    const { sealTotpSecret } = await loadTotpEnvelope();
+
+    expect(() => sealTotpSecret('JBSWY3DPEHPK3PXP')).toThrow(/repeated character/i);
+  });
+
   it('rejects a key whose first 32 characters are not 32 bytes', async () => {
     vi.stubEnv('TOTP_ENCRYPTION_KEY', 'é'.repeat(70));
     const { sealTotpSecret } = await loadTotpEnvelope();

@@ -59,9 +59,9 @@ const QUESTIONS = [
         machine and we receive nothing. In <strong>BYOK</strong>, the request goes from your client
         straight to the provider on your own key and we are not in the path. In{' '}
         <strong>Managed Cloud</strong>, it goes through us and we store it. One caveat people get
-        wrong: Local and BYOK are desktop, CLI and VS Code capabilities:{' '}
-        <strong>the web app is cloud-only</strong>, so anything you do in a browser is Managed
-        Cloud. The full comparison is section 00 of the{' '}
+        wrong: Local is available in the released CLI, while BYOK is available in the CLI and is
+        coming soon to VS Code. <strong>Web and Desktop are cloud-only</strong>, so work on those
+        surfaces uses Managed Cloud. The full comparison is section 00 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>

@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { withSseHeartbeat } from './sse-heartbeat';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('@/lib/observability/metrics', () => ({ recordFailure: vi.fn() }));
 
 function makeSource(): {
   stream: ReadableStream<Uint8Array>;
@@ -109,5 +113,36 @@ describe('withSseHeartbeat', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(source.stream.locked).toBe(true);
     await expect(reader.read()).resolves.toEqual({ value: undefined, done: true });
+  });
+
+  it('reports a client that leaves mid-answer, with what it had already received', async () => {
+    const disconnects: Array<{ bytesDelivered: number; reason: string }> = [];
+    const source = makeSource();
+    const wrapped = withSseHeartbeat(source.stream, 15_000, (disconnect) =>
+      disconnects.push(disconnect),
+    );
+    const reader = wrapped.getReader();
+
+    source.push('data: {"a":1}\n\n');
+    await reader.read();
+    await reader.cancel('client disconnected');
+
+    expect(disconnects).toHaveLength(1);
+    expect(disconnects[0]?.bytesDelivered).toBe(15);
+    expect(disconnects[0]?.reason).toBe('client disconnected');
+  });
+
+  it('does not report a disconnect for a stream that finished first', async () => {
+    const disconnects: unknown[] = [];
+    const source = makeSource();
+    const wrapped = withSseHeartbeat(source.stream, 15_000, (disconnect) =>
+      disconnects.push(disconnect),
+    );
+
+    source.push('data: {"x":1}\n\n');
+    source.close();
+    await readAll(wrapped);
+
+    expect(disconnects).toHaveLength(0);
   });
 });

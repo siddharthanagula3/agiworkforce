@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
+import { recordAuditEvent, type AuditOutcome } from '@/lib/security-audit';
 import {
   hashActionParams,
   hashConfirmationToken,
@@ -19,17 +20,16 @@ import {
   finalizeProposal,
   insertProposal,
 } from './proposal-store';
-import { getSupportAction, SUPPORT_ACTIONS, type SupportActionDefinition } from './registry';
-import { recordSupportActionAttempt, recordSupportActionRefusal } from './record';
+import { getSupportAction, type SupportActionDefinition } from './registry';
 import {
   SupportActionRefusal,
-  SUPPORT_ACTION_IDS,
   type SupportActionId,
-  type SupportActionOption,
   type SupportActionProposalView,
   type SupportActionResult,
   type SupportActionSurface,
 } from './types';
+
+export { listAvailableSupportActions } from './catalog';
 
 export interface ProposeInput {
   db: DatabaseAdapter;
@@ -53,6 +53,78 @@ export interface ConfirmInput {
   confirmationToken: string;
   surface: SupportActionSurface;
   request?: Request;
+}
+
+type SupportActionPhase = 'propose' | 'confirm';
+
+interface SupportActionAttempt {
+  userId: string;
+  actionId: SupportActionId;
+  phase: SupportActionPhase;
+  outcome: AuditOutcome;
+  proposalId: string | null;
+  surface: SupportActionSurface;
+  request?: Request;
+  reason?: string;
+}
+
+function recordSupportActionRefusal(refusal: {
+  userId: string;
+  requestedActionId: string;
+  reason: 'excluded' | 'unknown_action';
+  surface: SupportActionSurface;
+}): void {
+  logger.warn(
+    {
+      event: 'support_action_refused',
+      userId: refusal.userId,
+      requestedActionId: refusal.requestedActionId.slice(0, 64),
+      reason: refusal.reason,
+      surface: refusal.surface,
+    },
+    'Support action refused before any proposal was created',
+  );
+}
+
+async function recordSupportActionAttempt(attempt: SupportActionAttempt): Promise<void> {
+  try {
+    await recordAuditEvent({
+      userId: attempt.userId,
+      eventType:
+        attempt.phase === 'propose' ? 'support_action_proposed' : 'support_action_confirmed',
+      outcome: attempt.outcome,
+      severity: attempt.outcome === 'success' ? 'info' : 'warning',
+      ...(attempt.request ? { request: attempt.request } : {}),
+      surface: attempt.surface === 'marketing' ? 'web-marketing' : 'web',
+      detail: {
+        resourceType: 'support_action',
+        ...(attempt.proposalId ? { resourceId: attempt.proposalId } : {}),
+        source: 'support_agent',
+        status: attempt.phase,
+        variant: attempt.actionId,
+        ...(attempt.reason ? { reason: attempt.reason } : {}),
+      },
+    });
+  } catch (error) {
+    logger.error(
+      { error, userId: attempt.userId, actionId: attempt.actionId, phase: attempt.phase },
+      'Failed to record support action attempt',
+    );
+  }
+
+  logger.info(
+    {
+      event: 'support_action_attempt',
+      userId: attempt.userId,
+      actionId: attempt.actionId,
+      phase: attempt.phase,
+      outcome: attempt.outcome,
+      proposalId: attempt.proposalId,
+      surface: attempt.surface,
+      reason: attempt.reason,
+    },
+    'Support action attempt',
+  );
 }
 
 async function assertTargetOwned(
@@ -107,35 +179,6 @@ function assertNotExcluded(actionId: string, userId: string, surface: SupportAct
     control: { ...excluded.control },
     explain: excluded.reason,
   });
-}
-
-export function listAvailableSupportActions(): {
-  actions: SupportActionOption[];
-  unavailable: { id: SupportActionId; reason: string }[];
-  excluded: { id: string; reason: string; control: { label: string; href: string } }[];
-} {
-  const actions: SupportActionOption[] = [];
-  const unavailable: { id: SupportActionId; reason: string }[] = [];
-
-  for (const id of SUPPORT_ACTION_IDS) {
-    const definition = SUPPORT_ACTIONS[id];
-    const availability = definition.resolveAvailability();
-    if (availability.available) {
-      actions.push({ id, title: definition.title, description: definition.description });
-    } else {
-      unavailable.push({ id, reason: availability.reason ?? 'Not available in this deployment.' });
-    }
-  }
-
-  return {
-    actions,
-    unavailable,
-    excluded: Object.values(EXCLUDED_SUPPORT_ACTIONS).map((e) => ({
-      id: e.id,
-      reason: e.reason,
-      control: { ...e.control },
-    })),
-  };
 }
 
 export async function proposeSupportAction(input: ProposeInput): Promise<ProposeOutput> {

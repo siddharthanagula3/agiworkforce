@@ -3,9 +3,11 @@ import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { openEnvelope, sealEnvelope } from '@/lib/crypto/envelope';
 import { logger } from '@/lib/logger';
 import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { getKeyValueStore } from '@/lib/server/key-value';
+import { organizationKeyRing } from '@/lib/server/organization-encryption-keys';
 import { buildBoundedDeliveryBody, deliverAuditBatch } from '@/lib/services/audit-streaming-proxy';
 
 export {
@@ -151,6 +153,29 @@ export function generateSigningSecret(): GeneratedSecret {
   return { secret, hash: hashSecret(secret), prefix: secret.slice(0, 8) };
 }
 
+function auditSigningSecretContext(organizationId: string): string {
+  return `organization-audit-destination:${organizationId}`;
+}
+
+async function sealAuditSigningSecret(
+  db: DatabaseAdapter,
+  organizationId: string,
+  secret: string,
+): Promise<string> {
+  const { ring } = await organizationKeyRing(db, organizationId);
+  return sealEnvelope(ring, secret, 'versioned', auditSigningSecretContext(organizationId));
+}
+
+async function openAuditSigningSecret(
+  db: DatabaseAdapter,
+  organizationId: string,
+  ciphertext: string,
+): Promise<string> {
+  const { ring } = await organizationKeyRing(db, organizationId);
+  return openEnvelope(ring, ciphertext, 'hex-triple', auditSigningSecretContext(organizationId))
+    .plaintext;
+}
+
 export async function readAuditDestination(
   db: DatabaseAdapter,
   organizationId: string,
@@ -179,13 +204,16 @@ export async function upsertAuditDestination(
   await assertResolvedPublicHostname(input.endpointUrl);
 
   const minted = generateSigningSecret();
+  const ciphertext = await sealAuditSigningSecret(db, organizationId, minted.secret);
   const [row] = await db.query<DestinationRow>(
     `insert into public.organization_audit_destinations
-       (organization_id, endpoint_url, secret_hash, secret_prefix, enabled, created_by_user_id)
-     values ($1, $2, $3, $4, $5, $6)
+       (organization_id, endpoint_url, secret_hash, secret_ciphertext, secret_prefix, enabled,
+        created_by_user_id)
+     values ($1, $2, $3, $4, $5, $6, $7)
      on conflict (organization_id) do update set
        endpoint_url         = excluded.endpoint_url,
        secret_hash          = excluded.secret_hash,
+       secret_ciphertext    = excluded.secret_ciphertext,
        secret_prefix        = excluded.secret_prefix,
        enabled              = excluded.enabled,
        consecutive_failures = 0
@@ -194,6 +222,7 @@ export async function upsertAuditDestination(
       organizationId,
       input.endpointUrl,
       minted.hash,
+      ciphertext,
       minted.prefix,
       input.enabled,
       input.createdByUserId,
@@ -344,7 +373,7 @@ export async function auditStreamContinuity(
 
 interface CursorRow {
   endpoint_url: string;
-  secret_hash: string;
+  secret_ciphertext: string | null;
   last_delivered_at: string | Date | null;
   last_delivered_id: string | null;
   consecutive_failures: number;
@@ -363,10 +392,9 @@ interface CursorRow {
  * transient error is worse than one that repeats them, because a receiver can
  * deduplicate on the event id and cannot recover what never arrived.
  *
- * `secretForDelivery` is supplied by the caller rather than read here, because
- * the stored value is a hash and the raw secret only exists in the caller's
- * key material. Passing the hash signs with the hash, which is a valid shared
- * secret as long as both sides agree, the console tells the receiver which.
+ * The signing key is opened only for a delivery. The one-way hash is retained
+ * for identification and integrity checks, but cannot sign a payload the
+ * receiver can verify with the secret it was shown.
  */
 export async function drainAuditDestination(
   db: DatabaseAdapter,
@@ -376,7 +404,8 @@ export async function drainAuditDestination(
   const now = options.now ?? new Date();
 
   const [row] = await db.query<CursorRow>(
-    `select endpoint_url, secret_hash, last_delivered_at, last_delivered_id, consecutive_failures
+    `select endpoint_url, secret_ciphertext, last_delivered_at, last_delivered_id,
+            consecutive_failures
        from public.organization_audit_destinations
       where organization_id = $1 and enabled = true
       limit 1`,
@@ -447,9 +476,27 @@ export async function drainAuditDestination(
     })),
   });
 
+  let signingSecret: string;
+  try {
+    if (!row.secret_ciphertext) {
+      throw new Error('The audit destination predates encrypted signing keys; rotate its secret.');
+    }
+    signingSecret = await openAuditSigningSecret(db, organizationId, row.secret_ciphertext);
+  } catch (caught) {
+    const error = caught instanceof Error ? caught.message : String(caught);
+    await db.query(
+      `update public.organization_audit_destinations
+          set last_attempt_at = now(), last_status = $2,
+              consecutive_failures = consecutive_failures + 1
+        where organization_id = $1`,
+      [organizationId, error.slice(0, 300)],
+    );
+    return { organizationId, delivered: 0, status: 'failed', error };
+  }
+
   const { status, error, succeeded } = await deliverAuditBatch({
     endpointUrl: row.endpoint_url,
-    secret: row.secret_hash,
+    secret: signingSecret,
     timestamp,
     body,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),

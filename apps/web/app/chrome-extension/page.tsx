@@ -88,7 +88,7 @@ const BOUNDARY_LEDGER = [
   },
   {
     k: 'Keys in Chrome',
-    v: 'None. Chat and computer use run on AGI’s server-side provider keys, not on yours. Your Desktop keys stay on Desktop, encrypted at rest.',
+    v: 'None. Chat and computer use run on AGI’s server-side provider keys, not on yours. The current Desktop app also accepts no provider keys.',
   },
   {
     k: 'Computer-use egress',

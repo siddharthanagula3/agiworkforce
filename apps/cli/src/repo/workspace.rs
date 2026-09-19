@@ -244,7 +244,7 @@ mod tests {
         std::fs::create_dir_all(root.join("packages/alpha")).unwrap();
         std::fs::create_dir_all(root.join("packages/empty")).unwrap();
         std::fs::write(
-            root.join("packages/alpha/package.json"),
+            root.join("packages/alpha").join("package.json"),
             r#"{"name":"@scope/alpha"}"#,
         )
         .unwrap();

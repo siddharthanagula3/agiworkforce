@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { networkErrorMessage } from '@/lib/user-error-message';
+import { toUserMessage } from '@/lib/user-error-message';
 import { useNotificationStore } from './notification-store';
 import { logger } from '@shared/lib/logger';
 
@@ -9,27 +9,10 @@ const ENABLE_REACT_QUERY_DEVTOOLS =
   process.env['NEXT_PUBLIC_ENABLE_REACT_QUERY_DEVTOOLS'] === 'true';
 
 function getErrorMessage(error: unknown): string {
-  // Before the status ladder: a dropped connection never reaches it, because
-  // there is no response to carry a status, so it fell through to
-  // error.message and put the browser's own "Failed to fetch" on screen.
-  const network = networkErrorMessage(error);
-  if (network) return network;
-  if (error instanceof Error) {
-    if ('code' in error && error.code === 'PGRST116') {
-      return 'Resource not found';
-    }
-    if ('status' in error) {
-      const status = (error as { status: number }).status;
-      if (status === 401) return 'Please sign in to continue';
-      if (status === 403) return 'You do not have permission to perform this action';
-      if (status === 404) return 'Resource not found';
-      if (status === 429) return 'Too many requests. Please try again later';
-      if (status >= 500) return 'Server error. Please try again later';
-    }
-    return error.message;
+  if (error instanceof Error && 'code' in error && error.code === 'PGRST116') {
+    return 'Resource not found';
   }
-  if (typeof error === 'string') return error;
-  return 'An unexpected error occurred';
+  return toUserMessage(error, 'Something went wrong. Try again.');
 }
 
 const queryCache = new QueryCache({

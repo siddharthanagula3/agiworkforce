@@ -158,7 +158,14 @@ describe('POST /api/mobile/iap/verify', () => {
       status: 'already_processed',
       unitsGranted: 500,
     });
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.execute).not.toHaveBeenCalledWith(
+      'select public.add_credits_microusd($1, $2, $3, $4, $5)',
+      expect.anything(),
+    );
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO security_audit_logs'),
+      expect.arrayContaining(['user-1', 'mobile_purchase_verified']),
+    );
   });
 
   it('refuses a receipt already bound to another AGI account', async () => {

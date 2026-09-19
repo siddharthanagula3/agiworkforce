@@ -44,7 +44,20 @@ async function handleSetup2FA(request: NextRequest) {
 
   const hashedCodes = await Promise.all(backupCodes.map((c) => hashBackupCode(c)));
 
-  const encryptedSecret = sealTotpSecret(secret);
+  let encryptedSecret: string;
+  try {
+    encryptedSecret = sealTotpSecret(secret);
+  } catch (error) {
+    logger.error(
+      { userId, error: error instanceof Error ? error.message : String(error) },
+      '2FA setup encryption is unavailable',
+    );
+    throw createError
+      .serviceUnavailable(
+        'Authenticator setup is temporarily unavailable. Try again later or contact support.',
+      )
+      .asUserSafe();
+  }
 
   await db.query(
     `insert into user_two_factor

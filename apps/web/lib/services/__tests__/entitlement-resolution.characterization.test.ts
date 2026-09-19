@@ -27,7 +27,6 @@ vi.mock('@/lib/services/enterprise-collection-state', () => ({
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  entitlementDenialReason,
   isSeatBearingBillingPlan,
   resolveEffectiveSubscription,
   resolveEntitlementBundle,
@@ -116,6 +115,10 @@ describe('entitlement resolution characterization', () => {
     mocks.getSubscription.mockResolvedValue(null);
 
     const bundle = await resolveEntitlementBundle(scopedDb, 'member-1');
+    expect(mocks.privilegedQuery).toHaveBeenCalledWith(
+      expect.stringContaining("membership.status = 'active'"),
+      ['member-1'],
+    );
 
     expect(bundle).toMatchObject({
       plan: 'free',
@@ -195,15 +198,6 @@ describe('entitlement resolution characterization', () => {
     expect(bundle.entitled).toBe(false);
     expect(bundle.denialReason).toBe('payment_required');
     expect(bundle.source).toBe('subscription');
-  });
-
-  it('the denial reason distinguishes a missing seat from a missing upgrade', async () => {
-    mocks.getSubscription.mockResolvedValue(ownRow());
-    const bundle = await resolveEntitlementBundle(scopedDb, 'member-1');
-
-    expect(entitlementDenialReason(bundle, ['pro'])).toBeNull();
-    expect(entitlementDenialReason(bundle, ['team'])).toBe('requires_seat');
-    expect(entitlementDenialReason(bundle, ['max'])).toBe('requires_upgrade');
   });
 
   it('resolveUserPersonalPlanTier ignores seats so a seat cannot entitle its own transfer', async () => {

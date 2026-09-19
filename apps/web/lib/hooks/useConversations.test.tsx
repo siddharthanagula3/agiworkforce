@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { managedCloudConversationPath } from '@agiworkforce/cloud-contracts';
 import { getModelsForTierAndSurface } from '@agiworkforce/types';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
 import {
   __resetConversationListLoadForTests,
@@ -109,6 +110,7 @@ describe('useConversations.createConversation', () => {
   beforeEach(() => {
     __resetConversationListLoadForTests();
     useChatStore.getState().reset();
+    useSettingsStore.getState().setNewChatsTemporary(false);
     useChatProjectStore.setState({ projects: [], activeProjectId: null });
     authMocks.getToken.mockResolvedValue('session-token');
     vi.stubGlobal('fetch', mockFetchRoutes());
@@ -142,6 +144,39 @@ describe('useConversations.createConversation', () => {
     expect(findPostBody()).not.toHaveProperty('projectId');
   });
 
+  it('inherits the temporary default when there is no per-chat choice', async () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto');
+    });
+    expect(findPostBody()).toMatchObject({ isTemporary: true });
+  });
+
+  it('preserves a captured opt-out after the active conversation consumes the pending choice', async () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    useChatStore.getState().setPendingTemporaryChat(false);
+    useChatStore.getState().setActiveConversation('placeholder');
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto', null, { isTemporary: false });
+    });
+    expect(findPostBody()).not.toHaveProperty('isTemporary');
+  });
+
+  it('lets an explicit composer choice override the temporary default', async () => {
+    useSettingsStore.getState().setNewChatsTemporary(true);
+    useChatStore.getState().setPendingTemporaryChat(false);
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    await act(async () => {
+      await result.current.createConversation('New Chat', 'auto');
+    });
+    expect(findPostBody()).not.toHaveProperty('isTemporary');
+  });
+
   it('marks the first conversation temporary when armed from the composer before it existed', async () => {
     useChatStore.getState().setPendingTemporaryChat(true);
     const { result } = renderHook(() => useConversations());
@@ -157,7 +192,7 @@ describe('useConversations.createConversation', () => {
   it('honours the temporary intent the caller captured before the active id switch cleared it', async () => {
     useChatStore.getState().setPendingTemporaryChat(true);
     useChatStore.getState().setActiveConversation('placeholder-1');
-    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+    expect(useChatStore.getState().pendingTemporaryChat).toBeNull();
     const { result } = renderHook(() => useConversations());
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
 
@@ -177,7 +212,7 @@ describe('useConversations.createConversation', () => {
       await result.current.createConversation('New Chat', 'auto');
     });
 
-    expect(useChatStore.getState().pendingTemporaryChat).toBe(false);
+    expect(useChatStore.getState().pendingTemporaryChat).toBeNull();
   });
 });
 
@@ -185,6 +220,7 @@ describe('useConversations.updateConversation', () => {
   beforeEach(() => {
     __resetConversationListLoadForTests();
     useChatStore.getState().reset();
+    useSettingsStore.getState().setNewChatsTemporary(false);
     useChatProjectStore.setState({
       projects: [
         {
@@ -284,6 +320,7 @@ describe('useConversations.loadConversation pagination races', () => {
   beforeEach(() => {
     __resetConversationListLoadForTests();
     useChatStore.getState().reset();
+    useSettingsStore.getState().setNewChatsTemporary(false);
     authMocks.getToken.mockResolvedValue('session-token');
   });
 
@@ -418,6 +455,7 @@ describe('WEB-WEB-CHAT-PAGE-SIDEBAR-RECENTS-LIST-HARD-01', () => {
   beforeEach(() => {
     __resetConversationListLoadForTests();
     useChatStore.getState().reset();
+    useSettingsStore.getState().setNewChatsTemporary(false);
     useChatProjectStore.setState({ projects: [], activeProjectId: null });
     authMocks.getToken.mockResolvedValue('session-token');
   });
@@ -472,6 +510,7 @@ describe('useProjectConversations', () => {
   beforeEach(() => {
     __resetConversationListLoadForTests();
     useChatStore.getState().reset();
+    useSettingsStore.getState().setNewChatsTemporary(false);
     authMocks.getToken.mockResolvedValue('session-token');
   });
 
@@ -531,7 +570,8 @@ describe('useProjectConversations', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.conversations).toEqual([]);
-    expect(result.current.error).toBe('Project chats unavailable');
+    expect(result.current.error).toBe('Something went wrong on our side. Try again shortly.');
+    expect(result.current.error).not.toContain('Project chats unavailable');
   });
 
   it('pages and deduplicates older project chats through the same filtered route', async () => {
@@ -612,23 +652,36 @@ describe('useConversations list rate limiting', () => {
     }
   });
 
-  it('surfaces a failure the retries cannot fix', async () => {
+  it('keeps the prior list and hides server details when a retry cannot fix a 500', async () => {
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce(conversationListResponse([WIRE_CONVERSATION]))
       .mockImplementation(
         async () =>
-          new Response(JSON.stringify({ error: { message: 'Server exploded.' } }), { status: 500 }),
+          new Response(JSON.stringify({ error: { message: 'Server exploded.' } }), {
+            status: 500,
+          }),
       );
     vi.stubGlobal('fetch', fetchMock);
 
     try {
       const { result } = renderHook(() => useConversations());
 
+      await waitFor(() => expect(result.current.conversations).toHaveLength(1));
+
       await act(async () => {
         await result.current.fetchConversations();
       });
 
-      await waitFor(() => expect(result.current.listError).toBe('Server exploded.'));
+      await waitFor(() =>
+        expect(result.current.listError).toBe(
+          'Something went wrong on our side. Try again shortly.',
+        ),
+      );
+      expect(result.current.conversations.map((conversation) => conversation.id)).toEqual([
+        WIRE_CONVERSATION.id,
+      ]);
+      expect(result.current.listError).not.toContain('Server exploded');
     } finally {
       vi.unstubAllGlobals();
       vi.useRealTimers();
@@ -652,6 +705,7 @@ describe('useConversations list request coalescing', () => {
   beforeEach(() => {
     __resetConversationListLoadForTests();
     useChatStore.getState().reset();
+    useSettingsStore.getState().setNewChatsTemporary(false);
     useChatProjectStore.setState({ projects: [], activeProjectId: null });
     authMocks.getToken.mockResolvedValue('session-token');
     authMocks.userId = 'user-1';
@@ -759,7 +813,13 @@ describe('useConversations list request coalescing', () => {
       await list.promise;
     });
 
-    await waitFor(() => expect(second.result.current.listError).toBe('nope'));
-    expect(first.result.current.listError).toBe('nope');
+    await waitFor(() =>
+      expect(second.result.current.listError).toBe(
+        'Something went wrong on our side. Try again shortly.',
+      ),
+    );
+    expect(first.result.current.listError).toBe(
+      'Something went wrong on our side. Try again shortly.',
+    );
   });
 });

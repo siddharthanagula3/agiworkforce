@@ -90,6 +90,7 @@ import {
   useVoiceSessionStore,
 } from '@/features/chat/stores/voice-session-store';
 import { TranscriptNotice } from './TranscriptNotice';
+import { CitationPastChats } from './CitationPastChats';
 import {
   AgentActivityTimeline,
   BranchNavigator,
@@ -519,6 +520,7 @@ interface Message {
     }>;
     /** Project knowledge passages this turn read, each with where it came from. */
     projectSources?: ProjectFileCitation[];
+    pastChatSources?: StoreMessageMetadata['pastChatSources'];
     /** Web search citations from server-managed tools (e.g., Anthropic web_search) */
     citations?: Array<{
       type?: string;
@@ -2617,6 +2619,12 @@ const MessageBubbleComponent = function MessageBubble({
                 citations={message.metadata?.projectSources ?? []}
                 answerText={cleanedContent}
               />
+            </div>
+          )}
+
+          {!isUser && (message.metadata?.pastChatSources?.length ?? 0) > 0 && (
+            <div className="mt-2">
+              <CitationPastChats citations={message.metadata?.pastChatSources ?? []} />
             </div>
           )}
 

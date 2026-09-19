@@ -21,12 +21,15 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
   recordAuditEvent: (...args: unknown[]) => mocks.recordAuditEvent(...args),
 }));
 vi.mock('@/lib/user-connector-tools', () => ({
   evictConnectorOAuthCaches: (...args: unknown[]) => mocks.evictConnectorOAuthCaches(...args),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   listConnectorAccounts: (...args: unknown[]) => mocks.listConnectorAccounts(...args),
   setDefaultConnectorAccount: (...args: unknown[]) => mocks.setDefaultConnectorAccount(...args),
   revokeConnectorOAuthGrant: (...args: unknown[]) => mocks.revokeConnectorOAuthGrant(...args),

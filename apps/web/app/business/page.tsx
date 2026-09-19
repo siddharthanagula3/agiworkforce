@@ -83,7 +83,7 @@ export default function BusinessPage() {
           rows={[
             {
               k: 'Model choice',
-              v: `One product routes across a dated, inspectable catalog: ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. Frontier cloud APIs through BYOK on Desktop, CLI, and VS Code, plus local models through Ollama, LM Studio, llama.cpp, and vLLM. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
+              v: `One product routes across a dated, inspectable catalog: ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. The released CLI supports BYOK plus local Ollama and LM Studio models; VS Code BYOK is coming soon, and Desktop uses managed cloud. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
             },
             {
               k: 'Cost shape',
@@ -123,7 +123,7 @@ export default function BusinessPage() {
             {
               meta: 'Local + BYOK',
               title: 'BYOK mode',
-              body: 'Bring provider keys on Desktop, CLI, and VS Code and pay providers directly.',
+              body: 'Bring provider keys from the released CLI and pay providers directly. VS Code support is coming soon.',
               href: '/byok',
             },
             {

@@ -148,48 +148,6 @@ export function getPlatformCapabilities(platform: SyncedAppSurface): CapabilityR
 
 export const ALL_PLATFORM_CAPABILITIES = Object.keys(WEB) as readonly PlatformCapability[];
 
-export function isPlatformCapability(value: unknown): value is PlatformCapability {
-  return (
-    typeof value === 'string' && (ALL_PLATFORM_CAPABILITIES as readonly string[]).includes(value)
-  );
-}
-
-export interface ParsedCapabilityNames {
-  granted: ReadonlySet<PlatformCapability>;
-  /** Names this build has no meaning for, reported rather than granted. */
-  unrecognized: readonly string[];
-}
-
-/**
- * The tolerance rule for a capability claim arriving from a client: an
- * unrecognized name is reported and left ungranted, never thrown on and never
- * granted, because a peer one release ahead is normal and omission already
- * means denial to `capability-handshake`.
- */
-export function parseCapabilityNames(raw: unknown): ParsedCapabilityNames {
-  const granted = new Set<PlatformCapability>();
-  const unrecognized = new Set<string>();
-
-  const record = (name: unknown, claimed: boolean): void => {
-    if (typeof name !== 'string') return;
-    if (!isPlatformCapability(name)) {
-      unrecognized.add(name);
-      return;
-    }
-    if (claimed) granted.add(name);
-  };
-
-  if (Array.isArray(raw)) {
-    for (const name of raw) record(name, true);
-  } else if (typeof raw === 'object' && raw !== null) {
-    for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
-      if (typeof value === 'boolean') record(name, value);
-    }
-  }
-
-  return { granted, unrecognized: [...unrecognized].sort() };
-}
-
 /**
  * The surface layer's grant for `capability-handshake`, read from the one
  * platform matrix rather than restated at each call site.

@@ -29,6 +29,7 @@ import {
   taskRecurrence,
 } from '../types';
 import { ScheduleRunHistory, type ScheduleHistoryState } from './ScheduleRunHistory';
+import { scheduleErrorMessage } from '../lib/schedule-error-message';
 
 export type ScheduleOperation = 'toggle' | 'run' | 'delete' | null;
 
@@ -38,6 +39,7 @@ export function scheduleCardElementId(scheduleId: string): string {
 
 interface ScheduleCardProps {
   schedule: ScheduleTask;
+  readOnly: boolean;
   operation: ScheduleOperation;
   error: string | null;
   projectName?: string | null;
@@ -108,6 +110,7 @@ function statusVariant(status: ScheduleTask['status']) {
 
 export function ScheduleCard({
   schedule,
+  readOnly,
   operation,
   error,
   projectName,
@@ -127,9 +130,11 @@ export function ScheduleCard({
 }: ScheduleCardProps) {
   const terminal = TERMINAL_STATUSES.has(schedule.status);
   const supported = schedule.actionType === 'agent';
-  const canRun = supported && schedule.isEnabled && schedule.status === 'active' && !operation;
-  const canEdit = supported && !terminal && !operation;
-  const canToggle = !terminal && (!schedule.isEnabled ? supported : true) && !operation;
+  const canRun =
+    !readOnly && supported && schedule.isEnabled && schedule.status === 'active' && !operation;
+  const canEdit = !readOnly && supported && !terminal && !operation;
+  const canToggle =
+    !readOnly && !terminal && (!schedule.isEnabled ? supported : true) && !operation;
   const headingId = `schedule-title-${schedule.id}`;
   const rawCron =
     taskRecurrence(schedule) === 'custom' && schedule.cronExpression
@@ -255,7 +260,7 @@ export function ScheduleCard({
 
             {schedule.lastError && (
               <p className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-danger">
-                Last run: {schedule.lastError}
+                Last run: {scheduleErrorMessage(schedule.lastError)}
               </p>
             )}
             {error && (
@@ -384,7 +389,7 @@ export function ScheduleCard({
                     type="button"
                     role="menuitem"
                     className={cn(menuItemCls, 'text-danger hover:text-danger')}
-                    disabled={operation !== null}
+                    disabled={readOnly || operation !== null}
                     onClick={() => {
                       closeMenu();
                       onDelete(schedule);

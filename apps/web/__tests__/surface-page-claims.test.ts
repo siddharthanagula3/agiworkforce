@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -171,6 +171,162 @@ describe('/desktop separates what is built from what is published', () => {
   });
 });
 
+describe('public Local and BYOK claims follow the shipping Electron enforcement', () => {
+  it('anchors the claim to the cloud-only runtime gate, not to a shared premise in prose', () => {
+    const config = repoText('apps', 'desktop', 'electron', 'config.ts');
+    const dispatcher = repoText('apps', 'desktop', 'electron', 'runtime', 'dispatcher.ts');
+
+    expect(config).toMatch(/This shell has no Local mode/u);
+    expect(dispatcher).toMatch(/localModels: false/u);
+    expect(dispatcher).toMatch(/localMcp: false/u);
+    expect(dispatcher).toMatch(
+      /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
+    );
+  });
+
+  it('states the same contract on the Desktop, Local, and BYOK pages', () => {
+    expect(collapsed('app/desktop/page.tsx')).toMatch(
+      /Desktop contract is cloud-only for inference/u,
+    );
+    expect(collapsed('app/local/page.tsx')).toMatch(
+      /public Electron Desktop contract does not accept local-inference commands or provider keys/u,
+    );
+    expect(collapsed('app/byok/page.tsx')).toMatch(
+      /Desktop runs on your AGI account and takes no provider key/u,
+    );
+  });
+
+  it('keeps the help sources free of the retired Desktop Local and Desktop BYOK story', () => {
+    const help = [
+      'content/support/byok-provider-keys.md',
+      'content/support/desktop-and-cli.md',
+      'content/support/getting-started.md',
+      'content/support/install-desktop-and-mobile.md',
+      'content/support/local-mode.md',
+      'content/support/privacy-controls.md',
+      'content/support/providers-and-models.md',
+    ]
+      .map(fileText)
+      .join('\n');
+
+    for (const [label, pattern] of [
+      ['Desktop Local mode', /Desktop Local mode/iu],
+      ['Desktop local-provider support', /Desktop supports (?:Ollama|LM Studio|llama\.cpp|vLLM)/iu],
+      ['Desktop provider-key entry', /provider API key on Desktop/iu],
+      ['the retired desktop master password', /desktop master password/iu],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(help), `help still advertises ${label}`).toBe(false);
+    }
+
+    expect(help).toMatch(/released CLI supports Ollama and\s+LM Studio/iu);
+    expect(help).toMatch(/current Desktop\s+application is managed-cloud-only/iu);
+  });
+
+  it('keeps public pricing copy on the two CLI local runtimes', () => {
+    const pricing = repoText('packages', 'ui', 'i18n', 'locales', 'en', 'pricing.json');
+    expect(pricing).toMatch(/Ollama or LM Studio model from the released CLI/u);
+    expect(pricing).toMatch(/Local session files on disk/u);
+    expect(pricing).toMatch(/Desktop runs managed cloud/u);
+    expect(pricing).not.toMatch(/SQLite|llama\.cpp|vLLM|Desktop, CLI & VS Code/u);
+  });
+
+  it('keeps every translated pricing file free of the retired SQLite claim', () => {
+    const localeRoot = join(REPO_ROOT, 'packages', 'ui', 'i18n', 'locales');
+    for (const entry of readdirSync(localeRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const pricing = readFileSync(join(localeRoot, entry.name, 'pricing.json'), 'utf8');
+      expect(pricing, `${entry.name} pricing still claims CLI sessions use SQLite`).not.toMatch(
+        /SQLite/u,
+      );
+    }
+  });
+
+  it('keeps privacy, terms, and trust copy on the executable CLI and Electron contract', () => {
+    const publicContract = [
+      'app/privacy/page.tsx',
+      'app/privacy/india/page.tsx',
+      'app/terms/page.tsx',
+      'app/trust/page.tsx',
+      'app/security/page.tsx',
+      'app/subprocessors/page.tsx',
+      'app/agent-permissions/page.tsx',
+    ]
+      .map(collapsed)
+      .join('\n');
+
+    expect(publicContract).toMatch(/released CLI to Ollama or LM Studio on loopback/iu);
+    expect(publicContract).toMatch(/Desktop and web use Managed Cloud/iu);
+    expect(publicContract).toMatch(/operating system credential store/iu);
+
+    for (const [label, pattern] of [
+      ['Desktop in the BYOK surface list', /desktop app, the CLI and the VS Code extension/iu],
+      ['a Desktop or BYOK master password', /master password/iu],
+      ['the retired Desktop SQLCipher store', /SQLCipher/iu],
+      ['the retired local SQLite connector store', /stored in local SQLite/iu],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(publicContract), `public contract still claims ${label}`).toBe(false);
+    }
+  });
+
+  it('keeps local MCP and browser-bridge copy on the Electron capability declaration', () => {
+    const localRuntimeCopy = [
+      'app/connectors/mcp-directory/page.tsx',
+      'app/plugins/[id]/page.tsx',
+      'app/api/connectors/route.ts',
+      'features/plugins/server/directory/constants.ts',
+      'features/connectors/data/connectors.ts',
+      'lib/connectors/oauth-setup.ts',
+      'lib/changelog-entries.ts',
+      'app/integrations/page.tsx',
+    ]
+      .map(collapsed)
+      .join('\n');
+
+    expect(localRuntimeCopy).toMatch(/current public Desktop reports no local MCP capability/iu);
+    expect(localRuntimeCopy).toMatch(/Panel chat remains Managed Cloud/u);
+    expect(localRuntimeCopy).toMatch(/released CLI/iu);
+
+    for (const [label, pattern] of [
+      ['local-process MCP on Desktop', /added from Desktop or the CLI/iu],
+      ['plugin installation on Desktop', /desktop app or the CLI/iu],
+      ['Desktop local-MCP settings', /Connect it from Desktop device settings/iu],
+      ['Desktop device-local connector execution', /Desktop device runtime (?:runs|only)/iu],
+      ['Desktop local MCP in the historical release note', /Desktop: official MCP registry/iu],
+      ['Desktop model inference for the Chrome bridge', /Desktop runs the model/iu],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(localRuntimeCopy), `public copy still claims ${label}`).toBe(false);
+    }
+  });
+
+  it('keeps current repository documentation on the same public Desktop contract', () => {
+    const currentDocs = [
+      'README.md',
+      'docs/architecture/desktop.md',
+      'docs/architecture/overview.md',
+      'docs/architecture/execution-plan-contract.md',
+      'docs/work/implementation-status.md',
+    ]
+      .map((path) => repoText(...path.split('/')).replace(/\s+/gu, ' '))
+      .join('\n');
+
+    expect(currentDocs).toMatch(/Electron is the only public Desktop product/iu);
+    expect(currentDocs).toMatch(/public Electron Desktop reports `localMcp: false`/iu);
+    expect(currentDocs).toMatch(/released CLI supports BYOK/iu);
+
+    for (const [label, pattern] of [
+      [
+        'the Tauri renderer as the public production shell',
+        /Desktop production shell is `apps\/desktop\/src\/features\/v3/iu,
+      ],
+      ['the retained Tauri router as the public live router', /is the live desktop router/iu],
+      ['Whisper.cpp as a public Desktop feature', /speech-to-text \(Whisper\.cpp\) on desktop/iu],
+      ['a public Desktop MCP client', /an MCP client in desktop\/CLI/iu],
+    ] as ReadonlyArray<readonly [string, RegExp]>) {
+      expect(pattern.test(currentDocs), `current documentation still claims ${label}`).toBe(false);
+    }
+  });
+});
+
 describe('/cli, no subcommand the binary refuses to expose', () => {
   it('does not advertise an agi cloud command', () => {
     const page = collapsed('app/cli/page.tsx');
@@ -256,14 +412,15 @@ describe('/get-started, desktop availability matches the release pipeline', () =
   });
 });
 
-describe('/get-started, BYOK surfaces are stated with their release state', () => {
-  it('keeps VS Code and Desktop out of the list of surfaces BYOK runs on today', () => {
+describe('/get-started, local and BYOK surfaces are stated with their release state', () => {
+  it('keeps Desktop out of Local and BYOK and VS Code out of the list running today', () => {
     const page = collapsed('app/get-started/page.tsx');
     expect(
       /Local and BYOK run on Desktop/u.test(page),
       'page claims BYOK runs on Desktop, which runs on the AGI account and takes no key',
     ).toBe(false);
-    expect(page).toMatch(/Local runs on Desktop and the CLI today, BYOK on the CLI/u);
+    expect(page).toMatch(/Local and BYOK run on the CLI today/u);
+    expect(page).toMatch(/VS Code BYOK is \$\{SURFACE_STATUS\.vscode\.toLowerCase\(\)\}/u);
   });
 });
 

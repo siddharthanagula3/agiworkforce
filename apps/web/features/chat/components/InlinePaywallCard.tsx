@@ -43,6 +43,7 @@ import {
 import {
   getBillingPlanPricing,
   getPlanPriceUsd,
+  isFreeOfChargePlanTier,
   normalizePaywallFeature,
   normalizeBillingPlanTier,
   normalizeUIPlanTier,
@@ -132,7 +133,7 @@ const EMPTY_REASON = '';
 
 export function normalizeRequiredTier(value: string): RequiredTier {
   const tier = normalizeBillingPlanTier(value);
-  if (tier === 'local-only' || tier === 'byok' || tier === 'free') return 'basic';
+  if (isFreeOfChargePlanTier(tier)) return 'basic';
   return tier;
 }
 

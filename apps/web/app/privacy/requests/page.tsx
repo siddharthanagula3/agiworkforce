@@ -38,7 +38,7 @@ const SELF_SERVE: readonly LedgerRow[] = [
   {
     label: 'Export your data',
     value:
-      'Signed in, export from your account settings at any time. It is rate limited and each export is recorded in the security audit log. It does not yet cover every category the schema holds. That gap is tracked, and until it closes, use the access request below if something is missing.',
+      'Signed in, export the reviewed personal and account-data sections from account settings at any time. The file includes a completeness record: a complete export read every reviewed section without skipped or truncated rows; a partial export names what was unavailable, skipped, or truncated. Live secrets, credential verifiers, and product-internal cost ledgers are intentionally excluded. Exports are rate limited and recorded in the security audit log. Use the access request below if you need something the file does not contain.',
   },
   {
     label: 'Delete your account',

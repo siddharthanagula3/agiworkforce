@@ -147,6 +147,11 @@ function requireGatedByCi(guardCommand, chainCommand = guardCommand) {
 requireGatedByCi('pnpm check:module-reachability');
 requireGatedByCi('pnpm check:no-hex-mobile');
 requireGatedByCi('pnpm --filter @agiworkforce/web check:no-hex-web');
+requireGatedByCi('pnpm check:concurrent-step-lease');
+requireGatedByCi('pnpm check:public-share-dlp');
+requireGatedByCi('pnpm check:unsafe-retry');
+requireGatedByCi('pnpm check:work-client-state');
+requireGatedByCi('pnpm check:worktask-scope');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run typecheck --affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm test:affected');
 requireIncludes('.github/workflows/ci.yml', 'pnpm exec turbo run build --affected');
@@ -466,7 +471,7 @@ requireIncludes(
   'DESKTOP_RELEASE_CHANNELS = RELEASE_CHANNELS',
 );
 requireIncludes(
-  'apps/web/lib/feature-flags/flag-definition.ts',
+  'packages/contracts/types/src/model-catalog.ts',
   "RELEASE_CHANNELS = ['stable', 'beta', 'nightly'] as const",
 );
 requireIncludes(

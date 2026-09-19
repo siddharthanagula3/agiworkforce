@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { collectPendingApprovals } from '@/features/chat/components/approvals/ApprovalInbox';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { useChatStream, __resetPendingTurnsForTests, isApprovalTurnLive } from './useChatStream';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
@@ -360,6 +361,60 @@ describe('useChatStream, tool approval → resume', () => {
     expect(metadata.cloudApproval?.calls.map((call) => call.toolCallId)).toEqual(['call_2']);
     expect(isApprovalTurnLive(assistantId)).toBe(true);
   });
+
+  it.each([
+    ['http', true],
+    ['auth', true],
+    ['http', false],
+    ['auth', false],
+  ] as const)(
+    'keeps approval controls available after %s failure (temporary=%s)',
+    async (failure, temporary) => {
+      mockSseStream([approvalEvent]);
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('summarize PR 7', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+      const assistantId = assistantMessage()!.id;
+      if (!temporary) {
+        useChatStore.setState({ conversations: [{ ...TEMP_CONVERSATION, isTemporary: false }] });
+        __resetPendingTurnsForTests();
+      }
+      vi.mocked(fetch).mockImplementation(async () => new Response('{}', { status: 200 }));
+      if (failure === 'auth') {
+        authMocks.getToken.mockResolvedValue(null);
+      } else {
+        vi.mocked(fetch).mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: 'Service unavailable' }), { status: 503 }),
+        );
+      }
+      await act(async () => {
+        await result.current.resolveToolApproval(assistantId, 'call_1', 'approved');
+      });
+      expect(collectPendingApprovals([assistantMessage()!])).toEqual([
+        expect.objectContaining({ toolCallId: 'call_1' }),
+      ]);
+      expect(
+        assistantMessage()?.metadata?.tools?.find((tool) => tool.toolCallId === 'call_1')?.approved,
+      ).toBeUndefined();
+      __resetPendingTurnsForTests();
+      expect(isApprovalTurnLive(assistantId)).toBe(true);
+      if (!temporary && failure === 'http') {
+        const save = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/messages'));
+        expect(save).toBeDefined();
+        const body = JSON.parse(String((save![1] as RequestInit).body));
+        expect(body.metadata.cloudApproval.calls[0].approvalDecision).toBeUndefined();
+      }
+      authMocks.getToken.mockResolvedValue('session-token');
+      mockSseStream([{ choices: [{ delta: { content: 'Recovered.' } }] }]);
+      await act(async () => {
+        await result.current.resolveToolApproval(assistantId, 'call_1', 'rejected');
+      });
+      expect(assistantMessage()?.content).toContain('Recovered.');
+    },
+  );
 
   it('sends decision "rejected" and marks the card failed without executing', async () => {
     mockSseStream([approvalEvent]);

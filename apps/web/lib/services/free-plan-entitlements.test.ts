@@ -41,7 +41,7 @@ describe('managed cloud resource entitlements', () => {
 
   it('builds plan-specific, user-safe limit messages', () => {
     expect(getProjectLimitErrorMessage('basic')).toBe(
-      'Basic accounts can have up to 5 Projects. Delete a Project or upgrade to add another.',
+      'Your Basic plan includes 5 project folders. Upgrade your plan to add more, or delete an existing folder to make room.',
     );
     expect(getCustomRemoteMcpLimitErrorMessage('team')).toBe(
       'Team accounts can add up to 25 custom connectors. Remove one or upgrade to add another.',

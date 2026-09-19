@@ -35,8 +35,8 @@ export default function SupportPage() {
         <PageHero
           id="agi-support-title"
           eyebrow="Support"
-          title="We read every email, and Team and Enterprise get a stated first response."
-          lede="Email is the canonical channel for everyone. Free through Max carry no response-time commitment; Team and Enterprise do, stated below in Central Time, the time zone AGI Automation LLC operates in. We do not claim 24/7 coverage, because a small team could not staff it honestly."
+          title="Support channels and plan commitments."
+          lede="The help centre and email are the published channels. Free through Max carry no response-time commitment; Team and Enterprise commitments are stated below in Central Time. We do not claim 24/7 coverage."
           ctas={[
             { href: contactMailto(), label: `Email ${CONTACT_EMAIL}` },
             { href: '/help', label: 'Browse the help index', variant: 'secondary' },
@@ -52,9 +52,8 @@ export default function SupportPage() {
                 What you can count on, by tier.
               </h2>
               <Prose>
-                One honest table. Every tier reaches a human by email; Team and Enterprise carry a
-                stated first-response target on top of that. These are current commitments, not
-                targets we are building toward; the uptime and credit targets on{' '}
+                One table names the available channel for each tier. Team and Enterprise carry a
+                stated first-response target; other tiers do not. The uptime and credit targets on{' '}
                 <Link href="/sla" className="agi-ds-link">
                   /sla
                 </Link>{' '}

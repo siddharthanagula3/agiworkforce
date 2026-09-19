@@ -32,7 +32,11 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
     maxMembers: null,
   })),
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
+  recordAuditEvent: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/services/deprovision-service', () => ({
   deprovisionMember: vi.fn(async () => ({
     sessionsRevoked: 0,
@@ -41,8 +45,12 @@ vi.mock('@/lib/services/deprovision-service', () => ({
     errors: [],
   })),
 }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: vi.fn(() => ({})) }));
+vi.mock('@/lib/server/identity', () => ({
+  getRequestIdentity: vi.fn(async () => null),
+  getIdentityProvider: vi.fn(() => ({})),
+}));
 vi.mock('@/lib/server/request-context-cache', () => ({
+  getCachedActiveOrganizationId: vi.fn(async () => null),
   invalidateActiveOrganizationCache: vi.fn(async () => undefined),
 }));
 

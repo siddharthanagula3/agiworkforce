@@ -38,6 +38,14 @@ const SQL_ROLE_ARRAY_CHECK =
   /\bapp_has_org_role\s*\(|\bcurrent_app_org_role\s*\(\s*\)\s*(?:in|=)\s*[('"]/i;
 const SQL_PERMISSION_HELPER = 'app_has_org_permission';
 
+// Applied migrations cannot be edited, so their role-array policies are corrected by a later
+// migration. This set may only shrink: an entry whose file no longer offends is an error.
+const SQL_BASELINE = new Map([
+  ['0227_payment_provider_subscription_history.sql', 'redefined by 0267'],
+  ['0228_enterprise_commercial_agreements.sql', 'redefined by 0267'],
+  ['0248_permission_namespaces_and_scim_group_membership_lock.sql', 'redefined by 0267'],
+]);
+
 function stripSqlComments(source) {
   return source.replace(/--[^\n]*/g, '');
 }
@@ -84,13 +92,19 @@ for (const file of walk(root)) {
 }
 
 const sqlOffenders = [];
+const unusedBaseline = new Set(SQL_BASELINE.keys());
 const migrationsAbs = path.join(root, MIGRATIONS_DIR);
 if (fs.existsSync(migrationsAbs)) {
   for (const name of fs.readdirSync(migrationsAbs).sort()) {
     const match = MIGRATION_FILE.exec(name);
     if (!match || Number.parseInt(match[1], 10) < FIRST_PERMISSION_GRID_MIGRATION) continue;
     const source = fs.readFileSync(path.join(migrationsAbs, name), 'utf8');
-    for (const hit of findRoleArrayChecksInMigration(source)) {
+    const hits = findRoleArrayChecksInMigration(source);
+    if (hits.length > 0 && SQL_BASELINE.has(name)) {
+      unusedBaseline.delete(name);
+      continue;
+    }
+    for (const hit of hits) {
       sqlOffenders.push(`${MIGRATIONS_DIR}/${name}:${hit.line}  ${hit.text}`);
     }
   }
@@ -114,9 +128,17 @@ if (sqlOffenders.length > 0) {
   for (const offender of sqlOffenders) console.error(`  ${offender}`);
 }
 
-if (offenders.length > 0 || sqlOffenders.length > 0) process.exit(1);
+if (unusedBaseline.size > 0) {
+  console.error(
+    `check:org-role-checks, ${unusedBaseline.size} baseline entr(y/ies) no longer offend.\n` +
+      'Delete them from SQL_BASELINE; the set may only shrink.\n',
+  );
+  for (const name of unusedBaseline) console.error(`  ${MIGRATIONS_DIR}/${name}`);
+}
+
+if (offenders.length > 0 || sqlOffenders.length > 0 || unusedBaseline.size > 0) process.exit(1);
 
 console.log(
   'check:org-role-checks, every organization-admin gate goes through the shared helper, ' +
-    'and every new policy asks for a permission.',
+    `and every new policy asks for a permission (${SQL_BASELINE.size} baselined migration(s)).`,
 );

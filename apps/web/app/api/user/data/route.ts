@@ -5,6 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -13,7 +14,7 @@ import { eraseUserAccountData, eraseUserMedia } from '@/lib/server/account-erasu
 import { GET as exportUserDataGet } from '@/app/api/user/export/route';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
-export const GET = exportUserDataGet;
+export const GET = withPrivateNoStore(exportUserDataGet);
 
 async function handleDeleteUserData(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);

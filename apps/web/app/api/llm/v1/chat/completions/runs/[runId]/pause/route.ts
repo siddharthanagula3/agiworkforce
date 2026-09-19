@@ -13,6 +13,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   CloudAgentRunNotFoundError,
   CloudAgentRunNotPausableError,
@@ -29,7 +30,7 @@ async function handlePause(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   const parsedRunId = RunIdSchema.safeParse((await context.params).runId);
@@ -37,6 +38,13 @@ async function handlePause(request: NextRequest, context: RouteContext) {
 
   try {
     const run = await requestCloudAgentRunPause(db, { userId, runId: parsedRunId.data });
+    await recordAuditEvent({
+      userId,
+      organizationId,
+      eventType: 'agent_run_lifecycle_changed',
+      request,
+      detail: { resourceId: parsedRunId.data, status: 'pause_requested' },
+    });
     return NextResponse.json(
       { run },
       { status: 202, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },

@@ -257,7 +257,6 @@
         "trackedBy": "SIX-32",
         "paths": [
           "apps/mobile/components/ui/avatar.tsx",
-          "apps/mobile/components/ui/bottom-sheet.tsx",
           "apps/mobile/lib/markdown.ts",
           "apps/mobile/lib/providerStreamClient.ts",
           "apps/mobile/lib/tagUtils.ts",

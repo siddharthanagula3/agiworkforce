@@ -89,7 +89,7 @@
         "multiple devices",
         "sync"
       ],
-      "updated": "2026-08-05",
+      "updated": "2026-09-19",
       "source": "content/support/accounts-and-sign-in.md",
       "chunks": [
         {
@@ -97,28 +97,28 @@
           "ordinal": 0,
           "heading": "Signing in",
           "headingPath": "Accounts and signing in › Signing in",
-          "text": "Sign in with the email address you registered. If a sign-in link or verification\nemail has not arrived, check the spam folder first, then request a new one from the\nsign-in screen."
+          "text": "Open [Sign in](https://agiworkforce.com/login) and use the email address or sign-in provider associated\nwith your account. Follow the password or email-code option shown on screen.\n\nIf a verification code has not arrived, check your spam folder and confirm the\nemail address, then use **Resend code** when it becomes available. If you forgot\nyour account password, choose **Forgot password?** on the password screen."
         },
         {
           "id": "accounts-and-sign-in#1",
           "ordinal": 1,
           "heading": "Using AGI on several devices",
           "headingPath": "Accounts and signing in › Using AGI on several devices",
-          "text": "Your conversations sync across web, desktop, mobile, and the browser extension when\nyou are signed in. Local-mode conversations are the exception: they stay on the\ndevice that created them."
+          "text": "To reopen saved web conversations on another device, sign in to the web app with\nthe same account and select the same workspace. Personal and Enterprise workspaces\nare separate, so check the workspace menu if expected conversations are missing.\n\nCheck [Downloads](https://agiworkforce.com/download) for the current release status of other clients before\ntrying to install them. Local-mode conversations stay on the device that created\nthem. Temporary chats do not appear in saved history."
         },
         {
           "id": "accounts-and-sign-in#2",
           "ordinal": 2,
-          "heading": "The desktop master password is separate",
-          "headingPath": "Accounts and signing in › The desktop master password is separate",
-          "text": "The desktop master password is not your account password. It protects the encrypted\nprovider keys stored on your machine, AGI never has it, and it cannot be recovered."
+          "heading": "CLI provider credentials are separate",
+          "headingPath": "Accounts and signing in › CLI provider credentials are separate",
+          "text": "The released CLI stores provider keys in the operating system credential store.\nThose keys are separate from your AGI account credential. Desktop accepts no\nprovider key, and VS Code BYOK is coming soon."
         },
         {
           "id": "accounts-and-sign-in#3",
           "ordinal": 3,
-          "heading": "Getting a human",
-          "headingPath": "Accounts and signing in › Getting a human",
-          "text": "A real person reads contact@agiworkforce.com. The support page lists what is covered\nfor each plan."
+          "heading": "Contacting support",
+          "headingPath": "Accounts and signing in › Contacting support",
+          "text": "Send support requests to contact@agiworkforce.com. The support page lists the\navailable channels and any plan-specific response commitments."
         }
       ]
     },
@@ -332,8 +332,8 @@
         "add key",
         "encrypted"
       ],
-      "platforms": ["cli", "desktop"],
-      "updated": "2026-08-05",
+      "platforms": ["cli", "vscode"],
+      "updated": "2026-09-19",
       "source": "content/support/byok-provider-keys.md",
       "chunks": [
         {
@@ -341,42 +341,42 @@
           "ordinal": 0,
           "heading": "What BYOK means here",
           "headingPath": "Add your own provider API key (BYOK) › What BYOK means here",
-          "text": "BYOK is \"bring your own key\". You supply a provider API key on Desktop or CLI, and\nAGI sends your requests directly to that provider using it. Keys are encrypted at\nrest on your machine. Usage is billed by your provider, not by AGI, and AGI adds no\nmarkup."
+          "text": "BYOK is \"bring your own key\". The released CLI accepts provider API keys today,\nand VS Code BYOK is coming soon. AGI sends requests directly to the provider you\nselected. Usage is billed by that provider, not by AGI, and AGI adds no markup.\nWeb, Mobile, Desktop and Chrome do not accept provider keys; each runs on your AGI\naccount."
         },
         {
           "id": "byok-provider-keys#1",
           "ordinal": 1,
           "heading": "Adding a key",
           "headingPath": "Add your own provider API key (BYOK) › Adding a key",
-          "text": "1. Open Settings, then Providers.\n2. Choose \"Add provider\" and select the provider you have an account with.\n3. Paste the API key and save. The key is encrypted at rest before it is stored."
+          "text": "1. Run `agi login <provider>`, such as `agi login anthropic`.\n2. Paste the provider API key when the CLI prompts for it.\n3. Run `agi auth-status` to confirm the saved provider. The CLI stores the secret\n   in the OS credential store.\n\nA bare `agi login` signs in to AGI managed cloud. It does not prompt for a\nprovider API key."
         },
         {
           "id": "byok-provider-keys#2",
           "ordinal": 2,
           "heading": "Anthropic",
           "headingPath": "Add your own provider API key (BYOK) › Anthropic",
-          "text": "Create an API key in the Anthropic console, then paste it into the Anthropic entry\nunder Settings, Providers."
+          "text": "Create an API key in the Anthropic console, then run `agi login anthropic`."
         },
         {
           "id": "byok-provider-keys#3",
           "ordinal": 3,
           "heading": "OpenAI",
           "headingPath": "Add your own provider API key (BYOK) › OpenAI",
-          "text": "Create an API key in the OpenAI platform dashboard, then paste it into the OpenAI\nentry under Settings, Providers."
+          "text": "Create an API key in the OpenAI platform dashboard, then run `agi login openai`."
         },
         {
           "id": "byok-provider-keys#4",
           "ordinal": 4,
           "heading": "Custom OpenAI-compatible endpoints",
           "headingPath": "Add your own provider API key (BYOK) › Custom OpenAI-compatible endpoints",
-          "text": "If your provider exposes an OpenAI-compatible API, add it as a custom endpoint and\nsupply its base URL alongside the key."
+          "text": "The released CLI accepts the provider names listed by `agi login --help`. Custom\nOpenAI-compatible endpoints remain subject to the CLI's current configuration and\nprovider support."
         },
         {
           "id": "byok-provider-keys#5",
           "ordinal": 5,
-          "heading": "The desktop master password",
-          "headingPath": "Add your own provider API key (BYOK) › The desktop master password",
-          "text": "The Desktop master password protects your encrypted keys and is unrecoverable by\ndesign. AGI never has it. If you forget it, your encrypted keys cannot be\ndecrypted. Back it up somewhere safe."
+          "heading": "VS Code release state",
+          "headingPath": "Add your own provider API key (BYOK) › VS Code release state",
+          "text": "The VS Code extension has a private SecretStorage-backed key flow in the codebase,\nbut no VSIX has been published yet. The public setup instructions will apply when\nthat release is available."
         },
         {
           "id": "byok-provider-keys#6",
@@ -637,7 +637,7 @@
         "command line"
       ],
       "platforms": ["cli", "desktop", "linux", "macos", "windows"],
-      "updated": "2026-08-13",
+      "updated": "2026-09-19",
       "source": "content/support/desktop-and-cli.md",
       "chunks": [
         {
@@ -652,21 +652,21 @@
           "ordinal": 1,
           "heading": "The desktop app",
           "headingPath": "Desktop app and CLI › The desktop app",
-          "text": "Desktop installers for macOS, Windows, and Linux are published as release assets on\nthe download page as they become available. Desktop is the surface that supports\nLocal mode and BYOK."
+          "text": "The current Desktop application is an Electron shell for managed-cloud account\nwork. It does not accept provider keys or run a local model. No Desktop installer\nhas been published yet; the download page reports release availability instead of\noffering an unverified asset."
         },
         {
           "id": "desktop-and-cli#2",
           "ordinal": 2,
           "heading": "What the desktop app adds",
           "headingPath": "Desktop app and CLI › What the desktop app adds",
-          "text": "- Desktop Local mode through Ollama, LM Studio, llama.cpp, or vLLM. The CLI\n  supports its documented local integrations, currently Ollama and LM Studio.\n- BYOK provider keys, encrypted at rest on your machine behind the master password.\n- Offline operation with no managed-cloud dependency."
+          "text": "- A dedicated managed-cloud window for your AGI account.\n- Approved-folder workflows and one-step computer-use approvals on supported\n  macOS builds.\n- The optional Chrome native bridge.\n\nLocal and BYOK are available in the released CLI. The CLI's documented local\nintegrations are Ollama and LM Studio, and `agi login <provider>` stores provider\nkeys in the OS credential store."
         },
         {
           "id": "desktop-and-cli#3",
           "ordinal": 3,
           "heading": "Managed cloud from developer surfaces",
           "headingPath": "Desktop app and CLI › Managed cloud from developer surfaces",
-          "text": "Managed cloud access from the CLI, the Chrome extension, and VS Code is part of the\nhigher paid tiers. Current plan details live on the pricing page."
+          "text": "Desktop itself is managed-cloud-only. Managed cloud access from the CLI, Chrome,\nand VS Code depends on release availability and the current plan details shown on\nthe pricing page."
         }
       ]
     },
@@ -855,7 +855,7 @@
         "onboarding",
         "install"
       ],
-      "updated": "2026-09-01",
+      "updated": "2026-09-19",
       "source": "content/support/getting-started.md",
       "chunks": [
         {
@@ -870,14 +870,14 @@
           "ordinal": 1,
           "heading": "The three trust modes",
           "headingPath": "Getting started with AGI › The three trust modes",
-          "text": "AGI runs in three separate trust modes and never silently moves work between them.\n\n- **Local** runs models on your own hardware. Desktop supports Ollama, LM Studio,\n  llama.cpp, and vLLM; the CLI supports its documented local integrations,\n  currently Ollama and LM Studio. Local is free and can run offline after the\n  runtime and model are installed.\n- **BYOK** means you bring your own provider API key on supported Desktop, CLI,\n  and VS Code releases. Keys stay in the local runtime and traffic goes directly\n  to your provider. Usage is billed by the provider, not by AGI, with no markup.\n  BYOK is free.\n- **Managed cloud** runs on AGI-operated provider access. It is metered, and\n  current plan details live on the pricing page.\n\nMoving a conversation from Local to BYOK is always an explicit fork with context\nselection, a payload preview, and a visible provider label. It never happens\nautomatically."
+          "text": "AGI runs in three separate trust modes and never silently moves work between them.\n\n- **Local** runs models on your own hardware. The released CLI supports Ollama and\n  LM Studio. Local is free and can run offline after the runtime and model are\n  installed.\n- **BYOK** means you bring your own provider API key. The released CLI supports it\n  today, and VS Code BYOK is coming soon. Keys stay in the surface's private\n  credential store and traffic goes directly to your provider. Usage is billed by\n  the provider, not by AGI, with no markup. BYOK is free.\n- **Managed cloud** runs on AGI-operated provider access. It is metered, and\n  current plan details live on the pricing page.\n\nWeb, Mobile, Desktop and Chrome do not accept provider keys. The current Desktop\napplication is a managed-cloud account shell and does not run local models.\n\nMoving a conversation from Local to BYOK is always an explicit fork with context\nselection, a payload preview, and a visible provider label. It never happens\nautomatically."
         },
         {
           "id": "getting-started#2",
           "ordinal": 2,
           "heading": "What to set up first",
           "headingPath": "Getting started with AGI › What to set up first",
-          "text": "1. Pick a trust mode. If you want to stay offline, install the desktop app and run\n   Local mode.\n2. If you want to use your own provider account, add a provider key.\n3. If you want AGI to handle provider access for you, use managed cloud on the web."
+          "text": "1. Pick a trust mode. If you want to stay offline, install the CLI and configure\n   Ollama or LM Studio.\n2. If you want to use your own provider account, run `agi login <provider>` and\n   verify it with `agi auth-status`.\n3. If you want AGI to handle provider access for you, use managed cloud on the web."
         },
         {
           "id": "getting-started#3",
@@ -986,7 +986,7 @@
         "get notified"
       ],
       "platforms": ["android", "desktop", "ios", "linux", "macos", "mobile", "windows"],
-      "updated": "2026-09-17",
+      "updated": "2026-09-19",
       "source": "content/support/install-desktop-and-mobile.md",
       "chunks": [
         {
@@ -1015,7 +1015,7 @@
           "ordinal": 3,
           "heading": "What desktop adds once it ships",
           "headingPath": "Installing the desktop and mobile apps › What desktop adds once it ships",
-          "text": "Desktop is the surface for Local mode through Ollama, LM Studio, llama.cpp and\nvLLM, for BYOK provider keys encrypted at rest behind a master password, and for\noffline operation with no managed-cloud dependency."
+          "text": "Desktop adds a dedicated managed-cloud account window, approved-folder workflows,\none-step computer-use approvals on supported macOS builds, and the optional Chrome\nnative bridge. It does not accept provider keys or run local models. Local and BYOK\nare available through the released CLI."
         },
         {
           "id": "install-desktop-and-mobile#4",
@@ -1029,7 +1029,7 @@
           "ordinal": 5,
           "heading": "In the meantime",
           "headingPath": "Installing the desktop and mobile apps › In the meantime",
-          "text": "Everything in this help centre that is not marked desktop-only or CLI-only works\nin the web app today, on any modern browser, signed in with the same account."
+          "text": "Use the web app while waiting for another client. Check each guide for its\nplatform and setup requirements: access can depend on your plan, workspace\npermissions and browser capabilities. The [download page](https://agiworkforce.com/download) is the\nplace to check current client release availability."
         }
       ]
     },
@@ -1224,15 +1224,13 @@
         "offline",
         "ollama",
         "lm studio",
-        "llama.cpp",
-        "vllm",
         "on device",
         "no internet",
         "privacy",
         "free"
       ],
-      "platforms": ["cli", "desktop"],
-      "updated": "2026-08-13",
+      "platforms": ["cli"],
+      "updated": "2026-09-19",
       "source": "content/support/local-mode.md",
       "chunks": [
         {
@@ -1240,14 +1238,14 @@
           "ordinal": 0,
           "heading": "Running models on your own hardware",
           "headingPath": "Run AGI offline with Local mode › Running models on your own hardware",
-          "text": "Desktop Local mode runs models through Ollama, LM Studio, llama.cpp, or vLLM on\nyour own machine. The CLI supports its documented local integrations, currently\nOllama and LM Studio. There are no AGI API keys or managed quotas, and inference\ncan run offline after the runtime and model are installed. Local mode is free."
+          "text": "The released CLI runs models through Ollama or LM Studio on your own machine.\nThere are no AGI API keys or managed quotas, and inference can run offline after\nthe runtime and model are installed. Local mode is free. The current Desktop\napplication is managed-cloud-only and does not run local models."
         },
         {
           "id": "local-mode#1",
           "ordinal": 1,
           "heading": "Setting it up",
           "headingPath": "Run AGI offline with Local mode › Setting it up",
-          "text": "1. Install a supported runtime and at least one compatible model. On Desktop,\n   choose Ollama, LM Studio, llama.cpp, or vLLM; for the CLI, follow its current\n   Ollama or LM Studio setup guide.\n2. Install the AGI surface whose release is available for your platform.\n3. Select the local runtime in the model picker. AGI lists models exposed by the\n   running server."
+          "text": "1. Install Ollama or LM Studio and at least one compatible model.\n2. Install the AGI CLI for your platform.\n3. Select the local runtime in the CLI. AGI lists models exposed by the running\n   server."
         },
         {
           "id": "local-mode#2",
@@ -1542,14 +1540,14 @@
           "ordinal": 0,
           "heading": "What is stored where",
           "headingPath": "Privacy controls in Settings › What is stored where",
-          "text": "In Local mode on Desktop, CLI and VS Code, conversations stay on your device and\nare never uploaded. Managed cloud conversations are encrypted in transit and at\nrest. AGI does not sell your data, and does not use customer conversation\ncontent to train AGI-owned models."
+          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select; VS Code\nBYOK is coming soon. Web, Mobile, Desktop and Chrome use managed cloud and do not\naccept provider keys. Managed cloud conversations are encrypted in transit and\nat rest. AGI does not sell your data, and does not use customer conversation\ncontent to train AGI-owned models."
         },
         {
           "id": "privacy-controls#1",
           "ordinal": 1,
           "heading": "Diagnostics",
           "headingPath": "Privacy controls in Settings › Diagnostics",
-          "text": "Crash reports and anonymised usage counts, with no message content, help fix\nbugs. They are disabled by default and can be turned off at any time in\nSettings, Privacy."
+          "text": "Browser crash reports and consent-gated usage counts help fix bugs. They are\ndisabled by default and can be turned on or off in Settings, Privacy. Sensitive\nrequest fields are removed before error reports are sent; free-text diagnostic\nmessages may remain after secrets are masked. Server-side operational error\nreporting can run when configured and is not controlled by the browser setting."
         },
         {
           "id": "privacy-controls#2",
@@ -1667,11 +1665,9 @@
         "zhipu",
         "ollama",
         "lm studio",
-        "llama.cpp",
-        "vllm",
         "routing"
       ],
-      "updated": "2026-08-13",
+      "updated": "2026-09-19",
       "source": "content/support/providers-and-models.md",
       "chunks": [
         {
@@ -1679,7 +1675,7 @@
           "ordinal": 0,
           "heading": "Which providers are supported",
           "headingPath": "Providers and models › Which providers are supported",
-          "text": "AGI supports {{MARKETING.providers.display}} provider integrations, including\nAnthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and\ncustom OpenAI-compatible endpoints. Desktop Local mode supports four verified\nruntimes: Ollama, LM Studio, llama.cpp, and vLLM. The in-product catalog is the\ncurrent source of truth."
+          "text": "AGI supports {{MARKETING.providers.display}} provider integrations, including\nAnthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and\ncustom OpenAI-compatible endpoints. The released CLI supports the Ollama and LM\nStudio local runtimes. Desktop runs on your AGI account and does not accept a\nprovider key or run a local model. The in-product catalog is the current source\nof truth."
         },
         {
           "id": "providers-and-models#1",
@@ -2120,7 +2116,7 @@
           "ordinal": 8,
           "heading": "Still stuck",
           "headingPath": "Troubleshooting: when something does not work › Still stuck",
-          "text": "Email contact@agiworkforce.com. A real person reads it. Include your **User ID**\nfrom Settings, Account, and the **Organization ID** too if the problem is\nworkspace-wide."
+          "text": "Email contact@agiworkforce.com. Include your **User ID** from Settings, Account,\nand the **Organization ID** too if the problem is workspace-wide. The support\npage lists the available channels and response commitments."
         }
       ]
     },
@@ -2144,7 +2140,7 @@
         "rate limit",
         "out of capacity"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-19",
       "source": "content/support/usage-and-credits.md",
       "chunks": [
         {
@@ -2152,7 +2148,7 @@
           "ordinal": 0,
           "heading": "How usage is measured",
           "headingPath": "Usage limits, credits and top-ups › How usage is measured",
-          "text": "Managed cloud usage is metered. Each plan carries a capacity allowance, and the\nusage view in Settings shows how much of the current allowance you have used and\nwhen it resets, as a percentage and a reset time."
+          "text": "Managed cloud usage is metered. For plans with included allowances, Settings,\nUsage shows consumption, remaining allowance and reset times. Purchased credits\nare shown separately from the plan allowance.\n\nEnterprise allowances and billing follow the workspace contract. Use **View\nworkspace usage** to see organization consumption; the contract determines the\napplicable allowance rather than a personal-plan percentage bar."
         },
         {
           "id": "usage-and-credits#1",
@@ -2209,7 +2205,7 @@
         "microphone denied",
         "speak"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-19",
       "source": "content/support/voice.md",
       "chunks": [
         {
@@ -2217,21 +2213,21 @@
           "ordinal": 0,
           "heading": "Two different things",
           "headingPath": "Talk to AGI: voice mode and dictation › Two different things",
-          "text": "**Dictation** turns speech into text in the composer. You review the transcript\nand press send, so nothing is sent until you send it.\n\n**Voice mode** is a spoken conversation: AGI listens and answers out loud, and a\ntranscript of both sides appears as you go."
+          "text": "**Dictation** turns speech into text in the composer. On web, finishing a recording\nsends its audio to AGI's transcription service. You review the resulting text\nbefore sending it as a chat message. Cancel before finishing the recording to\ndiscard it without requesting transcription.\n\n**Voice mode** is a spoken conversation: AGI listens and answers out loud, and a\ntranscript of both sides appears as you go."
         },
         {
           "id": "voice#1",
           "ordinal": 1,
           "heading": "Dictation",
           "headingPath": "Talk to AGI: voice mode and dictation › Dictation",
-          "text": "Turn it on in Settings, Voice: \"Turn speech into composer text with the\nmicrophone button. Review the transcript before sending.\" The same page sets the\nlanguage dictation transcribes into. With dictation off, the language control is\ndisabled because there is nothing to transcribe."
+          "text": "Turn it on in Settings, Voice: \"Turn speech into composer text with the\nmicrophone button. Review the transcript before sending.\" The same page sets the\nlanguage dictation transcribes into. Turning dictation off disables its microphone\nbutton and language control, and discards any recording still in progress."
         },
         {
           "id": "voice#2",
           "ordinal": 2,
           "heading": "Voice mode",
           "headingPath": "Talk to AGI: voice mode and dictation › Voice mode",
-          "text": "Start it with the **Start voice mode** button in the composer. Voice settings\nchoose the spoken voice, how much intelligence a voice turn gets, and its\nlanguage, which can be left on **Auto-detect**. Several voices are offered,\nincluding Marin, Meridian, Gleam, Quartz, Ripple, Vesper, Willow, Stone, Delta,\nCinder, Beacon, Bossa and Tempo."
+          "text": "Start it with the **Start voice mode** button in the composer. Voice settings\nchoose the spoken voice, how much intelligence a voice turn gets, and its\nlanguage, which can be left on **Auto-detect**. Choose from the voices available\nin the voice settings."
         },
         {
           "id": "voice#3",

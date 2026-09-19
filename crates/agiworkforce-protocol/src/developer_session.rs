@@ -856,21 +856,17 @@ pub enum DeveloperSessionNegotiation {
 /// stays in [`SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS`]: the added
 /// methods are additive and an older client never calls them, which is how a
 /// new backend feature degrades gracefully instead of dropping the session.
-pub fn negotiate_developer_session_protocol(
-    requested: Option<u32>,
-) -> DeveloperSessionNegotiation {
+pub fn negotiate_developer_session_protocol(requested: Option<u32>) -> DeveloperSessionNegotiation {
     match requested {
         None => DeveloperSessionNegotiation::Legacy(LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION),
         Some(version) if SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.contains(&version) => {
             DeveloperSessionNegotiation::Agreed(version)
         }
-        Some(version) => {
-            DeveloperSessionNegotiation::Unsupported(ProtocolVersionUnsupportedData {
-                requested_protocol_version: version,
-                supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
-                minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-            })
-        }
+        Some(version) => DeveloperSessionNegotiation::Unsupported(ProtocolVersionUnsupportedData {
+            requested_protocol_version: version,
+            supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+            minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+        }),
     }
 }
 
@@ -1713,9 +1709,13 @@ mod tests {
 
     /// Every spelling inside `text` between `open` and the next `close`.
     fn quoted_between(text: &str, open: &str, close: &str) -> Vec<String> {
-        let start = text.find(open).unwrap_or_else(|| panic!("{open} is present"));
+        let start = text
+            .find(open)
+            .unwrap_or_else(|| panic!("{open} is present"));
         let rest = &text[start + open.len()..];
-        let end = rest.find(close).unwrap_or_else(|| panic!("{close} closes it"));
+        let end = rest
+            .find(close)
+            .unwrap_or_else(|| panic!("{close} closes it"));
         rest[..end]
             .split('\'')
             .skip(1)
@@ -1780,7 +1780,10 @@ mod tests {
         }
 
         // The shared contract is the wire enum itself, not a fifth vocabulary.
-        let mut wire: Vec<&str> = DEVELOPER_AGENT_MODES.iter().map(|m| m.wire_name()).collect();
+        let mut wire: Vec<&str> = DEVELOPER_AGENT_MODES
+            .iter()
+            .map(|m| m.wire_name())
+            .collect();
         wire.sort_unstable();
         let mut mirrored: Vec<&str> = shared.iter().map(String::as_str).collect();
         mirrored.sort_unstable();
@@ -1854,8 +1857,9 @@ mod tests {
             );
         }
 
-        let too_old =
-            negotiate_developer_session_protocol(Some(MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION - 1));
+        let too_old = negotiate_developer_session_protocol(Some(
+            MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION - 1,
+        ));
         assert_eq!(
             too_old,
             DeveloperSessionNegotiation::Unsupported(ProtocolVersionUnsupportedData {

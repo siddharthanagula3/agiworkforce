@@ -1,0 +1,11 @@
+{
+  "recordedAt": "2026-09-19",
+  "kind": "targeted-verification",
+  "log": "test_active_requests_small_continuation (test_launch.LaunchHookTests) ... ok\ntest_all_blocked_is_not_completion (test_launch.LaunchHookTests) ... ok\ntest_concurrent_repeated_events_issue_one_continuation (test_launch.LaunchHookTests) ... ok\ntest_disabled_run_cannot_claim_completion (test_launch.LaunchHookTests) ... ok\ntest_done_flag_or_missing_proof_cannot_complete (test_launch.LaunchHookTests) ... ok\ntest_finite_limits (test_launch.LaunchHookTests) ... ok\ntest_implementation_progress_resets_stall_count_not_budget (test_launch.LaunchHookTests) ... ok\ntest_interrupt_and_new_user_prompt_preserve_control (test_launch.LaunchHookTests) ... ok\ntest_login_wait_and_expiry_never_repeat_login (test_launch.LaunchHookTests) ... ok\ntest_malformed_ledger_has_diagnostic_and_persists_hook_error (test_launch.LaunchHookTests) ... ok\ntest_missing_and_malformed_state_have_diagnostics (test_launch.LaunchHookTests) ... ok\ntest_no_progress_replans_then_checkpoints (test_launch.LaunchHookTests) ... ok\ntest_one_blocked_task_does_not_hide_independent_work (test_launch.LaunchHookTests) ... ok\ntest_own_continuation_is_observed_without_resuming_paused_run (test_launch.LaunchHookTests) ... ok\ntest_resume_cannot_reset_expired_run (test_launch.LaunchHookTests) ... ok\ntest_scope_or_configuration_drift_checkpoints (test_launch.LaunchHookTests) ... ok\ntest_unrelated_session_worktree_worker_and_inactive_do_not_continue (test_launch.LaunchHookTests) ... ok\ntest_valid_pass_is_not_requeued_and_only_changed_dependencies_invalidate (test_launch.LaunchHookTests) ... ok\ntest_verified_scope_requires_all_current_evidence_and_audit (test_launch.LaunchHookTests) ... ok\n\n----------------------------------------------------------------------\nRan 19 tests in 0.333s\n\nOK\n",
+  "sourceHashes": {
+    ".codex/hooks/launch.py": "448048e6f61d8192fe094c40658d94e091aefb930f517ab4cc035a9e2b121d18",
+    ".codex/hooks/test_launch.py": "a28283e61bc8371d1b14d28a50cc57d05054c984e56028a96f9aa5ce5791c89c",
+    ".codex/hooks.json": "9ac01749502ffdbd90b81f894cb56aab762fe23530639cc7a1adb86ed1bd86dd"
+  },
+  "limitations": "Unit/contract validation only; runtime Browser assertions remain separately tracked."
+}

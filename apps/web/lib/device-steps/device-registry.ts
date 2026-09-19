@@ -62,7 +62,7 @@ const BY_INSTALL = `
            else exists (
              select 1 from device_refresh_tokens t
               where t.user_id = r.user_id
-                and t.family_id = r.credential_family_id
+                and t.family_id::text = r.credential_family_id
                 and t.revoked_at is null
                 and t.used_at is null
                 and t.expires_at > now()

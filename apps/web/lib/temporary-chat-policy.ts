@@ -33,3 +33,10 @@ export const TEMPORARY_CHAT_END_CONFIRMATION = {
     'out anything you still need first.',
   confirmLabel: 'End and discard',
 } as const;
+
+export function resolveNewChatTemporary(
+  pendingChoice: boolean | null,
+  defaultTemporary: boolean,
+): boolean {
+  return pendingChoice ?? defaultTemporary;
+}

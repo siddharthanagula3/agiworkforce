@@ -43,6 +43,7 @@ import {
 import { runCloudAgentTurn } from '@/lib/workflows/start-cloud-agent-workflow';
 import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
 import { withSseHeartbeat } from '../../../lib/sse-heartbeat';
+import { withStreamEnvelope } from '../../../lib/stream-envelope';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { loadConnectorToolPermissions } from '../../../lib/connector-tool-permissions';
 import { loadToolApprovalPolicy, policyAutoApprovesTool } from '../../../lib/tool-approval-policy';
@@ -324,7 +325,13 @@ async function handlePausedRunResume(
         })
       : turn.readable;
 
-  return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
+  const enveloped = withStreamEnvelope(body, {
+    conversationId: processed.conversationId ?? undefined,
+    turnId: processed.assistantMessageId ?? undefined,
+    startSequence: claim.checkpoint.nextEventSequence,
+  });
+
+  return new NextResponse(withSseHeartbeat(enveloped), { headers: streamHeaders });
 }
 
 async function admitAndDispatchResume(

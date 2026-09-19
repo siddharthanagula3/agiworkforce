@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { Video, X } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toUserMessage } from '@/lib/user-error-message';
 
 interface VideoGenerationPlaceholderProps {
   /** ISO timestamp the generation started, for the elapsed counter. */
@@ -186,7 +187,10 @@ export function VideoGenerationPlaceholder({
       };
       if (!response.ok) {
         setCancelState('failed');
-        setCancelNote(body.error?.message ?? 'Could not stop this generation. Try again.');
+        const error = Object.assign(new Error(body.error?.message ?? `HTTP ${response.status}`), {
+          status: response.status,
+        });
+        setCancelNote(toUserMessage(error, 'Could not stop this generation. Try again.'));
         return;
       }
       setCancelState('sent');

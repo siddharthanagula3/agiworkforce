@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 
-vi.mock('next/navigation', () => ({ usePathname: () => '/workspace' }));
+const navigationState = vi.hoisted(() => ({ pathname: '/workspace' }));
+
+vi.mock('next/navigation', () => ({ usePathname: () => navigationState.pathname }));
 
 import { WorkspaceConsoleShell } from '../WorkspaceConsoleShell';
 
@@ -21,13 +23,17 @@ function shell(props: Partial<Parameters<typeof WorkspaceConsoleShell>[0]> = {})
 }
 
 describe('WorkspaceConsoleShell', () => {
+  beforeEach(() => {
+    navigationState.pathname = '/workspace';
+  });
+
   it('renders the console for an owner', () => {
     shell({ role: 'owner' });
 
     expect(screen.getByText('console body')).toBeInTheDocument();
-    expect(
-      screen.getByRole('navigation', { name: /workspace administration/i }),
-    ).toBeInTheDocument();
+    expect(screen.getAllByRole('navigation', { name: /workspace administration/i })).toHaveLength(
+      2,
+    );
   });
 
   it('renders the console for an admin', () => {
@@ -74,5 +80,60 @@ describe('WorkspaceConsoleShell', () => {
       expect(screen.queryByRole('navigation', { name: /workspace administration/i })).toBeNull();
       unmount();
     }
+  });
+
+  it('keeps the mobile administration menu collapsed above the page content', () => {
+    shell();
+
+    const disclosure = screen.getByLabelText(/workspace administration, current page: overview/i);
+    const details = disclosure.closest('details');
+    expect(details).not.toHaveAttribute('open');
+    expect(disclosure.className).toContain('min-h-11');
+
+    disclosure.focus();
+    fireEvent.click(disclosure);
+
+    expect(details).toHaveAttribute('open');
+    expect(document.activeElement).toBe(disclosure);
+  });
+
+  it('names the current nested page in the mobile control', () => {
+    navigationState.pathname = '/workspace/people';
+    shell();
+
+    expect(
+      screen.getByLabelText(/workspace administration, current page: members/i),
+    ).toBeInTheDocument();
+  });
+
+  it('collapses the mobile menu and restores visible focus when the route changes', () => {
+    const { rerender } = shell();
+    const disclosure = screen.getByLabelText(/workspace administration, current page: overview/i);
+    const details = disclosure.closest('details');
+
+    fireEvent.click(disclosure);
+    expect(details).toHaveAttribute('open');
+
+    navigationState.pathname = '/workspace/billing';
+    rerender(
+      <WorkspaceConsoleShell role="owner" organizationId={ORG} membershipUnavailable={false}>
+        <p>console body</p>
+      </WorkspaceConsoleShell>,
+    );
+
+    const updatedDisclosure = screen.getByLabelText(
+      /workspace administration, current page: billing/i,
+    );
+    expect(details).not.toHaveAttribute('open');
+    expect(document.activeElement).toBe(updatedDisclosure);
+  });
+
+  it('preserves the desktop sidebar width and row layout', () => {
+    const { container } = shell();
+
+    const frame = container.firstElementChild;
+    const aside = container.querySelector('aside');
+    expect(frame?.className).toContain('md:flex-row');
+    expect(aside?.className).toContain('md:w-60');
   });
 });

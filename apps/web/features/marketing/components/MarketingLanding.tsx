@@ -28,7 +28,7 @@ import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import {
   approximateCount,
-  DESKTOP_LOCAL_RUNTIMES,
+  CLI_LOCAL_RUNTIMES,
   MARKETING,
   SURFACE_STATUS,
 } from '@/lib/marketing-constants';
@@ -45,7 +45,7 @@ export function MarketingLanding() {
   return (
     <div data-design="agi">
       <Header />
-      <main className="agi-shell">
+      <main id="main-content" tabIndex={-1} className="agi-shell">
         <FlagshipHero
           brand="AGI"
           eyebrow="the AI application suite"
@@ -72,8 +72,8 @@ export function MarketingLanding() {
               label: 'providers that take your key',
             },
             {
-              value: approximateCount(DESKTOP_LOCAL_RUNTIMES.names.length),
-              label: 'local runtimes on Desktop',
+              value: approximateCount(CLI_LOCAL_RUNTIMES.names.length),
+              label: 'local runtimes in the CLI',
             },
             { value: approximateCount(MARKETING.surfaces.count), label: 'surfaces, one account' },
           ]}
@@ -93,10 +93,10 @@ export function MarketingLanding() {
             {
               index: '01',
               name: 'AGI Desktop',
-              tagline: 'Runs on your machine.',
-              body: 'The AGI app for macOS. Your account in a window that stays open, plus approved folders, models already running on the Mac, and computer use one step at a time. The Chrome extension pairs with it.',
+              tagline: 'Your managed account on your Mac.',
+              body: 'The AGI app for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use one step at a time. The current Desktop accepts no provider keys or local models.',
               capabilities: [
-                `Local models via ${DESKTOP_LOCAL_RUNTIMES.label}`,
+                'Managed-cloud chat with visible model labels',
                 'Approved folders and programs',
                 'Computer use on macOS, step by step',
                 'Pairs with the Chrome extension',
@@ -207,8 +207,8 @@ export function MarketingLanding() {
               body: 'Models on your hardware. Works offline. Free.',
               points: [
                 'Local chats, files, and sessions never silently leave your device',
-                'Ollama, LM Studio, llama.cpp & vLLM on Desktop',
-                'On-device Local Mode on Mobile',
+                `${CLI_LOCAL_RUNTIMES.label} in the released CLI`,
+                'Mobile Local mode is planned, not published',
                 'No account required',
               ],
               cta: { href: '/local', label: 'Run AGI Locally' },
@@ -217,7 +217,7 @@ export function MarketingLanding() {
               mode: 'BYOK',
               glyph: '◇',
               title: 'Your keys, your bill.',
-              body: 'Bring provider keys on Desktop, CLI, and VS Code.',
+              body: 'Bring provider keys in the released CLI. VS Code support is coming soon.',
               points: [
                 'Keys stored encrypted, on your machine',
                 'Traffic goes directly to your provider',
@@ -303,8 +303,8 @@ export function MarketingLanding() {
 
         <DevBand
           eyebrow="Approvals"
-          title="Nothing runs without you."
-          body="Every file edit and shell command asks first. Pick your autonomy: Suggest, Auto-edit, or Full-auto. Change it any time with Shift+Tab."
+          title="Choose when AGI asks."
+          body="In the CLI, choose whether file edits and shell commands need your approval. Modes that accept edits or run automatically can skip individual prompts. Use Shift+Tab to change modes."
           ctas={[
             { href: '/features/tools', label: 'See Tool Permissions' },
             { href: '/security', label: 'Read the Security Model' },
@@ -318,7 +318,7 @@ export function MarketingLanding() {
             Local, on-device AI. Built, not yet shipped.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI Mobile is built around Local Mode: chats and memory stay on the phone unless you
+            AGI Mobile is planned around Local Mode: chats and memory stay on the phone unless you
             move them. It is not on the App Store or Google Play yet, so there is nothing to install
             today. Leave your email to be told when it lands.
           </p>
@@ -344,7 +344,7 @@ export function MarketingLanding() {
           cards={[
             {
               title: 'Start on your own',
-              body: 'AGI Web is free to try in the browser. Local and BYOK need no account at all.',
+              body: 'AGI Web is free to try in the browser. The released CLI offers Local and BYOK routes.',
               points: [
                 'Every admitted model behind one selector, with Auto as the default',
                 'Projects, memory, artifacts and web search on the first day',

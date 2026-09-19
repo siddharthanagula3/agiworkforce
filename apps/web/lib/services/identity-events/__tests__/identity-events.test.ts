@@ -13,6 +13,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', () => ({
+  getClientIp: vi.fn(() => undefined),
   recordAuditEvent: (...args: unknown[]) => mocks.audit(...args),
 }));
 vi.mock('@/lib/server/risk-signals', () => ({

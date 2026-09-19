@@ -6,7 +6,9 @@ const { mockGetUserScopedDb, mockLogger, mockRecord, mockQuery, mockAudit } = vi
   mockGetUserScopedDb: vi.fn(),
   mockLogger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
   mockRecord: vi.fn((outcomes: unknown[]) => outcomes.length),
-  mockQuery: vi.fn(async () => []),
+  mockQuery: vi.fn(
+    async (_sql?: string, _params?: unknown[]) => [] as Array<{ client_event_id: string }>,
+  ),
   mockAudit: vi.fn(async () => undefined),
 }));
 
@@ -16,7 +18,11 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockAudit }));
+vi.mock('@/lib/security-audit', () => ({
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(async () => undefined),
+  recordAuditEvent: mockAudit,
+}));
 
 vi.mock('@/lib/observability/automation-telemetry', async () => {
   const actual = await vi.importActual<typeof import('@/lib/observability/automation-telemetry')>(
@@ -29,6 +35,7 @@ import { POST } from '../route';
 
 function report(overrides: Record<string, unknown> = {}) {
   return {
+    eventId: '4f43acb0-0e4f-4db7-829f-e4729072510a',
     runId: 'run_1',
     action: 'browser.click',
     surface: 'extension',
@@ -53,7 +60,10 @@ function post(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockRecord.mockImplementation((outcomes: unknown[]) => outcomes.length);
-  mockQuery.mockResolvedValue([]);
+  mockQuery.mockImplementation(async (_sql?: string, params?: unknown[]) => {
+    const rows = JSON.parse(String(params?.[2])) as Array<{ event_id: string }>;
+    return rows.map(({ event_id }) => ({ client_event_id: event_id }));
+  });
   mockGetUserScopedDb.mockResolvedValue({
     db: { query: mockQuery },
     userId: 'user-1',
@@ -157,6 +167,7 @@ describe('automation receipts and the audit stream', () => {
 
     expect(receiptRows()).toEqual([
       expect.objectContaining({
+        event_id: '4f43acb0-0e4f-4db7-829f-e4729072510a',
         run_id: 'run_1',
         device_id: 'device_1',
         surface: 'extension',
@@ -196,6 +207,19 @@ describe('automation receipts and the audit stream', () => {
     expect((await POST(post({ outcomes: [report()] }))).status).toBe(500);
     expect(mockRecord).not.toHaveBeenCalled();
     expect(mockAudit).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges a retried receipt without duplicating its audit stream event', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    const response = await POST(post({ outcomes: [report()] }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ accepted: 1 });
+    expect(mockAudit).not.toHaveBeenCalled();
+    expect(
+      mockLogger.info.mock.calls.some((call) => call[1] === 'Automation run outcomes recorded'),
+    ).toBe(false);
   });
 
   /** L73624: the SIEM stream gets one event per run, not one per pointer move. */

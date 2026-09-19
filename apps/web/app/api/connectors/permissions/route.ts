@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
@@ -71,7 +72,7 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
   // a destructiveness verdict is a safety property, not a caller preference.
   const destructive = isDestructiveConnectorTool(connectorId, toolName);
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   await db.query(
     `insert into public.connector_tool_permissions
        (user_id, connector_id, tool_name, level, destructive, updated_at)
@@ -82,6 +83,19 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
                      updated_at = now()`,
     [userId, connectorId, toolName, WIRE_TO_DB[level], destructive],
   );
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    request,
+    eventType: 'connector_setting_changed',
+    detail: {
+      resourceType: 'connector',
+      resourceId: connectorId,
+      connectorId,
+      resourceName: toolName,
+      status: level,
+    },
+  });
   return NextResponse.json({ success: true, destructive });
 }
 
@@ -102,7 +116,7 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('toolName must be a non-empty tool name when provided');
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const removed = toolName
     ? await db.execute(
         `delete from public.connector_tool_permissions
@@ -114,6 +128,21 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
           where user_id = $1 and connector_id = $2`,
         [userId, connectorId],
       );
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    request,
+    eventType: 'connector_setting_changed',
+    detail: {
+      resourceType: 'connector',
+      resourceId: connectorId,
+      connectorId,
+      ...(toolName ? { resourceName: toolName } : {}),
+      status: 'permission_removed',
+      count: removed,
+    },
+  });
 
   return NextResponse.json({ success: true, removed });
 }

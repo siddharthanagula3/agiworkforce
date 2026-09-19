@@ -13,7 +13,7 @@ Every action the application takes on a tenant's behalf was audited; the one
 path with the most authority was not.
 
 The mechanism is `apps/web/lib/server/support-access-service.ts` and migration
-`apps/web/db/neon/0225_support_access_grants.sql`. This document is the part
+`apps/web/db/neon/0229_support_access_grants.sql`. This document is the part
 that is a process rather than code, plus the two things a reviewer always asks:
 how an operator's access ends when they leave, and what stops a production
 tenant being assembled by hand in the database.

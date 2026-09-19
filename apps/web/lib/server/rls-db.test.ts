@@ -191,7 +191,7 @@ describe('getUserScopedDb with an API-key principal', () => {
     vi.unstubAllEnvs();
   });
 
-  it('skips organization resolution when the caller opts out, scoping to no workspace', async () => {
+  it('keeps authentication policy checks when data scope opts out of workspace resolution', async () => {
     mockAuth.mockResolvedValue({ userId: 'user_1', getToken: async () => 'jwt-token' });
     const request = new NextRequest('https://example.test/api/settings/preferences');
 
@@ -200,8 +200,30 @@ describe('getUserScopedDb with an API-key principal', () => {
     const scoped = await getUserScopedDb(request, { resolveOrganization: false });
 
     expect(scoped.organizationId).toBeNull();
-    expect(resolveActiveOrganizationId).not.toHaveBeenCalled();
+    expect(resolveActiveOrganizationId).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      'user_1',
+      request,
+    );
     expect(rlsWithOrg).toHaveBeenCalledWith(null);
+  });
+
+  it('propagates an explicit workspace rejection instead of falling back to personal data', async () => {
+    const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+    const refusal = Object.assign(new Error('You are not a member of that workspace'), {
+      statusCode: 403,
+    });
+    vi.mocked(resolveActiveOrganizationId).mockRejectedValue(refusal);
+    const request = apiKeyRequest();
+    request.headers.set('x-agi-organization-id', '11111111-1111-4111-8111-111111111111');
+    try {
+      await expect(getUserScopedDb(request, { apiKeyScope: 'inference:write' })).rejects.toBe(
+        refusal,
+      );
+      expect(rlsWithOrg).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(resolveActiveOrganizationId).mockResolvedValue(null);
+    }
   });
 });
 

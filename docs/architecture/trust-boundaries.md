@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-08-13
+Last updated: 2026-09-19
 
 The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines `source-of-truth.md` (Local / BYOK / Managed Cloud) into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
 
@@ -20,16 +20,15 @@ A check mark means allowed, not shipped.
 Implementation status is generated from the harness catalog into
 [`docs/generated/trust-mode-surface-matrix.md`](../generated/trust-mode-surface-matrix.md)
 and will disagree with this table wherever a permitted mode is not finished yet.
-Five profiles disagree today, `desktop/local-chat`, `mobile/local-chat` and
-`cli/local-chat` are `partial`, and `vscode/byok-chat` and `vscode/local-chat`
-are `unwired`, while this table shows all five as permitted. Both are correct
-answers to different questions, and neither should be edited to match the other.
+The generated matrix still inventories retained and forthcoming implementations.
+It does not make a retained Tauri profile a public Desktop capability or an
+unpublished extension available to users.
 
 | Surface     | Local LLMs |      BYOK      | Managed Cloud (subscription) | Cloud chat sync                                    |
 | ----------- | :--------: | :------------: | :--------------------------: | -------------------------------------------------- |
 | **Mobile**  |     ✅     | ❌ **no BYOK** |              ✅              | ✅ shared with web + desktop                       |
 | **Web**     |     ❌     |       ❌       |      ✅ **cloud only**       | ✅ shared with desktop + mobile                    |
-| **Desktop** |     ✅     |       ✅       |              ✅              | ✅ shared with web + mobile                        |
+| **Desktop** |     ❌     |       ❌       |      ✅ **cloud only**       | ✅ shared with web + mobile                        |
 | **CLI**     |     ✅     |       ✅       |  ✅ (subscription required)  | separate (coding sessions)                         |
 | **VS Code** |     ✅     |       ✅       |  ✅ (subscription required)  | separate (coding sessions)                         |
 | **Chrome**  |     ❌     |       ❌       |      ✅ **cloud only**       | ✅ eligible chats mirror to shared account history |
@@ -38,18 +37,18 @@ answers to different questions, and neither should be edited to match the other.
 
 - **Mobile**: two modes only: **Local** (on-device) and **Cloud** (subscription). **BYOK is NOT offered on mobile** (no direct provider-key entry). Cloud chats sync with web + desktop.
 - **Web**: **Cloud only.** No local, no BYOK. Cloud chats sync with desktop + mobile.
-- **Desktop**: exactly **two top-level modes**:
-  - **Local mode** = local LLMs **and** BYOK (both are user-private; BYOK goes direct to the user's provider, not AGI cloud).
-  - **Cloud mode** = API providers via the AGI subscription (managed).
-  - Cloud chats sync with web + mobile.
+- **Desktop**: **Cloud only.** The public Electron application loads the managed
+  account surface and rejects local-inference commands. It accepts no provider
+  key. Approved folders, computer use, and other device tools do not change the
+  conversation's managed-cloud trust boundary. Cloud chats sync with web + mobile.
 - **CLI**: local-first coding agent. Model access via **subscription** (must be present to reach managed models), **BYOK**, and **local models**. Coding sessions are separate from the chat app's cloud history.
 - **VS Code**: **same as CLI** (subscription + BYOK + local; coding sessions separate).
-- **Chrome**: **Cloud only.** `chrome.storage.local` remains authoritative, but a signed-in conversation automatically mirrors into the shared account store when every turn was inferred in Managed Cloud. It then appears in Web, Mobile Cloud, Tauri Cloud, and Electron Cloud. Unknown-provenance or any Local/BYOK turn permanently disqualifies that conversation.
+- **Chrome**: **Cloud only.** `chrome.storage.local` remains authoritative, but a signed-in conversation automatically mirrors into the shared account store when every turn was inferred in Managed Cloud. It then appears in Web, Mobile Cloud, and Desktop. Unknown-provenance or any Local/BYOK turn permanently disqualifies that conversation.
 
 ## Invariants to enforce (the "clean separation")
 
 1. **Local never crosses to AGI cloud.** A Local-mode chat/file/tool result must never be routed to managed cloud or have its content/telemetry leave the device.
-2. **BYOK is private and surface-scoped.** BYOK requests go direct to the user's provider with a visible provider label; BYOK is available **only on Desktop, CLI, VS Code**, and must be **absent on Mobile, Web, Chrome**.
+2. **BYOK is private and surface-scoped.** BYOK requests go direct to the user's provider with a visible provider label; BYOK is available in the released **CLI**, is permitted for the unpublished **VS Code** extension, and must be absent on Mobile, Web, Desktop, and Chrome.
 3. **Managed Cloud is the only metered egress** and is gated by subscription/entitlement; it is the only path that writes to the shared cloud chat store.
 4. **Cloud chat store is shared by Web + Desktop + Mobile**, and provenance-eligible Chrome Managed Cloud chats automatically mirror into it. Chrome's local store remains authoritative; CLI/VS Code coding sessions are separate from the chat store.
 5. **Local→BYOK / Local→Cloud transitions are explicit** (fork/continuation with context selection, secret scan, payload preview, consent, provider label), never silent.

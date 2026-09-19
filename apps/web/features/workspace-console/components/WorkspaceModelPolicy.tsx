@@ -385,7 +385,7 @@ export function WorkspaceModelPolicy() {
           <div className="flex items-center gap-3">
             {update.isError ? (
               <span className="text-xs" style={{ color: 'var(--settings-destructive-text)' }}>
-                {update.error.message}
+                {toUserMessage(update.error, 'Could not update model policy. Try again.')}
               </span>
             ) : null}
             <button

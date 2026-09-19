@@ -36,6 +36,13 @@ describe('delete-account dialog matches what deletion actually does', () => {
     );
   });
 
+  it('labels the action as scheduling rather than immediate deletion', () => {
+    expect(dialog).toMatch(/Deletion is scheduled for 24 hours later/i);
+    expect(dialog).toMatch(/Schedule deletion/);
+    expect(dialog).toMatch(/Scheduling…/);
+    expect(dialog).not.toMatch(/hint="This cannot be undone\."/);
+  });
+
   it('privacy policy agrees that cancellation is self-serve, not a support request', () => {
     expect(privacy).not.toMatch(/no self-serve way to cancel a scheduled deletion/i);
     expect(privacy).toMatch(/cancellation is self-serve/i);

@@ -395,7 +395,7 @@ function useConnectorMutations(adapter?: SettingsDataAdapter) {
       try {
         await action(id);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Something went wrong. Try again.';
+        const message = toUserMessage(err, 'Something went wrong. Try again.');
         setErrors((prev) => ({ ...prev, [id]: message }));
       } finally {
         setMutatingIds((prev) => {
@@ -2119,7 +2119,7 @@ export function SettingsModal({
 
         {/* Right pane */}
         <main
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 [scrollbar-gutter:stable] sm:px-6 sm:pb-6 md:px-8 md:pb-8 md:pt-7"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 [scrollbar-gutter:stable] sm:px-6 sm:pb-6 md:mt-14 md:px-8 md:pb-8 md:pt-0"
           id="settings-pane"
           tabIndex={-1}
         >

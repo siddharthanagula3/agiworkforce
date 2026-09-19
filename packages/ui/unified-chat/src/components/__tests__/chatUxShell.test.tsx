@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';
 
@@ -670,7 +670,11 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
-function renderClient(node: _React.ReactElement): { html: string; unmount: () => void } {
+function renderClient(node: _React.ReactElement): {
+  html: string;
+  container: HTMLDivElement;
+  unmount: () => void;
+} {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -679,12 +683,74 @@ function renderClient(node: _React.ReactElement): { html: string; unmount: () =>
   });
   return {
     html: container.innerHTML,
+    container,
     unmount: () => {
       act(() => root.unmount());
       container.remove();
     },
   };
 }
+
+describe('ChatInterface error presentation', () => {
+  beforeEach(resetStores);
+
+  it('turns a conversation HTTP failure into actionable copy and keeps Retry', async () => {
+    useChatStore.setState({ activeConversationId: 'conv-error' });
+    const runtime = {
+      loadMessages: vi.fn(async () => {
+        throw new Error('HTTP 401');
+      }),
+    } as unknown as ChatRuntime;
+
+    const rendered = renderClient(
+      <ChatInterface runtime={runtime} sidebarSlot={null} enableSearchOverlay={false} />,
+    );
+    try {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(rendered.container.textContent).toContain('Your session has expired');
+      expect(rendered.container.textContent).not.toContain('HTTP 401');
+      expect(
+        Array.from(rendered.container.querySelectorAll('button')).some(
+          (button) => button.textContent === 'Try again',
+        ),
+      ).toBe(true);
+    } finally {
+      rendered.unmount();
+    }
+  });
+
+  it('does not expose an internal render exception', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const BrokenContent = () => {
+      throw new Error('HTTP 500: SELECT secret FROM accounts');
+    };
+
+    const rendered = renderClient(
+      <ChatInterface
+        runtime={null}
+        sidebarSlot={null}
+        emptyStateSlot={<BrokenContent />}
+        enableSearchOverlay={false}
+      />,
+    );
+    try {
+      expect(rendered.container.textContent).toContain('Something went wrong on our side');
+      expect(rendered.container.textContent).not.toContain('SELECT secret');
+      expect(rendered.container.textContent).not.toContain('HTTP 500');
+      expect(
+        Array.from(rendered.container.querySelectorAll('button')).some(
+          (button) => button.textContent === 'Try again',
+        ),
+      ).toBe(true);
+    } finally {
+      rendered.unmount();
+      consoleError.mockRestore();
+    }
+  });
+});
 
 describe('ChatInterface artifact panel wiring', () => {
   beforeEach(() => {

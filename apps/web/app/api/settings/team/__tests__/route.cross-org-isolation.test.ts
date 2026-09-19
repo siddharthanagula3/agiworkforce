@@ -118,6 +118,8 @@ function membershipLookup(sql: string, params?: unknown[]) {
   const [organizationId, userId] = (params ?? []) as [string, string];
 
   return Object.values(MEMBERSHIPS).filter((row) => {
+    if (/status\s*=\s*'active'/.test(text) && (row['status'] ?? 'active') !== 'active')
+      return false;
     if (scopesOrg && row['organization_id'] !== organizationId) return false;
     if (scopesUser && row['user_id'] !== userId) return false;
     return true;
@@ -191,6 +193,27 @@ describe('settings/team cross-organization isolation', () => {
       mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('left join public.profiles')),
     ).toBe(false);
   });
+
+  it.each(['invited', 'suspended', 'deprovisioned'])(
+    'refuses team profile access for a %s requester',
+    async (status) => {
+      const caller = MEMBERSHIPS[`${ORG_A}:org-a-admin`]!;
+      caller['status'] = status;
+      try {
+        const response = await GET(
+          new Request(`http://localhost:3000/api/settings/team?organizationId=${ORG_A}`) as never,
+        );
+        expect(response.status).toBe(403);
+        expect(
+          mockNeonQuery.mock.calls.some(([sql]) =>
+            String(sql).includes('left join public.profiles'),
+          ),
+        ).toBe(false);
+      } finally {
+        delete caller['status'];
+      }
+    },
+  );
 
   it('binds the member list to the requested organization id', async () => {
     const response = await GET(

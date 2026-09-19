@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const source = readFileSync(join(process.cwd(), 'app/api/user/export/route.ts'), 'utf8');
+const source = ['app/api/user/export/route.ts', 'lib/server/restricted-user-export-reader.ts']
+  .map((path) => readFileSync(join(process.cwd(), path), 'utf8'))
+  .join('\n');
 
 function exportedSections(): string[] {
   return [...source.matchAll(/section: '([a-z_]+)'/g)].map((m) => m[1] as string);

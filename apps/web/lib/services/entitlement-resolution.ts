@@ -74,6 +74,7 @@ const SEAT_CANDIDATES_SQL = `
   join public.subscriptions owner_subscription
     on owner_subscription.user_id = organization.owner_user_id
   where membership.user_id = $1
+    and membership.status = 'active'
     and organization.owner_user_id is not null
     and organization.owner_user_id <> membership.user_id
   order by membership.joined_at asc, organization.id asc`;
@@ -281,18 +282,4 @@ export async function resolveEntitledPlanTier(
   options: EntitlementResolutionOptions = {},
 ): Promise<BillingPlanTier> {
   return (await resolveEntitlementBundle(db, userId, options)).plan;
-}
-
-/**
- * Why a bundle does not reach the plan a caller needs. A seat-bearing plan the
- * account has no seat on is a different refusal from a plan it never bought.
- */
-export function entitlementDenialReason(
-  bundle: EntitlementBundle,
-  requiredPlans: readonly BillingPlanTier[],
-): CapabilityDenialReason | null {
-  if (requiredPlans.includes(bundle.plan) && bundle.entitled) return null;
-  if (bundle.denialReason) return bundle.denialReason;
-  if (requiredPlans.some((plan) => isSeatBearingBillingPlan(plan))) return 'requires_seat';
-  return 'requires_upgrade';
 }

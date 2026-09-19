@@ -2,16 +2,16 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
-  logs: [] as Array<{
-    id: string;
-    userId: string | null;
-    action: string;
-    resourceType: string | null;
-    resourceId: string | null;
-    details: Record<string, unknown>;
-    ipAddress: string | null;
-    createdAt: string;
-  }>,
+  logs: {
+    entries: [] as Array<{
+      id: string;
+      action: string;
+      sentence: string;
+      device: string | null;
+      createdAt: string;
+    }>,
+    hasMore: false,
+  },
   actions: ['login', 'settings_change'],
   isLoading: false,
   isError: false,
@@ -43,7 +43,7 @@ import { AuditLogPanel } from './AuditLogPanel';
 
 describe('AuditLogPanel', () => {
   beforeEach(() => {
-    state.logs = [];
+    state.logs = { entries: [], hasMore: false };
     state.actions = ['login', 'settings_change'];
     state.isLoading = false;
     state.isError = false;
@@ -53,24 +53,26 @@ describe('AuditLogPanel', () => {
   });
 
   it('renders account audit entries from the live settings query', () => {
-    state.logs = [
-      {
-        id: 'audit-1',
-        userId: 'user-1',
-        action: 'settings_change',
-        resourceType: 'preferences',
-        resourceId: 'privacy',
-        details: {},
-        ipAddress: '127.0.0.1',
-        createdAt: '2026-07-29T20:15:00.000Z',
-      },
-    ];
+    state.logs = {
+      entries: [
+        {
+          id: 'audit-1',
+          action: 'settings_change',
+          sentence: 'Changed settings',
+          device: 'Chrome on Mac',
+          createdAt: '2026-07-29T20:15:00.000Z',
+        },
+      ],
+      hasMore: false,
+    };
 
     render(<AuditLogPanel />);
 
     const entries = screen.getByRole('list', { name: 'Security activity entries' });
-    expect(within(entries).getByText('Settings Change')).toBeVisible();
-    expect(screen.getByText('preferences · privacy')).toBeVisible();
+    expect(within(entries).getByText('Changed settings')).toBeVisible();
+    expect(screen.getByText('Chrome on Mac')).toBeVisible();
+    expect(entries).not.toHaveTextContent('127.0.0.1');
+    expect(entries).not.toHaveTextContent('preferences');
     expect(entries).toBeVisible();
     expect(state.useAuditLogs).toHaveBeenCalledWith({
       action: undefined,
@@ -94,16 +96,16 @@ describe('AuditLogPanel', () => {
   });
 
   it('pages through complete result sets and supports refresh', () => {
-    state.logs = Array.from({ length: 20 }, (_, index) => ({
-      id: `audit-${index}`,
-      userId: 'user-1',
-      action: 'login',
-      resourceType: null,
-      resourceId: null,
-      details: {},
-      ipAddress: null,
-      createdAt: '2026-07-29T20:15:00.000Z',
-    }));
+    state.logs = {
+      entries: Array.from({ length: 20 }, (_, index) => ({
+        id: `audit-${index}`,
+        action: 'login',
+        sentence: 'Signed in on a new device',
+        device: null,
+        createdAt: '2026-07-29T20:15:00.000Z',
+      })),
+      hasMore: true,
+    };
 
     render(<AuditLogPanel />);
     fireEvent.click(screen.getByRole('button', { name: 'Next security activity page' }));
@@ -124,7 +126,10 @@ describe('AuditLogPanel', () => {
 
     render(<AuditLogPanel />);
 
-    expect(screen.getByRole('alert')).toHaveTextContent('HTTP 503');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Something went wrong on our side. Try again shortly.',
+    );
+    expect(screen.getByRole('alert')).not.toHaveTextContent('HTTP');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(state.refetch).toHaveBeenCalledOnce();
   });

@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@shared/lib/logger', () => ({
@@ -20,8 +19,12 @@ vi.mock('./agent-metrics-store', () => ({}));
 vi.mock('./company-hub-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => ({}));
+vi.mock('@/features/chat/stores/voice-session-store', () => ({}));
 vi.mock('@/features/chat/stores/style-store', () => ({}));
 vi.mock('@/features/connectors/stores/tool-permissions-store', () => ({}));
+vi.mock('@/features/chat/lib/use-model-favourites', () => ({}));
+vi.mock('@/features/connectors/hooks/use-connectors', () => ({}));
+vi.mock('@/features/connectors/hooks/use-connector-capabilities', () => ({}));
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 
 import { cleanupAllStores } from './authentication-store';

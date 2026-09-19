@@ -24,7 +24,7 @@ import {
 export const metadata = buildMetadata({
   title: 'Mobile legal: privacy policy and terms of service',
   description:
-    'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local and public-alpha Cloud modes.',
+    'Planned privacy and terms for the unpublished AGI Mobile app, including its proposed Local and managed-cloud modes.',
   path: '/mobile/legal',
 });
 
@@ -39,9 +39,9 @@ const DATA_CATEGORIES: readonly LedgerRow[] = [
     label: 'Conversation content',
     value: (
       <>
-        Text, images, voice input, documents you share in chat. Local mode stores and processes on
-        device. Cloud is open in public alpha and subscription-backed. Collected to run the AI
-        assistant in the mode you selected.
+        {MOBILE_UNRELEASED
+          ? 'If the app is published, its planned Local mode stores and processes conversation content on-device; its planned managed-cloud continuation is subscription-backed.'
+          : 'Text, images, voice input, and documents you share in chat. Local mode stores and processes on-device; managed cloud is subscription-backed.'}
       </>
     ),
   },
@@ -49,9 +49,9 @@ const DATA_CATEGORIES: readonly LedgerRow[] = [
     label: 'Account data',
     value: (
       <>
-        Email address and authentication token, if you create an account or join the Team &amp;
-        Enterprise early-access list. Held in a managed database, US region, encrypted at rest.
-        Collected to run your account and manage early-access interest for higher-capacity plans.
+        Email address and authentication token, if you create an account or ask us to discuss Team
+        or Enterprise access. Held in a managed database, US region, encrypted at rest. Collected to
+        run your account and manage contract-access interest for higher-capacity plans.
       </>
     ),
   },
@@ -113,13 +113,14 @@ const TERMS: readonly LedgerRow[] = [
     label: 'Siri and Shortcuts',
     value: (
       <>
-        The App supports Siri voice phrases, Spotlight actions, and the Shortcuts app (for example,
-        &ldquo;Ask AGI&hellip;&rdquo;, &ldquo;Summarize with AGI&rdquo;). When you invoke the App
-        this way, the spoken phrase is processed by Apple for speech recognition and may be used by
-        Apple to improve its products, per Apple&rsquo;s own privacy practices. Any text, image, or
-        audio you provide through a Siri/Shortcuts action is sent to {COMPANY} only to the extent
-        necessary to carry out that request and improve the App&rsquo;s responsiveness to it, never
-        for advertising or for training third-party models.
+        The {MOBILE_UNRELEASED ? 'planned App will support' : 'App supports'} Siri voice phrases,
+        Spotlight actions, and the Shortcuts app (for example, &ldquo;Ask AGI&hellip;&rdquo;,
+        &ldquo;Summarize with AGI&rdquo;). When you invoke the App this way, the spoken phrase is
+        processed by Apple for speech recognition and may be used by Apple to improve its products,
+        per Apple&rsquo;s own privacy practices. Any text, image, or audio you provide through a
+        Siri/Shortcuts action is sent to {COMPANY} only to the extent necessary to carry out that
+        request and improve the App&rsquo;s responsiveness to it, never for advertising or for
+        training third-party models.
       </>
     ),
   },
@@ -256,8 +257,9 @@ export default function MobileLegalPage() {
             <>
               Effective {EFFECTIVE_DATE}. Applies to AGI Mobile on iOS and Android.{' '}
               <strong>
-                Local mode runs on your device. Cloud mode uses explicit labels and a separate trust
-                boundary.
+                {MOBILE_UNRELEASED
+                  ? 'AGI Mobile is not published. This page describes the planned Local and managed-cloud boundaries for a future release.'
+                  : 'Local mode runs on your device. Managed-cloud mode uses explicit labels and a separate trust boundary.'}
               </strong>
             </>
           }
@@ -274,22 +276,25 @@ export default function MobileLegalPage() {
                 01 &middot; Privacy policy.
               </h2>
               <Prose>
-                {COMPANY} ({COMPANY_STATE}) operates AGI Mobile. This policy describes what data the
-                app collects, how it is processed, and your rights as a user. Where applicable, this
-                policy references compliance with India&rsquo;s Digital Personal Data Protection Act
-                2023 (DPDP Act), the EU AI Act (Regulation EU 2024/1689), and the EU General Data
-                Protection Regulation (GDPR).
+                {COMPANY} ({COMPANY_STATE}) is developing AGI Mobile. Because the app is not
+                published, this policy describes planned processing for a future release, not data
+                collected from a currently installable app. Where applicable, this policy references
+                compliance with India&rsquo;s Digital Personal Data Protection Act 2023 (DPDP Act),
+                the EU AI Act (Regulation EU 2024/1689), and the EU General Data Protection
+                Regulation (GDPR).
               </Prose>
             </div>
 
             <Stack gap="tight">
               <h3 className="agi-ds-h3">
-                Core fact: mobile has local and public-alpha cloud modes.
+                {MOBILE_UNRELEASED
+                  ? 'Planned boundary: Local and managed-cloud modes.'
+                  : 'Core fact: mobile has Local and managed-cloud modes.'}
               </h3>
               <Prose size="sm">
-                In Local mode, the AI model runs on your device or a local model route and is not
-                silently routed to AGI Cloud. Cloud mode is open in public alpha and visibly
-                labeled.
+                {MOBILE_UNRELEASED
+                  ? 'The planned Local mode runs on-device and does not silently route to AGI Cloud. The planned managed-cloud continuation is separately labeled.'
+                  : 'In Local mode, the AI model runs on your device and is not silently routed to AGI Cloud. Managed-cloud mode is visibly labeled.'}
               </Prose>
             </Stack>
 
@@ -359,10 +364,10 @@ export default function MobileLegalPage() {
             <Stack gap="tight">
               <h3 className="agi-ds-h3">EU AI Act disclosures.</h3>
               <Prose size="sm">
-                AGI Mobile is a general-purpose AI assistant. In compliance with Art. 50(1) of
-                Regulation (EU) 2024/1689, the app discloses clearly within the conversation
-                interface that responses are AI-generated. Conversation exports include a
-                machine-readable marker and a human-readable disclosure block per Art. 50(2). AGI
+                The planned AGI Mobile release is a general-purpose AI assistant. In compliance with
+                Art. 50(1) of Regulation (EU) 2024/1689, the app will disclose clearly within the
+                conversation interface that responses are AI-generated. Conversation exports include
+                a machine-readable marker and a human-readable disclosure block per Art. 50(2). AGI
                 Mobile does not engage in practices prohibited under Art. 5, including subliminal
                 manipulation; biometric categorisation to infer protected or sensitive attributes;
                 real-time remote biometric identification in public spaces; social scoring; emotion
@@ -374,10 +379,11 @@ export default function MobileLegalPage() {
             <Stack gap="tight">
               <h3 className="agi-ds-h3">Data retention.</h3>
               <Prose size="sm">
-                Conversation data is stored locally on your device and is deleted when you uninstall
-                the app or delete it from within the app. Diagnostic, analytics, and account
-                retention periods are governed by the active production configuration and user
-                deletion controls.
+                {MOBILE_UNRELEASED
+                  ? 'The planned Local mode stores conversation data on-device and provides in-app deletion; uninstalling the future app also removes its local data.'
+                  : 'Local conversation data is stored on-device and is deleted when you uninstall the app or delete it in the app.'}{' '}
+                Diagnostic, analytics, and account retention periods are governed by the active
+                production configuration and user deletion controls.
               </Prose>
             </Stack>
 

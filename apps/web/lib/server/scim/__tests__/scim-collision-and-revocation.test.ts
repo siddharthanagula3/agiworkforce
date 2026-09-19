@@ -11,11 +11,22 @@ type DeprovisionInput = { userId: string; organizationId: string };
 const deprovisionMember = vi.fn(
   async (_db: unknown, _identity: unknown, _input: DeprovisionInput) => ({
     errors: [] as string[],
+    sessionsRevoked: 2,
   }),
 );
 vi.mock('@/lib/services/deprovision-service', () => ({
   deprovisionMember: (db: unknown, identity: unknown, input: DeprovisionInput) =>
     deprovisionMember(db, identity, input),
+}));
+
+type IdentityEventInput = { userId: string; event: string; organizationId?: string | null };
+const emitIdentitySecurityEvent = vi.fn(async (_db: unknown, _input: IdentityEventInput) => ({
+  level: 'none',
+  signals: [],
+}));
+vi.mock('@/lib/services/identity-events', () => ({
+  emitIdentitySecurityEvent: (db: unknown, input: IdentityEventInput) =>
+    emitIdentitySecurityEvent(db, input),
 }));
 
 vi.mock('@/lib/services/organization-verified-domains', () => ({
@@ -272,7 +283,8 @@ let db: DatabaseAdapter;
 beforeEach(() => {
   nextId = 0;
   deprovisionMember.mockClear();
-  deprovisionMember.mockResolvedValue({ errors: [] });
+  deprovisionMember.mockResolvedValue({ errors: [], sessionsRevoked: 2 });
+  emitIdentitySecurityEvent.mockClear();
   world = {
     users: [],
     groups: [],
@@ -383,9 +395,47 @@ describe('deprovision revokes live credentials', () => {
     expect(event?.payload).toMatchObject({ membershipRevoked: true, credentialsRevoked: true });
   });
 
+  it('tells the person their sessions ended, through the shared identity event', async () => {
+    const user = await provisioned();
+    await deleteScimUser(db, ctxA, user.id);
+
+    expect(emitIdentitySecurityEvent).toHaveBeenCalledTimes(1);
+    expect(emitIdentitySecurityEvent.mock.calls[0]?.[1]).toMatchObject({
+      userId: 'profile-a',
+      event: 'all_sessions_revoked',
+      organizationId: ORG_A,
+      surface: 'scim',
+    });
+  });
+
+  it('stays silent when the removal ended no live session', async () => {
+    const user = await provisioned();
+    deprovisionMember.mockResolvedValue({ errors: [], sessionsRevoked: 0 });
+
+    await deleteScimUser(db, ctxA, user.id);
+
+    expect(emitIdentitySecurityEvent).not.toHaveBeenCalled();
+  });
+
+  it('records an announcement failure without failing the deprovision', async () => {
+    const user = await provisioned();
+    emitIdentitySecurityEvent.mockRejectedValueOnce(new Error('notifications are down'));
+
+    await expect(deleteScimUser(db, ctxA, user.id)).resolves.toBeUndefined();
+
+    const event = world.events.find((e) => e.eventType === 'user.deprovisioned');
+    expect(event?.payload).toMatchObject({ membershipRevoked: true, credentialsRevoked: false });
+    expect(event?.payload?.['revocationWarnings']).toEqual([
+      'Revocation was not announced: notifications are down',
+    ]);
+  });
+
   it('revokes them on a deactivating PATCH too, and records what it could not reach', async () => {
     const user = await provisioned();
-    deprovisionMember.mockResolvedValue({ errors: ['2 session(s) could not be revoked'] });
+    deprovisionMember.mockResolvedValue({
+      errors: ['2 session(s) could not be revoked'],
+      sessionsRevoked: 0,
+    });
 
     await patchScimUser(db, ctxA, user.id, [{ op: 'replace', path: 'active', value: false }]);
 

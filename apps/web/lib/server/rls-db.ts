@@ -14,11 +14,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { RLS_POOL_TUNING } from '@/lib/server/db-pool-tuning';
 import { reportDatabaseConnectionError } from '@/lib/server/db-connection-error';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
-import {
-  resolveActiveOrganizationId,
-  resolveOrganizationMembershipId,
-} from '@/lib/services/active-workspace-service';
-import { getCachedActiveOrganizationId } from '@/lib/server/request-context-cache';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 let rlsDb: DatabaseAdapter | null = null;
 
@@ -50,26 +46,11 @@ export interface UserScopedDbOptions {
 
 export const ACTIVE_ORG_HEADER = MANAGED_CLOUD_ORGANIZATION_HEADER;
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function readExplicitActiveOrgId(request: NextRequest): string | null | undefined {
-  const raw = request.headers.get(ACTIVE_ORG_HEADER)?.trim();
-  if (!raw) return undefined;
-  return UUID_RE.test(raw) ? raw : null;
-}
-
 async function resolveRequestOrganizationId(
   request: NextRequest,
   userId: string,
 ): Promise<string | null> {
-  const explicit = readExplicitActiveOrgId(request);
-  if (explicit !== undefined) {
-    if (!explicit) return null;
-    const cached = await getCachedActiveOrganizationId(userId);
-    if (cached === explicit) return explicit;
-    return resolveOrganizationMembershipId(getNeonDb(), userId, explicit);
-  }
-  return resolveActiveOrganizationId(getNeonDb(), userId);
+  return resolveActiveOrganizationId(getNeonDb(), userId, request);
 }
 
 function isApiKeyToken(token: string): boolean {

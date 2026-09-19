@@ -538,6 +538,75 @@ export async function listPluginUpdateOffers(
   return offers;
 }
 
+export interface AppliedPluginUpdate {
+  pluginId: string;
+  fromVersion: string;
+  toVersion: string;
+  diff: PluginVersionDiff;
+  /** The pin was stopped, so applying this update is what puts the pack back. */
+  reEnabled: boolean;
+}
+
+/**
+ * Move one installation onto a newer published version. A version that asks for
+ * a permission the installed one did not have never applies on its own: the
+ * caller has to name each added permission, which is what the diff screen asks
+ * the member to approve.
+ */
+export async function applyPluginUpdate(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    pluginId: string;
+    toVersion: string;
+    acknowledgedPermissions?: readonly string[];
+  },
+): Promise<AppliedPluginUpdate> {
+  const pluginId = PluginIdSchema.parse(input.pluginId);
+  const toVersion = VersionSchema.parse(input.toVersion);
+
+  const installed = await db.query<{ installed_version: string }>(
+    `select installed_version from public.plugin_installations
+      where user_id = $1 and plugin_id = $2`,
+    [input.userId, pluginId],
+  );
+  const fromVersion = installed[0]?.installed_version;
+  if (!fromVersion) throw new PluginLifecycleError(`${pluginId} is not installed.`);
+  if (fromVersion === toVersion) {
+    throw new PluginLifecycleError(`${pluginId} is already on ${toVersion}.`);
+  }
+
+  const target = await readVersion(db, pluginId, toVersion);
+  if (!target) throw new PluginLifecycleError(`${pluginId} has no version ${toVersion}.`);
+  if (target.status !== 'published') {
+    throw new PluginLifecycleError(
+      `${pluginId} ${toVersion} is ${target.status}, so it cannot be installed.`,
+    );
+  }
+
+  const current = await readVersion(db, pluginId, fromVersion);
+  const diff = diffPluginVersionRecords(current, target);
+  const acknowledged = new Set(input.acknowledgedPermissions ?? []);
+  const unapproved = diff.addedPermissions.filter((permission) => !acknowledged.has(permission));
+  if (unapproved.length > 0) {
+    throw new PluginLifecycleError(
+      `${pluginId} ${toVersion} asks for ${unapproved.join(', ')}, which you have not approved yet.`,
+    );
+  }
+
+  const reEnabled = current?.status === 'suspended';
+  await db.execute(
+    `update public.plugin_installations
+        set installed_version = $3,
+            enabled = enabled or $4,
+            updated_at = now()
+      where user_id = $1 and plugin_id = $2`,
+    [input.userId, pluginId, toVersion, reEnabled],
+  );
+
+  return { pluginId, fromVersion, toVersion, diff, reEnabled };
+}
+
 export interface PluginLifecycleEvent {
   pluginId: string;
   version: string;

@@ -50,6 +50,7 @@ interface VoiceSessionStoreState {
 }
 
 interface VoiceSessionStoreActions {
+  resetOnLogout: () => void;
   dispatch: (event: VoiceSessionEvent) => void;
   setVoice: (voice: string) => void;
   setBackendBusy: (backendBusy: boolean) => void;
@@ -81,6 +82,18 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       pace: VOICE_PACE_DEFAULT,
       backendBusy: false,
       toolActivity: [],
+
+      resetOnLogout: () =>
+        set({
+          session: INITIAL_VOICE_SESSION_STATE,
+          ...PANELS_CLOSED,
+          intelligence: VOICE_INTELLIGENCE.balanced,
+          language: VOICE_LANGUAGE_AUTO,
+          voice: LIVE_DEFAULT_VOICE,
+          pace: VOICE_PACE_DEFAULT,
+          backendBusy: false,
+          toolActivity: [],
+        }),
 
       dispatch: (event) => {
         const session = voiceSessionReducer(get().session, event);

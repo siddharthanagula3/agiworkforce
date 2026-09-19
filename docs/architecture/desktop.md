@@ -1,250 +1,102 @@
 # Desktop surface
 
-> **Path:** `apps/desktop/` · **Stack:** Tauri v2.11.1 + React (Vite) · **Owner:** founder · **Status:** v1.2.0 shipped Linux; macOS + Windows release pipeline unblocked 2026-05-16 (PLA renewed). **Updated:** 2026-05-21.
+Status: Current
+Owner: Founder + desktop lead
+Last updated: 2026-09-19
 
-## Mission
+The public AGI Desktop product is the Electron application under
+`apps/desktop/electron`. The Rust/Tauri implementation in
+`apps/desktop/src-tauri` is retained for internal value and compatibility; it
+does not define a second public Desktop product.
 
-Native Mac / Windows / Linux app for the same chat layer that runs on web and mobile. Power-user surface, keyboard shortcuts, Cmd-K palette, MCP plugins, computer-use (Pro+ tier), Dispatch host for mobile-controlled tasks.
+## Public contract
 
-## Status at HEAD
+- Conversation inference is Managed Cloud. The public Electron dispatcher
+  refuses every command in `LOCAL_INFERENCE_COMMANDS` with
+  `unsupported-platform`.
+- Desktop does not accept provider API keys and does not expose Local or BYOK
+  inference. The device-registry profile reports `localModels: false` and
+  `localMcp: false`.
+- Desktop adds approved local folders and device tools to the signed-in cloud
+  account. A local device capability does not change the conversation's trust
+  mode.
+- Cloud conversations, projects, memory, settings, and account state share the
+  hosted contract with Web. Durable conversation data does not move into a
+  private Desktop SQLite database.
 
-| Item          | State                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------------------------------- |
-| Linux build   | ✅ v1.2.0 shipped 2026-05-04 (AppImage)                                                                 |
-| macOS build   | 🚧 unblocked (PLA renewed 2026-05-16, signing identity `D2PR62RLT4` active); rebuild + notarize pending |
-| Windows build | 🚧 unsigned ships; EV cert still pending                                                                |
-| Active chat   | `ChatInterface` from `@agiworkforce/unified-chat` (was `packages/chat`)                                 |
-| v3 UI         | live behind `DESKTOP_CHAT_V3=true` (default-on per PR #366)                                             |
+The executable owners are:
 
-## Verified codebase numbers (2026-05-17 audit)
+- `apps/desktop/electron/config.ts` for renderer mode, allowed origins, and the
+  Managed Cloud boundary.
+- `apps/desktop/electron/main.ts` for the hardened browser window, preload,
+  deep links, tray, shortcuts, and IPC registration.
+- `apps/desktop/electron/runtime/dispatcher.ts` for command classification,
+  permission ordering, Local-inference refusal, and device capability
+  declaration.
+- `packages/contracts/local-runtime` for typed IPC commands and device-step
+  contracts shared with consumers.
 
-- **749** `.rs` files in `apps/desktop/src-tauri/` · ~**377K** LOC
-- **1,111** `.ts`/`.tsx` files in `apps/desktop/src/` · **303,407** LOC
-- **1,488** `#[tauri::command]` decorators across **137** source files
-- **118** stores (was claimed 84 in older memory, undercount)
-- **74** component subdirs in the former Desktop components tree, all since moved into
-  `apps/desktop/src/features/` and `apps/desktop/src/ui/`. The old tree
-  no longer exists; `pnpm check:structure-conventions` fails if any of those retired
-  domain directories (including `ui/`) or an import of their old paths reappears.
+## Renderer and IPC boundary
 
-## Stack + locked versions
+The shipped renderer mode loads `https://agiworkforce.com`. The main window
+uses context isolation, Chromium sandboxing, no renderer Node integration, and
+the Electron preload. The preload exposes the host bridge only to the allowed
+AGI origin; OAuth pages do not inherit it.
 
-| Layer              | Choice                                                                 | Version                                                         |
-| ------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Shell              | Tauri v2                                                               | 2.11.1                                                          |
-| Frontend framework | React                                                                  | 19.x via Vite                                                   |
-| Bundler            | Vite                                                                   | latest (per `package.json`)                                     |
-| Rust toolchain     | rustc                                                                  | 1.94.0 (pinned in `apps/desktop/src-tauri/rust-toolchain.toml`) |
-| Native deps        | macOS Seatbelt entitlements XML; Linux bwrap                           | per `src-tauri/Cargo.toml`                                      |
-| Distribution       | Linux AppImage automated; Windows gated on Authenticode; macOS blocked | root `target/release/bundle/`                                   |
+Privileged operations follow one path:
 
-## File layout
-
-```
-apps/desktop/
-├── src/                            React frontend
-│   ├── App.tsx                     entry; loads ChatInterface and chat overlays
-│   ├── features/
-│   │   ├── chat/                   Desktop-owned chat shell, CommandPalette, SearchModal, ToolLabel, shortcuts
-│   │   └── onboarding/
-│   │       └── OnboardingWizard.tsx   ⚠ canonical mode picker (Local vs Cloud); ModeSelectionDialog was deleted, do NOT reintroduce
-│   ├── stores/                     118 Zustand stores
-│   ├── hooks/                      40+ custom hooks
-│   ├── constants/
-│   │   └── models.json             ⚠ mirror of packages/contracts/types/models.json; SSOT is packages/contracts/types
-│   └── i18n/                       English + Spanish locales wired
-├── src-tauri/                      Rust backend
-│   ├── src/
-│   │   ├── main.rs
-│   │   └── ...                     750 .rs files
-│   ├── Cargo.toml                  workspace member; depends only on sandbox-policy crate
-│   ├── tauri.conf.json             app metadata; bundle identifier com.agiworkforce.desktop
-│   ├── rust-toolchain.toml         Rust 1.94.0 pin
-│   └── Cargo/Tauri sources         build outputs live at root target/ because this is a Cargo workspace member
-├── public/                         static assets
-├── package.json                    @agiworkforce/desktop
-└── tsconfig.json
+```text
+hosted web renderer
+  -> sandboxed preload
+  -> Electron IPC channel
+  -> runtime dispatcher
+  -> command classification
+  -> workspace/global permission
+  -> approved-root and path checks where applicable
+  -> device service
 ```
 
-## Key files to know
+Unknown commands fail closed. Local-inference commands are refused before
+permission handling so a hidden UI cannot leave the capability reachable.
+Filesystem operations resolve and contain paths under a user-approved root.
+High-risk operations use explicit approval and the platform's available
+sandbox; an unavailable sandbox must not silently become an unrestricted run.
 
-| File                                                        | What                                                                                                                                                                                                                             |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/desktop/src/App.tsx`                                  | Entry. Loads `ChatInterface` from `@agiworkforce/unified-chat` and Desktop chat overlays from `apps/desktop/src/features/chat/`. The retired `apps/desktop/src/components/UnifiedAgenticChat/` directory is removed and guarded. |
-| `apps/desktop/src/features/onboarding/OnboardingWizard.tsx` | Mode picker. **`ModeSelectionDialog` was removed and must not be reintroduced** (PRD V5 §10 lock #2).                                                                                                                            |
-| `apps/desktop/src-tauri/Cargo.toml`                         | Workspace lint rules: `unsafe_code = "deny"`, `await_holding_lock = "warn"`.                                                                                                                                                     |
-| `apps/desktop/src/constants/models.json`                    | Mirror file, DO NOT edit; SSOT is `packages/contracts/types/src/models.json`.                                                                                                                                                    |
-| `.github/workflows/release-desktop.yml`                     | Canonical `v-desktop-*` workflow. Validates versions, builds Linux x86_64, attaches the Tauri updater signature, publishes, then ingests updater metadata.                                                                       |
-| `.github/workflows/build-windows-release.yml`               | Manual recovery workflow for a selected published desktop tag. Checks out that tag, requires Azure Artifact Signing identity/config, verifies Authenticode before upload, then ingests Windows updater metadata.                 |
+## Local state and credentials
 
-## Build + test commands
+Electron keeps only device-owned shell state such as window preferences,
+approved roots, permission decisions, pairing state, and device identity.
+Account credentials are stored only when Electron `safeStorage` reports that
+operating-system encryption is available; otherwise persistence is refused.
+Provider API keys are not part of the public Desktop contract.
+
+## Release state
+
+`.github/workflows/release-desktop-cloud.yml` builds the Electron macOS
+application from `v-cloud-desktop-*` tags, signs each architecture, notarizes
+the result, and validates the staple. A working release workflow is not proof
+that an installer is published. The release API and public download page remain
+the authority for availability, and no public Electron installer is currently
+published.
+
+The retained Tauri workflows use a separate tag and asset namespace. They do
+not authorize public Tauri, Linux, Local-inference, or BYOK claims.
+
+## Retained Tauri source conventions
+
+These conventions describe the retained internal Tauri renderer, not the
+public Electron product. **Retired chat folder:** the former
+UnifiedAgenticChat component tree must not be recreated; retained Tauri-owned
+chat code lives in `apps/desktop/src/features/chat/`.
+
+## Verification
 
 ```bash
-# Dev (hot-reload, opens a window)
-pnpm dev:desktop
-
-# Production bundle
-pnpm build:desktop
-# Outputs: target/release/bundle/ (the Cargo workspace target directory)
-
-# Typecheck just desktop
-pnpm typecheck
-
-# Typecheck all workspaces
-pnpm typecheck:all
-
-# Rust check
-cargo check --workspace
-
-# Rust tests
-cargo test --workspace --lib
-
-# Playwright E2E
-pnpm --filter desktop exec playwright test
-
-# Lint
-pnpm lint                    # excludes apps/extension
+pnpm --filter @agiworkforce/desktop typecheck:electron
+pnpm --filter @agiworkforce/desktop test
+pnpm --filter @agiworkforce/desktop check:no-devtools
+pnpm --filter @agiworkforce/desktop exec vitest run electron/__tests__/dispatcher.test.ts
 ```
 
-## Release process
-
-1. Bump the same version in `apps/desktop/package.json`,
-   `apps/desktop/src-tauri/tauri.conf.json`, and `apps/desktop/src-tauri/Cargo.toml`.
-2. Run `bash scripts/release.sh X.Y.Z` to validate the tag plan.
-3. From a clean tree, run `bash scripts/release.sh X.Y.Z --yes`; it creates and pushes only
-   `v-desktop-X.Y.Z`.
-4. `release-desktop.yml` validates, builds Linux x86_64, uploads the AppImage plus Tauri updater
-   signature to a draft, publishes the GitHub release, and only then writes the Neon updater row.
-5. Windows is not part of that atomic workflow. If Windows is intentionally added to an existing
-   desktop release, invoke `build-windows-release.yml` for the exact tag. It refuses to publish
-   without a valid Authenticode certificate and checks out the selected tag rather than `main`.
-6. There is no production macOS workflow. Do not claim a signed/notarized DMG until that job and
-   its Apple credentials exist.
-
-Windows publication requires a verified Azure Artifact Signing account and certificate profile.
-Configure GitHub secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID`, plus
-repository variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, and
-`AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE`. The workflow installs the pinned
-`artifact-signing-cli` version, feeds it to Tauri through a release-only `signCommand` overlay,
-and refuses upload unless Windows reports every shipping executable as Authenticode-valid.
-
-## Provider integrations on desktop
-
-All 10+ providers route through `@agiworkforce/provider-protocol` via `packages/client/desktop-command-client`. Desktop is the first surface that wires every provider end-to-end. See [docs/surfaces/cli.md](cli.md) for the canonical list (CLI registers all 12 named + Custom).
-
-## Computer-use action routing and platform support (2026-09-05)
-
-One classified action is resolved by `src-tauri/src/automation/action_router/` before the
-observe-plan-act visual loop is reached. The order is fixed in code, never left to model tool
-choice: an HTTP retrieval, then the platform accessibility service, then the page over the devtools
-protocol, then vision as the last resort. Each tier answers from a typed capability check and
-records a typed decline on the `computer_use:action_routed` event, which names the driver that ran
-the action.
-
-| Tier          | Driver                                         | Verbs it accepts                                                                                                                            |
-| ------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| API           | `http_api`                                     | retrieve an absolute URL                                                                                                                    |
-| Accessibility | `macos_accessibility`, `windows_ui_automation` | invoke a named control, type into a named field, toggle a named control, focus a window by title, scroll a named region, read a named value |
-| DOM           | `chrome_devtools_protocol`                     | navigate, click, type, select an option, read text, scroll into view                                                                        |
-| Visual        | `visual_loop`                                  | everything the tiers above declined                                                                                                         |
-
-Platform support for the accessibility tier is decided, not implicit:
-
-| Platform | Accessibility tier                                                                                                                                                                                                                                                                                                                           |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS    | Supported through `automation/mac`. `scroll a named region` is declined `platform_unsupported`, the service exposes no scroll pattern                                                                                                                                                                                                        |
-| Windows  | Supported through `automation/uia`, including scrolling                                                                                                                                                                                                                                                                                      |
-| Linux    | **Not supported.** There is no AT-SPI implementation here, and adding one is not a bounded change: it needs a new crate dependency, a session bus client, and a full inspector. The tier declines `platform_unsupported` with the platform named, the decline is recorded on the routing event, and the visual loop takes the action instead |
-
-`automation::accessibility_backend()` is the single place that answers "does this platform have an
-accessibility driver, and what is it called". The Linux `uia` shim in `automation/mod.rs` still
-errors on every call, now with one named constant rather than ten copies of a sentence, so a caller
-that reaches it past the tier gets the same answer the router already gave.
-
-### Per-step routing inside the visual loop (2026-09-05)
-
-The visual loop is the fallback for one step, not for a whole task. Its planner may name the
-control a step addresses (`"target": "the Send button"`, plus `"value"` to pick one entry out of a
-list), and a step that names one is offered to the same three tiers before any pointer moves; the
-coordinates it planned are what runs when they decline. The routing decision for a step rides the
-same `computer_use:action_routed` event as a top-level action, carrying `stepIndex`.
-
-Two verbs, `read` and `navigate`, have no pointer equivalent, so a decline ends the step with the
-reasons recorded rather than moving the mouse. Every other planned step keeps its raw form. The
-safety layer still judges that raw form, so its verdict governs the step whichever driver takes it.
-
-### Confirmation pause and resume (2026-09-05)
-
-A step the safety layer flags for confirmation pauses the task at that step and holds. The wait is
-the same channel every other desktop tool confirmation uses
-(`ToolConfirmationState::await_confirmation`), so there is one pending map, one standing-grant rule
-and one `respond_tool_confirmation` that answers it. Only the surface differs: the request is
-emitted as `computer_use:confirmation_required` carrying the shared `ToolApprovalRequest` and is
-answered on the voice consent dialog, so one decision never shows two Approve buttons. The main
-window is raised before the request goes out.
-
-Approval resumes that same step through whichever driver the router picks for it. A denial ends the
-task as `confirmation_denied`. An unanswered request expires at `CONFIRMATION_TIMEOUT_SECS` (120
-seconds, bounded well below the background approval bound because the pause holds the pointer of a
-machine the user is sitting at) and ends the task as `confirmation_timed_out`. Neither outcome falls
-through to running the action. A grant the user offers is session-scoped and never offered at all
-for a tool on `NEVER_REMEMBERABLE`.
-
-## Dispatch and scheduled routines (shipped; verified 2026-08-09)
-
-Mobile-to-Desktop Dispatch and on-device scheduled routines both exist in code, which is what the
-`/agi-work` marketing page claims ("Scheduled routines and mobile-to-desktop dispatch ship with the
-Desktop app"). Evidence:
-
-- **Outbound signing exists**: this closes the old "W6 #15 outbound signer" item, which said
-  desktop could receive but not sign. `signOutbound()`
-  (`apps/desktop/src/services/dispatch.ts:313`) invokes the Rust `dispatch_hmac_sign` command, and
-  every outbound companion control message is signed through it in `sendCompanionControl()`
-  (`apps/desktop/src/stores/connectionStore.ts:241`).
-- **Inbound dispatch runs a real task**, the runtime is started at
-  `apps/desktop/src/App.tsx:649` (`initializeCoworkDispatchRuntime`), and a
-  `dispatch.task.create` control message submits an actual agent goal
-  (`apps/desktop/src/services/coworkDispatch.ts:412-468`), streaming status back to Mobile.
-- **Dispatch is default-deny per device**, `apps/desktop/src/stores/coworkDispatchStore.ts` starts
-  `enabled: false`; only Settings → Cowork turns it on, and a task arriving while it is off is
-  rejected with that reason. Pairing alone never grants execution authority.
-- **Scheduled routines are real and persisted**, the scheduler lives in
-  `apps/desktop/src-tauri/src/sys/commands/scheduler.rs`, its store is created at
-  `apps/desktop/src-tauri/src/lib.rs:812-844` (SQLite `scheduler.db`, temp-dir fallback), and its
-  commands are registered at `apps/desktop/src-tauri/src/lib.rs:2022-2032`. The UI is
-  `AgiWorkScheduled`, mounted in `apps/desktop/src/features/v3/DesktopShellV3.tsx:831`.
-
-There is still no Dispatch **subpanel** in the desktop shell; dispatch is configured in
-Settings → Cowork and observed from Mobile. The deeper "desktop routines product" tracked as
-CAP-049 is about that missing surface and the host-relay contract, not about the transport above.
-
-## Current open work (Wave 6, in flight)
-
-1. **W6 #19**: Remove hardcoded model fallbacks in 5 Web files (cross-surface, see [docs/surfaces/web.md](web.md)).
-2. **W6 #22**: CLI sandbox hard-refuse on Windows + Linux-no-bwrap (no silent fallthrough). Cross-surface with CLI.
-
-## Gotchas
-
-- **Counts in prose go stale.** This file has carried three different store counts. Measure before citing one: `git ls-files 'apps/desktop/src/stores/*' | wc -l`.
-- **Retired chat folder:** `apps/desktop/src/components/UnifiedAgenticChat/` is removed. Do not recreate it. Desktop-owned chat code now lives in `apps/desktop/src/features/chat/`; the component name `UnifiedAgenticChat` can still appear inside that feature folder and tests.
-- **There is no desktop model mirror.** `apps/desktop/src/constants/models.json` does not exist; the catalog is resolved through `packages/contracts/types/src/model-catalog.ts` like every other surface.
-- **macOS code-signing identity:** `D2PR62RLT4`. Don't change without owner approval.
-- **Bundle identifier:** `com.agiworkforce.desktop`. Don't change, would break update channel.
-
-## Current References
-
-- [docs/product/suite.md](../product/suite.md) - Desktop role in Web/Mobile/Desktop chat sync and local compute.
-- [docs/architecture/overview.md](../architecture/overview.md) - runtime, generated-file, and provider boundaries.
-- [docs/development/agent-operability.md](../development/agent-operability.md) - current docs and agent workflow rules.
-- [docs/decisions/README.md](../decisions/README.md) - current trust-boundary and application-suite decisions.
-- Historical Tauri command and layout details live only in git history.
-
-## Memory references
-
-- `memory/reference/patterns/release-pipeline.md`, desktop + CLI signing, notarization, update endpoint
-- `memory/reference/patterns/tauri-build-commands.md`, Tauri v2 build/bundle/sign commands
-- `memory/audits/release-v1.2.0-2026-05-04.md`, v1.2.0 release state + APPLE\_\* secret blockers
-
-## Operational owner
-
-Founder. Hiring: looking for a senior Rust engineer + macOS specialist post-launch.
+Website claim tests additionally inspect the executable Electron contract so a
+copy-only test cannot certify a shared false premise.

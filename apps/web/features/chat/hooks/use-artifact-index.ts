@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from '@/lib/identity/client';
+import { toUserMessage } from '@/lib/user-error-message';
 
 /**
  * The account-wide artifact index (migration 0121, `GET /api/artifacts/index`).
@@ -79,7 +80,9 @@ export function useArtifactIndex(options: ArtifactIndexOptions = {}): ArtifactIn
           signal: controller.signal,
           ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
         });
-        if (!res.ok) throw new Error(`artifact index responded ${res.status}`);
+        if (!res.ok) {
+          throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status });
+        }
         const body = (await res.json()) as { artifacts?: IndexedArtifact[] };
         if (cancelled) return;
         setState({ artifacts: body.artifacts ?? [], loaded: true, error: null });
@@ -93,7 +96,7 @@ export function useArtifactIndex(options: ArtifactIndexOptions = {}): ArtifactIn
         setState((prev) => ({
           artifacts: prev.artifacts,
           loaded: true,
-          error: error instanceof Error ? error.message : 'The artifact index could not be read',
+          error: toUserMessage(error, 'The artifact index could not be read'),
         }));
       }
     })();

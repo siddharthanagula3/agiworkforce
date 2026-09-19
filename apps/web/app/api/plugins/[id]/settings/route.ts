@@ -8,6 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   getPluginInstallationSettings,
   updatePluginInstallationSettings,
@@ -50,7 +51,7 @@ async function handleGet(request: NextRequest, context: RouteContext): Promise<N
 }
 
 async function handlePatch(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -74,6 +75,13 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
       { status: 404 },
     );
   }
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'plugin_setting_changed',
+    request,
+    detail: { resourceId: params.data.id, changedKeys: Object.keys(body.data) },
+  });
   return NextResponse.json({ settings });
 }
 

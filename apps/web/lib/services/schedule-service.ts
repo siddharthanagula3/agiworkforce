@@ -32,6 +32,7 @@ import {
 } from '@/lib/schedules/schedule-time';
 import { normalizeDayparts, type Daypart } from '@/lib/schedules/dayparts';
 import { normalizeRecurrenceRule, parseRecurrenceRule } from '@/lib/schedules/recurrence-rule';
+import { normalizeEligibleScheduleModel } from '@/lib/schedules/schedule-models';
 import {
   normalizeScheduleCondition,
   type ScheduleCondition,
@@ -344,12 +345,24 @@ function validDate(value: unknown, label: string): Date | null {
   return date;
 }
 
-function normalizeModel(model: string | null | undefined): string {
+function normalizeModel(
+  model: string | null | undefined,
+  planTier: string,
+  existingModel?: string | null,
+): string {
   const selection = model?.trim() || 'auto';
   if (isAutoModeModelId(selection)) return selection;
   const metadata = getModelMetadataById(selection);
   if (!metadata) throw new ScheduleValidationError('Model is not present in the canonical catalog');
-  return metadata.id;
+  const existing = existingModel ? getModelMetadataById(existingModel)?.id : null;
+  if (metadata.id === existing) return metadata.id;
+  const eligible = normalizeEligibleScheduleModel(metadata.id, planTier);
+  if (!eligible) {
+    throw new ScheduleValidationError(
+      'Model is not available for Managed Cloud schedules on the current plan',
+    );
+  }
+  return eligible;
 }
 
 interface ValidatedScheduleDefinition {
@@ -406,7 +419,7 @@ const SCHEDULE_INPUT_KEYS = new Set([
 function validateScheduleInput(
   input: ScheduleInput,
   now: Date,
-  options: { enforceCadence?: boolean } = {},
+  options: { planTier: string; enforceCadence?: boolean; existingModel?: string | null },
 ): ValidatedScheduleDefinition {
   const enforceCadence = options.enforceCadence ?? true;
   return validation(() => {
@@ -549,7 +562,7 @@ function validateScheduleInput(
       name,
       description,
       prompt,
-      model: normalizeModel(input.model),
+      model: normalizeModel(input.model, options.planTier, options.existingModel),
       projectId,
       scheduleType,
       cronExpression,
@@ -682,9 +695,11 @@ export async function createSchedule(
   db: DatabaseAdapter,
   userId: string,
   input: ScheduleInput,
-  options: { now?: Date } = {},
+  options: { planTier: string; now?: Date },
 ): Promise<ScheduleTask> {
-  const definition = validateScheduleInput(input, options.now ?? new Date());
+  const definition = validateScheduleInput(input, options.now ?? new Date(), {
+    planTier: options.planTier,
+  });
   if (definition.projectId) await assertProjectOwnership(db, userId, definition.projectId);
   const [row] = await db.query<TaskRow>(
     `insert into scheduled_tasks (
@@ -778,7 +793,7 @@ export async function updateSchedule(
   userId: string,
   taskId: string,
   patch: ScheduleUpdateInput,
-  options: { now?: Date } = {},
+  options: { planTier: string; now?: Date },
 ): Promise<ScheduleTask> {
   return db.transaction(async (tx) => {
     const current = await getScheduleForUpdate(tx, userId, taskId);
@@ -789,7 +804,7 @@ export async function updateSchedule(
     const definition = validateScheduleInput(
       { ...inputFromTask(current), ...patch } as ScheduleInput,
       validationNow,
-      { enforceCadence: false },
+      { enforceCadence: false, planTier: options.planTier, existingModel: current.model },
     );
     const timingChanged =
       definition.scheduleType !== current.scheduleType ||

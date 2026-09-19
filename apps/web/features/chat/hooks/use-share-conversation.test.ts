@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useShareConversation } from './use-share-conversation';
+import { SHARE_CONVERSATION_CLIENT_DEADLINE_MS } from '@/lib/deadline-policy';
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -158,5 +159,78 @@ describe('useShareConversation', () => {
       expect.objectContaining({ method: 'DELETE' }),
     );
     expect(result.current.activeShare).toBeNull();
+  });
+
+  it('aborts a pending request when the dialog dismisses and ignores its late failure', async () => {
+    let rejectRequest!: (error: unknown) => void;
+    const fetchMock = vi.spyOn(global, 'fetch').mockImplementationOnce((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        rejectRequest = reject;
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')),
+        );
+      });
+    });
+    const { result } = renderHook(() => useShareConversation('My session', undefined, 'conv-1'));
+
+    let pending!: Promise<boolean>;
+    act(() => {
+      pending = result.current.share(7);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+
+    act(() => result.current.cancelPending());
+    await act(async () => {
+      rejectRequest(new Error('late trace 0xdeadbeef'));
+      await pending;
+    });
+
+    expect(signal?.aborted).toBe(true);
+    expect(result.current.isSharing).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('times out a request and lets the user try again', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(global, 'fetch')
+      .mockImplementationOnce(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('aborted', 'AbortError')),
+            );
+          }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            shareUrl: 'https://agiworkforce.com/share/retry',
+            token: 'retry',
+            expiresAt: '2026-07-08T00:00:00.000Z',
+            messageCount: 1,
+          }),
+          { status: 201 },
+        ),
+      );
+    const { result } = renderHook(() => useShareConversation('My session', undefined, 'conv-1'));
+
+    let first!: Promise<boolean>;
+    act(() => {
+      first = result.current.share(7);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SHARE_CONVERSATION_CLIENT_DEADLINE_MS);
+      await first;
+    });
+
+    expect(result.current.error).toMatch(/took too long/i);
+    await act(async () => {
+      expect(await result.current.share(7)).toBe(true);
+    });
+    expect(result.current.activeShare?.token).toBe('retry');
+    vi.useRealTimers();
   });
 });

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Provider/platform
-Last updated: 2026-09-17
+Last updated: 2026-09-19
 
 This matrix is the product contract for routing and UI labels. It records what AGI may claim in Local/BYOK/Managed modes. Provider SDK details can change; surfaces must read capability metadata instead of hardcoding provider assumptions.
 
@@ -101,6 +101,15 @@ runs the stage; `0`, `false` or `off` restores the authored order everywhere in
 one edit. Each resolution carries the decision inputs on
 `taskFamilyDecision`: the family, the floor band, every candidate with its
 route and expected microUSD, and the slot and route that were taken.
+
+## Proposed semantic assessment for Auto
+
+The [Jev Auto routing proposal](../specs/jev-auto-routing/spec.md) describes a
+Managed evaluation step that supplies task requirements to this router. Its
+[architecture](../specs/jev-auto-routing/plan.md) preserves deterministic
+admission, registry ownership and explicit selections, and defines the Gateway
+evaluation transport, cost accounting and rollout evidence. This is a design
+proposal; the product does not currently call Jev for model selection.
 
 ## Rollout: observed health, region, canary, shadow and the decision trace
 

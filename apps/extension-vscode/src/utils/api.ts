@@ -92,6 +92,7 @@ const SECRET_KEY = 'agiWorkforce.apiKey';
 const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
 const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
+const ACCOUNT_REFRESH_TOKEN_KEY = 'agiWorkforce.accountRefreshToken';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
 const DEFAULT_GATEWAY_ORIGIN = 'https://api.agiworkforce.com';
 
@@ -107,8 +108,16 @@ export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> 
   await secrets.delete(SECRET_KEY);
 }
 
-export async function getAccountToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
-  const state = await getAccountAuthState(secrets);
+export async function getAccountToken(
+  secrets: vscode.SecretStorage,
+  options: { renew?: boolean } = {},
+): Promise<string | undefined> {
+  let state = await getAccountAuthState(secrets);
+  if (state.status === 'expired' && options.renew !== false) {
+    if ((await renewAccountSession(secrets)) === 'renewed') {
+      state = await getAccountAuthState(secrets);
+    }
+  }
   if (state.status !== 'signed-in') return undefined;
   return secrets.get(ACCOUNT_TOKEN_KEY);
 }
@@ -117,6 +126,7 @@ export async function setAccountToken(
   secrets: vscode.SecretStorage,
   token: string,
   expiresAt?: number,
+  refreshToken?: string,
 ): Promise<void> {
   await secrets.store(ACCOUNT_TOKEN_KEY, token);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
@@ -125,14 +135,33 @@ export async function setAccountToken(
   } else {
     await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   }
+  // Always rewritten: a sign-in that returned no renewal credential must not
+  // inherit the previous device session's, which belongs to another grant.
+  if (refreshToken !== undefined && refreshToken !== '') {
+    await secrets.store(ACCOUNT_REFRESH_TOKEN_KEY, refreshToken);
+  } else {
+    await secrets.delete(ACCOUNT_REFRESH_TOKEN_KEY);
+  }
+}
+
+export async function getAccountRefreshToken(
+  secrets: vscode.SecretStorage,
+): Promise<string | undefined> {
+  const stored = await secrets.get(ACCOUNT_REFRESH_TOKEN_KEY);
+  return stored === undefined || stored === '' ? undefined : stored;
 }
 
 export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
   await secrets.delete(ACCOUNT_TOKEN_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
+  await secrets.delete(ACCOUNT_REFRESH_TOKEN_KEY);
 }
 
+/**
+ * The renewal credential survives here on purpose: an access token that expired
+ * or was rejected is exactly when the rotation below should run, silently.
+ */
 async function invalidateAccountToken(
   secrets: vscode.SecretStorage,
   observedToken: string,
@@ -142,6 +171,35 @@ async function invalidateAccountToken(
   await secrets.delete(ACCOUNT_TOKEN_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
+}
+
+export type AccountSessionRenewal = 'renewed' | 'unavailable' | 'revoked' | 'terms-required';
+
+/**
+ * Rotates the device session in place so an expired editor never has to repeat
+ * the device-code flow. deviceAuth is loaded here rather than imported at the
+ * top because it owns the device endpoints and already imports this module.
+ */
+export async function renewAccountSession(
+  secrets: vscode.SecretStorage,
+): Promise<AccountSessionRenewal> {
+  const refreshToken = await getAccountRefreshToken(secrets);
+  if (refreshToken === undefined) return 'unavailable';
+
+  const { refreshDeviceSession } = await import('../features/account-auth/deviceAuth');
+  const result = await refreshDeviceSession(getCloudWebOrigin(), refreshToken);
+
+  if (result.kind === 'renewed') {
+    await setAccountToken(secrets, result.token, result.expiresAt, result.refreshToken);
+    return 'renewed';
+  }
+  if (result.kind === 'revoked') {
+    await clearAccountToken(secrets);
+    await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
+    notifyAccountTierMayHaveChanged();
+    return 'revoked';
+  }
+  return result.kind === 'terms-required' ? 'terms-required' : 'unavailable';
 }
 
 export async function getAccountAuthState(
@@ -172,7 +230,10 @@ type CloudCredential =
   | { kind: 'none'; accountStatus: 'signed-out' | 'expired' };
 
 async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudCredential> {
-  const accountState = await getAccountAuthState(secrets);
+  let accountState = await getAccountAuthState(secrets);
+  if (accountState.status === 'expired' && (await renewAccountSession(secrets)) === 'renewed') {
+    accountState = await getAccountAuthState(secrets);
+  }
   if (accountState.status === 'signed-in') {
     const accountToken = await secrets.get(ACCOUNT_TOKEN_KEY);
     if (accountToken !== undefined && accountToken !== '') {

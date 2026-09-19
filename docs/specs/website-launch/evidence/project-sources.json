@@ -1,0 +1,48 @@
+{
+  "recordedAt": "2026-09-19T09:18:00.597366+00:00",
+  "scope": "Local project text upload, extraction and revision; no remote storage or provider generation",
+  "projectId": "ba4c5481-d61b-4855-85bb-983933cad013",
+  "fixture": "agi-launch-source.txt",
+  "observations": [
+    "Initial upload HTTP201 and sealed local object matched all167 input bytes; Browser preview showed source text.",
+    "Revision2 persisted a supersedes chain with one current DB row; UI wrongly showed2 sources until reload.",
+    "After source-list refresh repair, revision3 showed1 source immediately without reload.",
+    "DB retained all3 versions, exactly1 current; current extracted text matches input after canonical whitespace normalization.",
+    "Browser preview of revision3 showed confirmed Wednesday15:30 text.",
+    "Remove source opened consequence-bearing confirmation; Cancel retained the source.",
+    "Download control clicked; saved download bytes not available for inspection."
+  ],
+  "verification": {
+    "before": "2 new regression failures,5 existing passes",
+    "after": "10 tests passed in2 files",
+    "sourceSha256": "c14fdfe3739846b854b55e7e66c55a2d7d73f7bccdf5b43f0ccd86c79d403273",
+    "currentFileId": "0d957ecd-d884-48af-899e-2384de1c0946",
+    "lint": "Focused ESLint and Prettier passed"
+  },
+  "sourceHashes": {
+    "apps/web/features/projects/components/SourcesPanel.tsx": "90b2caffbc28d39f1ae2be28c8cc6dedf7b3bca7fc980a55dfebb0f47d4e013e",
+    "apps/web/features/projects/components/__tests__/SourcesPanel.org-shared.test.tsx": "765953284ca0e1017c8c9ca577e4f9a4f454d5ec3d3675c98d49d61658be8753",
+    "apps/web/app/api/projects/[id]/knowledge-files/route.ts": "e349cb3b1f5c3d35370a43388e66daa34fb6a4e5bf26331e2711fa5c41add9f9",
+    "apps/web/lib/server/project-knowledge-object-storage.ts": "3b2945aa12402ba1e972574a35d136466734a8dff53726c54846c77c6056e5d4"
+  },
+  "limitations": [
+    "Semantic embeddings disabled via process credentials; keyword-only indexing logged.",
+    "Generated outputs, download and provider-grounded answers remain unverified.",
+    "No production storage, provider calls, deployment or approval implied."
+  ],
+  "jev": {
+    "choice": "refetch",
+    "confidence": 0.49,
+    "requestHash": "5a1f45b743e1aab641ff6c531f4be8c4de2d693f7b1b29a755a8a31d188894cc"
+  },
+  "downloadRecovery": {
+    "before": "3 regression failures for403/500 and network failure",
+    "after": "3 regression passes, focused lint passed; latest web typecheck passed after test type corrections",
+    "browser": "Synthetic revision3 object temporarily withheld; download returned404 and displayed retryable error. Object restored with original hash; retry returned200. First toast snapshot missed timing; second awaited actual toast visibility.",
+    "limitations": "Saved browser download bytes remain unverified.",
+    "sourceHashes": {
+      "apps/web/features/projects/components/FilePreviewModal.tsx": "751d3bda95253aacdd20e81273473099d62f145703a5c02b48037ce4bf5497b6",
+      "apps/web/features/projects/components/__tests__/FilePreviewModal.download.test.tsx": "bce0e152d4bba1237c1d2308e01a2426d84da4e9707ff057984b7492535b1514"
+    }
+  }
+}

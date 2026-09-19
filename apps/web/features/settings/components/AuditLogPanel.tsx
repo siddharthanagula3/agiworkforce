@@ -2,11 +2,8 @@
 
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
-import {
-  useAuditLogActions,
-  useAuditLogs,
-  type AuditLogEntry,
-} from '../hooks/use-settings-queries';
+import { toUserMessage } from '@/lib/user-error-message';
+import { useAuditLogActions, useAuditLogs } from '../hooks/use-settings-queries';
 
 const PAGE_SIZE = 20;
 
@@ -27,13 +24,6 @@ function formatTimestamp(value: string): string {
   }).format(date);
 }
 
-function entryContext(entry: AuditLogEntry): string | null {
-  if (entry.resourceType && entry.resourceId) {
-    return `${entry.resourceType} · ${entry.resourceId}`;
-  }
-  return entry.resourceType ?? entry.resourceId ?? entry.ipAddress;
-}
-
 export function AuditLogPanel() {
   const [action, setAction] = useState('');
   const [offset, setOffset] = useState(0);
@@ -44,7 +34,8 @@ export function AuditLogPanel() {
   });
   const actionsQuery = useAuditLogActions();
 
-  const entries = logsQuery.data ?? [];
+  const entries = logsQuery.data?.entries ?? [];
+  const hasMore = logsQuery.data?.hasMore === true;
   const page = Math.floor(offset / PAGE_SIZE) + 1;
 
   return (
@@ -105,7 +96,7 @@ export function AuditLogPanel() {
         <div role="alert" className="px-5 py-8">
           <p className="text-sm font-medium text-foreground">Security activity could not load.</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {logsQuery.error?.message ?? 'Try again in a moment.'}
+            {toUserMessage(logsQuery.error, 'Try again in a moment.')}
           </p>
           <button
             type="button"
@@ -121,27 +112,22 @@ export function AuditLogPanel() {
         </div>
       ) : (
         <ul className="divide-y divide-border/50" aria-label="Security activity entries">
-          {entries.map((entry) => {
-            const context = entryContext(entry);
-            return (
-              <li key={entry.id} className="flex items-start justify-between gap-4 px-5 py-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    {formatAction(entry.action)}
-                  </p>
-                  {context ? (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{context}</p>
-                  ) : null}
-                </div>
-                <time
-                  dateTime={entry.createdAt}
-                  className="shrink-0 text-right text-xs text-muted-foreground"
-                >
-                  {formatTimestamp(entry.createdAt)}
-                </time>
-              </li>
-            );
-          })}
+          {entries.map((entry) => (
+            <li key={entry.id} className="flex items-start justify-between gap-4 px-5 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">{entry.sentence}</p>
+                {entry.device ? (
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{entry.device}</p>
+                ) : null}
+              </div>
+              <time
+                dateTime={entry.createdAt}
+                className="shrink-0 text-right text-xs text-muted-foreground"
+              >
+                {formatTimestamp(entry.createdAt)}
+              </time>
+            </li>
+          ))}
         </ul>
       )}
 
@@ -160,7 +146,7 @@ export function AuditLogPanel() {
           <button
             type="button"
             onClick={() => setOffset((value) => value + PAGE_SIZE)}
-            disabled={entries.length < PAGE_SIZE || logsQuery.isFetching}
+            disabled={!hasMore || logsQuery.isFetching}
             aria-label="Next security activity page"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
           >

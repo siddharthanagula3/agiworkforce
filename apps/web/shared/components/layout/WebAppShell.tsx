@@ -20,10 +20,10 @@
  * project metadata from the previous Clerk account.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
-import { useSignOut } from '@/lib/identity/client';
+import { useCurrentUser, useSignOut } from '@/lib/identity/client';
 import { ChevronUp, Menu } from '@agiworkforce/icons';
 import {
   Sheet,
@@ -53,6 +53,7 @@ import { useManagedCloudProjects, useProjectStore } from '@/features/projects';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
+import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import {
   conversationDeleteConfirm,
   conversationHref,
@@ -88,6 +89,7 @@ import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/Comp
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { onAppCommand } from '@shared/lib/app-commands';
+import { resolveAccountIdentity, type AccountIdentity } from './account-identity';
 
 // A fresh [] each render changes the identity every time and defeats the
 // memoization below, which is what the exhaustive-deps warning was pointing at.
@@ -112,6 +114,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const pathname = usePathname();
   const { openSettings } = useSettingsModal();
   const identitySignOut = useSignOut();
+  const { user: identityUser } = useCurrentUser();
   const { user, logout, isLoading: isAuthLoading, initialized: isAuthInitialized } = useAuthStore();
   const isWorkspaceAdmin = useIsWorkspaceAdmin();
   const disabledFeatures = useDisabledWorkspaceFeatures();
@@ -119,12 +122,47 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const isBillingLoading = useBillingStore((s) => s.isLoading);
   const isBillingInitialized = useBillingStore((s) => s.initialized);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
+  const canonicalUser = useBillingStore((state) => state.user);
+  const providerUser = useMemo<AccountIdentity | null>(() => {
+    if (!identityUser) return null;
+    const name =
+      identityUser.fullName ||
+      [identityUser.firstName, identityUser.lastName].filter(Boolean).join(' ') ||
+      identityUser.username ||
+      undefined;
+    const email = identityUser.email ?? identityUser.emails[0];
+    return {
+      id: identityUser.id,
+      ...(name ? { name } : {}),
+      ...(email ? { email } : {}),
+    };
+  }, [identityUser]);
+  const accountUser = resolveAccountIdentity(canonicalUser, user, providerUser);
 
   const collapsed = useUIStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
+  const navOpenerRef = useRef<HTMLElement | null>(null);
+  const restoreMobileNavFocusRef = useRef(true);
+  const openMobileNav = useCallback(() => {
+    restoreMobileNavFocusRef.current = true;
+    navOpenerRef.current = document.activeElement as HTMLElement | null;
+    setMobileNavOpen(true);
+  }, []);
+  const openAfterMobileNavClose = useCallback((open: () => void) => {
+    restoreMobileNavFocusRef.current = false;
+    setMobileNavOpen(false);
+    open();
+  }, []);
+  const openShellSettings = useCallback(
+    (section: Parameters<typeof openSettings>[0]) =>
+      openAfterMobileNavClose(() => openSettings(section)),
+    [openAfterMobileNavClose, openSettings],
+  );
 
   // Shared with WebChatPage's account menu (useUpgradePlanFlow) so the
   // dialog, mid-cycle confirm, and the real Stripe checkout call cannot
@@ -134,44 +172,60 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     subscription,
     currentTier: subscription?.tier,
     billingPolicyReady,
-    openSettings,
+    openSettings: openShellSettings,
   });
 
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
 
-  // ---- Narrow-viewport navigation (WEB-APPSHELL-MOBILE-SIDEBAR-01) ----
+  // ---- Viewport tiers (WEB-APPSHELL-MOBILE-SIDEBAR-01) ----
   // Below 768px the persistent ~260px sidebar reduced every route on this
-  // shell to a clipped strip. Narrow viewports get a compact header with an
-  // "Open navigation" control and a modal drawer instead; desktop keeps the
+  // shell to a clipped strip. Compact viewports get a header with an "Open
+  // navigation" control and a modal drawer; a tablet in portrait keeps the
+  // icon rail and expands it over the content; wider windows keep the
   // persistent/collapsible sidebar. Tracked separately from the manual
   // collapse toggle so widening the window restores the user's choice.
-  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mql = window.matchMedia('(max-width: 768px)');
-    const update = () => setIsNarrowViewport(mql.matches);
-    update();
-    mql.addEventListener('change', update);
-    return () => mql.removeEventListener('change', update);
-  }, []);
+  const shellLayout = useShellLayout();
+  const isNarrowViewport = shellLayout.tier === 'compact';
+  const showsRail = rail && shellLayout.sidebarMode !== 'drawer';
 
   // Close the drawer after any navigation so it never lingers over the new route.
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
 
+  // A rotation or an iPad split-view resize re-flows the shell, and the reading
+  // position in the content is what the user loses when it does.
+  const mainContentRef = useRef<HTMLDivElement>(null);
+  const contentScrollRef = useRef(0);
+  useEffect(() => {
+    const element = mainContentRef.current;
+    if (!element) return;
+    const remember = () => {
+      contentScrollRef.current = element.scrollTop;
+    };
+    element.addEventListener('scroll', remember, { passive: true });
+    return () => element.removeEventListener('scroll', remember);
+  }, []);
+  useLayoutEffect(() => {
+    const element = mainContentRef.current;
+    if (!element || contentScrollRef.current <= 0) return;
+    element.scrollTop = contentScrollRef.current;
+  }, [shellLayout.tier, shellLayout.orientation]);
+
   // The same overlay commands the chat surface answers, so a native menu item
   // or a keyboard shortcut reaches them on the project surfaces too.
   useEffect(() => {
-    const stopSearch = onAppCommand('open-search', () => setSearchDialogOpen(true));
-    const stopShortcuts = onAppCommand('open-shortcuts', () => setKeyboardShortcutsOpen(true));
+    const stopSearch = onAppCommand('open-search', () =>
+      openAfterMobileNavClose(() => setSearchDialogOpen(true)),
+    );
+    const stopShortcuts = onAppCommand('open-shortcuts', () =>
+      openAfterMobileNavClose(() => setKeyboardShortcutsOpen(true)),
+    );
     return () => {
       stopSearch();
       stopShortcuts();
     };
-  }, []);
+  }, [openAfterMobileNavClose]);
 
   // Escape closes; focus moves into the drawer on open and back to the
   // trigger on close (the cleanup also runs on unmount, which is harmless).
@@ -220,13 +274,9 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const handleNewChat = useCallback(() => router.push('/chat'), [router]);
   const handleOpenCode = useCallback(() => router.push(CODE_ROUTES.root), [router]);
   const handleOpenSearch = useCallback(() => {
-    setMobileNavOpen(false);
-    setSearchDialogOpen(true);
-  }, []);
-  const handleOpenUsage = useCallback(() => {
-    setMobileNavOpen(false);
-    openSettings('usage');
-  }, [openSettings]);
+    openAfterMobileNavClose(() => setSearchDialogOpen(true));
+  }, [openAfterMobileNavClose]);
+  const handleOpenUsage = useCallback(() => openShellSettings('usage'), [openShellSettings]);
 
   const { usage: managedUsageSummary } = useManagedUsageSummary();
   const managedBudgetPercent = useMemo(
@@ -240,12 +290,14 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   const handleDeleteSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      confirmDestructive({
-        ...conversationDeleteConfirm(convo?.title),
-        onConfirm: () => deleteConversation(id),
-      });
+      openAfterMobileNavClose(() =>
+        confirmDestructive({
+          ...conversationDeleteConfirm(convo?.title),
+          onConfirm: () => deleteConversation(id),
+        }),
+      );
     },
-    [confirmDestructive, conversations, deleteConversation],
+    [confirmDestructive, conversations, deleteConversation, openAfterMobileNavClose],
   );
   const handleRenameSession = useCallback(
     (id: string, title: string) => void updateConversation(id, { title }),
@@ -312,15 +364,23 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       // shell at least had. Same dialog and copy as ProjectSettingsDialog.
       const project = storeProjects.find((p) => p.id === projectId);
       if (!project) return;
-      confirmDestructive({
-        ...projectDeleteConfirm(project.name),
-        onConfirm: () =>
-          deleteProjectOptimistically(project, removeProjectFromStore, (restored) =>
-            setStoreProjects([...useProjectStore.getState().projects, restored]),
-          ),
-      });
+      openAfterMobileNavClose(() =>
+        confirmDestructive({
+          ...projectDeleteConfirm(project.name),
+          onConfirm: () =>
+            deleteProjectOptimistically(project, removeProjectFromStore, (restored) =>
+              setStoreProjects([...useProjectStore.getState().projects, restored]),
+            ),
+        }),
+      );
     },
-    [confirmDestructive, removeProjectFromStore, setStoreProjects, storeProjects],
+    [
+      confirmDestructive,
+      openAfterMobileNavClose,
+      removeProjectFromStore,
+      setStoreProjects,
+      storeProjects,
+    ],
   );
   // The projects page owns the create dialog, so carry the intent across the
   // navigation: without ?new=1 this button lands the user on a list and the
@@ -352,7 +412,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // "SIDDHARTHA NAGULA", and the raw value rendered a shouting, truncated
   // "SIDDHARTH…" in the sidebar while the greeting headline four inches away
   // said "Siddhartha". One rule, one source, every surface.
-  const displayName = resolveAccountDisplayName(user?.name, user?.email);
+  const displayName = resolveAccountDisplayName(accountUser?.name, accountUser?.email);
   const userInitial = accountInitial(displayName);
   // `?? 'free'` alone would sell an upgrade to a paying subscriber whenever
   // `/api/me` answers 401 (that path clears `subscription` and records no
@@ -380,14 +440,14 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // menu.
   const accountMenuItems = (
     <AccountMenuItems
-      email={user?.email}
-      onManageWorkspace={() => openSettings('team')}
-      onOpenSettings={() => openSettings('general')}
+      email={accountUser?.email}
+      onManageWorkspace={() => openShellSettings('team')}
+      onOpenSettings={() => openShellSettings('general')}
       onOpenHelp={() => router.push(helpHrefForPath(pathname))}
-      onOpenFeedback={() => setFeedbackOpen(true)}
-      onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
+      onOpenFeedback={() => openAfterMobileNavClose(() => setFeedbackOpen(true))}
+      onOpenKeyboardShortcuts={() => openAfterMobileNavClose(() => setKeyboardShortcutsOpen(true))}
       showUpgrade={hasSelfServeUpgradePath(currentTier)}
-      onUpgrade={() => openUpgradeDialog()}
+      onUpgrade={() => openAfterMobileNavClose(openUpgradeDialog)}
       onDownloadApps={() => router.push('/download')}
       onLogout={() => void handleLogout()}
     />
@@ -408,7 +468,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     </div>
   ) : (
     <div className="w-full">
-      {isFreeTier && <SidebarFreePlanNudge onUpgrade={() => openSettings('billing')} />}
+      {isFreeTier && <SidebarFreePlanNudge onUpgrade={() => openShellSettings('billing')} />}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -424,8 +484,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
                 <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
                 <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
               </div>
-              {user?.email && (
-                <p className="truncate text-[12px] text-muted-foreground">{user.email}</p>
+              {accountUser?.email && (
+                <p className="truncate text-[12px] text-muted-foreground">{accountUser.email}</p>
               )}
             </div>
             <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -531,20 +591,25 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         onOpenChange={setKeyboardShortcutsOpen}
         shortcuts={KEYBOARD_SHORTCUT_DOCS}
       />
-      {/* Desktop: persistent/collapsible sidebar. Narrow: replaced by the
-          header trigger + modal drawer below (WEB-APPSHELL-MOBILE-SIDEBAR-01). */}
-      {rail && !isNarrowViewport && (
+      {/* Desktop: persistent/collapsible sidebar. Tablet portrait: the icon
+          rail, expanding into the drawer. Compact: the header trigger + modal
+          drawer below (WEB-APPSHELL-MOBILE-SIDEBAR-01). */}
+      {showsRail && (
         <Sidebar
           {...sharedSidebarProps}
-          collapsed={collapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!collapsed)}
+          collapsed={shellLayout.sidebarMode === 'rail' ? true : collapsed}
+          onToggleCollapse={
+            shellLayout.sidebarMode === 'rail'
+              ? openMobileNav
+              : () => setSidebarCollapsed(!collapsed)
+          }
         />
       )}
 
       <div
         className="relative flex min-h-0 min-w-0 flex-1 flex-col"
-        aria-hidden={rail && isNarrowViewport && mobileNavOpen ? true : undefined}
-        inert={rail && isNarrowViewport && mobileNavOpen ? true : undefined}
+        aria-hidden={rail && mobileNavOpen ? true : undefined}
+        inert={rail && mobileNavOpen ? true : undefined}
       >
         {isNarrowViewport && (
           <header
@@ -558,7 +623,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
                 aria-label="Open navigation"
                 aria-expanded={mobileNavOpen}
                 aria-controls="webappshell-mobile-nav"
-                onClick={() => setMobileNavOpen(true)}
+                onClick={openMobileNav}
                 className="flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <Menu className="h-5 w-5" aria-hidden="true" />
@@ -574,8 +639,11 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         {/* Content area, scrolls inside the shell (the outer wrapper is fixed). */}
         <div
           id="main-content"
+          ref={mainContentRef}
           role="main"
           tabIndex={-1}
+          data-shell-tier={shellLayout.tier}
+          data-shell-orientation={shellLayout.orientation}
           className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain [scrollbar-width:thin]"
         >
           {children}
@@ -584,7 +652,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         <div id={CONTENT_OVERLAY_ROOT_ID} className="pointer-events-none absolute inset-0" />
       </div>
 
-      {rail && isNarrowViewport && (
+      {rail && shellLayout.sidebarMode !== 'persistent' && (
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetContent
             id="webappshell-mobile-nav"
@@ -597,7 +665,13 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
               // The sheet is opened from a button outside it, so Radix has no
               // trigger to hand focus back to and would drop it on the body.
               event.preventDefault();
-              mobileNavTriggerRef.current?.focus();
+              if (!restoreMobileNavFocusRef.current) {
+                restoreMobileNavFocusRef.current = true;
+                return;
+              }
+              const opener = navOpenerRef.current;
+              if (opener?.isConnected) opener.focus();
+              else mobileNavTriggerRef.current?.focus();
             }}
           >
             <SheetTitle className="sr-only">Navigation</SheetTitle>

@@ -48,11 +48,24 @@ function invokeStateMethod(state: unknown, method: string): boolean {
 }
 
 const STORE_RESET_METHODS = ['resetOnLogout', 'reset', 'clearAll', 'clear'] as const;
-const MODULE_TEARDOWN_METHODS = new Set(['stopMissionCleanupInterval']);
+const MODULE_ACCOUNT_CLEANUP_METHODS = new Set([
+  'stopMissionCleanupInterval',
+  'invalidateModelFavouritesCache',
+  'invalidateConnectorsCache',
+  'invalidateConnectorCapabilityCatalog',
+]);
 
-function resetStoreState(handle: ZustandStoreHandle): void {
+const MODULE_WORKSPACE_CLEANUP_METHODS = new Set([
+  'invalidateConnectorsCache',
+  'invalidateConnectorCapabilityCatalog',
+]);
+
+function resetStoreState(
+  handle: ZustandStoreHandle,
+  methods: readonly string[] = STORE_RESET_METHODS,
+): void {
   const state = handle.getState();
-  for (const method of STORE_RESET_METHODS) {
+  for (const method of methods) {
     if (invokeStateMethod(state, method)) return;
   }
 }
@@ -73,17 +86,63 @@ const USER_SCOPED_STORE_MODULES: ReadonlyArray<{ label: string; load: () => Prom
   { label: 'company-hub-store', load: () => import('./company-hub-store') },
   { label: 'artifacts-store', load: () => import('@/features/chat/stores/artifacts-store') },
   { label: 'voice-input-store', load: () => import('@/features/chat/stores/voice-input-store') },
+  {
+    label: 'voice-session-store',
+    load: () => import('@/features/chat/stores/voice-session-store'),
+  },
   { label: 'style-store', load: () => import('@/features/chat/stores/style-store') },
   {
     label: 'tool-permissions-store',
     load: () => import('@/features/connectors/stores/tool-permissions-store'),
   },
+  {
+    label: 'model-favourites-cache',
+    load: () => import('@/features/chat/lib/use-model-favourites'),
+  },
+  {
+    label: 'connectors-cache',
+    load: () => import('@/features/connectors/hooks/use-connectors'),
+  },
+  {
+    label: 'connector-capabilities-cache',
+    load: () => import('@/features/connectors/hooks/use-connector-capabilities'),
+  },
   { label: 'unified-chat-stores', load: () => import('@agiworkforce/unified-chat') },
+];
+
+const WORKSPACE_SCOPED_STORE_LABELS = new Set([
+  'mission-control-store',
+  'notification-store',
+  'artifact-store',
+  'web-chat-store',
+  'media-store',
+  'agent-metrics-store',
+  'company-hub-store',
+  'artifacts-store',
+  'connectors-cache',
+  'connector-capabilities-cache',
+]);
+
+const WORKSPACE_SCOPED_STORE_MODULES = USER_SCOPED_STORE_MODULES.filter(({ label }) =>
+  WORKSPACE_SCOPED_STORE_LABELS.has(label),
+);
+
+const WORKSPACE_RESET_METHODS = ['resetOnWorkspaceSwitch', ...STORE_RESET_METHODS] as const;
+
+const WORKSPACE_STORAGE_KEY_PATTERNS: readonly RegExp[] = [
+  /^agi-composer-draft:/,
+  /^agi-chat-artifact-sync-cursor:/,
+  /^agi\.composer-pending-draft$/,
+  /^agi\.sidebar\.unreadConversationIds$/,
+  /^agi\.workspace-policy\./,
+  /^agi:mcp-context-pending$/,
+  /^agi:steps-card:/,
 ];
 
 const APP_STORAGE_KEY_PATTERNS: readonly RegExp[] = [
   /^agi[-_.]/i,
   /^agiworkforce[-_.]/i,
+  /^agi:/i,
   /^chat-/i,
   /^tool-storage$/,
   /^agent-metrics-storage$/,
@@ -120,6 +179,29 @@ function purgeAppOwnedStorage(area: Storage | undefined): number {
   return removed;
 }
 
+function purgeStorageKeys(area: Storage | undefined, patterns: readonly RegExp[]): number {
+  if (!area) return 0;
+  const doomed: string[] = [];
+  try {
+    for (let index = 0; index < area.length; index += 1) {
+      const key = area.key(index);
+      if (key && patterns.some((pattern) => pattern.test(key))) doomed.push(key);
+    }
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const key of doomed) {
+    try {
+      area.removeItem(key);
+      removed += 1;
+    } catch {
+      // Keep clearing the remaining workspace-bound keys.
+    }
+  }
+  return removed;
+}
+
 /**
  * Central cleanup on sign-out. Resets every user-scoped store's in-memory
  * state AND clears its persisted payload, then sweeps any remaining app-owned
@@ -146,7 +228,7 @@ export async function cleanupAllStores(): Promise<void> {
           if (hasPersistApi(handle)) handle.persist?.clearStorage();
         }
         for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
-          if (MODULE_TEARDOWN_METHODS.has(exportName) && typeof exported === 'function') {
+          if (MODULE_ACCOUNT_CLEANUP_METHODS.has(exportName) && typeof exported === 'function') {
             (exported as () => void)();
           }
         }
@@ -236,6 +318,30 @@ async function cancelWorkspaceBoundOperations(): Promise<void> {
   );
 }
 
+async function cleanupWorkspaceStores(): Promise<void> {
+  await Promise.allSettled(
+    WORKSPACE_SCOPED_STORE_MODULES.map(async ({ label, load }) => {
+      try {
+        const mod = await load();
+        if (!mod || typeof mod !== 'object') return;
+        for (const exported of Object.values(mod as Record<string, unknown>)) {
+          const handle = asZustandStore(exported);
+          if (handle) resetStoreState(handle, WORKSPACE_RESET_METHODS);
+        }
+        for (const [exportName, exported] of Object.entries(mod as Record<string, unknown>)) {
+          if (MODULE_WORKSPACE_CLEANUP_METHODS.has(exportName) && typeof exported === 'function') {
+            (exported as () => void)();
+          }
+        }
+      } catch (error) {
+        logger.error(`Error cleaning up ${label} on workspace switch:`, error);
+      }
+    }),
+  );
+  purgeStorageKeys(window.localStorage, WORKSPACE_STORAGE_KEY_PATTERNS);
+  purgeStorageKeys(window.sessionStorage, WORKSPACE_STORAGE_KEY_PATTERNS);
+}
+
 /**
  * Binds the local caches to one account and workspace. A change of either stops
  * the work the previous scope started and drops its cached content before the
@@ -264,7 +370,8 @@ export async function applyCacheScope(scope: CacheScopeSelector): Promise<boolea
   }
 
   await cancelWorkspaceBoundOperations();
-  await cleanupAllStores();
+  if (previous.account === next.account) await cleanupWorkspaceStores();
+  else await cleanupAllStores();
   recordCacheScope(nextId);
   logger.auth(`Cache scope changed from ${recorded} to ${nextId}; local caches dropped`);
   return true;

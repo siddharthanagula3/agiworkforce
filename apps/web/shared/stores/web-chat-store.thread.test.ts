@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { resolveModelFamilySlot } from '@agiworkforce/types';
 import {
   useChatStore,
   selectActiveLeafId,
@@ -10,6 +11,7 @@ import {
 const CONVERSATION_ID = 'conv-thread';
 const OTHER_CONVERSATION_ID = 'conv-other';
 const BASE_TIME = Date.parse('2026-09-01T10:00:00.000Z');
+const LUNA_MODEL_ID = resolveModelFamilySlot('openai/gpt-fast');
 
 function message(
   id: string,
@@ -278,6 +280,28 @@ describe('web chat store, message thread', () => {
     useChatStore.getState().setActiveConversation(CONVERSATION_ID);
 
     expect(useChatStore.getState().messages.map((m) => m.id)).toEqual(['u1', 'a1']);
+  });
+});
+
+describe('web chat store, workspace reset', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('keeps the account model preference while removing the previous workspace conversation', () => {
+    const store = useChatStore.getState();
+    store.setSelectedModel(LUNA_MODEL_ID, 'economy');
+    store.setActiveConversationWithMessages(CONVERSATION_ID, linearRows());
+
+    store.resetOnWorkspaceSwitch();
+
+    expect(useChatStore.getState()).toMatchObject({
+      selectedModel: LUNA_MODEL_ID,
+      selectedModelTier: 'economy',
+      conversations: [],
+      messages: [],
+      activeConversationId: null,
+    });
   });
 });
 

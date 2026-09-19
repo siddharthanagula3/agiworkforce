@@ -8,19 +8,24 @@
       "kinds": ["package", "script"]
     },
     {
-      "pathPrefix": "THIRD_PARTY_LICENSES.md",
-      "reason": "Every path to the right of an arrow in this file is a path in the UPSTREAM project a file was ported from, not a path in this repo. Most read as `src/...` and never collide; `packages/plugin-sdk/src/provider-entry.ts` happens to look repo-rooted. Resolving these against this tree is the wrong check.",
+      "pathPrefix": "docs/architecture/render-layer.md",
+      "reason": "The render-layer spec carries Status: Draft for build. Every repo path it cites names a file the design would create, not a file it claims exists. Filed as debt these read as rot to whoever ratchets next; they are proposals, and they resolve when the design ships.",
       "kinds": ["md-path"]
     },
     {
-      "pathPrefix": "docs/architecture/render-layer.md",
-      "reason": "The render-layer spec carries Status: Draft for build. Every repo path it cites names a file the design would create, not a file it claims exists. Filed as debt these read as rot to whoever ratchets next; they are proposals, and they resolve when the design ships.",
+      "pathPrefix": "docs/work/checklist-secondary-verification-2026-09-18.md",
+      "reason": "The missing-path section quotes the exact references the verification found unresolvable, so every path it lists is meant not to resolve. Repointing them would erase the finding the document reports.",
       "kinds": ["md-path"]
     },
     {
       "pathPrefix": "scripts/check-boundaries.mjs",
       "reason": "The comment names the generated devkit bundle at apps/web/app/.well-known/workflow/v1/flow/route.js, which is exactly the file the guard below exists to ignore. It is written by `next dev`, gitignored beside itself, and never tracked, so citing it is the point rather than a stale reference.",
       "kinds": ["path"]
+    },
+    {
+      "pathPrefix": "THIRD_PARTY_LICENSES.md",
+      "reason": "Every path to the right of an arrow in this file is a path in the UPSTREAM project a file was ported from, not a path in this repo. Most read as `src/...` and never collide; `packages/plugin-sdk/src/provider-entry.ts` happens to look repo-rooted. Resolving these against this tree is the wrong check.",
+      "kinds": ["md-path"]
     }
   ],
   "knownContradictions": [
@@ -31,8 +36,6 @@
     }
   ],
   "debt": [
-    "md-link::docs/architecture/desktop.md::cli.md",
-    "md-link::docs/architecture/desktop.md::web.md",
     "md-path::docs/work/restructure-execution-queue.md::docs/plans/monorepo-restructure-2026-07-08.md",
     "md-path::docs/decisions/wire-or-cut.md::apps/desktop/src/api/council.ts",
     "md-path::docs/decisions/wire-or-cut.md::apps/desktop/src/api/planning.ts",
@@ -61,8 +64,6 @@
     "md-path::docs/specs/domain-first-reorg.md::docs/plans/wave2-desktop-v1.md",
     "md-path::docs/specs/domain-first-reorg.md::services/modelCatalog.ts",
     "md-path::docs/specs/domain-first-reorg.md::services/tierGuard.ts",
-    "md-path::docs/architecture/desktop.md::apps/desktop/src/constants/models.json",
-    "md-path::docs/architecture/desktop.md::packages/chat",
     "md-path::tools/skill-vetting/README.md::docs/strategy/PORTING-TRACKER.md",
     "package::apps/cli/src/sdk_io/protocol.rs::@agiworkforce/agent-sdk",
     "path::apps/cli/src/models/streaming.rs::docs/plans/rust-engine-extraction-2026-07-09.md",

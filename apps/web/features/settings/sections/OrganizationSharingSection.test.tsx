@@ -330,6 +330,82 @@ describe('OrganizationSharingSection', () => {
     const { container } = renderSection();
     expect(container.textContent).not.toMatch(/auth|token|secret/i);
   });
+
+  it('shows a safe project-load error and recovers through Retry', async () => {
+    const user = userEvent.setup();
+    let attempts = 0;
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/projects') && attempts++ === 0) {
+        return new Response(null, { status: 500 });
+      }
+      if (String(input).includes('/api/projects')) {
+        return new Response(
+          JSON.stringify({
+            projects: [{ id: 'own-project', name: 'My notes', isOrgShared: false }],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ connectors: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    mockOverview.mockReturnValue(overview());
+
+    renderSection();
+
+    const card = screen.getByText('Shared projects').closest('section') as HTMLElement;
+    expect(await within(card).findByText(/went wrong on our side/i)).toBeInTheDocument();
+    expect(card.textContent).not.toContain('HTTP 500');
+    expect(within(card).queryByRole('combobox', { name: /project to share/i })).toBeNull();
+
+    await user.click(within(card).getByRole('button', { name: 'Retry' }));
+
+    expect(await within(card).findByRole('option', { name: 'My notes' })).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
+  it('shows a safe connector-load error and recovers through Retry', async () => {
+    const user = userEvent.setup();
+    let attempts = 0;
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/api/connectors/custom') && attempts++ === 0) {
+        return new Response(null, { status: 500 });
+      }
+      if (String(input).includes('/api/connectors/custom')) {
+        return new Response(
+          JSON.stringify({ connectors: [{ id: 'own-connector', name: 'Linear' }] }),
+          { status: 200 },
+        );
+      }
+      return new Response(JSON.stringify({ projects: [] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    mockOverview.mockReturnValue(overview());
+
+    renderSection();
+
+    const card = screen.getByText('Shared connectors').closest('section') as HTMLElement;
+    expect(await within(card).findByText(/went wrong on our side/i)).toBeInTheDocument();
+    expect(card.textContent).not.toContain('HTTP 500');
+    expect(within(card).queryByRole('combobox', { name: /connector to share/i })).toBeNull();
+
+    await user.click(within(card).getByRole('button', { name: 'Retry' }));
+
+    expect(await within(card).findByRole('option', { name: 'Linear' })).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
+  it('does not render a raw overview failure', () => {
+    mockOverview.mockReturnValue({
+      isLoading: false,
+      isError: true,
+      error: new Error('HTTP 500'),
+      data: null,
+    });
+
+    renderSection();
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/went wrong on our side/i);
+    expect(screen.getByRole('alert')).not.toHaveTextContent('HTTP 500');
+  });
 });
 
 describe('shared artifacts', () => {

@@ -17,7 +17,7 @@ const PROJECT = {
   id: 'proj_desc',
   name: 'Launch plan',
   description: 'Everything for the September launch.',
-  instructions: '',
+  instructions: 'Always cite project sources.',
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
 } as unknown as Project;
@@ -42,6 +42,25 @@ beforeEach(() => {
 });
 
 describe('ProjectSettingsDialog description', () => {
+  it('clears saved instructions using an explicit null update', async () => {
+    const user = userEvent.setup();
+    const { onUpdate } = renderDialog();
+    const field = screen.getByLabelText('Instructions');
+    expect(field).toHaveValue('Always cite project sources.');
+
+    await user.clear(field);
+    await user.click(screen.getByRole('button', { name: /^save/i }));
+
+    await waitFor(() => expect(updateProject).toHaveBeenCalled());
+    expect(JSON.parse(JSON.stringify(updateProject.mock.calls[0]![1]))).toMatchObject({
+      instructions: null,
+    });
+    expect(onUpdate).toHaveBeenCalledWith(
+      'proj_desc',
+      expect.objectContaining({ instructions: undefined }),
+    );
+  });
+
   it('shows the saved description and persists an edit', async () => {
     const user = userEvent.setup();
     const { onUpdate } = renderDialog();

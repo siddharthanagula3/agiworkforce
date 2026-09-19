@@ -71,6 +71,10 @@ describe('Health Check API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['DATABASE_URL'] = 'postgresql://test:test@localhost/test';
+    process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.example.test';
+    process.env['UPSTASH_REDIS_REST_TOKEN'] = 'test-token';
+    process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_health';
+    process.env['CLERK_SECRET_KEY'] = 'sk_test_health';
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_123';
     stripeMocks.retrievePrice.mockResolvedValue({
       active: true,
@@ -216,23 +220,17 @@ describe('Health Check API', () => {
       expect(data.checks.stripe.message).toBe('unavailable');
     });
 
-    it('names every unconfigured dependency, optional ones included', async () => {
+    it('does not expose internal dependency names or environment variable names', async () => {
       delete process.env['E2B_API_KEY'];
       process.env['AGI_OTEL_EXPORTER_ENDPOINT'] = 'https://otel.example';
 
       const response = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
       const data = await response.json();
-      const unready = data.checks.environment.unreadyDependencies as Array<{
-        id: string;
-        criticality: string;
-        missing: string[];
-      }>;
 
-      const codeExecution = unready.find((entry) => entry.id === 'code_execution');
-      expect(codeExecution?.criticality).toBe('optional');
-      expect(codeExecution?.missing).toContain('E2B_API_KEY');
-      expect(unready.map((entry) => entry.id)).not.toContain('observability');
-      expect(unready.map((entry) => entry.id)).not.toContain('database');
+      expect(data.checks.environment).toEqual({ status: 'healthy' });
+      expect(JSON.stringify(data)).not.toContain('unreadyDependencies');
+      expect(JSON.stringify(data)).not.toContain('E2B_API_KEY');
+      expect(JSON.stringify(data)).not.toContain('code_execution');
     });
 
     it('should handle DB connection failure gracefully', async () => {

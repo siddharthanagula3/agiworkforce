@@ -136,3 +136,20 @@ describe('CreateProjectDialog, description', () => {
     expect(payload).not.toHaveProperty('description');
   });
 });
+
+describe('CreateProjectDialog, quota recovery', () => {
+  it('shows the actionable quota explanation and preserves the entered name for recovery', async () => {
+    const message =
+      'Your Free plan includes 1 project folder. Upgrade your plan to add more, or delete an existing folder to make room.';
+    createProject.mockRejectedValueOnce(
+      Object.assign(new Error(`HTTP 400: ${message}`), { status: 400 }),
+    );
+    open();
+    await userEvent.type(await screen.findByLabelText('Project name'), 'Quarterly review');
+    await userEvent.click(screen.getByRole('button', { name: 'Create project' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(screen.getByRole('alert')).not.toHaveTextContent('HTTP');
+    expect(screen.getByLabelText('Project name')).toHaveValue('Quarterly review');
+    expect(screen.getByRole('button', { name: 'Create project' })).toBeEnabled();
+  });
+});

@@ -17,6 +17,7 @@ import {
   declineInvitation,
   formatInvitation,
 } from '@/lib/services/organization-invitation-service';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const AcceptSchema = z.object({
   token: z.string().min(20).max(512),
@@ -56,6 +57,13 @@ async function handleAccept(request: NextRequest) {
       { userId, organizationId: invitation.organization_id, invitationId: invitation.id },
       'Organization invitation declined',
     );
+    await recordAuditEvent({
+      userId,
+      organizationId: invitation.organization_id,
+      eventType: 'member_invitation_declined',
+      request,
+      detail: { resourceId: invitation.id, targetUserId: userId },
+    });
     return NextResponse.json({ invitation: formatInvitation(invitation) });
   }
 
@@ -69,6 +77,14 @@ async function handleAccept(request: NextRequest) {
     { userId, organizationId: invitation.organization_id, invitationId: invitation.id, role },
     'Organization invitation accepted',
   );
+
+  await recordAuditEvent({
+    userId,
+    organizationId: invitation.organization_id,
+    eventType: 'member_joined',
+    request,
+    detail: { resourceId: invitation.id, targetUserId: userId, role },
+  });
 
   return NextResponse.json({
     invitation: formatInvitation(invitation),
