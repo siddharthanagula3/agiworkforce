@@ -204,7 +204,7 @@
       "boundary": "local",
       "actionable": false,
       "dependencies": [],
-      "evidence": "Independent source/runtime/doc re-audit is clean with 41 source fingerprints; 32 Desktop dispatcher tests, 281 public-claim tests, 305 privacy/legal/support tests, i18n parity, docs:check, diff validation and retired-phrase scans passed. The sole stale non-rendered test comment was corrected and its 21-test suite plus fingerprint delta refresh passed. See evidence/public-claims.json. Production behavior and provider-generated outputs remain separate QA cases."
+      "evidence": "Independent source/runtime/doc re-audit is clean with 41 source fingerprints; 32 Desktop dispatcher tests, 281 public-claim tests, 305 privacy/legal/support tests, i18n parity, docs:check, diff validation and retired-phrase scans passed. The sole stale non-rendered test comment was corrected and its 21-test suite plus fingerprint delta refresh passed. Exact final-byte verification also proves the privacy delta formatter-only and passes canonical corpus drift plus 116 privacy/support tests. See evidence/public-claims.json. Production behavior and provider-generated outputs remain separate QA cases."
     },
     {
       "id": "JEV-PILOT-ELIGIBILITY",
