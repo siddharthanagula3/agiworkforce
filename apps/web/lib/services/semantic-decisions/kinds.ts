@@ -1,7 +1,12 @@
 // Closed, so a caller cannot mint a flag key or a metric series at runtime.
 // Imports nothing: metric cardinality and the flag namespace both read it.
 
-export const DECISION_KIND_IDS = ['turn_signals'] as const;
+export const DECISION_KIND_IDS = [
+  'turn_signals',
+  'connector_tool_shortlist',
+  'memory_relevance',
+  'memory_worth_extracting',
+] as const;
 
 export type DecisionKind = (typeof DECISION_KIND_IDS)[number];
 
@@ -23,6 +28,30 @@ export const DECISION_KINDS: Readonly<Record<DecisionKind, DecisionKindRecord>> 
     failurePolicy: 'baseline_stands',
     description:
       'Task family, current-information, external-tool, code-understanding and complexity signals over one managed chat turn. Shadow only: the deterministic classifier keeps the turn.',
+  },
+  connector_tool_shortlist: {
+    id: 'connector_tool_shortlist',
+    owner: 'AI platform maintainers',
+    questionVersion: 1,
+    failurePolicy: 'baseline_stands',
+    description:
+      'Which connected tools this turn would need, one Noul per candidate. Shadow only: the lexical shortlist still builds the turn, and a deferred tool stays reachable through load_connector_tools.',
+  },
+  memory_relevance: {
+    id: 'memory_relevance',
+    owner: 'AI platform maintainers',
+    questionVersion: 1,
+    failurePolicy: 'baseline_stands',
+    description:
+      'Whether each unpinned memory bears on this turn, always applies, or neither. Shadow only, selection for request context only: nothing is ever deleted or reordered in storage.',
+  },
+  memory_worth_extracting: {
+    id: 'memory_worth_extracting',
+    owner: 'AI platform maintainers',
+    questionVersion: 1,
+    failurePolicy: 'baseline_stands',
+    description:
+      'Whether one message states a durable fact about the speaker. Shadow only: the regex gate still decides whether the post-turn extraction runs.',
   },
 };
 
@@ -52,7 +81,12 @@ export function confidenceBin(value: number): DecisionConfidenceBin {
 
 // Questions with a deterministic answer to compare against, so only these
 // produce an agreement and name a disagreement series.
-export const DECISION_COMPARISON_KEYS = ['task_family'] as const;
+export const DECISION_COMPARISON_KEYS = [
+  'task_family',
+  'tool_shortlist',
+  'memory_selection',
+  'worth_extracting',
+] as const;
 
 export type DecisionComparisonKey = (typeof DECISION_COMPARISON_KEYS)[number];
 
@@ -67,6 +101,9 @@ export const DECISION_SKIP_REASONS = [
   'explicit_model',
   'no_text',
   'unconfigured',
+  // Code answered it outright, so there was nothing left to ask.
+  'no_candidates',
+  'decided_by_code',
 ] as const;
 
 export type DecisionSkipReason = (typeof DECISION_SKIP_REASONS)[number];

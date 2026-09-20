@@ -8,7 +8,7 @@ import {
 import { stableBucket, type FlagEvaluation } from '@/lib/feature-flags/evaluate-flags';
 import type { FlagDefinition } from '@/lib/feature-flags/flag-definition';
 
-import { DECISION_BUDGET, decisionCohort, resolveDecisionPolicy } from '../policy';
+import { DECISION_BUDGET, decisionCohort, decisionPolicy, resolveDecisionMode } from '../policy';
 
 const KIND = 'turn_signals';
 const KEY = decisionFlagKey(KIND);
@@ -54,9 +54,8 @@ function resolve(
   evaluations: Record<string, FlagEvaluation>,
   definitions: FlagDefinition[] = [definition(100)],
 ) {
-  return resolveDecisionPolicy({
+  return resolveDecisionMode({
     kind: KIND,
-    model: MODEL,
     evaluations,
     definitions,
     bucketId: 'user-1',
@@ -67,7 +66,7 @@ function resolve(
 describe('which mode a decision kind runs in', () => {
   it('is disabled when no flag exists, which is every deployment today', () => {
     expect(resolve({}).mode).toBe('disabled');
-    expect(resolve({}).policy.mode).toBe('disabled');
+    expect(decisionPolicy(KIND, MODEL, resolve({})).mode).toBe('disabled');
   });
 
   it('is disabled when the flag serves off', () => {
@@ -114,13 +113,13 @@ describe('which mode a decision kind runs in', () => {
 
 describe('the population a decision kind is asked for', () => {
   it('takes the sample rate from the rule that served', () => {
-    expect(resolve({ [KEY]: evaluation() }, [definition(25)]).policy.sampleRate).toBe(0.25);
+    expect(resolve({ [KEY]: evaluation() }, [definition(25)]).sampleRate).toBe(0.25);
   });
 
   it('admits everyone when an override or the default served, since no bucket was drawn', () => {
     expect(
       resolve({ [KEY]: evaluation({ reason: 'user_override', ruleId: null }) }, [definition(5)])
-        .policy.sampleRate,
+        .sampleRate,
     ).toBe(1);
   });
 
@@ -136,15 +135,17 @@ describe('the population a decision kind is asked for', () => {
   });
 
   it('admits a subject the flag admitted, and refuses one it did not', () => {
-    const rate = resolve({ [KEY]: evaluation() }, [definition(100)]).policy.sampleRate;
+    const rate = resolve({ [KEY]: evaluation() }, [definition(100)]).sampleRate;
     expect(decisionCohort(KIND, 'ramp', 'user-1')).toBeLessThan(rate);
     expect(decisionCohort(KIND, 'ramp', 'user-1')).not.toBeLessThan(
-      resolve({ [KEY]: evaluation() }, [definition(0)]).policy.sampleRate,
+      resolve({ [KEY]: evaluation() }, [definition(0)]).sampleRate,
     );
   });
 
   it('carries the host budget and the pinned model rather than inventing either', () => {
-    const { policy } = resolve({ [KEY]: evaluation() });
-    expect(policy).toMatchObject({ ...DECISION_BUDGET, model: MODEL });
+    expect(decisionPolicy(KIND, MODEL, resolve({ [KEY]: evaluation() }))).toMatchObject({
+      ...DECISION_BUDGET,
+      model: MODEL,
+    });
   });
 });

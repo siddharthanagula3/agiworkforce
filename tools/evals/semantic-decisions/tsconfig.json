@@ -1,8 +1,15 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // Same mapping the suite baselines use, so a bench script can import the
+    // real production module rather than restating it.
+    "baseUrl": "../../..",
+    "paths": {
+      "server-only": ["tools/evals/semantic-decisions/suites/server-only-noop.ts"],
+      "@/*": ["apps/web/*"]
+    }
   },
-  "include": ["*.mts"],
+  "include": ["*.mts", "questions/*.mts"],
   "exclude": ["node_modules"]
 }

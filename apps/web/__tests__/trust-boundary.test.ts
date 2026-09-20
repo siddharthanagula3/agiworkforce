@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { buildLocalToByokHandoffDraft } from '@agiworkforce/utils';
 import { createDecisionEvaluator, type DecisionPolicy } from '@agiworkforce/agent-core';
 import { evaluateDecisionEligibility } from '@/lib/services/semantic-decisions/eligibility';
+import { DECISION_KIND_IDS } from '@/lib/services/semantic-decisions/kinds';
 import {
   LocalInferenceRefused,
   isLocalModelId,
@@ -267,6 +268,22 @@ describe('semantic decisions stay inside managed cloud', () => {
       const outcome = await run(request, { trustMode, providerAllowed: true, cohort: 0 });
 
       expect(outcome).toMatchObject({ status: 'fallback', reason: 'policy' });
+      expect(evaluate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['local', 'byok'] as const)(
+    'CRITICAL: no decision kind evaluates for a %s session',
+    async (trustMode) => {
+      const evaluate = vi.fn();
+      for (const kind of DECISION_KIND_IDS) {
+        const run = createDecisionEvaluator({ kind, provider: { evaluate }, policy: () => policy });
+
+        expect(await run(request, { trustMode, providerAllowed: true, cohort: 0 })).toMatchObject({
+          status: 'fallback',
+          reason: 'policy',
+        });
+      }
       expect(evaluate).not.toHaveBeenCalled();
     },
   );
