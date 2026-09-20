@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-09-18
+Last updated: 2026-09-20
 
 The one route an enterprise deal takes, from a quote to a billed subscription,
 and the code that enforces each step. The two documents a customer signs are
@@ -88,3 +88,34 @@ manual signature rather than failing at import:
 No route calls `sendOrderForm` or `readEnvelope` yet. Until one exists, a
 signed Order Form reaches the system through
 `recordSignedOrderFromEnvelope` only.
+
+## 6. The security pack a reviewer asks for
+
+A procurement security review asks the same five questions every time. Each one
+already has an authoritative answer in this repository, and the answer is cited
+here rather than restated, because a restated answer drifts from the one the
+code enforces.
+
+| Question a reviewer asks  | Where the answer lives                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Security overview         | `docs/security/security.md`, the single security document                                                                             |
+| Data flow and boundaries  | `docs/architecture/trust-boundaries.md` for Local, BYOK and Managed Cloud per surface; `docs/architecture/overview.md` for the system |
+| Access control            | The enterprise authorization contract in `packages/contracts/types/src/enterprise`, and the permission each admin route resolves      |
+| Retention and deletion    | `docs/architecture/RETENTION_MATRIX.md` per store, and `docs/security/security.md` section 5 for the posture                          |
+| Legal hold and eDiscovery | `docs/compliance/legal-hold-and-ediscovery.md`, with the operator procedure in `docs/runbooks/legal-hold.md`                          |
+| Vulnerability management  | Root `SECURITY.md` for the reporting policy and scope                                                                                 |
+| Incident response         | `docs/runbooks/incident-response.md`, with `docs/runbooks/personal-data-breach.md` for a personal-data incident                       |
+
+Three answers a reviewer will ask for and this repository does not have. Say so
+rather than deferring:
+
+1. **No SOC 2 report, no ISO 27001 certificate and no HIPAA position.** `/trust`
+   carries the dated status. A questionnaire answered as "in progress" where
+   nothing is in progress is a misrepresentation, not optimism.
+2. **No third-party penetration test report.** The security work in this
+   repository is internal review plus the guards in `scripts/`.
+3. **Managed Cloud is in public alpha.** Say so wherever an answer bears on an
+   availability or durability commitment.
+
+A questionnaire answer that is not one of the cited documents needs the document
+written first. Do not answer from memory of what the product used to do.

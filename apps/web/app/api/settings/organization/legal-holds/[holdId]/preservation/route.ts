@@ -23,6 +23,8 @@ export interface LegalHoldPreservationResponse {
   releasedAt: string | null;
   stores: HeldResourceCount[];
   preserved: number;
+  /** Of those, rows whose bytes this product never stored and cannot produce. */
+  referenceOnly: number;
   /** A hold that is active and selects nothing preserves no evidence. */
   preservesNothing: boolean;
 }
@@ -49,6 +51,7 @@ async function handleGet(
 
   const stores = await countHeldResources(privileged, hold, LEGAL_HOLD_RESOURCE_TYPES);
   const preserved = stores.reduce((total, store) => total + store.preserved, 0);
+  const referenceOnly = stores.reduce((total, store) => total + store.referenceOnly, 0);
 
   await logAdminDataAccess(request, {
     userId: caller.actorUserId,
@@ -65,7 +68,8 @@ async function handleGet(
     releasedAt: hold.releasedAt,
     stores,
     preserved,
-    preservesNothing: hold.releasedAt === null && preserved === 0,
+    referenceOnly,
+    preservesNothing: hold.releasedAt === null && preserved === referenceOnly,
   };
   return NextResponse.json(payload);
 }

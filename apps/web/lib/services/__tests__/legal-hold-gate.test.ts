@@ -58,6 +58,10 @@ function workspace(holds: HoldRow[], custodians: Record<string, unknown>[] = [])
       { id: 'm-alice', conversation_id: 'c-alice' },
       { id: 'm-bob', conversation_id: 'c-bob' },
     ],
+    media_assets: [
+      { id: 'f-stored', user_id: 'alice', organization_id: ORG, storage_pathname: 'media/a.png' },
+      { id: 'f-external', user_id: 'alice', organization_id: ORG, storage_pathname: null },
+    ],
   });
 }
 
@@ -179,8 +183,8 @@ describe('what a hold currently preserves', () => {
       ['conversation', 'message'],
     );
     expect(counts).toEqual([
-      { resourceType: 'conversation', table: 'web_conversations', preserved: 1 },
-      { resourceType: 'message', table: 'web_messages', preserved: 1 },
+      { resourceType: 'conversation', table: 'web_conversations', preserved: 1, referenceOnly: 0 },
+      { resourceType: 'message', table: 'web_messages', preserved: 1, referenceOnly: 0 },
     ]);
   });
 
@@ -192,7 +196,19 @@ describe('what a hold currently preserves', () => {
       ['conversation'],
     );
     expect(counts).toEqual([
-      { resourceType: 'conversation', table: 'web_conversations', preserved: 0 },
+      { resourceType: 'conversation', table: 'web_conversations', preserved: 0, referenceOnly: 0 },
+    ]);
+  });
+
+  it('separates rows whose bytes it holds from references to bytes it never stored', async () => {
+    const db = workspace([holdRow({ id: 'h-alice', scope: 'member', subject_user_id: 'alice' })]);
+    const counts = await countHeldResources(
+      db as unknown as DatabaseAdapter,
+      hold({ id: 'h-alice', scope: 'member', subjectUserId: 'alice' }),
+      ['file'],
+    );
+    expect(counts).toEqual([
+      { resourceType: 'file', table: 'media_assets', preserved: 2, referenceOnly: 1 },
     ]);
   });
 

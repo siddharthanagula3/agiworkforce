@@ -125,6 +125,9 @@ export interface HoldableResource {
   readonly ownerColumn: string | null;
   readonly ownedVia: { readonly table: string; readonly column: string } | null;
   readonly organizationColumn: string | null;
+  /** The column pointing at bytes this product stored, null when the row is
+   * itself the content; a null value there is a reference, not preserved content. */
+  readonly storedContentColumn: string | null;
 }
 
 export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
@@ -133,6 +136,7 @@ export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
     table: 'web_conversations',
     ownerColumn: 'user_id',
     ownedVia: null,
+    storedContentColumn: null,
     organizationColumn: 'organization_id',
   },
   {
@@ -140,6 +144,7 @@ export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
     table: 'web_messages',
     ownerColumn: null,
     ownedVia: { table: 'web_conversations', column: 'conversation_id' },
+    storedContentColumn: null,
     organizationColumn: null,
   },
   {
@@ -147,6 +152,7 @@ export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
     table: 'user_projects',
     ownerColumn: 'user_id',
     ownedVia: null,
+    storedContentColumn: null,
     organizationColumn: 'organization_id',
   },
   {
@@ -154,6 +160,7 @@ export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
     table: 'project_knowledge_files',
     ownerColumn: null,
     ownedVia: { table: 'user_projects', column: 'project_id' },
+    storedContentColumn: 'storage_uri',
     organizationColumn: null,
   },
   {
@@ -161,6 +168,7 @@ export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
     table: 'media_assets',
     ownerColumn: 'user_id',
     ownedVia: null,
+    storedContentColumn: 'storage_pathname',
     organizationColumn: 'organization_id',
   },
   {
@@ -168,6 +176,7 @@ export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
     table: 'web_artifacts',
     ownerColumn: 'user_id',
     ownedVia: null,
+    storedContentColumn: null,
     organizationColumn: 'organization_id',
   },
   {
@@ -175,6 +184,7 @@ export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
     table: 'cloud_agent_runs',
     ownerColumn: 'user_id',
     ownedVia: null,
+    storedContentColumn: null,
     organizationColumn: 'organization_id',
   },
 ];
