@@ -7,6 +7,8 @@ import {
   RecordTermsAcceptance,
 } from '../../signup/complete/RecordTermsAcceptance';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
+import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 
@@ -35,6 +37,18 @@ export default async function LoginCompletePage({
       isDesktopSurface ? '&surface=desktop' : ''
     }&authRetry=1`;
     return <StaleSessionRecovery loginUrl={loginUrl} alreadyRetried={params.authRetry === '1'} />;
+  }
+
+  // Correct credentials do not mean the account may be used: say why here
+  // instead of handing over a product whose every call answers 403.
+  const access = await accountAccessForSignIn(userId);
+  if (!access.allowed) {
+    const loginHref = `/login?redirectTo=${encodeURIComponent(redirectTo)}`;
+    return (
+      <AuthLayout embedded={isDesktopSurface}>
+        <AccountAccessNotice denial={access} signInHref={loginHref} />
+      </AuthLayout>
+    );
   }
 
   if (await hasAcceptedCurrentTerms(userId)) {
