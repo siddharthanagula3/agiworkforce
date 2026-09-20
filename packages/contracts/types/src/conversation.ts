@@ -9,20 +9,28 @@ export type MessageId = string & { readonly [__brand]: 'MessageId' };
 
 export type ActionId = string & { readonly [__brand]: 'ActionId' };
 
-export type MessageKind =
-  | 'text'
+/**
+ * The block kinds a conversation can carry. A client publishes the subset it
+ * renders, so a kind added here reaches an older build as an unknown block it
+ * degrades rather than as an empty bubble.
+ */
+export const MESSAGE_KINDS = [
+  'text',
   /** An image attachment or generated image. */
-  | 'image'
+  'image',
   /** A tool call request from the assistant. */
-  | 'tool_call'
+  'tool_call',
   /** A tool result returned to the assistant. */
-  | 'tool_result'
+  'tool_result',
   /** A system-generated notification (not from user or model). */
-  | 'system'
+  'system',
   /** An agent status update (thinking, searching, etc.). */
-  | 'status'
+  'status',
   /** An artifact (code, document, chart, etc.) delivered inline. */
-  | 'artifact';
+  'artifact',
+] as const;
+
+export type MessageKind = (typeof MESSAGE_KINDS)[number];
 
 export type MessageStatus =
   | 'pending'

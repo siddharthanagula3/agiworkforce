@@ -58,7 +58,7 @@
       "label": "Devices",
       "owner": "apps/web/app/api/settings/devices/[deviceId]/route.ts",
       "capabilities": ["canUseCamera", "canUsePhotos"],
-      "concepts": [],
+      "concepts": ["device"],
       "tables": [
         "desktop_devices",
         "device_installations",
@@ -243,7 +243,7 @@
       "label": "Files",
       "owner": "apps/web/lib/server/media-assets.ts",
       "capabilities": ["canUploadFiles"],
-      "concepts": [],
+      "concepts": ["file"],
       "tables": ["file_lineage", "media_assets", "project_knowledge_files"]
     },
     {
@@ -315,7 +315,7 @@
       "label": "Agents",
       "owner": "packages/ai/agent-core",
       "capabilities": [],
-      "concepts": [],
+      "concepts": ["agent-run"],
       "tables": [
         "cloud_agent_events",
         "cloud_agent_execution_operations",
@@ -541,7 +541,7 @@
       "label": "Notifications",
       "owner": "apps/web/lib/services/notification-service.ts",
       "capabilities": ["canUseNotifications"],
-      "concepts": [],
+      "concepts": ["notification"],
       "tables": ["notifications"]
     },
     {
@@ -612,7 +612,7 @@
         "canUseTerminal",
         "canUseWorkingDirectory"
       ],
-      "concepts": [],
+      "concepts": ["client-capability-manifest"],
       "tables": []
     },
     {
@@ -761,7 +761,7 @@
       "label": "Feature Flags",
       "owner": "apps/web/lib/feature-flags",
       "capabilities": [],
-      "concepts": [],
+      "concepts": ["feature-release"],
       "tables": ["feature_flag_definitions", "feature_flags"]
     },
     {
