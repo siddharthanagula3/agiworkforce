@@ -24,6 +24,7 @@ function governed(revision: number, overrides: Record<string, boolean> = {}) {
       revision,
       blockingRules: [],
     },
+    code: null,
   } satisfies EffectiveWorkspacePolicyResponse;
 }
 

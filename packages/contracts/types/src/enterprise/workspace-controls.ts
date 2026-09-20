@@ -471,9 +471,106 @@ export const WORKSPACE_POLICY_EFFECTIVE_PATH = '/api/settings/organization/polic
 
 export const WORKSPACE_POLICY_EXPLAIN_PATH = '/api/settings/organization/policy/effective/explain';
 
+// A client cannot honour a control it is never told about, so the effective
+// answer carries the Code controls beside the rest of the policy.
 export interface EffectiveWorkspacePolicyResponse {
   organizationId: string | null;
   governed: boolean;
   revision: number;
   controls: EffectiveWorkspacePolicy | null;
+  code: EffectiveWorkspaceCodeControls | null;
+}
+
+// What a Code surface is about to do, named so one function decides all of it
+// and no call site compares a control key by hand.
+export type WorkspaceCodeAct =
+  | { act: 'open_cloud_session'; surface: SourceSurface | 'api' | 'unknown' }
+  | { act: 'connect_github' }
+  | { act: 'review_pull_request' }
+  | { act: 'use_mcp_server'; server?: string | null }
+  | { act: 'reach_host'; host?: string | null };
+
+export type WorkspaceCodeDecisionCode =
+  'allowed' | 'code_control_disabled' | 'code_host_not_allowed' | 'code_mcp_server_not_allowed';
+
+export interface WorkspaceCodeDecision {
+  allowed: boolean;
+  code: WorkspaceCodeDecisionCode;
+  reason: string;
+  control: WorkspaceCodeControlKey | null;
+}
+
+const CODE_ACT_ALLOWED: WorkspaceCodeDecision = Object.freeze({
+  allowed: true,
+  code: 'allowed',
+  reason: 'Allowed by workspace policy.',
+  control: null,
+});
+
+function codeControlOff(control: WorkspaceCodeControlKey): WorkspaceCodeDecision {
+  return {
+    allowed: false,
+    code: 'code_control_disabled',
+    reason: `Your workspace administrator has turned off ${WORKSPACE_CODE_CONTROL_LABELS[control]} for Code.`,
+    control,
+  };
+}
+
+const CODE_ACT_TOGGLES: Readonly<
+  Record<'connect_github' | 'review_pull_request', WorkspaceCodeControlKey>
+> = Object.freeze({
+  connect_github: 'allowGithubConnection',
+  review_pull_request: 'allowAutomatedReview',
+});
+
+/**
+ * An empty allow list is "the workspace added no rule", never deny everything,
+ * which is the state every organization that has not touched these controls is
+ * in. Only a control an administrator explicitly turned off refuses.
+ */
+export function evaluateWorkspaceCodeAct(
+  controls: WorkspaceCodeControls | null,
+  act: WorkspaceCodeAct,
+): WorkspaceCodeDecision {
+  if (!controls) return CODE_ACT_ALLOWED;
+
+  switch (act.act) {
+    // The control is about the desktop app putting a session in the cloud, so a
+    // session opened from anywhere else is not what it governs.
+    case 'open_cloud_session': {
+      if (act.surface !== 'desktop' || controls.allowDesktopCloudSync) return CODE_ACT_ALLOWED;
+      return codeControlOff('allowDesktopCloudSync');
+    }
+
+    case 'connect_github':
+    case 'review_pull_request': {
+      const control = CODE_ACT_TOGGLES[act.act];
+      return controls[control] ? CODE_ACT_ALLOWED : codeControlOff(control);
+    }
+
+    case 'use_mcp_server': {
+      if (!controls.allowMcpServers) return codeControlOff('allowMcpServers');
+      if (controls.allowedMcpServers.length === 0) return CODE_ACT_ALLOWED;
+      if (isCodeHostAllowed(controls.allowedMcpServers, act.server)) return CODE_ACT_ALLOWED;
+      return {
+        allowed: false,
+        code: 'code_mcp_server_not_allowed',
+        reason:
+          'Your workspace administrator has turned off MCP servers outside the list this workspace allows.',
+        control: 'allowedMcpServers',
+      };
+    }
+
+    case 'reach_host': {
+      if (controls.allowedEgressHosts.length === 0) return CODE_ACT_ALLOWED;
+      if (isCodeHostAllowed(controls.allowedEgressHosts, act.host)) return CODE_ACT_ALLOWED;
+      return {
+        allowed: false,
+        code: 'code_host_not_allowed',
+        reason:
+          'Your workspace administrator has turned off network hosts outside the list this workspace allows.',
+        control: 'allowedEgressHosts',
+      };
+    }
+  }
 }

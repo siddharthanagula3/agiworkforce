@@ -13,6 +13,7 @@ import {
 } from '@/lib/github-app';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { assertWorkspaceCodeAccess } from '@/lib/services/organization-policy-code-gate';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { effectivePlanTier } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -415,6 +416,13 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
   try {
     const installation = await readReviewInstallation(db, installationId);
     if (!installation) return;
+    const codeGate = await assertWorkspaceCodeAccess(db, installation.user_id, {
+      act: 'review_pull_request',
+    });
+    if (!codeGate.allowed) {
+      logger.info({ owner, repo, prNumber, code: codeGate.code }, codeGate.reason);
+      return;
+    }
     if (!isManagedComputePrivateBetaEnabled()) {
       logger.info(
         { owner, repo, prNumber },

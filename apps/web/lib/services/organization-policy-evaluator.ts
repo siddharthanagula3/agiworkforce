@@ -45,7 +45,10 @@ export type PolicyDecisionCode =
   | 'billing_read_only'
   | 'billing_past_due'
   | 'workspace_policy_unavailable'
-  | 'workspace_not_accessible';
+  | 'workspace_not_accessible'
+  | 'code_control_disabled'
+  | 'code_host_not_allowed'
+  | 'code_mcp_server_not_allowed';
 
 export interface PolicyObligation {
   type: 'local_to_byok_preview' | 'retention_days';
@@ -417,3 +420,9 @@ export function evaluateOrganizationPolicy(
     }
   }
 }
+
+export {
+  evaluateWorkspaceCodeAct,
+  type WorkspaceCodeAct,
+  type WorkspaceCodeDecision,
+} from '@agiworkforce/types';

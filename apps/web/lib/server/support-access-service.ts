@@ -17,6 +17,7 @@ export const SUPPORT_ACCESS_SCOPES = Object.freeze([
   'billing',
   'audit_logs',
   'workspace_settings',
+  'background_jobs',
 ] as const);
 
 export type SupportAccessScope = (typeof SUPPORT_ACCESS_SCOPES)[number];
@@ -511,6 +512,37 @@ export async function findLiveSupportAccessGrant(
   return row ? mapGrant(row) : null;
 }
 
+export interface SupportAccessCoverageLookup {
+  db: DatabaseAdapter;
+  actorUserId: string;
+  scope: SupportAccessScope;
+  organizationIds: readonly string[];
+}
+
+/**
+ * The live grant this operator holds over each of several workspaces at once.
+ * A listing that spans tenants asks once rather than per row, and a workspace
+ * missing from the result is one the operator holds nothing over.
+ */
+export async function findLiveSupportAccessGrants(
+  lookup: SupportAccessCoverageLookup,
+): Promise<Map<string, SupportAccessGrant>> {
+  const organizationIds = [...new Set(lookup.organizationIds)];
+  if (organizationIds.length === 0) return new Map();
+  const rows = await lookup.db.query<GrantRow>(
+    `select distinct on (organization_id) ${GRANT_COLUMNS}
+       from public.support_access_grants
+      where status = 'approved'
+        and expires_at > now()
+        and requested_by_user_id = $1
+        and $2 = any (scopes)
+        and organization_id = any ($3::uuid[])
+      order by organization_id, expires_at desc`,
+    [lookup.actorUserId, lookup.scope, organizationIds],
+  );
+  return new Map(rows.map((row) => [row.organization_id, mapGrant(row)]));
+}
+
 /**
  * The gate. Every support-principal read passes through here, and a read that
  * no live grant covers is refused AND recorded: the refusal is the row that
@@ -567,6 +599,75 @@ export async function recordSupportDataAccess(input: RecordSupportAccessInput): 
       detail: { ticketRef: input.grant.ticketRef },
     }),
   );
+}
+
+export interface OperatorContentListing<T> {
+  db: DatabaseAdapter;
+  actorUserId: string;
+  scope: SupportAccessScope;
+  resourceType: string;
+  records: readonly T[];
+  organizationIdOf: (record: T) => string | null;
+  withoutContent: (record: T) => T;
+}
+
+export interface OperatorContentView<T> {
+  records: T[];
+  grantedOrganizationIds: string[];
+  redactedCount: number;
+}
+
+/**
+ * An operator listing that spans tenants. A row whose workspace no live grant
+ * covers is served without its content, and each workspace actually read is
+ * appended to that workspace's own trail under the grant that allowed it.
+ */
+export async function readOperatorContentUnderGrants<T>(
+  input: OperatorContentListing<T>,
+): Promise<OperatorContentView<T>> {
+  const organizationIds = input.records
+    .map((record) => input.organizationIdOf(record))
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+  const grants = await findLiveSupportAccessGrants({
+    db: input.db,
+    actorUserId: input.actorUserId,
+    scope: input.scope,
+    organizationIds,
+  });
+
+  const served = new Map<string, number>();
+  let redactedCount = 0;
+  const records = input.records.map((record) => {
+    const organizationId = input.organizationIdOf(record);
+    if (!organizationId || !grants.has(organizationId)) {
+      redactedCount += 1;
+      return input.withoutContent(record);
+    }
+    served.set(organizationId, (served.get(organizationId) ?? 0) + 1);
+    return record;
+  });
+
+  for (const [organizationId, rowCount] of served) {
+    const grant = grants.get(organizationId);
+    if (!grant) continue;
+    try {
+      await recordSupportDataAccess({
+        db: input.db,
+        grant,
+        actorUserId: input.actorUserId,
+        resourceType: input.resourceType,
+        rowCount,
+      });
+    } catch (error) {
+      logger.error(
+        { error, organizationId, grantId: grant.id, resourceType: input.resourceType },
+        'Operator content read could not be appended to the break-glass trail',
+      );
+    }
+  }
+
+  return { records, grantedOrganizationIds: [...served.keys()].sort(), redactedCount };
 }
 
 export interface SupportAccessReadInput extends SupportAccessLookup {

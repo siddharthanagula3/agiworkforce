@@ -1,15 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_WORKSPACE_CODE_CONTROLS,
   DEFAULT_WORKSPACE_CONTROLS,
   evaluateAuthorization,
+  evaluateWorkspaceCodeAct,
+  WORKSPACE_CODE_TOGGLE_KEYS,
   WORKSPACE_FEATURES,
   type AuthorizationSubject,
+  type EffectiveWorkspaceCodeControls,
   type EffectiveWorkspacePolicyResponse,
+  type WorkspaceCodeAct,
+  type WorkspaceCodeToggleKey,
   type WorkspaceControls,
   type WorkspaceFeature,
 } from '@agiworkforce/types';
 
-import { disabledWorkspaceFeatures, isWorkspaceFeatureEnabled } from '../workspacePolicy';
+import {
+  disabledWorkspaceFeatures,
+  isWorkspaceCodeConnectionAllowed,
+  isWorkspaceCodeHostAllowed,
+  isWorkspaceFeatureEnabled,
+  parseEffectiveWorkspacePolicy,
+  workspaceCodeSessionRetentionDays,
+} from '../workspacePolicy';
 
 const ORGANIZATION_ID = 'org_agreement';
 const REVISION = 7;
@@ -100,5 +113,84 @@ describe('the client shows exactly what the server allows', () => {
       expect(isWorkspaceFeatureEnabled(null, feature)).toBe(true);
       expect(serverAllows(controlsWith([feature]), feature)).toBe(false);
     }
+  });
+});
+
+const CODE_ACT_FOR: Readonly<Record<WorkspaceCodeToggleKey, WorkspaceCodeAct>> = {
+  allowDesktopCloudSync: { act: 'open_cloud_session', surface: 'desktop' },
+  allowGithubConnection: { act: 'connect_github' },
+  allowAutomatedReview: { act: 'review_pull_request' },
+  allowMcpServers: { act: 'use_mcp_server' },
+};
+
+function codePolicy(
+  code: Partial<EffectiveWorkspaceCodeControls> | null,
+): EffectiveWorkspacePolicyResponse {
+  return {
+    organizationId: ORGANIZATION_ID,
+    governed: true,
+    revision: REVISION,
+    controls: controlsWith([]),
+    code: code
+      ? ({
+          ...DEFAULT_WORKSPACE_CODE_CONTROLS,
+          appliedOverrideIds: [],
+          revision: REVISION,
+          blockingRules: [],
+          ...code,
+        } as EffectiveWorkspaceCodeControls)
+      : null,
+  } as EffectiveWorkspacePolicyResponse;
+}
+
+describe('the client reads the Code controls the server resolved', () => {
+  it('agrees with the server on every Code connection, in both states', () => {
+    for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
+      for (const off of [false, true]) {
+        const controls = { ...DEFAULT_WORKSPACE_CODE_CONTROLS, [key]: !off };
+        expect({
+          key,
+          off,
+          client: isWorkspaceCodeConnectionAllowed(codePolicy({ [key]: !off }), key),
+        }).toEqual({
+          key,
+          off,
+          client: evaluateWorkspaceCodeAct(controls, CODE_ACT_FOR[key]).allowed,
+        });
+      }
+    }
+  });
+
+  it('treats a server that sends no Code controls as no rule at all', () => {
+    for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
+      expect(isWorkspaceCodeConnectionAllowed(codePolicy(null), key)).toBe(true);
+    }
+    expect(isWorkspaceCodeHostAllowed(codePolicy(null), 'anything.example.com')).toBe(true);
+    expect(workspaceCodeSessionRetentionDays(codePolicy(null))).toBeNull();
+  });
+
+  it('agrees with the server on an egress host, and an empty list is no rule', () => {
+    const scoped = codePolicy({ allowedEgressHosts: ['*.example.com'] });
+    expect(isWorkspaceCodeHostAllowed(scoped, 'api.example.com')).toBe(true);
+    expect(isWorkspaceCodeHostAllowed(scoped, 'evil.test')).toBe(false);
+    expect(isWorkspaceCodeHostAllowed(codePolicy({ allowedEgressHosts: [] }), 'evil.test')).toBe(
+      true,
+    );
+  });
+
+  it('carries the shorter Code session retention the server resolved', () => {
+    expect(workspaceCodeSessionRetentionDays(codePolicy({ sessionRetentionDays: 7 }))).toBe(7);
+  });
+
+  it('keeps a payload whose Code controls are malformed out of the snapshot', () => {
+    const wire = {
+      organizationId: ORGANIZATION_ID,
+      governed: true,
+      revision: REVISION,
+      controls: controlsWith([]),
+      code: { allowGithubConnection: 'no' },
+    };
+
+    expect(parseEffectiveWorkspacePolicy(wire)?.code).toBeNull();
   });
 });

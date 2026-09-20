@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   cookieSet: vi.fn((_options: unknown) => undefined),
   linkingAvailable: vi.fn(() => false),
+  codeGate: vi.fn(async () => null as Response | null),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -17,6 +18,10 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
+}));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/services/organization-policy-code-gate', () => ({
+  buildWorkspaceCodeGateResponse: mocks.codeGate,
 }));
 vi.mock('@/lib/github-app', () => ({
   generateGitHubInstallState: vi.fn(() => 'c'.repeat(64)),
@@ -59,5 +64,37 @@ describe('GitHub installation start ownership proof', () => {
         maxAge: 600,
       }),
     );
+  });
+});
+
+describe('the workspace Code policy decides before GitHub is reached', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.linkingAvailable.mockReturnValue(true);
+    mocks.codeGate.mockResolvedValue(null);
+  });
+
+  it('asks about connecting GitHub for the signed-in member', async () => {
+    await GET(new NextRequest('https://agiworkforce.com/api/github/install/start'));
+
+    expect(mocks.codeGate).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      { act: 'connect_github' },
+      expect.anything(),
+    );
+  });
+
+  it('returns the refusal and never mints an install state when the workspace says no', async () => {
+    mocks.codeGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'code_control_disabled' } }), { status: 403 }),
+    );
+
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/github/install/start'),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.cookieSet).not.toHaveBeenCalled();
   });
 });

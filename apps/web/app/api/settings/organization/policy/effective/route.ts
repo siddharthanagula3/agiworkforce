@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { EffectiveWorkspacePolicyResponse } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -27,17 +28,17 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return new NextResponse(null, { status: 304, headers });
   }
 
-  return NextResponse.json(
-    effective
-      ? {
-          organizationId: effective.organizationId,
-          governed: true,
-          revision: effective.revision,
-          controls: effective.controls,
-        }
-      : { organizationId: null, governed: false, revision: 0, controls: null },
-    { headers },
-  );
+  const body: EffectiveWorkspacePolicyResponse = effective
+    ? {
+        organizationId: effective.organizationId,
+        governed: true,
+        revision: effective.revision,
+        controls: effective.controls,
+        code: effective.code,
+      }
+    : { organizationId: null, governed: false, revision: 0, controls: null, code: null };
+
+  return NextResponse.json(body, { headers });
 }
 
 export const GET = withErrorHandler(handleGet);
