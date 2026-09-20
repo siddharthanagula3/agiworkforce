@@ -305,7 +305,7 @@ test('a bare call at the top of a body does not shadow the enclosing function', 
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
 });
 
-const REFERRALS_MIGRATION = `create table if not exists public.referrals (
+const ZERO_COVERAGE_MIGRATION = `create table if not exists public.account_sessions (
   id uuid primary key default gen_random_uuid(),
   user_id text not null
 );
@@ -329,7 +329,7 @@ test('an app-enforced table with zero policed statements fails as a hollow decis
 
 test('a declared zero-coverage table is accepted', () => {
   const result = runOnSandbox({
-    [`${NEON}/0001_referrals.sql`]: REFERRALS_MIGRATION,
+    [`${NEON}/0001_account_sessions.sql`]: ZERO_COVERAGE_MIGRATION,
     'apps/web/lib/shares.ts': [
       "import { getNeonDb } from './db';",
       'export async function countRows() {',
@@ -343,17 +343,17 @@ test('a declared zero-coverage table is accepted', () => {
 
 test('a zero-coverage reason that has stopped being true fails as stale', () => {
   const result = runOnSandbox({
-    [`${NEON}/0001_referrals.sql`]: REFERRALS_MIGRATION,
-    'apps/web/lib/referrals.ts': [
+    [`${NEON}/0001_account_sessions.sql`]: ZERO_COVERAGE_MIGRATION,
+    'apps/web/lib/account-sessions.ts': [
       "import { getNeonDb } from './db';",
-      'export async function listReferrals(userId: string) {',
+      'export async function listAccountSessions(userId: string) {',
       '  const db = getNeonDb();',
-      '  return db.query(`select id from referrals where user_id = $1`, [userId]);',
+      '  return db.query(`select id from account_sessions where user_id = $1`, [userId]);',
       '}',
     ].join('\n'),
   });
   assert.equal(result.status, 1, `expected failure, got:\n${result.stdout}`);
-  assert.match(result.stderr, /referrals/);
+  assert.match(result.stderr, /account_sessions/);
   assert.match(result.stderr, /stopped being true/);
 });
 
