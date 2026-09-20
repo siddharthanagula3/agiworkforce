@@ -16,8 +16,10 @@ import {
   isTextLikeFileMediaType,
   localDeviceManagedFile,
   resolveGeneratedFileKind,
+  type FileAvailability,
   type FileLineage,
   type FileOrigin,
+  type FileOwnerScope,
   type ManagedFile,
   type SourceSurface,
 } from '@agiworkforce/types';
@@ -27,6 +29,9 @@ export interface SurfaceFileOptions {
   lineage?: Partial<FileLineage>;
   version?: number;
   parentVersionId?: string | null;
+  owner?: Partial<FileOwnerScope> | null;
+  availability?: Partial<FileAvailability> | null;
+  createdAt?: string | null;
 }
 
 /** The wire shape a generated file crosses the network in. */
@@ -57,6 +62,7 @@ export interface LocalDocumentLike {
   file_name: string;
   file_size: number;
   mime_type?: string;
+  device_id?: string;
 }
 
 /** A file a mobile surface wrote into its own sandbox. */
@@ -64,6 +70,7 @@ export interface DeviceExportLike {
   uri: string;
   fileName: string;
   mimeType?: string;
+  deviceId?: string;
 }
 
 function parseStatusFor(mediaType: string, origin: FileOrigin): ManagedFile['parseStatus'] {
@@ -85,6 +92,9 @@ export function managedFileFromGeneratedWire(
     parseStatus: 'not_applicable',
     checksumSha256: file.checksum_sha256 ?? null,
     sourceSurface: options.sourceSurface ?? null,
+    owner: options.owner ?? null,
+    availability: options.availability ?? null,
+    createdAt: options.createdAt ?? null,
     version: options.version ?? 1,
     parentVersionId: options.parentVersionId ?? null,
     lineage: options.lineage ?? {},
@@ -122,6 +132,9 @@ export function managedFileFromUpload(
     parseStatus: parseStatusFor(attachment.mimeType, 'upload'),
     checksumSha256: options.checksumSha256 ?? null,
     sourceSurface: options.sourceSurface ?? null,
+    owner: options.owner ?? null,
+    availability: options.availability ?? null,
+    createdAt: options.createdAt ?? null,
     version: options.version ?? 1,
     parentVersionId: options.parentVersionId ?? null,
     lineage: options.lineage ?? {},
@@ -140,6 +153,10 @@ export function managedFileFromLocalDocument(
     ...(document.mime_type ? { mediaType: document.mime_type } : {}),
     origin: options.origin ?? 'generated',
     sourceSurface: options.sourceSurface ?? null,
+    deviceId: document.device_id ?? null,
+    owner: options.owner ?? null,
+    availability: options.availability ?? null,
+    createdAt: options.createdAt ?? null,
     lineage: options.lineage ?? {},
     version: options.version ?? 1,
     parentVersionId: options.parentVersionId ?? null,
@@ -157,6 +174,7 @@ export function managedFileFromDeviceExport(
       file_name: exported.fileName,
       file_size: options.byteCount ?? 0,
       ...(exported.mimeType ? { mime_type: exported.mimeType } : {}),
+      ...(exported.deviceId ? { device_id: exported.deviceId } : {}),
     },
     { ...options, origin: 'generated' },
   );
