@@ -29,6 +29,7 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: () => '203.0.113.9',
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
+  logAuthFailure: vi.fn(),
 }));
 
 const { db } = vi.hoisted(() => ({ db: { current: null as unknown } }));

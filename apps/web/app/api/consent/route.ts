@@ -16,7 +16,7 @@ import {
   readUserConsents,
   recordConsentBatch,
 } from '@/lib/server/consent-records';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const ConsentDecisionSchema = z.object({
   purpose: z.string().refine(isConsentPurpose, 'Unknown consent purpose'),
@@ -33,10 +33,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { subject: userId } = await getRequestIdentity();
-  if (!userId) {
-    throw createError.unauthorized('Sign in to read your consent record');
-  }
+  const { userId } = await getClerkAuthUser(request);
 
   const records = await readUserConsents(userId);
 
@@ -54,10 +51,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { subject: userId } = await getRequestIdentity();
-  if (!userId) {
-    throw createError.unauthorized('Sign in to record a consent decision');
-  }
+  const { userId } = await getClerkAuthUser(request);
 
   const parsed = RecordConsentSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

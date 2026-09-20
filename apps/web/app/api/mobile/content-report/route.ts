@@ -25,7 +25,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getOptionalAuthUser } from '@/lib/api-auth';
 
 const ContentReportSchema = z.object({
   reportId: z.string().trim().min(1).max(128),
@@ -50,7 +50,7 @@ async function handleSubmitContentReport(request: NextRequest) {
   }
   const { reportId, messageId, conversationId, category, contentExcerpt, userNote } = parsed.data;
 
-  const { subject: userId } = await getRequestIdentity();
+  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
 
   const db = getNeonDb();
   try {

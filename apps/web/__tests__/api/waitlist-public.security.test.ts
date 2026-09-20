@@ -62,6 +62,16 @@ const mockAuth = vi.fn().mockResolvedValue({ userId: null });
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockAuth(),
 }));
+vi.mock('@/lib/api-auth', () => ({
+  getOptionalAuthUser: async () => {
+    try {
+      const { userId } = (await mockAuth()) as { userId: string | null };
+      return userId ? { userId } : null;
+    } catch {
+      return null;
+    }
+  },
+}));
 
 import { POST, OPTIONS } from '@/app/api/waitlist/public/route';
 import {

@@ -30,9 +30,9 @@ const SKIPPED_DIRS = new Set(['node_modules', 'dist', '.next', 'build', 'coverag
  */
 const ADMITS_UNBOUND = [
   {
-    file: 'apps/web/lib/custom-connector-crypto.ts',
+    file: 'apps/web/lib/crypto/connector-secret-reseal.ts',
     reason:
-      'connector secrets were sealed before the purpose became associated data; those rows are owed a re-seal',
+      'connector secrets sealed before the purpose became associated data still open here, and this is the module whose re-seal takes the allowance away',
   },
   {
     file: 'apps/web/lib/crypto/cmek-lifecycle.ts',

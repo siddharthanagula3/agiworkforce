@@ -19,7 +19,7 @@ import {
 } from '@/lib/server/data-rights-requests';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getClerkAuthUser, getOptionalAuthUser } from '@/lib/api-auth';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 const CreateRequestSchema = z.object({
@@ -96,12 +96,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid rights-request payload', parsed.error.flatten());
   }
 
-  let userId: string | null = null;
-  try {
-    userId = (await getRequestIdentity()).subject ?? null;
-  } catch {
-    userId = null;
-  }
+  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
 
   const contactEmail = parsed.data.contactEmail.trim().toLowerCase();
   const details = parsed.data.details?.trim() || null;
@@ -159,10 +154,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { subject: userId } = await getRequestIdentity();
-  if (!userId) {
-    throw createError.unauthorized('Sign in to see the requests recorded against your account');
-  }
+  const { userId } = await getClerkAuthUser(request);
 
   const requests = await readUserDataRightsRequests(userId);
   return NextResponse.json({ requests, types: DATA_RIGHTS_REQUEST_TYPES });
