@@ -9,8 +9,9 @@
     "api": {
       "why": "the request and response shapes a client outside this build depends on",
       "kind": "constant",
-      "file": "apps/web/lib/api-gateway-policy.ts",
+      "file": "packages/contracts/cloud-contracts/src/client-handshake.ts",
       "symbol": "API_CONTRACT_VERSION",
+      "minSymbol": "MINIMUM_SUPPORTED_API_CONTRACT_VERSION",
       "negotiated": true
     },
     "contracts": {

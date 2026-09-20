@@ -9,6 +9,7 @@ import {
   type ManagedCloudProjectsClient,
 } from '@agiworkforce/cloud-contracts';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 export const CHROME_PROJECT_PAGE_SIZE = 50;
 export const CHROME_PROJECT_CONVERSATION_PAGE_SIZE = 10;
@@ -28,10 +29,7 @@ export interface ChromeProjectsDependencies {
 }
 
 export type ChromeProjectsErrorCode =
-  | 'auth_required'
-  | 'cancelled'
-  | 'invalid_request'
-  | 'server_error';
+  'auth_required' | 'cancelled' | 'invalid_request' | 'server_error';
 
 export interface ChromeProjectsError {
   status: 'error';
@@ -40,24 +38,21 @@ export interface ChromeProjectsError {
 }
 
 export type ChromeProjectListResult =
-  | { status: 'success'; projects: ManagedCloudProject[] }
-  | ChromeProjectsError;
+  { status: 'success'; projects: ManagedCloudProject[] } | ChromeProjectsError;
 
 export type ChromeProjectResult =
-  | { status: 'success'; project: ManagedCloudProject }
-  | ChromeProjectsError;
+  { status: 'success'; project: ManagedCloudProject } | ChromeProjectsError;
 
 export type ChromeProjectWriteResult = { status: 'success' } | ChromeProjectsError;
 
 export type ChromeProjectConversationsResult =
-  | { status: 'success'; conversations: ChromeProjectConversation[] }
-  | ChromeProjectsError;
+  { status: 'success'; conversations: ChromeProjectConversation[] } | ChromeProjectsError;
 
 function surfaceHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     'X-Requested-With': 'XMLHttpRequest',
-    'X-AGI-Surface': 'chrome',
+    ...platformRequestHeaders(),
   };
 }
 
@@ -75,7 +70,7 @@ function createDefaultChatClient(token: string): ManagedCloudChatClient {
     decorateMutationHeaders: (headers) => ({
       ...headers,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
     }),
   });
 }

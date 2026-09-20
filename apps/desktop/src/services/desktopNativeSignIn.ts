@@ -3,7 +3,7 @@ import {
   requestDeviceAuthorization,
   type DeviceAuthorizationPost,
 } from '@agiworkforce/client-runtime';
-import { WEB_APP_URL } from '../api/config';
+import { WEB_APP_URL, desktopRequestHeaders } from '../api/config';
 import { invoke } from '../lib/tauri-mock';
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 
@@ -14,11 +14,7 @@ export interface NativeCloudCredential {
 }
 
 export type NativeExchangeFailureKind =
-  | 'network'
-  | 'server_error'
-  | 'denied'
-  | 'expired'
-  | 'unexpected';
+  'network' | 'server_error' | 'denied' | 'expired' | 'unexpected';
 
 export class NativeSignInExchangeError extends Error {
   readonly kind: NativeExchangeFailureKind;
@@ -202,7 +198,7 @@ async function approveOwnDeviceCode(
         Authorization: `Bearer ${clerkSessionToken}`,
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
-        'X-AGI-Surface': 'desktop',
+        ...desktopRequestHeaders(),
       },
       body: JSON.stringify({ user_code: userCode, action: 'approve' }),
       ...(signal ? { signal } : {}),

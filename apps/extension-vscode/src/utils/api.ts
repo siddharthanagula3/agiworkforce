@@ -16,7 +16,7 @@ import {
 } from '@agiworkforce/types';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
 import { Config } from '../platform/config';
-import { getExtensionUserAgent } from '../platform/version';
+import { platformRequestHeaders } from '../platform/platformHeaders';
 
 export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -535,9 +535,7 @@ export async function streamChatCompletion(
 
   const authHeaders: Record<string, string> = {
     Authorization: `Bearer ${credential.token}`,
-    'User-Agent': getExtensionUserAgent(),
-    'X-Client': 'vscode-extension',
-    'X-AGI-Surface': 'vscode',
+    ...platformRequestHeaders(),
     'Idempotency-Key': idempotencyKey,
   };
 
@@ -768,9 +766,7 @@ export async function fetchAccountIdentity(
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accountToken}`,
-        'User-Agent': getExtensionUserAgent(),
-        'X-Client': 'vscode-extension',
-        'X-AGI-Surface': 'vscode',
+        ...platformRequestHeaders(),
       },
     };
 
@@ -826,9 +822,7 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
       method: 'GET',
       headers: {
         Authorization: `Bearer ${credential.token}`,
-        'User-Agent': getExtensionUserAgent(),
-        'X-Client': 'vscode-extension',
-        'X-AGI-Surface': 'vscode',
+        ...platformRequestHeaders(),
       },
     };
 

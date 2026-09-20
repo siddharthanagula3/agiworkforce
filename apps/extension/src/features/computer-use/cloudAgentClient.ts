@@ -1,6 +1,7 @@
 import { validateGatewayUrl } from '../../background/policy';
 import { getAuthToken } from '../cloud-bridge/freeTrialClient';
 import { BoundedSseDecoder } from '../cloud-bridge/boundedSseDecoder';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 export { getAuthToken };
 
@@ -347,7 +348,7 @@ export async function callCloud(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
       'Idempotency-Key': `cu:${crypto.randomUUID()}`,
       'x-agi-managed-compute-beta': '1',
     },

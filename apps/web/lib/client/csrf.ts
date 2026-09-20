@@ -1,3 +1,9 @@
+import {
+  API_CONTRACT_VERSION,
+  API_VERSION_REQUEST_HEADER,
+  CLIENT_VERSION_HEADER,
+} from '@agiworkforce/cloud-contracts';
+
 interface CsrfTokenResponse {
   token: string;
   expiresIn: number;
@@ -51,7 +57,8 @@ export async function getCsrfToken(): Promise<string> {
 }
 
 /**
- * Add CSRF token to fetch headers
+ * The CSRF token, the build this bundle was served from and the contract it was
+ * written against. The caller adds the surface: this bundle also runs in a shell.
  *
  * @example
  * const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
@@ -59,10 +66,13 @@ export async function getCsrfToken(): Promise<string> {
  */
 export async function addCsrfHeaders(headers: HeadersInit = {}): Promise<HeadersInit> {
   const token = await getCsrfToken();
+  const build = process.env['NEXT_PUBLIC_APP_VERSION']?.trim();
 
   return {
     ...headers,
     'x-csrf-token': token,
+    ...(build ? { [CLIENT_VERSION_HEADER]: build } : {}),
+    [API_VERSION_REQUEST_HEADER]: API_CONTRACT_VERSION,
   };
 }
 
