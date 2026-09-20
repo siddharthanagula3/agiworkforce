@@ -54,7 +54,7 @@ changed requirements need replanning. There is no forced Jev latency tax on ever
 | Session/trust contracts            | `packages/contracts`, Rust protocol crate                     | Version cross-host observation/action envelopes only when needed; generate TS from Rust protocol types |
 | Decision contracts and composition | `packages/ai/agent-core`                                      | Reuse the new evaluator; add domain-specific builders and fallback composition after evidence          |
 | Model eligibility and economics    | `packages/ai/routing`, model registry                         | Resolve semantic signals against exact capability, provider, cost and user-selection rules             |
-| Jev transport                      | `packages/ai/provider-runtime/decisions`                      | Host-supplied configuration and tracing; credentials remain on an authorized host                      |
+| Jev transport                      | `packages/ai/provider-runtime/src/typesafe-decisions.ts`      | Host-supplied configuration and tracing; credentials remain on an authorized host                      |
 | Managed request hosting            | `apps/web` services and durable workflows                     | Authenticate, scope payloads, reserve spend, execute bounded work, persist progress and settle usage   |
 | Browser execution                  | Extension `agentLoop.ts` and `cdpDriver.ts`                   | Add bounded action selection using the existing observation, ownership and approval paths              |
 | Desktop execution                  | Electron dispatcher/permissions and Tauri registered commands | Keep distinct bridges; expose proven native capabilities through the correct shell                     |
