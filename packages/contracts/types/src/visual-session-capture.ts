@@ -217,12 +217,20 @@ export class VisualCaptureSession {
   private readonly nextFrameId: () => string;
   private readonly stream: MediaStream;
   private readonly grabber: VisualFrameGrabber;
+  // Only a pause this handler made is undone by it. A pause the user asked for
+  // must survive switching away from the tab and back.
   private readonly onVisibilityChange = () => {
     if (typeof document === 'undefined') return;
-    if (document.visibilityState === 'hidden') this.pause();
-    else this.resume();
+    if (document.visibilityState === 'hidden') {
+      if (this.state.state !== 'active') return;
+      this.pause();
+      this.hiddenPause = true;
+      return;
+    }
+    if (this.hiddenPause) this.resume();
   };
 
+  private hiddenPause = false;
   private buffer: VisualFrame[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
   private state: VisualSessionStatus;
@@ -299,6 +307,7 @@ export class VisualCaptureSession {
 
   resume(): void {
     if (this.state.state !== 'paused') return;
+    this.hiddenPause = false;
     this.stream.getVideoTracks().forEach((track) => {
       track.enabled = true;
     });

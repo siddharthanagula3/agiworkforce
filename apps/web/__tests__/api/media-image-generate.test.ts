@@ -263,6 +263,7 @@ const imageJobMocks = vi.hoisted(() => ({
   create: vi.fn(),
   claim: vi.fn(),
   complete: vi.fn(),
+  fail: vi.fn(),
 }));
 vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/server/image-generation-jobs')>()),
@@ -270,6 +271,7 @@ vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
   createImageGenerationJob: (...args: unknown[]) => imageJobMocks.create(...args),
   claimImageGenerationJobAttempt: (...args: unknown[]) => imageJobMocks.claim(...args),
   completeImageGenerationJob: (...args: unknown[]) => imageJobMocks.complete(...args),
+  failImageGenerationJob: (...args: unknown[]) => imageJobMocks.fail(...args),
 }));
 
 const mockFetch = vi.fn();
@@ -368,6 +370,14 @@ describe('POST /api/media/image/generate', () => {
       status: 'completed' as const,
       attempts: 1,
       actualCostMicrousd: 8000,
+      terminalAt: '2026-09-17T00:01:00.000Z',
+    }));
+    imageJobMocks.fail.mockImplementation(async (input: { publicError: string }) => ({
+      ...DURABLE_IMAGE_JOB,
+      status: 'failed' as const,
+      attempts: 1,
+      retryable: false,
+      publicError: input.publicError,
       terminalAt: '2026-09-17T00:01:00.000Z',
     }));
 
@@ -1574,6 +1584,111 @@ describe('POST /api/media/image/generate', () => {
       expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
       expect(mockFetch).toHaveBeenCalledOnce();
       expect(String(mockFetch.mock.calls[0]?.[0])).toContain('images/edits');
+    });
+  });
+
+  describe('Generated output safety floor', () => {
+    const REFUSED_BYTES = Buffer.from('generated-image-bytes-that-are-denylisted');
+    const REFUSED_B64 = REFUSED_BYTES.toString('base64');
+    const REFUSED_SHA256 = createHash('sha256').update(REFUSED_BYTES).digest('hex');
+
+    beforeEach(() => {
+      process.env['MODERATION_HASH_DENYLIST'] = `known-list:${REFUSED_SHA256}`;
+      mediaPersistenceMocks.storageConfigured.mockReturnValue(true);
+      mediaAssetReadinessMocks.insertAtomically.mockResolvedValue([
+        '33333333-3333-4333-8333-333333333333',
+      ]);
+    });
+
+    afterEach(() => {
+      delete process.env['MODERATION_HASH_DENYLIST'];
+    });
+
+    it('refuses a generated image before it reaches storage, the library or the charge', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ b64_json: REFUSED_B64 }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a perfectly benign instruction', provider: 'openai' }),
+      );
+      const data = await response.json();
+
+      expect(response.status).toBe(422);
+      expect(data.error).toMatchObject({
+        type: 'invalid_request_error',
+        code: 'content_policy_violation',
+      });
+      expect(mediaPersistenceMocks.storeMedia).not.toHaveBeenCalled();
+      expect(mediaAssetReadinessMocks.insertAtomically).not.toHaveBeenCalled();
+      expect(managedUsageMocks.delivered).not.toHaveBeenCalled();
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
+      );
+    });
+
+    it('refuses a generated image the provider returns only as a URL', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [{ url: 'https://example.com/refused-image.png' }] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          headers: { get: () => 'image/png' },
+          arrayBuffer: async () => Uint8Array.from(REFUSED_BYTES).buffer,
+        });
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'another benign instruction', provider: 'openai' }),
+      );
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'content_policy_violation' },
+      });
+      expect(mediaPersistenceMocks.storeMedia).not.toHaveBeenCalled();
+    });
+
+    it('refuses a generated image on the attempt that runs after the response', async () => {
+      imageJobMocks.storeReady.mockResolvedValue(true);
+      imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ b64_json: REFUSED_B64 }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a benign instruction', provider: 'openai', async: true }),
+      );
+      expect(response.status).toBe(202);
+
+      for (const callback of afterCallbacks) await callback();
+
+      expect(mediaPersistenceMocks.storeMedia).not.toHaveBeenCalled();
+      expect(mediaAssetReadinessMocks.insertAtomically).not.toHaveBeenCalled();
+      expect(imageJobMocks.complete).not.toHaveBeenCalled();
+      expect(imageJobMocks.fail).toHaveBeenCalledWith(
+        expect.objectContaining({ publicError: expect.stringContaining('usage policy') }),
+      );
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
+      );
+    });
+
+    it('stores a generated image the floor allows', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ b64_json: VALID_JPEG_BASE64 }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a benign instruction', provider: 'openai' }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(mediaPersistenceMocks.storeMedia).toHaveBeenCalledTimes(1);
     });
   });
 
