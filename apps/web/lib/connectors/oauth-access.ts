@@ -9,6 +9,7 @@ import {
 import {
   ConnectorGrantDecryptionError,
   getConnectorOAuthGrant,
+  listRevocableConnectorTokens,
   revokeConnectorOAuthGrant,
   updateConnectorOAuthGrantTokens,
 } from '@/lib/connectors/oauth-store';
@@ -175,20 +176,23 @@ export async function resolveConnectorAccessToken(
   }
 }
 
+/**
+ * With no account key this disconnects every account of the connector, so every
+ * one of their credentials is handed back to the provider before the local rows
+ * are destroyed. Revoking only the default would leave a second mailbox's
+ * refresh token live upstream with nothing left here to revoke it with.
+ */
 export async function disconnectConnectorOAuthGrant(
   userId: string,
   connectorId: string,
+  accountKey?: string | null,
 ): Promise<boolean> {
   const provider: ConnectorOAuthProvider | null = getConnectorOAuthProvider(connectorId);
   if (provider?.revocationUrl) {
     try {
-      const grant = await getConnectorOAuthGrant(userId, connectorId);
-      if (grant) {
-        await revokeTokenAtProvider(
-          provider,
-          grant.refreshToken ?? grant.accessToken,
-          grant.refreshToken ? 'refresh_token' : 'access_token',
-        );
+      const revocable = await listRevocableConnectorTokens(userId, connectorId, accountKey);
+      for (const credential of revocable) {
+        await revokeTokenAtProvider(provider, credential.token, credential.tokenTypeHint);
       }
     } catch (error) {
       logger.warn(
@@ -197,5 +201,5 @@ export async function disconnectConnectorOAuthGrant(
       );
     }
   }
-  return revokeConnectorOAuthGrant(userId, connectorId);
+  return revokeConnectorOAuthGrant(userId, connectorId, accountKey);
 }
