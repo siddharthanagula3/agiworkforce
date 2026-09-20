@@ -57,7 +57,9 @@ function run(root) {
 
 const BASELINE = {
   'apps/web/lib/crypto/envelope.ts': MODULE,
-  'apps/web/lib/custom-connector-crypto.ts': CALL_SITE('{ value: purpose, acceptUnbound: true }'),
+  'apps/web/lib/crypto/connector-secret-reseal.ts': CALL_SITE(
+    '{ value: purpose, acceptUnbound: true }',
+  ),
   'apps/web/lib/crypto/cmek-lifecycle.ts': CALL_SITE(
     '{ value: entry.context, acceptUnbound: true }',
   ),
@@ -102,7 +104,7 @@ test('fails a baseline entry whose call site has stopped admitting one', () => {
   const result = run(
     fixture({
       ...BASELINE,
-      'apps/web/lib/custom-connector-crypto.ts': CALL_SITE(
+      'apps/web/lib/crypto/connector-secret-reseal.ts': CALL_SITE(
         '{ value: purpose, acceptUnbound: false }',
       ),
     }),

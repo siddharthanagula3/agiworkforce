@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { logAuthFailure } from '@/lib/security-audit';
 import { setTenantScope } from '@/lib/observability/trace-context';
@@ -317,4 +317,35 @@ export async function getClerkAuthUser(
   }
 
   throw createError.unauthorized();
+}
+
+/**
+ * For routes that also serve signed-out callers: no credential answers null, a credential
+ * answers only through the account and workspace gate, never as a raw provider subject.
+ */
+export async function getOptionalAuthUser(
+  request: NextRequest,
+  options: AuthOptions = {},
+): Promise<AuthResult | null> {
+  const bearer = request.headers.get('authorization')?.startsWith('Bearer ') === true;
+  if (!bearer) {
+    let subject: string | null;
+    try {
+      ({ subject } = await getRequestIdentity());
+    } catch (error) {
+      logger.warn({ error }, 'Request identity lookup failed; treating the caller as signed out');
+      return null;
+    }
+    if (subject === null) return null;
+  }
+  try {
+    return await getClerkAuthUser(request, options);
+  } catch (error) {
+    // A gated-out session is served as signed out: support and privacy forms stay reachable
+    // to a suspended person, and nothing is attributed to the account.
+    if (!bearer && isAppError(error) && (error.statusCode === 401 || error.statusCode === 403)) {
+      return null;
+    }
+    throw error;
+  }
 }

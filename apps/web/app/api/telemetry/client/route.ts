@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -16,7 +17,6 @@ import {
 import { recordClientFailure } from '@/lib/observability/metrics';
 import { httpRequestLabels } from '@/lib/observability/request-labels';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getRequestIdentity } from '@/lib/server/identity';
 import { readServerTelemetryConsent } from '@/lib/server/telemetry-consent';
 
 // `strict` is the privacy control: there is no field a prompt, a message or a
@@ -53,10 +53,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'client-telemetry');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { subject: userId } = await getRequestIdentity();
-  if (!userId) {
-    throw createError.unauthorized('Sign in to report a client failure');
-  }
+  await getClerkAuthUser(request);
 
   const parsed = IngestSchema.safeParse(await readBoundedBody(request));
   if (!parsed.success) {
