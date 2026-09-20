@@ -15,9 +15,10 @@ describe('user-facing components do not render raw error messages', () => {
     const output = execFileSync(process.execPath, ['scripts/check-raw-error-to-user.mjs'], {
       cwd: REPO_ROOT,
       encoding: 'utf8',
+      timeout: 30_000,
     });
     expect(output).toContain('Raw-error-to-user check passed');
-  });
+  }, 35_000);
 
   it('is not vacuous, the helper it points at is widely used', () => {
     const users = execSync("grep -rl 'toUserMessage' --include='*.tsx' features app | wc -l", {

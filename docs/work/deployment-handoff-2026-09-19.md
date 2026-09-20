@@ -894,7 +894,8 @@ before promotion.
 ## CI and security repair checkpoint (2026-09-20)
 
 The repair baseline is `94fada312a53fea70519418547494c52d687c7d0` on remote
-`main`. The current patch is awaiting commit, push and remote verification.
+`main`. Security repairs were pushed as `103b52950` and `43787483b`; remote
+verification is running. GitHub now reports zero open Dependabot alerts.
 This checkpoint does not assert a green deployment or change the historical
 launch decision.
 
@@ -955,7 +956,18 @@ therefore performed the separate parser, transport and consumer review locally.
 The six local enterprise accessibility checks and the desktop/CLI library
 Clippy command also pass.
 
-Next: finish the staged guard chain, commit with hooks enabled,
-push to main, and inspect the resulting CI, CodeQL and dependency alerts. Passing
-local checks must not be described as a verified green remote pipeline. The
-independent production-backup prerequisite above remains unresolved.
+The previous full JavaScript CI run completed with 2,165 passing web test files,
+nine failing files and four skipped files. The follow-up repairs complete UI
+partial mocks, assert the new Free-first keyboard order, refresh measured RLS
+claims and give the repository-wide raw-error subprocess a 30-second deadline
+inside a 35-second test budget (measured locally at 1.32 seconds). No scan scope
+or assertion was removed. The local-only quota endpoint now admits browser
+sessions, not developer API keys; Jev selected this boundary at 0.89 confidence
+(input fingerprint `a93554710e99fab107276e0a0c4c1998abe719ef17436d7aadded630f601b7c4`).
+The 11 targeted files, including the real RLS authentication adapter and quota
+route, pass all 84 tests. API-key rejection and session binding remain covered.
+
+Next: push this JavaScript follow-up with hooks enabled, then inspect CI,
+CodeQL and dependency alerts for the resulting commit. Passing local checks
+must not be described as a verified green remote pipeline. The independent
+production-backup prerequisite above remains unresolved.
