@@ -3,6 +3,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
+  ACCOUNT_STATUSES,
   accountAccessDecision,
   effectiveAccountStatus,
   type AccountAccessDecision,
@@ -45,4 +46,23 @@ export async function accountAccessForSignIn(userId: string): Promise<AccountAcc
     logger.error({ err, userId }, 'account lifecycle lookup failed at sign-in completion');
     return { allowed: true };
   }
+}
+
+// An unattended run has nobody to refuse at sign-in, so the refusing statuses are read from
+// the account vocabulary: a status added there cannot keep spending on a shut account.
+export const UNATTENDED_RUN_DENIED_STATUSES: string[] = ACCOUNT_STATUSES.filter(
+  (status) => !accountAccessDecision(status).allowed,
+);
+
+/** The same decision as a set predicate, for a statement that claims work for many owners at once. */
+export function ownerMayRunUnattendedSql(ownerColumn: string, deniedStatusesParam: number): string {
+  return `not exists (
+         select 1 from public.profiles profile
+          where profile.id = ${ownerColumn}
+            and profile.account_status = any($${deniedStatusesParam}::text[])
+       )
+       and not exists (
+         select 1 from public.erasure_tombstones tombstone
+          where tombstone.user_id = ${ownerColumn}
+       )`;
 }

@@ -8,6 +8,7 @@ import {
   explainCloudAgentRunEnding,
 } from './cloud-agent-run-termination';
 import { MAX_OPERATION_LEASE_SECONDS } from './cloud-agent-execution-service';
+import { EXECUTOR_HELD_TASK_STATES } from './cloud-agent-run-service';
 
 export const CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS =
   CLOUD_AGENT_WORKFLOW_INVOCATION_LIMIT_MS / 1_000 + MAX_OPERATION_LEASE_SECONDS;
@@ -16,6 +17,15 @@ const REAP_BATCH_SIZE = 200;
 const MAX_REAP_BATCHES = 25;
 const REAP_BUDGET_MS = 240_000;
 const CANCELLED_STATE = 'cancelled';
+
+/**
+ * Every state a worker is supposed to be driving, read from the one place that
+ * classifies the vocabulary. A state added to the engine but not to the sweep
+ * leaves runs nothing ever ends: they keep a conversation blocked and keep
+ * reporting themselves as live. States parked on a person are not here, because
+ * waiting for an answer is not a stall.
+ */
+const REAPABLE_STATE_VALUES: string[] = [...EXECUTOR_HELD_TASK_STATES];
 
 const CANCEL_CONCURRENCY = 8;
 
@@ -105,14 +115,14 @@ export async function reapOrphanedCloudAgentRuns(
         where id in (
           select id
             from public.cloud_agent_runs
-           where state in ('queued', 'running')
+           where state = any($3::text[])
              and updated_at < now() - make_interval(secs => $1)
            order by updated_at
            limit $2
         )
       returning id, user_id, state, conversation_id, request_id, model, last_event_sequence,
                 workflow_run_id`,
-      [CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS, REAP_BATCH_SIZE],
+      [CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS, REAP_BATCH_SIZE, REAPABLE_STATE_VALUES],
     );
 
     if (reaped.length === 0) return report;

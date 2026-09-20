@@ -38,6 +38,10 @@ import {
   type ScheduleCondition,
   type ScheduleConditionState,
 } from '@/lib/schedules/schedule-condition';
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { executeScheduledAgent } from './scheduled-agent-executor';
@@ -48,6 +52,8 @@ const MAX_BATCH_SIZE = 100;
 const MAX_PAGE_SIZE = 100;
 const MAX_ERROR_LENGTH = 2_000;
 const SCHEDULE_WORKER_NAME = 'scheduled-task';
+
+export { UNATTENDED_RUN_DENIED_STATUSES } from '@/lib/auth/account-lifecycle';
 const MISSED_EXECUTION_GRACE_MS = 2 * SWEEP_INTERVAL_MS;
 const MAX_RETRY_ATTEMPTS = 5;
 const MIN_RETRY_BACKOFF_SECONDS = 60;
@@ -1008,6 +1014,7 @@ export async function claimDueScheduleRuns(
          and next_execution_at <= now()
          and (expires_at is null or expires_at > now())
          and (max_executions is null or execution_count < max_executions or retry_attempt > 0)
+         and ${ownerMayRunUnattendedSql('scheduled_tasks.user_id', 3)}
        order by next_execution_at asc, id asc
        for update skip locked
        limit $1
@@ -1041,7 +1048,7 @@ export async function claimDueScheduleRuns(
      from claimed
      join inserted on inserted.task_id = claimed.id
      order by claimed.scheduled_for asc, claimed.id asc`,
-    [limit, leaseSeconds],
+    [limit, leaseSeconds, UNATTENDED_RUN_DENIED_STATUSES],
   );
   return rows.map(mapClaim);
 }
