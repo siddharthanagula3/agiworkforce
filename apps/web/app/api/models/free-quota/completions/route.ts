@@ -25,7 +25,6 @@ import {
   buildModelPolicyGateResponse,
   buildProviderEgressGateResponse,
 } from '@/lib/managed-compute-gate';
-import { getNeonDb } from '@/lib/server/neon-db';
 import {
   resolveZeroDataRetentionPolicy,
   evaluateActiveWorkspacePolicy,
@@ -104,7 +103,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
   );
   if (!conversation) return refusal('Conversation not found.', 'conversation_not_found', 404);
   const privacy = await evaluateActiveWorkspacePolicy(
-    getNeonDb(),
+    scoped.db,
     scoped.userId,
     { resource: 'privacy_mode', mode: 'byok' },
     request,

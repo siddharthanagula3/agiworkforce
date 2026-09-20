@@ -23,7 +23,10 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/error-handler', () => ({ withErrorHandler: <T>(handler: T) => handler }));
-vi.mock('@/lib/api-auth', () => ({ assertAccountActive: vi.fn() }));
+vi.mock('@/lib/api-auth', async (original) => ({
+  ...(await original<object>()),
+  assertAccountActive: vi.fn(),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     userId: 'local-user',
@@ -31,14 +34,14 @@ vi.mock('@/lib/server/rls-db', () => ({
     db: { query: mocks.query },
   })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn() }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/managed-compute-gate', () => ({
   buildModelPolicyGateResponse: mocks.modelGate,
   buildProviderEgressGateResponse: mocks.egress,
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (original) => ({
+  ...(await original<object>()),
   evaluateActiveWorkspacePolicy: mocks.privacy,
   resolveZeroDataRetentionPolicy: mocks.retention,
 }));
@@ -133,6 +136,12 @@ describe('local Free selector completion boundary', () => {
       null,
     ]);
     expect(mocks.media).not.toHaveBeenCalled();
+    expect(mocks.privacy).toHaveBeenCalledWith(
+      expect.objectContaining({ query: mocks.query }),
+      'local-user',
+      { resource: 'privacy_mode', mode: 'byok' },
+      expect.anything(),
+    );
   });
   it('rejects production and CSRF failures before dispatch', async () => {
     vi.stubEnv('NODE_ENV', 'production');
