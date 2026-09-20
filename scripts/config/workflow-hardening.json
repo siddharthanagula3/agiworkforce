@@ -1,0 +1,251 @@
+{
+  "$comment": "Measured from .github/workflows by scripts/check-workflow-hardening.mjs. The workflows themselves are changed only through a reviewed deploy change, so a gap this file records is a gap the guard refuses to let grow, not a gap it forgives.",
+  "trustedActionPrefixes": ["actions", "github", "microsoft"],
+  "productionEnvironments": [
+    "production-web",
+    "production-railway",
+    "production-fly",
+    "staging-web",
+    "macos-release",
+    "chrome-web-store",
+    "vscode-marketplace"
+  ],
+  "allowedWriteScopes": [
+    {
+      "id": "agiworkforce-bot.yml:process:issues",
+      "reason": "the bot answers an issue comment, which is an issue write"
+    },
+    {
+      "id": "agiworkforce-bot.yml:process:pull-requests",
+      "reason": "the bot answers a review comment, which is a pull request write"
+    },
+    {
+      "id": "build-windows-release.yml:build-windows:contents",
+      "reason": "it uploads the signed Windows installer to the release"
+    },
+    {
+      "id": "codeql.yml:rust-security:checks",
+      "reason": "the analysis reports its result as a check run"
+    },
+    {
+      "id": "codeql.yml:rust-security:security-events",
+      "reason": "it uploads SARIF to code scanning"
+    },
+    {
+      "id": "deploy-signaling-server.yml:gate:attestations",
+      "reason": "the workflow attests the image it builds; the scope is declared once for all its jobs"
+    },
+    {
+      "id": "deploy-signaling-server.yml:gate:id-token",
+      "reason": "OIDC is how the deploy authenticates without a long-lived token"
+    },
+    {
+      "id": "deploy-signaling-server.yml:gate:packages",
+      "reason": "the image is pushed to the repository container registry"
+    },
+    {
+      "id": "deploy-signaling-server.yml:test:attestations",
+      "reason": "same workflow-level grant; this job builds nothing and writes nothing"
+    },
+    {
+      "id": "deploy-signaling-server.yml:test:id-token",
+      "reason": "same workflow-level grant; this job builds nothing and writes nothing"
+    },
+    {
+      "id": "deploy-signaling-server.yml:test:packages",
+      "reason": "same workflow-level grant; this job builds nothing and writes nothing"
+    },
+    {
+      "id": "deploy-signaling-server.yml:build:attestations",
+      "reason": "it attests the container image it builds"
+    },
+    {
+      "id": "deploy-signaling-server.yml:build:id-token",
+      "reason": "OIDC signs the attestation"
+    },
+    {
+      "id": "deploy-signaling-server.yml:build:packages",
+      "reason": "it pushes the image to the registry"
+    },
+    {
+      "id": "deploy-signaling-server.yml:deploy-railway:attestations",
+      "reason": "same workflow-level grant; the deploy reads the image it was handed"
+    },
+    {
+      "id": "deploy-signaling-server.yml:deploy-railway:id-token",
+      "reason": "OIDC authenticates the deploy"
+    },
+    {
+      "id": "deploy-signaling-server.yml:deploy-railway:packages",
+      "reason": "it pulls the image it deploys from the registry"
+    },
+    {
+      "id": "deploy-signaling-server.yml:deploy-fly:attestations",
+      "reason": "same workflow-level grant; the deploy reads the image it was handed"
+    },
+    {
+      "id": "deploy-signaling-server.yml:deploy-fly:id-token",
+      "reason": "OIDC authenticates the deploy"
+    },
+    {
+      "id": "deploy-signaling-server.yml:deploy-fly:packages",
+      "reason": "it pulls the image it deploys from the registry"
+    },
+    {
+      "id": "deploy-signaling-server.yml:cleanup:packages",
+      "reason": "it deletes the untagged images the build left behind"
+    },
+    {
+      "id": "deploy-staging.yml:unprovisioned:statuses",
+      "reason": "it reports the staging verdict as a commit status the production gate waits on"
+    },
+    {
+      "id": "deploy-staging.yml:deploy:statuses",
+      "reason": "it reports the staging verdict as a commit status the production gate waits on"
+    },
+    {
+      "id": "evals.yml:quality-signal:statuses",
+      "reason": "it reports the eval verdict as a commit status"
+    },
+    {
+      "id": "guardian.yml:guardian:checks",
+      "reason": "it reports its findings as a check run"
+    },
+    {
+      "id": "guardian.yml:guardian:pull-requests",
+      "reason": "it comments its findings on the pull request"
+    },
+    {
+      "id": "release-chrome-extension.yml:publish:id-token",
+      "reason": "OIDC authenticates the Chrome Web Store publish"
+    },
+    {
+      "id": "release-cli.yml:sign-release-assets:id-token",
+      "reason": "OIDC signs the release assets without a stored key"
+    },
+    {
+      "id": "release-cli.yml:publish-npm:id-token",
+      "reason": "npm trusted publishing authenticates over OIDC"
+    },
+    {
+      "id": "release-cli.yml:github-release:contents",
+      "reason": "it creates the GitHub release and uploads the binaries"
+    },
+    {
+      "id": "release-desktop-cloud.yml:prepare-release:contents",
+      "reason": "the workflow creates a release; the scope is declared once for all its jobs"
+    },
+    {
+      "id": "release-desktop-cloud.yml:validate:contents",
+      "reason": "same workflow-level grant; this job only validates"
+    },
+    {
+      "id": "release-desktop-cloud.yml:build-macos:contents",
+      "reason": "it uploads the signed macOS build to the draft release"
+    },
+    {
+      "id": "release-desktop-cloud.yml:publish-release:contents",
+      "reason": "it publishes the draft release"
+    },
+    {
+      "id": "release-desktop-cloud.yml:cleanup-on-failure:contents",
+      "reason": "it deletes the draft release a failed run left behind"
+    },
+    {
+      "id": "release-desktop.yml:prepare-release:contents",
+      "reason": "it creates the draft release the builds upload into"
+    },
+    {
+      "id": "release-desktop.yml:build-linux:contents",
+      "reason": "it uploads the Linux build to the draft release"
+    },
+    {
+      "id": "release-desktop.yml:build-macos:contents",
+      "reason": "it uploads the signed macOS build to the draft release"
+    },
+    {
+      "id": "release-desktop.yml:publish-release:contents",
+      "reason": "it publishes the draft release"
+    },
+    {
+      "id": "release-desktop.yml:cleanup-on-failure:contents",
+      "reason": "it deletes the draft release a failed run left behind"
+    },
+    {
+      "id": "release-vscode-extension.yml:publish:id-token",
+      "reason": "OIDC authenticates the marketplace publish"
+    },
+    {
+      "id": "test-l1.yml:upload-coverage:id-token",
+      "reason": "OIDC authenticates the coverage upload"
+    }
+  ],
+  "knownGaps": {
+    "unpinnedActions": [],
+    "implicitPermissions": [],
+    "missingJobTimeout": [
+      {
+        "id": "actions-pinned-check.yml:check",
+        "reason": "the step fetches every pinned action ref from github.com, so a hung fetch runs to the six hour default",
+        "fix": "timeout-minutes: 15"
+      },
+      {
+        "id": "ci.yml:ci-complete",
+        "reason": "it is the aggregate gate every other lane reports into; a hang here holds the CI concurrency group and blocks the production deploy that waits on this workflow",
+        "fix": "timeout-minutes: 5"
+      },
+      {
+        "id": "codeql.yml:rust-security",
+        "reason": "a CodeQL database build on a large Rust tree has no natural ceiling",
+        "fix": "timeout-minutes: 60"
+      },
+      {
+        "id": "release-cli.yml:validate-version",
+        "reason": "a tag validation step should never outlive a few minutes",
+        "fix": "timeout-minutes: 10"
+      },
+      {
+        "id": "release-cli.yml:build",
+        "reason": "a cross platform cargo release build; the matrix runs five of them at once",
+        "fix": "timeout-minutes: 90"
+      },
+      {
+        "id": "release-cli.yml:sign-release-assets",
+        "reason": "signing reaches an external OIDC issuer that can stall",
+        "fix": "timeout-minutes: 20"
+      },
+      {
+        "id": "release-cli.yml:publish-npm",
+        "reason": "the publish reaches the npm registry, which can stall on a trusted publishing exchange",
+        "fix": "timeout-minutes: 20"
+      },
+      {
+        "id": "release-cli.yml:github-release",
+        "reason": "it uploads every built binary to the release",
+        "fix": "timeout-minutes: 30"
+      },
+      {
+        "id": "release-desktop.yml:prepare-release",
+        "reason": "it only creates the draft release",
+        "fix": "timeout-minutes: 10"
+      },
+      {
+        "id": "release-desktop.yml:update-database",
+        "reason": "it writes the release row; a stalled connection would otherwise hold the job for six hours",
+        "fix": "timeout-minutes: 10"
+      },
+      {
+        "id": "release-desktop.yml:publish-release",
+        "reason": "it publishes the draft release",
+        "fix": "timeout-minutes: 15"
+      },
+      {
+        "id": "release-desktop.yml:cleanup-on-failure",
+        "reason": "the failure path must not itself be able to hang",
+        "fix": "timeout-minutes: 10"
+      }
+    ],
+    "deployWithoutEnvironment": [],
+    "runInterpolatesUntrustedInput": []
+  }
+}
