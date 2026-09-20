@@ -26,14 +26,23 @@ function sourceFiles(directory: string, collected: string[] = []): string[] {
 
 const PRODUCT_FILES = SEARCH_ROOTS.flatMap((root) => sourceFiles(path.join(WEB_ROOT, root)));
 
-/** `event: '<key>'` as every emit and handle call site writes it. */
+/** `event: '<key>'` as every call site writes it. */
 const EVENT_LITERAL = /\bevent:\s*'([a-z_]+)'/g;
+
+/** Every function that puts a notice on the wire; a rename empties the sweep, so they are checked too. */
+const RAISE_ENTRY_POINTS = [
+  'emitIdentitySecurityEvent',
+  'handleIdentitySecurityEvent',
+  'announceTwoFactorChange',
+] as const;
+
+const ENTRY_POINT_CALL = new RegExp(`\\b(?:${RAISE_ENTRY_POINTS.join('|')})\\(`);
 
 function raisedEvents(): Set<string> {
   const raised = new Set<string>();
   for (const file of PRODUCT_FILES) {
     const source = readFileSync(file, 'utf8');
-    if (!/IdentitySecurityEvent\(/.test(source)) continue;
+    if (!ENTRY_POINT_CALL.test(source)) continue;
     for (const match of source.matchAll(EVENT_LITERAL)) raised.add(match[1] as string);
   }
   return raised;
@@ -68,6 +77,15 @@ describe('the identity security notices the product promises', () => {
   it('sweeps a real tree, so an empty sweep cannot pass', () => {
     expect(PRODUCT_FILES.length).toBeGreaterThan(500);
     expect(raised.size).toBeGreaterThan(0);
+  });
+
+  it('still finds every function that can put a notice on the wire', () => {
+    const declared = PRODUCT_FILES.flatMap((file) => {
+      const source = readFileSync(file, 'utf8');
+      return RAISE_ENTRY_POINTS.filter((name) => source.includes(`export async function ${name}`));
+    });
+
+    expect([...declared].sort()).toEqual([...RAISE_ENTRY_POINTS].sort());
   });
 
   it('raises every catalogued notice that has somewhere to raise it', () => {

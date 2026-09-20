@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   verifyTOTPCode: vi.fn(),
   recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
+  identityEvent: vi.fn(async (_event: Record<string, unknown>) => ({
+    assessment: { level: 'normal', signals: [] },
+    response: null,
+  })),
   logAuthFailure: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
@@ -29,6 +33,9 @@ vi.mock('@/features/settings/services/user-preferences', () => ({
 }));
 vi.mock('@/lib/crypto/totp-envelope', () => ({
   openTotpSecret: vi.fn(() => 'SECRET'),
+}));
+vi.mock('@/lib/server/two-factor-security-events', () => ({
+  announceTwoFactorChange: (event: Record<string, unknown>) => mocks.identityEvent(event),
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (event: Record<string, unknown>) => mocks.recordAuditEvent(event),
@@ -72,28 +79,29 @@ describe('POST /api/settings/2fa/verify', () => {
     expect(response.status).toBe(401);
   });
 
-  it('writes an audit row naming the account that turned 2FA on', async () => {
+  it('records the enrollment and tells the account holder it happened', async () => {
     mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
     mocks.verifyTOTPCode.mockResolvedValueOnce(true);
 
     await POST(request('123456'));
 
-    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+    expect(mocks.identityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        eventType: 'two_factor_enabled',
-        detail: expect.objectContaining({ resourceType: 'two_factor' }),
+        event: 'two_factor_enabled',
+        detail: expect.objectContaining({ source: 'totp_code' }),
       }),
     );
   });
 
-  it('writes no audit row when the code is refused', async () => {
+  it('records nothing and tells nobody when the code is refused', async () => {
     mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
     mocks.verifyTOTPCode.mockResolvedValueOnce(false);
 
     await POST(request('000000')).catch(() => undefined);
 
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.identityEvent).not.toHaveBeenCalled();
   });
 
   it('records the refused code as a failed authentication for the account', async () => {
@@ -115,6 +123,7 @@ describe('POST /api/settings/2fa/verify', () => {
     await POST(request('123456'));
 
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.identityEvent).not.toHaveBeenCalled();
   });
 
   it('exempts an organization owner from the mfa gate so verification stays reachable', async () => {
