@@ -2,7 +2,7 @@
 
 Status: Draft. Nothing below has been exercised end to end in Stripe test mode.
 Owner: Founder / billing operator
-Last updated: 2026-09-04
+Last updated: 2026-09-20
 
 This runbook is the operator procedure for provisioning, collecting, and
 enforcing an AGI Enterprise contract in Stripe. It describes the target design
@@ -332,7 +332,7 @@ to advance time rather than waiting real days for the 30/60/90 checkpoints.
       actions once the contract reaches `read_only`, while reads, exports,
       and settings remain reachable, and that no data is deleted at any
       stage.
-      Verified 2026-09-04 in test mode over HTTP: with the QA contract's `collection_stage` set to `read_only` and `oldest_open_invoice_due_at` 100 days overdue, a signed-in `POST /api/llm/v1/chat/completions` was refused (`billing_read_only`) while `GET /api/chat/conversations` still returned 200; row restored after. Exercised via a temporary `apps/web/e2e/tmp-billing-readonly.spec.ts` (deleted after the run). Found and worked around `BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY` (`docs/agent-context/known-flaws.md`): the contract's `ended_at` from an earlier cancel never clears on a new active subscription, which would otherwise have hidden this org from the gate entirely.
+      Verified 2026-09-04 in test mode over HTTP: with the QA contract's `collection_stage` set to `read_only` and `oldest_open_invoice_due_at` 100 days overdue, a signed-in `POST /api/llm/v1/chat/completions` was refused (`billing_read_only`) while `GET /api/chat/conversations` still returned 200; row restored after. Exercised via a throwaway Playwright spec under `apps/web/e2e`, deleted after the run, so no path is quoted here for an operator to look for. Found and worked around `BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY` (`docs/agent-context/known-flaws.md`): the contract's `ended_at` from an earlier cancel never clears on a new active subscription, which would otherwise have hidden this org from the gate entirely.
 - [x] If an overage price is configured, generate managed-usage spend past
       the included allowance and confirm the usage-metering cron reports
       overage to the correct meter exactly once per day, with no
