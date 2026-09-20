@@ -40,10 +40,14 @@ import type { FlagEvaluation } from '@/lib/feature-flags/evaluate-flags';
 
 import {
   evaluateSemanticDecision,
+  openDecisionGate,
   resetSemanticDecisionHost,
+  type DecisionGate,
   type SemanticDecisionContext,
 } from '../host';
+import { readDecisionTransportConfig } from '../config';
 import type { DecisionEligibilityFacts } from '../eligibility';
+import { resolveDecisionMode, type DecisionModeResolution } from '../policy';
 
 const KIND = 'turn_signals';
 const KEY = decisionFlagKey(KIND);
@@ -76,6 +80,8 @@ function shadowFlag(): Record<string, FlagEvaluation> {
   };
 }
 
+const NOW_MS = Date.parse('2026-09-20T12:00:00.000Z');
+
 function context(overrides: Partial<SemanticDecisionContext> = {}): SemanticDecisionContext {
   return {
     requestId: 'request-1',
@@ -83,13 +89,40 @@ function context(overrides: Partial<SemanticDecisionContext> = {}): SemanticDeci
     userId: 'user-1',
     organizationId: 'workspace-1',
     surface: 'web',
-    bucketId: 'user-1',
-    eligibility: ELIGIBLE,
-    flagEvaluations: shadowFlag(),
-    flagDefinitions: [],
-    nowMs: Date.parse('2026-09-20T12:00:00.000Z'),
     ...overrides,
   };
+}
+
+function resolution(
+  evaluations: Record<string, FlagEvaluation> = shadowFlag(),
+): DecisionModeResolution {
+  return resolveDecisionMode({
+    kind: KIND,
+    evaluations,
+    definitions: [],
+    bucketId: 'user-1',
+    nowMs: NOW_MS,
+  });
+}
+
+function gate(
+  overrides: {
+    evaluations?: Record<string, FlagEvaluation>;
+    eligibility?: DecisionEligibilityFacts;
+  } = {},
+): DecisionGate {
+  return openDecisionGate({
+    kind: KIND,
+    transport: readDecisionTransportConfig(),
+    resolution: resolution(overrides.evaluations),
+    eligibility: overrides.eligibility ?? ELIGIBLE,
+  });
+}
+
+function openGate(): Extract<DecisionGate, { asks: true }> {
+  const resolved = gate();
+  if (!resolved.asks) throw new Error('the gate was expected to open');
+  return resolved;
 }
 
 function answerBody(model = MODEL) {
@@ -110,7 +143,12 @@ function respondWith(body: string, status = 200): void {
 }
 
 function run(overrides: Partial<SemanticDecisionContext> = {}) {
-  return evaluateSemanticDecision({ kind: KIND, request: REQUEST, context: context(overrides) });
+  return evaluateSemanticDecision({
+    kind: KIND,
+    request: REQUEST,
+    gate: openGate(),
+    context: context(overrides),
+  });
 }
 
 beforeEach(() => {
@@ -129,36 +167,52 @@ afterEach(() => {
 });
 
 describe('nothing happens until it is switched on', () => {
-  it('records nothing at all when no flag exists', async () => {
-    const network = vi.fn();
-    vi.stubGlobal('fetch', network);
+  it('records nothing at all when no flag exists', () => {
+    const closed = gate({ evaluations: {} });
 
-    const result = await run({ flagEvaluations: {} });
-
-    expect(result).toMatchObject({ mode: 'disabled', outcome: { reason: 'disabled' } });
-    expect(network).not.toHaveBeenCalled();
-    expect(mocks.recordProviderCostEvent).not.toHaveBeenCalled();
+    expect(closed).toMatchObject({ asks: false, mode: 'disabled', skipReason: null });
     expect(mocks.recordSemanticDecision).not.toHaveBeenCalled();
   });
 
-  it('reports itself disabled when the transport is unconfigured, whatever the flag says', async () => {
+  it('reports itself disabled when the transport is unconfigured, whatever the flag says', () => {
     vi.stubEnv('TYPESAFE_API_KEY', '');
-    const network = vi.fn();
-    vi.stubGlobal('fetch', network);
 
-    expect(await run()).toMatchObject({ mode: 'disabled', skipReason: 'unconfigured' });
-    expect(network).not.toHaveBeenCalled();
+    expect(gate()).toMatchObject({ asks: false, mode: 'disabled', skipReason: 'unconfigured' });
+    expect(mocks.recordSemanticDecision).not.toHaveBeenCalled();
   });
 
-  it('never reaches the transport for a session that is not managed', async () => {
-    const network = vi.fn();
-    vi.stubGlobal('fetch', network);
+  it('never opens for a session that is not managed', () => {
+    const closed = gate({ eligibility: { ...ELIGIBLE, privacyMode: 'byok' } });
 
-    const result = await run({ eligibility: { ...ELIGIBLE, privacyMode: 'byok' } });
-
-    expect(result).toMatchObject({ skipReason: 'trust_mode', outcome: { status: 'fallback' } });
-    expect(network).not.toHaveBeenCalled();
+    expect(closed).toMatchObject({ asks: false, skipReason: 'trust_mode' });
+    expect(mocks.recordSemanticDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'skipped', reason: 'trust_mode' }),
+    );
     expect(mocks.recordProviderCostEvent).not.toHaveBeenCalled();
+  });
+
+  it('never opens for a subject the rollout did not draw', () => {
+    const drawn = resolution();
+    const closed = openDecisionGate({
+      kind: KIND,
+      transport: readDecisionTransportConfig(),
+      resolution: { ...drawn, sampleRate: 0 },
+      eligibility: ELIGIBLE,
+    });
+
+    expect(closed).toMatchObject({ asks: false, mode: 'shadow' });
+    expect(mocks.recordSemanticDecision).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'fallback', reason: 'sampled_out' }),
+    );
+  });
+
+  it('carries the pinned model and the subject the flag drew once it opens', () => {
+    expect(openGate()).toMatchObject({
+      asks: true,
+      mode: 'shadow',
+      trustMode: 'managed',
+      policy: expect.objectContaining({ mode: 'shadow', model: MODEL, sampleRate: 1 }),
+    });
   });
 
   it('never reaches the transport when the caller names a precondition', async () => {
@@ -282,12 +336,8 @@ describe('two subjects in flight at once', () => {
       }),
     );
 
-    const first = run({ requestId: 'first', decisionId: 'turn_signals:first' });
-    await Promise.resolve();
-    const second = await run({
-      requestId: 'second',
-      decisionId: 'turn_signals:second',
-      flagEvaluations: {
+    const enabled = gate({
+      evaluations: {
         [KEY]: {
           key: KEY,
           variant: 'enabled',
@@ -297,6 +347,16 @@ describe('two subjects in flight at once', () => {
           version: 1,
         },
       },
+    });
+    if (!enabled.asks) throw new Error('the gate was expected to open');
+
+    const first = run({ requestId: 'first', decisionId: 'turn_signals:first' });
+    await Promise.resolve();
+    const second = await evaluateSemanticDecision({
+      kind: KIND,
+      request: REQUEST,
+      gate: enabled,
+      context: context({ requestId: 'second', decisionId: 'turn_signals:second' }),
     });
     release?.(
       new Response(answerBody(), { status: 200, headers: { 'Content-Type': 'application/json' } }),

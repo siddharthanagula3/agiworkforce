@@ -696,7 +696,7 @@ function isForcedSkillToolChoice(value: unknown): boolean {
   );
 }
 
-function lastUserTurnText(
+export function lastUserTurnText(
   messages: ProcessedRequest['chatRequest']['messages'] | undefined,
 ): string {
   for (let index = (messages?.length ?? 0) - 1; index >= 0; index -= 1) {
