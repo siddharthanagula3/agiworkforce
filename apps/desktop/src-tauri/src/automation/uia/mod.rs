@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::{mpsc, OnceLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use windows::core::{BSTR, VARIANT};
+use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CoUninitialize, CLSCTX_INPROC_SERVER,
     COINIT_MULTITHREADED, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IDENTIFY,
