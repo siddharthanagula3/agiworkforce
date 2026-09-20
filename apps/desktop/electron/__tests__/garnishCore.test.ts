@@ -9,8 +9,13 @@ import {
   frameIsOnScreen,
   isShortcutOff,
   isUsableAccelerator,
+  MAX_ZOOM_LEVEL,
+  MIN_ZOOM_LEVEL,
+  ZOOM_LEVEL_STEP,
+  clampZoomLevel,
   normalizePreferences,
   normalizeShortcuts,
+  parsePreferencesFile,
   normalizeWindowFrame,
   parseSettingsFile,
   pickSourceForDisplay,
@@ -287,5 +292,28 @@ describe('fillsWorkArea', () => {
     expect(fillsWorkArea({ x: 0, y: 33, width: 1470, height: 700 }, workArea)).toBe(false);
     expect(fillsWorkArea({ x: 29, y: 162, width: 1470, height: 836 }, workArea)).toBe(false);
     expect(fillsWorkArea({ x: 140, y: 90, width: 1100, height: 720 }, workArea)).toBe(false);
+  });
+});
+
+describe('the zoom level a window reopens at', () => {
+  it('comes back off the settings file at the value the user chose', () => {
+    const chosen = normalizePreferences({
+      zoomLevel: DEFAULT_PREFERENCES.zoomLevel + ZOOM_LEVEL_STEP,
+    });
+    expect(parsePreferencesFile(JSON.stringify(chosen)).zoomLevel).toBe(chosen.zoomLevel);
+  });
+
+  it('is held inside the range the renderer can draw', () => {
+    expect(clampZoomLevel(MAX_ZOOM_LEVEL + 10)).toBe(MAX_ZOOM_LEVEL);
+    expect(clampZoomLevel(MIN_ZOOM_LEVEL - 10)).toBe(MIN_ZOOM_LEVEL);
+    expect(normalizePreferences({ zoomLevel: 99 }).zoomLevel).toBe(MAX_ZOOM_LEVEL);
+  });
+
+  it('falls back to actual size rather than a stored value that is not a number', () => {
+    expect(clampZoomLevel(Number.NaN)).toBe(DEFAULT_PREFERENCES.zoomLevel);
+    expect(normalizePreferences({ zoomLevel: 'big' }).zoomLevel).toBe(
+      DEFAULT_PREFERENCES.zoomLevel,
+    );
+    expect(parsePreferencesFile('{ broken').zoomLevel).toBe(DEFAULT_PREFERENCES.zoomLevel);
   });
 });

@@ -167,8 +167,9 @@ export function parseCombo(combo: string): { key: string; modifiers: ShortcutMod
     }
   }
 
-  if (keyParts.length !== 1 || keyParts[0] === undefined) return null;
-  return { key: keyParts[0], modifiers };
+  const key = keyParts[0];
+  if (keyParts.length !== 1 || key === undefined || key === '' || /\s/.test(key)) return null;
+  return { key, modifiers };
 }
 
 export function resolveBinding(
