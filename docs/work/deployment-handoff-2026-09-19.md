@@ -2,7 +2,7 @@
 
 Status: BLOCKED
 Owner: Release engineering
-Last updated: 2026-09-19
+Last updated: 2026-09-20
 
 ## Scope
 
@@ -11,6 +11,51 @@ apply required database and production configuration changes through the
 repository-owned release path, deploy the website and its required services,
 prove `https://agiworkforce.com` serves the resulting commit, and hand the
 release to a separate comprehensive production QA session.
+
+## Production migrations applied, 2026-09-20
+
+The owner explicitly authorized production migration apply after the blocked main
+push. Production branch `br-round-firefly-apm79pdx` in Neon project
+`wispy-star-10666975` advanced from 0248 through **0273** using the canonical
+runner with `apply --target production --confirm-production`. Source baseline:
+`ca20f3add935fcb139ce196ba2986b38d328898f`. All 25 migrations committed;
+`verify` reports **273 applied, zero pending, zero checksum drift**. A separate
+Neon MCP query independently confirmed the ledger count and maximum sequence.
+No applied SQL file was edited. The production high-water mark now records 273;
+allowlist entries for these now-applied migrations were removed. All 48 migration
+runner, SQL guard and dependency guard tests passed after recording the verified
+production state; the migration dependency guard is now green.
+
+Recovery and rehearsal evidence:
+
+- Pre-migration snapshot: `snap-empty-salad-appydyvx`, named
+  `pre-migrations-0249-0273-20260920`, created at 2026-09-20T05:47:19Z.
+- Private local PostgreSQL17 custom archive:
+  `/Users/siddhartha/.local/share/agiworkforce-recovery/20260920-migrations/production-before-0249.dump`.
+  Mode 0600 in a 0700 directory; SHA-256
+  `21a60d24b7da50489c7d5aba4d5b843d8ab52ce67d52505a4d088947c74e53ec`.
+  `pg_dump` succeeded and `pg_restore --file=/dev/null` read the entire archive
+  successfully. This validates readability, not a completed archive restore drill.
+- Fresh production clone `br-super-union-apo0em76`, named
+  `codex-migration-rehearsal-20260920`, applied the same 25 files and passed
+  canonical verification. It is retained for inspection; compute auto-suspends
+  after 300 seconds. The pre-migration snapshot is retained separately.
+- Thirteen read-only checks passed on both clone and production: ledger head,
+  activation backfill and timestamps, plugin version backfill, automation event
+  non-null IDs, forced RLS and unique index, three permission-based policies,
+  inactive member permission denial, feature-flag constraints, nullable audit
+  secret, custody trigger and activation index.
+- A rolled-back synthetic transaction on the clone verified active-owner access,
+  suspended-member denial, direct custody-delete refusal and workspace-cascade
+  deletion. No synthetic mutation was run against production.
+- The first policy probe named the wrong three policies; after matching the
+  actual 0267 definitions, all three passed. No migration was changed to satisfy
+  the probe. Sanitized runner logs and probe SQL are retained with the archive.
+
+Jev selected the backup/rehearsal/apply approach with confidence 1.0. The database
+recovery safeguards cover this database-only operation. The independent
+object-storage backup gap remains open for application promotion; this operation
+is neither a production deployment nor a reversal of the historical GLOBAL NO-GO.
 
 ## Main push attempt, 2026-09-20
 
@@ -33,7 +78,7 @@ blocker; no hook or safety policy was disabled.
 A fresh Vercel production environment pull returned empty database URL values, so
 it could not establish the database status. A subsequent read-only Neon MCP query
 against the production branch confirmed **248 applied migrations, maximum sequence
-248**. Migrations 0249 through 0273 therefore remain unapplied. The independent
+248**. Migrations 0249 through 0273 were unapplied at that attempt; the later apply is recorded above. The independent
 object-backup prerequisite recorded below remains unresolved. Production migrations
 were not applied. Remote `main` remains `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`;
 no production deployment or successful push is claimed.
@@ -47,7 +92,7 @@ no production deployment or successful push is claimed.
 | Production web         | `/api/version` reports `eb09a3242df1e003d72702ff6b51b5f641412440` in `production`                                                                                                                                                            | Healthy response, but behind both remote and local `main`                                                                                 |
 | GitHub protection      | Branch protection endpoint returns `404`; repository rulesets list is empty                                                                                                                                                                  | No enforced protected merge process is configured                                                                                         |
 | Production deploy path | `.github/workflows/deploy-production.yml`                                                                                                                                                                                                    | Requires successful push-triggered `CI` for the exact `main` SHA and the same-SHA staging verdict                                         |
-| Database release path  | staging applies pending migrations; production verifies the ledger before deployment                                                                                                                                                         | Production is clean through 0248 with 25 pending migrations, 0249 through 0273                                                            |
+| Database release path  | staging applies pending migrations; production verifies the ledger before deployment                                                                                                                                                         | Production verified through 0273 on 2026-09-20; zero pending migrations and zero drift                                                    |
 | Production smoke       | Not started                                                                                                                                                                                                                                  | Requires the deployed exact SHA; interactive model smoke must use Luna                                                                    |
 
 ## Inclusion inventory
@@ -831,7 +876,8 @@ before promotion.
 - Production object backup needs a separate-region S3-compatible target and an
   independent credential scoped to it. The currently authorized Cloudflare
   session can administer the existing R2 account but does not supply a separate
-  failure domain or an independent backup credential. Production migration and
-  application promotion remain paused until this safety prerequisite is met.
+  failure domain or an independent backup credential. Application promotion
+  remains paused until this prerequisite is met. The separately authorized
+  database migration completed with database recovery safeguards recorded above.
 - Authentication handoff will be requested only if the final production smoke
   reaches a sign-in boundary.

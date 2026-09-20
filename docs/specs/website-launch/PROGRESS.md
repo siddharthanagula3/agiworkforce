@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Website launch preparation
-Last updated: 2026-09-19
+Last updated: 2026-09-20
 
 This is the entry point for current work. Historical audit artifacts remain immutable. Their local paths and fingerprints are
 recorded in [QA_COVERAGE.json](QA_COVERAGE.json); they are not tracked documentation links.
@@ -15,7 +15,9 @@ and [PRODUCTION_REMAINING.md](PRODUCTION_REMAINING.md) before continuing.
 ## Current state
 
 Source identity and preexisting dirty file hashes: [source-baseline.json](source-baseline.json).
-No existing changes discarded. No push, deployment, production migration, or original-chat mutation.
+No existing changes discarded. Production migrations 0249–0273 applied on 2026-09-20
+with snapshot, local database archive and production-clone rehearsal; 273 applied,
+zero pending and zero drift. Main push is being resumed; no deployment is claimed.
 Audit decisions independently counted: 7,803 done; 9,597 partial; 5,076 missing; 6,639 unverified.
 All 29,115 reviewed. Historical GLOBAL NO-GO preserved.
 Seven historical drift entries affect Jev tooling/workflow/dependencies and a routing-document date;
@@ -24,6 +26,14 @@ none establishes a current website runtime pass. Do not regenerate the snapshot.
 Jev selected implementation/QA (0.93) and systematic debugging (1.00), request hash
 84b2aae71d999fc6fbe77a7fe2097c08827c4879dc08bb68d36ebf1090186c46.
 No private demo data supplied. Product conversation routing unchanged.
+
+## Production migration checkpoint, 2026-09-20
+
+All 13 read-only post-migration checks passed on production and the rehearsal
+clone. Active/suspended membership and custody deletion behavior also passed in
+a rolled-back clone transaction. Recovery identifiers and evidence are recorded
+in [the deployment handoff](../../work/deployment-handoff-2026-09-19.md).
+The object-storage backup release gap and historical GLOBAL NO-GO remain.
 
 ## Current runtime checkpoint
 
