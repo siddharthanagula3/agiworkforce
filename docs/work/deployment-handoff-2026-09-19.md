@@ -1304,3 +1304,36 @@ encoder; authorization, native program argv, process ownership, timeout and
 cancellation semantics remain with their existing owners. A fresh reviewer
 agent remains unavailable due to the previously reached agent thread limit;
 this is not represented as a fresh independent postpatch review.
+
+### Coverage gate integrity follow-up
+
+The historical green Priority Level 1 run `35499143990` concealed a failed
+coverage command: 230 files and 462 tests failed, with 2,726 files and 32,410
+tests passing. `pnpm test:coverage || true` swallowed the exit status. Root
+Vitest 4 also ran package-owned Vitest 5 assertions and resolved package-relative
+paths from the repository root. A focused two-file reproduction fails from the
+root and passes all 14 cases with the web package's own runner and cwd. The
+repository line-floor argument used the invalid singular `threshold` spelling.
+
+Jev selected package-owned runners and a merged Istanbul report at confidence
+1.0, request `91be5a40af7d25863e00b37f3f08572ea29cec83f3dada0a4d01d905e6e0b102`.
+The repair reuses the existing 23-project list and floor parser, preserves
+package thresholds, and enforces the existing 75% aggregate floor. Missing,
+empty, malformed or stale reports cannot produce a pass. Eighteen harness and
+floor tests pass, including separate package processes and duplicate-source
+coverage merging. The full package-owned coverage run is still in progress;
+its aggregate is not yet verified. ESLint ignores these scripts under the
+existing configuration; Node syntax checks and execution tests provide actual
+validation instead of claiming a lint pass over ignored files.
+
+The workflow now propagates coverage failures and retains exact report
+artifacts. Codecov auto-search is disabled because the earlier failed upload
+selected source files with coverage in their names after no report was generated.
+External Codecov delivery remains advisory: the previous upload returned HTTP
+400 requiring a token, and the repository has no Codecov token secret. This is
+not a verified external delivery. Dependency audit after adding the existing
+Istanbul coverage library reports zero vulnerabilities at every severity.
+Evidence: `/tmp/agi-priority-99fd-clean.log`,
+`/tmp/agi-root-coverage-repro.log`, `/tmp/agi-package-coverage-repro.log`,
+`/tmp/agi-coverage-floor-check.log`, `/tmp/agi-package-coverage-full.log`,
+`/tmp/agi-coverage-dependency-audit.json`.

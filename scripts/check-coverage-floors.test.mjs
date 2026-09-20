@@ -38,10 +38,16 @@ test('reads the projects list, each declared floor and the repository floor', ()
   assert.equal(parseLinesFloor(FLOORED), 92);
   assert.equal(parseLinesFloor(UNFLOORED), null);
   assert.equal(
-    parseRootFloor('"test:coverage": "vitest run --coverage --coverage.threshold.lines=75"'),
+    parseRootFloor(
+      '"test:coverage": "node scripts/run-coverage.mjs --coverage.thresholds.lines=75"',
+    ),
     75,
   );
   assert.equal(parseRootFloor('"test:coverage": "vitest run --coverage"'), null);
+  assert.equal(
+    parseRootFloor('"test:coverage": "vitest run --coverage --coverage.threshold.lines=75"'),
+    null,
+  );
 });
 
 test('today’s shape passes', () => {
@@ -88,7 +94,7 @@ test('removing the repository-wide floor entirely fails', () => {
     state({ 'packages/a': FLOORED, 'packages/b': UNFLOORED }, null),
     recorded,
   );
-  assert.match(errors[0], /no longer passes --coverage\.threshold\.lines/);
+  assert.match(errors[0], /no longer passes --coverage\.thresholds\.lines/);
 });
 
 test('a project in the list with no vitest config fails', () => {

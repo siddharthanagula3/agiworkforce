@@ -6,7 +6,15 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'crates/**'
+      - 'services/**'
+      - 'tools/evals/**'
       - '.github/workflows/test-l1.yml'
+      - 'scripts/run-coverage*'
+      - 'scripts/check-coverage-floors*'
+      - 'scripts/lib/coverage-floors.mjs'
+      - 'vitest.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   push:
     branches:
       - main
@@ -14,7 +22,15 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'crates/**'
+      - 'services/**'
+      - 'tools/evals/**'
       - '.github/workflows/test-l1.yml'
+      - 'scripts/run-coverage*'
+      - 'scripts/check-coverage-floors*'
+      - 'scripts/lib/coverage-floors.mjs'
+      - 'vitest.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
 
 concurrency:
   group: tests-l1-${{ github.ref }}
@@ -59,13 +75,24 @@ jobs:
 
       - name: Generate Coverage Report
         if: always()
-        run: pnpm test:coverage || true
+        run: pnpm test:coverage
+
+      - name: Preserve coverage evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: |
+            coverage/coverage-final.json
+            coverage/coverage-summary.json
+          if-no-files-found: error
 
       - name: Upload Coverage to Codecov
         if: always()
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: ./coverage/coverage-final.json
+          disable_search: true
           fail_ci_if_error: false
           verbose: true
 
@@ -75,4 +102,4 @@ jobs:
 
       - name: Verify LLM Failures
         if: always()
-        run: pnpm check:llm-failures:staged || echo "LLM failure check warning"
+        run: pnpm check:llm-failures:staged
