@@ -557,8 +557,11 @@ compilation all happen after a merge rather than at review.
 triggers on `pull_request` for `**/*.rs`, `**/Cargo.toml` and `**/Cargo.lock`
 and runs the same clippy command for the two shipped crates, which type-checks
 them. `auto-route-conformance` runs on pull requests but replays one fixture
-against a single crate. `windows-smoke`'s own `cargo test` carries
-`continue-on-error: true` even on its main-only run.
+against a single crate. The 2026-09-20 CI continuation found 34 Windows CLI
+test failures hidden by `continue-on-error`. That suppression is removed in the
+current repair; native path handling and platform fixtures are corrected. Exact
+runner verification is tracked in `docs/work/deployment-handoff-2026-09-19.md`.
+The separate pre-merge coverage decision remains open.
 **What was fixed in this pass:** the guardrail layer pinned the
 `native_changed` half of that condition and not the `github.ref` half, so the
 trade-off could be widened or narrowed with nothing failing either way, and a

@@ -830,15 +830,13 @@ mod environment_and_policy_tests {
         assert_eq!(inherited.as_std().get_envs().count(), 0);
     }
 
+    #[cfg(unix)]
     #[test]
-    fn a_wrapped_program_runs_directly_under_either_backend() {
-        let workspace = std::env::temp_dir()
-            .canonicalize()
-            .unwrap()
-            .join("agi-wrap");
-        let mut manager = SandboxManager::full_auto(workspace).with_network(NetworkPolicy::Allow);
+    fn a_wrapped_program_runs_directly_under_seatbelt() {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut manager = SandboxManager::full_auto(workspace.path().to_path_buf())
+            .with_network(NetworkPolicy::Allow);
         let args = vec!["--stdio".to_string(), "a b".to_string()];
-
         manager.sandbox_type = SandboxType::MacosSeatbelt;
         let (program, wrapped) = sandboxed_program(&manager, "npx", &args).unwrap();
         assert_eq!(program, "sandbox-exec");
@@ -852,15 +850,26 @@ mod environment_and_policy_tests {
         );
         assert!(wrapped[1].contains(&format!("(allow file-write* (subpath \"{scratch}\"))")));
         assert_eq!(&wrapped[4..], &["npx", "--stdio", "a b"]);
+    }
 
+    #[test]
+    fn a_wrapped_program_runs_directly_under_bubblewrap() {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut manager = SandboxManager::full_auto(workspace.path().to_path_buf());
         manager.sandbox_type = SandboxType::LinuxBubblewrap;
+        let args = vec!["--stdio".to_string(), "a b".to_string()];
         let (program, wrapped) = sandboxed_program(&manager, "npx", &args).unwrap();
         assert_eq!(program, "bwrap");
         let separator = wrapped.iter().position(|arg| arg == "--").unwrap();
         assert_eq!(&wrapped[separator + 1..], &["npx", "--stdio", "a b"]);
+    }
 
+    #[test]
+    fn a_wrapped_program_refuses_an_unavailable_backend() {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut manager = SandboxManager::full_auto(workspace.path().to_path_buf());
         manager.sandbox_type = SandboxType::None;
-        assert!(sandboxed_program(&manager, "npx", &args).is_err());
+        assert!(sandboxed_program(&manager, "npx", &["--stdio".to_string()]).is_err());
     }
 
     #[cfg(target_os = "macos")]
@@ -1021,11 +1030,13 @@ mod tests {
     // CRIT-2: Seatbelt path injection prevention
     // -----------------------------------------------------------------------
 
+    #[cfg(unix)]
     fn accept(s: &str) -> String {
         validate_and_escape_seatbelt_path(&PathBuf::from(s))
             .unwrap_or_else(|e| panic!("expected accept for {:?}: {}", s, e))
     }
 
+    #[cfg(unix)]
     fn reject(s: &str) -> String {
         validate_and_escape_seatbelt_path(&PathBuf::from(s))
             .map(|ok| panic!("expected rejection for {:?}, got: {:?}", s, ok))
@@ -1033,42 +1044,49 @@ mod tests {
             .to_string()
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_double_quote() {
         let msg = reject("/tmp/ws\"injected");
         assert!(msg.contains("SBPL-special"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_open_paren() {
         let msg = reject("/tmp/ws(inject");
         assert!(msg.contains("SBPL-special"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_close_paren() {
         let msg = reject("/tmp/ws)inject");
         assert!(msg.contains("SBPL-special"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_backslash() {
         let msg = reject("/tmp/ws\\inject");
         assert!(msg.contains("SBPL-special"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_newline() {
         let msg = reject("/tmp/ws\ninjected");
         assert!(msg.contains("control"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_carriage_return() {
         let msg = reject("/tmp/ws\rinjected");
         assert!(msg.contains("control"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_nul_byte() {
         // Verify the char-level control check catches NUL (0x00 < 0x20).
@@ -1076,6 +1094,7 @@ mod tests {
         assert!(has_nul, "NUL detection sanity");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_leading_whitespace() {
         // A path with a leading space is not absolute on POSIX, so it hits the
@@ -1088,6 +1107,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_trailing_whitespace() {
         // Trailing whitespace: the path IS absolute but has trailing space.
@@ -1095,18 +1115,21 @@ mod tests {
         assert!(msg.contains("whitespace"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_root_path() {
         let msg = reject("/");
         assert!(msg.contains("broad"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_empty_path() {
         let msg = reject("");
         assert!(msg.contains("empty"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_unicode_line_separator() {
         let s = "/tmp/ws\u{2028}inject";
@@ -1114,6 +1137,7 @@ mod tests {
         assert!(msg.contains("separator"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_rejects_unicode_paragraph_separator() {
         let s = "/tmp/ws\u{2029}inject";
@@ -1121,12 +1145,14 @@ mod tests {
         assert!(msg.contains("separator"), "got: {msg}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_accepts_normal_path() {
         let result = accept("/Users/developer/my-project");
         assert_eq!(result, "/Users/developer/my-project");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_accepts_path_with_unicode_letters() {
         // Non-ASCII Unicode that is not a control char or SBPL-special passes.
@@ -1134,12 +1160,14 @@ mod tests {
         assert_eq!(result, "/home/用户/project");
     }
 
+    #[cfg(unix)]
     #[test]
     fn sbpl_accepts_path_with_hyphen_and_underscore() {
         let result = accept("/tmp/my-workspace_v2");
         assert_eq!(result, "/tmp/my-workspace_v2");
     }
 
+    #[cfg(unix)]
     #[test]
     fn profile_with_hostile_path_keeps_deny_default_intact() {
         // The PoC from the red-team report, verify it is rejected before
@@ -1189,18 +1217,18 @@ mod tests {
 
     #[test]
     fn workspace_write_policy_includes_workspace_and_explicit_roots() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace = directory.path().join("workspace");
+        let shared = directory.path().join("shared");
         let mgr = SandboxManager::new(
             SandboxPolicy::WorkspaceWrite {
-                writable_roots: vec![PathBuf::from("/tmp/shared"), PathBuf::from("/tmp/shared")],
+                writable_roots: vec![shared.clone(), shared.clone()],
             },
-            PathBuf::from("/tmp/workspace"),
+            workspace.clone(),
         );
         assert_eq!(
             writable_roots(&mgr).expect("roots"),
-            vec![
-                PathBuf::from("/tmp/workspace"),
-                PathBuf::from("/tmp/shared")
-            ]
+            vec![workspace, shared]
         );
     }
 
@@ -1479,6 +1507,7 @@ mod tests {
 
     /// The profile the real execution path would hand to `sandbox-exec`, for a
     /// workspace-write manager on the given network policy.
+    #[cfg(unix)]
     fn profile_for(network: NetworkPolicy) -> (tempfile::TempDir, tempfile::TempDir, String) {
         let workspace = tempfile::tempdir().expect("workspace");
         let scratch = tempfile::tempdir().expect("scratch");
@@ -1492,6 +1521,7 @@ mod tests {
         (workspace, scratch, profile)
     }
 
+    #[cfg(unix)]
     #[test]
     fn seatbelt_profile_deny_omits_network_outbound_rule() {
         let (_workspace, _scratch, profile) = profile_for(NetworkPolicy::Deny);
@@ -1501,6 +1531,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn seatbelt_profile_allow_includes_network_outbound_rule() {
         let (_workspace, _scratch, profile) = profile_for(NetworkPolicy::Allow);
@@ -1514,6 +1545,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn seatbelt_external_only_allows_the_network_but_denies_loopback_last() {
         let (_workspace, _scratch, profile) = profile_for(NetworkPolicy::AllowExternal);
@@ -1530,6 +1562,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn seatbelt_workspace_write_scopes_temporary_writes_to_a_private_scratch_dir() {
         let (_workspace, scratch, profile) = profile_for(NetworkPolicy::Deny);

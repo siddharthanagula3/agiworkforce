@@ -97,15 +97,6 @@
       "tracking": "RUST-DEPENDENCY-ADVISORIES-01 (docs/agent-context/known-flaws.md)"
     },
     {
-      "id": "windows-test-loader",
-      "kind": "continue-on-error",
-      "job": "windows-smoke",
-      "step": "cargo test --workspace --lib (default features, Windows)",
-      "reason": "The Windows test binary fails to load with STATUS_ENTRYPOINT_NOT_FOUND from a cross-CRT DLL mismatch; Windows cargo check and clippy stay strict and the full test suite runs on Linux.",
-      "owner": "Platform lead",
-      "tracking": "TODO(windows-test-load)"
-    },
-    {
       "id": "semgrep-accepted-findings",
       "kind": "allowlist-file",
       "path": "scripts/semgrep-allowlist.json",
@@ -127,7 +118,7 @@
       "path": "scripts/scan-allowlist.json",
       "reason": "Triaged Trivy and ZAP findings. Every entry carries an id, a scanner, a reason, an owner and an expiry that scripts/check-scan-findings.mjs enforces, and an entry that matches nothing fails as stale.",
       "owner": "Platform lead",
-      "tracking": "SEC-§111"
+      "tracking": "SEC-\u00a7111"
     }
   ]
 }

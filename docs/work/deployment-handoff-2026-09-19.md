@@ -1097,7 +1097,8 @@ HTTPS-enforcement tests. Evidence: `/tmp/agi-native-host-build.log` and
 false positive with this evidence; no scanner configuration changed. GitHub
 again reports zero open code-scanning and Dependabot alerts.
 
-Remote CI on `6c382b80d` now passes Windows and macOS Rust checks, Linux default
+Remote CI on `6c382b80d` reports Windows success (later found to mask test
+failures; see correction below) and passes macOS Rust checks, Linux default
 Rust tests/Clippy, all-feature Clippy, iOS build/onboarding, desktop/Chrome E2E,
 VS Code with the real CLI, security scans, contracts, DB/RLS and repository
 guards. The complete affected JavaScript test step passed in 41m23s, followed
@@ -1116,3 +1117,56 @@ A fresh cargo audit from `/tmp`, outside repository suppression configuration,
 reports zero vulnerability-class findings with `settings.ignore: []`, plus 17
 unmaintained, one unsound and two yanked warnings. Its complete output is
 `/tmp/agi-rust-current-unsuppressed-audit.json`.
+
+## Windows CI suppression correction, 2026-09-20
+
+The Windows job on `99fd8a995` reported success while `cargo test --workspace
+--lib` exited 1: 2,647 CLI cases passed, 34 failed, one was ignored and one
+filtered. Its existing `continue-on-error: true` masked those failures and
+prevented subsequent desktop tests from being reached. Earlier Windows success
+statements describe GitHub's job conclusion, not a passing test suite. Evidence:
+`/tmp/agi-windows-99fd.log`, CI run `35499143996`, job `106047808375`.
+
+The correction removes that suppression and its canonical security-gate
+exclusion, so the existing policy guard rejects an unregistered reintroduction. Native Windows command paths now retain backslashes; glob rejects
+rooted and drive-prefixed patterns while retaining canonical result containment.
+Remote MCP transports no longer require an irrelevant local subprocess sandbox;
+stdio still fails closed when its backend is unavailable. Regression cases cover
+Windows drive-relative, rooted, UNC and verbatim paths, a legitimate in-project
+glob, Windows command paths, remote MCP and unavailable stdio sandboxes.
+
+Fixtures use JSON serialization for rewritten hook paths, explicit repository
+line endings, native absolute paths and source locations. Seatbelt-only tests
+remain active on Unix, where that path grammar applies; platform-neutral sandbox
+checks and unsupported-backend rejection remain active on Windows. No production
+sandbox restrictions were relaxed. Two locally exposed worktree test races now
+use the existing child-process test mutex and private temporary worktree paths.
+
+Jev selected repair-and-enforce at confidence 1.0, request hash
+`f90d8ab2c69dea5c16f867a3a4bcaa9502683c6a41d7a196e369b59c59558b4e`.
+An independent read-only boundary investigator traced glob and MCP. The requested
+fresh candidate reviewer could not start because the agent thread limit was
+reached, so the coordinator performed a separate bypass and compatibility review,
+including native path components, remote/stdio branches and direct callers.
+
+The initial concurrent local CLI suite passed 2,720 cases and exposed two worktree
+fixture races. A serial run passed 2,723 cases with one existing ignored case;
+normal-concurrency verification after the race correction is recorded below.
+Windows-specific regression execution remains a remote-runner requirement.
+
+The complete CodeQL analysis for `99fd8a995` passed in every language and both
+GitHub code-scanning and Dependabot APIs report zero open alerts. Web E2E completed
+66 cases on their first attempt and three on retry: two auth hydration timing
+cases and one pricing contrast case. This is a passing job with retained flaky
+results, not 69 clean first-attempt passes. The final JavaScript build and Linux
+Rust lane were still running at this checkpoint. Production backup/approval
+prerequisites remain separate and unresolved.
+
+Normal-concurrency revalidation after the worktree fixture correction passed:
+**2,723 CLI tests, zero failures, one existing ignored test** in 9.73 seconds.
+Logs: `/tmp/agi-windows-portability-final.log` and the earlier diagnostic
+`/tmp/agi-windows-portability-serial.log`.
+
+CLI Clippy passed with `-D warnings -D unsafe-code`. Rust formatting and diff
+checks passed. The security-gate policy continues to allow its separate,
+explicitly registered maintenance advisory and local lock-drift exclusions.

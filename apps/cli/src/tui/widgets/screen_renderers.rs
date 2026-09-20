@@ -996,7 +996,10 @@ mod tests {
             &[],
             Some(Path::new("/home/me/project")),
         );
-        assert!(s.contains("Project agents (/home/me/project/.agiworkforce/agents)"));
+        let agent_dir = Path::new("/home/me/project")
+            .join(".agiworkforce")
+            .join("agents");
+        assert!(s.contains(&format!("Project agents ({})", agent_dir.display())));
         assert!(s.contains("researcher · fixture-render-model"));
         assert!(s.contains("Built-in agents (always available)"));
         assert!(s.contains("explorer · haiku"));

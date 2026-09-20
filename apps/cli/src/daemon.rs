@@ -1370,6 +1370,7 @@ mod tests {
 
     #[test]
     fn test_validate_filewatcher_valid() {
+        let workspace = tempfile::tempdir().unwrap();
         let trigger = TriggerConfig {
             id: "valid-watcher".to_string(),
             trigger_type: TriggerType::FileWatcher,
@@ -1378,7 +1379,7 @@ mod tests {
             enabled: true,
             cron: None,
             webhook_path: None,
-            watch_path: Some("/tmp".to_string()),
+            watch_path: Some(workspace.path().to_string_lossy().into_owned()),
             watch_glob: Some("*.rs".to_string()),
         };
         let result = validate_triggers(&[&trigger]);
