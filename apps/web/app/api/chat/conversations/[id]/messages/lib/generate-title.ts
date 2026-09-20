@@ -124,7 +124,7 @@ async function isTemporaryConversation(
   userId: string,
 ): Promise<boolean> {
   const [row] = await db.query<{ is_temporary: boolean }>(
-    'select is_temporary from web_conversations where id = $1 and user_id = $2 limit 1',
+    'select is_temporary from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
     [conversationId, userId],
   );
   return row?.is_temporary === true;

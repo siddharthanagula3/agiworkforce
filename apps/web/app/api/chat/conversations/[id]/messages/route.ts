@@ -287,7 +287,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     let isFirstUserMessage = activated === true;
     if (activated === null) {
       const [row] = await db.query<{ count: string }>(
-        'select count(*)::text as count from web_messages where conversation_id = $1',
+        'select count(*)::text as count from web_messages where conversation_id = $1 and deleted_at is null',
         [conversationId],
       );
       isFirstUserMessage = Number(row?.count ?? 0) <= 1;

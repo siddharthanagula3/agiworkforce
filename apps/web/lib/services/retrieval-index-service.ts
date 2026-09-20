@@ -607,6 +607,7 @@ export async function readProjectKnowledgeIndexStates(
             d.last_error, d.indexed_at::text as indexed_at
        from retrieval_documents d
        join project_knowledge_files k on k.id = d.project_knowledge_file_id
+        and k.deleted_at is null
       where k.project_id = $1
         and d.project_knowledge_file_id = any($2::uuid[])`,
     [projectId, fileIds],

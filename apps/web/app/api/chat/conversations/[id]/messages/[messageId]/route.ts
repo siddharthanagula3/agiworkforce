@@ -86,7 +86,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   }
 
   const [row] = await db.query<{ metadata: Record<string, unknown> | null }>(
-    'select metadata from web_messages where id = $1 and conversation_id = $2 limit 1',
+    'select metadata from web_messages where id = $1 and conversation_id = $2 and deleted_at is null limit 1',
     [messageId, conversationId],
   );
 
@@ -150,7 +150,7 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
     const readerLeafId = await lockConversationThread(tx, threadScope);
 
     const [target] = await tx.query<{ id: string; parent_id: string | null }>(
-      'select id, parent_id from web_messages where id = $1 and conversation_id = $2 limit 1',
+      'select id, parent_id from web_messages where id = $1 and conversation_id = $2 and deleted_at is null limit 1',
       [messageId, conversationId],
     );
 

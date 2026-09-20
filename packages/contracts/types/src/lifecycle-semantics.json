@@ -188,94 +188,52 @@
   ],
   "readExemptions": [
     {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "table": "web_conversations",
-      "class": "erasure",
-      "why": "Erasure removes every row the subject owns, whatever state it is in; filtering withdrawn rows would leave them behind."
+      "file": "apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts",
+      "table": "web_messages",
+      "class": "write-path",
+      "why": "The statements left unfiltered are the ones that decide lineage rather than serve content: the branched-or-linear shape check, the parent stamping that reads it, and the recursive subtree a delete collects. A withdrawn row still occupies its place in the chain, and hiding it would re-parent live turns onto a gap or leave its children behind."
     },
     {
-      "file": "apps/web/lib/server/account-erasure.ts",
+      "file": "apps/web/app/api/chat/sync/route.ts",
       "table": "user_projects",
-      "class": "erasure",
-      "why": "Erasure removes every row the subject owns, whatever state it is in."
+      "class": "tombstone-sync",
+      "why": "The project read fences a conversation onto a project the caller still owns, and the push must carry a project tombstone to the client."
     },
     {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "table": "project_knowledge_files",
-      "class": "erasure",
-      "why": "Erasure removes every row the subject owns, whatever state it is in."
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "table": "web_artifacts",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
     },
     {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "table": "media_assets",
-      "class": "erasure",
-      "why": "Erasure removes the bytes of withdrawn assets too, so the read has to see them."
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "table": "web_conversations",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
     },
     {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "table": "cloud_code_sessions",
-      "class": "erasure",
-      "why": "Erasure removes archived sessions along with active ones."
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "table": "web_messages",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
     },
     {
-      "file": "apps/web/lib/server/organization-erasure.ts",
-      "table": "media_assets",
-      "class": "erasure",
-      "why": "Workspace erasure removes withdrawn assets as well as live ones."
-    },
-    {
-      "file": "apps/web/lib/server/temporary-files/purge.ts",
+      "file": "apps/web/app/api/cron/purge-deleted-media/route.ts",
       "table": "media_assets",
       "class": "purge",
-      "why": "The purge exists to collect rows nobody may read any more."
+      "why": "The sweep exists to collect rows past their recovery window, so it selects on the marker rather than filtering it out."
     },
     {
-      "file": "apps/web/lib/services/retention-service.ts",
+      "file": "apps/web/app/api/cron/purge-temporary-chats/route.ts",
       "table": "web_conversations",
-      "class": "retention-sweep",
-      "why": "A retention sweep ages out rows by their own clock and must see withdrawn rows to collect them."
+      "class": "purge",
+      "why": "The sweep collects expired temporary chats whatever state they are in; a withdrawn one still has to go."
     },
     {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
-      "table": "web_conversations",
-      "class": "retention-sweep",
-      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
-    },
-    {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
-      "table": "user_projects",
-      "class": "retention-sweep",
-      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
-    },
-    {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "file": "apps/web/app/api/cron/replicate-object-backups/route.ts",
       "table": "project_knowledge_files",
-      "class": "retention-sweep",
-      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
-    },
-    {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
-      "table": "media_assets",
-      "class": "retention-sweep",
-      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
-    },
-    {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
-      "table": "web_artifacts",
-      "class": "retention-sweep",
-      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
-    },
-    {
-      "file": "apps/web/lib/services/domain-retention-service.ts",
-      "table": "cloud_code_sessions",
-      "class": "retention-sweep",
-      "why": "A domain retention sweep collects archived sessions as well as active ones."
-    },
-    {
-      "file": "apps/web/lib/server/generated-file-persist.ts",
-      "table": "media_assets",
-      "class": "write-path",
-      "why": "The read resolves the parent row a revision is being written against; the write itself fences on ownership."
+      "class": "data-export",
+      "why": "The replica covers the objects still in storage, and a withdrawn row keeps its object until a purge collects it."
     },
     {
       "file": "apps/web/app/api/llm/v1/route/preview/route.ts",
@@ -290,10 +248,202 @@
       "why": "The read answers only whether the caller owns the conversation it is attaching the image to."
     },
     {
+      "file": "apps/web/app/api/projects/sync/route.ts",
+      "table": "user_projects",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
+    },
+    {
       "file": "apps/web/app/api/settings/organization/policy/policy-subject.ts",
       "table": "user_projects",
       "class": "ownership-check",
       "why": "The read resolves which workspace a policy subject belongs to; a withdrawn project still belongs to the same workspace."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "cloud_code_sessions",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "conversations",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "media_assets",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "project_knowledge_files",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "user_memories",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "user_projects",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "web_artifacts",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "web_conversations",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "web_messages",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/lib/feature-flags/flag-store.ts",
+      "table": "feature_flag_definitions",
+      "class": "write-path",
+      "why": "The by-key read has to see an archived definition so re-creating that key restores it instead of colliding on the primary key; the list takes includeArchived as a parameter."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "table": "media_assets",
+      "class": "erasure",
+      "why": "Erasure removes the bytes of withdrawn assets too, so the read has to see them."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "table": "project_knowledge_files",
+      "class": "erasure",
+      "why": "Erasure removes every row the subject owns, whatever state it is in."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "table": "user_projects",
+      "class": "erasure",
+      "why": "Erasure removes every row the subject owns, whatever state it is in."
+    },
+    {
+      "file": "apps/web/lib/server/generated-file-persist.ts",
+      "table": "media_assets",
+      "class": "write-path",
+      "why": "The read resolves the parent row a revision is being written against; the write itself fences on ownership."
+    },
+    {
+      "file": "apps/web/lib/server/media-assets.ts",
+      "table": "media_assets",
+      "class": "tombstone-check",
+      "why": "The by-id lookup selects deleted_at so the caller refuses or restores; the purge and restore statements select on the marker by design."
+    },
+    {
+      "file": "apps/web/lib/server/media-assets.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The probe asks only whether the conversation the asset is being attached to is temporary; it returns no conversation content."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "table": "media_assets",
+      "class": "erasure",
+      "why": "Workspace erasure removes withdrawn assets as well as live ones."
+    },
+    {
+      "file": "apps/web/lib/server/temporary-files/purge.ts",
+      "table": "media_assets",
+      "class": "purge",
+      "why": "The purge exists to collect rows nobody may read any more."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "table": "cloud_code_sessions",
+      "class": "tombstone-check",
+      "why": "The by-id reads select archived_at so a caller can restore or delete an archived session; the list narrows by a status predicate that names the marker."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "cloud_code_sessions",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects archived sessions as well as active ones."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "media_assets",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "project_knowledge_files",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "user_projects",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "web_artifacts",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "web_conversations",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "project_knowledge_files",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "user_projects",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "web_conversations",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "web_messages",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/managed-auto-memory-service.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The read resolves which project a conversation belongs to so a memory is written into the right scope; it returns no conversation content."
+    },
+    {
+      "file": "apps/web/lib/services/product-link-resolver.ts",
+      "table": "media_assets",
+      "class": "tombstone-check",
+      "why": "The resolver selects deleted_at and answers \"deleted\" on it, which it cannot do without reading the withdrawn row."
     },
     {
       "file": "apps/web/lib/services/published-artifact-service.ts",
@@ -302,10 +452,10 @@
       "why": "The read answers whether the publisher owns the conversation the artifact came from."
     },
     {
-      "file": "apps/web/lib/services/managed-auto-memory-service.ts",
+      "file": "apps/web/lib/services/retention-service.ts",
       "table": "web_conversations",
-      "class": "ownership-check",
-      "why": "The read resolves which project a conversation belongs to so a memory is written into the right scope; it returns no conversation content."
+      "class": "retention-sweep",
+      "why": "A retention sweep ages out rows by their own clock and must see withdrawn rows to collect them."
     }
   ],
   "hardDeleteStores": {

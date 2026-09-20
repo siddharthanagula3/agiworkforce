@@ -2,10 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const queryMock = vi.fn();
+const executeMock = vi.fn(async () => 0);
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
-    db: { query: queryMock },
+    db: { query: queryMock, execute: executeMock },
     userId: 'u1',
     organizationId: null,
   })),
@@ -90,7 +91,7 @@ describe('POST /api/chat/sync, artifact indexing', () => {
 
     expect(res.status).toBe(200);
     expect(scheduleArtifactIndexing).toHaveBeenCalledWith({
-      db: { query: queryMock },
+      db: { query: queryMock, execute: executeMock },
       userId: 'u1',
       conversationId: CONVERSATION_ID,
       messageId: ASSISTANT_MESSAGE_ID,

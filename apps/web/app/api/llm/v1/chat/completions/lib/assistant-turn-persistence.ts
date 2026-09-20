@@ -64,6 +64,7 @@ const SELECT_ASSISTANT_TURN_METADATA_SQL = `select m.metadata
           and c.user_id = $3
           and c.organization_id is not distinct from $4::uuid
           and c.deleted_at is null
+          and m.deleted_at is null
         limit 1`;
 
 const PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL = `update web_messages m

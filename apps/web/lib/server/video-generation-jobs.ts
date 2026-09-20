@@ -381,6 +381,7 @@ export async function createVideoGenerationJob(input: {
             and conversation.deleted_at is null
             and message.id = $3
             and message.conversation_id = conversation.id
+            and message.deleted_at is null
             and message.role = 'assistant'
           for update of message`,
         [conversationId, input.userId, assistantMessageId],

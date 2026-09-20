@@ -56,6 +56,7 @@ export async function syncVideoGenerationTranscript(
        from public.web_conversations conversation
       where message.id = $1
         and message.conversation_id = $2
+        and message.deleted_at is null
         and message.role = 'assistant'
         and conversation.id = message.conversation_id
         and conversation.user_id = $3
@@ -96,6 +97,7 @@ export async function failUnboundVideoGenerationTranscript(input: {
        from public.web_conversations conversation
       where message.id = $1
         and message.conversation_id = $2
+        and message.deleted_at is null
         and message.role = 'assistant'
         and message.metadata->>'toolType' = 'video-generation'
         and nullif(btrim(message.metadata->>'videoTaskId'), '') is null
@@ -114,6 +116,7 @@ export async function failUnboundVideoGenerationTranscript(input: {
          on conversation.id = message.conversation_id
       where message.id = $1
         and message.conversation_id = $2
+        and message.deleted_at is null
         and message.role = 'assistant'
         and message.metadata->>'toolType' = 'video-generation'
         and conversation.user_id = $3
