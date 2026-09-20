@@ -2331,9 +2331,21 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn tmpdir_special_path_preserves_symlinked_tmpdir() {
-        if std::env::var_os(SYMLINKED_TMPDIR_TEST_ENV).is_none() {
+        // TMPDIR is process-wide, so the symlinked one is built here and handed
+        // to a child that inherits it. Mutating this process's environment
+        // would reach every other test running beside it.
+        let Some(handed_down) = std::env::var_os(SYMLINKED_TMPDIR_TEST_ENV) else {
+            let cwd = TempDir::new().expect("tempdir");
+            let real_tmpdir = cwd.path().join("real-tmpdir");
+            let link_tmpdir = cwd.path().join("link-tmpdir");
+
+            fs::create_dir_all(real_tmpdir.join("blocked")).expect("create blocked");
+            fs::create_dir_all(real_tmpdir.join(".codex")).expect("create .codex");
+            symlink_dir(&real_tmpdir, &link_tmpdir).expect("create symlinked tmpdir");
+
             let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
-                .env(SYMLINKED_TMPDIR_TEST_ENV, "1")
+                .env(SYMLINKED_TMPDIR_TEST_ENV, cwd.path())
+                .env("TMPDIR", &link_tmpdir)
                 .arg("--exact")
                 .arg("permissions::tests::tmpdir_special_path_preserves_symlinked_tmpdir")
                 .output()
@@ -2346,17 +2358,11 @@ mod tests {
                 String::from_utf8_lossy(&output.stderr)
             );
             return;
-        }
+        };
 
-        let cwd = TempDir::new().expect("tempdir");
-        let real_tmpdir = cwd.path().join("real-tmpdir");
-        let link_tmpdir = cwd.path().join("link-tmpdir");
-        let blocked = real_tmpdir.join("blocked");
-        let agiworkforce_dir = real_tmpdir.join(".codex");
-
-        fs::create_dir_all(&blocked).expect("create blocked");
-        fs::create_dir_all(&agiworkforce_dir).expect("create .codex");
-        symlink_dir(&real_tmpdir, &link_tmpdir).expect("create symlinked tmpdir");
+        let cwd = std::path::PathBuf::from(handed_down);
+        let link_tmpdir = cwd.join("link-tmpdir");
+        let cwd = cwd.as_path();
 
         let link_blocked =
             AbsolutePathBuf::from_absolute_path(link_tmpdir.join("blocked")).expect("link blocked");
@@ -2364,10 +2370,6 @@ mod tests {
             AbsolutePathBuf::from_absolute_path(&link_tmpdir).expect("absolute symlinked tmpdir");
         let expected_blocked = link_blocked.clone();
         let expected_codex = expected_root.join(".codex");
-
-        unsafe {
-            std::env::set_var("TMPDIR", &link_tmpdir);
-        }
 
         let policy = FileSystemSandboxPolicy::restricted(vec![
             FileSystemSandboxEntry {
@@ -2383,11 +2385,11 @@ mod tests {
         ]);
 
         assert_eq!(
-            policy.get_unreadable_roots_with_cwd(cwd.path()),
+            policy.get_unreadable_roots_with_cwd(cwd),
             vec![expected_blocked.clone()]
         );
 
-        let writable_roots = policy.get_writable_roots_with_cwd(cwd.path());
+        let writable_roots = policy.get_writable_roots_with_cwd(cwd);
         assert_eq!(writable_roots.len(), 1);
         assert_eq!(writable_roots[0].root, expected_root);
         assert!(
