@@ -438,4 +438,129 @@ new file mode 100644\n\
         assert!(result.applied.is_empty(), "{:?}", result.applied);
         assert!(!result.conflicted.is_empty());
     }
+
+    /// A rename is one patch, not a delete and a create. The file has to land
+    /// at its new path with its content, and the old path has to be gone.
+    #[tokio::test]
+    async fn a_rename_hunk_moves_the_file_and_leaves_nothing_at_the_old_path() {
+        let workspace = seeded_repo();
+        let before = workspace.path().join("before.txt");
+        std::fs::write(&before, "kept\n").expect("seed file");
+        let patch = "diff --git a/before.txt b/after.txt\n\
+similarity index 100%\n\
+rename from before.txt\n\
+rename to after.txt\n";
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply rename patch");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        assert!(!before.exists(), "the old path must be gone");
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("after.txt")).expect("renamed file"),
+            "kept\n",
+            "a rename keeps the content"
+        );
+    }
+
+    /// The executable bit is part of what a file is. A patch that sets it has
+    /// to leave a file the shell will run, not one that needs chmod afterwards.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_mode_change_hunk_leaves_the_file_executable() {
+        use std::os::unix::fs::PermissionsExt;
+        let workspace = seeded_repo();
+        let script = workspace.path().join("run.sh");
+        std::fs::write(&script, "#!/bin/sh\necho hi\n").expect("seed script");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o644))
+            .expect("start non-executable");
+        let patch = "diff --git a/run.sh b/run.sh\n\
+old mode 100644\n\
+new mode 100755\n";
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply mode patch");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        let mode = std::fs::metadata(&script)
+            .expect("script metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o111, 0o111, "mode is {mode:o}");
+    }
+
+    /// A file written with CRLF stays CRLF. Rewriting one line must not
+    /// normalise the rest of the file, which would turn a one-line change into
+    /// a diff against every line for whoever reviews it next.
+    #[tokio::test]
+    async fn editing_one_line_of_a_crlf_file_leaves_the_other_line_endings_alone() {
+        let workspace = seeded_repo();
+        let target = workspace.path().join("windows.txt");
+        std::fs::write(&target, "one\r\ntwo\r\nthree\r\n").expect("seed file");
+        let patch = concat!(
+            "--- a/windows.txt\n",
+            "+++ b/windows.txt\n",
+            "@@ -1,3 +1,3 @@\n",
+            " one\r\n",
+            "-two\r\n",
+            "+TWO\r\n",
+            " three\r\n",
+        );
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply crlf patch");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        assert_eq!(
+            std::fs::read(&target).expect("read result"),
+            b"one\r\nTWO\r\nthree\r\n",
+            "the untouched lines keep their carriage returns"
+        );
+    }
+
+    /// A binary file is not text and has no hunks. The patch path has to carry
+    /// the bytes through byte for byte rather than mangling them as lines.
+    #[tokio::test]
+    async fn a_binary_patch_restores_the_bytes_it_carries() {
+        let workspace = seeded_repo();
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(workspace.path())
+                .output()
+                .expect("git available")
+        };
+        run(&["config", "user.email", "test@example.invalid"]);
+        run(&["config", "user.name", "Test"]);
+        std::fs::write(workspace.path().join("seed.txt"), "seed\n").expect("seed file");
+        run(&["add", "seed.txt"]);
+        run(&["commit", "-qm", "seed"]);
+
+        let bytes: Vec<u8> = (0u8..=255).collect();
+        let blob = workspace.path().join("blob.bin");
+        std::fs::write(&blob, &bytes).expect("seed binary");
+        run(&["add", "blob.bin"]);
+        let patch =
+            String::from_utf8_lossy(&run(&["diff", "--cached", "--binary"]).stdout).into_owned();
+        assert!(
+            patch.contains("GIT binary patch"),
+            "fixture must be a binary patch: {patch}"
+        );
+        run(&["reset", "-q"]);
+        std::fs::remove_file(&blob).expect("remove before re-applying");
+
+        let result = apply_git_patch(&patch, Some(workspace.path()))
+            .await
+            .expect("apply binary patch");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        assert_eq!(
+            std::fs::read(&blob).expect("read restored binary"),
+            bytes,
+            "every byte has to come back, including the zero byte"
+        );
+    }
 }

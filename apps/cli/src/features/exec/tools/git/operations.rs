@@ -18,8 +18,9 @@ use crate::platform::runtime::git::{
     GitApi, GitOperation, MergeOutcome, PushForce, PushPlan, StashOutcome,
 };
 use crate::platform::runtime::git_tools::{
-    git_operation_for, git_tool_spec, push_force, remote_of, GitToolClass,
+    git_operation_for, git_tool_spec, push_force, remote_of, repository_operation_for, GitToolClass,
 };
+use crate::repo::{detect_repository_layout, OperationAvailability, RepositoryLayout};
 use crate::safety::push_consent::{
     request_push_consent, PushApprovalPrompt, PushApprover, PushConsent,
 };
@@ -108,6 +109,22 @@ fn repository_root(workspace_root: Option<&Path>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// What the checkout itself says about this call. A directory that is not a
+/// repository has no answer, and a tool whose result does not depend on the
+/// shape of the checkout is not asked.
+fn checkout_verdict(
+    layout: Option<&RepositoryLayout>,
+    tool_name: &str,
+    args: &HashMap<String, String>,
+) -> Option<OperationAvailability> {
+    let layout = layout?;
+    let operation = repository_operation_for(tool_name, args, &layout.submodules)?;
+    match layout.availability(operation) {
+        OperationAvailability::Available => None,
+        other => Some(other),
+    }
+}
+
 pub(crate) async fn execute_git_tool(
     tool_name: &str,
     args: &HashMap<String, String>,
@@ -119,7 +136,11 @@ pub(crate) async fn execute_git_tool(
     let Some(spec) = git_tool_spec(tool_name) else {
         return Ok(failed(tool_name, format!("{tool_name} is not a git tool")));
     };
-    let root = repository_root(workspace_root);
+    let opened_at = repository_root(workspace_root);
+    let layout = detect_repository_layout(&opened_at);
+    let root = layout
+        .as_ref()
+        .map_or_else(|| opened_at.clone(), |layout| layout.root.clone());
     let git = GitApi::at(&root);
     let approver = SurfaceApprover {
         callback: approval_callback,
@@ -138,10 +159,23 @@ pub(crate) async fn execute_git_tool(
         return Ok(failed(tool_name, error.to_string()));
     }
 
+    let verdict = checkout_verdict(layout.as_ref(), tool_name, args);
+    if let Some(OperationAvailability::Unavailable(reason)) = &verdict {
+        return Ok(failed(
+            tool_name,
+            format!("`{tool_name}` cannot run in this checkout: {reason}."),
+        ));
+    }
+    let needs_checkout_approval = match &verdict {
+        Some(OperationAvailability::NeedsApproval(reason)) => Some(reason.clone()),
+        _ => None,
+    };
+
     if let Some(denial) = consent_for_operation(
         tool_name,
         spec.class,
         require_confirmation,
+        needs_checkout_approval,
         &operation,
         &git,
         &approver,
@@ -151,24 +185,33 @@ pub(crate) async fn execute_git_tool(
         return Ok(denial);
     }
 
-    run_operation(tool_name, args, operation, &git, &root).await
+    let result = run_operation(tool_name, args, operation, &git, &root).await?;
+    Ok(match verdict {
+        Some(OperationAvailability::Degraded(reason)) if result.success => ToolResult {
+            output: format!("{}\n{reason}", result.output),
+            ..result
+        },
+        _ => result,
+    })
 }
 
-/// Ask when the operation discards work, turns the repository's hooks off, or
-/// writes while the session is still confirming its writes. A destructive
-/// operation asks whatever the session's permission mode says, because the
-/// thing it throws away is not in the repository afterwards.
+/// Ask when the operation discards work, turns the repository's hooks off, the
+/// checkout says this operation needs a decision, or the session is still
+/// confirming its writes. A destructive operation asks whatever the session's
+/// permission mode says, because the thing it throws away is not in the
+/// repository afterwards.
 async fn consent_for_operation(
     tool_name: &str,
     class: GitToolClass,
     require_confirmation: bool,
+    checkout_reason: Option<String>,
     operation: &GitOperation,
     git: &GitApi,
     approver: &SurfaceApprover<'_>,
 ) -> Option<ToolResult> {
     let bypasses_hooks = operation.bypasses_hooks();
     let confirming_a_write = require_confirmation && operation.is_write();
-    if !class.always_asks() && !bypasses_hooks && !confirming_a_write {
+    if !class.always_asks() && !bypasses_hooks && !confirming_a_write && checkout_reason.is_none() {
         return None;
     }
 
@@ -178,6 +221,9 @@ async fn consent_for_operation(
         .unwrap_or_else(|_| tool_name.to_string())];
     if bypasses_hooks {
         detail.push(crate::safety::git_hook_bypass_reason().to_string());
+    }
+    if let Some(reason) = checkout_reason {
+        detail.push(reason);
     }
     let discarded = git.discarded_by(operation).await.unwrap_or_default();
     if !discarded.is_empty() {
@@ -803,5 +849,257 @@ mod tests {
             .output()
             .expect("git");
         assert!(!landed.status.success());
+    }
+
+    /// A shallow clone answers history questions from the depth it has. The
+    /// agent is told so with the answer, because a `git log` that simply stops
+    /// reads as a repository with no older commits.
+    #[tokio::test]
+    async fn a_shallow_clone_says_its_history_stops_where_the_clone_did() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let origin = root.path().join("origin");
+        std::fs::create_dir_all(&origin).unwrap();
+        init_repo(&origin);
+        commit(&origin, "second");
+        commit(&origin, "third");
+        let shallow = root.path().join("shallow");
+        SyncCommand::new("git")
+            .args([
+                "clone",
+                "-q",
+                "--depth",
+                "1",
+                &format!("file://{}", origin.to_str().expect("path")),
+                shallow.to_str().expect("path"),
+            ])
+            .output()
+            .expect("git available");
+
+        let deep = execute_git_tool(
+            "git_log",
+            &HashMap::new(),
+            Some(&origin),
+            false,
+            false,
+            None,
+        )
+        .await
+        .expect("log");
+        assert!(deep.success);
+        assert!(
+            !deep.output.contains("shallow clone"),
+            "a full clone has nothing to warn about: {}",
+            deep.output
+        );
+
+        let result = execute_git_tool(
+            "git_log",
+            &HashMap::new(),
+            Some(&shallow),
+            false,
+            false,
+            None,
+        )
+        .await
+        .expect("log");
+        assert!(result.success, "{}", result.output);
+        assert!(
+            result.output.contains("shallow clone"),
+            "the answer must say the history is cut off: {}",
+            result.output
+        );
+    }
+
+    /// A bare repository has no working tree, so staging a path there is not a
+    /// thing that can happen. It is refused before git is run, with the reason
+    /// the checkout gave.
+    #[tokio::test]
+    async fn a_bare_repository_refuses_a_tool_that_needs_a_working_tree() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let bare = root.path().join("bare.git");
+        SyncCommand::new("git")
+            .args(["init", "-q", "--bare", bare.to_str().expect("path")])
+            .output()
+            .expect("git available");
+        let (callback, seen) = recording(ApprovalDecision::AllowOnce);
+
+        let result = execute_git_tool(
+            "git_stage",
+            &args(&[("paths", "README.md")]),
+            Some(&bare),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("stage");
+
+        assert!(!result.success, "{}", result.output);
+        assert!(
+            result.output.contains("no working tree"),
+            "the refusal must carry the checkout's own reason: {}",
+            result.output
+        );
+        assert!(
+            seen.lock().expect("seen").is_empty(),
+            "nothing that cannot run should be offered for approval"
+        );
+    }
+
+    /// Staging a submodule path writes a new commit id into the parent's index,
+    /// which is what every other clone will check out. That is a decision, not
+    /// a file edit, so it is asked about even in a session that stages freely.
+    #[tokio::test]
+    async fn staging_a_submodule_asks_before_moving_what_everyone_else_checks_out() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let work = root.path().join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        init_repo(&work);
+        std::fs::write(work.join(".gitmodules"), "[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n\turl = https://example.invalid/lib.git\n").unwrap();
+        std::fs::create_dir_all(work.join("vendor/lib")).unwrap();
+        std::fs::write(work.join("vendor/lib/file.txt"), "x").unwrap();
+        std::fs::write(work.join("plain.txt"), "x").unwrap();
+
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+        let refused = execute_git_tool(
+            "git_stage",
+            &args(&[("paths", "vendor/lib")]),
+            Some(&work),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("stage");
+        assert!(!refused.success, "{}", refused.output);
+        let asked = seen.lock().expect("seen").clone();
+        assert_eq!(asked.len(), 1, "moving a submodule pointer must be asked");
+        assert!(
+            asked[0]
+                .detail
+                .iter()
+                .any(|line| line.contains("submodule pointer")),
+            "the prompt must name what changes: {:?}",
+            asked[0].detail
+        );
+
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+        let plain = execute_git_tool(
+            "git_stage",
+            &args(&[("paths", "plain.txt")]),
+            Some(&work),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("stage");
+        assert!(plain.success, "{}", plain.output);
+        assert!(
+            seen.lock().expect("seen").is_empty(),
+            "an ordinary path is still an ordinary stage"
+        );
+    }
+
+    /// On a detached HEAD a merge lands on no branch, so the commit it makes is
+    /// reachable only by its id. The session is told that before it happens.
+    #[tokio::test]
+    async fn a_commit_making_operation_on_a_detached_head_asks_first() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let work = root.path().join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        init_repo(&work);
+        commit(&work, "second");
+        SyncCommand::new("git")
+            .current_dir(&work)
+            .args(["checkout", "-q", "--detach", "HEAD~1"])
+            .output()
+            .expect("git available");
+
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+        let result = execute_git_tool(
+            "git_cherry_pick",
+            &args(&[("rev", "main")]),
+            Some(&work),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("cherry-pick");
+
+        assert!(!result.success, "{}", result.output);
+        let asked = seen.lock().expect("seen");
+        assert_eq!(asked.len(), 1);
+        assert!(
+            asked[0]
+                .detail
+                .iter()
+                .any(|line| line.contains("HEAD is detached")),
+            "the prompt must say where the commit would land: {:?}",
+            asked[0].detail
+        );
+    }
+
+    /// A repository checked out inside another one is its own repository. A
+    /// tool run there reports the inner checkout, never the outer one it
+    /// happens to sit in.
+    #[tokio::test]
+    async fn a_tool_run_in_a_nested_checkout_acts_on_the_nested_repository() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let outer = root.path().join("outer");
+        std::fs::create_dir_all(&outer).unwrap();
+        init_repo(&outer);
+        let inner = outer.join("vendor/inner");
+        std::fs::create_dir_all(&inner).unwrap();
+        init_repo(&inner);
+        commit(&inner, "inner-only");
+
+        let result = execute_git_tool("git_log", &HashMap::new(), Some(&inner), false, false, None)
+            .await
+            .expect("log");
+        assert!(result.success, "{}", result.output);
+        assert!(
+            result.output.contains("inner-only"),
+            "the inner repository's history is what a tool there reads: {}",
+            result.output
+        );
+    }
+
+    /// A session opened in a subdirectory is still working in one repository.
+    /// What a destructive prompt names is that repository, because "discard
+    /// everything under /repo/packages/ui" and "discard everything in /repo"
+    /// are different answers to give.
+    #[tokio::test]
+    async fn a_prompt_names_the_repository_the_operation_affects_not_the_open_directory() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let work = root.path().join("work");
+        std::fs::create_dir_all(&work).unwrap();
+        init_repo(&work);
+        let nested = work.join("packages/ui");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        let (callback, seen) = recording(ApprovalDecision::Deny);
+        execute_git_tool(
+            "git_clean",
+            &HashMap::new(),
+            Some(&nested),
+            false,
+            false,
+            Some(&callback),
+        )
+        .await
+        .expect("clean");
+
+        let asked = seen.lock().expect("seen");
+        assert_eq!(asked.len(), 1);
+        let canonical = std::fs::canonicalize(&work).expect("canonical work");
+        assert!(
+            asked[0]
+                .summary
+                .contains(&format!("in {}", canonical.display())),
+            "the prompt must name the repository: {}",
+            asked[0].summary
+        );
     }
 }
