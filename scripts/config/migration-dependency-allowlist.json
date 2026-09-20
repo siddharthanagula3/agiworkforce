@@ -165,6 +165,21 @@
       "file": "apps/web/lib/services/managed-memory-context-service.ts",
       "migration": 284,
       "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-contracts/agreement-store.ts",
+      "migration": 285,
+      "reason": "Reads and writes what this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration; the enterprise commercial domain has no production caller that authors an agreement yet."
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-contracts/agreement-store.ts",
+      "migration": 286,
+      "reason": "Reads and writes what this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration; the enterprise commercial domain has no production caller that authors an agreement yet."
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-contracts/invoicing.ts",
+      "migration": 287,
+      "reason": "Reads and writes what this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration; the enterprise commercial domain has no production caller that authors an agreement yet."
     }
   ]
 }
