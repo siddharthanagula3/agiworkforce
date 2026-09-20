@@ -25,7 +25,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -54,7 +54,7 @@
           "ordinal": 3,
           "heading": "Active sessions",
           "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
-          "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
+          "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
         },
         {
           "id": "account-security#4",
@@ -535,7 +535,7 @@
         "permissions",
         "always allow"
       ],
-      "updated": "2026-08-05",
+      "updated": "2026-09-20",
       "source": "content/support/connectors-and-mcp.md",
       "chunks": [
         {
@@ -564,7 +564,7 @@
           "ordinal": 3,
           "heading": "Removing a connector",
           "headingPath": "Connectors and MCP › Removing a connector",
-          "text": "Removing a connector deactivates it and clears the saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate."
+          "text": "Removing a connector deactivates it and clears the saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate. AGI asks the provider to revoke every account you connected through it,\nnot only the one AGI treated as the default, and deletes the credentials it held\nfor them."
         },
         {
           "id": "connectors-and-mcp#4",
@@ -1198,7 +1198,7 @@
         "list view",
         "search files"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/library.md",
       "chunks": [
         {
@@ -1220,7 +1220,7 @@
           "ordinal": 2,
           "heading": "Deleting and restoring",
           "headingPath": "Find your files and artifacts in the Library › Deleting and restoring",
-          "text": "Deleting moves an item to **Recently deleted**, where it stays restorable for 30\ndays before it is removed for good. **Delete permanently** erases the stored\nbytes now: nothing restores the file afterwards and anything linking to it stops\nresolving, so it asks first and says so."
+          "text": "Deleting moves an item to **Recently deleted**, where it stays restorable. For\nan uploaded or generated file, that window is 30 days: after it the stored bytes\nare removed for good. Other items stay in **Recently deleted** until you restore\nthem or delete them yourself. A legal hold on your workspace keeps held material\npast either window until the hold is released.\n\n**Delete permanently** erases the stored bytes now: nothing restores the file\nafterwards and anything linking to it stops resolving, so it asks first and says\nso."
         },
         {
           "id": "library#3",
@@ -1558,7 +1558,7 @@
         "sell data",
         "anonymized usage"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/privacy-controls.md",
       "chunks": [
         {
@@ -1580,7 +1580,7 @@
           "ordinal": 2,
           "heading": "Temporary chats",
           "headingPath": "Privacy controls in Settings › Temporary chats",
-          "text": "\"Start new chats as temporary\" makes every new conversation temporary: not saved\nto your account or history, no memory, and attachments kept out of the Library.\nAn individual conversation can still be switched."
+          "text": "\"Start new chats as temporary\" makes every new conversation temporary: no\nmessage written to your history, no memory, and attachments kept out of the\nLibrary. The conversation record and any attachment are held for up to 30 days\nand then removed. An individual conversation can still be switched."
         },
         {
           "id": "privacy-controls#3",
@@ -1967,7 +1967,7 @@
         "end temporary chat",
         "ephemeral"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/temporary-chats.md",
       "chunks": [
         {
@@ -1975,7 +1975,7 @@
           "ordinal": 0,
           "heading": "What a temporary chat does",
           "headingPath": "Temporary chats › What a temporary chat does",
-          "text": "A temporary chat stays out of your history, your memory and your Library. It is\nnever written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary means AGI stores nothing, not that the outside world forgets."
+          "text": "A temporary chat stays out of your history, your memory and your Library. It is\nnever written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary is about what AGI keeps, not about what the outside world\nforgets.\n\nWhat AGI does keep is narrow and bounded. No message of a temporary chat is\nwritten to your conversation history. The conversation record itself, and any\nfile you attach, are held for up to 30 days and then removed, which is what\nkeeps an in-flight chat working and an attachment readable while you are still\nin it. A legal hold placed on your workspace keeps that material past the 30\ndays until the hold is released."
         },
         {
           "id": "temporary-chats#1",
@@ -2018,7 +2018,7 @@
         "call log",
         "reset permissions"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/tool-approvals.md",
       "chunks": [
         {
@@ -2054,7 +2054,7 @@
           "ordinal": 4,
           "heading": "Removing a connector clears its approvals",
           "headingPath": "Approvals: what a tool may do without asking › Removing a connector clears its approvals",
-          "text": "Removing a connector deactivates it and clears its saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate."
+          "text": "Removing a connector deactivates it and clears its saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate. It also asks the provider to revoke every account you connected through\nthat connector, not only the one AGI treated as the default, and deletes the\ncredentials AGI held for them."
         }
       ]
     },

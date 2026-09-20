@@ -10,11 +10,19 @@ const apiDir = path.resolve(v1Dir, '../..');
 const webRoot = path.resolve(apiDir, '../..');
 const repoRoot = path.resolve(webRoot, '../..');
 
+interface SpecResponse {
+  description?: string;
+  content?: Record<string, { schema?: { $ref?: string } }>;
+}
+
+interface SpecOperation extends Record<string, unknown> {
+  security?: Array<Record<string, unknown>>;
+  responses?: Record<string, SpecResponse>;
+}
+
 const spec = JSON.parse(readFileSync(path.join(webRoot, 'public/openapi.json'), 'utf8')) as {
-  paths: Record<
-    string,
-    Record<string, { security?: Array<Record<string, unknown>> } & Record<string, unknown>>
-  >;
+  components: { schemas: Record<string, unknown> };
+  paths: Record<string, Record<string, SpecOperation>>;
 };
 
 function sourceFiles(dir: string): string[] {
@@ -81,6 +89,20 @@ function acceptsApiKey(operation: { security?: Array<Record<string, unknown>> })
   return (operation.security ?? []).some((requirement) => 'ApiKeyAuth' in requirement);
 }
 
+function errorStatuses(operation: SpecOperation): string[] {
+  return Object.keys(operation.responses ?? {}).filter((code) => Number(code) >= 400);
+}
+
+/** Every 4xx and 5xx a route module returns with a status literal of its own. */
+function emittedErrorStatuses(specPath: string): string[] {
+  const source = routeSource(specPath);
+  return [
+    ...new Set([...source.matchAll(/status:\s*([45]\d{2})\b/g)].flatMap((match) => match[1] ?? [])),
+  ].sort();
+}
+
+const schemaNames = new Set(Object.keys(spec.components.schemas));
+
 describe('published OpenAPI spec', () => {
   it('documents every route in the API tree an API key can authenticate to', () => {
     for (const [specPath, scopes] of scopesByRoute) {
@@ -128,6 +150,59 @@ describe('published OpenAPI spec', () => {
       expect(routeSource(specPath), `${specPath} does not require ${String(scope)}`).toContain(
         `apiKeyScope: '${String(scope)}'`,
       );
+    }
+  });
+
+  it('enumerates at least one operation, so an empty spec cannot pass vacuously', () => {
+    expect(operations.length).toBeGreaterThan(10);
+  });
+
+  it('gives every documented error response a described JSON body', () => {
+    for (const { specPath, method, operation } of operations) {
+      const where = `${method.toUpperCase()} ${specPath}`;
+      const statuses = errorStatuses(operation);
+      expect(statuses.length, `${where} documents no error response at all`).toBeGreaterThan(0);
+      for (const status of statuses) {
+        const response = operation.responses?.[status];
+        expect(response?.description?.trim(), `${where} ${status} has no description`).toBeTruthy();
+        const schema = response?.content?.['application/json']?.schema;
+        expect(
+          schema?.$ref,
+          `${where} ${status} documents no application/json schema, so a caller cannot parse the failure`,
+        ).toBeTruthy();
+        const name = schema?.$ref?.replace('#/components/schemas/', '') ?? '';
+        expect(
+          schemaNames,
+          `${where} ${status} names schema ${name}, which is not defined`,
+        ).toContain(name);
+      }
+    }
+  });
+
+  it('documents every error status the route handler itself returns', () => {
+    for (const { specPath, method, operation } of operations) {
+      const documented = new Set(errorStatuses(operation));
+      const undocumented = emittedErrorStatuses(specPath).filter(
+        (status) => !documented.has(status),
+      );
+      expect(
+        undocumented,
+        `${method.toUpperCase()} ${specPath} returns ${undocumented.join(', ')} but openapi.json does not document it`,
+      ).toEqual([]);
+    }
+  });
+
+  it('answers a rate limit with the rate-limit body wherever the route is limited', () => {
+    for (const { specPath, method, operation } of operations) {
+      if (!/\b(?:rateLimit|checkRateLimit|rateLimitConfigs)\b/.test(routeSource(specPath)))
+        continue;
+      const response = operation.responses?.['429'];
+      const where = `${method.toUpperCase()} ${specPath}`;
+      expect(response, `${where} is rate limited but documents no 429`).toBeDefined();
+      expect(
+        response?.content?.['application/json']?.schema?.$ref,
+        `${where} documents a 429 without the rate-limit body`,
+      ).toBe('#/components/schemas/RateLimitError');
     }
   });
 

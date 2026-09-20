@@ -1040,7 +1040,14 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "402": {
             "description": "Managed usage exhausted",
@@ -1054,6 +1061,36 @@
           },
           "403": {
             "description": "API key lacks the `inference:write` scope, or the calling plan lacks the capability for the resolved client surface",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The addressed resource does not exist for this caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The resource is in a state this operation cannot be applied to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Uploaded payload is larger than this endpoint accepts",
             "content": {
               "application/json": {
                 "schema": {
@@ -1078,6 +1115,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "Client closed the connection before the response finished streaming",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream provider returned a response this gateway could not use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No provider was available to serve the request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream provider did not answer inside the gateway timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -1127,10 +1204,24 @@
             }
           },
           "400": {
-            "description": "Invalid embeddings request"
+            "description": "Invalid embeddings request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "402": {
             "description": "Managed usage exhausted",
@@ -1208,16 +1299,44 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "403": {
-            "description": "API key lacks the `inference:write` scope"
+            "description": "API key lacks the `inference:write` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "413": {
-            "description": "Audio file exceeds 25 MB"
+            "description": "Audio file exceeds 25 MB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "415": {
-            "description": "Unsupported audio type, or content that is not audio"
+            "description": "Unsupported audio type, or content that is not audio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "429": {
             "description": "Rate limited",
@@ -1278,7 +1397,14 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "403": {
             "description": "Subscription inactive, workspace policy refused the caller, or the API key lacks the `inference:write` scope",
@@ -1329,7 +1455,14 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "403": {
             "description": "No subscription record, or the API key lacks the `usage:read` scope",
@@ -1397,7 +1530,14 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "402": {
             "description": "Managed usage is exhausted for the plan window",
@@ -1506,7 +1646,14 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "403": {
             "description": "The credential resolves to a different account than the reservation, or the API key lacks the `inference:write` scope",
@@ -1557,7 +1704,14 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "403": {
             "description": "API key lacks the `usage:read` scope",
@@ -1620,13 +1774,34 @@
             }
           },
           "400": {
-            "description": "Invalid request parameters"
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Rate limited"
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           }
         }
       }
@@ -1658,10 +1833,34 @@
             }
           },
           "400": {
-            "description": "Invalid device parameters"
+            "description": "Invalid device parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Presented credential did not verify",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "429": {
-            "description": "Too many device authorization requests"
+            "description": "Too many device authorization requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
           }
         }
       }
@@ -1732,7 +1931,34 @@
             }
           },
           "403": {
-            "description": "Device fingerprint mismatch"
+            "description": "Device fingerprint mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The addressed resource does not exist for this caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The device authorization code has expired and cannot be polled again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -1783,10 +2009,34 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Credential verified but is not permitted to perform this operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "409": {
-            "description": "Code already processed"
+            "description": "Code already processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         }
       }
@@ -1808,7 +2058,14 @@
             }
           },
           "401": {
-            "description": "Not authenticated"
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           }
         }
       }
