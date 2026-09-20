@@ -118,6 +118,7 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
   getConnectorOAuthGrant: vi.fn(),
   revokeConnectorOAuthGrant: vi.fn(),
+  listRevocableConnectorTokens: vi.fn(async () => []),
   updateConnectorOAuthGrantTokens: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-access', () => ({
