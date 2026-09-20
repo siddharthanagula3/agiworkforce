@@ -109,6 +109,7 @@ test('CI propagates coverage failures and uploads only explicit coverage reports
   const steps = workflow.jobs['test-l1'].steps;
   const generation = steps.find((step) => step.name === 'Generate Coverage Report');
   assert.equal(generation.run, 'pnpm test:coverage');
+  assert.equal(generation.if, '${{ !cancelled() }}');
   assert.notEqual(generation['continue-on-error'], true);
   const artifact = steps.find((step) => step.name === 'Preserve coverage evidence');
   assert.equal(artifact.with['if-no-files-found'], 'error');
