@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import { answerMemoryPolicyQuery } from './memory-policy-stub';
+import { answerMemoryPolicyQuery, asQuery } from './memory-policy-stub';
 
 const hoisted = vi.hoisted(() => ({
   after: vi.fn((task: Promise<unknown>) => task),
@@ -55,8 +55,11 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
   });
 
   it('with the flag off, never calls the extractor and writes the pattern facts', async () => {
-    const query = vi.fn(
-      async (sql: string) => answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
     );
 
     await recordManagedAutoMemoryTurn({
@@ -74,8 +77,11 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
   it('with the flag on, persists what the model extractor returned', async () => {
     hoisted.enabled.mockReturnValue(true);
     hoisted.extract.mockResolvedValue(["User's name is Sid", 'User lives in Berlin']);
-    const query = vi.fn(
-      async (sql: string) => answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
     );
 
     await recordManagedAutoMemoryTurn({
@@ -104,8 +110,11 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
         settleExtraction = resolve;
       }),
     );
-    const query = vi.fn(
-      async (sql: string) => answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
     );
 
     await recordManagedAutoMemoryTurn({
@@ -124,8 +133,11 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
   it('falls back to the pattern facts when the extractor throws', async () => {
     hoisted.enabled.mockReturnValue(true);
     hoisted.extract.mockRejectedValue(new Error('provider 503'));
-    const query = vi.fn(
-      async (sql: string) => answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
     );
 
     await recordManagedAutoMemoryTurn({
@@ -141,8 +153,11 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
 
   it('does not forward a zero-data-retention turn to the shared utility route', async () => {
     hoisted.enabled.mockReturnValue(true);
-    const query = vi.fn(
-      async (sql: string) => answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
     );
 
     await recordManagedAutoMemoryTurn({
@@ -158,8 +173,11 @@ describe('recordManagedAutoMemoryTurn, model extraction flag', () => {
 
   it('keeps the pattern facts when no metering context can be resolved', async () => {
     hoisted.enabled.mockReturnValue(true);
-    const query = vi.fn(
-      async (sql: string) => answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
     );
 
     await recordManagedAutoMemoryTurn({
