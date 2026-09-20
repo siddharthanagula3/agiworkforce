@@ -315,3 +315,19 @@ export function resolveProductAnalyticsSurface(request: NextRequest): ProductAna
   const hint = readSurfaceHint(request);
   return isProductAnalyticsSurface(hint) ? hint : 'web';
 }
+
+/**
+ * Events no surface emits by name, because they are read off something that
+ * already happened: the cost meter, the audit trail or the account's own
+ * history. A name here and nowhere else is produced; a name in neither is an
+ * event the vocabulary promises and nothing raises.
+ */
+export const DERIVED_PRODUCT_ANALYTICS_EVENTS: readonly ProductAnalyticsEventName[] = Object.freeze(
+  [
+    ...new Set<ProductAnalyticsEventName>([
+      ...MILESTONE_EVENTS,
+      ...Object.values(CAPABILITY_EVENTS),
+      ...Object.values(AUDITED_PRODUCT_EVENTS),
+    ]),
+  ],
+);

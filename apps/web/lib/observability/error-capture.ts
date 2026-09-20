@@ -38,11 +38,48 @@ export function isReportableServerError(error: unknown): boolean {
   return status === null || status >= FIRST_SERVER_ERROR_STATUS;
 }
 
+const FINGERPRINT_FRAMES = 2;
+const UNKNOWN_FRAME = 'unknown';
+const POSITION = /:\d+:\d+\)?$/u;
+const BUILD_ARTEFACT = /[.-][0-9a-f]{8,}(?=\.[a-z]+$)/iu;
+
+function frameIdentity(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('at ')) return null;
+  const withoutPosition = trimmed.slice(3).replace(POSITION, '');
+  const site = withoutPosition.replace(/^.*\((.*)$/u, '$1');
+  const normalized = site
+    .replace(/^(?:file|webpack(?:-internal)?):\/\/+/u, '')
+    .replace(/^.*?(?=(?:apps|packages|services|crates|node_modules)\/)/u, '')
+    .replace(/\?.*$/u, '')
+    .replace(BUILD_ARTEFACT, '');
+  return normalized.length > 0 ? normalized : null;
+}
+
+/**
+ * A stable identity for a recurring exception. The message carries ids and
+ * values that differ per occurrence and the paths carry a build hash that
+ * differs per release, so neither is part of it: the fingerprint is the error
+ * name and the top frames with their positions and build artefacts removed.
+ * The same fault at the same site therefore groups across deploys.
+ */
+export function errorFingerprint(error: unknown): string {
+  const name = error instanceof Error && error.name ? error.name : typeof error;
+  const stack = error instanceof Error && typeof error.stack === 'string' ? error.stack : '';
+  const frames = stack
+    .split('\n')
+    .map(frameIdentity)
+    .filter((frame): frame is string => frame !== null)
+    .slice(0, FINGERPRINT_FRAMES);
+  return [name, ...(frames.length > 0 ? frames : [UNKNOWN_FRAME])].join('|');
+}
+
 function sendToErrorMonitoring(error: unknown, tags: Record<string, string>): void {
   if (!isSentryConfigured()) return;
+  const tagged = { ...tags, [OBSERVABILITY_ATTRIBUTE.errorFingerprint]: errorFingerprint(error) };
   void import('@sentry/nextjs')
     .then((sentry) => {
-      sentry.captureException(error, { tags, level: 'error' });
+      sentry.captureException(error, { tags: tagged, level: 'error' });
     })
     .catch((captureError: unknown) => {
       logger.warn({ error: captureError }, 'Error could not be sent to error monitoring');

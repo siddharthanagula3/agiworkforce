@@ -289,6 +289,8 @@ export function recordTurnOutcome(input: {
   mode?: string | undefined;
   trustMode?: string | undefined;
   workspaceKind?: WorkspaceKind | undefined;
+  /** The rollout arm and flag variants the turn was served under. */
+  cohort?: string | null | undefined;
   cache?: CacheOutcome | undefined;
   timeToFirstTokenMs?: number | null | undefined;
   durationMs?: number | null | undefined;
@@ -305,6 +307,7 @@ export function recordTurnOutcome(input: {
     [OBSERVABILITY_ATTRIBUTE.requestMode]: input.mode,
     [OBSERVABILITY_ATTRIBUTE.trustMode]: input.trustMode,
     [OBSERVABILITY_ATTRIBUTE.workspaceKind]: input.workspaceKind,
+    [OBSERVABILITY_ATTRIBUTE.routingCohort]: input.cohort ?? undefined,
     [OBSERVABILITY_ATTRIBUTE.cacheOutcome]: input.cache,
     [OBSERVABILITY_ATTRIBUTE.errorType]: input.errorType,
   });
