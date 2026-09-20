@@ -123,6 +123,12 @@ fn validate_git_relative_path(repo_path: &str, relative_path: &str) -> Result<St
     if relative_path.contains('\0') {
         return Err("Git file path contains null bytes".to_string());
     }
+    if Path::new(relative_path)
+        .components()
+        .any(|component| component == std::path::Component::ParentDir)
+    {
+        return Err("Git file path contains directory traversal (..)".to_string());
+    }
 
     let repo = Path::new(repo_path);
     let candidate = repo.join(relative_path);
