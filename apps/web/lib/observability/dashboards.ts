@@ -1,4 +1,5 @@
 import { OBSERVABILITY_ATTRIBUTE } from './attributes';
+import { LOCAL_METRIC_LABEL } from './cardinality';
 import { MEDIA_ATTRIBUTE } from './media-telemetry';
 import { METRIC_NAME } from './metrics';
 
@@ -636,6 +637,43 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
           attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
         ],
         match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.turnOutcome)]: 'failed' },
+      },
+    ],
+  },
+  {
+    id: 'database-health',
+    title: 'Database health',
+    panels: [
+      {
+        id: 'database-operation-rate',
+        title: 'Queries by operation',
+        metric: METRIC_NAME.databaseOperations,
+        aggregation: 'rate',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
+      },
+      {
+        id: 'database-error-ratio',
+        title: 'Failed share of queries',
+        metric: METRIC_NAME.databaseOperations,
+        aggregation: 'ratio',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
+        match: { [attributeKey(LOCAL_METRIC_LABEL.databaseOutcome)]: 'error' },
+      },
+      // A saturated pool shows as latency long before it shows as an error, so
+      // the tail is the reading that moves first.
+      {
+        id: 'database-latency-p95',
+        title: 'Query latency p95',
+        metric: METRIC_NAME.databaseDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
+      },
+      {
+        id: 'database-latency-p99',
+        title: 'Query latency p99',
+        metric: METRIC_NAME.databaseDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
       },
     ],
   },

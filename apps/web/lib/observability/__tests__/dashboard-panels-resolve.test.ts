@@ -17,11 +17,13 @@ import {
   recordBrowserTask,
   recordCompletion,
   recordConfigurationState,
+  recordDatabaseOperation,
   recordDenial,
   recordFailure,
   recordHttpRequest,
   recordNotificationDelivery,
   recordQueueAge,
+  recordQueueDepth,
   recordRejection,
   recordRoutingDecision,
   recordSpanMetrics,
@@ -97,6 +99,14 @@ async function emitEverySignal(): Promise<void> {
     protocolVersion: '1',
   });
   recordFailure('api', 'timeout');
+  recordDatabaseOperation({ operation: 'select', outcome: 'ok', durationMs: 3 });
+  recordDatabaseOperation({
+    operation: 'insert',
+    outcome: 'error',
+    durationMs: 7,
+    errorType: 'timeout',
+  });
+  recordQueueDepth({ queue: 'digest', status: 'queued', count: 3 });
   recordQueueAge({ queue: 'digest', oldestQueuedAgeMs: 10, stuck: 1 });
   recordBrowserTask({ status: 'failed', surface: 'web', errorType: 'blocked' });
   recordNotificationDelivery({ channel: 'email', outcome: 'delivered' });

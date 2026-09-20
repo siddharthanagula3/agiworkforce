@@ -17,6 +17,7 @@ import {
 import { logger } from './logger';
 import { captureServerError } from './observability/error-capture';
 import { recordHttpRequest } from './observability/metrics';
+import { httpRequestLabels } from './observability/request-labels';
 import { redactAttributes, redactValue } from './observability/redact';
 import {
   PayloadCeilingExceededError,
@@ -242,6 +243,7 @@ export function withErrorHandler<T extends unknown[]>(
     };
     const method = (args[0] as { method?: string } | undefined)?.method;
     const url = (args[0] as { url?: string } | undefined)?.url;
+    const callerLabels = httpRequestLabels((name) => readHeader(args[0], name));
     const breach = findPayloadCeilingBreach(
       (args[0] ?? {}) as Parameters<typeof findPayloadCeilingBreach>[0],
     );
@@ -288,7 +290,12 @@ export function withErrorHandler<T extends unknown[]>(
         }
 
         const durationMs = Date.now() - startedAt;
-        recordHttpRequest({ method, statusCode: response.status, durationMs });
+        recordHttpRequest({
+          method,
+          statusCode: response.status,
+          durationMs,
+          ...callerLabels,
+        });
 
         const attributes = redactAttributes({
           [ATTR_HTTP_REQUEST_METHOD]: method,

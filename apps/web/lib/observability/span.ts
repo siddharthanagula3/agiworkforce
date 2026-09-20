@@ -7,18 +7,21 @@ import { getTraceContext, runWithTraceContext, type TraceContext } from './trace
 
 export type { SpanKind };
 
-export type SpanDomain =
-  | 'approval'
-  | 'billing'
-  | 'database'
-  | 'external'
-  | 'http'
-  | 'model'
-  | 'queue'
-  | 'retrieval'
-  | 'sandbox'
-  | 'task'
-  | 'tool';
+export const SPAN_DOMAINS = [
+  'approval',
+  'billing',
+  'database',
+  'external',
+  'http',
+  'model',
+  'queue',
+  'retrieval',
+  'sandbox',
+  'task',
+  'tool',
+] as const;
+
+export type SpanDomain = (typeof SPAN_DOMAINS)[number];
 
 export interface SpanOptions {
   readonly kind?: SpanKind;
