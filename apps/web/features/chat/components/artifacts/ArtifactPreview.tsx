@@ -1780,7 +1780,7 @@ if (__AgiApp) {
                 className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center"
                 data-testid="artifact-render-error"
               >
-                <AlertTriangle className="h-7 w-7 text-amber-500" aria-hidden="true" />
+                <AlertTriangle className="h-7 w-7 text-warning" aria-hidden="true" />
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     This artifact couldn&apos;t be rendered.
@@ -2129,7 +2129,7 @@ if (__AgiApp) {
                   className="flex h-full w-full flex-col items-center justify-center gap-3 bg-background px-6 text-center"
                   data-testid="artifact-render-error"
                 >
-                  <AlertTriangle className="h-7 w-7 text-amber-500" aria-hidden="true" />
+                  <AlertTriangle className="h-7 w-7 text-warning" aria-hidden="true" />
                   <div>
                     <p className="text-sm font-medium text-foreground">
                       This artifact couldn&apos;t be rendered.

@@ -61,7 +61,7 @@ Reuse these owners; create no second task ledger:
 - `LAUNCH_PLAN.md`: this dependency order and work-package acceptance criteria.
 - `PROGRESS.md`: compact checkpoint and exact next action.
 - `PRODUCTION_REMAINING.md`: only assertions needing the release environment.
-- `docs/work/checklist-reaudit/items.jsonl` and `decisions.jsonl`: original requirement IDs, source lines,
+- local audit artifact `items.jsonl` (path and fingerprint in [QA_COVERAGE.json](QA_COVERAGE.json)) and `decisions.jsonl`: original requirement IDs, source lines,
   wording and historical decisions. `CORRECTIONS.md` preserves audit limitations and security findings.
 - `ACTIVE_ISSUES.md` and `docs/agent-context/known-flaws.md`: canonical unresolved defect ownership.
   Link or update existing IDs rather than create duplicates.

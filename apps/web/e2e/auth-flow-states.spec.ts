@@ -1,3 +1,4 @@
+import { mockAuthProvider } from './lib/mock-auth-provider';
 import { test, expect, type Page } from '@playwright/test';
 
 // Vendor-response states are covered in features/auth/__tests__/AuthFlow.states.test.tsx.
@@ -8,8 +9,10 @@ const PHONE = { width: 390, height: 844 };
 const ZOOMED = { width: 640, height: 512 };
 
 async function openAuth(page: Page, route: string): Promise<void> {
+  await mockAuthProvider(page);
   await page.goto(route, { waitUntil: 'load' });
   await expect(page.getByTestId('auth-layout')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
 }
 
 test.describe('auth flow states', () => {
@@ -20,7 +23,7 @@ test.describe('auth flow states', () => {
       const email = page.getByLabel('Email address');
       await expect(email).toBeVisible();
       await expect(email).toBeFocused();
-      await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
     });
 
     test(`${route} keeps a live region in the tree before it has anything to say`, async ({
@@ -36,20 +39,25 @@ test.describe('auth flow states', () => {
     test(`${route} reaches every control from the keyboard alone`, async ({ page }) => {
       await openAuth(page, route);
 
-      const reached: string[] = [];
-      for (let step = 0; step < 12; step += 1) {
-        await page.keyboard.press('Tab');
-        reached.push(
-          await page.evaluate(() => {
-            const active = document.activeElement;
-            if (!active || active === document.body) return '';
-            return `${active.tagName.toLowerCase()}:${(active.textContent ?? '').trim().slice(0, 32)}`;
-          }),
-        );
+      const controls = await page
+        .getByTestId('auth-layout')
+        .locator('button, input, a[href]')
+        .all();
+      const targets = [];
+      for (const control of controls) {
+        if ((await control.isVisible()) && (await control.isEnabled())) targets.push(control);
       }
-
-      expect(reached.filter((entry) => entry.startsWith('button'))).not.toHaveLength(0);
-      expect(reached.filter((entry) => entry === '')).toHaveLength(0);
+      expect(targets.length).toBeGreaterThan(0);
+      const reached = new Set<number>();
+      for (let step = 0; step < targets.length * 2 + 4; step += 1) {
+        for (const [index, control] of targets.entries()) {
+          if (await control.evaluate((element) => element === document.activeElement))
+            reached.add(index);
+        }
+        if (reached.size === targets.length) break;
+        await page.keyboard.press('Tab');
+      }
+      expect(reached.size, 'every visible auth control is reachable by Tab').toBe(targets.length);
     });
 
     test(`${route} fits a phone with no sideways scroll`, async ({ page }) => {
@@ -71,7 +79,7 @@ test.describe('auth flow states', () => {
       );
       expect(overflow).toBeLessThanOrEqual(0);
 
-      const submit = page.getByRole('button', { name: 'Continue' });
+      const submit = page.getByRole('button', { name: 'Continue', exact: true });
       const box = await submit.boundingBox();
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(24);
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(24);
@@ -82,9 +90,9 @@ test.describe('auth flow states', () => {
     await openAuth(page, '/login');
 
     await page.getByLabel('Email address').fill(`no-account-${Date.now()}@example.invalid`);
-    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByTestId('auth-layout').getByRole('alert')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Sign up instead.' })).toBeVisible();
   });
 });

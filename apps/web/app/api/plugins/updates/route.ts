@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { isPluginSemver } from '@agiworkforce/types';
 
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
 const ApplySchema = z
   .object({
     pluginId: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
-    toVersion: z.string().regex(/^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)*$/),
+    toVersion: z.string().refine(isPluginSemver, 'Invalid semantic version'),
     acknowledgedPermissions: z.array(z.string().min(1).max(200)).max(200).optional(),
   })
   .strict();

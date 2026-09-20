@@ -18,7 +18,7 @@
  *   - apps/mobile/ (via API responses)
  */
 
-import modelsCatalogJson from './models.json';
+import modelsCatalogJson from './models.json' with { type: 'json' };
 
 export type ProviderOfferingCategory = 'chat' | 'image' | 'video' | 'audio' | 'embedding';
 

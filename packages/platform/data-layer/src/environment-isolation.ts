@@ -158,7 +158,10 @@ function localBaseUrl(env: IsolationEnvironment): string {
 // sends password resets, OAuth callbacks and email links to another deployment.
 export function resolveEnvironmentBaseUrl(env: IsolationEnvironment = process.env): string {
   const environment = resolveRuntimeEnvironment(env);
-  const configured = readTrimmed(env, APP_BASE_URL_VAR)?.replace(/\/+$/, '');
+  const rawConfigured = readTrimmed(env, APP_BASE_URL_VAR);
+  let end = rawConfigured?.length ?? 0;
+  while (end > 0 && rawConfigured?.[end - 1] === '/') end -= 1;
+  const configured = rawConfigured?.slice(0, end);
   const deployed = DEPLOYED_ENVIRONMENTS.has(environment);
 
   if (!configured) {

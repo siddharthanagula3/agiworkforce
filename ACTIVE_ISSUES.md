@@ -74,7 +74,7 @@ This is stale diagnostic/accessibility noise, not evidence of a private-data lea
 only sets the cancellation flag. Review supported error-render suppression and
 owned-container cleanup, preserving the visible source fallback. Verify invalid
 render, rerender and navigation leave no orphan nodes. Evidence:
-`docs/work/checklist-reaudit/current-evidence/browser-render.json`. No repair attempted.
+local audit artifact `browser-render.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)). No repair attempted.
 
 ## QA-ERASURE-HARNESS-BOUNDARY-2026-09-19
 
@@ -84,7 +84,7 @@ render, rerender and navigation leave no orphan nodes. Evidence:
 execution evidence, but it does not meet the repository's adapter ownership rule.
 Adapt the harness through the canonical entrypoint and rerun the boundary check
 in the repair phase. Do not weaken the guard or treat this as a production data
-leak. Evidence: `docs/work/checklist-reaudit/current-evidence/boundaries.json`.
+leak. Evidence: local audit artifact `boundaries.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)).
 
 ## WEB-DRAFT-CLEAR-RESTORE-2026-09-19
 
@@ -95,7 +95,7 @@ twice; a second clear empties the input. The mount/restoration path and deferred
 handback effect in `ChatComposerNew.tsx` are the investigation boundary, not a
 proven root cause. Distinguish navigation/reload parking from a failed-send
 handback, then verify deliberate clearing stays empty without a false failure
-notice. Evidence: `docs/work/checklist-reaudit/current-evidence/browser-composer.json`.
+notice. Evidence: local audit artifact `browser-composer.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)).
 No application repair was made in this QA pass.
 
 ## WEB-DRAFT-NAVIGATION-LOSS-2026-09-19
@@ -106,7 +106,7 @@ composer is empty. The second reproduction used normal typing to rule out a
 programmatic-value-only artifact. No message was submitted. This is a current
 Next development-session failure, not a claim about every browser or production.
 
-Evidence: `docs/work/checklist-reaudit/current-evidence/browser-draft-search.json`.
+Evidence: local audit artifact `browser-draft-search.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)).
 The composer lifecycle and the one-use history restoration gate in
 `apps/web/features/chat/lib/pending-composer-draft.ts` are investigation pointers;
 a root cause has not been established. In the repair phase, trace mount/cleanup
@@ -123,7 +123,7 @@ and no effective branch rules. The legacy protection endpoint returns the explic
 it before merge. This finding does not establish that production deployment bypasses
 its separate promotion workflow.
 
-Evidence is retained in `docs/work/checklist-reaudit/current-evidence/github-main.json`,
+Evidence is retained in local audit artifact `github-main.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)),
 `github-main-protection.json`, `github-rulesets.json` and `github-main-rules.json`, with
 the corresponding hashed response logs. Configure an owner-reviewed main-branch rule
 requiring pull requests and the intended successful checks, with bounded and audited

@@ -192,6 +192,14 @@ pub fn sentry_envelope(dsn: &str, report: &CrashReport, event_id: &str) -> Optio
     })
 }
 
+fn crash_upload_client() -> Result<reqwest::Client, reqwest::Error> {
+    reqwest::Client::builder()
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(UPLOAD_TIMEOUT)
+        .build()
+}
+
 pub async fn upload_pending(dir: PathBuf) {
     let Some(dsn) = RELEASE_DSN.map(str::trim).filter(|dsn| !dsn.is_empty()) else {
         return;
@@ -200,7 +208,7 @@ pub async fn upload_pending(dir: PathBuf) {
     if reports.is_empty() {
         return;
     }
-    let Ok(client) = reqwest::Client::builder().timeout(UPLOAD_TIMEOUT).build() else {
+    let Ok(client) = crash_upload_client() else {
         return;
     };
     for (path, report) in reports {
@@ -347,6 +355,24 @@ mod tests {
         assert_eq!(
             event["exception"]["values"][0]["value"],
             "src/tui/mod.rs:10:5"
+        );
+    }
+
+    #[tokio::test]
+    async fn upload_transport_refuses_plaintext_before_connecting() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let endpoint = format!("http://{}/envelope", listener.local_addr().unwrap());
+        let error = crash_upload_client()
+            .unwrap()
+            .post(endpoint)
+            .send()
+            .await
+            .unwrap_err();
+        assert!(error.is_builder());
+        assert_eq!(
+            listener.accept().unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
         );
     }
 

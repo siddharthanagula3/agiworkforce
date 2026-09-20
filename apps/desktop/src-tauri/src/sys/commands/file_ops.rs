@@ -569,25 +569,20 @@ pub async fn file_write(
         canonical_parent.join(file_name)
     };
 
+    #[cfg(unix)]
     let write_result: std::io::Result<()> = (|| {
-        #[cfg(unix)]
-        {
-            use std::io::Write as _;
-            use std::os::unix::fs::OpenOptionsExt;
-            let mut f = fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .custom_flags(libc::O_NOFOLLOW) // AUDIT-FIX: H-15
-                .open(&write_target)?;
-            f.write_all(content.as_bytes())
-        }
-        #[cfg(not(unix))]
-        {
-            // AUDIT-FIX: H-15, Windows has no O_NOFOLLOW equivalent; accepted exception, callers must trust validate_path_security.
-            fs::write(&write_target, content.as_bytes())
-        }
+        use std::io::Write as _;
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&write_target)?;
+        f.write_all(content.as_bytes())
     })();
+    #[cfg(not(unix))]
+    let write_result = fs::write(&write_target, content.as_bytes());
 
     match write_result {
         Ok(_) => {

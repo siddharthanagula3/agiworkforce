@@ -191,20 +191,26 @@ impl UIInspector for InspectorService {
     fn find_element_by_selector(&self, selector: &ElementSelector) -> Result<Option<String>> {
         match selector.selector_type {
             SelectorType::AutomationId => {
-                let mut query = ElementQuery::default();
-                query.automation_id = Some(selector.value.clone());
+                let query = ElementQuery {
+                    automation_id: Some(selector.value.clone()),
+                    ..ElementQuery::default()
+                };
                 let elements = self.native.find_elements(None, &query)?;
                 Ok(elements.first().map(|e| e.id.clone()))
             }
             SelectorType::Name => {
-                let mut query = ElementQuery::default();
-                query.name = Some(selector.value.clone());
+                let query = ElementQuery {
+                    name: Some(selector.value.clone()),
+                    ..ElementQuery::default()
+                };
                 let elements = self.native.find_elements(None, &query)?;
                 Ok(elements.first().map(|e| e.id.clone()))
             }
             SelectorType::ClassName => {
-                let mut query = ElementQuery::default();
-                query.class_name = Some(selector.value.clone());
+                let query = ElementQuery {
+                    class_name: Some(selector.value.clone()),
+                    ..ElementQuery::default()
+                };
                 let elements = self.native.find_elements(None, &query)?;
                 Ok(elements.first().map(|e| e.id.clone()))
             }

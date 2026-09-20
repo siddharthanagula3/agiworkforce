@@ -57,11 +57,9 @@ test.describe('@reachability v3 surface', () => {
   });
 
   test('empty state greeting renders when no conversation', async ({ page }) => {
-    const greet = page.getByText(
-      /(good morning|good afternoon|good evening|rise and shine|\bhi\b|hello|standing by|ready to start the day|working late|never sleeps|what are we accomplishing|what can we get done|what shall we tackle)/i,
-    );
-    await greet.first().waitFor({ state: 'attached', timeout: 5000 });
-    await expect(greet.first()).toBeVisible();
+    const greeting = page.locator('[data-v3-shell]').getByRole('heading', { level: 1 });
+    await expect(greeting).toBeVisible();
+    await expect(greeting).toContainText('E2e');
   });
 
   test('user message bubble selector [data-v3-msg-user] is queryable', async ({ page }) => {

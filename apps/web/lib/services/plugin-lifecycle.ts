@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
+import { isPluginSemver } from '@agiworkforce/types';
 
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import { AppError, ErrorCode } from '@/lib/errors';
@@ -27,10 +28,9 @@ export const PLUGIN_LIFECYCLE_ACTIONS = [
 
 export type PluginLifecycleAction = (typeof PLUGIN_LIFECYCLE_ACTIONS)[number];
 
-const SEMVER = /^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)*$/;
 const PLUGIN_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/;
 
-const VersionSchema = z.string().regex(SEMVER);
+const VersionSchema = z.string().refine(isPluginSemver, 'Invalid semantic version');
 const PluginIdSchema = z.string().regex(PLUGIN_ID);
 const ReasonSchema = z.string().trim().min(1).max(2000);
 const StatusSchema = z.enum(PLUGIN_VERSION_STATUSES);
