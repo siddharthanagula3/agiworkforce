@@ -384,7 +384,7 @@ export default function TrustPage() {
                       {
                         label: '2026-09-20',
                         value:
-                          'Re-measured after the deletion graph was closed over the database schema instead of a hand-kept list. Three stores had kept an erased account\u2019s identifiers: referrals, the cloud waitlist and device installations. Referrals and device installations joined the enumerated erasure list, which grew from 93 user-scoped tables to 95; the cloud waitlist is keyed by address rather than by account and joined the address-keyed erasure list.',
+                          'Re-measured after the deletion graph was closed over the database schema instead of a hand-kept list. Two stores had kept an erased account\u2019s identifiers: referrals and device installations. Both joined the enumerated erasure list, which grew from 93 user-scoped tables to 95.',
                       },
                       {
                         label: '2026-09-19',
