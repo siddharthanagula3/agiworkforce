@@ -416,6 +416,7 @@ export interface AuditEventDetail {
   enabled?: boolean;
   durationMs?: number;
   keyVersion?: string;
+  expiresAt?: string;
   version?: string;
   variant?: string;
   region?: string;
@@ -514,6 +515,7 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'enabled',
   'durationMs',
   'keyVersion',
+  'expiresAt',
   'version',
   'variant',
   'region',

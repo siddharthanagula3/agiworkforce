@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { createError } from '@/lib/errors';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
@@ -16,6 +17,36 @@ const ARGON2_OPTIONS: argon2.HashOptions = {
 };
 
 export const KEY_ID_REGEX = /^sk_live_([0-9a-f]{16})_[A-Za-z0-9]{1,}/;
+
+export const API_KEY_MAX_LIFETIME_DAYS_ENV = 'API_KEY_MAX_LIFETIME_DAYS';
+
+const DEFAULT_MAX_LIFETIME_DAYS = 365;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function apiKeyMaxLifetimeDays(): number {
+  const configured = process.env[API_KEY_MAX_LIFETIME_DAYS_ENV]?.trim();
+  if (!configured) return DEFAULT_MAX_LIFETIME_DAYS;
+
+  const days = Number(configured);
+  if (!Number.isFinite(days) || days <= 0) return DEFAULT_MAX_LIFETIME_DAYS;
+  return days;
+}
+
+export type ApiKeyExpiryProblem = 'not_a_time' | 'in_the_past' | 'beyond_maximum';
+
+export function apiKeyExpiryProblem(expiresAt: Date, now: number): ApiKeyExpiryProblem | null {
+  const at = expiresAt.getTime();
+  if (!Number.isFinite(at)) return 'not_a_time';
+  if (at <= now) return 'in_the_past';
+  if (at - now > apiKeyMaxLifetimeDays() * DAY_MS) return 'beyond_maximum';
+  return null;
+}
+
+export function apiKeyExpiryMessage(problem: ApiKeyExpiryProblem): string {
+  if (problem === 'not_a_time') return 'Expiry must be a date and time';
+  if (problem === 'in_the_past') return 'Expiry must be in the future';
+  return `Expiry must be no more than ${apiKeyMaxLifetimeDays()} days away`;
+}
 
 async function generateKey(): Promise<{ raw: string; hash: string; keyId: string }> {
   const keyId = randomBytes(8).toString('hex');
@@ -42,6 +73,7 @@ export class ApiKeyService {
     userId: string,
     name: string,
     scopes: ApiKeyScope[],
+    expiresAt: Date | null = null,
   ): Promise<{ apiKey: ApiKeyRow; rawKey: string }> {
     const uniqueScopes = new Set(scopes);
     if (
@@ -52,13 +84,18 @@ export class ApiKeyService {
       throw new Error('At least one unique, supported API key scope is required');
     }
 
+    if (expiresAt !== null) {
+      const problem = apiKeyExpiryProblem(expiresAt, Date.now());
+      if (problem) throw createError.validation(apiKeyExpiryMessage(problem));
+    }
+
     const { raw, hash, keyId } = await generateKey();
 
     const rows = await db.query<ApiKeyRow>(
       `INSERT INTO api_keys (user_id, name, key_hash, key_prefix, scopes, expires_at)
-       VALUES ($1, $2, $3, $4, $5, NULL)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [userId, name, hash, keyId, scopes],
+      [userId, name, hash, keyId, scopes, expiresAt === null ? null : expiresAt.toISOString()],
     );
 
     if (!rows[0]) {
