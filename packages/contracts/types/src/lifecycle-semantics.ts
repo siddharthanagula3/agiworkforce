@@ -28,6 +28,9 @@ export const LIFECYCLE_READ_CLASSES = [
   'retention-sweep',
   'ownership-check',
   'write-path',
+  'tombstone-sync',
+  'data-export',
+  'tombstone-check',
   'defect',
 ] as const;
 export type LifecycleReadClass = (typeof LIFECYCLE_READ_CLASSES)[number];

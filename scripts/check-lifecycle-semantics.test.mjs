@@ -316,6 +316,170 @@ test('a recorded read needs a known class, a reason, and a fix when it is a defe
   );
 });
 
+function unrecordedIn(files) {
+  return checkLifecycleSemantics(fixture({}, files)).unrecorded.map((read) => read.file);
+}
+
+test('a second statement in the same file is judged on its own', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/thread.ts': `
+        export const visible = \`select id from web_conversations where deleted_at is null\`;
+        export const every = \`select title from web_conversations where user_id = $1\`;
+      `,
+    }),
+    ['apps/web/lib/services/thread.ts'],
+  );
+});
+
+test('a join filtered on one side only is judged on both', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/thread.ts': `export const sql = \`
+        select source.title, target.title
+          from web_conversations as source
+          join web_conversations as target on target.id = source.id
+         where source.deleted_at is null\`;`,
+    }),
+    ['apps/web/lib/services/thread.ts'],
+  );
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/thread.ts': `export const sql = \`
+        select source.title, target.title
+          from web_conversations as source
+          join web_conversations as target on target.id = source.id
+         where source.deleted_at is null and target.deleted_at is null\`;`,
+    }),
+    [],
+  );
+});
+
+test('a recursive walk is judged at every step, not only at its anchor', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/chain.ts': `export const sql = \`
+        with recursive chain as (
+          select c.id, c.parent_id from web_conversations c
+           where c.id = $1 and c.deleted_at is null
+          union all
+          select p.id, p.parent_id from web_conversations p
+            join chain on p.id = chain.parent_id
+        )
+        select id from chain\`;`,
+    }),
+    ['apps/web/lib/services/chain.ts'],
+  );
+});
+
+test('a copy is a read of what it copies', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/fork.ts': `export const sql = \`
+        insert into web_conversations (id, title, deleted_at)
+        select gen_random_uuid(), title, deleted_at
+          from web_conversations
+         where user_id = $1\`;`,
+    }),
+    ['apps/web/lib/services/fork.ts'],
+  );
+});
+
+test('a predicate the module assembles at runtime counts, and its absence still fails', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/search.ts': `
+        const clauses = ['user_id = $1'];
+        clauses.push('deleted_at is null');
+        export const sql = \`select id from web_conversations where \${clauses.join(' and ')}\`;
+      `,
+    }),
+    [],
+  );
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/search.ts': `
+        const clauses = ['user_id = $1'];
+        clauses.push('title ilike $2');
+        export const sql = \`select id from web_conversations where \${clauses.join(' and ')}\`;
+      `,
+    }),
+    ['apps/web/lib/services/search.ts'],
+  );
+});
+
+test('a predicate pushed under a condition is not one the statement always carries', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/search.ts': `
+        const clauses = ['user_id = $1'];
+        if (!includeDeleted) clauses.push('deleted_at is null');
+        export const sql = \`select id from web_conversations where \${clauses.join(' and ')}\`;
+      `,
+    }),
+    ['apps/web/lib/services/search.ts'],
+  );
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/search.ts': `
+        const clauses = ['user_id = $1'];
+        if (recent) {
+          clauses.push('deleted_at is null');
+        }
+        export const sql = \`select id from web_conversations where \${clauses.join(' and ')}\`;
+      `,
+    }),
+    ['apps/web/lib/services/search.ts'],
+  );
+});
+
+test('a fragment is judged in the statement that splices it, not on its own', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/runs.ts': `
+        const LATERAL = \`left join lateral (
+          select c.title from web_conversations c where c.id = runs.conversation_id limit 1
+        ) recent on true\`;
+        export const sql = \`select runs.id from cloud_agent_runs runs \${LATERAL}\`;
+      `,
+    }),
+    ['apps/web/lib/services/runs.ts'],
+  );
+});
+
+test('naming the marker in a select list is not filtering on it', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/listing.ts':
+        'export const sql = `select id, title, deleted_at from web_conversations where user_id = $1`;',
+    }),
+    ['apps/web/lib/services/listing.ts'],
+  );
+});
+
+test('prose that names a table is not a statement', () => {
+  assert.deepEqual(
+    unrecordedIn({
+      'apps/web/lib/services/notes.ts':
+        "export const note = 'Rebuilt from web_conversations, which the export already carries in full.';",
+    }),
+    [],
+  );
+});
+
+test('the guard and the shared contract agree on what a read class is', () => {
+  const module = readFileSync(
+    path.join(process.cwd(), 'packages/contracts/types/src/lifecycle-semantics.ts'),
+    'utf8',
+  );
+  const block = /LIFECYCLE_READ_CLASSES = \[([^\]]*)\]/.exec(module);
+  assert.ok(block !== null, 'LIFECYCLE_READ_CLASSES is no longer a literal list');
+  assert.deepEqual(
+    [...block[1].matchAll(/'([a-z-]+)'/g)].map((match) => match[1]),
+    [...READ_CLASSES],
+  );
+});
+
 test('an archive the shared contract calls searchable fails', () => {
   const root = fixture();
   write(

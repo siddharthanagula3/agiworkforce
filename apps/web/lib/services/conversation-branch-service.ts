@@ -229,6 +229,7 @@ export async function forkConversation(
           and conversation.deleted_at is null
         where message.id = $1
           and message.conversation_id = $2
+          and message.deleted_at is null
         limit 1`,
       [input.messageId, input.sourceConversationId, userId],
     );
@@ -312,6 +313,7 @@ export async function forkConversation(
                 ) as message_position
            from public.web_messages as message
           where message.conversation_id = $1
+            and message.deleted_at is null
        ),
        fork_position as (
          select message_position

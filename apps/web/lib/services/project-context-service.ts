@@ -253,6 +253,7 @@ export async function loadProjectContext(
          select role, content, created_at
            from web_messages
           where conversation_id = c.id
+            and deleted_at is null
             and role in ('user', 'assistant')
           order by created_at desc
           limit 6

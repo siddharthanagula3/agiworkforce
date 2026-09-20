@@ -67,7 +67,7 @@ async function handleGetConversations(request: NextRequest) {
     const where = [
       'user_id = $1',
       'organization_id is not distinct from $2',
-      'exists (select 1 from web_messages where web_messages.conversation_id = web_conversations.id)',
+      'exists (select 1 from web_messages where web_messages.conversation_id = web_conversations.id and web_messages.deleted_at is null)',
     ];
     where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
     const params: unknown[] = [userId, organizationId];
@@ -123,7 +123,8 @@ async function handleGetConversations(request: NextRequest) {
                   sum(
                     (select count(*)
                        from web_messages
-                      where web_messages.conversation_id = web_conversations.id)
+                      where web_messages.conversation_id = web_conversations.id
+                        and web_messages.deleted_at is null)
                   ),
                   0
                 )::text as message_count
