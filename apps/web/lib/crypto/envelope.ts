@@ -403,19 +403,32 @@ function decrypt(
   return Buffer.concat([decipher.update(parts.ciphertext), decipher.final()]).toString('utf8');
 }
 
-// A context-bound open also accepts a ciphertext sealed before contexts existed, and reports
-// that through `contextBound` so the caller can re-seal it; a ciphertext sealed under a
-// DIFFERENT context never opens.
+/**
+ * The associated data an open is bound to, and whether a ciphertext carrying
+ * NONE of it may still open here.
+ *
+ * `acceptUnbound` is not a convenience. A ciphertext sealed without associated
+ * data opens under EVERY context, so a call site that admits one admits a value
+ * written for any other purpose, resource or tenant. Only a store that still
+ * holds rows sealed before its context existed may say true, and it owes a
+ * re-seal; everything else says false and gets a refusal.
+ */
+export interface EnvelopeContext {
+  value: string;
+  acceptUnbound: boolean;
+}
+
 function decryptWithContext(
   key: EnvelopeKey,
   parts: ReturnType<typeof decode>,
-  context: string | undefined,
+  context: EnvelopeContext | undefined,
 ): { plaintext: string; contextBound: boolean } {
   if (context === undefined)
     return { plaintext: decrypt(key, parts, undefined), contextBound: false };
   try {
-    return { plaintext: decrypt(key, parts, context), contextBound: true };
+    return { plaintext: decrypt(key, parts, context.value), contextBound: true };
   } catch (boundError) {
+    if (!context.acceptUnbound) throw boundError;
     try {
       return { plaintext: decrypt(key, parts, undefined), contextBound: false };
     } catch {
@@ -443,7 +456,7 @@ export function openEnvelope(
   ring: KeyRing,
   value: string,
   legacyLayout: Exclude<EnvelopeLayout, 'versioned'>,
-  context?: string,
+  context?: EnvelopeContext,
 ): OpenedEnvelope {
   const keyId = envelopeKeyId(value);
   if (keyId !== null) {

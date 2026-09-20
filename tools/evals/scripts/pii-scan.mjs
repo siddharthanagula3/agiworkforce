@@ -21,6 +21,15 @@ import { fileURLToPath } from 'node:url';
 
 const EVALS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const DATASETS_DIR = path.join(EVALS_ROOT, 'datasets');
+export const RECORDINGS_DIR = path.join(EVALS_ROOT, 'recordings');
+export const MEASUREMENTS_DIR = path.join(EVALS_ROOT, 'measurements');
+
+/**
+ * The corpus is what a run is asked, and these two are what came back and what
+ * it cost. A provider response and a run output are where a production case or
+ * a live credential would actually land, so they are scanned on the same terms.
+ */
+export const SCANNED_DIRS = Object.freeze([DATASETS_DIR, RECORDINGS_DIR, MEASUREMENTS_DIR]);
 
 const TEXT_EXTENSIONS = new Set(['.json', '.txt', '.csv', '.md', '.mjs', '.js']);
 
@@ -54,7 +63,9 @@ const EMAIL = /\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)\b/gu;
 const US_SSN = /\b\d{3}-\d{2}-\d{4}\b/gu;
 const E164_PHONE = /(?<![\w.])\+\d{10,15}(?![\w.])/gu;
 const NANP_PHONE = /(?<![\w-])\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}(?![\w-])/gu;
-const CARD_NUMBER = /(?<![\d-])(?:\d[ -]?){12,18}\d(?![\d-])/gu;
+// A card number is a token of its own. The two lookbehinds and two lookaheads
+// keep it out of a longer hex digest and out of the fraction part of a float.
+const CARD_NUMBER = /(?<![\w-])(?<!\d\.)(?:\d[ -]?){12,18}\d(?![\w-])(?!\.\d)/gu;
 const IPV4 = /(?<![\d.])\d{1,3}(?:\.\d{1,3}){3}(?![\d.])/gu;
 const IBAN = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,28}\b/gu;
 const SECRET_PREFIX =
@@ -150,17 +161,21 @@ export function scanDatasets(root = DATASETS_DIR) {
   return scanFiles(textFilesUnder(root));
 }
 
+/** Every directory a run writes to or reads from, in one pass. */
+export function scanEvalCorpora(roots = SCANNED_DIRS) {
+  return roots.filter((root) => fs.existsSync(root)).flatMap((root) => scanDatasets(root));
+}
+
 function main() {
-  const root = process.argv[2] ? path.resolve(process.argv[2]) : DATASETS_DIR;
-  const findings = scanDatasets(root);
+  const roots = process.argv[2] ? [path.resolve(process.argv[2])] : SCANNED_DIRS;
+  const findings = scanEvalCorpora(roots);
   for (const finding of findings) {
     process.stdout.write(
       `FAIL ${path.relative(EVALS_ROOT, finding.file)}:${finding.line} ${finding.kind} ${finding.redacted}\n`,
     );
   }
-  process.stdout.write(
-    `[evals pii] ${findings.length} personal-data pattern(s) in ${path.relative(EVALS_ROOT, root)}\n`,
-  );
+  const scanned = roots.map((root) => path.relative(EVALS_ROOT, root)).join(', ');
+  process.stdout.write(`[evals pii] ${findings.length} personal-data pattern(s) in ${scanned}\n`);
   if (findings.length > 0) {
     process.stdout.write(
       'A corpus row may not carry real personal data. Replace it with a synthetic value at a reserved documentation domain or range.\n',

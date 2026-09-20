@@ -160,7 +160,10 @@ describe('legacy layouts', () => {
 
     const sealed = encryptConnectorToken('mcp-bearer', 'custom-connector-auth-header');
     expect(
-      openEnvelope(loaded, sealed, 'hex-triple', 'custom-connector-auth-header').plaintext,
+      openEnvelope(loaded, sealed, 'hex-triple', {
+        value: 'custom-connector-auth-header',
+        acceptUnbound: false,
+      }).plaintext,
     ).toBe('mcp-bearer');
     expect(
       decryptConnectorToken(
@@ -174,22 +177,40 @@ describe('legacy layouts', () => {
     const loaded = ring({ TEST_KEY: KEY_ONE });
     const sealed = sealEnvelope(loaded, 'refresh-me', 'versioned', 'oauth-refresh-token');
 
-    expect(openEnvelope(loaded, sealed, 'hex-triple', 'oauth-refresh-token')).toMatchObject({
+    expect(
+      openEnvelope(loaded, sealed, 'hex-triple', {
+        value: 'oauth-refresh-token',
+        acceptUnbound: false,
+      }),
+    ).toMatchObject({
       plaintext: 'refresh-me',
       contextBound: true,
     });
-    expect(() => openEnvelope(loaded, sealed, 'hex-triple', 'oauth-access-token')).toThrow();
+    expect(() =>
+      openEnvelope(loaded, sealed, 'hex-triple', {
+        value: 'oauth-access-token',
+        acceptUnbound: true,
+      }),
+    ).toThrow();
     expect(() => openEnvelope(loaded, sealed, 'hex-triple')).toThrow();
   });
 
-  it('still opens a pre-context ciphertext and says so, so callers can re-seal it', () => {
+  it('opens a pre-context ciphertext only where the call site admits one, and says so', () => {
     const loaded = ring({ TEST_KEY: KEY_ONE });
     const legacy = sealEnvelope(loaded, 'old-token', 'hex-triple');
 
-    expect(openEnvelope(loaded, legacy, 'hex-triple', 'oauth-access-token')).toMatchObject({
-      plaintext: 'old-token',
-      contextBound: false,
-    });
+    expect(() =>
+      openEnvelope(loaded, legacy, 'hex-triple', {
+        value: 'oauth-access-token',
+        acceptUnbound: false,
+      }),
+    ).toThrow();
+    expect(
+      openEnvelope(loaded, legacy, 'hex-triple', {
+        value: 'oauth-access-token',
+        acceptUnbound: true,
+      }),
+    ).toMatchObject({ plaintext: 'old-token', contextBound: false });
   });
 
   it('round-trips the b64-iv-ct-tag layout it inherited from device-token-crypto', () => {
@@ -250,7 +271,7 @@ describe('production readers survive a rotation', () => {
         ring({ TEST_KEY: KEY_TWO }),
         encryptConnectorToken('fresh', 'custom-connector-auth-header'),
         'hex-triple',
-        'custom-connector-auth-header',
+        { value: 'custom-connector-auth-header', acceptUnbound: false },
       ).plaintext,
     ).toBe('fresh');
   });

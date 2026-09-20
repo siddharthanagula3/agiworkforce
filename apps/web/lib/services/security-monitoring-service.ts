@@ -49,11 +49,27 @@ type StoredSecurityAuditLogRow = Omit<SecurityAuditLogRow, 'severity'> & {
   severity: StoredSecurityEventSeverity;
 };
 
+/**
+ * Two writers share this table. `logSecurityEvent` writes the severity this
+ * service reports; `recordAuditEvent` writes the audit vocabulary. Reading
+ * normalizes them, so a filter has to widen the other way or it silently drops
+ * every audited event at the severity it was asked for.
+ */
+const AUDIT_SEVERITY_ALIAS: Readonly<Record<string, SecurityEventSeverity>> = Object.freeze({
+  info: 'low',
+  warning: 'medium',
+  error: 'high',
+});
+
 function normalizeSecuritySeverity(severity: StoredSecurityEventSeverity): SecurityEventSeverity {
-  if (severity === 'info') return 'low';
-  if (severity === 'warning') return 'medium';
-  if (severity === 'error') return 'high';
-  return severity;
+  return AUDIT_SEVERITY_ALIAS[severity] ?? (severity as SecurityEventSeverity);
+}
+
+export function storedSeveritiesFor(severity: SecurityEventSeverity): string[] {
+  const aliases = Object.entries(AUDIT_SEVERITY_ALIAS)
+    .filter(([, normalized]) => normalized === severity)
+    .map(([stored]) => stored);
+  return [severity, ...aliases];
 }
 
 function toSecurityEvent(row: StoredSecurityAuditLogRow): SecurityEvent {
@@ -124,8 +140,8 @@ export class SecurityMonitoringService {
       const conditions: string[] = [];
 
       if (severity) {
-        params.push(severity);
-        conditions.push(`severity = $${params.length}`);
+        params.push(storedSeveritiesFor(severity));
+        conditions.push(`severity = any($${params.length}::text[])`);
       }
       if (eventType) {
         params.push(eventType);
@@ -249,8 +265,8 @@ export class SecurityMonitoringService {
           conditions.push(`event_type = $${params.length}`);
         }
         if (threshold.severity) {
-          params.push(threshold.severity);
-          conditions.push(`severity = $${params.length}`);
+          params.push(storedSeveritiesFor(threshold.severity));
+          conditions.push(`severity = any($${params.length}::text[])`);
         }
 
         const where = conditions.join(' and ');

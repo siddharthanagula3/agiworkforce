@@ -72,6 +72,8 @@ function getKeyRing(): KeyRing {
 
 // The purpose is bound into the authentication tag, so a ciphertext lifted from one column
 // or row cannot be opened as another secret class by the server on an attacker's behalf.
+// Rows written before the purpose existed carry no associated data and are still admitted,
+// which is what `acceptUnbound` states; they are owed a re-seal.
 export function encryptConnectorToken(token: string, purpose: ConnectorSecretPurpose): string {
   return sealEnvelope(getKeyRing(), token, 'hex-triple', purpose);
 }
@@ -80,7 +82,10 @@ export function decryptConnectorToken(
   encryptedValue: string,
   purpose: ConnectorSecretPurpose,
 ): string {
-  return openEnvelope(getKeyRing(), encryptedValue, 'hex-triple', purpose).plaintext;
+  return openEnvelope(getKeyRing(), encryptedValue, 'hex-triple', {
+    value: purpose,
+    acceptUnbound: true,
+  }).plaintext;
 }
 
 export function bearerCredential(token: string): CustomConnectorCredential {
