@@ -12,6 +12,15 @@ repository-owned release path, deploy the website and its required services,
 prove `https://agiworkforce.com` serves the resulting commit, and hand the
 release to a separate comprehensive production QA session.
 
+## Main push completed, 2026-09-20
+
+A normal `git push origin HEAD:main` with all hooks enabled advanced remote
+`main` from `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70` to `833c6d336`.
+The complete operability guard chain passed in the isolated pre-push checkout,
+including migration dependencies. This includes the application changes and
+production migration evidence. Documentation follow-up reconciles the remaining
+production queue; no deployment or new launch approval is claimed.
+
 ## Production migrations applied, 2026-09-20
 
 The owner explicitly authorized production migration apply after the blocked main
@@ -80,20 +89,20 @@ it could not establish the database status. A subsequent read-only Neon MCP quer
 against the production branch confirmed **248 applied migrations, maximum sequence
 248**. Migrations 0249 through 0273 were unapplied at that attempt; the later apply is recorded above. The independent
 object-backup prerequisite recorded below remains unresolved. Production migrations
-were not applied. Remote `main` remains `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`;
+were not applied during that earlier attempt. Remote `main` then remained `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`;
 no production deployment or successful push is claimed.
 
 ## Release ledger
 
-| Item                   | Current evidence                                                                                                                                                                                                                             | State                                                                                                                                     |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Local candidate        | `codex/website-launch-preparation-20260919`; integration commit `c4097d64ad20ba65c29e7d337ae5da6814352cde`, corpus/evidence commit `9c465d7c736c5ce47e6537b4a9ea5d9a2a0d7eb8`, pre-push candidate `978cc12daaf244059c3dc243d114d7c9541163e7` | The branch containing this report is clean and 20 commits ahead of `origin/main`; all 759 paths are classified in the inclusion inventory |
-| Remote `main`          | `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`                                                                                                                                                                                                   | Latest push CI is failing                                                                                                                 |
-| Production web         | `/api/version` reports `eb09a3242df1e003d72702ff6b51b5f641412440` in `production`                                                                                                                                                            | Healthy response, but behind both remote and local `main`                                                                                 |
-| GitHub protection      | Branch protection endpoint returns `404`; repository rulesets list is empty                                                                                                                                                                  | No enforced protected merge process is configured                                                                                         |
-| Production deploy path | `.github/workflows/deploy-production.yml`                                                                                                                                                                                                    | Requires successful push-triggered `CI` for the exact `main` SHA and the same-SHA staging verdict                                         |
-| Database release path  | staging applies pending migrations; production verifies the ledger before deployment                                                                                                                                                         | Production verified through 0273 on 2026-09-20; zero pending migrations and zero drift                                                    |
-| Production smoke       | Not started                                                                                                                                                                                                                                  | Requires the deployed exact SHA; interactive model smoke must use Luna                                                                    |
+| Item                   | Current evidence                                                                                                                                                                                                                             | State                                                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Local candidate        | `codex/website-launch-preparation-20260919`; integration commit `c4097d64ad20ba65c29e7d337ae5da6814352cde`, corpus/evidence commit `9c465d7c736c5ce47e6537b4a9ea5d9a2a0d7eb8`, pre-push candidate `978cc12daaf244059c3dc243d114d7c9541163e7` | Application changes and migration evidence pushed to main at 833c6d336; all 759 original paths are classified in the inclusion inventory |
+| Remote `main`          | `833c6d336`, normal push confirmed on 2026-09-20                                                                                                                                                                                             | Full local pre-push chain passed; exact-SHA CI and deployment still need separate verification                                           |
+| Production web         | `/api/version` reports `eb09a3242df1e003d72702ff6b51b5f641412440` in `production`                                                                                                                                                            | Healthy response, but behind both remote and local `main`                                                                                |
+| GitHub protection      | Branch protection endpoint returns `404`; repository rulesets list is empty                                                                                                                                                                  | No enforced protected merge process is configured                                                                                        |
+| Production deploy path | `.github/workflows/deploy-production.yml`                                                                                                                                                                                                    | Requires successful push-triggered `CI` for the exact `main` SHA and the same-SHA staging verdict                                        |
+| Database release path  | staging applies pending migrations; production verifies the ledger before deployment                                                                                                                                                         | Production verified through 0273 on 2026-09-20; zero pending migrations and zero drift                                                   |
+| Production smoke       | Not started                                                                                                                                                                                                                                  | Requires the deployed exact SHA; interactive model smoke must use Luna                                                                   |
 
 ## Inclusion inventory
 
