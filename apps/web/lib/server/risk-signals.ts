@@ -8,9 +8,12 @@ import { hashIpAddress } from '@/lib/server/ip-hash';
 
 export const RISK_SIGNALS = [
   'new_device',
+  'new_browser',
   'new_location',
   'impossible_travel',
   'repeated_auth_failures',
+  'credential_stuffing',
+  'recovery_attempt',
   'new_device_with_factor_change',
 ] as const;
 
@@ -26,8 +29,17 @@ export interface RiskObservation {
   latitude: number | null;
   longitude: number | null;
   deviceRef: string | null;
+  userAgentRef: string | null;
   surface: string | null;
   observedAt: string;
+}
+
+/**
+ * What the account's own history cannot answer. Reading it needs a query
+ * across accounts, so it is supplied rather than derived.
+ */
+export interface RiskContext {
+  otherAccountsFailedFromAddress?: number;
 }
 
 export interface RiskAssessment {
@@ -42,10 +54,15 @@ const IMPOSSIBLE_TRAVEL_MIN_KM = 500;
 const AUTH_FAILURE_WINDOW_MS = 15 * 60_000;
 const AUTH_FAILURE_THRESHOLD = 5;
 const FACTOR_CHANGE_WINDOW_MS = 60 * 60_000;
+/** Spraying one password over many accounts, rather than many over one. */
+const STUFFING_WINDOW_MS = 24 * 60 * 60_000;
+const STUFFING_ACCOUNT_THRESHOLD = 3;
 const HISTORY_LIMIT = 50;
 const EARTH_RADIUS_KM = 6371;
 
-const FACTOR_CHANGE_EVENTS: ReadonlySet<string> = new Set([
+const RECOVERY_EVENT_KEY = 'recovery_requested';
+
+export const FACTOR_CHANGE_EVENTS: ReadonlySet<string> = new Set([
   'password_changed',
   'email_changed',
   'two_factor_enabled',
@@ -53,11 +70,13 @@ const FACTOR_CHANGE_EVENTS: ReadonlySet<string> = new Set([
   'backup_codes_regenerated',
   'passkey_added',
   'passkey_removed',
+  RECOVERY_EVENT_KEY,
 ]);
 
 const COMPROMISE_SIGNALS: ReadonlySet<RiskSignal> = new Set<RiskSignal>([
   'impossible_travel',
   'repeated_auth_failures',
+  'credential_stuffing',
   'new_device_with_factor_change',
 ]);
 
@@ -96,6 +115,7 @@ function hasCoordinates(
 export function assessRisk(
   history: readonly RiskObservation[],
   current: RiskObservation,
+  context: RiskContext = {},
 ): RiskAssessment {
   const signals = new Set<RiskSignal>();
   const currentAt = millis(current.observedAt);
@@ -105,6 +125,10 @@ export function assessRisk(
     !current.deviceRef || successes.some((entry) => entry.deviceRef === current.deviceRef);
   const isNewDevice = successes.length > 0 && !knownDevice;
   if (isNewDevice) signals.add('new_device');
+
+  const knownBrowser =
+    !current.userAgentRef || successes.some((entry) => entry.userAgentRef === current.userAgentRef);
+  if (successes.length > 0 && !knownBrowser) signals.add('new_browser');
 
   if (
     current.country &&
@@ -135,6 +159,21 @@ export function assessRisk(
   const failuresIncludingCurrent = recentFailures + (current.outcome === 'failure' ? 1 : 0);
   if (failuresIncludingCurrent >= AUTH_FAILURE_THRESHOLD) signals.add('repeated_auth_failures');
 
+  if ((context.otherAccountsFailedFromAddress ?? 0) >= STUFFING_ACCOUNT_THRESHOLD) {
+    signals.add('credential_stuffing');
+  }
+
+  if (
+    current.eventKey === RECOVERY_EVENT_KEY ||
+    history.some(
+      (entry) =>
+        entry.eventKey === RECOVERY_EVENT_KEY &&
+        currentAt - millis(entry.observedAt) <= FACTOR_CHANGE_WINDOW_MS,
+    )
+  ) {
+    signals.add('recovery_attempt');
+  }
+
   if (
     isNewDevice &&
     history.some(
@@ -163,6 +202,7 @@ interface ObservationRow {
   latitude: number | string | null;
   longitude: number | string | null;
   device_ref: string | null;
+  user_agent_ref: string | null;
   surface: string | null;
   observed_at: string | Date;
 }
@@ -178,6 +218,7 @@ function toObservation(row: ObservationRow): RiskObservation {
     latitude: latitude !== null && Number.isFinite(latitude) ? latitude : null,
     longitude: longitude !== null && Number.isFinite(longitude) ? longitude : null,
     deviceRef: row.device_ref,
+    userAgentRef: row.user_agent_ref ?? null,
     surface: row.surface,
     observedAt: row.observed_at instanceof Date ? row.observed_at.toISOString() : row.observed_at,
   };
@@ -189,7 +230,7 @@ export async function readRecentObservations(
   limit = HISTORY_LIMIT,
 ): Promise<RiskObservation[]> {
   const rows = await db.query<ObservationRow>(
-    `select event_key, outcome, ip_hash, country, latitude, longitude, device_ref, surface, observed_at
+    `select event_key, outcome, ip_hash, country, latitude, longitude, device_ref, user_agent_ref, surface, observed_at
        from public.identity_risk_observations
       where user_id = $1
       order by observed_at desc
@@ -197,6 +238,28 @@ export async function readRecentObservations(
     [userId, Math.max(1, Math.min(HISTORY_LIMIT, limit))],
   );
   return rows.map(toObservation);
+}
+
+/**
+ * How many other accounts this address has failed against lately. Repeated
+ * failures against one account is a different attack from one password tried
+ * against many, and only this query can tell them apart.
+ */
+export async function countOtherAccountsFailedFromAddress(
+  db: DatabaseAdapter,
+  input: { userId: string; ipHash: string; since: string },
+): Promise<number> {
+  const [row] = await db.query<{ accounts: number | string | null }>(
+    `select count(distinct user_id) as accounts
+       from public.identity_risk_observations
+      where ip_hash = $1
+        and user_id <> $2
+        and outcome = 'failure'
+        and observed_at >= $3`,
+    [input.ipHash, input.userId, input.since],
+  );
+  const parsed = Number(row?.accounts ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
 }
 
 export interface ObservationInput {
@@ -212,7 +275,9 @@ export interface ObservationInput {
 const COUNTRY_HEADER = 'x-vercel-ip-country';
 const LATITUDE_HEADER = 'x-vercel-ip-latitude';
 const LONGITUDE_HEADER = 'x-vercel-ip-longitude';
+const CLIENT_HEADER = 'user-agent';
 const IP_HASH_DOMAIN = 'identity-risk';
+const CLIENT_HASH_DOMAIN = 'identity-risk-client';
 
 function coordinate(value: string | null, bound: number): number | null {
   if (!value) return null;
@@ -224,6 +289,7 @@ export function observationFromRequest(input: ObservationInput): RiskObservation
   const request = input.request;
   const ip = request ? getClientIp(request) : undefined;
   const country = request?.headers.get(COUNTRY_HEADER)?.trim().toUpperCase() ?? null;
+  const client = request?.headers.get(CLIENT_HEADER)?.trim() ?? '';
   return {
     eventKey: input.eventKey,
     outcome: input.outcome ?? 'success',
@@ -232,6 +298,7 @@ export function observationFromRequest(input: ObservationInput): RiskObservation
     latitude: coordinate(request?.headers.get(LATITUDE_HEADER) ?? null, 90),
     longitude: coordinate(request?.headers.get(LONGITUDE_HEADER) ?? null, 180),
     deviceRef: input.deviceRef?.trim() || null,
+    userAgentRef: client ? hashIpAddress(client, CLIENT_HASH_DOMAIN) : null,
     surface: input.surface?.trim() || null,
     observedAt: input.observedAt ?? new Date().toISOString(),
   };
@@ -253,13 +320,26 @@ export async function recordIdentityObservation(
     logger.warn({ error, userId: input.userId }, '[risk-signals] history unavailable');
   }
 
-  const assessment = assessRisk(history, current);
+  const context: RiskContext = {};
+  if (current.ipHash) {
+    try {
+      context.otherAccountsFailedFromAddress = await countOtherAccountsFailedFromAddress(db, {
+        userId: input.userId,
+        ipHash: current.ipHash,
+        since: new Date(millis(current.observedAt) - STUFFING_WINDOW_MS).toISOString(),
+      });
+    } catch (error) {
+      logger.warn({ error, userId: input.userId }, '[risk-signals] address reuse unavailable');
+    }
+  }
+
+  const assessment = assessRisk(history, current, context);
 
   try {
     await db.execute(
       `insert into public.identity_risk_observations
-         (user_id, event_key, outcome, ip_hash, country, latitude, longitude, device_ref, surface, observed_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         (user_id, event_key, outcome, ip_hash, country, latitude, longitude, device_ref, user_agent_ref, surface, observed_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         input.userId,
         current.eventKey,
@@ -269,6 +349,7 @@ export async function recordIdentityObservation(
         current.latitude,
         current.longitude,
         current.deviceRef,
+        current.userAgentRef,
         current.surface,
         current.observedAt,
       ],
