@@ -110,7 +110,7 @@ describe('the five stages are separate answers, not one boolean', () => {
             maxReasoningEffort: WORKSPACE_REASONING_EFFORTS[0],
           },
         }),
-        { reasoningEffort: WORKSPACE_REASONING_EFFORTS.at(-1) },
+        { reasoningEffort: WORKSPACE_REASONING_EFFORTS[WORKSPACE_REASONING_EFFORTS.length - 1] },
       ),
     ).toBe('reasoning_effort_capped');
   });
