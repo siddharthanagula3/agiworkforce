@@ -1,5 +1,5 @@
 import markdownit from 'markdown-it';
-import DOMPurify from 'dompurify';
+import DOMPurify, { type Config } from 'dompurify';
 import { findPathReferences } from '../utils/pathReferences';
 
 const md = markdownit({
@@ -36,7 +36,7 @@ md.renderer.rules.code_block = (tokens, index) => {
   return token ? renderCodeBlock(token.content) : '';
 };
 
-export const PURIFY_CONFIG: DOMPurify.Config = {
+export const PURIFY_CONFIG: Config = {
   FORBID_TAGS: [
     'img',
     'picture',
@@ -112,7 +112,7 @@ function linkifyPathReferences(root: DocumentFragment): void {
 function render(markdown: string): string {
   if (typeof markdown !== 'string') return '';
   const html = md.render(markdown);
-  const sanitized = DOMPurify.sanitize(html, PURIFY_CONFIG) as string;
+  const sanitized = DOMPurify.sanitize(html, PURIFY_CONFIG);
   const template = document.createElement('template');
   template.innerHTML = sanitized;
   linkifyPathReferences(template.content);
