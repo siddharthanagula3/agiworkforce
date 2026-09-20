@@ -161,7 +161,7 @@ describe('a refusal is counted by the layer that made it', () => {
   it('counts a model a workspace policy refused as a policy denial', async () => {
     const decision = await evaluateModelAccessForOrganization(stubDatabase(), 'org_1', {
       provider: 'openai',
-      modelId: 'gpt-5',
+      modelId: 'model-under-test',
     } as Parameters<typeof evaluateModelAccessForOrganization>[2]);
     expect(decision.allowed).toBe(false);
 
@@ -189,7 +189,7 @@ describe('a refusal is counted by the layer that made it', () => {
     await expect(assertCapabilityAvailable(subject(), 'canChat', 'Chat')).rejects.toThrow();
     await evaluateModelAccessForOrganization(stubDatabase(), 'org_1', {
       provider: 'openai',
-      modelId: 'gpt-5',
+      modelId: 'model-under-test',
     } as Parameters<typeof evaluateModelAccessForOrganization>[2]);
     await resolveEntitlementBundle(stubDatabase(), 'user_1', { includeSeats: false });
 

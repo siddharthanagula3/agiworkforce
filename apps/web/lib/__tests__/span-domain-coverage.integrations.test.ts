@@ -252,14 +252,19 @@ describe('span domain coverage for work handed to a dependency', () => {
 
   it('emits a model span carrying the provider request id and no prompt text', async () => {
     const chatRequest = {
-      model: 'claude-opus-5',
+      model: 'model-under-test',
       messages: [{ role: 'user', content: 'my password is hunter2' }],
       tools: [],
     } as unknown as ChatRequest;
 
     await startProviderStream(
       streamingAdapter([
-        { type: 'response-meta', id: 'req_abc123', model: 'claude-opus-5', provider: 'anthropic' },
+        {
+          type: 'response-meta',
+          id: 'req_abc123',
+          model: 'model-under-test',
+          provider: 'anthropic',
+        },
         { type: 'text-delta', delta: 'hi' },
       ] as unknown as StreamChunk[]),
       chatRequest,
@@ -272,13 +277,13 @@ describe('span domain coverage for work handed to a dependency', () => {
     expect(spans[0]!['span_name']).toBe('gen_ai.stream.start');
     expect(spans[0]!['agi.provider.request_id']).toBe('req_abc123');
     expect(spans[0]!['gen_ai.provider.name']).toBe('anthropic');
-    expect(spans[0]!['gen_ai.response.model']).toBe('claude-opus-5');
+    expect(spans[0]!['gen_ai.response.model']).toBe('model-under-test');
     expect(spans[0]!['status']).toBe('ok');
     expect(JSON.stringify(spans[0])).not.toContain('hunter2');
   });
 
   it('marks the model span errored and keeps the provider error code when the stream opens with one', async () => {
-    const chatRequest = { model: 'claude-opus-5', messages: [] } as unknown as ChatRequest;
+    const chatRequest = { model: 'model-under-test', messages: [] } as unknown as ChatRequest;
 
     await expect(
       startProviderStream(
