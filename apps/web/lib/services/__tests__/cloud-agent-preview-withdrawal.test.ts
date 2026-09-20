@@ -30,7 +30,7 @@ function seeded(conversationDeletedAt: string | null = null) {
         work_mode: 'agiwork',
         state: 'running',
         provider: 'anthropic',
-        model: 'claude-opus-5',
+        model: 'model-under-test',
         last_event_sequence: 1,
         cancellation_requested_at: null,
         pause_requested_at: null,

@@ -18,6 +18,7 @@ const cloudModules = [
   'library',
   'managed-media',
   'me',
+  'client-handshake',
   'sync',
   'managed-cloud-settings-client',
   'projects',

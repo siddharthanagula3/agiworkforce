@@ -51,6 +51,7 @@ export const MATURITY_VOCABULARY = Object.freeze({
 export const VERSION_SYMBOLS = Object.freeze([
   'packages/contracts/types/src/developer-session-versioning.ts',
   'apps/web/lib/api-gateway-policy.ts',
+  'packages/contracts/cloud-contracts/src/client-handshake.ts',
 ]);
 
 const FEATURE_ID = /^[a-z][a-z0-9_]*$/;
