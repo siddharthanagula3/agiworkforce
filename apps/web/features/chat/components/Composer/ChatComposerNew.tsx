@@ -40,6 +40,7 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
 import { ComposerFooter } from './ComposerFooter';
+import { freeQuotaSelection } from '../../lib/free-quota-selection';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
@@ -1065,12 +1066,17 @@ const ChatComposerNewComponent = ({
     }
   }, [availableVideoModels, mediaAvailabilityStatus, videoModelId]);
 
-  const trialExhausted = isFreeTrial && (freeTrial?.limitReached ?? false);
-
   // Capability gating: enable/disable composer affordances based on the SELECTED
   // model's capabilities so a user never sends an input the model can't handle
   // (e.g. an image to a text-only model, or web search to a no-search model).
   const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
+  const freeQuotaSelected = Boolean(freeQuotaSelection(composerSelectedModelId));
+  const trialExhausted = !freeQuotaSelected && isFreeTrial && (freeTrial?.limitReached ?? false);
+  useEffect(() => {
+    if (freeQuotaSelected && (imageMode || videoMode)) {
+      setComposerToggles({ imageMode: false, videoMode: false });
+    }
+  }, [freeQuotaSelected, imageMode, videoMode, setComposerToggles]);
   const setComposerSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const isAutoSelected = isAutoModeModelId(composerSelectedModelId);
   const selectedModelMeta = getModelMetadata(composerSelectedModelId);
@@ -2469,6 +2475,8 @@ const ChatComposerNewComponent = ({
       return;
     }
 
+    if (freeQuotaSelected) sendImageMode = false;
+
     if (sendImageMode && outgoingContent.trim()) {
       // A diagram, chart or vector is structured text the Artifacts system
       // renders exactly; a raster model draws an unreadable picture of one.
@@ -2552,7 +2560,7 @@ const ChatComposerNewComponent = ({
     // Video generation mode: same delegation contract as image. The task runs
     // for a minute or more behind a status poll, so it is deliberately not part
     // of the streaming turn and is not queued.
-    if (videoMode) {
+    if (videoMode && !freeQuotaSelected) {
       if (isTurnActive) return;
       // AUDIT-FIX MEDIA-VIDEO-01: same contract as image above. The video
       // request schema has no reference-image field at all, so an attachment
@@ -2699,6 +2707,7 @@ const ChatComposerNewComponent = ({
     hasAttachmentConflict,
     localAttachmentConflict,
     trialExhausted,
+    freeQuotaSelected,
     onUpgradeRequest,
     imageMode,
     effectiveImageAspectRatio,

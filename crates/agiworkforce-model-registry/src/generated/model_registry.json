@@ -39260,6 +39260,13 @@
       "verifiedBy": "catalog-developers-and-provider-labels",
       "status": "ADDITION",
       "notes": "Every model now carries a developer (who trained it) separate from its provider (which route serves it), resolved from catalog/developers.json: a first-party provider inherits its developer, a host such as groq or open_router resolves through the author segment of the upstream model id, so GPT-OSS on Groq is an OpenAI model and a synced OpenRouter entry keeps its author. The qwen provider label becomes Alibaba Model Studio because that provider id is the DashScope account that serves Qwen and third-party models; the Qwen developer label stays Qwen."
+    },
+    {
+      "id": "verification/2026-09-19/51",
+      "date": "2026-09-19",
+      "verifiedBy": "user-qwencloud-benefits-screenshots-and-authenticated-model-list",
+      "status": "ADDITION",
+      "notes": "Added 272 provider offering observations as an explicitly separate quota inventory: 205 fully visible provider IDs and 67 truncated IDs retained as unresolved. This inventory does not admit models to production routing, override lifecycle retirement, change paid prices, or establish account-bound free eligibility. Allocation evidence remains in apps/web/config/free-pools.json. Read-only discovery with the configured key returned 169 IDs; discovery alone does not prove its account owns the screenshot allocations."
     }
   ],
   "retiredModels": {

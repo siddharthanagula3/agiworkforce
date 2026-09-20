@@ -448,7 +448,7 @@
           "ordinal": 4,
           "heading": "Rename, archive and delete",
           "headingPath": "Start, steer and manage a chat › Rename, archive and delete",
-          "text": "The conversation title menu renames a chat. Archiving moves it out of the\nsidebar without deleting anything, and Settings holds an **Archived chats** list\nthat restores or permanently deletes them. A deleted chat goes to **Recently\ndeleted** in Settings, where it can be put back or removed for good."
+          "text": "The conversation title menu renames a chat. Archiving moves it out of the\nsidebar without deleting anything, and Settings holds an **Archived chats** list\nthat restores a chat or moves it to **Recently deleted**. A deleted chat stays\nthere until you restore it; the product does not currently offer permanent chat\ndeletion separately from deleting your account."
         },
         {
           "id": "chat-basics#5",
@@ -591,7 +591,7 @@
         "account erasure",
         "remove my data"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-19",
       "source": "content/support/delete-your-account.md",
       "chunks": [
         {
@@ -620,7 +620,7 @@
           "ordinal": 3,
           "heading": "Deleting conversations without deleting the account",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Deleting conversations without deleting the account",
-          "text": "Settings, Privacy has narrower options: **Archive all chats**, which moves every\nchat out of the sidebar and can be undone from Archived chats, and **Delete all\nchats**, which permanently deletes every active and archived conversation. Both\nask first and name what they do."
+          "text": "Settings, Privacy has narrower controls for the workspace you are currently\nusing. **Archive all chats** moves that workspace's chats out of the sidebar and\ncan be undone from Archived chats. **Delete all chats** moves that workspace's\nactive and archived conversations to Recently deleted, where you can restore\nthem. Both ask first and name the current-workspace scope."
         }
       ]
     },

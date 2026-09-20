@@ -363,3 +363,321 @@ project export JSON, account-export media links, workspace authorization, exact 
 opaque handling for active document types. No owner file was saved and no production storage was
 contacted. The previous project-source/media byte limitation is closed for deterministic local scope;
 DATA-CONTROLS remains pending for the separately recorded mobile browser and broader control gaps.
+
+## Mobile Account geometry verification
+
+The native local PostgreSQL and Redis configuration supported a fresh authenticated Browser pass
+without the prior connection loss. At 390×844 and 320×700 the repaired session table exactly matches
+its horizontal wrapper, action buttons remain inside the viewport, desktop columns are hidden, mobile
+metadata is visible and the document has no horizontal overflow. The 320px view exposed a separate
+recent-activity label/count ellipsis. Jev selected a stacked phone row with 0.53 confidence (request
+`b69a88133482293f17e4093385725052c20125e8f7e0e3936e9aa083f9a10983`); the complete event,
+device and timestamp now stack on phones and return to a compact two-column row at the small
+breakpoint. The focused regression protects the no-ellipsis contract. Four Account/activity files
+pass 17 tests, focused lint/format/diff checks pass, and the final 320px screenshot shows the complete
+`Viewed account data ×36` label and timestamp. DATA-CONTROLS remains pending only for its separately
+recorded destructive/external behavior gaps; the mobile Account layout limitation is closed.
+
+## Workspace-scoped destructive controls
+
+Jev selected deterministic destructive-data verification with 0.79 confidence (request
+`53dba9d7a72be7c89764e0e8fdb74db6e458f753d805740368f2e14ca26403e5`) and then selected
+active-workspace copy alignment with 1.00 confidence (request
+`8c0720dd70d4304e15dab2bfb11a3ad989db8a418302b4dc3d515f1fad825fbb`). The Privacy UI
+promised account-wide archive/delete while both canonical routes were active-workspace scoped, and
+Help called recoverable soft deletion permanent. Four regressions failed before repair. Settings,
+Archived chats and Help now name the current workspace and Recently deleted restoration without a
+purge promise or nonexistent permanent-delete control.
+
+Browser showed the actual count of two and the corrected archive/delete dialogs; both were cancelled.
+The UI fits at 390×844 and 320×700. A real PostgreSQL transaction soft-deleted exactly two disposable
+workspace conversations, preserved the personal conversation, matched one disposable account
+schedule and rolled back with zero residue. Fourteen deletion/account/Help files pass 237 tests and
+five Privacy files pass 15 tests; focused lint, formatting, corpus and diff checks pass. DATA-CONTROLS
+remains pending because the owner account was not erased, permanent chat erasure is not available
+separately from account deletion, and external behavior remains outside this local evidence.
+
+## Tool-loop latency observability
+
+The tool loop already measured first-provider-line latency for route health and routing-decision
+outcomes, so the routing layer was not blind. The missing piece was the human-readable diagnostic
+event available on the direct streaming path. Jev selected a per-provider-step event with 1.00
+confidence (request `215a88533a2e3e1e7dcf177e39a4f6f425988da9236518604f2dcb01fd9fe1b3`).
+Each successful tool-loop provider step now emits `llm_ttft_observed` with the actual serving route,
+provider, model, request, logical operation and retry attempt, plus `llm_ttft_slo_breach` when the
+existing threshold is exceeded. The event explicitly identifies its measurement as first provider
+line, which can be text, thinking or a tool call. The focused regression failed before the repair and
+now proves an exact 200ms measurement; three observability, route-outcome and failover files pass 19
+tests with focused lint and formatting. Provider credits remain unavailable, so a new successful
+live-model latency comparison is still blocked and no end-to-end speed improvement is claimed.
+
+## Scheduled account erasure integrity
+
+Jev selected a disposable real-database erasure probe with 1.00 confidence (request
+`126b2b59927f74a0735fa3dfd2c257abb11610f51e5b6585a7ffa367a1352d82`). The probe reached a
+real defect: account erasure attempted to remove the user from a personal usage-ledger row that had
+no organization, violating the ledger rule that every row retain an organization or user. The erasure
+stopped before identity and profile removal, and its retry detail named the intentionally retained
+profile instead of the failing ledger.
+
+Jev selected row partitioning with 1.00 confidence (request
+`4b76b049b807ae180aa8d9dcb2cda4adf8aec89eb6131f3e2af744020672419c`). Personal ledger rows
+now leave with the account; organization billing history remains with the user identity removed.
+Retry detail now names failed deletion, anonymization, stored-object and cache categories. The same
+opt-in PostgreSQL probe now completes the scheduled path, closes the tombstone, deletes subject-owned
+rows, anonymizes the retained financial rows and leaves zero synthetic residue. Twelve related files
+pass 193 tests with focused lint and formatting. The identity provider was spied, stored-object tables
+had no fixture bytes and the signed-in owner was untouched; those external boundaries remain open.
+
+## Browser-first QA checkpoint
+
+The owner changed the execution order to complete Browser discovery before further repairs. The
+in-app Browser pass covered authenticated chat, projects, Library, Models, Study, Schedules, every
+Settings section, saved-chat search, an existing latency conversation, a failed Work item, public
+Pricing/Help/Support/Contact/Security/Status, and the Enterprise overview, members, roles, identity,
+policy, models, connectors, Code, MCP, sharing, audit, data, usage and billing surfaces. Desktop,
+tablet and phone-sized layouts were inspected. No application source was changed during discovery.
+
+Seventeen confirmed findings are recorded in `QA_ISSUES.md#browser-first-discovery-pass-2026-09-19`.
+The highest-priority set is: the Turbopack/esbuild process deadlocked twice during ordinary
+navigation; the Enterprise audit trail rejects the signed-in owner as unauthenticated; workspace
+policy, identity and overview disagree about what is enforced; public Enterprise pricing overstates
+SSO/SCIM/audit readiness; successful chat recovery retains a failed block; Work exposes a raw
+provider reason code; status does not exercise inference; and mobile navigation/composer controls
+move off-screen or overlap. No repair attempt has started for this batch.
+
+The local migration ledger is now 272 applied, one pending and one drift, invalidating the earlier
+zero-pending/zero-drift environment statement. Free through Max 15x limit evidence was not replayed:
+its four canonical billing/usage fingerprints still match, including the exact 15× Pro managed-usage
+ratios. Public security headers and mobile Pricing layout passed. Provider generation remains blocked
+by exhausted credits. The next authorized phase is to repair this consolidated list one issue at a
+time, beginning with the runtime and Enterprise audit blockers, while retaining the pass evidence to
+avoid unchanged replay.
+
+## Planning-only checkpoint, 2026-09-19
+
+The owner requested a plan before further work. `LAUNCH_PLAN.md` now defines evidence reconciliation,
+website requirement accounting, runtime/schema readiness, remaining discovery, security and data
+integrity, chat/latency, responsive UI, commercial/integration correctness and targeted acceptance.
+No application source, service, schema, account or production setting was changed during planning.
+
+The previous “17 confirmed” summary was overstated. Current source already describes Desktop as
+managed cloud, and Identity's “Not yet available” heading concerns mandatory SSO and group-scoped
+entitlements, not deprovisioning. Those allegations are withdrawn. Billing-contract, zero-token and
+status observations require qualification before claiming runtime defects. The earlier broad QA pass
+is partial until website requirement accounting and remaining workflow dispositions are complete.
+The issue and coverage records now carry these corrections without changing the frozen audit.
+
+Next action: complete requirement-to-scenario mapping and remaining-discovery dispositions, then
+investigate the local runtime exits and schema/configuration prerequisites. Follow the plan's gates;
+do not begin product repairs simply because one page has been inspected.
+
+## Historical unverified-cohort verification, 2026-09-19
+
+The owner requested verification of the exact 6,639 historical unverified rows.
+Current overlay: 132 requirement/source assessments (5 done, 102 partial, 17
+missing, 8 still unverified); 568 additional prerequisite-only checks remain
+unverified; 5,939 rows are not yet assessed. Across the entire cohort, 6,515 remain
+unverified. This is an incomplete verification checkpoint, not completion of the
+audit or launch approval. Frozen original decisions and GLOBAL NO-GO are preserved.
+
+Checkpoint, row evidence and accounting:
+`docs/work/checklist-reaudit/CURRENT_VERIFICATION.md`, `current-verification.jsonl`
+and `current-verification-state.json`. The directory is locally excluded from Git;
+artifacts are saved on disk, not committed. No exclusion was changed.
+
+New confirmed local defects: draft loss after Projects/Back, a false send-failure
+restoration when clearing a reloaded draft, and orphan Mermaid diagnostic nodes
+remaining in accessibility after navigation. Canonical IDs/repair actions are in
+`ACTIVE_ISSUES.md` and `known-flaws.md`; QA_ISSUES points to them. Main-branch
+protection is absent in read-only live GitHub inspection, and the pre-existing live
+erasure test's direct pg import fails the package-boundary guard. No repairs or
+production mutations were performed.
+
+233 fresh targeted tests pass; the local RLS identity probe passes 26 assertions,
+and the reservation probe passes 19 including verified overlapping database lock
+waiters. The 33-table RLS probe also passed. Browser rendering/keyboard/paste/search
+passes are retained; synthetic database fixtures were cleaned up. Original scoped
+QA evidence was reused only after 104 recorded source fingerprints matched.
+
+The existing bound run's four-hour deadline expired at 2026-09-19 12:49:41 UTC.
+Checkpoint without changing its counters/deadline or creating another run. This is
+not BLOCKED: independent local QA remains actionable. Exact next batch: untouched
+Chat attachment/lifecycle and identity/workspace acceptance cases joined by stable
+ID; do not replay the unchanged passes above or start repairs ahead of QA.
+
+Checkpoint cleanup: temporary Browser tab closed, viewport reset, synthetic fixture
+removed and the batch-owned Next server stopped; port 3100 has no listener. Existing
+PostgreSQL/Redis and unrelated applications were preserved. Documentation diff check passes.
+
+## QwenCloud Free model selector, 2026-09-19
+
+The owner clarified that the models belong in the composer selector. The misplaced
+read-only /models quota panel is removed. Chat > Change model > Free now provides
+search and modality filters, persists exact offering choices and dispatches directly
+through the configured QwenCloud user key. Jev approved the explicit selector route
+and local user-key boundary; ordinary Managed Cloud vendor restrictions remain intact.
+
+The owner signed into the shared browser. All 272 exact identities are resolved from
+the live Benefits table. The local key matches the console's local-testing key. Current
+account-bound, user-bound verification admits 94 connected offerings:79 chat,14 image,
+1 video. The other172 require protocol/input integration;4 active allocations have
+quota-only protection off and2 expired. Those178 remain visibly disabled. Connected
+is not a claim that every offering has been live-tested. Account verification expires
+after one hour; it is private local state, not authorization inferred from screenshots.
+
+Three synthetic experiments passed through the actual Free selector: chat returned
+“42 Free selector verified” (route1.5s), one image rendered a blue paper boat (4.8s),
+and one two-second video returned a provider result (30.3s). Reload preserved the
+messages, image, video link and selected offering. A fourth request verified the newly
+connected GLM chat family (route1.4s). Benefits records1 image and2 seconds
+consumed; the dashboard still displays$0.00. Browser policy blocked external video
+playback, so playback is unverified; no bypass or replacement generation was attempted.
+
+The repairs prevent an explicit Free selection from entering automatic or armed paid
+media routes, skip paid automatic titles for these conversations, and preserve named
+output links that citation cleanup previously removed. No paid fallback or automatic
+provider resubmission occurs. Workspace model, BYOK, region and retention policies
+still apply, and production requests to this development endpoint are rejected.
+
+A follow-up official protocol review (Jev confidence0.98) connected15 additional
+chat/vision offerings and removed6 incompatible generic-chat entries. Required
+reasoning is now enabled with a128-token thinking cap, while translation variants
+remain unavailable until language controls exist. The CLI refuses required-thinking
+models because they require the composer streaming path.
+
+Validation:66 focused web tests in8 files and17 Qwen adapter tests in3 files pass.
+Web, Qwen and factory typechecks pass. Focused ESLint, generated-catalog sync,
+model-catalog integrity, model-ID literals and free-pool checks pass (the free-pool
+guard retains unrelated pre-existing terms warnings). Expiry, insufficient allocation,
+wrong key/user, duplicate claims, concurrency, quota exhaustion and workspace refusal
+have targeted tests. Structural tests do not replace the three actual browser results.
+
+The tested conversation remains open with the free chat offering selected and the
+local Next server running. Remaining work is explicitly tracked as
+QWEN-FREE-QUOTA-REMAINING; do not rerun unchanged passing generations. See
+[evidence/qwen-free-quota.json](evidence/qwen-free-quota.json) for counts, results,
+limits, source hashes and remaining gaps. Historical GLOBAL NO-GO is unchanged.
+
+## Free quota capability experiments, 2026-09-19
+
+Jev selected the bounded capability matrix (confidence 1.00). Sixteen direct-provider
+requests covered 13 capability areas across seven verified quota-only offerings.
+JSON extraction, generated JavaScript (five independent runtime assertions), corrected
+conversation context, quoted-instruction handling, retrieval across 160 synthetic rows,
+function-call arguments, concise reasoning, translation, receipt OCR, embeddings and
+reranking passed their narrow expectations. Speech recognition transcribed an independent
+local speech fixture exactly. These are representative cases, not model benchmarks.
+
+The initial reasoning answer hit the 128-token output cap. A concise-answer prompt
+returned the correct FINAL=12 without increasing that cap. Speech generation returned
+5.12 seconds of PCM, but its order number was misrecognized by the ASR model. The
+same error remained after correcting the WAV header and sending the same PCM as
+base64; independent local speech passed. This isolates an audio-dependent quality gap,
+not a general ASR outage. Human listening and the precise acoustic cause remain unverified.
+The provider also returned an HTTP audio link and an oversized WAV frame declaration;
+HTTPS GET succeeded without credentials, while signed HEAD returned403. No security
+check was disabled and no HTTP download was used.
+
+The calls reported 4,740 tokens,70 synthesized characters and14 ASR seconds. Direct
+request durations ranged from0.785 to3.702 seconds (median1.765 seconds); these are
+not localhost or production latency measurements. The provider header displayed$0.00,
+but allocation counters lagged, so final billing reconciliation is not claimed. Each
+named probe was claimed once; no automatic paid fallback or submission retries occurred.
+
+Current Free selector accounting remains94 connected offerings. Direct API success does
+not enable speech, translation, embedding, ranking, attachment or tool controls in the
+composer. Prior image/video generation passes were preserved without replay. Realtime
+voice, voice cloning, media editing/input and all272 models individually remain untested.
+See evidence/qwen-free-quota.json#capabilityExperiments for inputs, expectations, outputs,
+usage, fixture hashes, limits and the two remaining speech observations. Do not requeue
+unchanged passing cases. Historical GLOBAL NO-GO remains unchanged.
+
+## Free quota through the Browser, 2026-09-19
+
+Four requests were entered and sent through the actual Free composer selector in a
+new conversation, /chat/e022da46-67bd-4071-ac59-313c5b01ff89. JSON extraction, a Spanish
+follow-up correcting Monday to Friday, a JavaScript code block with exact clipboard
+copy, and a switch to the required-thinking offering returning FINAL=14 passed.
+Reload after the first three replies preserved their text/code and the Free selection.
+Speech, embedding and reranking controls correctly remain disabled pending integration.
+No direct API submissions or new media generations were made in this browser batch.
+
+Two display issues are now registered: WEB-FREE-PROVENANCE-RELOAD-2026-09-19 and
+WEB-CHAT-ANGLE-TEXT-2026-09-19. The former loses the streamed free-pool label on reload;
+the latter hides an angle-bracket placeholder in the rendered user message while the
+editor retains the original. No repair claimed. The browser conversation remains open.
+Evidence: evidence/qwen-free-quota.json#browserCapabilityExperiments.
+
+## Chat and image QA pack browser batch, 2026-09-19
+
+The owner excluded speech, embeddings and ranking. Jev chose the bounded rendering/image
+batch (confidence1.00). The pasted350-case overview supplied test inputs, not prior passes;
+its linked expanded ZIP and fixtures are unavailable locally. Only the two selected
+text/image offerings received fresh live quota-only verification. No global run limits
+were reset and no answer budget was increased.
+
+Fifteen browser submissions produced13 chat replies, one1024×1024 HELLO QA poster and
+one deliberately stopped request. Ten compact prompt cases passed; TB02 failed numeric
+alignment, SA01 promoted requested inert code to an artifact preview, and MD09 returned
+200 rather than240 characters. The poster survived reload but Library > Images remained
+empty (PL06 gap). Individual case IDs, exact observations, conversation paths and partial
+UI coverage are in evidence/qwen-free-quota.json#qaPackBrowserBatch.
+
+Confirmed passes include nested-quote closure, mixed-format boundaries, six code languages,
+second-code-block copying, math, an actual Mermaid artifact with source/fullscreen controls,
+missing-image honesty, multilingual glyphs, edit Cancel/Save/version pairing and reload,
+empty-input refusal, image content and cancellation persistence. At390px the actual long
+string wrapped without page overflow. Full width/device, stream-failure and provider-side
+abort behavior are not claimed. Synthetic draft clearing reproduced the existing restore
+issue; the free-pool reload-label issue also remains. Combined browser helper timing made
+early reload observations ambiguous; isolated later reloads passed, so no redirect defect
+was registered. Provider spend still displayed$0.00 and image quota recorded one extra use.
+
+No product repair was made during this discovery pass. The generated poster remains open;
+viewport restored. Next work: consolidate/fix the confirmed canonical renderer and media
+integration findings, then rerun only their affected cases. Unlisted pack cases remain
+NOT RUN. Historical GLOBAL NO-GO is unchanged.
+
+### 2026-09-19: Login completion refinement
+
+User-requested refinement of `/login/complete`: reused the canonical AuthLayout and
+AuthStepFrame, added a “Finish signing in” heading and explanation, improved consent
+spacing and keyboard focus, and added an explicit Continue action. The login gate
+requires a fresh checkbox selection and Continue before mounting the existing recorder.
+Legal wording, durable acceptance checks, CSRF handling, retry behavior and redirect
+validation are preserved. Login recording now uses sign-in-specific progress copy.
+
+Validation: 18 tests passed across the login completion page, TermsGate, signup agreement
+and acceptance recorder suites. Focused ESLint, web typecheck (8 GB heap), CSS token guard
+and git diff whitespace validation passed. Browser checks used a temporary development-only
+preview generated from the actual page markup with the real auth/gate components and an
+inert recorder, because the signed-in account had already accepted the current terms.
+The real completion route correctly skipped the gate for that account. Preview checks
+covered 320, 390, 1024 and 1440 px in dark and light themes without horizontal overflow;
+checkbox keyboard toggling, visible link focus, disabled/enabled Continue, and child mount
+only after Continue passed. No live consent record was changed. The preview was removed,
+viewport and dark theme restored, and the signed-in app reopened. This focused change does
+not close the earlier QA findings or change the historical GLOBAL NO-GO.
+
+### 2026-09-20: Free model quota exhaustion
+
+Chat, image and video provider-confirmed free-quota exhaustion now share the
+`free_quota_exhausted` response and direct users to choose another model in Free.
+The existing local quota authorization module records exhaustion atomically in its
+cache, scoped to account, credential, offering and verification timestamp. The
+catalogue marks those entries exhausted and the selector disables them. Reopening
+or reloading retains the state; a fresh account verification supersedes the marker.
+A verified zero balance also blocks sends. Unrelated accounts, credentials and
+models do not inherit exhaustion. Server-side repeated sends stop before dispatch.
+Generic Try again/start a new chat guidance and same-model regeneration are removed
+for this error, including persisted error metadata for continuation failures.
+
+Validation uses simulated provider failures, never deliberate quota depletion:
+156 tests passed across completion routes, catalogue responses, durable state,
+selector, stream hook and transcript actions. Focused ESLint and diff whitespace
+checks passed. Live provider depletion was not attempted and is not claimed.
+Web typecheck passed after correcting index-signature property access. Browser smoke
+verification confirmed the reopened Free section remains expanded, with category/search
+controls loaded and no catalogue loading error. Exhaustion UI itself was verified with
+fixtures, not by consuming the live allocation.

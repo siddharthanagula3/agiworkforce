@@ -1,5 +1,6 @@
 'use client';
 
+import { freeQuotaSelection } from '@features/chat/lib/free-quota-selection';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ModelAvailability, ModelEnvironment, RoutingTaskType } from '@agiworkforce/types';
@@ -235,7 +236,9 @@ function resolveProvider(modelId: string, explicitProvider?: string | null): str
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
   const catalogProvider = isAutoModeModelId(canonicalModelId)
     ? 'managed_cloud'
-    : (getModelMetadata(canonicalModelId)?.provider ?? null);
+    : (freeQuotaSelection(canonicalModelId)?.provider ??
+      getModelMetadata(canonicalModelId)?.provider ??
+      null);
   return explicitProvider === catalogProvider ? explicitProvider : catalogProvider;
 }
 
@@ -250,6 +253,15 @@ function isSelectableModel(model: AIModel): boolean {
  */
 export function findSelectableModel(modelId: string | null | undefined): AIModel | null {
   if (!modelId) return null;
+  const free = freeQuotaSelection(modelId);
+  if (free)
+    return {
+      id: modelId,
+      name: free.displayName,
+      provider: 'QwenCloud',
+      providerKey: free.provider,
+      description: 'Free quota · QwenCloud',
+    };
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
   return (
     AVAILABLE_MODELS.find((model) => model.id === canonicalModelId && isSelectableModel(model)) ??
@@ -356,9 +368,7 @@ export const useModelStore = create<ModelState>()(
 
       getSelectedModel: () => {
         const { selectedModelId } = get();
-        return (
-          AVAILABLE_MODELS.find((model) => model.id === selectedModelId) ?? AVAILABLE_MODELS[0]!
-        );
+        return findSelectableModel(selectedModelId) ?? AVAILABLE_MODELS[0]!;
       },
 
       getAvailableModels: async () => AVAILABLE_MODELS,

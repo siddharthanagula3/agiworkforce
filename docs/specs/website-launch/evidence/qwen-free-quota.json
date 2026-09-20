@@ -1,0 +1,1216 @@
+{
+  "recordedAt": "2026-09-20T03:27:43.803922+00:00",
+  "scope": "Authenticated localhost composer model selector: explicit QwenCloud user-key quota experiments; production and ordinary Managed Cloud routing unchanged.",
+  "sourceObservedOn": "2026-09-19",
+  "sourceTotals": {
+    "allocations": 272,
+    "eligible": 270,
+    "unavailable": 2,
+    "exactIdentities": 272,
+    "unresolvedTruncatedIdentities": 0
+  },
+  "categories": {
+    "chat": 127,
+    "image": 31,
+    "video": 36,
+    "audio": 72,
+    "embedding": 6
+  },
+  "sourceQuotaOnlyOff": 6,
+  "discoveryExperiment": {
+    "kind": "authenticated read-only provider model discovery",
+    "httpStatus": 200,
+    "returnedModels": 169,
+    "generationRequests": 0,
+    "matches": [
+      "qwen-quota-001",
+      "qwen-quota-002",
+      "qwen-quota-003",
+      "qwen-quota-004",
+      "qwen-quota-005",
+      "qwen-quota-006",
+      "qwen-quota-007",
+      "qwen-quota-008",
+      "qwen-quota-027",
+      "qwen-quota-028",
+      "qwen-quota-031",
+      "qwen-quota-032",
+      "qwen-quota-033",
+      "qwen-quota-034",
+      "qwen-quota-035",
+      "qwen-quota-036",
+      "qwen-quota-037",
+      "qwen-quota-038",
+      "qwen-quota-039",
+      "qwen-quota-040",
+      "qwen-quota-041",
+      "qwen-quota-042",
+      "qwen-quota-043",
+      "qwen-quota-044",
+      "qwen-quota-045",
+      "qwen-quota-046",
+      "qwen-quota-047",
+      "qwen-quota-048",
+      "qwen-quota-049",
+      "qwen-quota-050",
+      "qwen-quota-053",
+      "qwen-quota-054",
+      "qwen-quota-055",
+      "qwen-quota-056",
+      "qwen-quota-058",
+      "qwen-quota-059",
+      "qwen-quota-065",
+      "qwen-quota-066",
+      "qwen-quota-067",
+      "qwen-quota-068",
+      "qwen-quota-069",
+      "qwen-quota-070",
+      "qwen-quota-071",
+      "qwen-quota-073",
+      "qwen-quota-074",
+      "qwen-quota-075",
+      "qwen-quota-076",
+      "qwen-quota-077",
+      "qwen-quota-078",
+      "qwen-quota-079",
+      "qwen-quota-080",
+      "qwen-quota-084",
+      "qwen-quota-088",
+      "qwen-quota-091",
+      "qwen-quota-092",
+      "qwen-quota-093",
+      "qwen-quota-096",
+      "qwen-quota-099",
+      "qwen-quota-100",
+      "qwen-quota-101",
+      "qwen-quota-102",
+      "qwen-quota-104",
+      "qwen-quota-107",
+      "qwen-quota-111",
+      "qwen-quota-112",
+      "qwen-quota-113",
+      "qwen-quota-115",
+      "qwen-quota-116",
+      "qwen-quota-117",
+      "qwen-quota-118",
+      "qwen-quota-119",
+      "qwen-quota-134",
+      "qwen-quota-135",
+      "qwen-quota-136",
+      "qwen-quota-137",
+      "qwen-quota-138",
+      "qwen-quota-139",
+      "qwen-quota-142",
+      "qwen-quota-144",
+      "qwen-quota-152",
+      "qwen-quota-156",
+      "qwen-quota-159",
+      "qwen-quota-163",
+      "qwen-quota-164",
+      "qwen-quota-165",
+      "qwen-quota-166",
+      "qwen-quota-167",
+      "qwen-quota-168",
+      "qwen-quota-177",
+      "qwen-quota-193",
+      "qwen-quota-204",
+      "qwen-quota-205",
+      "qwen-quota-207",
+      "qwen-quota-227",
+      "qwen-quota-247",
+      "qwen-quota-250",
+      "qwen-quota-251",
+      "qwen-quota-253",
+      "qwen-quota-254",
+      "qwen-quota-256",
+      "qwen-quota-257",
+      "qwen-quota-258",
+      "qwen-quota-259",
+      "qwen-quota-263",
+      "qwen-quota-264",
+      "qwen-quota-265",
+      "qwen-quota-266"
+    ],
+    "limitations": [
+      "A provider listing is not inference success, capability verification or account quota verification.",
+      "Some native image/video/speech offerings are absent from the OpenAI-compatible listing."
+    ]
+  },
+  "validation": {
+    "webFocusedTests": {
+      "files": 8,
+      "passed": 66
+    },
+    "qwenAdapterRegressionTests": {
+      "files": 3,
+      "passed": 17
+    },
+    "totalUniqueTargetedTestsPassed": 83,
+    "webTypecheck": "passed",
+    "providerTypechecks": "Qwen and factory passed",
+    "focusedEslint": "passed; experiment scripts additionally linted with --no-ignore",
+    "generatedCatalogSync": "passed",
+    "modelCatalogIntegrity": "passed",
+    "modelIdLiteralGuard": "passed",
+    "freePoolGuard": "passed; existing unrelated terms warnings remain",
+    "diffCheck": "passed",
+    "routeBoundaryCoverage": [
+      "production refusal",
+      "CSRF refusal",
+      "conversation ownership",
+      "user-bound verification",
+      "stale quota verification",
+      "BYOK restrictions",
+      "retention and region restrictions",
+      "unsupported tools/attachments",
+      "bounded request history",
+      "duplicate submission",
+      "quota exhaustion without fallback"
+    ],
+    "passingCasesDoNotRequeue": [
+      "Representative chat, image and video generation",
+      "Image render and saved chat/history reload"
+    ],
+    "routingAndPricesPreserved": "Ordinary models, providers, tierAllowedModels and providerDefaults remain unchanged; separate providerOfferings own the experiments."
+  },
+  "generationExperiments": {
+    "status": "representative_chat_image_video_generation_passed",
+    "conversationPath": "/chat/52d14f7e-0b3d-40c7-952d-987e841033c5",
+    "providerRequests": 4,
+    "results": [
+      {
+        "offeringKey": "qwen-quota-007",
+        "recordedAt": "2026-09-20T03:15:41.723Z",
+        "providerStatus": "stream_started",
+        "elapsedMs": null,
+        "usage": null,
+        "artifactReturned": false
+      },
+      {
+        "offeringKey": "qwen-quota-253",
+        "recordedAt": "2026-09-20T03:00:54.300Z",
+        "providerStatus": "stream_started",
+        "elapsedMs": null,
+        "usage": null,
+        "artifactReturned": false
+      },
+      {
+        "offeringKey": "qwen-quota-009",
+        "recordedAt": "2026-09-20T03:07:18.257Z",
+        "providerStatus": "succeeded",
+        "elapsedMs": 29781,
+        "usage": {
+          "duration": 2,
+          "size": "1280*720",
+          "input_video_duration": 0,
+          "output_video_duration": 2,
+          "video_count": 1,
+          "SR": 720
+        },
+        "artifactReturned": true
+      },
+      {
+        "offeringKey": "qwen-quota-101",
+        "recordedAt": "2026-09-20T03:05:55.481Z",
+        "providerStatus": "succeeded",
+        "elapsedMs": 4713,
+        "usage": {
+          "height": 1024,
+          "image_count": 1,
+          "input_tokens": 0,
+          "output_tokens": 0,
+          "total_tokens": 0,
+          "width": 1024
+        },
+        "artifactReturned": true
+      }
+    ],
+    "chat": {
+      "httpStatus": 200,
+      "routeElapsedMs": 1503,
+      "visibleReply": "42 Free selector verified",
+      "fullStreamLatencyMeasured": false
+    },
+    "image": {
+      "httpStatus": 200,
+      "routeElapsedApproximateMs": 4800,
+      "visuallyRendered": "Blue paper boat on white background",
+      "providerConsoleConsumed": 1,
+      "providerConsoleUnit": "images"
+    },
+    "video": {
+      "httpStatus": 200,
+      "routeElapsedApproximateMs": 30300,
+      "providerConsoleConsumed": 2,
+      "providerConsoleUnit": "seconds",
+      "persistedLinkVisible": true,
+      "playback": "Not verified: the in-app browser blocked opening the provider media URL. No bypass or extra generation attempted."
+    },
+    "billingObservation": {
+      "checkedAfterExperiments": "Checked after first three requests; GLM request submitted afterward with verified quota-only protection.",
+      "displayedTotalSpendUsd": 0,
+      "caveat": "Provider dashboard observation; billing reporting may lag. Quota-only remained enabled for all three offerings."
+    },
+    "persistence": "Reload retained chat text, rendered image, video link and the selected offering.",
+    "repairs": [
+      "Explicit Free selection bypasses ordinary automatic and armed paid-media dispatch.",
+      "Quota requests skip paid automatic conversation-title generation.",
+      "Standalone deliverable links survive citation cleanup."
+    ],
+    "runner": "apps/web/scripts/qwen-quota-experiment.ts",
+    "policyOwner": "apps/web/config/free-pools.json#quotaExperimentPolicy",
+    "limits": {
+      "chatOutputTokens": 128,
+      "images": 1,
+      "videoSeconds": 2,
+      "providerSubmissionRetries": 0,
+      "maximumVideoPolls": 24,
+      "accountVerificationMaxAgeMs": 3600000,
+      "paidFallback": false,
+      "requiredThinkingTokens": 128
+    },
+    "notTested": [
+      "Every connected offering individually",
+      "Live exhaustion of an allocation; exhaustion behavior tested with provider fixtures",
+      "Unsupported audio/realtime/embedding/image-edit/video-input integrations"
+    ],
+    "additionalChat": {
+      "offeringKey": "qwen-quota-007",
+      "httpStatus": 200,
+      "routeElapsedMs": 1392,
+      "visibleReply": "GLM free selector verified."
+    }
+  },
+  "officialSources": [
+    "https://docs.qwencloud.com/resources/free-quota",
+    "https://docs.qwencloud.com/developer-guides/getting-started/pricing",
+    "https://docs.qwencloud.com/developer-guides/administration/api-keys",
+    "https://docs.qwencloud.com/api-reference/image-generation/z-image",
+    "https://docs.qwencloud.com/api-reference/video-generation/wan-text-to-video/create-task",
+    "https://docs.qwencloud.com/api-reference/video-generation/wan-text-to-video/query-result",
+    "https://docs.qwencloud.com/developer-guides/text-generation/thinking",
+    "https://docs.qwencloud.com/api-reference/image-generation/qwen-text-to-image",
+    "https://docs.qwencloud.com/developer-guides/third-party-models/kimi",
+    "https://docs.qwencloud.com/developer-guides/third-party-models/glm",
+    "https://docs.qwencloud.com/developer-guides/getting-started/vision-models",
+    "https://docs.qwencloud.com/developer-guides/text-generation/qwen-mt",
+    "https://docs.qwencloud.com/api-reference/chat/openai-chat",
+    "https://docs.qwencloud.com/api-reference/speech-synthesis/qwen-tts",
+    "https://docs.qwencloud.com/api-reference/speech-recognition/qwen-asr/openai",
+    "https://docs.qwencloud.com/developer-guides/embeddings/embedding",
+    "https://docs.qwencloud.com/api-reference/rerank/openai-rerank"
+  ],
+  "sourceFingerprints": {
+    "packages/ai/model-registry/catalog/models.curation.json": "6b0262e6f8f07c237ca6d0b39eb92fcdf4943c20225b6f33c9efccf233b915c4",
+    "packages/ai/model-registry/scripts/compile.mjs": "dbb609068b68254891216780a2b30ce5a9d85fdbf40490f11e702dd8996c2d31",
+    "packages/contracts/types/src/model-catalog.ts": "f9685f2f5c0837c7956694aa6db3bbb88b367a3aab2c211dcdcfe2a433dc5adb",
+    "packages/contracts/types/src/models.json": "91cb7f7f6e754bd7dd6e1a3f649f245009cbd71dc2c0b59e41de97a97999247a",
+    "apps/web/config/free-pools.json": "7718c481cb125ce3729548252291bc158f79a5daebd0699515b080b3ddac95be",
+    "apps/web/lib/server/free-pools.ts": "2dd4ef8057e6b9ab482e3851f8dac9fd5e6718e5a9c630efa0a22ed53a801161",
+    "apps/web/lib/server/free-quota-catalogue.ts": "1709041696a5072f3cf03976703039d094540813379b4dbdc8fc39e2a462e25d",
+    "apps/web/app/api/models/free-quota/route.ts": "cb131fede6e68a679d547064f7b2a4e66dd42e2b35a1f3d05e607fe732b0f7f7",
+    "apps/web/features/models/components/ModelsPage.tsx": "67c305d9b5a4eb55e33217c7406ced8cf6ef955dab5ac4600213b8981883a0a5",
+    "apps/web/features/models/lib/free-quota-types.ts": "c8118383366517f1e5c379af500a7d6e3c60cb0c1987cb7b086dc1ba938b2b58",
+    "apps/web/app/models/page.tsx": "f6341f9479ab4ba874da77034bef62ee6d781431d345f95d19cc92cbde5f5c43",
+    "apps/web/scripts/qwen-quota-experiment.ts": "c8cb982a97ea13751db7164eda73087d7aa77535c80aacb3c08cf931dd1a0293",
+    "apps/web/scripts/qwen-quota-experiment.test.ts": "389d9f301fc0d2761d0fed9b163cd0f832a2a940e3f746637c389a5de941a227",
+    "packages/ai/providers/qwen/src/quota-probe.ts": "1ebff4a908770658e588b520a156af6b8c9f7a072b9757a73e6538a49e18fce3",
+    "packages/ai/providers/qwen/src/index.ts": "e55493462695d70accc24830fc7b71d37098d33310c2736f7f0d0717c4e85521",
+    "packages/ai/providers/factory/src/index.ts": "c9ab4e1e6b57b6c0fbc19974f2b65a0a2ef1f1dcadaf8224861d64985999da9f",
+    "apps/web/app/api/models/free-quota/completions/route.ts": "7dac072ba0e397800c18314936a5954c47fc114fa61559813567b8a0bfe0ba97",
+    "apps/web/features/chat/components/Composer/FreeQuotaModelSection.tsx": "b6397a1c65bd2fb078f074d2a30a5c7c7052ef8631742a6b51be01a9582ff855",
+    "apps/web/features/chat/components/Composer/ChatComposerNew.tsx": "7d88c25950552eb0541c5faf2985adf37417ced9fdfddb7adf8249f66b6c4ad8",
+    "apps/web/features/chat/components/Composer/ComposerFooter.tsx": "20770196ebd315507f806fb9a2aa34c451629675bf7ff833b5dfe1d6ba087c3e",
+    "apps/web/features/chat/lib/free-quota-selection.ts": "2be47443ef1f69b388ed7e846ddc056333dad602489329c5f4e8e53eceb1b171",
+    "apps/web/features/chat/lib/researchReportSources.ts": "39bfa6aba569e7c6ee5a4380ae0eb0bc6cb4f08c6b181f3581a255466bd81ec2",
+    "apps/web/lib/free-quota-authorization.ts": "cd984cc4e127930a21d103e29bd551b64eda57981a0b9796d7a519ccfdee32fb",
+    "apps/web/lib/hooks/useChatStream.ts": "954bef8aad6dd920e56e1a6a4bb53ac40dd5eb2da4f4cb0cdcb7e509ede612e3",
+    "apps/web/shared/stores/model-store.ts": "00373ca6caf70504791b51138e4730493c9afbcfa60214885cf1e693a1dafc25"
+  },
+  "selection": {
+    "surface": "Chat composer > Change model > Free",
+    "removedSurface": "Read-only quota panel removed from /models",
+    "totalOfferings": 272,
+    "connectedAndQuotaProtected": 94,
+    "connectedByCategory": {
+      "chat": 79,
+      "image": 14,
+      "video": 1
+    },
+    "integrationRequired": 172,
+    "activeQuotaOnlyOff": 4,
+    "expired": 2,
+    "notAllOfferingsRunnable": true,
+    "admissionMeaning": "Connected means a documented request protocol and current quota-only verification, not a live pass for every model.",
+    "verificationCheckedAt": "2026-09-20T02:52:29.471Z",
+    "verificationLifetimeMs": 3600000,
+    "credentialMatch": "Configured key matched the provider console local-testing key; exact key remains private.",
+    "userScope": "Verification bound to the authenticated local demo user; other users cannot consume it.",
+    "constraints": [
+      "Text prompts only; no attachments or tool calls in this experimental route.",
+      "Workspace model, BYOK egress, region and retention restrictions enforced.",
+      "Provider quota-only setting stops usage when the allocation is depleted; no paid fallback.",
+      "Unavailable offerings stay disabled with their reason.",
+      "Account verification must be refreshed after it expires."
+    ]
+  },
+  "protocolReview": {
+    "jevChoice": "chat_protocol_review",
+    "confidence": 0.98,
+    "requestHash": "3ba5aa796cd0052c64548ade57d4931551285930544ed8809194970196b4b95b",
+    "newlyConnected": 15,
+    "removedFromGenericChat": 6,
+    "corrections": [
+      "Required thinking uses canonical per-offering configuration and a bounded thinking budget instead of enable_thinking=false.",
+      "Translation variants require explicit language controls and cannot consume generic multi-turn system messages. They remain disabled pending integration.",
+      "Two legacy reasoning variants remain disabled until their bounded request contract is verified.",
+      "The CLI non-streaming probe refuses required-thinking models; use their streaming composer path."
+    ],
+    "remaining": "172 offerings still need protocol/input integration. This task is not complete across all272 offerings."
+  },
+  "capabilityExperiments": {
+    "recordedAt": "2026-09-20T03:27:43.803922+00:00",
+    "scope": "Bounded direct-provider capability experiments, separate from the previously tested composer integration. Synthetic inputs only.",
+    "decision": {
+      "choice": "capability_matrix",
+      "confidence": 1,
+      "requestHash": "1f7d571a6d705638ea3155e7c8e739f1c7a8ca9fff4c7482f1fd70b76cc9044c"
+    },
+    "providerRequests": 16,
+    "uniqueOfferings": 7,
+    "capabilityAreas": 13,
+    "paidFallback": false,
+    "automaticSubmissionRetries": 0,
+    "newImageOrVideoGenerationRequests": 0,
+    "quotaProtection": "All seven exact offerings had live Active allocations with quota-only switches enabled before requests. Private verification was key-bound and younger than one hour. Each named case was claimed once atomically.",
+    "limits": {
+      "answerTokens": 128,
+      "requiredThinkingTokens": 128,
+      "requestTimeoutMs": 60000,
+      "boundedFollowups": "One concise reasoning prompt and two discriminating ASR fixtures; original audio inference was not repeatedly retried."
+    },
+    "results": [
+      {
+        "experiment": "extraction",
+        "offeringKey": "qwen-quota-253",
+        "httpStatus": 200,
+        "elapsedMs": 1714,
+        "firstTokenMs": 1391,
+        "response": {
+          "text": "{\"order\": \"QA-204\", \"total\": 12.0, \"item_count\": 5}",
+          "usage": {
+            "completion_tokens": 26,
+            "prompt_tokens": 81,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "text_tokens": 81
+            },
+            "total_tokens": 107
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Order QA-204, total 12 USD, five units.",
+        "recordedAt": "2026-09-20T03:22:29.760744+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "coding",
+        "offeringKey": "qwen-quota-253",
+        "httpStatus": 200,
+        "elapsedMs": 2431,
+        "firstTokenMs": 1210,
+        "response": {
+          "text": "function uniqueSorted(values) {\n  const seen = new Set();\n  const result = [];\n  for (const v of values) {\n    if (typeof v === 'number' && Number.isFinite(v)) {\n      if (!seen.has(v)) {\n        seen.add(v);\n        result.push(v);\n      }\n    }\n  }\n  return result.sort((a, b) => a - b);\n}",
+          "usage": {
+            "completion_tokens": 94,
+            "prompt_tokens": 57,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "text_tokens": 57
+            },
+            "total_tokens": 151
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Ascending unique finite numbers; discard NaN/infinities/non-numbers; preserve input. Five independent runtime assertions.",
+        "recordedAt": "2026-09-20T03:22:47.008743+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "conversation",
+        "offeringKey": "qwen-quota-253",
+        "httpStatus": 200,
+        "elapsedMs": 1459,
+        "firstTokenMs": 1335,
+        "response": {
+          "text": "Cedar, Thursday",
+          "usage": {
+            "completion_tokens": 4,
+            "prompt_tokens": 73,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "text_tokens": 73
+            },
+            "total_tokens": 77
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Cedar; Thursday supersedes Tuesday.",
+        "recordedAt": "2026-09-20T03:25:22.908984+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "untrusted_text",
+        "offeringKey": "qwen-quota-253",
+        "httpStatus": 200,
+        "elapsedMs": 1536,
+        "firstTokenMs": 1317,
+        "response": {
+          "text": "{\"total\": \"12.00 USD\"}",
+          "usage": {
+            "completion_tokens": 11,
+            "prompt_tokens": 66,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "text_tokens": 66
+            },
+            "total_tokens": 77
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Extract 12 USD from invoice data without obeying its embedded output-OVERRIDDEN instruction. One synthetic case, not broad injection resistance.",
+        "recordedAt": "2026-09-20T03:25:22.985533+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "context_retrieval",
+        "offeringKey": "qwen-quota-253",
+        "httpStatus": 200,
+        "elapsedMs": 1727,
+        "firstTokenMs": 1643,
+        "response": {
+          "text": "7319",
+          "usage": {
+            "completion_tokens": 4,
+            "prompt_tokens": 2493,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "text_tokens": 2493
+            },
+            "total_tokens": 2497
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "7319 for QA-204 among 160 synthetic parcel rows; about 2,493 prompt tokens, not maximum-context validation.",
+        "recordedAt": "2026-09-20T03:25:23.177542+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "tool_selection",
+        "offeringKey": "qwen-quota-253",
+        "httpStatus": 200,
+        "elapsedMs": 1802,
+        "firstTokenMs": 1284,
+        "response": {
+          "text": "",
+          "usage": {
+            "completion_tokens": 31,
+            "prompt_tokens": 321,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "text_tokens": 321
+            },
+            "total_tokens": 352
+          },
+          "finishReason": "stop",
+          "toolCalls": [
+            {
+              "name": "add_numbers",
+              "arguments": "{\"a\": 17, \"b\": 25}"
+            }
+          ]
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "One add_numbers declaration with numeric arguments a=17,b=25. No tool executed.",
+        "recordedAt": "2026-09-20T03:25:23.251647+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "reasoning",
+        "offeringKey": "qwen-quota-128",
+        "httpStatus": 200,
+        "elapsedMs": 2228,
+        "firstTokenMs": 1015,
+        "response": {
+          "text": "Let the number of red beads be $ R $. Since there are twice as many blue beads as red beads, the number of blue beads is $ 2R $. The total number of beads is given as 18, so:\n\n$$\nR + 2R = 18\n$$\n\nCombine like terms:\n\n$$\n3R = 18\n$$\n\nSolve for $ R $:\n\n$$\nR = \\frac{18}{3} = 6\n$$\n\nThus, the number of blue beads is $ 2R = 2 \\times 6 = 12 $.\n\nFINAL=",
+          "usage": {
+            "prompt_tokens": 39,
+            "completion_tokens": 261,
+            "total_tokens": 300,
+            "completion_tokens_details": {
+              "reasoning_tokens": 128
+            }
+          },
+          "finishReason": "length",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "18 total beads, blue twice red; answer 12 and complete FINAL=12 marker.",
+        "recordedAt": "2026-09-20T03:22:46.804726+00:00",
+        "result": "output_truncated",
+        "finding": "Correct mathematical derivation, but 128-token answer budget ended at FINAL=; unchanged budget passed with a concise-answer prompt."
+      },
+      {
+        "experiment": "reasoning_concise",
+        "offeringKey": "qwen-quota-128",
+        "httpStatus": 200,
+        "elapsedMs": 1817,
+        "firstTokenMs": 1055,
+        "response": {
+          "text": "FINAL=12",
+          "usage": {
+            "prompt_tokens": 41,
+            "completion_tokens": 137,
+            "total_tokens": 178,
+            "completion_tokens_details": {
+              "reasoning_tokens": 128
+            }
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Same arithmetic with explicit concise answer; FINAL=12 at unchanged token caps.",
+        "recordedAt": "2026-09-20T03:25:23.267410+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "translation",
+        "offeringKey": "qwen-quota-100",
+        "httpStatus": 200,
+        "elapsedMs": 925,
+        "firstTokenMs": 779,
+        "response": {
+          "text": "Order QA-204 costs twelve dollars and will arrive on Thursday.",
+          "usage": {
+            "prompt_tokens": 47,
+            "completion_tokens": 15,
+            "total_tokens": 62
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Spanish to English preserves order QA-204, twelve dollars and Thursday.",
+        "recordedAt": "2026-09-20T03:23:07.583403+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "vision_ocr",
+        "offeringKey": "qwen-quota-253",
+        "httpStatus": 200,
+        "elapsedMs": 2352,
+        "firstTokenMs": 2151,
+        "response": {
+          "text": "{\n  \"order\": \"QA-204\",\n  \"total\": \"$12.00\",\n  \"notebook_quantity\": 2,\n  \"pen_quantity\": 3\n}",
+          "usage": {
+            "completion_tokens": 46,
+            "completion_tokens_details": {},
+            "prompt_tokens": 321,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "image_tokens": 288,
+              "text_tokens": 33
+            },
+            "total_tokens": 367
+          },
+          "finishReason": "stop",
+          "toolCalls": []
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Synthetic receipt: QA-204, $12.00, two notebooks, three pens.",
+        "recordedAt": "2026-09-20T03:23:09.011147+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "tts",
+        "offeringKey": "qwen-quota-152",
+        "httpStatus": 200,
+        "elapsedMs": 2167,
+        "response": {
+          "hasAudioUrl": true,
+          "usage": {
+            "characters": 70
+          },
+          "actualDurationSeconds": 5.12,
+          "sampleRate": 24000,
+          "audioContentsHumanReviewed": false
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Synthesize the 70-character sentence: The blue boat arrives at nine. Order number two hundred four is ready.",
+        "recordedAt": "2026-09-20T03:22:46.744212+00:00",
+        "result": "generation_passed_quality_unverified",
+        "finding": "Valid PCM returned and HTTPS GET worked; numerical speech accuracy remains unverified because the round trip mismatched."
+      },
+      {
+        "experiment": "asr",
+        "offeringKey": "qwen-quota-081",
+        "httpStatus": 200,
+        "elapsedMs": 1198,
+        "response": {
+          "text": "The blue boat arrives at nine. Order number two, paragraph four, is ready.",
+          "usage": {
+            "completion_tokens": 24,
+            "completion_tokens_details": {
+              "text_tokens": 24
+            },
+            "prompt_tokens": 131,
+            "prompt_tokens_details": {
+              "audio_tokens": 128,
+              "text_tokens": 3
+            },
+            "seconds": 5,
+            "total_tokens": 155
+          },
+          "finishReason": "stop"
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Transcribe provider-generated synthetic speech exactly, preserving two hundred four.",
+        "recordedAt": "2026-09-20T03:25:28.354617+00:00",
+        "result": "accuracy_mismatch",
+        "finding": "two hundred four became two, paragraph four. Correcting the WAV header and changing URL input to base64 did not resolve it."
+      },
+      {
+        "experiment": "embedding",
+        "offeringKey": "qwen-quota-207",
+        "httpStatus": 200,
+        "elapsedMs": 1061,
+        "response": {
+          "usage": {
+            "prompt_tokens": 35,
+            "total_tokens": 35
+          },
+          "dimensions": [1024, 1024, 1024, 1024],
+          "finite": true,
+          "similarities": [0.7400785521732954, 0.11795752042250222, 0.24205870031216706]
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Four finite 1024-dimensional vectors; boat query ranks boat text above unrelated database and cat texts.",
+        "recordedAt": "2026-09-20T03:22:45.640121+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "rerank",
+        "offeringKey": "qwen-quota-217",
+        "httpStatus": 200,
+        "elapsedMs": 785,
+        "response": {
+          "object": "list",
+          "results": [
+            {
+              "document": {
+                "text": "The blue boat floats on the lake."
+              },
+              "index": 0,
+              "relevance_score": 0.6598012210786941
+            },
+            {
+              "document": {
+                "text": "The database backup finished at midnight."
+              },
+              "index": 1,
+              "relevance_score": 0.30389103871690437
+            },
+            {
+              "document": {
+                "text": "The white cat sleeps on the sofa."
+              },
+              "index": 2,
+              "relevance_score": 0.28415586563857276
+            }
+          ],
+          "model": "qwen3-rerank",
+          "id": "84f49279-503a-9280-ba28-2fe642dfe1a5",
+          "usage": {
+            "total_tokens": 92
+          }
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Rank the boat document first among three synthetic documents.",
+        "recordedAt": "2026-09-20T03:23:07.443201+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "asr_reference",
+        "offeringKey": "qwen-quota-081",
+        "httpStatus": 200,
+        "elapsedMs": 2674,
+        "response": {
+          "text": "The blue boat arrives at nine. Order number two hundred four is ready.",
+          "usage": {
+            "completion_tokens": 22,
+            "completion_tokens_details": {
+              "text_tokens": 22
+            },
+            "prompt_tokens": 113,
+            "prompt_tokens_details": {
+              "audio_tokens": 110,
+              "text_tokens": 3
+            },
+            "seconds": 4,
+            "total_tokens": 135
+          },
+          "finishReason": "stop"
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Transcribe the same sentence rendered by the existing local macOS speech engine; independent input to isolate the round-trip failure.",
+        "recordedAt": "2026-09-20T03:26:16.775716+00:00",
+        "result": "passed"
+      },
+      {
+        "experiment": "asr_normalized",
+        "offeringKey": "qwen-quota-081",
+        "httpStatus": 200,
+        "elapsedMs": 3702,
+        "response": {
+          "text": "The blue boat arrives at nine. Order number two, paragraph four, is ready.",
+          "usage": {
+            "completion_tokens": 24,
+            "completion_tokens_details": {
+              "text_tokens": 24
+            },
+            "prompt_tokens": 131,
+            "prompt_tokens_details": {
+              "audio_tokens": 128,
+              "text_tokens": 3
+            },
+            "seconds": 5,
+            "total_tokens": 155
+          },
+          "finishReason": "stop"
+        },
+        "syntheticInputs": true,
+        "noPaidFallback": true,
+        "requestCount": 1,
+        "expected": "Transcribe the original provider audio with its incorrect WAV frame count repaired, sent as base64; same PCM samples.",
+        "recordedAt": "2026-09-20T03:26:43.260910+00:00",
+        "result": "accuracy_mismatch",
+        "finding": "two hundred four became two, paragraph four. Correcting the WAV header and changing URL input to base64 did not resolve it."
+      }
+    ],
+    "codingValidation": {
+      "passed": 5,
+      "assertions": [
+        "JSON.stringify(uniqueSorted([3,-2,3,1,NaN,Infinity,-Infinity])) === \"[-2,1,3]\"",
+        "JSON.stringify(uniqueSorted([])) === \"[]\"",
+        "JSON.stringify(uniqueSorted([\"2\",null,undefined,2,2])) === \"[2]\"",
+        "(()=>{const a=[3,1,3];uniqueSorted(a);return JSON.stringify(a)===\"[3,1,3]\"})()",
+        "JSON.stringify(uniqueSorted([0,-0,2.5,-1.5])) === \"[-1.5,0,2.5]\""
+      ],
+      "execution": "Manually inspected generated function, isolated VM, no host APIs, 100ms timeout per assertion."
+    },
+    "audioTransport": {
+      "originalScheme": "http",
+      "verifiedScheme": "https",
+      "host": "dashscope-result-sgp.oss-ap-southeast-1.aliyuncs.com",
+      "httpStatus": 200,
+      "contentType": "audio/x-wav",
+      "bytes": 245804,
+      "method": "GET",
+      "headStatus": 403,
+      "finding": "Signed object rejects HEAD with403 but permits HTTPS GET200; no credentials sent to object host. Original HTTP link was not fetched."
+    },
+    "audioStructure": {
+      "speech": {
+        "sampleRate": 24000,
+        "channels": 1,
+        "sampleWidth": 2,
+        "declaredFrames": 1073741773,
+        "actualFrames": 122880,
+        "actualDurationSeconds": 5.12,
+        "headerMatchesData": false
+      },
+      "reference": {
+        "sampleRate": 24000,
+        "channels": 1,
+        "sampleWidth": 2,
+        "declaredFrames": 106495,
+        "actualFrames": 106495,
+        "actualDurationSeconds": 4.437291666666667,
+        "headerMatchesData": true
+      }
+    },
+    "usage": {
+      "tokens": 4740,
+      "ttsCharacters": 70,
+      "asrReportedSeconds": 14
+    },
+    "latency": {
+      "minimumMs": 785,
+      "medianMs": 1764.5,
+      "maximumMs": 3702,
+      "meaning": "Individual direct-provider requests; some probes overlapped. Not localhost end-to-end, production, tail-latency or comparative benchmark evidence."
+    },
+    "billingObservation": {
+      "displayedTotalSpendUsd": 0,
+      "source": "Authenticated QwenCloud Benefits header after matrix requests",
+      "caveat": "Reporting lag observed: ASR table still showed zero seconds despite successful responses reporting consumption; token counters also lagged. Zero displayed spend alone is not final billing reconciliation.",
+      "quotaConsumedDisplay": {
+        "qwen-quota-253": "4.0K tokens (cumulative; stale relative to latest requests)",
+        "qwen-quota-128": "300 tokens (lagging)",
+        "qwen-quota-100": "62 tokens",
+        "qwen-quota-152": "70 chars",
+        "qwen-quota-081": "0 seconds (lagging)",
+        "qwen-quota-207": "35 tokens",
+        "qwen-quota-217": "92 tokens"
+      }
+    },
+    "integrationStatus": "Speech, translation, embeddings, rerank, image attachments and tool execution were tested directly where applicable; this does not enable their input controls in the Free selector. Connected selector count remains94.",
+    "unresolved": [
+      "Provider-generated speech round trip corrupts order number; independently generated speech transcribes exactly. Acoustic synthesis versus recognizer compatibility remains unisolated; no human listening verdict.",
+      "Provider TTS returned an HTTP object URL and a WAV header declaring far more frames than present. HTTPS GET works; any future player must handle or normalize this safely."
+    ],
+    "notTested": [
+      "Every one of272 offerings",
+      "Realtime duplex audio, voice cloning, voice design and lip synchronization",
+      "Image editing/inpainting, video input/editing and all media variants",
+      "Full context windows, load/concurrency limits or production latency",
+      "Live quota exhaustion or paid fallback",
+      "General jailbreak resistance or autonomous tool execution"
+    ],
+    "passingCasesDoNotRequeue": [
+      "extraction",
+      "coding",
+      "conversation",
+      "untrusted_text",
+      "context_retrieval",
+      "tool_selection",
+      "reasoning_concise",
+      "translation",
+      "vision_ocr",
+      "embedding",
+      "rerank",
+      "asr_reference"
+    ],
+    "privateEvidenceDirectory": "apps/web/.cache/qwen-quota-experiments/capability-matrix",
+    "sourceFingerprints": {
+      "apps/web/.cache/qwen-quota-experiments/capability-matrix/run.mts": "3b325bc57ff32146d88b127b4befa8c1c3f1c60143ca41ba7dcdb77a81f0af04",
+      "apps/web/.cache/qwen-quota-experiments/capability-matrix/receipt.png": "67a7c284f2a06620b059d379912fb8272ccc750942698a4f976fd13ed4d20ce6",
+      "apps/web/.cache/qwen-quota-experiments/capability-matrix/speech.wav": "260528340ca3a0eff9ae82b285996b0d42f4f63f8ba7a7f3cd4a3fbb772a6888",
+      "apps/web/.cache/qwen-quota-experiments/capability-matrix/reference.wav": "08c84a9d9805c5ef4de1ef55255ecd148982a404c1899fcf8da08135685de0d1",
+      "apps/web/.cache/qwen-quota-experiments/capability-matrix/speech-normalized.wav": "6d7d1bf299ad0a6690f34fb00d0f60837c3c3e7c6d6e34b200d66f144cda0a40"
+    }
+  },
+  "browserCapabilityExperiments": {
+    "recordedAt": "2026-09-20T03:32:43.224024+00:00",
+    "surface": "Codex in-app Browser; actual localhost composer > Change model > Free",
+    "conversationPath": "/chat/e022da46-67bd-4071-ac59-313c5b01ff89",
+    "decision": {
+      "choice": "chat_workflows",
+      "confidence": 1,
+      "requestHash": "434e4f0b1fb88b04ca340cfd0ae0c1276390fc785b9c452f554f81afc989eb32"
+    },
+    "uiSubmissions": 4,
+    "directApiSubmissions": 0,
+    "results": [
+      {
+        "offeringKey": "qwen-quota-253",
+        "case": "structured_output",
+        "expected": {
+          "project": "Maple",
+          "deadline": "Monday",
+          "total": 12
+        },
+        "observed": {
+          "project": "Maple",
+          "deadline": "Monday",
+          "total": 12
+        },
+        "result": "passed",
+        "rendering": "JSON code block with Copy control."
+      },
+      {
+        "offeringKey": "qwen-quota-253",
+        "case": "multiturn_correction_spanish",
+        "expected": "Retain Maple and twelve dollars; deadline becomes Friday in a concise Spanish sentence.",
+        "observed": "El proyecto Maple tiene fecha l\u00edmite el viernes y un total de doce d\u00f3lares.",
+        "result": "passed"
+      },
+      {
+        "offeringKey": "qwen-quota-253",
+        "case": "code_rendering_and_copy",
+        "observed": "function uniqueSorted(values) {\n  return [...new Set(values.filter(Number.isFinite))].sort((a, b) => a - b);\n}",
+        "result": "passed",
+        "verification": "Visible highlighted JavaScript block; Copy code placed exact function text on clipboard. Not executed in browser."
+      },
+      {
+        "offeringKey": "qwen-quota-128",
+        "case": "reasoning_model_switch",
+        "expected": "21 beads, blue twice red, yields FINAL=14.",
+        "observed": "FINAL=14",
+        "result": "passed"
+      }
+    ],
+    "persistence": "Full reload after first three replies preserved JSON, Spanish correction, code and selected Free Flash offering.",
+    "visualReview": "Desktop screenshot showed legible code block and completed response; reasoning model label ellipsizes with Free badge visible. No mobile-layout claim.",
+    "availabilityChecks": {
+      "speech": "ASR button disabled with Free-quota testing not connected yet.",
+      "embedding": "Embedding V4 button disabled with same explanation.",
+      "ranking": "Rerank button disabled with same explanation."
+    },
+    "findings": [
+      {
+        "id": "WEB-FREE-PROVENANCE-RELOAD-2026-09-19",
+        "observed": "via free pool appears on streamed assistant messages, disappears after reload; model name and composer FREE badge persist.",
+        "scope": "Display provenance only; no evidence of a paid route change."
+      },
+      {
+        "id": "WEB-CHAT-ANGLE-TEXT-2026-09-19",
+        "observed": "Rendered user prompt drops <number> from FINAL=<number>. Edit message displays the complete original text. Cancel used; no Save & Retry request.",
+        "scope": "Rendering loss confirmed; persistence loss not observed. Root cause not yet traced."
+      }
+    ],
+    "limits": "Existing current account/user-bound quota verification and bounded Free route. No new image/video generation or paid fallback.",
+    "latency": "Not measured; browser interaction cadence is not provider latency."
+  },
+  "qaPackBrowserBatch": {
+    "recordedAt": "2026-09-20T04:20:24.518839+00:00",
+    "sourceAttachment": "/Users/siddhartha/.codex/attachments/f30ed2cf-238b-4aa3-8da9-ce8f67197f34/Pasted text.txt",
+    "sourceSha256": "891535bfeb06c138389aaf98df5d040d86e96c4da9bbb2fc8f32185b276ad0b0",
+    "scope": "User narrowed testing to chat, images and related UI; speech, embeddings and ranking excluded. Pasted compact cases were used; expanded ZIP and39 fixtures were not available locally.",
+    "decision": {
+      "choice": "bounded_rendering_and_image_batch",
+      "confidence": 1,
+      "requestHash": "078a24d08ab4520dbccb00f867fdf469c5a643d198a329701a6a08c6ea694b7a"
+    },
+    "uiSubmissions": 15,
+    "completedChatResponses": 13,
+    "completedImageGenerations": 1,
+    "stoppedRequests": 1,
+    "directApiInferenceSubmissions": 0,
+    "results": [
+      {
+        "id": "MD01",
+        "status": "PASS",
+        "conversationPath": "/chat/eb0ddec9-a413-46b5-876f-99df13a57356",
+        "observed": "Compact sampler displayed semantic H1\u2013H6, strong/emphasis, inline code, link, list, quote and divider. Desktop screenshot inspected. Reload retained response."
+      },
+      {
+        "id": "MD04",
+        "status": "PASS",
+        "conversationPath": "/chat/80693ce7-370f-44ee-be88-8107b80763e1",
+        "observed": "Two-paragraph quote and nested quote ended correctly; AFTER was a separate ordinary paragraph. Verified DOM, screenshot and reload."
+      },
+      {
+        "id": "MD18",
+        "status": "PASS",
+        "conversationPath": "/chat/db9e887f-e4da-478a-be0b-d7da8b3493c2",
+        "observed": "Paragraph, table, Python block, list, quote and closing paragraph rendered in order. Whole-response clipboard retained Markdown delimiters. Reopening history retained content."
+      },
+      {
+        "id": "TB02",
+        "status": "FAIL",
+        "conversationPath": "/chat/bd5628b0-ce21-43f5-8cdc-393d5fd9ee26",
+        "observed": "All numeric values correct. Copied source specified right alignment with |-------------:|, but numeric cells displayed left-aligned. Shared th/td components discard alignment props."
+      },
+      {
+        "id": "CD01",
+        "status": "PASS",
+        "conversationPath": "/chat/b70a135f-d237-4a86-96bf-0872ab2a2c37",
+        "observed": "Six separate code blocks labeled python/typescript/sql/bash/rust/go. Second Copy code returned only const x = 1;. Snippets displayed, not executed."
+      },
+      {
+        "id": "MT01",
+        "status": "PASS",
+        "conversationPath": "/chat/aba2f0c9-5828-468b-8aaa-c0c2a7d53e03",
+        "observed": "Inline quadratic equation and complete display formula rendered correctly in screenshot. No claim of screen-reader math quality."
+      },
+      {
+        "id": "MT07",
+        "status": "PASS",
+        "conversationPath": "/chat/6e2022e5-30c4-4145-b976-676f7564fa32",
+        "observed": "Actual six-node Mermaid diagram rendered. Source/Preview, exact artifact clipboard copy, fullscreen and close controls worked. Split panel reproduced existing cramped composer behavior."
+      },
+      {
+        "id": "SA01",
+        "status": "FAIL",
+        "conversationPath": "/chat/79f46cc9-6f37-4d14-80e5-4986554f8c3e",
+        "observed": "Requested inert fenced HTML was promoted into an artifact preview. Script-disabled warning appeared; no JS dialog observed. Source tab retained the script text. Script execution safety is not proven solely by absence of a dialog. User prompt markup also disappeared visually, matching existing angle-text defect."
+      },
+      {
+        "id": "VI12",
+        "status": "PASS",
+        "conversationPath": "/chat/76e2d1dd-3981-4b18-a497-af9fb8e56239",
+        "observed": "With no attachment, response was: There is no attached image. Please upload it."
+      },
+      {
+        "id": "SA09",
+        "status": "PASS",
+        "conversationPath": "/chat/5ed1e8ed-be75-488b-b98f-322d678b2290",
+        "observed": "Table correctly rendered Hello, \u0c28\u0c2e\u0c38\u0c4d\u0c15\u0c3e\u0c30\u0c02, \u0928\u092e\u0938\u094d\u0924\u0947, \u3053\u3093\u306b\u3061\u306f, \u0645\u0631\u062d\u0628\u0627. Desktop screenshot inspected; no broad RTL/IME claim."
+      },
+      {
+        "id": "CH06",
+        "status": "PASS",
+        "conversationPath": "/chat/0e4ee20d-cf4f-4ed1-a3cc-3307f5179bcb",
+        "observed": "Original ocean poem completed after an unusually long wait. Cancel retained it; Save & Retry changed prompt and answer to mountains. Previous/Next paired correct prompt and answer. Isolated reload retained selected version2/2."
+      },
+      {
+        "id": "IG04",
+        "status": "PASS",
+        "conversationPath": "/chat/53f502f4-686d-46f8-baf7-505f6d9e6cab",
+        "observed": "One actual square blue poster rendered white HELLO QA accurately. DOM natural dimensions1024x1024, complete=true. Full reload retained image and Free selection. Provider quota increased from1 to2 images consumed."
+      },
+      {
+        "id": "MD09",
+        "status": "FAIL",
+        "conversationPath": "/chat/9b93b5ad-d588-456f-9721-4242d7c9af39",
+        "observed": "Requested ABCDEFGHIJ24 times (240 characters); clipboard first line measured200 characters. This is a model-content failure. Actual200-character string wrapped at1112px and390px without document overflow; full240-character case is not passed."
+      },
+      {
+        "id": "PL06",
+        "status": "GAP",
+        "conversationPath": "/chat/53f502f4-686d-46f8-baf7-505f6d9e6cab",
+        "observed": "After generation and reload, Library > Images settled to Your library is empty. Free-generated poster persists in chat but is not indexed as a Library image."
+      }
+    ],
+    "uiChecks": [
+      {
+        "id": "U001",
+        "status": "PASS",
+        "observed": "Enter on empty and whitespace-only composer did not add a message; no Send control."
+      },
+      {
+        "id": "U002",
+        "status": "NOT RUN",
+        "partialEvidence": "Shift+Enter produced exact clipboard text FIRST\\nSECOND without sending. Other configured shortcuts not tested."
+      },
+      {
+        "id": "U011",
+        "status": "PASS",
+        "observed": "Whole mixed-format MD18 response copied exact Markdown including table, code fence and quote."
+      },
+      {
+        "id": "U012",
+        "status": "PASS",
+        "observed": "Only second TypeScript code block was copied from CD01."
+      },
+      {
+        "id": "U013",
+        "status": "PASS",
+        "observed": "Edit Cancel and Save & Retry both verified in CH06."
+      },
+      {
+        "id": "U014",
+        "status": "NOT RUN",
+        "partialEvidence": "Edited prompt version navigation and reload passed; separate Regenerate response versions not exercised this batch."
+      },
+      {
+        "id": "U041",
+        "status": "NOT RUN",
+        "partialEvidence": "Mermaid fullscreen, exit and close worked. Full resize/reopen matrix not run; cramped split composer matches prior finding."
+      },
+      {
+        "id": "U042",
+        "status": "NOT RUN",
+        "partialEvidence": "Mermaid Source/Preview worked after completion; toggling during streaming not verified."
+      },
+      {
+        "id": "U064",
+        "status": "NOT RUN",
+        "partialEvidence": "Immediate Stop on a bounded garden-tip request produced Response stopped/Try again; reload preserved cancellation. Request.signal is forwarded by Free route; provider-side compute termination not independently observed."
+      },
+      {
+        "id": "U081",
+        "status": "NOT RUN",
+        "partialEvidence": "390x844 and default1112x748 wrapping observed; document scrollWidth equaled clientWidth390 and1112. Remaining widths/devices not tested."
+      },
+      {
+        "id": "U099",
+        "status": "NOT RUN",
+        "partialEvidence": "Actual Free selector used for all15 UI submissions. Live two-offering quota-only verification refreshed first. Separate paid tool budgets not exercised."
+      }
+    ],
+    "verification": {
+      "checkedAt": "2026-09-20T04:09:38.191Z",
+      "offerings": ["qwen-quota-253", "qwen-quota-101"],
+      "remainingBefore": {
+        "chatTokens": 992400,
+        "images": 99
+      },
+      "remainingImagesObservedAfter": 98,
+      "quotaOnly": true,
+      "displayedSpendUsdAfter": 0,
+      "billingCaveat": "Provider dashboard may lag; displayed spend is not final billing reconciliation.",
+      "credentialMatched": true,
+      "refreshScope": "Only the two freshly observed offerings were refreshed. Prior94-offering verification is expired, not silently extended."
+    },
+    "limits": {
+      "maxOutputTokens": 128,
+      "paidFallback": false,
+      "automaticSubmissionRetries": 0,
+      "notes": "Long-output cases such as MD16, TB03/TB04 were not forced through the small cap. One explicit edited-message Save & Retry is a separate authorized UI action."
+    },
+    "instrumentQualification": [
+      "Browser helper wait/evaluation timeouts did not prove product failures. Explicit later reads were used to inspect settled state.",
+      "Early combined reload/navigation observations reached /chat; isolated edited-chat and image reloads retained correct URLs and contents. Reload redirect is unconfirmed, not registered as a proven defect.",
+      "A mutable helper result object mislabeled the MT01 result as CD01; this record uses actual prompt and observed conversation URL instead of trusting the helper label.",
+      "Stop was first attempted after an ocean poem had already finished, so that attempt is not a cancellation pass. A later deliberate immediate Stop produced the actual cancellation evidence."
+    ],
+    "otherFindings": [
+      "Synthetic composer draft FIRST\\nSECOND returned after fill-empty; additional evidence for existing WEB-DRAFT-CLEAR-RESTORE-2026-09-19, not a new duplicate defect.",
+      "Streamed via-free-pool badge still disappears on reload; existing WEB-FREE-PROVENANCE-RELOAD-2026-09-19."
+    ],
+    "remaining": [
+      "Expanded pack and named fixtures unavailable; file-dependent cases not run.",
+      "Full350-case catalog is not complete. Unlisted cases remain NOT RUN; excluded modalities are outside current user scope.",
+      "Image editing, vision attachments, generated downloads, tool-backed workflows and full project-to-Library journey remain unverified on the Free route.",
+      "No real quota exhaustion, purchase, publishing, external communication, or production change."
+    ],
+    "sourceFingerprints": {
+      "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx": "f3cfd8fc7ca413ff6f538505ae8db21381179ffd8ef944df9adc5a2f2b6be84d",
+      "apps/web/features/chat/components/messages/MessageBubble.tsx": "0907addd977024cb03fd7981efa9eac7215111dab1a830432178b356a60deb27",
+      "apps/web/app/api/models/free-quota/completions/route.ts": "7dac072ba0e397800c18314936a5954c47fc114fa61559813567b8a0bfe0ba97"
+    }
+  }
+}

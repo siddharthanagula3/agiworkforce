@@ -1,5 +1,10 @@
 'use client';
 
+import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
+import {
+  chatCompletionEndpoint,
+  freeQuotaSelection,
+} from '@/features/chat/lib/free-quota-selection';
 import {
   createContext,
   useCallback,
@@ -407,7 +412,8 @@ function getVisibleErrorMessage(error: unknown): string {
   return toUserMessage(error, 'An unknown error occurred');
 }
 
-function buildAssistantErrorContent(message: string): string {
+function buildAssistantErrorContent(message: string, code?: string): string {
+  if (code === FREE_QUOTA_EXHAUSTED_CODE) return message;
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
@@ -3430,7 +3436,7 @@ export function useChatStream(): UseChatStreamReturn {
             : thinkingEffort;
           const sendsEffortWithoutThinking =
             selectedModelMetadata?.reasoning?.control === 'effort_levels';
-          const response = await fetch('/api/llm/v1/chat/completions', {
+          const response = await fetch(chatCompletionEndpoint(model), {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -3598,6 +3604,7 @@ export function useChatStream(): UseChatStreamReturn {
           // finished without returning a response" card.
           if (
             !retriedEmptyTurn &&
+            !freeQuotaSelection(model) &&
             isEmptyAssistantTurn(findConversationMessage(conversationId, assistantMessageId), model)
           ) {
             retriedEmptyTurn = true;
@@ -3736,7 +3743,7 @@ export function useChatStream(): UseChatStreamReturn {
               operationId: continuationOperationId,
             }),
           });
-          const response = await fetch('/api/llm/v1/chat/completions', {
+          const response = await fetch(chatCompletionEndpoint(model), {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -3821,10 +3828,15 @@ export function useChatStream(): UseChatStreamReturn {
 
           const streamedSoFar =
             findConversationMessage(conversationId, assistantMessageId)?.content ?? seedContent;
-          const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage)}`;
+          const mergedContent = `${streamedSoFar}\n\n${buildAssistantErrorContent(errorMessage, errorCode)}`;
           updateMessage(
             assistantMessageId,
-            { isStreaming: false, content: mergedContent, error: true },
+            {
+              isStreaming: false,
+              content: mergedContent,
+              error: true,
+              metadata: { ...priorMetadata, ...(errorCode ? { errorCode } : {}) },
+            },
             conversationId,
           );
           setError(errorMessage, conversationId);
@@ -3836,7 +3848,11 @@ export function useChatStream(): UseChatStreamReturn {
                 role: 'assistant',
                 content: mergedContent,
                 model,
-                metadata: { ...priorMetadata, finishReason: undefined },
+                metadata: {
+                  ...priorMetadata,
+                  finishReason: undefined,
+                  ...(errorCode ? { errorCode } : {}),
+                },
               },
               getAuthToken,
             ).catch((err) => notifyPersistenceFailure('assistant', err));
@@ -4366,8 +4382,8 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
 
   const priorContent = currentMessage?.content;
   const errorContent = priorContent
-    ? `${priorContent}\n\n${buildAssistantErrorContent(errorMessage)}`
-    : buildAssistantErrorContent(errorMessage);
+    ? `${priorContent}\n\n${buildAssistantErrorContent(errorMessage, errorCode)}`
+    : buildAssistantErrorContent(errorMessage, errorCode);
   const freshMetadata = findConversationMessage(conversationId, assistantMessageId)?.metadata;
   updateMessage(
     assistantMessageId,

@@ -29,12 +29,25 @@ export class ScheduledErasureError extends Error {
   }
 }
 
-function incompleteTables(report: AccountErasureReport): string {
-  return Object.entries(report.tables)
-    .filter(([, outcome]) => !outcome.deleted && !outcome.skipped)
-    .map(([table, outcome]) => `${table}${outcome.error ? ` (${outcome.error})` : ''}`)
-    .join(', ')
-    .slice(0, 500);
+function incompleteStores(report: AccountErasureReport): string {
+  const failures = Object.entries(report.tables)
+    .filter(([table, outcome]) => table !== 'profiles' && !outcome.deleted && !outcome.skipped)
+    .map(([table, outcome]) => `${table}${outcome.error ? ` (${outcome.error})` : ''}`);
+  failures.push(
+    ...Object.entries(report.anonymized ?? {})
+      .filter(([, outcome]) => !outcome.updated && !outcome.skipped)
+      .map(([table, outcome]) => `${table}${outcome.error ? ` (${outcome.error})` : ''}`),
+  );
+  for (const [store, count] of [
+    ['media objects', report.mediaObjectsFailed],
+    ['backup objects', report.backupObjectsFailed],
+    ['knowledge objects', report.knowledgeObjectsFailed],
+    ['avatar objects', report.avatarObjectsFailed],
+    ['sandbox cache keys', report.cacheKeysFailed],
+  ] as const) {
+    if ((count ?? 0) > 0) failures.push(`${store} (${count} failed)`);
+  }
+  return failures.join(', ').slice(0, 500);
 }
 
 async function deleteProviderIdentity(
@@ -86,7 +99,7 @@ async function erase(userId: string): Promise<void> {
   if (!report.complete) {
     throw new ScheduledErasureError(
       'erasure',
-      `Account data was only partly erased: ${incompleteTables(report) || 'see the erasure report'}`,
+      `Account data was only partly erased: ${incompleteStores(report) || 'see the erasure report'}`,
     );
   }
 
@@ -140,7 +153,7 @@ export async function reEraseTombstonedAccount(userId: string): Promise<Schedule
       if (!report.complete) {
         throw new ScheduledErasureError(
           'erasure',
-          `Tombstoned account could not be fully re-erased: ${incompleteTables(report) || 'see the erasure report'}`,
+          `Tombstoned account could not be fully re-erased: ${incompleteStores(report) || 'see the erasure report'}`,
         );
       }
       await closeErasureTombstone(userId);
