@@ -36,7 +36,11 @@ import {
   listCloudCodeSessions,
 } from '@/lib/services/cloud-code-session-service';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
-import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
+import {
+  buildWorkspaceFeatureGateResponse,
+  isManagedComputePrivateBetaEnabled,
+} from '@/lib/managed-compute-gate';
+import { buildWorkspaceCodeGateResponse } from '@/lib/services/organization-policy-code-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
   buildManagedComputeAccessGateResponse,
@@ -186,6 +190,32 @@ async function handleCreate(request: NextRequest) {
       { status: 422 },
     );
   }
+  const featureGate = await buildWorkspaceFeatureGateResponse(
+    userId,
+    request,
+    'code',
+    resolveCloudChatSurface(request),
+  );
+  if (featureGate) return featureGate;
+
+  const codeGate = await buildWorkspaceCodeGateResponse(
+    db,
+    userId,
+    { act: 'open_cloud_session', surface: resolveCloudChatSurface(request) },
+    request,
+  );
+  if (codeGate) return codeGate;
+
+  for (const host of Array.isArray(body['extraHosts']) ? body['extraHosts'] : []) {
+    const hostGate = await buildWorkspaceCodeGateResponse(
+      db,
+      userId,
+      { act: 'reach_host', host: typeof host === 'string' ? host : null },
+      request,
+    );
+    if (hostGate) return hostGate;
+  }
+
   const subscription = await resolveEffectiveSubscription(db, userId);
   const accessDecision = await evaluateManagedComputeAccess(
     db,
