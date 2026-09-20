@@ -230,3 +230,24 @@ describe('host messages the phone accepts', () => {
     ).not.toBeNull();
   });
 });
+
+describe('adversarial tool output', () => {
+  it('handles long nonmatching numeric runs without retrying every suffix', () => {
+    expect(parseTestSummary('9'.repeat(100_000) + ' neither', false)).toEqual({
+      status: 'passed',
+      passed: null,
+      failed: null,
+      skipped: null,
+    });
+    expect(parseTestSummary('Tests ' + ' '.repeat(100_000), false).passed).toBeNull();
+    expect(parseTestSummary(' '.repeat(100_000) + '\nTests: 2 passed', false).passed).toBe(2);
+  });
+
+  it('reads the last git destination delimiter and preserves paths with spaces', () => {
+    const destination = 'file with spaces.ts';
+    expect(diffPaths('diff --git a/' + 'a b/a'.repeat(20_000) + ' b/' + destination)).toEqual([
+      destination,
+    ]);
+    expect(diffPaths('diff --git a/' + 'x'.repeat(100_000))).toEqual([]);
+  });
+});

@@ -797,10 +797,8 @@ impl ManagedSession {
 
         if path.exists() && fingerprint_of(path) != seen_fingerprint(path) {
             match quarantine_conflicting_session(path) {
-                Some(kept) => eprintln!(
-                    "[session] {} changed outside this process; its previous contents were kept at {}",
-                    path.display(),
-                    kept.display()
+                Some(_) => eprintln!(
+                    "[session] The saved session changed outside this process; its previous contents were preserved in the session directory"
                 ),
                 None => bail!(
                     "Managed session file {} changed outside this process and could not be set \

@@ -446,3 +446,32 @@ describe('model-facing Skill tool', () => {
     expect(result.content).toContain('<\u200bskill_result');
   });
 });
+
+it('refuses malformed MCP names without ambiguous delimiter matching', () => {
+  const connectorSkill = skill({ metadata: { requires: { mcp: ['Linear'] } } });
+  for (const tool of [
+    'mcp__linear__',
+    'mcp____run',
+    'mcp__linear__' + 'a__'.repeat(30_000) + '\n',
+    'mcp__linear__run\u2028',
+  ]) {
+    expect(
+      executeSkillTool(
+        [connectorSkill],
+        { action: 'load', name: 'documents' },
+        {
+          availableTools: new Set([tool]),
+        },
+      ),
+    ).toMatchObject({ isError: true, code: 'skill_dependencies_unavailable' });
+  }
+  expect(
+    executeSkillTool(
+      [connectorSkill],
+      { action: 'load', name: 'documents' },
+      {
+        availableTools: new Set(['mcp__linear__run__nested']),
+      },
+    ).isError,
+  ).not.toBe(true);
+});

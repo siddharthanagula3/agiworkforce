@@ -50,7 +50,7 @@ export * from './model-catalog';
 
 export * from './harness-protocol';
 
-export { default as modelsCatalogJson } from './models.json';
+export { default as modelsCatalogJson } from './models.json' with { type: 'json' };
 
 export * from './runtime';
 

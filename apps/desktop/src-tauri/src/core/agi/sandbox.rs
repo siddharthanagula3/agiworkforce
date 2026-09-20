@@ -248,7 +248,7 @@ fn build_execution_command(
             .arg(&runner.command)
             .args(&runner.args)
             .arg(script_path);
-        return Ok(cmd);
+        Ok(cmd)
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]

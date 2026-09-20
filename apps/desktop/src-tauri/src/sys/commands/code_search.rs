@@ -1060,6 +1060,7 @@ fn which_available(name: &str) -> bool {
 
 #[cfg(test)]
 mod code_search_tests {
+    #[cfg(unix)]
     use super::*;
 
     #[cfg(unix)]

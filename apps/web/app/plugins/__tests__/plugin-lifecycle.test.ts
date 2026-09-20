@@ -463,3 +463,32 @@ describe('applying an update moves one installation and nothing else', () => {
     ).rejects.toBeInstanceOf(PluginLifecycleError);
   });
 });
+
+describe('plugin lifecycle semantic versions', () => {
+  it('rejects malformed long suffixes before touching storage', async () => {
+    const db = { query: vi.fn() } as unknown as DatabaseAdapter;
+    await expect(
+      publishPluginVersion(db, {
+        pluginId: PLUGIN_ID,
+        version: '0.0.0+' + '--'.repeat(10_000) + '!',
+        actorUserId: ADMIN,
+      }),
+    ).rejects.toThrow();
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('publishes prerelease and build metadata using the shared version contract', async () => {
+    const { db } = world({
+      entryVersion: '1.0.0',
+      entryStatus: 'published',
+      versions: [],
+      installations: [],
+      events: [],
+    });
+    const version = '1.2.3-beta.2+build.17';
+    expect(
+      (await publishPluginVersion(db, { pluginId: PLUGIN_ID, version, actorUserId: ADMIN }))
+        .version,
+    ).toBe(version);
+  });
+});

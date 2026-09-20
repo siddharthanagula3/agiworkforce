@@ -716,6 +716,34 @@
     "corpus-manifest.jsonl": {
       "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/corpus-manifest.jsonl",
       "sha256": "211e2e49ef03e0ee2f2bd441b9344f3a897b4daca6f3833bef1a31ee5abb4c62"
+    },
+    "browser-render.json": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/current-evidence/browser-render.json",
+      "sha256": "0fa0aaad0f95cef480ef16896dce99f3fa0f2f10287f397b049d0e934f7fa506"
+    },
+    "boundaries.json": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/current-evidence/boundaries.json",
+      "sha256": "865137d9653413ae20dff765c939234a2b285e92c814e448b2eaeb9ac76adbc9"
+    },
+    "browser-composer.json": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/current-evidence/browser-composer.json",
+      "sha256": "30f79971d081a32d65fd63ddaf0c6e5d2804c799aec7c26f5b09c69108c90e39"
+    },
+    "browser-draft-search.json": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/current-evidence/browser-draft-search.json",
+      "sha256": "823d7d2bdc9b4627191abfcba4932755fd594e87ce5f3523051bcee4e69fbd39"
+    },
+    "github-main.json": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/current-evidence/github-main.json",
+      "sha256": "f5b7aa5730865e39fb92b13f2e25f8bddc011cd134170f07db8232456f29b56a"
+    },
+    "items.jsonl": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/items.jsonl",
+      "sha256": "02f607977bf36c1a90fdc8e0e6298d03cbcda269f5d334744da11a045bb2bbb4"
+    },
+    "CURRENT_VERIFICATION.md": {
+      "localPath": "/Users/siddhartha/Desktop/agiworkforce/docs/work/checklist-reaudit/CURRENT_VERIFICATION.md",
+      "sha256": "5c0060d694779b8652fd796cbb983c91c81a4e4c7f0ac36b3257de3c7ccdfe13"
     }
   },
   "localScope": [

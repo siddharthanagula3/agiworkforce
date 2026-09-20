@@ -5,11 +5,14 @@ import AxeBuilder from '@axe-core/playwright';
  * Sweeps the surface an enterprise buyer actually walks before signing.
  *
  * Runs against whatever `ENTERPRISE_SWEEP_BASE_URL` points at, defaulting to
- * production, because the question this answers is "what does a customer see",
+ * the local Playwright server, because the question this answers is "what does a customer see",
  * not "what does the branch build". Everything here is a public GET; no
  * credential is used and nothing is written.
  */
-const BASE = process.env['ENTERPRISE_SWEEP_BASE_URL'] ?? 'https://agiworkforce.com';
+const BASE =
+  process.env['ENTERPRISE_SWEEP_BASE_URL'] ??
+  process.env['PLAYWRIGHT_BASE_URL'] ??
+  'http://localhost:3000';
 
 /** The buyer's path: what it is, what it costs, and whether it survives review. */
 const ENTERPRISE_ROUTES = [

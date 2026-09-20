@@ -8,7 +8,7 @@
  * or that browsing and sandboxing share one vendor and therefore one outage.
  */
 
-import registryJson from './dependency-registry.json';
+import registryJson from './dependency-registry.json' with { type: 'json' };
 
 export const DEPENDENCY_KINDS = [
   'model-provider',

@@ -184,7 +184,10 @@ describe('work state mapping', () => {
     const body = /pub const fn legacy_equivalent[\s\S]*?\n {4}\}/u.exec(source)?.[0] ?? '';
     const snake = (name: string) => name.replace(/(?<!^)([A-Z])/gu, '_$1').toLowerCase();
     const rustPairs = new Map<string, string>();
-    for (const [, lhs, rhs] of body.matchAll(/((?:Self::\w+\s*\|?\s*)+)=>\s*Self::(\w+)/gu)) {
+    for (const arm of body.split(',')) {
+      const [lhs, result] = arm.split('=>');
+      const rhs = result?.trim().match(/^Self::(\w+)$/u)?.[1];
+      if (!lhs || !rhs) continue;
       for (const [, variant] of (lhs ?? '').matchAll(/Self::(\w+)/gu)) {
         rustPairs.set(snake(variant ?? ''), snake(rhs ?? ''));
       }

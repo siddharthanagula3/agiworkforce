@@ -42,7 +42,7 @@ mod windows_compat_tests {
     use aes_gcm::aead::rand_core::OsRng;
     use aes_gcm::{
         aead::{rand_core::RngCore, Aead, KeyInit},
-        Aes256Gcm, Key, Nonce,
+        Aes256Gcm, Key,
     };
 
     // rusqlite, in-memory DB (same as SecretManager tests)

@@ -1,0 +1,63 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 6855ae0ad828accbb1ce2dd8ae786681cace4e91..093333e09ba9fc34ef1713c8883a2f24ba1d3fee 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -2,7 +2,7 @@ import { Transform, Writable } from 'node:stream';
+ import IntervalTree from '@flatten-js/interval-tree';
+ import * as TEL from 'trace-event-lib';
+ import fs from 'node:fs';
+-import StreamArray from 'stream-json/streamers/StreamArray.js';
++import StreamArray from 'stream-json/streamers/stream-array.js';
+ import multiSortStream from 'multi-sort-stream';
+ 
+ function _classPrivateFieldLooseBase(e, t) {
+@@ -987,7 +987,7 @@ class BunyanTraceEventStream extends Transform {
+ function jsonlReadFile(filePath) {
+   return fs.createReadStream(filePath, {
+     encoding: 'utf8'
+-  }).pipe(StreamArray.withParser()).pipe(new MapValues(filePath));
++  }).pipe(StreamArray.withParserAsStream()).pipe(new MapValues(filePath));
+ }
+ class MapValues extends Transform {
+   constructor(filePath) {
+diff --git a/dist/index.umd.js b/dist/index.umd.js
+index 26b4878e2c40c15484a1437d9b3414608d842f57..4217264b10e710a1a5d9d81d5d1013aa0a62bcf5 100644
+--- a/dist/index.umd.js
++++ b/dist/index.umd.js
+@@ -1,6 +1,6 @@
+ (function (global, factory) {
+-  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('node:stream'), require('@flatten-js/interval-tree'), require('trace-event-lib'), require('node:fs'), require('stream-json/streamers/StreamArray.js'), require('multi-sort-stream')) :
+-  typeof define === 'function' && define.amd ? define(['exports', 'node:stream', '@flatten-js/interval-tree', 'trace-event-lib', 'node:fs', 'stream-json/streamers/StreamArray.js', 'multi-sort-stream'], factory) :
++  typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('node:stream'), require('@flatten-js/interval-tree'), require('trace-event-lib'), require('node:fs'), require('stream-json/streamers/stream-array.js'), require('multi-sort-stream')) :
++  typeof define === 'function' && define.amd ? define(['exports', 'node:stream', '@flatten-js/interval-tree', 'trace-event-lib', 'node:fs', 'stream-json/streamers/stream-array.js', 'multi-sort-stream'], factory) :
+   (global = global || self, factory(global.bunyamin = {}, global.node_stream, global.IntervalTree, global.traceEventLib, global.fs, global.StreamArray, global.multiSortStream));
+ })(this, (function (exports, node_stream, IntervalTree, TEL, fs, StreamArray, multiSortStream) {
+   function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
+@@ -1011,7 +1011,7 @@
+   function jsonlReadFile(filePath) {
+     return fs__default["default"].createReadStream(filePath, {
+       encoding: 'utf8'
+-    }).pipe(StreamArray__default["default"].withParser()).pipe(new MapValues(filePath));
++    }).pipe(StreamArray__default["default"].withParserAsStream()).pipe(new MapValues(filePath));
+   }
+   class MapValues extends node_stream.Transform {
+     constructor(filePath) {
+diff --git a/src/streams/jsonl/jsonlReadFile.ts b/src/streams/jsonl/jsonlReadFile.ts
+index 480c34983d22b658b4a1bc0adf80d151e15728c9..0165994977a4c4baafb03ac84ffdd0d11c9d6cbc 100644
+--- a/src/streams/jsonl/jsonlReadFile.ts
++++ b/src/streams/jsonl/jsonlReadFile.ts
+@@ -2,12 +2,12 @@ import fs from 'node:fs';
+ import type { Readable } from 'node:stream';
+ import { Transform } from 'node:stream';
+ // eslint-disable-next-line import/extensions
+-import StreamArray from 'stream-json/streamers/StreamArray.js';
++import StreamArray from 'stream-json/streamers/stream-array.js';
+ 
+ export function jsonlReadFile(filePath: string): Readable {
+   return fs
+     .createReadStream(filePath, { encoding: 'utf8' })
+-    .pipe(StreamArray.withParser())
++    .pipe(StreamArray.withParserAsStream())
+     .pipe(new MapValues(filePath));
+ }
+ 

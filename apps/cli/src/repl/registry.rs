@@ -190,7 +190,7 @@ mod save_tests {
 
         match save_session_for_display(&mut session) {
             CommandOutcome::Info(message) => {
-                assert!(message.contains("saved-session-id"), "{message}")
+                assert!(message.contains("saved-session-id"))
             }
             other => panic!("expected the saved session id: {other:?}"),
         }
@@ -1078,13 +1078,10 @@ mod branch_tests {
         );
         match outcome {
             CommandOutcome::Info(message) => {
-                assert!(
-                    message.contains("Branched conversation 'a branch'"),
-                    "{message}"
-                );
+                assert!(message.contains("Branched conversation 'a branch'"));
                 assert!(
                     !message.contains("forked-session-source"),
-                    "the fork must name the new session, not the source: {message}"
+                    "the fork must name the new session, not the source"
                 );
             }
             other => panic!("expected the forked session id: {other:?}"),

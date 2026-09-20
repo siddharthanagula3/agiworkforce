@@ -23,7 +23,7 @@
  * recorded as an exemption with a reason.
  */
 
-import conceptRegistryJson from './concept-registry.json';
+import conceptRegistryJson from './concept-registry.json' with { type: 'json' };
 import type { ResourceChildDisposition, ResourceLifecycleState } from './resource-lifecycle';
 import type { SourceSurface } from './suite-contracts';
 

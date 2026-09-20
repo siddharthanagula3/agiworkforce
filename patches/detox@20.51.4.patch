@@ -1,0 +1,19 @@
+diff --git a/src/logger/utils/streams/DetoxJSONLParser.js b/src/logger/utils/streams/DetoxJSONLParser.js
+index d94743237d1e1168866d3e5aaed37f01d4398ebb..e2fc55043a8719604e3438bdb96bb2beb7cb1324 100644
+--- a/src/logger/utils/streams/DetoxJSONLParser.js
++++ b/src/logger/utils/streams/DetoxJSONLParser.js
+@@ -1,4 +1,4 @@
+-const JsonlParser = require('stream-json/jsonl/Parser');
++const JsonlParser = require('stream-json/jsonl/parser.js').default;
+ 
+ const { through } = require('./transformers');
+ 
+@@ -10,7 +10,7 @@ class DetoxJSONLParser {
+   createTransformer() {
+     const log = this._log;
+     const readable = through();
+-    const writable = JsonlParser.make({ checkErrors: true })
++    const writable = JsonlParser.asStream({ checkErrors: true })
+       .on('error', (err) => {
+         /* istanbul ignore else */
+         if (err instanceof SyntaxError) {
