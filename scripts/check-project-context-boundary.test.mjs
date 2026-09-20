@@ -5,12 +5,13 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  findUncheckedProjectContextLoads,
   findUnloadedProjectRenders,
   findUnscopedProjectReads,
   projectScopedTables,
   extractStatements,
 } from './lib/project-context-boundary.mjs';
-import { renderers, run } from './check-project-context-boundary.mjs';
+import { renderers, run, uncheckedLoads } from './check-project-context-boundary.mjs';
 
 const MIGRATION = `
 create table if not exists public.user_projects (
@@ -217,7 +218,87 @@ test('accepts a module that loads the project before rendering it', () => {
   }
 });
 
+test('fails when a caller never tests the loaded project for null', () => {
+  const root = makeRepo({
+    'apps/web/lib/services/runner.ts': `
+      import { loadProjectContext, formatProjectSystemPrompt } from './project-context-service';
+      export async function run(db, projectId, userId) {
+        const projectContext = await loadProjectContext(db, { projectId, userId });
+        return formatProjectSystemPrompt(projectContext);
+      }
+    `,
+  });
+  try {
+    const findings = findUncheckedProjectContextLoads(root);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].file, 'apps/web/lib/services/runner.ts');
+    assert.equal(findings[0].binding, 'projectContext');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('accepts a caller that refuses on null', () => {
+  const root = makeRepo({
+    'apps/web/lib/services/runner.ts': `
+      import { loadProjectContext, formatProjectSystemPrompt } from './project-context-service';
+      export async function run(db, projectId, userId) {
+        const projectContext = await loadProjectContext(db, { projectId, userId });
+        if (!projectContext) throw new Error('gone');
+        return formatProjectSystemPrompt(projectContext);
+      }
+    `,
+  });
+  try {
+    assert.deepEqual(findUncheckedProjectContextLoads(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a null test far below the call does not count as guarding it', () => {
+  const filler = Array.from(
+    { length: 30 },
+    (_, index) => `        const line${index} = ${index};`,
+  ).join('\n');
+  const root = makeRepo({
+    'apps/web/lib/services/runner.ts': `
+      import { loadProjectContext, formatProjectSystemPrompt } from './project-context-service';
+      export async function run(db, projectId, userId) {
+        const projectContext = await loadProjectContext(db, { projectId, userId });
+${filler}
+        if (!projectContext) throw new Error('gone');
+        return formatProjectSystemPrompt(projectContext);
+      }
+    `,
+  });
+  try {
+    assert.equal(findUncheckedProjectContextLoads(root).length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('fails when the loaded project is not bound at all', () => {
+  const root = makeRepo({
+    'apps/web/lib/services/runner.ts': `
+      import { loadProjectContext, renderProjectContext } from './project-context-service';
+      export async function run(db, projectId, userId) {
+        return renderProjectContext(await loadProjectContext(db, { projectId, userId })).prompt;
+      }
+    `,
+  });
+  try {
+    const findings = findUncheckedProjectContextLoads(root);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].binding, null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('the repository is clean apart from the recorded baseline', () => {
   assert.deepEqual(run(), []);
   assert.deepEqual(renderers(), []);
+  assert.deepEqual(uncheckedLoads(), []);
 });
