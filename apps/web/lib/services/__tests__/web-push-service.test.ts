@@ -1,15 +1,34 @@
 import { createDecipheriv, createECDH, createHmac, randomBytes, type ECDH } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), fetch: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  execute: vi.fn(),
+  fetch: vi.fn(),
+  warn: vi.fn(),
+  privateHosts: new Set<string>(),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
-  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: mocks.warn },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mocks.query, execute: mocks.execute }),
 }));
+
+// The real resolver would ask DNS about a test hostname. The hosts named here
+// stand for the ones whose addresses come back inside the deployment network.
+vi.mock('@/lib/egress-policy', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/egress-policy')>('@/lib/egress-policy');
+  return {
+    ...actual,
+    pinnedPublicFetch: (...args: unknown[]) => mocks.fetch(...args),
+    assertResolvedPublicHostname: async (url: string) => {
+      if (mocks.privateHosts.has(new URL(url).host)) throw new actual.EgressPolicyError(url);
+    },
+  };
+});
 
 const VAPID_PUBLIC_KEY_ENV = 'WEB_PUSH_VAPID_PUBLIC_KEY';
 const VAPID_PRIVATE_KEY_ENV = 'WEB_PUSH_VAPID_PRIVATE_KEY';
@@ -113,6 +132,7 @@ beforeEach(() => {
   vi.stubEnv(VAPID_PUBLIC_KEY_ENV, VAPID.publicKey);
   vi.stubEnv(VAPID_PRIVATE_KEY_ENV, VAPID.privateKey);
   vi.stubEnv(VAPID_SUBJECT_ENV, SUBJECT);
+  mocks.privateHosts.clear();
   mocks.query.mockResolvedValue([subscriptionRow('push.example.test')]);
   mocks.execute.mockResolvedValue(undefined);
   mocks.fetch.mockResolvedValue({ ok: true, status: 201 });
@@ -247,6 +267,59 @@ describe('delivery', () => {
       invalidated: 0,
     });
     expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('endpoints that address the deployment itself', () => {
+  it('never opens a socket to a stored endpoint whose host is inside the network', async () => {
+    mocks.privateHosts.add('metadata.internal.test');
+    mocks.query.mockResolvedValue([subscriptionRow('metadata.internal.test')]);
+
+    const result = await sendWebPushToUser('user-1', MESSAGE);
+
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(result.sent).toBe(0);
+  });
+
+  it('drops that one registration and still delivers to the rest of the batch', async () => {
+    mocks.privateHosts.add('metadata.internal.test');
+    const inside = subscriptionRow('metadata.internal.test');
+    const outside = subscriptionRow('push-b.test');
+    mocks.query.mockResolvedValue([inside, outside]);
+
+    const result = await sendWebPushToUser('user-1', MESSAGE);
+
+    expect(result).toEqual({ sent: 1, invalidated: 1 });
+    expect(mocks.fetch.mock.calls.map((call) => call[0])).toEqual([outside.endpoint]);
+    const [, params] = mocks.execute.mock.calls[0]!;
+    expect(params).toEqual([[inside.endpoint]]);
+  });
+
+  it('refuses a redirect rather than following it with the VAPID credential', async () => {
+    mocks.fetch.mockResolvedValue({
+      ok: false,
+      status: 302,
+      headers: new Headers({ location: 'https://attacker.test/collect' }),
+      body: null,
+    });
+
+    const result = await sendWebPushToUser('user-1', MESSAGE);
+
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch.mock.calls[0]![1].redirect).toBe('manual');
+    expect(result).toEqual({ sent: 0, invalidated: 0 });
+  });
+
+  it('keeps the push token out of the log line by naming the host only', async () => {
+    const row = subscriptionRow('push.example.test');
+    mocks.query.mockResolvedValue([row]);
+    mocks.fetch.mockResolvedValue({ ok: false, status: 500 });
+
+    await sendWebPushToUser('user-1', MESSAGE);
+
+    const logged = JSON.stringify(mocks.warn.mock.calls);
+    expect(logged).toContain('push.example.test');
+    expect(logged).not.toContain(row.endpoint);
   });
 });
 
