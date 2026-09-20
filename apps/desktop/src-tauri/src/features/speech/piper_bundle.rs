@@ -374,7 +374,7 @@ mod tests {
         finish_tar(builder);
         let error =
             extract_archive(&archive, "tar.gz", &temp.path().join("destination")).unwrap_err();
-        assert!(error.contains("symlinks are unsupported"));
+        assert!(error.to_string().contains("symlinks are unsupported"));
     }
 
     #[test]
