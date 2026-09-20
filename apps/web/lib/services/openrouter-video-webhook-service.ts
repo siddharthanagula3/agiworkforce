@@ -3,6 +3,8 @@ import 'server-only';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
+import { recordRejection } from '@/lib/observability/metrics';
+
 const FIVE_MINUTES_SECONDS = 5 * 60;
 const TASK_ID_PATTERN = /^[A-Za-z0-9._~-]{1,512}$/u;
 const SignatureSchema = z.string().regex(/^[a-f0-9]{64}$/u);
@@ -38,6 +40,17 @@ const OpenRouterVideoWebhookSchema = z
   });
 
 export type OpenRouterVideoWebhookEvent = z.infer<typeof OpenRouterVideoWebhookSchema>;
+
+const PROVIDER_CALLBACK_SURFACE = 'api';
+
+function isUnrecognizedEventType(payload: unknown): boolean {
+  const type = (payload as { type?: unknown } | null | undefined)?.type;
+  return typeof type === 'string' && !(eventTypes as readonly string[]).includes(type);
+}
+
+function noteWebhookRejection(kind: 'contract_decode' | 'unknown_event', reason: string): void {
+  recordRejection({ kind, reason, surface: PROVIDER_CALLBACK_SURFACE });
+}
 
 export class OpenRouterVideoWebhookVerificationError extends Error {
   constructor(readonly kind: 'signature' | 'timestamp' | 'payload' | 'idempotency') {
@@ -94,10 +107,18 @@ export function verifyOpenRouterVideoWebhook(input: {
   try {
     payload = JSON.parse(input.rawBody.toString('utf8'));
   } catch {
+    noteWebhookRejection('contract_decode', 'malformed_json');
     throw new OpenRouterVideoWebhookVerificationError('payload');
   }
   const parsed = OpenRouterVideoWebhookSchema.safeParse(payload);
-  if (!parsed.success) throw new OpenRouterVideoWebhookVerificationError('payload');
+  if (!parsed.success) {
+    // An event kind this build does not know is the provider moving ahead of us;
+    // a payload that fails the shape is the contract itself disagreeing.
+    if (isUnrecognizedEventType(payload))
+      noteWebhookRejection('unknown_event', 'unrecognized_type');
+    else noteWebhookRejection('contract_decode', 'webhook_payload');
+    throw new OpenRouterVideoWebhookVerificationError('payload');
+  }
 
   if (input.idempotencyKey !== `${parsed.data.data.id}-${parsed.data.data.status}`) {
     throw new OpenRouterVideoWebhookVerificationError('idempotency');

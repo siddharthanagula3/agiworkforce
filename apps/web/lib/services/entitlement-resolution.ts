@@ -12,6 +12,7 @@ import {
   type CapabilityDenialReason,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { recordCapabilityDenial } from '@/lib/observability/denials';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
@@ -199,6 +200,22 @@ export interface EntitlementResolutionOptions {
 }
 
 function bundleFrom(
+  userId: string,
+  subscription: SubscriptionInfo | null,
+  source: EntitlementSource,
+): EntitlementBundle {
+  const bundle = buildBundle(userId, subscription, source);
+  if (bundle.denialReason) {
+    recordCapabilityDenial({
+      layer: 'entitlement',
+      reason: bundle.denialReason,
+      organizationId: bundle.seatSource?.organizationId ?? null,
+    });
+  }
+  return bundle;
+}
+
+function buildBundle(
   userId: string,
   subscription: SubscriptionInfo | null,
   source: EntitlementSource,
