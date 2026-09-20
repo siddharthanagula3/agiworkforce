@@ -280,6 +280,29 @@ const PUSH_MESSAGES_SQL = `
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `;
 
+const CLEAR_COMPACTION_SUMMARY_SQL = `update web_conversations
+             set compaction_summary = null,
+                 compaction_summary_through_message_id = null,
+                 compaction_summary_digest = null
+           where user_id = $1
+             and id = any($2::uuid[])
+             and compaction_summary is not null`;
+
+/**
+ * The conversations whose turns this batch actually changed. A push that only
+ * conflicts leaves every row as it was, so the summary covering them still
+ * answers for what it summarised.
+ */
+function conversationsApplied(
+  messages: MessageSyncPushItem[],
+  rows: Array<BatchRow<MessageDelta>>,
+): string[] {
+  const applied = new Set(rows.flatMap((row) => (row.kind === 'applied' ? [row.id] : [])));
+  return [
+    ...new Set(messages.filter((item) => applied.has(item.id)).map((item) => item.conversationId)),
+  ];
+}
+
 type ThreadParent = { id: string; parentId: string | null };
 
 /**
@@ -334,11 +357,14 @@ async function pushMessages(
     });
 
   if (threadScopes.length === 0) {
-    return db.query<BatchRow<MessageDelta>>(PUSH_MESSAGES_SQL, [
+    const rows = await db.query<BatchRow<MessageDelta>>(PUSH_MESSAGES_SQL, [
       userId,
       JSON.stringify(messages),
       JSON.stringify([]),
     ]);
+    const touched = conversationsApplied(messages, rows);
+    if (touched.length > 0) await db.execute(CLEAR_COMPACTION_SUMMARY_SQL, [userId, touched]);
+    return rows;
   }
 
   // Only the rows this batch creates take a parent. An edit or a tombstone
@@ -418,6 +444,8 @@ async function pushMessages(
       if (!appliedIds.has(leafMessageId)) continue;
       await setActiveLeaf(tx, scope, leafMessageId);
     }
+    const touched = conversationsApplied(messages, rows);
+    if (touched.length > 0) await tx.execute(CLEAR_COMPACTION_SUMMARY_SQL, [userId, touched]);
     return rows;
   });
 }

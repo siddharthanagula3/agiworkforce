@@ -88,7 +88,7 @@ export async function messageExists(
   messageId: string,
 ): Promise<boolean> {
   const [row] = await tx.query<{ id: string }>(
-    'select id from web_messages where id = $1 and conversation_id = $2 limit 1',
+    'select id from web_messages where id = $1 and conversation_id = $2 and deleted_at is null limit 1',
     [messageId, conversationId],
   );
   return Boolean(row);
@@ -125,7 +125,7 @@ export async function resolveAnsweredParentId(
   activeLeafMessageId: string,
 ): Promise<string | null> {
   const [leaf] = await tx.query<{ role: string; parent_id: string | null }>(
-    'select role, parent_id from web_messages where id = $1 and conversation_id = $2 limit 1',
+    'select role, parent_id from web_messages where id = $1 and conversation_id = $2 and deleted_at is null limit 1',
     [activeLeafMessageId, conversationId],
   );
 
@@ -212,6 +212,7 @@ export async function resolveLinearTail(
     `select id
        from web_messages
       where conversation_id = $1
+        and deleted_at is null
       order by created_at desc, id desc
       limit 1`,
     [conversationId],
@@ -323,6 +324,7 @@ export async function resolveSurvivingLeaf(
     `select id
        from web_messages
       where conversation_id = $1
+        and deleted_at is null
         and parent_id is not distinct from $2::uuid
         and id <> $3
       order by created_at desc, id desc
@@ -337,6 +339,7 @@ export async function resolveSurvivingLeaf(
        select distinct on (parent_id) parent_id, id
          from web_messages
         where conversation_id = $2
+          and deleted_at is null
           and parent_id is not null
         order by parent_id, created_at desc, id desc
      ),

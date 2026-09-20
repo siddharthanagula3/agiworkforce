@@ -345,6 +345,7 @@ const CONVERSATION_PREVIEW_LATERAL = `
            ) as preview
       from public.web_messages message
      where message.conversation_id = conversations.id
+       and message.deleted_at is null
        and message.role = 'user'
      order by message.created_at asc, message.id asc
      limit 1
