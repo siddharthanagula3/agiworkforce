@@ -1,0 +1,214 @@
+{
+  "concepts": {
+    "model capabilities": {
+      "module": "packages/contracts/types/src/model-catalog.ts",
+      "symbol": "COMPAT_CAPABILITY_SOURCES",
+      "kind": "vocabulary",
+      "why": "What a model can do is read from the catalogue, never guessed from its name."
+    },
+    "route ids": {
+      "module": "packages/contracts/types/src/product-routes.ts",
+      "symbol": "PRODUCT_ROUTE_PREFIXES",
+      "kind": "vocabulary",
+      "why": "A surface that invents its own route prefix sends a signed-in reader somewhere the middleware does not know about."
+    },
+    "plan ids": {
+      "module": "packages/contracts/types/src/billing-catalog.ts",
+      "symbol": "BillingPlanTier",
+      "kind": "vocabulary",
+      "why": "A plan name spelled twice becomes two products the day one of them is renamed."
+    },
+    "entitlements": {
+      "module": "packages/contracts/types/src/billing-catalog.ts",
+      "symbol": "BillingPlanCapability",
+      "kind": "vocabulary",
+      "why": "What a plan buys is one list; a client that keeps its own decides access without the server."
+    },
+    "credit conversion": {
+      "module": "packages/contracts/types/src/credits.ts",
+      "symbol": "CREDITS_PER_USD",
+      "kind": "constant",
+      "why": "One rate turns money into credits. A second copy prices the same work differently on two surfaces."
+    },
+    "usage accounting": {
+      "module": "packages/contracts/types/src/usage-vocabulary.ts",
+      "symbol": "ManagedUsageBucket",
+      "kind": "vocabulary",
+      "why": "Which bucket a request spends from decides when a reader is cut off, so it cannot be a per-surface opinion."
+    },
+    "role names": {
+      "module": "packages/contracts/types/src/resource-lifecycle.ts",
+      "symbol": "RESOURCE_ROLES",
+      "kind": "vocabulary",
+      "why": "A role is what a principal holds on a resource; a surface that invents one grants something nothing enforces."
+    },
+    "permission names": {
+      "module": "packages/contracts/types/src/enterprise/permissions.ts",
+      "symbol": "ADMIN_PERMISSION_AREAS",
+      "kind": "vocabulary",
+      "why": "A permission the server never heard of is a control that renders and does nothing."
+    },
+    "error codes": {
+      "module": "packages/contracts/types/src/errors.ts",
+      "symbol": "ErrorCode",
+      "kind": "vocabulary",
+      "why": "A reader is told what went wrong by code, not by parsing the sentence a server happened to write."
+    },
+    "feature ids": {
+      "module": "packages/contracts/types/src/feature-registry.ts",
+      "symbol": "CONTROL_LAYERS",
+      "kind": "vocabulary",
+      "why": "A feature is gated at named layers; a surface that invents a layer gates nothing."
+    },
+    "tool schemas": {
+      "module": "packages/contracts/types/src/tool-primitive.ts",
+      "symbol": "ToolDefinition",
+      "kind": "shape",
+      "why": "One tool shape reaches every surface from the protocol crate, so a member added on one side cannot go missing on the other."
+    },
+    "event schemas": {
+      "module": "packages/contracts/cloud-contracts/src/domain-events.ts",
+      "symbol": "DOMAIN_EVENT_VERBS",
+      "kind": "vocabulary",
+      "why": "An event name is a contract with every consumer; a private verb is an event nobody subscribes to.",
+      "scan": false,
+      "scanWhy": "The verbs are ordinary words (started, completed, failed), so a literal match is evidence of a lifecycle status, not of a private copy of the event vocabulary. DOMAIN_EVENT_NAME_PATTERN is what polices a real event name."
+    },
+    "sync rules": {
+      "module": "packages/contracts/types/src/sync/object-semantics.ts",
+      "symbol": "SYNC_OBJECT_TYPES",
+      "kind": "vocabulary",
+      "why": "Which objects sync, and how a conflict resolves, is one answer for every device.",
+      "scan": false,
+      "scanWhy": "The object types are the product nouns themselves (message, project, settings), so every surface names them for ordinary reasons."
+    },
+    "approval classes": {
+      "module": "packages/contracts/types/src/tool-approval-policy.ts",
+      "symbol": "TOOL_APPROVAL_POLICIES",
+      "kind": "vocabulary",
+      "why": "When a tool needs a human is a policy the workspace sets, not a default a surface picks."
+    },
+    "trust modes": {
+      "module": "packages/contracts/types/src/trust-mode-contract.ts",
+      "symbol": "STORAGE_LOCATIONS",
+      "kind": "vocabulary",
+      "why": "Where data may live is the promise the product sells; a surface that restates it can promise something the router will not keep."
+    },
+    "interaction modes": {
+      "module": "packages/contracts/types/src/runtime.ts",
+      "symbol": "CLOUD_WORK_MODES",
+      "kind": "vocabulary",
+      "why": "Chat and agent work are two modes with different budgets and different approvals, named once.",
+      "scan": false,
+      "scanWhy": "Chat and agent work are two members, and a private copy of a two-member vocabulary is indistinguishable from naming one of them. The registry owns it; the restatement scan cannot see it."
+    },
+    "lifecycle state names": {
+      "module": "packages/contracts/types/src/lifecycle-status.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "kind": "vocabulary",
+      "why": "What a unit of work is doing is one vocabulary; a private spelling is a state no other surface can render."
+    },
+    "tool support": {
+      "module": "packages/contracts/types/src/tool-status.ts",
+      "symbol": "TOOL_STATUSES",
+      "kind": "vocabulary",
+      "why": "Whether a tool is available is the server's answer, and a client that decides it shows a control that fails."
+    },
+    "error classifications": {
+      "module": "packages/contracts/types/src/reason-codes.ts",
+      "symbol": "CAPABILITY_DENIAL_REASONS",
+      "kind": "vocabulary",
+      "why": "Why a capability was refused decides what the reader is offered next."
+    },
+    "provider identity": {
+      "module": "packages/contracts/types/src/provider.ts",
+      "symbol": "Provider",
+      "kind": "vocabulary",
+      "why": "A provider list copied into a surface goes stale the day one is added, and the surface silently drops it."
+    }
+  },
+  "ownershipGaps": [
+    {
+      "concept": "data classifications",
+      "why": "Nothing in the tree classifies data by sensitivity. Residency (DATA_REGION_IDS) answers where data may live and the trust modes answer who may hold it, but no vocabulary says how sensitive a given row is.",
+      "fix": "Introduce the classification vocabulary together with the first surface that acts on it, so it is not a vocabulary on paper."
+    }
+  ],
+  "contractPackage": {
+    "ids": {
+      "module": "packages/contracts/types/src/identifier-contract.ts",
+      "symbol": "IDENTIFIER_CONTRACT",
+      "why": "What may be an identifier is one rule set, applied to every primary key in the schema."
+    },
+    "enums": {
+      "module": "packages/contracts/types/src/concept-registry.ts",
+      "symbol": "CONCEPT_NAMES",
+      "why": "The product nouns are enumerated once, so a surface cannot invent a thirteenth concept nobody stores."
+    },
+    "api inputs": {
+      "module": "packages/contracts/cloud-contracts/src/conversations.ts",
+      "symbol": "ManagedCloudCreateConversationRequestSchema",
+      "why": "A request shape parsed by the same schema on both sides cannot drift between the caller and the route."
+    },
+    "api outputs": {
+      "module": "packages/contracts/cloud-contracts/src/conversations.ts",
+      "symbol": "ManagedCloudConversationWireSchema",
+      "why": "A response shape the client parses is the contract; a route that returns something else fails at the boundary rather than in the UI."
+    },
+    "error envelope": {
+      "module": "packages/contracts/types/src/error-taxonomy.ts",
+      "symbol": "ERROR_CLASSES",
+      "why": "Every failure reaches a reader in the same envelope, classified, so a surface can decide what to offer next."
+    },
+    "events": {
+      "module": "packages/contracts/cloud-contracts/src/domain-events.ts",
+      "symbol": "DOMAIN_EVENT_NAME_PATTERN",
+      "why": "An event name is namespaced and verb-shaped, checked by a pattern rather than by convention."
+    },
+    "capability manifest": {
+      "module": "packages/contracts/types/src/surface-capability-manifest.ts",
+      "symbol": "SurfaceCapabilityManifest",
+      "why": "What a surface can do is answered by the host and the server together, in one shape both sides version."
+    },
+    "model capabilities": {
+      "module": "packages/contracts/types/src/model-catalog.ts",
+      "symbol": "NormalizedModelCapabilities",
+      "why": "What a model supports is read from the catalogue, never inferred from its id."
+    },
+    "tool schema": {
+      "module": "packages/contracts/types/src/tool-primitive.ts",
+      "symbol": "ToolDefinition",
+      "why": "One tool shape for every surface, owned by the protocol crate and generated into TypeScript."
+    },
+    "entitlements": {
+      "module": "packages/contracts/types/src/subscription-entitlement.ts",
+      "symbol": "ENTITLED_SUBSCRIPTION_STATUSES",
+      "why": "Which subscription states buy access is one list; a second copy sells the product twice."
+    },
+    "policy schema": {
+      "module": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+      "symbol": "WORKSPACE_FEATURES",
+      "why": "What an administrator can turn off is enumerated, so a control that renders has something behind it."
+    },
+    "sync messages": {
+      "module": "packages/contracts/cloud-contracts/src/sync.ts",
+      "symbol": "SyncProtocolVersionSchema",
+      "why": "A peer on an older protocol is told it is out of date instead of meeting a parse failure."
+    },
+    "remote-control protocol": {
+      "module": "packages/contracts/types/src/remote-code.ts",
+      "symbol": "REMOTE_CODE_PROTOCOL_VERSION",
+      "why": "A host and a controller negotiate one version before either acts on the other."
+    },
+    "usage events": {
+      "module": "packages/contracts/types/src/usage-vocabulary.ts",
+      "symbol": "MANAGED_USAGE_BUCKET_ORDER",
+      "why": "Which bucket a request spends from, and in what order buckets are drawn down, is one answer for every surface."
+    },
+    "audit event metadata": {
+      "module": "packages/contracts/types/src/audit.ts",
+      "symbol": "AuditEvent",
+      "why": "What an audit row carries is one shape, so a compliance export is complete whatever wrote the row."
+    }
+  }
+}

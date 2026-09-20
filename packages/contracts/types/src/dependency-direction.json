@@ -1,0 +1,86 @@
+{
+  "workspaceScope": "@agiworkforce/",
+  "domainRoots": ["packages/contracts/"],
+  "domainPackages": [
+    "@agiworkforce/types",
+    "@agiworkforce/cloud-contracts",
+    "@agiworkforce/compliance",
+    "@agiworkforce/context",
+    "@agiworkforce/licensing",
+    "@agiworkforce/local-runtime-contract",
+    "@agiworkforce/trust-boundaries",
+    "@agiworkforce/model-registry"
+  ],
+  "providerAdapterRoots": ["packages/ai/providers/", "packages/ai/provider-runtime/"],
+  "providerSdkMatch": "^(openai|groq-sdk|cohere-ai|replicate)$|^@(anthropic-ai|google|mistralai|ai-sdk)/",
+  "forbidden": [
+    {
+      "name": "react",
+      "match": "^react($|/|-dom)",
+      "why": "A rule about what the product means cannot depend on how one surface draws it; a domain that imports React cannot be used by the CLI, the extension or a background job."
+    },
+    {
+      "name": "tauri",
+      "match": "^@tauri-apps/",
+      "why": "The desktop host is one place the domain runs, not a thing the domain knows about."
+    },
+    {
+      "name": "expo",
+      "match": "^(expo($|/)|react-native($|/))",
+      "why": "The mobile host is one place the domain runs, not a thing the domain knows about."
+    },
+    {
+      "name": "provider-sdk",
+      "match": "^(openai|groq-sdk|cohere-ai|replicate)$|^@(anthropic-ai|google|mistralai|ai-sdk)/",
+      "why": "A provider is an implementation of the routing contract. A domain that imports one cannot be routed to another."
+    },
+    {
+      "name": "stripe",
+      "match": "^(stripe|@stripe/)",
+      "why": "Billing is a provider behind the entitlement contract; the plans and the credits are the product's own."
+    },
+    {
+      "name": "database-client",
+      "match": "^(pg|postgres|mysql2?|sqlite3?|drizzle-orm|kysely)$|^@(neondatabase|prisma|libsql)/",
+      "why": "Storage is an adapter. A domain that opens a connection cannot be evaluated on a client, in a test, or against another store."
+    },
+    {
+      "name": "extension-api",
+      "match": "^(webextension-polyfill|chrome|browser)$",
+      "why": "A browser extension API is one host's surface, and the domain has to run where it does not exist."
+    }
+  ],
+  "forbiddenExemptions": [],
+  "providerSdkExemptions": [],
+  "rootsWithoutDomain": [
+    {
+      "root": "apps/cli/",
+      "why": "The CLI is Rust. Its half of the contract is the generated protocol in crates/agiworkforce-protocol, which check-cross-version-matrix already holds to the TypeScript side."
+    },
+    {
+      "root": "packages/platform/data-layer/",
+      "why": "The database adapter declares its own DatabaseAdapter interface rather than implementing a port the contracts own, so a second store would be a second interface.",
+      "fix": "Move the adapter interface into the contract package and have the adapter implement it."
+    },
+    {
+      "root": "packages/platform/identity/",
+      "why": "The identity adapter declares its own shapes rather than implementing a port the contracts own.",
+      "fix": "Move the port into the contract package."
+    },
+    {
+      "root": "packages/platform/key-value/",
+      "why": "The key-value adapter declares its own shapes rather than implementing a port the contracts own.",
+      "fix": "Move the port into the contract package."
+    },
+    {
+      "root": "packages/platform/object-storage/",
+      "why": "The object-storage adapter declares its own shapes rather than implementing a port the contracts own.",
+      "fix": "Move the port into the contract package."
+    },
+    {
+      "root": "packages/platform/observability/",
+      "why": "The observability adapter declares its own shapes rather than implementing a port the contracts own.",
+      "fix": "Move the port into the contract package."
+    }
+  ]
+}

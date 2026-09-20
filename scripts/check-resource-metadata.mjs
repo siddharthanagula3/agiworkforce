@@ -36,6 +36,29 @@ function stripSqlComments(sql) {
 }
 
 const FOREIGN_KEY = /references\s+(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)\s*\(([^)]*)\)([^,\n]*)/g;
+const ON_DELETE = /on\s+delete\s+(cascade|set\s+null|set\s+default|restrict|no\s+action)/;
+
+/**
+ * What the database itself does to a child when the parent goes. The four
+ * application-level answers are declared in the contract instead.
+ */
+export const SQL_CHILD_DISPOSITIONS = Object.freeze({
+  cascade: 'delete_child',
+  'set null': 'detach_child',
+  'set default': 'detach_child',
+  restrict: 'block_deletion',
+  'no action': 'block_deletion',
+});
+
+export const CHILD_DISPOSITION_ANSWERS = Object.freeze([
+  'delete_child',
+  'archive_child',
+  'detach_child',
+  'block_deletion',
+  'ask_user',
+  'preserve_shared_derivative',
+  'preserve_external_source',
+]);
 
 const COLUMN_LINE = /^([a-z_][a-z0-9_]*)\s+/;
 const NON_COLUMN_LEADERS = new Set([
@@ -102,11 +125,13 @@ export function readForeignKeys(repoRoot = REPO_ROOT) {
   const collect = (child, body, migration) => {
     FOREIGN_KEY.lastIndex = 0;
     for (const match of body.matchAll(FOREIGN_KEY)) {
+      const action = ON_DELETE.exec(match[3]);
       keys.push({
         child,
         parent: match[1],
         migration,
         declaresDisposition: /on\s+delete/.test(match[3]),
+        action: action === null ? null : action[1].replace(/\s+/g, ' '),
       });
     }
   };
@@ -494,8 +519,16 @@ function checkDeletionSemantics({ contract, foreignKeys, errors }) {
   const seen = new Set();
 
   for (const key of foreignKeys) {
-    if (key.declaresDisposition) continue;
     const id = `${key.child}->${key.parent}`;
+    if (key.action !== null) {
+      if (SQL_CHILD_DISPOSITIONS[key.action] === undefined) {
+        errors.push(
+          `${MIGRATIONS_DIR}/${key.migration}: ${id} declares "on delete ${key.action}", which maps ` +
+            'to no answer in the object dependency graph.',
+        );
+      }
+      continue;
+    }
     if (undeclared.has(id)) {
       seen.add(id);
       continue;
@@ -510,9 +543,46 @@ function checkDeletionSemantics({ contract, foreignKeys, errors }) {
     if (typeof entry.why !== 'string' || entry.why.trim().length === 0) {
       errors.push(`${CONTRACT_PATH}: undeclared disposition ${id} carries no reason.`);
     }
+    if (!CHILD_DISPOSITION_ANSWERS.includes(entry.answer)) {
+      errors.push(
+        `${CONTRACT_PATH}: undeclared disposition ${id} answers "${entry.answer}", which is not one ` +
+          `of ${CHILD_DISPOSITION_ANSWERS.join(', ')}.`,
+      );
+    }
     if (!seen.has(id)) {
       errors.push(
         `${CONTRACT_PATH}: undeclared disposition ${id} no longer describes a real gap. Delete it; this list only shrinks.`,
+      );
+    }
+  }
+
+  if (foreignKeys.length === 0) return;
+
+  const used = new Set(
+    foreignKeys
+      .map((key) =>
+        key.action === null
+          ? undeclared.get(`${key.child}->${key.parent}`)?.answer
+          : SQL_CHILD_DISPOSITIONS[key.action],
+      )
+      .filter(Boolean),
+  );
+  const unusedReasons = contract.childDispositionsNotUsed ?? {};
+  for (const answer of CHILD_DISPOSITION_ANSWERS) {
+    if (used.has(answer)) {
+      if (unusedReasons[answer] !== undefined) {
+        errors.push(
+          `${CONTRACT_PATH}: "${answer}" is recorded as unused and ${[...foreignKeys].length} edges ` +
+            'now include one. Delete the entry.',
+        );
+      }
+      continue;
+    }
+    const why = unusedReasons[answer];
+    if (typeof why !== 'string' || why.trim().length === 0) {
+      errors.push(
+        `${CONTRACT_PATH}: the dependency graph offers "${answer}" and no edge answers it. Record ` +
+          'why the product never needs it, or delete the answer.',
       );
     }
   }

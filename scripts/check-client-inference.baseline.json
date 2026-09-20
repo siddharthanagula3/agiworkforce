@@ -575,6 +575,30 @@
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/utils/ipc.ts",
+      "symbol": "ErrorCode",
+      "why": "The bridge names TIMEOUT, PAYLOAD_TOO_LARGE and INVALID_RESPONSE as its own transport codes instead of importing ErrorCode from @agiworkforce/types, so a renderer maps a host failure onto a code the server never uses.",
+      "fix": "Import ErrorCode and raise its members; add a transport class to the shared taxonomy if none of them fits."
+    },
+    {
+      "file": "apps/web/shared/stores/query-client.ts",
+      "symbol": "ErrorCode",
+      "why": "The retry table matches PGRST116, NETWORK_ERROR and PAYMENT_REQUIRED as string literals rather than reading the shared error codes, so a code the server renames is retried under the old spelling forever.",
+      "fix": "Read ErrorCode and the retry disposition from the shared taxonomy instead of matching literals."
+    },
+    {
+      "file": "apps/mobile/src/shared/components/FeatureUnavailable.tsx",
+      "symbol": "CONTROL_LAYERS",
+      "why": "The unavailable screen restates entitlement, permission and policy to choose its copy, so a fourth control layer added to the registry renders the wrong sentence on mobile.",
+      "fix": "Import CONTROL_LAYERS and key the copy off it."
+    },
+    {
+      "file": "apps/web/features/admin/components/RouteEconomicsPanel.tsx",
+      "symbol": "COMPAT_CAPABILITY_SOURCES",
+      "why": "The admin panel restates imageInput, reasoning, imageOutput and videoOutput to label route economics, so a capability added to the catalogue is missing from the panel with no failure.",
+      "fix": "Read the capability names from COMPAT_CAPABILITY_SOURCES."
     }
   ]
 }
