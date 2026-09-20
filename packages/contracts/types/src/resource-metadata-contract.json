@@ -71,6 +71,50 @@
     "parent": {
       "declaredPerTable": true,
       "why": "the owning row, for a child object whose ownership is its parent's"
+    },
+    "operationId": {
+      "column": "id",
+      "why": "the handle a caller quotes to ask about this run and nothing else"
+    },
+    "startedAt": {
+      "column": "started_at",
+      "why": "when the work actually began, which is not when the row was created"
+    },
+    "progress": {
+      "column": "progress",
+      "why": "how far along it is, for work a reader waits on"
+    },
+    "stage": {
+      "column": "status",
+      "why": "which step it is in, in the shared lifecycle vocabulary"
+    },
+    "cancellation": {
+      "column": "cancel_requested_at",
+      "why": "that a stop was asked for, so a worker can honour it and a reader can be told"
+    },
+    "retry": {
+      "column": "attempts",
+      "why": "how many times it has been tried, so a replay is bounded"
+    },
+    "result": {
+      "column": "result",
+      "why": "what it produced, readable after the caller has gone"
+    },
+    "error": {
+      "column": "last_error",
+      "why": "why it failed, kept apart from the result"
+    },
+    "requestId": {
+      "column": "idempotency_key",
+      "why": "the reference a reader quotes to support"
+    },
+    "cost": {
+      "column": "usage",
+      "why": "what it spent, so a bill can be explained"
+    },
+    "completedAt": {
+      "column": "completed_at",
+      "why": "when it ended, which is what a duration is measured against"
     }
   },
   "tables": {
@@ -264,64 +308,18 @@
     "website_auto_economy_trial_usage": {
       "createdAt": "first_prompt_at",
       "updatedAt": "last_prompt_at"
+    },
+    "published_artifacts": {
+      "version": "version"
     }
   },
   "gaps": [
-    {
-      "table": "api_keys",
-      "role": "updatedAt",
-      "standIn": "last_used_at and revoked_at",
-      "why": "a rename or a scope change rewrites the row and moves neither column, so the last write is unrecoverable.",
-      "fix": "add updated_at with a before-update trigger, as the resource_row_timestamps migration did for organization_members."
-    },
-    {
-      "table": "device_refresh_tokens",
-      "role": "updatedAt",
-      "standIn": "used_at, revoked_at and compromised_at",
-      "why": "three columns each record one transition and none of them records the most recent write.",
-      "fix": "add updated_at with a before-update trigger."
-    },
-    {
-      "table": "github_installations",
-      "role": "updatedAt",
-      "standIn": "ownership_verified_at",
-      "why": "an access-token refresh and the review toggle both rewrite the row without moving any timestamp.",
-      "fix": "add updated_at with a before-update trigger."
-    },
-    {
-      "table": "media_assets",
-      "role": "updatedAt",
-      "standIn": "deleted_at",
-      "why": "a new asset version rewrites version and parent_version_id while the row records only its deletion.",
-      "fix": "add updated_at with a before-update trigger."
-    },
-    {
-      "table": "organization_admin_api_keys",
-      "role": "updatedAt",
-      "standIn": "last_used_at and revoked_at",
-      "why": "a scope change rewrites the row and moves neither column, so the last write is unrecoverable.",
-      "fix": "add updated_at with a before-update trigger, as the resource_row_timestamps migration did for organization_members."
-    },
-    {
-      "table": "organization_spend_alerts",
-      "role": "updatedAt",
-      "standIn": "created_at",
-      "why": "recipients_notified and spent_cents are rewritten as the period runs and no column follows them.",
-      "fix": "add updated_at with a before-update trigger."
-    },
     {
       "table": "shared_conversations",
       "role": "visibility",
       "standIn": "expires_at",
       "why": "the share row records only when the link dies, never who the link was meant for.",
       "fix": "add visibility alongside the token and have the share route read it, as published_artifacts does."
-    },
-    {
-      "table": "shared_sessions",
-      "role": "updatedAt",
-      "standIn": "created_at",
-      "why": "messages and total_messages grow after the share is created and no column records the growth.",
-      "fix": "add updated_at with a before-update trigger."
     }
   ],
   "shareTokenColumn": "token",
@@ -426,5 +424,311 @@
       "parent": "web_messages",
       "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
     }
-  ]
+  ],
+  "operations": {
+    "agent_approval_requests": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": {
+        "none": "the outcome is the row's own columns rather than a separate result document"
+      },
+      "error": "denial_reason",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "resolved_at"
+    },
+    "agent_tool_executions": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "success",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": "result",
+      "error": "error_message",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": {
+        "none": "the row is written once, when the work has already ended"
+      }
+    },
+    "background_jobs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": "cancel_requested_at",
+      "retry": "attempts",
+      "result": "result",
+      "error": "last_error",
+      "requestId": "idempotency_key",
+      "cost": "usage",
+      "completedAt": "completed_at"
+    },
+    "cloud_agent_execution_operations": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": "attempt",
+      "result": "result",
+      "error": "error",
+      "requestId": "operation_key",
+      "cost": "usage",
+      "completedAt": "completed_at"
+    },
+    "cloud_agent_runs": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "state",
+      "cancellation": "cancellation_requested_at",
+      "retry": {
+        "none": "the run is not retried; its execution operations carry the attempt and the replay bound"
+      },
+      "result": {
+        "none": "a run produces messages and events, not one result document; settled_usage is what the row closes with"
+      },
+      "error": {
+        "none": "failures are recorded as events beside the row rather than on it"
+      },
+      "requestId": "request_id",
+      "cost": "settled_usage",
+      "completedAt": "completed_at"
+    },
+    "credit_settlement_jobs": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": "attempt_count",
+      "result": "result",
+      "error": "last_error",
+      "requestId": "idempotency_key",
+      "cost": "amount_microusd",
+      "completedAt": "completed_at"
+    },
+    "data_rights_requests": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": "resolution_note",
+      "error": {
+        "none": "failures are recorded as events beside the row rather than on it"
+      },
+      "requestId": "reference",
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "resolved_at"
+    },
+    "image_generation_jobs": {
+      "operationId": "id",
+      "startedAt": "attempt_started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": "cancel_requested_at",
+      "retry": "attempts",
+      "result": {
+        "none": "the image lands in the media store and the row carries its billing outcome"
+      },
+      "error": "public_error",
+      "requestId": "idempotency_key",
+      "cost": "actual_cost_microusd",
+      "completedAt": "terminal_at"
+    },
+    "managed_usage_requests": {
+      "operationId": "id",
+      "startedAt": "provider_started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "a lease is re-claimed rather than counted; the replay bound lives on the execution operation row"
+      },
+      "result": {
+        "none": "the answer is streamed to the caller; the row records what it cost and how it ended"
+      },
+      "error": "final_error_code",
+      "requestId": "idempotency_key",
+      "cost": "usage",
+      "completedAt": "finalized_at"
+    },
+    "notebook_runs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "ok",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": {
+        "none": "cell output is streamed to the notebook; the row records whether it ran and for how long"
+      },
+      "error": "error",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "finished_at"
+    },
+    "organization_key_rewrap_runs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": "scanned",
+      "stage": "state",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": "resealed",
+      "error": "last_error",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "completed_at"
+    },
+    "scheduled_task_runs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": "attempt_count",
+      "result": "result",
+      "error": "error",
+      "requestId": "idempotency_key",
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "completed_at"
+    },
+    "video_generation_jobs": {
+      "operationId": "id",
+      "startedAt": "provider_started_at",
+      "progress": "progress",
+      "stage": "status",
+      "cancellation": "cancel_requested_at",
+      "retry": "reconcile_failures",
+      "result": {
+        "none": "the outcome is the row's own columns rather than a separate result document"
+      },
+      "error": "public_error",
+      "requestId": "idempotency_key",
+      "cost": "actual_cost_cents",
+      "completedAt": "terminal_at"
+    }
+  },
+  "notOperations": [],
+  "concurrency": {
+    "projects": {
+      "table": "user_projects",
+      "why": "a project is edited from more than one device at once"
+    },
+    "project-instructions": {
+      "table": "user_projects",
+      "why": "the instructions live on the project row and two editors overwrite each other"
+    },
+    "artifacts": {
+      "table": "web_artifacts",
+      "why": "an artifact is edited while a run is still writing to it"
+    },
+    "documents": {
+      "table": "project_knowledge_files",
+      "why": "a knowledge file is replaced while another reader is citing it"
+    },
+    "policies": {
+      "table": "organization_admin_policies",
+      "why": "two administrators edit the same tenant policy"
+    },
+    "settings": {
+      "table": "user_settings",
+      "why": "settings are written from every surface the account signs in to"
+    },
+    "memory-summary": {
+      "table": "user_memories",
+      "why": "a summary is rewritten by a run while the reader is editing it"
+    },
+    "shared-resources": {
+      "table": "published_artifacts",
+      "why": "a published artifact is republished while someone holds the link"
+    },
+    "schedules": {
+      "table": "scheduled_tasks",
+      "why": "a schedule is edited while the dispatcher is reading it"
+    },
+    "agent-definitions": {
+      "table": "agent_tools",
+      "why": "an agent definition is edited while a run is loading it"
+    }
+  }
 }

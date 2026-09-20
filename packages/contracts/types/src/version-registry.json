@@ -1,0 +1,122 @@
+{
+  "artifacts": {
+    "database-schema": {
+      "why": "the stored shape every service reads; the migration sequence is its version",
+      "kind": "migrationSequence",
+      "path": "apps/web/db/neon",
+      "negotiated": false
+    },
+    "api": {
+      "why": "the request and response shapes a client outside this build depends on",
+      "kind": "constant",
+      "file": "apps/web/lib/api-gateway-policy.ts",
+      "symbol": "API_CONTRACT_VERSION",
+      "negotiated": true
+    },
+    "contracts": {
+      "why": "the manifest a server and a host exchange before either trusts the other's answer",
+      "kind": "constant",
+      "file": "packages/contracts/types/src/surface-capability-manifest.ts",
+      "symbol": "SURFACE_CAPABILITY_MANIFEST_SCHEMA_VERSION",
+      "minSymbol": "SURFACE_CAPABILITY_MANIFEST_MIN_SCHEMA_VERSION",
+      "negotiated": true
+    },
+    "event-schemas": {
+      "why": "a domain event outlives the build that emitted it, so its reader needs to know its shape",
+      "kind": "constant",
+      "file": "packages/contracts/cloud-contracts/src/domain-events.ts",
+      "symbol": "DOMAIN_EVENT_SCHEMA_VERSION",
+      "negotiated": false
+    },
+    "sync-protocol": {
+      "why": "two devices reconciling rows have to agree on the exchange before they exchange anything",
+      "kind": "constant",
+      "file": "packages/contracts/cloud-contracts/src/sync.ts",
+      "symbol": "SYNC_PROTOCOL_VERSION",
+      "minSymbol": "SYNC_PROTOCOL_MIN_VERSION",
+      "negotiated": true
+    },
+    "tool-schema": {
+      "why": "a stored tool call is replayed by a later build than the one that wrote it",
+      "kind": "constant",
+      "file": "packages/contracts/types/src/tool-primitive.ts",
+      "symbol": "TOOL_SCHEMA_VERSION",
+      "minSymbol": "TOOL_MIN_SCHEMA_VERSION",
+      "negotiated": false
+    },
+    "mcp-integration": {
+      "why": "the protocol revision we speak to an MCP server, owned by the SDK and pinned here",
+      "kind": "referenced",
+      "file": "apps/web/lib/connectors/mcp-credential-spec.ts",
+      "symbol": "LATEST_PROTOCOL_VERSION",
+      "negotiated": true
+    },
+    "model-registry": {
+      "why": "the catalogue every surface routes against, versioned so a stale copy is detectable",
+      "kind": "json",
+      "file": "packages/contracts/types/src/models.json",
+      "field": "version",
+      "negotiated": false
+    },
+    "prompt-registry": {
+      "why": "the system prompt a conversation was answered under, pinned so a reply can be explained",
+      "kind": "constant",
+      "file": "apps/web/lib/prompts/chat-system-prompt.ts",
+      "symbol": "CHAT_SYSTEM_PROMPT_PINNED_VERSION",
+      "negotiated": false
+    },
+    "policy-schema": {
+      "why": "the shape of a stored policy layer, separate from the tenant revision a value came from",
+      "kind": "constant",
+      "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+      "symbol": "WORKSPACE_POLICY_SCHEMA_VERSION",
+      "minSymbol": "WORKSPACE_POLICY_MIN_SCHEMA_VERSION",
+      "negotiated": false
+    },
+    "entitlement-schema": {
+      "why": "what a plan carries, which a client may name and may never work out for itself",
+      "kind": "constant",
+      "file": "packages/contracts/types/src/billing-plan-catalog.ts",
+      "symbol": "BILLING_PLAN_CATALOG_VERSION",
+      "negotiated": false
+    },
+    "artifact-runtime": {
+      "why": "an artifact is opened by a later build than the one that produced it",
+      "kind": "constant",
+      "file": "packages/contracts/types/src/artifacts.ts",
+      "symbol": "ARTIFACT_RUNTIME_SCHEMA_VERSION",
+      "minSymbol": "ARTIFACT_RUNTIME_MIN_SCHEMA_VERSION",
+      "negotiated": false
+    },
+    "plugin-manifest": {
+      "why": "three surfaces read the same plugin JSON and must refuse a shape they do not know",
+      "kind": "constant",
+      "file": "packages/contracts/types/src/plugins.ts",
+      "symbol": "PLUGIN_MANIFEST_SCHEMA_VERSION",
+      "minSymbol": "PLUGIN_MANIFEST_MIN_SCHEMA_VERSION",
+      "negotiated": false
+    },
+    "skill-manifest": {
+      "why": "a skill authored against one shape is loaded by a host built against another",
+      "kind": "constant",
+      "file": "packages/contracts/cloud-contracts/src/skills.ts",
+      "symbol": "MANAGED_SKILL_SCHEMA_VERSION",
+      "minSymbol": "MANAGED_SKILL_MIN_SCHEMA_VERSION",
+      "negotiated": false
+    },
+    "connector-manifest": {
+      "why": "the connector list is served to clients older than the build that added a state",
+      "kind": "constant",
+      "file": "packages/contracts/cloud-contracts/src/connectors.ts",
+      "symbol": "CONNECTOR_CONTRACT_SCHEMA_VERSION",
+      "minSymbol": "CONNECTOR_CONTRACT_MIN_SCHEMA_VERSION",
+      "negotiated": false
+    }
+  },
+  "clientFloor": {
+    "why": "the oldest runtime the server still answers, so a dangerously old client is refused rather than half served",
+    "file": "packages/contracts/types/src/developer-session-versioning.ts",
+    "symbol": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+    "unsupportedCode": "PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE"
+  }
+}

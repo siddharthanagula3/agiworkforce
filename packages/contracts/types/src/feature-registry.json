@@ -1,0 +1,208 @@
+{
+  "features": {
+    "work": {
+      "label": "Work",
+      "domain": "work",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "work",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "code": {
+      "label": "Code",
+      "domain": "code",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": "code",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "research": {
+      "label": "Research",
+      "domain": "research",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "chat_tools",
+        "policy": "research",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "skills": {
+      "label": "Skills",
+      "domain": "skills",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "skills_connectors",
+        "policy": "skills",
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    },
+    "plugins": {
+      "label": "Plugins",
+      "domain": "plugins",
+      "maturity": "beta",
+      "dependsOn": ["skills"],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "skills_connectors",
+        "policy": "plugins",
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    },
+    "hooks": {
+      "label": "Hooks",
+      "domain": "hooks",
+      "maturity": "beta",
+      "dependsOn": ["code"],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": "hooks",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "browser": {
+      "label": "Browser",
+      "domain": "browser",
+      "maturity": "beta",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "browser extension",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "chat_tools",
+        "policy": "browser",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "computer_use": {
+      "label": "Computer use",
+      "domain": "computer-use",
+      "maturity": "experimental",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "computer_use",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "remote_control": {
+      "label": "Remote Control",
+      "domain": "remote-control",
+      "maturity": "experimental",
+      "dependsOn": ["computer_use"],
+      "incompatibleWith": [],
+      "requiresHost": "desktop",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": "remote_control",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "schedules": {
+      "label": "Schedules",
+      "domain": "scheduler",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "schedules",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "event_triggers": {
+      "label": "Event triggers",
+      "domain": "events",
+      "maturity": "beta",
+      "dependsOn": ["schedules"],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "event_triggers",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "projects": {
+      "label": "Projects",
+      "domain": "projects",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "projects",
+        "policy": "projects",
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    }
+  }
+}

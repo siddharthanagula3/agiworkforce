@@ -93,7 +93,29 @@ export const DenialErrorCode = {
 
 export type DenialErrorCodeValue = (typeof DenialErrorCode)[keyof typeof DenialErrorCode];
 
+/**
+ * What broke, for the subsystems whose failures used to arrive as
+ * INTERNAL_ERROR. A blob write, a search backend, a tool, a connector and a
+ * sandbox each fail for their own reasons and each earns its own remedy, and
+ * none of them is the transport failing.
+ */
+export const DomainErrorCode = {
+  RESOURCE_DELETED: 'RESOURCE_DELETED',
+
+  STORAGE_ERROR: 'STORAGE_ERROR',
+  SEARCH_ERROR: 'SEARCH_ERROR',
+  TOOL_ERROR: 'TOOL_ERROR',
+  CONNECTOR_ERROR: 'CONNECTOR_ERROR',
+  SANDBOX_ERROR: 'SANDBOX_ERROR',
+
+  SAFETY_BLOCKED: 'SAFETY_BLOCKED',
+} as const;
+
+export type DomainErrorCodeValue = (typeof DomainErrorCode)[keyof typeof DomainErrorCode];
+
 export type AnyErrorCodeValue = ErrorCodeValue | DenialErrorCodeValue;
+
+export type ClassifiedErrorCode = AnyErrorCodeValue | DomainErrorCodeValue;
 
 /**
  * Standard API error response format.
@@ -211,14 +233,28 @@ export const DENIAL_ERROR_CODE_TO_HTTP_STATUS: Record<DenialErrorCodeValue, numb
   [DenialErrorCode.FEATURE_REMOVED]: 410,
 };
 
+export const DOMAIN_ERROR_CODE_TO_HTTP_STATUS: Record<DomainErrorCodeValue, number> = {
+  [DomainErrorCode.RESOURCE_DELETED]: 410,
+  [DomainErrorCode.STORAGE_ERROR]: 502,
+  [DomainErrorCode.SEARCH_ERROR]: 502,
+  [DomainErrorCode.TOOL_ERROR]: 502,
+  [DomainErrorCode.CONNECTOR_ERROR]: 502,
+  [DomainErrorCode.SANDBOX_ERROR]: 502,
+  [DomainErrorCode.SAFETY_BLOCKED]: 403,
+};
+
 export function isDenialErrorCode(code: string): code is DenialErrorCodeValue {
   return Object.prototype.hasOwnProperty.call(DENIAL_ERROR_CODE_TO_HTTP_STATUS, code);
 }
 
-export function errorCodeHttpStatus(code: AnyErrorCodeValue): number {
-  return isDenialErrorCode(code)
-    ? DENIAL_ERROR_CODE_TO_HTTP_STATUS[code]
-    : (ERROR_CODE_TO_HTTP_STATUS[code] ?? 500);
+export function isDomainErrorCode(code: string): code is DomainErrorCodeValue {
+  return Object.prototype.hasOwnProperty.call(DOMAIN_ERROR_CODE_TO_HTTP_STATUS, code);
+}
+
+export function errorCodeHttpStatus(code: ClassifiedErrorCode): number {
+  if (isDenialErrorCode(code)) return DENIAL_ERROR_CODE_TO_HTTP_STATUS[code];
+  if (isDomainErrorCode(code)) return DOMAIN_ERROR_CODE_TO_HTTP_STATUS[code];
+  return ERROR_CODE_TO_HTTP_STATUS[code] ?? 500;
 }
 
 export interface FriendlyError {

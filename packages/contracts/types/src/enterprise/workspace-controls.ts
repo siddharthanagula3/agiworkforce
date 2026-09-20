@@ -186,6 +186,11 @@ export const WORKSPACE_POLICY_OVERRIDE_SUBJECT_LABELS: Readonly<
   user: 'Person',
 });
 
+// The shape a stored policy layer is written against, separate from the
+// per-tenant revision that says which edit of the rules a value came from.
+export const WORKSPACE_POLICY_SCHEMA_VERSION = 1;
+export const WORKSPACE_POLICY_MIN_SCHEMA_VERSION = 1;
+
 export const WORKSPACE_POLICY_SCOPES = [
   'workspace',
   ...WORKSPACE_POLICY_OVERRIDE_SUBJECTS,
