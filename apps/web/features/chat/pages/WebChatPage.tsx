@@ -110,6 +110,7 @@ import { useConversationDraftSync } from '../hooks/use-conversation-draft-sync';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
+import { useStreamStallReport } from '../hooks/use-stream-stall-report';
 import {
   Sheet,
   SheetContent,
@@ -1373,6 +1374,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
   const activeLeafId = useChatStore(selectActiveLeafId(displayedConversationId));
   const allConversationRows = useChatStore(selectConversationAllRows(displayedConversationId));
+  useStreamStallReport({
+    streaming: isStreaming,
+    rows: allConversationRows,
+    turnKey: displayedConversationId,
+  });
   const variantInfoRef = useRef<VariantInfoByMessageId>(EMPTY_VARIANT_INFO);
   const variantInfoByMessageId = useMemo(() => {
     const next = variantsEnabled

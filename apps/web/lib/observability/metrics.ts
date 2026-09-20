@@ -14,6 +14,8 @@ import { scrubAttributes } from '@agiworkforce/observability';
 
 import { OBSERVABILITY_ATTRIBUTE, deploymentAttributes } from './attributes';
 import { boundAttributes } from './cardinality';
+import type { ClientFailureClass, ClientFailureDetail } from './client-failures';
+import type { WorkPlanMeasure, WorkPlanShape } from './work-plan-measures';
 import { SPAN_DOMAIN_ATTRIBUTE, TRACER_NAME } from './otel-span-bridge';
 
 export const METRIC_NAME = {
@@ -43,6 +45,8 @@ export const METRIC_NAME = {
   turnDuration: 'agi.turn.duration',
   turnCost: 'agi.turn.cost',
   turnRetries: 'agi.turn.retries',
+  clientFailures: 'agi.client.failures',
+  workPlanSteps: 'agi.work.plan.steps',
   // The media instruments live in media-telemetry.ts, which imports span.ts,
   // which imports this file. Importing them back would be a cycle that leaves
   // this object half built, so the names are restated and
@@ -59,6 +63,7 @@ export const METRIC_NAME = {
 export type FailureKind =
   | 'api'
   | 'browser'
+  | 'client'
   | 'connector'
   | 'database'
   | 'mcp'
@@ -104,6 +109,8 @@ interface Instruments {
   readonly turnDuration: Histogram;
   readonly turnCost: Histogram;
   readonly turnRetries: Counter;
+  readonly clientFailures: Counter;
+  readonly workPlanSteps: Gauge;
 }
 
 let cached: { provider: MeterProvider; instruments: Instruments } | null = null;
@@ -141,6 +148,8 @@ function instruments(): Instruments {
     turnDuration: meter.createHistogram(METRIC_NAME.turnDuration, { unit: MILLISECONDS }),
     turnCost: meter.createHistogram(METRIC_NAME.turnCost, { unit: MICRO_USD }),
     turnRetries: meter.createCounter(METRIC_NAME.turnRetries),
+    clientFailures: meter.createCounter(METRIC_NAME.clientFailures),
+    workPlanSteps: meter.createGauge(METRIC_NAME.workPlanSteps),
   };
   cached = { provider, instruments: created };
   return created;
@@ -325,6 +334,47 @@ export function recordTurnOutcome(input: {
   const retries = Math.max(0, Math.trunc(input.retries ?? 0));
   if (retries > 0) recorded.turnRetries.add(retries, attributes);
   if (input.outcome === 'failed') recordFailure('model', input.errorType);
+}
+
+// A failure the server never sees because it happened after the response, so
+// no existing series moves however often it happens.
+export function recordClientFailure(input: {
+  failure: ClientFailureClass;
+  detail?: ClientFailureDetail | undefined;
+  surface?: string | undefined;
+  clientVersion?: string | undefined;
+}): void {
+  instruments().clientFailures.add(
+    1,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.clientFailureClass]: input.failure,
+      [OBSERVABILITY_ATTRIBUTE.clientFailureDetail]: input.detail,
+      [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+      [OBSERVABILITY_ATTRIBUTE.clientVersion]: input.clientVersion,
+    }),
+  );
+  recordFailure('client', input.failure);
+}
+
+// A plan the agent keeps extending and a plan it finishes are both one run that
+// ended; this is the only reading of the difference.
+export function recordWorkPlanSize(input: {
+  shape: WorkPlanShape;
+  steps: number;
+  completed: number;
+}): void {
+  const recorded = instruments();
+  const measure = (kind: WorkPlanMeasure, value: number): void => {
+    recorded.workPlanSteps.record(
+      Math.max(0, Math.trunc(value)),
+      clean({
+        [OBSERVABILITY_ATTRIBUTE.workPlanShape]: input.shape,
+        [OBSERVABILITY_ATTRIBUTE.workPlanMeasure]: kind,
+      }),
+    );
+  };
+  measure('steps', input.steps);
+  measure('completed', input.completed);
 }
 
 export type DatabaseOutcome = 'ok' | 'error';

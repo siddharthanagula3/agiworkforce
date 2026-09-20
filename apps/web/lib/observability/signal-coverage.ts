@@ -124,6 +124,7 @@ export interface SpanDomainEvidence {
 const SPAN_COVERAGE_TEST = 'apps/web/lib/__tests__/span-domain-coverage.test.ts';
 const INTEGRATION_SPAN_TEST = 'apps/web/lib/__tests__/span-domain-coverage.integrations.test.ts';
 const DATABASE_SPAN_TEST = 'apps/web/lib/observability/database-span.test.ts';
+const CODE_ACTION_SPAN_TEST = 'apps/web/lib/observability/__tests__/code-action-spans.test.ts';
 
 export const SPAN_DOMAIN_EVIDENCE: readonly SpanDomainEvidence[] = [
   { domain: 'approval', provenBy: SPAN_COVERAGE_TEST },
@@ -133,11 +134,7 @@ export const SPAN_DOMAIN_EVIDENCE: readonly SpanDomainEvidence[] = [
     why: 'opened by apps/web/app/api/stripe-webhook/route.ts, which no test drives far enough to emit it',
   },
   { domain: 'database', provenBy: DATABASE_SPAN_TEST },
-  {
-    domain: 'external',
-    provenBy: null,
-    why: 'no call site opens it: the name is in the vocabulary and nothing in the product uses it',
-  },
+  { domain: 'external', provenBy: CODE_ACTION_SPAN_TEST },
   { domain: 'http', provenBy: SPAN_COVERAGE_TEST },
   { domain: 'model', provenBy: INTEGRATION_SPAN_TEST },
   { domain: 'queue', provenBy: INTEGRATION_SPAN_TEST },

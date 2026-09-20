@@ -8,6 +8,9 @@ import {
   MAX_AGIWORK_GOAL_FIELD_CHARS,
 } from '@/app/api/llm/v1/chat/completions/lib/agiwork-plan';
 import type { ContextSource } from '@agiworkforce/context';
+import { recordWorkPlanSize } from '@/lib/observability/metrics';
+import { withSpan } from '@/lib/observability/span';
+import type { WorkPlanShape } from '@/lib/observability/work-plan-measures';
 
 export const WORK_PLAN_STATUSES = ['draft', 'active', 'completed', 'failed', 'cancelled'] as const;
 export type WorkPlanStatus = (typeof WORK_PLAN_STATUSES)[number];
@@ -226,6 +229,14 @@ export function applyWorkPlanRevision(
 }
 
 /** The first step whose dependencies are all satisfied, or null while none is. */
+function observeWorkPlan(shape: WorkPlanShape, plan: WorkPlan): void {
+  recordWorkPlanSize({
+    shape,
+    steps: plan.steps.length,
+    completed: plan.steps.filter((step) => step.status === 'completed').length,
+  });
+}
+
 export function nextRunnableStep(plan: WorkPlan): WorkPlanStep | null {
   const completed = new Set(
     plan.steps.filter((step) => step.status === 'completed').map((step) => step.id),
@@ -419,44 +430,48 @@ export async function createWorkPlan(
 ): Promise<WorkPlan> {
   const operations = addStepOperations(input.steps);
 
-  return db.transaction(async (tx) => {
-    const [row] = await tx.query<WorkPlanRow>(
-      `insert into work_plans (user_id, run_id, conversation_id, objective, constraints, deliverable)
+  return withSpan('work.plan.create', { domain: 'task' }, async (span) =>
+    db.transaction(async (tx) => {
+      const [row] = await tx.query<WorkPlanRow>(
+        `insert into work_plans (user_id, run_id, conversation_id, objective, constraints, deliverable)
        values ($1, $2::uuid, $3::uuid, $4, $5, $6)
        returning id, user_id, run_id, conversation_id, objective, constraints, deliverable,
                  version, status`,
-      [
-        input.userId,
-        input.runId ?? null,
-        input.conversationId ?? null,
-        input.objective,
-        input.constraints ?? null,
-        input.deliverable ?? null,
-      ],
-    );
-    if (!row) throw new WorkPlanRevisionError('The plan could not be created');
+        [
+          input.userId,
+          input.runId ?? null,
+          input.conversationId ?? null,
+          input.objective,
+          input.constraints ?? null,
+          input.deliverable ?? null,
+        ],
+      );
+      if (!row) throw new WorkPlanRevisionError('The plan could not be created');
 
-    const empty = toWorkPlan(row, []);
-    const seeded = operations.reduce(applyOperation, empty);
-    assertDependenciesAreSatisfiable(seeded.steps);
-    if (seeded.steps.length > 0) await writeSteps(tx, seeded);
-    await recordRevision(
-      tx,
-      seeded,
-      operations.length > 0
-        ? operations
-        : [
-            {
-              kind: 'revise_objective',
-              objective: seeded.objective,
-              constraints: seeded.constraints,
-              deliverable: seeded.deliverable,
-            },
-          ],
-      'agent',
-    );
-    return seeded;
-  });
+      const empty = toWorkPlan(row, []);
+      const seeded = operations.reduce(applyOperation, empty);
+      assertDependenciesAreSatisfiable(seeded.steps);
+      if (seeded.steps.length > 0) await writeSteps(tx, seeded);
+      await recordRevision(
+        tx,
+        seeded,
+        operations.length > 0
+          ? operations
+          : [
+              {
+                kind: 'revise_objective',
+                objective: seeded.objective,
+                constraints: seeded.constraints,
+                deliverable: seeded.deliverable,
+              },
+            ],
+        'agent',
+      );
+      span.setAttributes({ 'agi.work.plan.status': seeded.status });
+      observeWorkPlan('planned', seeded);
+      return seeded;
+    }),
+  );
 }
 
 // Steps already on the plan are left alone, so a resumed turn that replans does
@@ -502,18 +517,19 @@ export async function reviseWorkPlan(
     expectedVersion?: number;
   },
 ): Promise<WorkPlan> {
-  return db.transaction(async (tx) => {
-    const current = await readPlan(tx, { userId: params.userId, planId: params.planId });
-    if (!current) throw new WorkPlanRevisionError('No such plan');
-    if (params.expectedVersion !== undefined && params.expectedVersion !== current.version) {
-      throw new WorkPlanRevisionError(
-        `The plan moved to version ${current.version} while this revision was being prepared`,
-      );
-    }
+  return withSpan('work.plan.revise', { domain: 'task' }, async (span) =>
+    db.transaction(async (tx) => {
+      const current = await readPlan(tx, { userId: params.userId, planId: params.planId });
+      if (!current) throw new WorkPlanRevisionError('No such plan');
+      if (params.expectedVersion !== undefined && params.expectedVersion !== current.version) {
+        throw new WorkPlanRevisionError(
+          `The plan moved to version ${current.version} while this revision was being prepared`,
+        );
+      }
 
-    const revised = applyWorkPlanRevision(current, params.operations);
-    const [row] = await tx.query<WorkPlanRow>(
-      `update work_plans
+      const revised = applyWorkPlanRevision(current, params.operations);
+      const [row] = await tx.query<WorkPlanRow>(
+        `update work_plans
           set objective = $3,
               constraints = $4,
               deliverable = $5,
@@ -521,26 +537,29 @@ export async function reviseWorkPlan(
         where id = $1::uuid and user_id = $2 and version = $6
        returning id, user_id, run_id, conversation_id, objective, constraints, deliverable,
                  version, status`,
-      [
-        params.planId,
-        params.userId,
-        revised.objective,
-        revised.constraints,
-        revised.deliverable,
-        current.version,
-      ],
-    );
-    if (!row) throw new WorkPlanRevisionError('The plan changed while this revision was applied');
+        [
+          params.planId,
+          params.userId,
+          revised.objective,
+          revised.constraints,
+          revised.deliverable,
+          current.version,
+        ],
+      );
+      if (!row) throw new WorkPlanRevisionError('The plan changed while this revision was applied');
 
-    const written = {
-      ...revised,
-      version: Number(row.version),
-      status: row.status as WorkPlanStatus,
-    };
-    await writeSteps(tx, written);
-    await recordRevision(tx, written, params.operations, params.revisedBy);
-    return written;
-  });
+      const written = {
+        ...revised,
+        version: Number(row.version),
+        status: row.status as WorkPlanStatus,
+      };
+      await writeSteps(tx, written);
+      await recordRevision(tx, written, params.operations, params.revisedBy);
+      span.setAttributes({ 'agi.work.plan.status': written.status });
+      observeWorkPlan('revised', written);
+      return written;
+    }),
+  );
 }
 
 export async function advanceWorkPlanStep(

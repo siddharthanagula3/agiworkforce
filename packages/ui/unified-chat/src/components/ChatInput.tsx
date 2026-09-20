@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { useMenuKeyboard, useUiTranslation } from '@agiworkforce/ui';
+import { reportClientFailure, type ClientFailureDetail } from '../lib/client-failures';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
 import { useModelStore } from '../stores/modelStore';
@@ -626,15 +627,18 @@ export function ChatInput({
           : [];
       const accepted: File[] = [];
       const rejections: string[] = [];
+      const rejectionKinds: ClientFailureDetail[] = [];
       for (const file of candidates) {
         const result = validateAttachmentFile(file);
         if (!result.ok) {
           rejections.push(result.message);
+          rejectionKinds.push('rejected');
           continue;
         }
         const runtimeRejection = attachmentPolicy?.validate(file);
         if (runtimeRejection) {
           rejections.push(runtimeRejection);
+          rejectionKinds.push('rejected');
           continue;
         }
         accepted.push(file);
@@ -650,6 +654,7 @@ export function ChatInput({
             rejections.push(
               `Attached files exceed the ${Math.round(maxBytes / (1024 * 1024))} MiB total limit.`,
             );
+            rejectionKinds.push('too_large');
             continue;
           }
           totalBytes += file.size;
@@ -657,11 +662,15 @@ export function ChatInput({
         }
         if (accepted.length > availableCount) {
           rejections.push(`Attach at most ${maxFiles} files per message.`);
+          rejectionKinds.push('too_many');
         }
         attachedFilesDestinationRef.current = attachmentDestinationKey;
         const nextFiles = [...existingAttachedFiles, ...bounded];
         attachedFilesRef.current = nextFiles;
         setAttachedFiles(nextFiles);
+      }
+      for (const detail of rejectionKinds) {
+        reportClientFailure({ failure: 'attachment', detail });
       }
       setAttachmentError(rejections[0] ?? null);
     },
