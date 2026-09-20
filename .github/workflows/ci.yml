@@ -364,6 +364,8 @@ jobs:
       # an expiry and a reason, so it cannot outlive the triage behind it.
 
       - name: Build affected deployable JavaScript surfaces
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
         run: >-
           pnpm exec turbo run build --affected
           --filter=@agiworkforce/signaling-server
