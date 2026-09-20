@@ -160,4 +160,13 @@ fn export_typescript_bindings() {
         .expect("export tool result graph");
     agiworkforce_protocol::tool_primitive::ToolAuditRecord::export_all_to(dir)
         .expect("export tool audit record graph");
+
+    // Session handoff. The record and what a receiving surface makes of it are
+    // three independent roots: no envelope above carries them as typed params.
+    agiworkforce_protocol::developer_session::DeveloperSessionHandoff::export_all_to(dir)
+        .expect("export session handoff graph");
+    agiworkforce_protocol::developer_session::HandoffAdmission::export_all_to(dir)
+        .expect("export session handoff admission graph");
+    agiworkforce_protocol::developer_session::HandoffRefusal::export_all_to(dir)
+        .expect("export session handoff refusal graph");
 }

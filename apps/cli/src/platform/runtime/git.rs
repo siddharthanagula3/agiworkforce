@@ -17,6 +17,8 @@ use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use tokio::process::Command;
 
+use crate::safety::push_consent::PushConsent;
+
 pub use super::worktree::{list_worktree_entries, parse_worktree_porcelain, WorktreeEntry};
 
 const GIT_OPERATION_TIMEOUT: Duration = Duration::from_secs(120);
@@ -635,6 +637,7 @@ pub enum PushReason {
     NotOnPlannedBranch { head: String },
     BranchMoved { planned: String, head: String },
     NothingToPush,
+    ConsentNotForThisPush,
 }
 
 impl PushReason {
@@ -658,6 +661,9 @@ impl PushReason {
                 format!("the branch moved from {planned} to {head} after the push was planned")
             }
             Self::NothingToPush => "the remote already holds every commit here".to_string(),
+            Self::ConsentNotForThisPush => {
+                "the approval on record was given for a different push".to_string()
+            }
         }
     }
 
@@ -669,6 +675,7 @@ impl PushReason {
                 | Self::NotOnPlannedBranch { .. }
                 | Self::BranchMoved { .. }
                 | Self::NothingToPush
+                | Self::ConsentNotForThisPush
         )
     }
 }
@@ -685,7 +692,7 @@ pub struct PushPlan {
     pub force: PushForce,
     pub commits: Vec<CommitSummary>,
     pub reasons: Vec<PushReason>,
-    approved: bool,
+    consent: Option<PushConsent>,
 }
 
 impl PushPlan {
@@ -722,15 +729,19 @@ impl PushPlan {
         !self.approvals().is_empty()
     }
 
-    /// Record that the user saw this plan and agreed to it. The consent is
-    /// attached to the plan, so it cannot outlive the commits it was given for.
-    pub fn approved(mut self) -> Self {
-        self.approved = true;
+    /// Attach the consent the user gave. Only the approval path mints one, and
+    /// [`GitApi::push`] checks that it was given for this plan.
+    pub fn approved(mut self, consent: PushConsent) -> Self {
+        self.consent = Some(consent);
         self
     }
 
     pub fn is_approved(&self) -> bool {
-        self.approved
+        self.consent.is_some()
+    }
+
+    pub fn consent(&self) -> Option<&PushConsent> {
+        self.consent.as_ref()
     }
 
     /// One line naming the remote, the branch and how many commits go with it.
@@ -1075,7 +1086,7 @@ impl GitApi {
                 force,
                 commits: Vec::new(),
                 reasons: vec![PushReason::DetachedHead],
-                approved: false,
+                consent: None,
             });
         };
         let head = self.rev_parse(&branch).await?.commit;
@@ -1123,7 +1134,7 @@ impl GitApi {
             force,
             commits,
             reasons,
-            approved: false,
+            consent: None,
         })
     }
 
@@ -1137,6 +1148,14 @@ impl GitApi {
     ) -> Result<PushOutcome> {
         if let Some(reason) = plan.blocked_by() {
             bail!("refusing to push: {}", reason.label());
+        }
+        if let Some(consent) = plan.consent() {
+            if !consent.covers(plan) {
+                bail!(
+                    "refusing to push: {}",
+                    PushReason::ConsentNotForThisPush.label()
+                );
+            }
         }
         let mut denied = Vec::new();
         let mut ungranted = Vec::new();
@@ -1234,10 +1253,61 @@ impl GitApi {
     }
 }
 
+/// Plan values for tests that exercise the approval path without a checkout.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::{CommitSummary, PushForce, PushPlan, PushReason};
+
+    pub(crate) fn push_plan_fixture(
+        remote: &str,
+        branch: &str,
+        head: &str,
+        commits: usize,
+    ) -> PushPlan {
+        let commits: Vec<CommitSummary> = (0..commits)
+            .map(|index| CommitSummary {
+                commit: format!("{head}{index}"),
+                subject: format!("commit {index}"),
+            })
+            .collect();
+        let mut reasons = vec![PushReason::NoUpstream];
+        if commits.is_empty() {
+            reasons.push(PushReason::NothingToPush);
+        }
+        PushPlan {
+            remote: remote.to_string(),
+            branch: branch.to_string(),
+            head: head.to_string(),
+            upstream: None,
+            force: PushForce::Never,
+            commits,
+            reasons,
+            consent: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::safety::push_consent::{request_push_consent, PushApprovalPrompt, PushApprover};
+    use crate::tui::approval_broker::ApprovalDecision;
     use std::process::Command as SyncCommand;
+
+    struct UserAllows;
+
+    #[async_trait::async_trait]
+    impl PushApprover for UserAllows {
+        async fn ask(&self, _prompt: &PushApprovalPrompt) -> ApprovalDecision {
+            ApprovalDecision::AllowOnce
+        }
+    }
+
+    async fn consent_for(plan: &PushPlan) -> crate::safety::push_consent::PushConsent {
+        request_push_consent(&UserAllows, plan)
+            .await
+            .expect("the user allowed the push")
+    }
 
     fn init_repo(dir: &Path) {
         let run = |args: &[&str]| {
@@ -1774,8 +1844,9 @@ mod tests {
             "a push names the ref it sends: {argv:?}"
         );
 
+        let consent = consent_for(&plan).await;
         git.push(
-            &plan.clone().approved(),
+            &plan.clone().approved(consent),
             &CodePermissionProfile::full_access(),
         )
         .await
@@ -1799,9 +1870,10 @@ mod tests {
 
         assert!(plan.capabilities().contains(&CodeCapability::GitPush));
 
+        let consent = consent_for(&plan).await;
         let denied = git
             .push(
-                &plan.clone().approved(),
+                &plan.clone().approved(consent),
                 &CodePermissionProfile::read_only(),
             )
             .await
@@ -1854,11 +1926,12 @@ mod tests {
     async fn a_plan_stops_being_consent_once_the_branch_moves_under_it() {
         let (_dir, work) = repo_with_remote();
         let git = GitApi::at(&work);
-        let plan = git
+        let planned = git
             .push_plan("origin", PushForce::Never, &policy())
             .await
-            .expect("plan")
-            .approved();
+            .expect("plan");
+        let consent = consent_for(&planned).await;
+        let plan = planned.approved(consent);
 
         std::fs::write(work.join("feature.txt"), "more\n").unwrap();
         git_run(&work, &["add", "feature.txt"]);
@@ -1885,6 +1958,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn consent_given_for_one_branch_does_not_send_another() {
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+        let feature = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        let consent = consent_for(&feature).await;
+
+        git_run(&work, &["checkout", "-q", "-b", "other"]);
+        std::fs::write(work.join("other.txt"), "other\n").unwrap();
+        git_run(&work, &["add", "other.txt"]);
+        git_run(
+            &work,
+            &["commit", "-q", "-m", "a branch the user never saw"],
+        );
+        let other = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        assert_eq!(other.branch, "other");
+
+        let refused = git
+            .push(
+                &other.approved(consent),
+                &CodePermissionProfile::full_access(),
+            )
+            .await
+            .expect_err("consent for feature is not consent for other");
+        assert!(
+            refused.to_string().contains("a different push"),
+            "{refused}"
+        );
+
+        let remote = GitApi::at(work.parent().expect("parent").join("remote.git"));
+        let names: Vec<String> = remote
+            .branches(false)
+            .await
+            .expect("remote branches")
+            .into_iter()
+            .map(|branch| branch.name)
+            .collect();
+        assert!(!names.iter().any(|name| name == "other"), "{names:?}");
+    }
+
+    #[tokio::test]
+    async fn consent_stops_covering_a_plan_once_the_head_it_named_moves() {
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+        let planned = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        let consent = consent_for(&planned).await;
+
+        std::fs::write(work.join("feature.txt"), "more\n").unwrap();
+        git_run(&work, &["add", "feature.txt"]);
+        git_run(
+            &work,
+            &["commit", "-q", "-m", "a commit the user never saw"],
+        );
+
+        let replanned = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        assert_ne!(replanned.head, planned.head);
+        assert!(!consent.covers(&replanned));
+
+        let refused = git
+            .push(
+                &replanned.approved(consent),
+                &CodePermissionProfile::full_access(),
+            )
+            .await
+            .expect_err("the consent named a head that has moved");
+        assert!(
+            refused.to_string().contains("a different push"),
+            "{refused}"
+        );
+    }
+
+    #[tokio::test]
     async fn a_detached_head_and_an_up_to_date_branch_both_stop_a_push() {
         let (_dir, work) = repo_with_remote();
         let git = GitApi::at(&work);
@@ -1905,8 +2061,12 @@ mod tests {
             .await
             .expect("plan");
         assert_eq!(detached.blocked_by(), Some(&PushReason::DetachedHead));
+        assert!(
+            request_push_consent(&UserAllows, &detached).await.is_none(),
+            "a detached HEAD is never offered for approval"
+        );
         let refused = git
-            .push(&detached.approved(), &CodePermissionProfile::full_access())
+            .push(&detached, &CodePermissionProfile::full_access())
             .await
             .expect_err("a detached HEAD has no branch to push");
         assert!(refused.to_string().contains("detached"), "{refused}");

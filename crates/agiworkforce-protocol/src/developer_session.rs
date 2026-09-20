@@ -1637,6 +1637,345 @@ pub struct SlashCommandRunResponse {
     pub payload: Option<Value>,
 }
 
+/// Where a session's work was running, and where a handoff sends it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HandoffEnvironment {
+    Local,
+    Cloud,
+}
+
+/// What produced a handoff. A chat or work thread seeds a new coding session;
+/// a developer session continues under its own id.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HandoffOrigin {
+    Chat,
+    Work,
+    DeveloperSession,
+}
+
+/// A resource that exists only on the machine that ran the session. None of
+/// these cross a handoff; the receiving surface starts its own.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HandoffLocalResource {
+    BackgroundShell,
+    DevServer,
+    McpServer,
+    Sandbox,
+    FileWatcher,
+    Terminal,
+}
+
+/// Every local resource a handoff can report. A surface that runs any of them
+/// lists it here so the receiver restarts it rather than assuming it arrived.
+pub const HANDOFF_LOCAL_RESOURCES: &[HandoffLocalResource] = &[
+    HandoffLocalResource::BackgroundShell,
+    HandoffLocalResource::DevServer,
+    HandoffLocalResource::McpServer,
+    HandoffLocalResource::Sandbox,
+    HandoffLocalResource::FileWatcher,
+    HandoffLocalResource::Terminal,
+];
+
+impl HandoffLocalResource {
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            Self::BackgroundShell => "background_shell",
+            Self::DevServer => "dev_server",
+            Self::McpServer => "mcp_server",
+            Self::Sandbox => "sandbox",
+            Self::FileWatcher => "file_watcher",
+            Self::Terminal => "terminal",
+        }
+    }
+
+    /// What the receiving surface has to do about it, named for the user.
+    pub const fn restart_label(self) -> &'static str {
+        match self {
+            Self::BackgroundShell => "background shells do not travel; rerun what you still need",
+            Self::DevServer => "the dev server is not running here; start it again",
+            Self::McpServer => "MCP servers reconnect on this machine",
+            Self::Sandbox => "the sandbox is rebuilt here from the workspace",
+            Self::FileWatcher => "file watchers are re-established for this checkout",
+            Self::Terminal => "open terminals stay on the machine that had them",
+        }
+    }
+}
+
+/// The checkout a session was working in, as the producing surface last saw it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffWorkspace {
+    pub cwd: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub worktree_root: Option<String>,
+    /// Fetch URL of the repository with any credential stripped, which is how
+    /// the receiving surface recognises the same repository on another machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub branch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub head_commit: Option<String>,
+    /// True when the origin had uncommitted work, which the receiver cannot
+    /// reproduce from `head_commit` alone.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub uncommitted_changes: bool,
+}
+
+/// The permission posture the session was running under.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffPosture {
+    pub agent_mode: DeveloperAgentMode,
+    pub trust_mode: DeveloperSessionTrustMode,
+    pub permission_profile_id: String,
+}
+
+/// A decision the session made and is expected to keep after the move.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffDecision {
+    pub summary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub rationale: Option<String>,
+    pub decided_at: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HandoffPlanStepState {
+    Pending,
+    InProgress,
+    Done,
+    Abandoned,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffPlanStep {
+    pub description: String,
+    pub state: HandoffPlanStepState,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HandoffValidationOutcome {
+    Passed,
+    Failed,
+    /// Started on the origin and never finished, so its result is not known.
+    Interrupted,
+}
+
+/// One check the session ran against the work, so the receiving surface knows
+/// what has already been proved and what has not.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffValidation {
+    pub command: String,
+    pub outcome: HandoffValidationOutcome,
+    pub ran_at: String,
+    /// Commit the check ran against, which tells the receiver whether it still
+    /// applies to the tree it has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub commit: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum HandoffTurnState {
+    Completed,
+    /// The origin was mid-turn when the handoff was produced. A receiver
+    /// reports it as interrupted; it never continues a turn it did not run.
+    Interrupted,
+}
+
+/// How the last turn on the origin ended.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffLastTurn {
+    pub turn_id: String,
+    pub state: HandoffTurnState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub model: Option<String>,
+    pub ended_at: String,
+}
+
+/// Everything one surface hands another when a session moves between them.
+///
+/// Nothing in it is a live handle: the record is the whole of what travels, so
+/// a receiver rebuilds its own processes instead of inheriting any.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct DeveloperSessionHandoff {
+    /// Version the producing surface speaks. A receiver that cannot speak it
+    /// refuses the handoff rather than reading fields by guesswork.
+    pub protocol_version: u32,
+    pub thread_id: String,
+    pub origin: HandoffOrigin,
+    pub issued_by: DeveloperSessionSource,
+    pub issued_at: String,
+    pub from_environment: HandoffEnvironment,
+    pub to_environment: HandoffEnvironment,
+    pub workspace: HandoffWorkspace,
+    pub posture: HandoffPosture,
+    /// What the session is trying to achieve, in the user's terms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub objective: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decisions: Vec<HandoffDecision>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plan: Vec<HandoffPlanStep>,
+    /// Every file the session changed, so the receiver knows the work even
+    /// when the tree it opens is at a different commit.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modified_files: Vec<DeveloperSessionFileChange>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validations: Vec<HandoffValidation>,
+    /// Approvals the origin was still waiting on. They are re-asked here; a
+    /// decision is never inherited across the move.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_approvals: Vec<PendingApprovalSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub last_turn: Option<HandoffLastTurn>,
+    /// Local resources the origin was running. Each one is restarted here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_resources: Vec<HandoffLocalResource>,
+}
+
+/// Why a receiving surface will not take a handoff.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", tag = "reason")]
+#[ts(rename_all = "camelCase", tag = "reason")]
+pub enum HandoffRefusal {
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    ProtocolVersionUnsupported {
+        requested_protocol_version: u32,
+        supported_protocol_versions: Vec<u32>,
+    },
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    WrongDestination {
+        expected: HandoffEnvironment,
+        received: HandoffEnvironment,
+    },
+    /// The posture on record predates persisted routing authority, so resuming
+    /// it would run turns under a boundary nobody chose.
+    TrustModeUnknown,
+}
+
+impl HandoffRefusal {
+    pub fn label(&self) -> String {
+        match self {
+            Self::ProtocolVersionUnsupported {
+                requested_protocol_version,
+                ..
+            } => format!("this build does not speak handoff version {requested_protocol_version}"),
+            Self::WrongDestination { expected, received } => {
+                format!("the handoff names {received:?} and this surface is {expected:?}")
+            }
+            Self::TrustModeUnknown => {
+                "the session's trust boundary is unknown, so choose one before resuming".to_string()
+            }
+        }
+    }
+}
+
+/// Whether a handoff continues an existing thread or seeds a new one.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(rename_all = "camelCase", tag = "kind")]
+pub enum HandoffStart {
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Resume { thread_id: String },
+    /// A chat or work thread handed the objective over; the coding session is
+    /// new and carries the objective and plan as its starting context.
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Seed { seeded_from_thread_id: String },
+}
+
+/// What a receiving surface does with an accepted handoff.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffAdmission {
+    pub start: HandoffStart,
+    /// Local resources to start here, because none of them travelled.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restart: Vec<HandoffLocalResource>,
+    /// The turn the origin never finished, reported rather than continued.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub interrupted_turn: Option<String>,
+    /// Approvals to ask again on this surface.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reask: Vec<PendingApprovalSnapshot>,
+}
+
+impl DeveloperSessionHandoff {
+    /// Take the handoff on a surface running in `here`, or say why not.
+    pub fn accept(&self, here: HandoffEnvironment) -> Result<HandoffAdmission, HandoffRefusal> {
+        if !SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.contains(&self.protocol_version) {
+            return Err(HandoffRefusal::ProtocolVersionUnsupported {
+                requested_protocol_version: self.protocol_version,
+                supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+            });
+        }
+        if self.to_environment != here {
+            return Err(HandoffRefusal::WrongDestination {
+                expected: here,
+                received: self.to_environment,
+            });
+        }
+        if self.posture.trust_mode == DeveloperSessionTrustMode::Unknown {
+            return Err(HandoffRefusal::TrustModeUnknown);
+        }
+        let start = match self.origin {
+            HandoffOrigin::DeveloperSession => HandoffStart::Resume {
+                thread_id: self.thread_id.clone(),
+            },
+            HandoffOrigin::Chat | HandoffOrigin::Work => HandoffStart::Seed {
+                seeded_from_thread_id: self.thread_id.clone(),
+            },
+        };
+        Ok(HandoffAdmission {
+            start,
+            restart: self.local_resources.clone(),
+            interrupted_turn: self.last_turn.as_ref().and_then(|turn| {
+                (turn.state == HandoffTurnState::Interrupted).then(|| turn.turn_id.clone())
+            }),
+            reask: self.pending_approvals.clone(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1872,5 +2211,262 @@ mod tests {
             negotiate_developer_session_protocol(Some(DEVELOPER_SESSION_PROTOCOL_VERSION + 1)),
             DeveloperSessionNegotiation::Unsupported(_)
         ));
+    }
+
+    /// Every part of the working state a handoff is required to carry, by the
+    /// wire name a receiving surface reads.
+    const HANDOFF_REQUIRED_CONTENT: &[&str] = &[
+        "protocolVersion",
+        "threadId",
+        "workspace",
+        "posture",
+        "objective",
+        "decisions",
+        "plan",
+        "modifiedFiles",
+        "validations",
+        "pendingApprovals",
+        "lastTurn",
+    ];
+
+    fn populated_handoff() -> DeveloperSessionHandoff {
+        DeveloperSessionHandoff {
+            protocol_version: DEVELOPER_SESSION_PROTOCOL_VERSION,
+            thread_id: "thread-1".to_string(),
+            origin: HandoffOrigin::DeveloperSession,
+            issued_by: DeveloperSessionSource::Cli,
+            issued_at: "2026-09-20T10:00:00Z".to_string(),
+            from_environment: HandoffEnvironment::Local,
+            to_environment: HandoffEnvironment::Cloud,
+            workspace: HandoffWorkspace {
+                cwd: "/work/repo/app".to_string(),
+                worktree_root: Some("/work/repo".to_string()),
+                repository: Some("https://example.invalid/team/repo.git".to_string()),
+                branch: Some("feature".to_string()),
+                head_commit: Some("abc123".to_string()),
+                uncommitted_changes: true,
+            },
+            posture: HandoffPosture {
+                agent_mode: DeveloperAgentMode::Ask,
+                trust_mode: DeveloperSessionTrustMode::Byok,
+                permission_profile_id: "standard".to_string(),
+            },
+            objective: Some("make the importer resume after a failed batch".to_string()),
+            decisions: vec![HandoffDecision {
+                summary: "keep the existing queue table".to_string(),
+                rationale: Some("a new table would need a backfill".to_string()),
+                decided_at: "2026-09-20T09:30:00Z".to_string(),
+            }],
+            plan: vec![
+                HandoffPlanStep {
+                    description: "record the last completed batch".to_string(),
+                    state: HandoffPlanStepState::Done,
+                },
+                HandoffPlanStep {
+                    description: "resume from it on restart".to_string(),
+                    state: HandoffPlanStepState::InProgress,
+                },
+            ],
+            modified_files: vec![DeveloperSessionFileChange {
+                path: "src/importer.rs".to_string(),
+                kind: DeveloperFileChangeKind::Modified,
+                tool: "edit_file".to_string(),
+                tool_call_id: "call-1".to_string(),
+                changed_at: "2026-09-20T09:45:00Z".to_string(),
+            }],
+            validations: vec![HandoffValidation {
+                command: "cargo test -p importer".to_string(),
+                outcome: HandoffValidationOutcome::Failed,
+                ran_at: "2026-09-20T09:50:00Z".to_string(),
+                commit: Some("abc123".to_string()),
+            }],
+            pending_approvals: vec![PendingApprovalSnapshot {
+                request_id: "req-1".to_string(),
+                kind: "exec".to_string(),
+                summary: "run the migration".to_string(),
+                detail: "psql -f migrate.sql".to_string(),
+            }],
+            last_turn: Some(HandoffLastTurn {
+                turn_id: "turn-9".to_string(),
+                state: HandoffTurnState::Interrupted,
+                model: Some("a-model".to_string()),
+                ended_at: "2026-09-20T09:59:00Z".to_string(),
+            }),
+            local_resources: HANDOFF_LOCAL_RESOURCES.to_vec(),
+        }
+    }
+
+    #[test]
+    fn a_handoff_carries_every_part_of_the_working_state_across_the_wire() {
+        let handoff = populated_handoff();
+        let wire = serde_json::to_value(&handoff).expect("serialize");
+        let object = wire.as_object().expect("an object");
+        for field in HANDOFF_REQUIRED_CONTENT {
+            assert!(
+                object.contains_key(*field),
+                "a handoff must carry {field}: {object:?}"
+            );
+        }
+
+        let back: DeveloperSessionHandoff = serde_json::from_value(wire).expect("round trip");
+        assert_eq!(back, handoff);
+        assert_eq!(
+            back.objective.as_deref(),
+            Some("make the importer resume after a failed batch")
+        );
+        assert_eq!(back.decisions, handoff.decisions);
+        assert_eq!(back.plan, handoff.plan);
+        assert_eq!(back.modified_files, handoff.modified_files);
+        assert_eq!(back.validations, handoff.validations);
+        assert_eq!(
+            back.validations[0].outcome,
+            HandoffValidationOutcome::Failed,
+            "a check that failed on the origin is not reported as proved here"
+        );
+    }
+
+    #[test]
+    fn a_handoff_travels_in_both_directions_and_only_to_the_surface_it_names() {
+        let outbound = populated_handoff();
+        assert_eq!(outbound.from_environment, HandoffEnvironment::Local);
+
+        let refused = outbound
+            .accept(HandoffEnvironment::Local)
+            .expect_err("a handoff bound for the cloud is not taken locally");
+        assert_eq!(
+            refused,
+            HandoffRefusal::WrongDestination {
+                expected: HandoffEnvironment::Local,
+                received: HandoffEnvironment::Cloud,
+            }
+        );
+        let admitted = outbound
+            .accept(HandoffEnvironment::Cloud)
+            .expect("the cloud takes it");
+        assert_eq!(
+            admitted.start,
+            HandoffStart::Resume {
+                thread_id: "thread-1".to_string()
+            }
+        );
+
+        let inbound = DeveloperSessionHandoff {
+            from_environment: HandoffEnvironment::Cloud,
+            to_environment: HandoffEnvironment::Local,
+            issued_by: DeveloperSessionSource::Unknown,
+            ..populated_handoff()
+        };
+        let back_home = inbound
+            .accept(HandoffEnvironment::Local)
+            .expect("the local surface takes it");
+        assert_eq!(
+            back_home.start,
+            HandoffStart::Resume {
+                thread_id: "thread-1".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn a_chat_or_work_handoff_seeds_a_new_coding_session_rather_than_resuming_one() {
+        for origin in [HandoffOrigin::Chat, HandoffOrigin::Work] {
+            let handoff = DeveloperSessionHandoff {
+                origin,
+                to_environment: HandoffEnvironment::Local,
+                ..populated_handoff()
+            };
+            let admitted = handoff.accept(HandoffEnvironment::Local).expect("accepted");
+            assert_eq!(
+                admitted.start,
+                HandoffStart::Seed {
+                    seeded_from_thread_id: "thread-1".to_string()
+                },
+                "{origin:?} starts a coding session"
+            );
+            assert!(handoff.objective.is_some(), "{origin:?} carries what to do");
+        }
+
+        let session = DeveloperSessionHandoff {
+            origin: HandoffOrigin::DeveloperSession,
+            to_environment: HandoffEnvironment::Local,
+            ..populated_handoff()
+        };
+        assert_eq!(
+            session
+                .accept(HandoffEnvironment::Local)
+                .expect("accepted")
+                .start,
+            HandoffStart::Resume {
+                thread_id: "thread-1".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn no_local_resource_survives_a_handoff_and_an_unfinished_turn_is_not_continued() {
+        let handoff = DeveloperSessionHandoff {
+            to_environment: HandoffEnvironment::Local,
+            ..populated_handoff()
+        };
+        let admitted = handoff.accept(HandoffEnvironment::Local).expect("accepted");
+
+        for resource in HANDOFF_LOCAL_RESOURCES {
+            assert!(
+                admitted.restart.contains(resource),
+                "{resource:?} must be restarted on the receiving surface"
+            );
+            assert!(!resource.restart_label().is_empty());
+        }
+
+        assert_eq!(admitted.interrupted_turn.as_deref(), Some("turn-9"));
+        assert_eq!(
+            admitted.reask, handoff.pending_approvals,
+            "an approval decided on the origin is asked again here"
+        );
+
+        let wire = serde_json::to_string(&handoff).expect("serialize");
+        for handle in ["pid", "fileDescriptor", "socket", "processId"] {
+            assert!(
+                !wire.contains(handle),
+                "a handoff carries no live {handle}: {wire}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_handoff_is_refused_when_the_receiver_cannot_speak_it_or_the_posture_is_unknown() {
+        let future = DeveloperSessionHandoff {
+            protocol_version: DEVELOPER_SESSION_PROTOCOL_VERSION + 1,
+            to_environment: HandoffEnvironment::Local,
+            ..populated_handoff()
+        };
+        assert_eq!(
+            future.accept(HandoffEnvironment::Local),
+            Err(HandoffRefusal::ProtocolVersionUnsupported {
+                requested_protocol_version: DEVELOPER_SESSION_PROTOCOL_VERSION + 1,
+                supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+            })
+        );
+
+        let legacy = DeveloperSessionHandoff {
+            protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            to_environment: HandoffEnvironment::Local,
+            ..populated_handoff()
+        };
+        assert!(legacy.accept(HandoffEnvironment::Local).is_ok());
+
+        let unknown_posture = DeveloperSessionHandoff {
+            to_environment: HandoffEnvironment::Local,
+            posture: HandoffPosture {
+                trust_mode: DeveloperSessionTrustMode::Unknown,
+                ..populated_handoff().posture
+            },
+            ..populated_handoff()
+        };
+        assert_eq!(
+            unknown_posture.accept(HandoffEnvironment::Local),
+            Err(HandoffRefusal::TrustModeUnknown)
+        );
+        assert!(!HandoffRefusal::TrustModeUnknown.label().is_empty());
     }
 }
