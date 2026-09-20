@@ -67,6 +67,54 @@ function isCompromiseColumnMissing(error: unknown): boolean {
   return /compromised_at|compromised_reason/.test(message) && /does not exist/.test(message);
 }
 
+const REVOKE_FAMILY = `
+  update device_refresh_tokens
+     set revoked_at = coalesce(revoked_at, $3)
+   where family_id::text = $1
+     and user_id = $2
+     and revoked_at is null
+   returning id`;
+
+/**
+ * Covers rows already revoked, so the record survives a family that was signed
+ * out before the theft was discovered.
+ */
+const COMPROMISE_FAMILY = `
+  update device_refresh_tokens
+     set compromised_at = coalesce(compromised_at, $3),
+         compromised_reason = coalesce(compromised_reason, $4)
+   where family_id::text = $1
+     and user_id = $2`;
+
+export interface FamilyCompromise {
+  familyId: string;
+  userId: string;
+  reason: RefreshFamilyCompromiseReason;
+  at: string;
+}
+
+/**
+ * Ends one credential family and says why. Revoking without the reason leaves a
+ * theft and a sign-out indistinguishable, which the compromise columns exist to prevent.
+ */
+export async function finishFamilyAsCompromised(
+  db: DatabaseAdapter,
+  input: FamilyCompromise,
+): Promise<DeviceCredentialRevocationResult> {
+  const scope = [input.familyId, input.userId, input.at];
+  const revoked = await db.query<{ id: string }>(REVOKE_FAMILY, scope);
+
+  try {
+    await db.execute(COMPROMISE_FAMILY, [...scope, input.reason]);
+    return { revoked: revoked.length, compromiseRecorded: true };
+  } catch (error) {
+    if (isCompromiseColumnMissing(error)) {
+      return { revoked: revoked.length, compromiseRecorded: false };
+    }
+    throw error;
+  }
+}
+
 const REVOKE_EVERY = `
   update device_refresh_tokens
      set revoked_at = coalesce(revoked_at, now())

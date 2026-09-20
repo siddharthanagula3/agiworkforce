@@ -103,6 +103,13 @@ export const rateLimitConfigs = {
     window: '1 s', // 10 requests per second
     failClosed: false,
   },
+  // Reading a code back is a guess at a live one, so it is throttled apart from
+  // issuing codes, which a client does once per sign-in.
+  'device-code-lookup': {
+    limit: 20,
+    window: '1 m',
+    failClosed: true,
+  },
   'mobile-push-token': {
     limit: 30,
     window: '1 m', // 30 push-token updates per minute (mirrors api-gateway limiter)
@@ -487,6 +494,13 @@ export const rateLimitConfigs = {
   'settings-session-revoke': {
     limit: 10,
     window: '1 m',
+    failClosed: true,
+  },
+  // Ending every session is one deliberate act, not something anybody repeats,
+  // and it is the loudest thing a stolen session can do.
+  'settings-sessions-revoke-all': {
+    limit: 5,
+    window: '1 h',
     failClosed: true,
   },
   'settings-account-compromise-read': {
