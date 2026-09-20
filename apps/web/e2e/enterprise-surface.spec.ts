@@ -93,6 +93,28 @@ async function settleTheme(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await document.fonts?.ready;
   });
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.agi-reveal')].every(
+      (node) =>
+        node.classList.contains('agi-reveal-armed') || node.classList.contains('is-revealed'),
+    ),
+  );
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await page.waitForFunction(() =>
+    document.getAnimations().every((animation) => {
+      const timing = animation.effect?.getComputedTiming();
+      return (
+        timing?.iterations === Infinity ||
+        animation.playState === 'finished' ||
+        animation.playState === 'idle'
+      );
+    }),
+  );
 }
 
 test.describe('enterprise buyer surface', () => {
