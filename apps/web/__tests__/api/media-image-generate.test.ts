@@ -274,6 +274,30 @@ vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
   failImageGenerationJob: (...args: unknown[]) => imageJobMocks.fail(...args),
 }));
 
+const jobQueueMocks = vi.hoisted(() => ({ enqueue: vi.fn() }));
+vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/jobs/job-service')>()),
+  enqueueJob: (...args: unknown[]) => jobQueueMocks.enqueue(...args),
+}));
+
+// Provider bytes now leave through the egress guard rather than global fetch.
+// The stub keeps one queue of provider responses so a URL-only candidate is
+// still resolved, screened and refused here.
+vi.mock('@/lib/url-fetch/guarded-fetch', () => ({
+  createDeadline: () => ({
+    signal: new AbortController().signal,
+    reason: () => null,
+    release: () => undefined,
+  }),
+  guardedFetch: async (target: URL) => ({
+    ok: true as const,
+    kind: 'response' as const,
+    response: (await mockFetch(target.toString())) as Response,
+    url: target,
+    hops: 0,
+  }),
+}));
+
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
@@ -359,6 +383,7 @@ describe('POST /api/media/image/generate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     afterCallbacks.length = 0;
+    jobQueueMocks.enqueue.mockResolvedValue({ id: 'bg-1', status: 'queued', created: true });
     imageJobMocks.storeReady.mockResolvedValue(false);
     imageJobMocks.claim.mockImplementation(async () => ({
       ...DURABLE_IMAGE_JOB,
@@ -1043,6 +1068,36 @@ describe('POST /api/media/image/generate', () => {
       // scheduled to run after the response, which is what lets the user leave.
       expect(mockFetch).not.toHaveBeenCalled();
       expect(afterCallbacks).toHaveLength(1);
+    });
+
+    it('hands every durable job to the background queue, not only the ones polled for', async () => {
+      imageJobMocks.storeReady.mockResolvedValue(true);
+      imageJobMocks.create.mockResolvedValue(DURABLE_IMAGE_JOB);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://example.com/generated-image.png' }] }),
+      });
+
+      await POST(makeAuthedRequest({ prompt: 'a cat on a throne', provider: 'openai' }));
+
+      // A request killed mid-attempt leaves the work to this drive; without it
+      // the job depends on the caller coming back to poll.
+      const queued = jobQueueMocks.enqueue.mock.calls.map(
+        (call) => (call[1] as Record<string, unknown>)['idempotencyKey'],
+      );
+      expect(queued).toContain(`image-job:${DURABLE_IMAGE_JOB.id}:0`);
+    });
+
+    it('queues nothing for a deployment with no durable store', async () => {
+      imageJobMocks.storeReady.mockResolvedValue(false);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ url: 'https://example.com/generated-image.png' }] }),
+      });
+
+      await POST(makeAuthedRequest({ prompt: 'a cat on a throne', provider: 'openai' }));
+
+      expect(jobQueueMocks.enqueue).not.toHaveBeenCalled();
     });
 
     it('refuses an async request on a deployment without the durable store', async () => {

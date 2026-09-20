@@ -905,15 +905,20 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   const corsHeaders = { ...getCorsHeaders(request), ...getSecurityHeaders() };
 
+  // The request that submits a job is not what finishes it. A drive queued for
+  // every durable job is what carries the work when this process is killed
+  // mid-attempt, whether or not the caller ever asks about it again. It is a
+  // no-op once the job is terminal.
+  if (jobStoreReady) {
+    await scheduleImageGenerationJobDrive({
+      db: scopedDb,
+      job,
+      delaySeconds: IMAGE_JOB_CLAIM_SECONDS,
+    });
+  }
+
   if (wantsAsync) {
     const detachedJob = job;
-    if (jobStoreReady) {
-      await scheduleImageGenerationJobDrive({
-        db: scopedDb,
-        job: detachedJob,
-        delaySeconds: IMAGE_JOB_CLAIM_SECONDS,
-      });
-    }
     after(async () => {
       try {
         await runImageGenerationJobAttempt({ db: scopedDb, job: detachedJob, inlineEdit });

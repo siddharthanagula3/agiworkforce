@@ -62,6 +62,7 @@ import {
 } from './lib/live-voice-context';
 import {
   clampVoicePace,
+  closeExpiredVoiceSessions,
   createVoiceSession,
   isVoiceSessionStoreReady,
   VOICE_PACE_DEFAULT,
@@ -399,6 +400,19 @@ async function handleCreateLiveSession(request: NextRequest) {
     // conversation with no row means it never had one. A session that runs
     // without its row makes that false, so it is refused and not charged.
     if (storeReady) {
+      // Every session this account left open past the block it could be billed
+      // for is over, whichever conversation it belonged to.
+      await closeExpiredVoiceSessions({
+        db: scoped.db,
+        userId,
+        maxOpenSeconds: ceilingSeconds,
+      }).catch((error: unknown) => {
+        logger.warn(
+          { event: 'voice_session_expiry_failed', error, userId },
+          'Expired voice sessions could not be closed',
+        );
+        return 0;
+      });
       let record: Awaited<ReturnType<typeof createVoiceSession>> = null;
       try {
         record = await createVoiceSession({

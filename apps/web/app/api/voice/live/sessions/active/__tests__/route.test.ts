@@ -4,6 +4,7 @@ const {
   authUserMock,
   rateLimitMock,
   userScopedDbMock,
+  closeExpiredVoiceSessionsMock,
   getActiveVoiceSessionForConversationMock,
   isVoiceSessionStoreReadyMock,
   listVoiceSessionHistoryMock,
@@ -11,6 +12,7 @@ const {
   authUserMock: vi.fn(),
   rateLimitMock: vi.fn(),
   userScopedDbMock: vi.fn(),
+  closeExpiredVoiceSessionsMock: vi.fn(),
   getActiveVoiceSessionForConversationMock: vi.fn(),
   isVoiceSessionStoreReadyMock: vi.fn(),
   listVoiceSessionHistoryMock: vi.fn(),
@@ -21,12 +23,14 @@ vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
 vi.mock('../../lib/voice-session-store', () => ({
+  closeExpiredVoiceSessions: closeExpiredVoiceSessionsMock,
   getActiveVoiceSessionForConversation: getActiveVoiceSessionForConversationMock,
   isVoiceSessionStoreReady: isVoiceSessionStoreReadyMock,
   listVoiceSessionHistory: listVoiceSessionHistoryMock,
 }));
 
 import { NextRequest } from 'next/server';
+import { LIVE_SESSION_BLOCK_MINUTES } from '@/lib/voice/live-voice-billing';
 import { GET } from '../route';
 
 const SESSION = {
@@ -55,6 +59,7 @@ beforeEach(() => {
     organizationId: null,
   });
   isVoiceSessionStoreReadyMock.mockResolvedValue(true);
+  closeExpiredVoiceSessionsMock.mockResolvedValue(0);
   getActiveVoiceSessionForConversationMock.mockResolvedValue(null);
   listVoiceSessionHistoryMock.mockResolvedValue([]);
 });
@@ -110,6 +115,19 @@ describe('GET /api/voice/live/sessions/active', () => {
     const body = await response.json();
     expect(body).toEqual({ session: null, history: [] });
     expect(getActiveVoiceSessionForConversationMock).not.toHaveBeenCalled();
+  });
+
+  it('ends a session left open past its block before it can be offered as resumable', async () => {
+    await GET(get('?conversationId=conv-1'));
+    expect(closeExpiredVoiceSessionsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        maxOpenSeconds: LIVE_SESSION_BLOCK_MINUTES * 60,
+      }),
+    );
+    const expiryCall = closeExpiredVoiceSessionsMock.mock.invocationCallOrder[0] ?? 0;
+    const readCall = getActiveVoiceSessionForConversationMock.mock.invocationCallOrder[0] ?? 0;
+    expect(expiryCall).toBeLessThan(readCall);
   });
 
   it('returns the limiter response and never reads when rate limited', async () => {
