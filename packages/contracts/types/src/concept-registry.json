@@ -55,7 +55,13 @@
       "label": "Conversation",
       "schema": "packages/contracts/cloud-contracts/src/conversations.ts",
       "symbol": "ManagedCloudConversationWire",
-      "tables": ["web_conversations"],
+      "tables": [
+        "web_conversations",
+        "conversation_tags",
+        "conversation_branches",
+        "conversation_branch_messages",
+        "chat_folders"
+      ],
       "writeFunctions": [],
       "mutators": [
         "apps/web/app/api/chat/conversations/[id]/route.ts",
@@ -80,14 +86,25 @@
         "updatedAt": "updated_at",
         "deletedAt": "deleted_at",
         "originSurface": "origin_surface"
-      }
+      },
+      "aliases": ["chat", "thread"],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "swept",
+        "purgedBy": "apps/web/app/api/cron/purge-temporary-chats/route.ts"
+      },
+      "classification": ["user-content"],
+      "events": [],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "message",
       "label": "Message",
       "schema": "packages/contracts/cloud-contracts/src/conversations.ts",
       "symbol": "ManagedCloudMessageWire",
-      "tables": ["web_messages"],
+      "tables": ["web_messages", "message_bookmarks", "message_reactions"],
       "writeFunctions": [],
       "mutators": [
         "apps/web/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence.ts",
@@ -111,7 +128,17 @@
         "updatedAt": "updated_at",
         "deletedAt": "deleted_at",
         "originSurface": "origin_surface"
-      }
+      },
+      "aliases": ["turn"],
+      "identity": "id",
+      "access": "parent-inherited",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["user-content"],
+      "events": [],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "project",
@@ -136,7 +163,17 @@
         "createdAt": "created_at",
         "updatedAt": "updated_at",
         "deletedAt": "deleted_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["user-content"],
+      "events": ["project_shared", "project_unshared", "project_member_access_changed"],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "memory",
@@ -165,7 +202,17 @@
         "createdAt": "created_at",
         "updatedAt": "updated_at",
         "deletedAt": "is_deleted"
-      }
+      },
+      "aliases": ["fact"],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["user-content"],
+      "events": [],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "schedule",
@@ -189,7 +236,17 @@
         "project": "project_id",
         "createdAt": "created_at",
         "updatedAt": "updated_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["user-content", "operational"],
+      "events": ["schedule_missed_execution"],
+      "storage": "cloud",
+      "deepLink": "schedule"
     },
     {
       "name": "skill",
@@ -211,14 +268,29 @@
         "owner": "user_id",
         "createdAt": "created_at",
         "updatedAt": "updated_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-only",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["user-content"],
+      "events": ["skill_installed", "skill_uninstalled"],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "connector",
       "label": "Connector connection",
       "schema": "packages/contracts/cloud-contracts/src/connectors.ts",
       "symbol": "ConnectorConnection",
-      "tables": ["user_connectors", "user_custom_connectors", "connector_oauth_grants"],
+      "tables": [
+        "user_connectors",
+        "user_custom_connectors",
+        "connector_oauth_grants",
+        "connector_tool_permissions"
+      ],
       "writeFunctions": [],
       "mutators": ["apps/web/app/api/connectors/route.ts"],
       "projections": [],
@@ -234,7 +306,17 @@
         "tenant": "organization_id",
         "createdAt": "connected_at",
         "updatedAt": "updated_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["operational", "credential"],
+      "events": ["connector_added", "connector_removed", "connector_setting_changed"],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "artifact",
@@ -262,7 +344,17 @@
         "createdAt": "created_at",
         "updatedAt": "updated_at",
         "deletedAt": "deleted_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["user-content", "credential"],
+      "events": ["organization_share_granted", "organization_share_revoked"],
+      "storage": "cloud",
+      "deepLink": "artifact"
     },
     {
       "name": "workspace",
@@ -285,7 +377,25 @@
         "tenant": "organization_id",
         "createdAt": "created_at",
         "updatedAt": "updated_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "tenant-role",
+      "retention": {
+        "kind": "tenant-policy",
+        "policy": "apps/web/lib/services/domain-retention-service.ts"
+      },
+      "classification": ["identity"],
+      "events": [
+        "member_invited",
+        "member_joined",
+        "member_removed",
+        "member_role_changed",
+        "organization_deletion_requested",
+        "organization_deletion_completed"
+      ],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "subscription",
@@ -307,7 +417,17 @@
         "owner": "user_id",
         "createdAt": "created_at",
         "updatedAt": "updated_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-only",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["billing", "credential"],
+      "events": ["plan_changed", "checkout_started", "billing_portal_opened"],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "credit-bucket",
@@ -328,7 +448,17 @@
       "columns": {
         "owner": "user_id",
         "createdAt": "created_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-only",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["billing"],
+      "events": ["spend_cap_exceeded"],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "usage-reservation",
@@ -351,7 +481,17 @@
         "tenant": "organization_id",
         "createdAt": "created_at",
         "updatedAt": "updated_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["operational", "credential"],
+      "events": [],
+      "storage": "cloud",
+      "deepLink": null
     },
     {
       "name": "audit-event",
@@ -372,7 +512,236 @@
       "columns": {
         "tenant": "organization_id",
         "createdAt": "created_at"
-      }
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "tenant-role",
+      "retention": {
+        "kind": "audit-class",
+        "class": "compliance"
+      },
+      "classification": ["operational"],
+      "events": ["audit_destination_configured", "audit_destination_deleted", "ediscovery_export"],
+      "storage": "cloud",
+      "deepLink": null
+    },
+    {
+      "name": "file",
+      "label": "File",
+      "schema": "packages/contracts/types/src/file-model.ts",
+      "symbol": "ManagedFile",
+      "tables": ["media_assets", "project_knowledge_files"],
+      "writeFunctions": [],
+      "mutators": [
+        "apps/web/app/api/projects/[id]/knowledge-files/route.ts",
+        "apps/web/app/api/cron/purge-deleted-media/route.ts"
+      ],
+      "projections": ["packages/contracts/types/src/file-reference.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "soft_deleted",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "deletedAt": "deleted_at",
+        "originSurface": "source_surface"
+      },
+      "aliases": ["media"],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "swept",
+        "purgedBy": "apps/web/app/api/cron/purge-deleted-media/route.ts"
+      },
+      "classification": ["user-content"],
+      "events": ["dlp_content_blocked"],
+      "storage": "cloud",
+      "deepLink": "file"
+    },
+    {
+      "name": "notification",
+      "label": "Notification",
+      "schema": "packages/contracts/types/src/notifications.ts",
+      "symbol": "NotificationFeedItem",
+      "tables": ["notifications"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/lib/services/notification-service.ts"],
+      "projections": [],
+      "providerCopies": [],
+      "ownership": "user",
+      "sync": "server-authoritative",
+      "versioning": "append-only",
+      "lifecycle": "active",
+      "childDisposition": "retain",
+      "auditBoundary": "none",
+      "columns": {
+        "owner": "user_id",
+        "createdAt": "created_at"
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-only",
+      "retention": {
+        "kind": "swept",
+        "purgedBy": "apps/web/lib/services/domain-retention-service.ts"
+      },
+      "classification": ["operational"],
+      "events": [],
+      "storage": "cloud",
+      "deepLink": null
+    },
+    {
+      "name": "device",
+      "label": "Device",
+      "schema": "packages/contracts/types/src/workspace.ts",
+      "symbol": "Device",
+      "tables": [
+        "device_registrations",
+        "desktop_devices",
+        "mobile_devices",
+        "device_refresh_tokens",
+        "device_authorization_codes"
+      ],
+      "writeFunctions": [],
+      "mutators": [
+        "apps/web/app/api/auth/device/code/route.ts",
+        "apps/web/app/api/auth/device/refresh/route.ts"
+      ],
+      "projections": ["packages/contracts/types/src/pairing.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "user",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "originSurface": "surface"
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["identity", "credential"],
+      "events": ["device_renamed", "device_trust_revoked"],
+      "storage": "cloud",
+      "deepLink": null
+    },
+    {
+      "name": "agent-run",
+      "label": "Agent run",
+      "schema": "packages/contracts/cloud-contracts/src/cloud-agent-runs.ts",
+      "symbol": "CloudAgentRun",
+      "tables": [
+        "cloud_agent_runs",
+        "cloud_agent_events",
+        "cloud_agent_execution_operations",
+        "cloud_agent_approval_checkpoints"
+      ],
+      "writeFunctions": [],
+      "mutators": [
+        "apps/web/lib/services/cloud-agent-run-service.ts",
+        "apps/web/lib/services/cloud-agent-execution-service.ts"
+      ],
+      "projections": [],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "cascade_delete",
+      "auditBoundary": "organization",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at",
+        "originSurface": "origin_surface"
+      },
+      "aliases": ["run"],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "swept",
+        "purgedBy": "apps/web/lib/services/cloud-agent-run-reaper.ts"
+      },
+      "classification": ["operational", "credential"],
+      "events": ["agent_run_lifecycle_changed"],
+      "storage": "cloud",
+      "deepLink": "work"
+    },
+    {
+      "name": "feature-release",
+      "label": "Feature release",
+      "schema": "packages/contracts/types/src/feature-release.ts",
+      "symbol": "FeatureRelease",
+      "tables": ["feature_flags"],
+      "writeFunctions": [],
+      "mutators": ["apps/web/lib/feature-flags/flag-store.ts"],
+      "projections": ["packages/contracts/types/src/feature-registry.ts"],
+      "providerCopies": [],
+      "ownership": "user-and-organization",
+      "sync": "server-authoritative",
+      "versioning": "updated-at",
+      "lifecycle": "active",
+      "childDisposition": "retain",
+      "auditBoundary": "organization",
+      "columns": {
+        "owner": "user_id",
+        "tenant": "organization_id",
+        "createdAt": "created_at",
+        "updatedAt": "updated_at"
+      },
+      "aliases": [],
+      "identity": "id",
+      "access": "owner-or-tenant-member",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["operational"],
+      "events": ["feature_flag_changed", "feature_flag_override_changed"],
+      "storage": "cloud",
+      "deepLink": null
+    },
+    {
+      "name": "client-capability-manifest",
+      "label": "Client capability manifest",
+      "schema": "packages/contracts/types/src/client-capability-manifest.ts",
+      "symbol": "ClientCapabilityManifest",
+      "tables": [],
+      "writeFunctions": [],
+      "mutators": [],
+      "projections": ["packages/contracts/types/src/surface-capability-manifest.ts"],
+      "providerCopies": [],
+      "ownership": "platform",
+      "sync": "client-authoritative",
+      "versioning": "none",
+      "lifecycle": "active",
+      "childDisposition": "retain",
+      "auditBoundary": "none",
+      "columns": {},
+      "aliases": [],
+      "identity": null,
+      "access": "platform-only",
+      "retention": {
+        "kind": "until-deleted"
+      },
+      "classification": ["operational"],
+      "events": [],
+      "storage": "device",
+      "deepLink": null
     }
   ],
   "duplicateVocabularies": [
@@ -442,5 +811,254 @@
       "why": "analytics names the product surfaces a second time, so a new surface reports under no name until both lists are edited."
     }
   ],
-  "columnExemptions": []
+  "columnExemptions": [],
+  "tableDispositions": [
+    {
+      "table": "account_lockout_attempts",
+      "disposition": "identity",
+      "why": "who the account is and how it proves it; the identity provider owns the object, this row is the local record of one attempt or one link"
+    },
+    {
+      "table": "account_sessions",
+      "disposition": "identity",
+      "why": "who the account is and how it proves it; the identity provider owns the object, this row is the local record of one attempt or one link"
+    },
+    {
+      "table": "user_two_factor",
+      "disposition": "identity",
+      "why": "who the account is and how it proves it; the identity provider owns the object, this row is the local record of one attempt or one link"
+    },
+    {
+      "table": "github_installations",
+      "disposition": "identity",
+      "why": "who the account is and how it proves it; the identity provider owns the object, this row is the local record of one attempt or one link"
+    },
+    {
+      "table": "messaging_connections",
+      "disposition": "identity",
+      "why": "who the account is and how it proves it; the identity provider owns the object, this row is the local record of one attempt or one link"
+    },
+    {
+      "table": "agent_tools",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "agent_tool_executions",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "cloud_code_agent_turns",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "connector_call_events",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "mcp_app_payloads",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "mcp_task_bindings",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "sync_data",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "website_auto_economy_trial_usage",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "retrieval_chunks",
+      "disposition": "operational",
+      "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "content_reports",
+      "disposition": "operational",
+      "why": "a report about a canonical object rather than an object of its own; it is answered and closed, never synced or versioned"
+    },
+    {
+      "table": "feedback",
+      "disposition": "operational",
+      "why": "a report about a canonical object rather than an object of its own; it is answered and closed, never synced or versioned"
+    },
+    {
+      "table": "product_analytics_events",
+      "disposition": "telemetry",
+      "why": "a measurement, kept for a fixed window and never read back as product truth"
+    },
+    {
+      "table": "usage_events",
+      "disposition": "telemetry",
+      "why": "a measurement, kept for a fixed window and never read back as product truth"
+    },
+    {
+      "table": "search_history",
+      "disposition": "telemetry",
+      "why": "a measurement, kept for a fixed window and never read back as product truth"
+    },
+    {
+      "table": "beta_redemptions",
+      "disposition": "pre-account",
+      "why": "written before an account exists, so it has no owner to scope by and no lifecycle an owner can drive"
+    },
+    {
+      "table": "cloud_managed_waitlist",
+      "disposition": "pre-account",
+      "why": "written before an account exists, so it has no owner to scope by and no lifecycle an owner can drive"
+    },
+    {
+      "table": "waitlist",
+      "disposition": "pre-account",
+      "why": "written before an account exists, so it has no owner to scope by and no lifecycle an owner can drive"
+    },
+    {
+      "table": "referrals",
+      "disposition": "pre-account",
+      "why": "written before an account exists, so it has no owner to scope by and no lifecycle an owner can drive"
+    },
+    {
+      "table": "api_keys",
+      "disposition": "canonical-gap",
+      "why": "an api key is a first class developer object with a name, scopes, a prefix and a revocation, and no shared contract type describes it",
+      "becomes": "api-key",
+      "fix": "add packages/contracts/types/src/api-key.ts exporting ApiKeyRecord (id, name, keyPrefix, scopes, revokedAt, expiresAt) and register the concept over api_keys"
+    },
+    {
+      "table": "shared_conversations",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+    },
+    {
+      "table": "shared_sessions",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+    },
+    {
+      "table": "organization_shared_artifacts",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+    },
+    {
+      "table": "organization_shared_connectors",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+    },
+    {
+      "table": "organization_shared_projects",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+    },
+    {
+      "table": "organization_shared_sessions",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+    },
+    {
+      "table": "organization_project_access",
+      "disposition": "canonical-gap",
+      "why": "a share is the object that makes private content reachable by a token or by an organization, and seven tables answer it with no one schema",
+      "becomes": "share",
+      "fix": "add packages/contracts/types/src/resource-share.ts exporting ResourceShare (target concept, audience, token, expiresAt, revokedAt) and register the concept over the seven share tables"
+    },
+    {
+      "table": "user_settings",
+      "disposition": "canonical-gap",
+      "why": "settings are synced and server versioned, so they are a cross device object, and settings-scopes.ts describes only how a value is resolved",
+      "becomes": "user-settings",
+      "fix": "add a ManagedUserSettings wire type beside the other cloud contracts and register the concept over user_settings, user_shortcuts and email_preferences"
+    },
+    {
+      "table": "user_shortcuts",
+      "disposition": "canonical-gap",
+      "why": "settings are synced and server versioned, so they are a cross device object, and settings-scopes.ts describes only how a value is resolved",
+      "becomes": "user-settings",
+      "fix": "add a ManagedUserSettings wire type beside the other cloud contracts and register the concept over user_settings, user_shortcuts and email_preferences"
+    },
+    {
+      "table": "email_preferences",
+      "disposition": "canonical-gap",
+      "why": "settings are synced and server versioned, so they are a cross device object, and settings-scopes.ts describes only how a value is resolved",
+      "becomes": "user-settings",
+      "fix": "add a ManagedUserSettings wire type beside the other cloud contracts and register the concept over user_settings, user_shortcuts and email_preferences"
+    },
+    {
+      "table": "retrieval_documents",
+      "disposition": "canonical-gap",
+      "why": "an indexed document is the join between a source object and its chunks, and nothing names its shape or its reindex lifecycle",
+      "becomes": "retrieval-document",
+      "fix": "add packages/contracts/types/src/retrieval-document.ts exporting RetrievalDocument (sourceKind, sourceId, status, chunkVersion, embeddingModel) and register the concept"
+    },
+    {
+      "table": "support_tickets",
+      "disposition": "canonical-gap",
+      "why": "a support ticket outlives the session that opened it and is read by an operator outside the tenant, which is exactly what a canonical object with an audit boundary is for",
+      "becomes": "support-ticket",
+      "fix": "add packages/contracts/types/src/support-ticket.ts exporting SupportTicket (status, priority, tier, handoffSessionId) and register the concept over the three support tables"
+    },
+    {
+      "table": "support_ticket_replies",
+      "disposition": "canonical-gap",
+      "why": "a support ticket outlives the session that opened it and is read by an operator outside the tenant, which is exactly what a canonical object with an audit boundary is for",
+      "becomes": "support-ticket",
+      "fix": "add packages/contracts/types/src/support-ticket.ts exporting SupportTicket (status, priority, tier, handoffSessionId) and register the concept over the three support tables"
+    },
+    {
+      "table": "support_handoff_sessions",
+      "disposition": "canonical-gap",
+      "why": "a support ticket outlives the session that opened it and is read by an operator outside the tenant, which is exactly what a canonical object with an audit boundary is for",
+      "becomes": "support-ticket",
+      "fix": "add packages/contracts/types/src/support-ticket.ts exporting SupportTicket (status, priority, tier, handoffSessionId) and register the concept over the three support tables"
+    }
+  ],
+  "uiStateColumns": [
+    {
+      "match": "^(is_)?(collapsed|expanded|hovered|focused|selected|dragging|scrolled)$",
+      "why": "a view state that belongs to one browser tab, not to the row every device reads"
+    },
+    {
+      "match": "^(scroll_position|sidebar_open|modal_open|active_tab|tab_index|drag_index|cursor_position)$",
+      "why": "where the pointer or the pane was, which is meaningless to a second reader"
+    }
+  ],
+  "vendorImports": [
+    "@clerk/",
+    "@neondatabase/",
+    "@vercel/",
+    "@aws-sdk/",
+    "@supabase/",
+    "stripe",
+    "firebase"
+  ],
+  "schemaHomeExemptions": [
+    {
+      "concept": "usage-reservation",
+      "schema": "apps/web/lib/services/managed-usage-request-service.ts",
+      "why": "the reservation shape is declared inside the web service that issues it, so the desktop, mobile and cli surfaces that spend the same balance cannot import the type they are settling against",
+      "fix": "move ManagedUsageRequestReservation into packages/contracts/types/src/managed-usage-balance.ts beside ManagedUsageSubscription and import it back into apps/web/lib/services/managed-usage-request-service.ts"
+    }
+  ]
 }
