@@ -57,6 +57,8 @@ vi.mock('@/lib/egress-policy', async (importOriginal) => ({
   ...(await importOriginal()),
   assertResolvedPublicHostname: vi.fn(async () => undefined),
   EgressPolicyError: class EgressPolicyError extends Error {},
+  pinnedPublicFetch: (input: unknown, init?: unknown) =>
+    (globalThis.fetch as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init),
 }));
 
 vi.mock('@agiworkforce/mcp', () => {

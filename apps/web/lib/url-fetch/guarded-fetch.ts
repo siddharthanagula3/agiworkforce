@@ -68,6 +68,8 @@ export interface GuardedFetchOptions {
   deadline: Deadline;
   maxRedirects: number;
   headers: Readonly<Record<string, string>>;
+  method?: 'GET' | 'POST';
+  body?: string;
   fetchImpl?: typeof fetch;
   /** Return false to stop at a redirect target and hand it back unfetched. */
   followRedirect?: (next: URL, hop: number) => boolean;
@@ -132,10 +134,11 @@ export async function guardedFetch(
     let response: Response;
     try {
       response = await fetchImpl(current.href, {
-        method: 'GET',
+        method: options.method ?? 'GET',
         redirect: 'manual',
         signal: deadline.signal,
         headers: { ...options.headers },
+        ...(options.body === undefined ? {} : { body: options.body }),
       });
     } catch (error) {
       const stopped = deadline.reason();
@@ -255,4 +258,162 @@ function join(chunks: readonly Uint8Array[], total: number): Uint8Array {
     offset += chunk.byteLength;
   }
   return out;
+}
+
+/**
+ * The variant for a request that carries a secret.
+ *
+ * `guardedFetch` refuses to be handed a credential at all, which is right for a
+ * page nobody here chose. A token exchange and an MCP dial do carry one, so
+ * they get their own door with a stricter rule about where it may travel:
+ * `refuse` means a redirect is a failed call, and `same-origin` means the
+ * credential never leaves the origin the caller registered.
+ */
+export type CredentialedRedirectPolicy = 'refuse' | 'same-origin';
+
+export type CredentialedRefusal =
+  GuardedFetchRefusal | 'redirect_refused' | 'cross_origin_redirect' | 'body_not_replayable';
+
+export type CredentialedFetchOutcome =
+  | { ok: true; response: Response; url: URL }
+  | { ok: false; refusal: CredentialedRefusal; url: URL | null; detail: string; status?: number };
+
+export interface CredentialedFetchOptions {
+  deadline: Deadline;
+  redirects: CredentialedRedirectPolicy;
+  headers: Readonly<Record<string, string>>;
+  method?: string;
+  body?: BodyInit | null | undefined;
+  maxRedirects?: number;
+  fetchImpl?: typeof fetch;
+}
+
+const CREDENTIALED_MAX_REDIRECTS = 3;
+
+function credentialedRefusal(
+  refusal: CredentialedRefusal,
+  url: URL | null,
+  detail: string,
+  status?: number,
+): CredentialedFetchOutcome {
+  return status === undefined
+    ? { ok: false, refusal, url, detail }
+    : { ok: false, refusal, url, detail, status };
+}
+
+export async function credentialedFetch(
+  target: URL,
+  options: CredentialedFetchOptions,
+): Promise<CredentialedFetchOutcome> {
+  const fetchImpl = options.fetchImpl ?? pinnedPublicFetch;
+  const origin = target.origin;
+  const maxRedirects =
+    options.redirects === 'refuse' ? 0 : (options.maxRedirects ?? CREDENTIALED_MAX_REDIRECTS);
+  let current = target;
+
+  for (let hop = 0; hop <= maxRedirects; hop += 1) {
+    const inadmissible = admissible(current);
+    if (inadmissible) {
+      return credentialedRefusal(
+        inadmissible,
+        current,
+        inadmissible === 'unsupported_scheme'
+          ? `Unsupported URL scheme "${current.protocol}", only http/https.`
+          : 'URLs with embedded credentials are not allowed.',
+      );
+    }
+
+    try {
+      await assertResolvedPublicHostname(current.href);
+    } catch (error) {
+      if (error instanceof EgressPolicyError) {
+        return credentialedRefusal(
+          'blocked_host',
+          current,
+          `Blocked: ${current.hostname} is not a resolvable public host.`,
+        );
+      }
+      throw error;
+    }
+
+    let response: Response;
+    try {
+      response = await fetchImpl(current.href, {
+        method: options.method ?? 'GET',
+        redirect: 'manual',
+        signal: options.deadline.signal,
+        headers: { ...options.headers },
+        ...(options.body === undefined || options.body === null ? {} : { body: options.body }),
+      });
+    } catch (error) {
+      const stopped = options.deadline.reason();
+      if (stopped) {
+        return credentialedRefusal(stopped, current, `Request ${stopped} for ${current.host}.`);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return credentialedRefusal('unreachable', current, `Request failed: ${message}`);
+    }
+
+    if (response.status < 300 || response.status >= 400) {
+      return { ok: true, response, url: current };
+    }
+
+    await response.body?.cancel().catch(() => undefined);
+    if (options.redirects === 'refuse') {
+      return credentialedRefusal(
+        'redirect_refused',
+        current,
+        'The endpoint answered with a redirect, which a credentialed request never follows.',
+        response.status,
+      );
+    }
+
+    const location = response.headers.get('location');
+    if (!location) {
+      return credentialedRefusal(
+        'missing_location',
+        current,
+        `Redirect (${response.status}) without a Location header.`,
+        response.status,
+      );
+    }
+    let next: URL;
+    try {
+      next = new URL(location, current);
+    } catch {
+      return credentialedRefusal('malformed_url', current, 'Redirect to a malformed URL.');
+    }
+    const nextInadmissible = admissible(next);
+    if (nextInadmissible) {
+      return credentialedRefusal(
+        nextInadmissible,
+        next,
+        `Redirect to an unsupported target from ${current.host}.`,
+      );
+    }
+    if (next.origin !== origin) {
+      return credentialedRefusal(
+        'cross_origin_redirect',
+        next,
+        `Refusing to carry a credential from ${origin} to ${next.origin}.`,
+      );
+    }
+    if (options.body !== undefined && options.body !== null && typeof options.body !== 'string') {
+      return credentialedRefusal(
+        'body_not_replayable',
+        next,
+        'A redirected credentialed request cannot replay a streamed body.',
+      );
+    }
+    if (hop === maxRedirects) {
+      return credentialedRefusal(
+        'too_many_redirects',
+        current,
+        `Exceeded ${maxRedirects} redirects inside ${origin}.`,
+      );
+    }
+    current = next;
+  }
+
+  return credentialedRefusal('too_many_redirects', current, `Exceeded ${maxRedirects} redirects.`);
 }

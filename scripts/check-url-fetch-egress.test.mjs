@@ -57,6 +57,17 @@ export async function fetchPageMetadata(url) {
 }
 `;
 
+const MCP_POLICY = `
+import type { McpEgressPolicy } from '@agiworkforce/mcp';
+import { credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
+import { assertResolvedPublicHostname } from './egress-policy';
+
+export const MCP_EGRESS_POLICY: McpEgressPolicy = {
+  assertAllowedUrl: (url) => assertResolvedPublicHostname(url),
+  fetch: (input, init) => credentialedFetch(new URL(String(input)), { redirects: 'same-origin' }),
+};
+`;
+
 const CONNECTOR = `
 import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 
@@ -78,6 +89,7 @@ function buildRoot(overrides = {}) {
   write('apps/web/lib/url-fetch/url-fetch-tool.ts', overrides.fetchTool ?? FETCH_TOOL);
   write('apps/web/lib/web-search/web-search-tool.ts', overrides.searchTool ?? SEARCH_TOOL);
   write('apps/web/lib/connectors/probe.ts', overrides.connector ?? CONNECTOR);
+  write('apps/web/lib/mcp-egress-policy.ts', overrides.mcpPolicy ?? MCP_POLICY);
   return root;
 }
 
@@ -138,6 +150,18 @@ test('fails a module that vets no host at all before fetching', () => {
   assert.equal(result.code, 1);
   // With the guard gone the module leaves the scanned set, so the surfaces alone must still fail.
   assert.match(result.out, /guardedFetch|assertResolvedPublicHostname|unvetted/);
+});
+
+test('fails an MCP policy that hands the client a fetch of its own', () => {
+  const root = buildRoot({
+    mcpPolicy: MCP_POLICY.replace(
+      "fetch: (input, init) => credentialedFetch(new URL(String(input)), { redirects: 'same-origin' }),",
+      'fetch: (input, init) => pinnedPublicFetch(input, init),',
+    ).replace("import { credentialedFetch } from '@/lib/url-fetch/guarded-fetch';\n", ''),
+  });
+  const result = run(root);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /hands the MCP client a fetch of its own/);
 });
 
 test('fails when the shared function has gone', () => {
