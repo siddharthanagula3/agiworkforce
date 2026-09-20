@@ -1262,3 +1262,45 @@ Evidence: `/tmp/agi-auth-zero-delay.log`,
 `/tmp/agi-auth-readiness-suite.log`, `/tmp/agi-auth-readiness-build.log`,
 `/tmp/agi-auth-readiness-browser-after.log`,
 `/tmp/agi-auth-readiness-browser-flow.log`, `/tmp/agi-animation-settle-test.log`.
+
+### Strict Windows follow-up: native shell argument preservation
+
+The strict Windows job `106053497365` now reports 2,663 CLI tests passed,
+two failed, one existing ignored and one filtered. This is an improvement over
+the earlier 34 failures, not a green Windows result. Desktop tests have still
+not been reached. The two remaining failures are the live hook transformer
+and the project-agent directory display. Raw log: `/tmp/agi-windows-f977.log`.
+
+The hook failure is production command corruption. Rust's default Windows
+argument serialization follows CRT rules, while Git for Windows' MSYS `sh`
+consumes paired backslashes inside a quoted argument. JSON-bearing scripts
+therefore lose the escapes in native paths before execution. The shared
+`process_tree::shell_command` now encodes only the Windows `sh -c` payload with
+MSYS quoting, preserving Unix invocation and ordinary executable argv. Hooks,
+compound shell tools and the explicit unsandboxed shell branch use this owner.
+No permission or sandbox decision changes. The directory renderer now joins
+`.agiworkforce` and `agents` as separate native path components.
+
+The independent read-only Windows investigator confirmed the hook path and
+identified the other two shell callers. The parser contract was checked against
+[MSYS2 runtime source](https://github.com/msys2/msys2-runtime/blob/msys2-3.6.10/winsup/cygwin/dcrt0.cc)
+and [Rust's Windows command extension](https://doc.rust-lang.org/std/os/windows/process/trait.CommandExt.html).
+The argument encoder targets MSYS/Cygwin `sh`; native Windows verification is
+still required. Jev selected this repair at confidence 0.89 and the native display
+join at 0.96, request
+`bf92ef37a589f7c6e4c73d73c289065e4c1ae9d4bc01daaa9c3398afebfcc53a`.
+
+New shell round-trip tests cover drive/UNC/verbatim paths, trailing backslashes,
+quotes, Unicode, control escapes, shell-looking text and JSON stdin. All 2,725
+CLI tests pass locally with normal concurrency and one existing ignored test;
+this does not substitute for Windows execution. Evidence:
+`/tmp/agi-windows-shell-cli-tests.log`, `/tmp/agi-windows-tui-followup.log`.
+The completed CodeQL run `35501315321` is successful; a subsequent API read still
+shows zero open code-scanning and zero open Dependabot alerts.
+CLI Clippy also passes with `-D warnings -D unsafe-code`, and formatting/diff
+checks pass. The parent separately reviewed the three changed callers and both
+structured-program branches: only explicit shell scripts use the Windows
+encoder; authorization, native program argv, process ownership, timeout and
+cancellation semantics remain with their existing owners. A fresh reviewer
+agent remains unavailable due to the previously reached agent thread limit;
+this is not represented as a fresh independent postpatch review.

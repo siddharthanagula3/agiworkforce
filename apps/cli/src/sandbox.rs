@@ -698,8 +698,14 @@ async fn execute_sandboxed_in_environment(
 ) -> Result<std::process::Output> {
     let argv = invocation.argv();
     if matches!(manager.policy, SandboxPolicy::DangerFullAccess) {
-        let mut cmd = tokio::process::Command::new(&argv[0]);
-        cmd.args(&argv[1..]);
+        let mut cmd = match invocation {
+            Invocation::Shell(script) => crate::process_tree::shell_command(script),
+            Invocation::Program { program, args } => {
+                let mut command = tokio::process::Command::new(program);
+                command.args(args);
+                command
+            }
+        };
         if let Some(dir) = cwd {
             cmd.current_dir(dir);
         }

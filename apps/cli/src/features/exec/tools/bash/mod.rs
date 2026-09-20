@@ -217,11 +217,7 @@ pub(super) async fn execute_run_command(
                 process.args(args);
                 process
             }
-            None => {
-                let mut process = tokio::process::Command::new("sh");
-                process.arg("-c").arg(command);
-                process
-            }
+            None => crate::process_tree::shell_command(command),
         };
         crate::process_tree::output(command_process, None, Some(COMMAND_TIMEOUT)).await
     } else {
