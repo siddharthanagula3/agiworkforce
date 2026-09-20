@@ -8,10 +8,46 @@
  * `app-nav-items.ts` exists). One definition, two call sites.
  */
 
+import { toast } from 'sonner';
+
 export interface DestructiveConfirmCopy {
   title: string;
   description: string;
   confirmLabel: string;
+}
+
+/**
+ * The row menu closes the instant an item is chosen, so a mutation that fails
+ * after that point leaves the user looking at an unchanged row with nothing to
+ * read. `useConversations` reports every one of these as `false` and records
+ * the reason in the chat store, which no shell outside `/chat` renders. The
+ * project half of the same menu has said so through a toast since it was
+ * written (`sidebar-project-actions.ts`); this is the conversation half.
+ */
+export type SessionRowAction =
+  'rename' | 'pin' | 'unpin' | 'archive' | 'restore' | 'moveToProject' | 'delete';
+
+const SESSION_ROW_ACTION_FAILURE: Record<SessionRowAction, string> = {
+  rename: 'Could not rename this conversation',
+  pin: 'Could not pin this conversation',
+  unpin: 'Could not unpin this conversation',
+  archive: 'Could not archive this conversation',
+  restore: 'Could not restore this conversation',
+  moveToProject: 'Could not move this conversation',
+  delete: 'Could not delete this conversation',
+};
+
+export function sessionRowActionFailureMessage(action: SessionRowAction): string {
+  return SESSION_ROW_ACTION_FAILURE[action];
+}
+
+export async function runSessionRowAction(
+  action: SessionRowAction,
+  run: () => Promise<boolean>,
+): Promise<boolean> {
+  const succeeded = await run();
+  if (!succeeded) toast.error(SESSION_ROW_ACTION_FAILURE[action]);
+  return succeeded;
 }
 
 export function conversationHref(conversationId: string): string {
