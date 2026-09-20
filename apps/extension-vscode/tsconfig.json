@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "preserve",
     // Include DOM lib here even though VS Code extensions don't run in
     // a DOM context, `packages/contracts/types/src/tauri.ts` references DOM
     // types (PerformanceEntry, Node, DOMRectReadOnly) that TS 6 needs
@@ -30,7 +30,7 @@
     "declarationMap": false,
     "sourceMap": true,
     "inlineSources": false,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "ignoreDeprecations": "5.0",
     "allowSyntheticDefaultImports": true,
     "incremental": true,
