@@ -43,6 +43,12 @@ function readError(body: unknown, fallback: string): string {
 }
 
 let reportedIdentity: ShellIdentity | null = null;
+let identityListeners: ((identity: ShellIdentity) => void)[] = [];
+
+/** Told whenever the renderer names the account, including a sign-out. */
+export function onShellIdentityReported(listener: (identity: ShellIdentity) => void): void {
+  identityListeners = [...identityListeners, listener];
+}
 
 /**
  * The renderer is the authority on its own account, and it says so the moment
@@ -52,6 +58,7 @@ let reportedIdentity: ShellIdentity | null = null;
  */
 export function reportShellIdentity(identity: ShellIdentity): void {
   reportedIdentity = identity;
+  for (const listener of identityListeners) listener(identity);
 }
 
 /**

@@ -115,6 +115,12 @@ vi.mock('../runtime/localModelSettingsStore', () => ({
 }));
 
 vi.mock('../shellIdentity', () => ({ reportShellIdentity }));
+const readShellLayout = vi.fn(() => ({ sidebarCollapsed: true, secondaryPanelWidth: 380 }));
+const writeShellLayout = vi.fn((patch: Record<string, unknown>) => ({
+  sidebarCollapsed: patch['sidebarCollapsed'] ?? null,
+  secondaryPanelWidth: patch['secondaryPanelWidth'] ?? null,
+}));
+vi.mock('../shellWindowStore', () => ({ readShellLayout, writeShellLayout }));
 vi.mock('../runtime/deviceIdentity', () => ({
   deviceIdentity: () => ({ deviceId: 'install-0000-1111', deviceName: 'Studio Mac' }),
 }));
@@ -264,6 +270,22 @@ describe('dispatch, local command gating', () => {
       timeoutMs: 'soon',
     });
     expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+  });
+});
+
+describe('dispatch, the window layout the shell holds', () => {
+  it('reads the layout without a workspace', async () => {
+    const response = await dispatch(window, 'window_layout_read', {});
+    expect(response).toEqual({
+      ok: true,
+      value: { sidebarCollapsed: true, secondaryPanelWidth: 380 },
+    });
+  });
+
+  it('hands a layout change to the store that outlives the window', async () => {
+    const response = await dispatch(window, 'window_layout_write', { sidebarCollapsed: false });
+    expect(writeShellLayout).toHaveBeenCalledWith({ sidebarCollapsed: false });
+    expect(response).toMatchObject({ ok: true, value: { sidebarCollapsed: false } });
   });
 });
 
