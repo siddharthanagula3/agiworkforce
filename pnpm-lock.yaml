@@ -75,10 +75,10 @@ overrides:
 
 patchedDependencies:
   bunyamin@1.6.3:
-    hash: q5gns77dsw2mwd6ifqotfra7nm
+    hash: njry5uiev7y6jualyvbasexewm
     path: patches/bunyamin@1.6.3.patch
   detox@20.51.4:
-    hash: 3ts5x3bojf2s22fn3ixxffvn7y
+    hash: nxxielknopip3fenv4vlr3vgde
     path: patches/detox@20.51.4.patch
   next-themes@0.4.6:
     hash: 6bc6kpsoihgvhbq52miawb5wu4
@@ -962,7 +962,7 @@ importers:
         version: 57.0.12(@babel/core@7.29.7)(@babel/runtime@7.29.7)(expo@57.0.23)(react-refresh@0.14.2)
       detox:
         specifier: 20.51.4
-        version: 20.51.4(patch_hash=3ts5x3bojf2s22fn3ixxffvn7y)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6)
+        version: 20.51.4(patch_hash=nxxielknopip3fenv4vlr3vgde)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6)
       detox-cli:
         specifier: 20.51.4
         version: 20.51.4
@@ -25829,10 +25829,10 @@ snapshots:
     optionalDependencies:
       expect: 29.7.0
 
-  '@wix-pilot/detox@1.0.13(@wix-pilot/core@3.4.2(expect@29.7.0))(detox@20.51.4(patch_hash=3ts5x3bojf2s22fn3ixxffvn7y)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6))(expect@29.7.0)':
+  '@wix-pilot/detox@1.0.13(@wix-pilot/core@3.4.2(expect@29.7.0))(detox@20.51.4(patch_hash=nxxielknopip3fenv4vlr3vgde)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6))(expect@29.7.0)':
     dependencies:
       '@wix-pilot/core': 3.4.2(expect@29.7.0)
-      detox: 20.51.4(patch_hash=3ts5x3bojf2s22fn3ixxffvn7y)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6)
+      detox: 20.51.4(patch_hash=nxxielknopip3fenv4vlr3vgde)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6)
       expect: 29.7.0
 
   '@workflow/astro@4.0.23(@opentelemetry/api@1.9.1)(@swc/helpers@0.5.23)(ws@8.21.3(bufferutil@4.1.0)(utf-8-validate@6.0.6))':
@@ -26975,7 +26975,7 @@ snapshots:
     dependencies:
       run-applescript: 7.1.0
 
-  bunyamin@1.6.3(patch_hash=q5gns77dsw2mwd6ifqotfra7nm)(bunyan@2.0.5):
+  bunyamin@1.6.3(patch_hash=njry5uiev7y6jualyvbasexewm)(bunyan@2.0.5):
     dependencies:
       '@flatten-js/interval-tree': 1.1.4
       multi-sort-stream: 1.0.4
@@ -27986,10 +27986,10 @@ snapshots:
     dependencies:
       chalk: 4.1.2
 
-  detox@20.51.4(patch_hash=3ts5x3bojf2s22fn3ixxffvn7y)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6):
+  detox@20.51.4(patch_hash=nxxielknopip3fenv4vlr3vgde)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6):
     dependencies:
       '@wix-pilot/core': 3.4.2(expect@29.7.0)
-      '@wix-pilot/detox': 1.0.13(@wix-pilot/core@3.4.2(expect@29.7.0))(detox@20.51.4(patch_hash=3ts5x3bojf2s22fn3ixxffvn7y)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6))(expect@29.7.0)
+      '@wix-pilot/detox': 1.0.13(@wix-pilot/core@3.4.2(expect@29.7.0))(detox@20.51.4(patch_hash=nxxielknopip3fenv4vlr3vgde)(@jest/environment@29.7.0)(@jest/types@30.5.1)(bufferutil@4.1.0)(expect@29.7.0)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0))(utf-8-validate@6.0.6))(expect@29.7.0)
       ajv: 8.20.0
       bunyan: 1.8.15
       bunyan-debug-stream: 3.1.1(bunyan@1.8.15)
@@ -30883,7 +30883,7 @@ snapshots:
 
   jest-environment-emit@1.2.0(@jest/environment@29.7.0)(@jest/types@30.5.1)(jest-environment-jsdom@29.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6))(jest-environment-node@29.7.0)(jest@29.7.0(@types/node@24.13.5)(babel-plugin-macros@3.1.0)):
     dependencies:
-      bunyamin: 1.6.3(patch_hash=q5gns77dsw2mwd6ifqotfra7nm)(bunyan@2.0.5)
+      bunyamin: 1.6.3(patch_hash=njry5uiev7y6jualyvbasexewm)(bunyan@2.0.5)
       bunyan: 2.0.5
       bunyan-debug-stream: 3.1.1(bunyan@2.0.5)
       funpermaproxy: 1.1.0
