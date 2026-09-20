@@ -1100,6 +1100,19 @@ again reports zero open code-scanning and Dependabot alerts.
 Remote CI on `6c382b80d` now passes Windows and macOS Rust checks, Linux default
 Rust tests/Clippy, all-feature Clippy, iOS build/onboarding, desktop/Chrome E2E,
 VS Code with the real CLI, security scans, contracts, DB/RLS and repository
-guards. The complete affected JavaScript test step passed in 41m23s; its
-remaining webview/build steps are still in progress. The only completed failed
-job is the web E2E fixture failure addressed by the pending browser correction.
+guards. The complete affected JavaScript test step passed in 41m23s, followed
+by webview and CLI wrapper tests. The final Next build compiled successfully
+but its TypeScript subprocess exhausted the default 4 GB heap. The build step
+now receives the same 8 GB `NODE_OPTIONS` setting as the passing standalone
+typecheck; Turbo already explicitly passes this variable through. The local
+production build had passed with that setting earlier in this batch. Workflow
+YAML, environment propagation and formatting checks pass. Jev selected this
+step-scoped correction at 1.0 confidence
+(`f5e3e8e7469d600517a5ab0041f536e97cc2523f745dee3c201fad5e5664d6f3`).
+Remote rerun remains required for this correction and the browser fixture.
+Evidence: `/tmp/agi-js-6c-job.log`.
+
+A fresh cargo audit from `/tmp`, outside repository suppression configuration,
+reports zero vulnerability-class findings with `settings.ignore: []`, plus 17
+unmaintained, one unsound and two yanked warnings. Its complete output is
+`/tmp/agi-rust-current-unsuppressed-audit.json`.
