@@ -11,6 +11,10 @@ const PHASE_COPY: Readonly<Record<AuthPhase, { key: string; label: string } | nu
   verifying: { key: 'flow.phase.verifying', label: 'Checking what you entered' },
   passkey_requested: { key: 'flow.phase.passkeyRequested', label: 'Waiting for your passkey' },
   redirecting: { key: 'flow.phase.redirecting', label: 'Taking you to your provider' },
+  enterprise_redirecting: {
+    key: 'flow.phase.enterpriseRedirecting',
+    label: 'This address belongs to an organization. Taking you to its sign-in',
+  },
 };
 
 // The region is always in the tree: an aria-live node added at the same moment

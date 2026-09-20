@@ -15,7 +15,13 @@ export type AuthSecondFactorKind = 'authenticator' | 'text_message' | 'email' | 
 export type AuthMethodId = 'password' | 'email_code' | 'passkey';
 
 export type AuthPhase =
-  'idle' | 'checking_account' | 'sending_code' | 'verifying' | 'passkey_requested' | 'redirecting';
+  | 'idle'
+  | 'checking_account'
+  | 'sending_code'
+  | 'verifying'
+  | 'passkey_requested'
+  | 'redirecting'
+  | 'enterprise_redirecting';
 
 export interface AuthSecondFactor {
   kind: AuthSecondFactorKind;
@@ -46,7 +52,7 @@ export interface AuthFailure {
 
 export type AuthResult =
   | { status: 'complete' }
-  | { status: 'redirecting' }
+  | { status: 'redirecting'; phase?: Extract<AuthPhase, 'enterprise_redirecting'> }
   | { status: 'next'; step: AuthStep }
   | AuthFailure;
 
