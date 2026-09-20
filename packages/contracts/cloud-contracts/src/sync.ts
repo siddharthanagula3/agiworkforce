@@ -14,7 +14,18 @@ export const AppliedRowSchema = z.object({
 });
 export type AppliedRow = z.infer<typeof AppliedRowSchema>;
 
-export const SyncProtocolVersionSchema = z.literal(2);
+// What this build speaks, and the oldest exchange it still understands. A
+// peer below the floor is told it is out of date instead of meeting a parse
+// failure it cannot explain to anyone.
+export const SYNC_PROTOCOL_VERSION = 2;
+export const SYNC_PROTOCOL_MIN_VERSION = 2;
+
+export const SyncProtocolVersionSchema = z.literal(SYNC_PROTOCOL_VERSION);
+
+export function syncProtocolCompatibility(peerVersion: number): 'readable' | 'too_old' | 'too_new' {
+  if (!Number.isInteger(peerVersion) || peerVersion < SYNC_PROTOCOL_MIN_VERSION) return 'too_old';
+  return peerVersion > SYNC_PROTOCOL_VERSION ? 'too_new' : 'readable';
+}
 
 function rejectDuplicateIds(
   items: ReadonlyArray<{ id: string }>,

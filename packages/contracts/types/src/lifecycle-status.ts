@@ -15,7 +15,7 @@
  */
 
 import type { CapabilityLayer } from './capability-handshake/types';
-import { ErrorCode, type ErrorCodeValue } from './errors';
+import { DomainErrorCode, ErrorCode, type ClassifiedErrorCode } from './errors';
 import type { ResourceLifecycleState } from './resource-lifecycle';
 import { SyncState } from './web-offline';
 
@@ -201,8 +201,14 @@ export function projectLifecycleStatus<DomainStatus extends string>(
 export const SURFACE_STATES = [
   'idle',
   'loading',
+  'refreshing',
   'success',
+  'empty',
+  'partial',
+  'stale',
   'error',
+  'retrying',
+  'rate_limited',
   'offline',
   'permission_denied',
   'policy_blocked',
@@ -214,15 +220,38 @@ export const SURFACE_STATES = [
 
 export type SurfaceState = (typeof SURFACE_STATES)[number];
 
+/**
+ * `success` is the loaded state. The word every surface reached for first is
+ * kept readable so a stored value or a shipped client does not have to be
+ * rewritten, and so nothing adds a second canonical spelling of it.
+ */
+export const SURFACE_STATE_ALIASES = {
+  loaded: 'success',
+  ready: 'success',
+  done: 'success',
+  fetching: 'loading',
+  reloading: 'refreshing',
+  throttled: 'rate_limited',
+} as const satisfies Readonly<Record<string, SurfaceState>>;
+
+export function toSurfaceState(value: string): SurfaceState | null {
+  if (isSurfaceState(value)) return value;
+  return (SURFACE_STATE_ALIASES as Readonly<Record<string, SurfaceState>>)[value] ?? null;
+}
+
 export const SURFACE_REMEDIES = [
   'wait',
   'retry',
+  'refresh',
   'reconnect',
   'sign_in',
   'request_access',
   'change_policy',
   'upgrade_plan',
   'choose_another',
+  'correct_input',
+  'revise_request',
+  'contact_support',
   'restore',
 ] as const;
 
@@ -235,25 +264,157 @@ export interface SurfaceStateRule {
   retryable: boolean;
   /** What the reader can do about it, or null when nothing they do helps. */
   remedy: SurfaceRemedy | null;
+  /** The read landed and there was genuinely nothing to show. */
+  meansNoData: boolean;
+  /** What is on screen is older than the server's answer. */
+  meansStaleData: boolean;
+  /** The reader is owed a sentence saying who decided and why. */
+  needsExplanation: boolean;
 }
 
 /**
  * `offline` is retryable and never permanent: the request was never refused,
  * it was never made. Rendering it as a failure is the defect this table exists
- * to prevent.
+ * to prevent. `empty` is the only state that means no data, so a read that
+ * failed cannot be rendered as one that returned nothing.
  */
 export const SURFACE_STATE_RULES: Readonly<Record<SurfaceState, SurfaceStateRule>> = {
-  idle: { permanentFailure: false, retryable: false, remedy: null },
-  loading: { permanentFailure: false, retryable: false, remedy: 'wait' },
-  success: { permanentFailure: false, retryable: false, remedy: null },
-  error: { permanentFailure: false, retryable: true, remedy: 'retry' },
-  offline: { permanentFailure: false, retryable: true, remedy: 'reconnect' },
-  permission_denied: { permanentFailure: true, retryable: false, remedy: 'request_access' },
-  policy_blocked: { permanentFailure: true, retryable: false, remedy: 'change_policy' },
-  entitlement_blocked: { permanentFailure: true, retryable: false, remedy: 'upgrade_plan' },
-  unsupported: { permanentFailure: true, retryable: false, remedy: 'choose_another' },
-  deleted: { permanentFailure: true, retryable: false, remedy: 'restore' },
-  archived: { permanentFailure: false, retryable: false, remedy: 'restore' },
+  idle: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: null,
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: false,
+  },
+  loading: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: 'wait',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: false,
+  },
+  refreshing: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: 'wait',
+    meansNoData: false,
+    meansStaleData: true,
+    needsExplanation: false,
+  },
+  success: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: null,
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: false,
+  },
+  empty: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: null,
+    meansNoData: true,
+    meansStaleData: false,
+    needsExplanation: false,
+  },
+  partial: {
+    permanentFailure: false,
+    retryable: true,
+    remedy: 'retry',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  stale: {
+    permanentFailure: false,
+    retryable: true,
+    remedy: 'refresh',
+    meansNoData: false,
+    meansStaleData: true,
+    needsExplanation: true,
+  },
+  error: {
+    permanentFailure: false,
+    retryable: true,
+    remedy: 'retry',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  retrying: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: 'wait',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: false,
+  },
+  rate_limited: {
+    permanentFailure: false,
+    retryable: true,
+    remedy: 'wait',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  offline: {
+    permanentFailure: false,
+    retryable: true,
+    remedy: 'reconnect',
+    meansNoData: false,
+    meansStaleData: true,
+    needsExplanation: true,
+  },
+  permission_denied: {
+    permanentFailure: true,
+    retryable: false,
+    remedy: 'request_access',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  policy_blocked: {
+    permanentFailure: true,
+    retryable: false,
+    remedy: 'change_policy',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  entitlement_blocked: {
+    permanentFailure: true,
+    retryable: false,
+    remedy: 'upgrade_plan',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  unsupported: {
+    permanentFailure: true,
+    retryable: false,
+    remedy: 'choose_another',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  deleted: {
+    permanentFailure: true,
+    retryable: false,
+    remedy: 'restore',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
+  archived: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: 'restore',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
 };
 
 export function isSurfaceState(value: string): value is SurfaceState {
@@ -264,7 +425,7 @@ export function isPermanentFailureSurfaceState(state: SurfaceState): boolean {
   return SURFACE_STATE_RULES[state].permanentFailure;
 }
 
-const ERROR_CODE_SURFACE_STATES: Readonly<Partial<Record<ErrorCodeValue, SurfaceState>>> = {
+const ERROR_CODE_SURFACE_STATES: Readonly<Partial<Record<ClassifiedErrorCode, SurfaceState>>> = {
   [ErrorCode.UNAUTHORIZED]: 'permission_denied',
   [ErrorCode.FORBIDDEN]: 'permission_denied',
   [ErrorCode.MFA_REQUIRED]: 'policy_blocked',
@@ -272,10 +433,59 @@ const ERROR_CODE_SURFACE_STATES: Readonly<Partial<Record<ErrorCodeValue, Surface
   [ErrorCode.PAYMENT_REQUIRED]: 'entitlement_blocked',
   [ErrorCode.CAPABILITY_UNAVAILABLE]: 'unsupported',
   [ErrorCode.NETWORK_ERROR]: 'offline',
+  [ErrorCode.RATE_LIMIT_EXCEEDED]: 'rate_limited',
+  [DomainErrorCode.RESOURCE_DELETED]: 'deleted',
+  [DomainErrorCode.SAFETY_BLOCKED]: 'policy_blocked',
 };
 
-export function surfaceStateForErrorCode(code: ErrorCodeValue): SurfaceState {
+export function surfaceStateForErrorCode(code: ClassifiedErrorCode): SurfaceState {
   return ERROR_CODE_SURFACE_STATES[code] ?? 'error';
+}
+
+export interface SurfaceReadOutcome {
+  /** The request has not come back yet. */
+  pending?: boolean;
+  /** Something was already on screen when the request went out. */
+  hadData?: boolean;
+  /** The request failed, with the code the server decided on. */
+  failedWith?: ClassifiedErrorCode | null;
+  /** The request was never made because the client has no connection. */
+  disconnected?: boolean;
+  /** The request came back and carried nothing. */
+  rowCount?: number;
+  /** The answer landed short of what was asked for. */
+  truncated?: boolean;
+  /** What is on screen predates the server's current answer. */
+  ageExceedsFreshness?: boolean;
+  /** The client is between attempts of a retry it decided to make. */
+  retryScheduled?: boolean;
+}
+
+/**
+ * One reading of a read. A failure never becomes `empty`, because the count is
+ * only consulted once the request has actually come back, and an offline read
+ * that has something on screen is stale rather than blank.
+ */
+export function surfaceStateForRead(outcome: SurfaceReadOutcome): SurfaceState {
+  const hadData = outcome.hadData === true;
+  if (outcome.failedWith !== undefined && outcome.failedWith !== null) {
+    if (outcome.retryScheduled === true) return 'retrying';
+    return surfaceStateForErrorCode(outcome.failedWith);
+  }
+  if (outcome.disconnected === true) return 'offline';
+  if (outcome.pending === true) return hadData ? 'refreshing' : 'loading';
+  if (outcome.rowCount === undefined) return hadData ? 'stale' : 'idle';
+  if (outcome.truncated === true) return 'partial';
+  if (outcome.ageExceedsFreshness === true) return 'stale';
+  return outcome.rowCount === 0 ? 'empty' : 'success';
+}
+
+export function surfaceStateMeansNoData(state: SurfaceState): boolean {
+  return SURFACE_STATE_RULES[state].meansNoData;
+}
+
+export function surfaceStateRemedy(state: SurfaceState): SurfaceRemedy | null {
+  return SURFACE_STATE_RULES[state].remedy;
 }
 
 /**

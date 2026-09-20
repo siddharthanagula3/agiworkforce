@@ -1,0 +1,43 @@
+{
+  "tables": {
+    "user_settings": {
+      "scope": "account",
+      "why": "one row per account, read on every surface that account signs in to"
+    },
+    "account_security_settings": {
+      "scope": "account",
+      "why": "second factor and allowed networks follow the person, not the workspace"
+    },
+    "email_preferences": {
+      "scope": "account",
+      "why": "what we may send the person, keyed by their address"
+    },
+    "organization_admin_policies": {
+      "scope": "organization",
+      "why": "the tenant's own defaults, the base every narrower layer narrows"
+    },
+    "organization_model_policies": {
+      "scope": "organization",
+      "why": "which providers and models the tenant permits at all"
+    },
+    "organization_connector_policies": {
+      "scope": "organization",
+      "why": "which connectors, plugins and MCP hosts the tenant permits at all"
+    },
+    "organization_domain_retention_policies": {
+      "scope": "organization",
+      "why": "how long each domain's rows are kept, decided by the tenant"
+    },
+    "organization_policy_overrides": {
+      "scope": "workspace",
+      "why": "the layering table: subject_type carries the narrower scope, mapped by WORKSPACE_POLICY_SCOPE_SETTINGS_SCOPE",
+      "subjectColumn": "subject_type"
+    },
+    "organization_policy_revisions": {
+      "scope": "organization",
+      "why": "the rule version an effective value is quoted against",
+      "ruleVersionColumn": "revision"
+    }
+  },
+  "unscopedTables": []
+}

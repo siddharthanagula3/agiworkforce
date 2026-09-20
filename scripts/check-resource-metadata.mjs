@@ -378,6 +378,111 @@ function checkTableObligations({ contract, tables, rewritten, errors }) {
   }
 }
 
+/** A table whose name says it records one run of something a caller waits on. */
+export const OPERATION_TABLE = /(_jobs|_runs|_operations|_executions|_requests)$/;
+
+/**
+ * What a caller may ask about an operation. A run nobody can cancel, whose
+ * cost nobody can read and whose failure has nowhere to go is a run the
+ * product can only tell a reader to wait for.
+ */
+export const OPERATION_ROLES = Object.freeze([
+  'operationId',
+  'startedAt',
+  'progress',
+  'stage',
+  'cancellation',
+  'retry',
+  'result',
+  'error',
+  'requestId',
+  'cost',
+  'completedAt',
+]);
+
+function checkOperations({ contract, tables, errors }) {
+  const declared = contract.operations ?? {};
+  const excluded = new Map((contract.notOperations ?? []).map((entry) => [entry.table, entry]));
+  const seenExcluded = new Set();
+
+  for (const [table, columns] of [...tables].sort(([a], [b]) => a.localeCompare(b))) {
+    if (!OPERATION_TABLE.test(table)) continue;
+    if (excluded.has(table)) {
+      seenExcluded.add(table);
+      continue;
+    }
+    const entry = declared[table];
+    if (entry === undefined) {
+      errors.push(
+        `${MIGRATIONS_DIR}: ${table} records one run of something and declares no operation fields. ` +
+          `Declare them in ${CONTRACT_PATH}, or record there why it is not an operation.`,
+      );
+      continue;
+    }
+    for (const role of OPERATION_ROLES) {
+      const value = entry[role] ?? contract.roles[role].column;
+      if (value !== null && typeof value === 'object') {
+        if (typeof value.none !== 'string' || value.none.trim().length === 0) {
+          errors.push(`${CONTRACT_PATH}: ${table} has no ${role} and does not say why.`);
+        }
+        continue;
+      }
+      if (!columns.has(value)) {
+        errors.push(
+          `${CONTRACT_PATH}: ${table} plays ${role} with ${value}, which no migration adds. ` +
+            'Name the column that carries it, or say the operation has none and why.',
+        );
+      }
+    }
+  }
+
+  for (const [table, entry] of excluded) {
+    if (typeof entry.why !== 'string' || entry.why.trim().length === 0) {
+      errors.push(
+        `${CONTRACT_PATH}: ${table} is excluded from the operations and carries no reason.`,
+      );
+    }
+    if (!seenExcluded.has(table)) {
+      errors.push(
+        `${CONTRACT_PATH}: ${table} is excluded from the operations and is no longer named like one. ` +
+          'Delete the entry.',
+      );
+    }
+  }
+
+  for (const table of Object.keys(declared)) {
+    if (!tables.has(table)) {
+      errors.push(`${CONTRACT_PATH}: declares operation ${table}, which no migration creates.`);
+    }
+  }
+}
+
+/**
+ * A resource two people can edit needs something to compare an update against.
+ * Without it the second writer replaces the first and nobody is told.
+ */
+function checkConcurrency({ contract, tables, errors }) {
+  for (const [kind, entry] of Object.entries(contract.concurrency ?? {})) {
+    if (typeof entry.why !== 'string' || entry.why.trim().length === 0) {
+      errors.push(`${CONTRACT_PATH}: concurrent resource "${kind}" carries no reason.`);
+    }
+    const columns = tables.get(entry.table);
+    if (columns === undefined) {
+      errors.push(
+        `${CONTRACT_PATH}: concurrent resource "${kind}" names ${entry.table}, which no migration creates.`,
+      );
+      continue;
+    }
+    const column = resolveRoleColumn({ contract, table: entry.table, role: 'version', columns });
+    if (column === null || !columns.has(column)) {
+      errors.push(
+        `${MIGRATIONS_DIR}: ${entry.table} holds "${kind}", which two people can edit, and carries no ` +
+          `version. Add ${contract.roles.version.column}, or declare the column that already plays that role.`,
+      );
+    }
+  }
+}
+
 /** What happens to a child row when its parent is deleted has to be written down. */
 function checkDeletionSemantics({ contract, foreignKeys, errors }) {
   const undeclared = new Map(
@@ -424,6 +529,8 @@ export function checkResourceMetadata(repoRoot = REPO_ROOT) {
   checkRoleVocabulary({ contract, tables, repoRoot, errors });
   checkDeclarations({ contract, tables, errors });
   checkTableObligations({ contract, tables, rewritten, errors });
+  checkOperations({ contract, tables, errors });
+  checkConcurrency({ contract, tables, errors });
   checkDeletionSemantics({ contract, foreignKeys, errors });
 
   return {
@@ -433,6 +540,8 @@ export function checkResourceMetadata(repoRoot = REPO_ROOT) {
       roles: Object.keys(contract.roles).length,
       rewrittenInPlace: rewritten.size,
       foreignKeys: foreignKeys.length,
+      operations: Object.keys(contract.operations ?? {}).length,
+      concurrent: Object.keys(contract.concurrency ?? {}).length,
       gaps: (contract.gaps ?? []).length + (contract.undeclaredDispositions ?? []).length,
     },
   };
@@ -450,6 +559,7 @@ function main() {
   console.log(
     `check-resource-metadata: OK (${report.tables} tables, ${report.roles} metadata roles, ` +
       `${report.rewrittenInPlace} rewritten in place, ${report.foreignKeys} foreign keys, ` +
+      `${report.operations} operations, ${report.concurrent} concurrently edited resources, ` +
       `${report.gaps} recorded gap(s))`,
   );
 }

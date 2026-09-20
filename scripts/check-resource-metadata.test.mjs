@@ -260,3 +260,169 @@ test('the row timestamps migration adds the columns the contract depends on', ()
   assert.ok(tables.get('connector_tool_permissions').has('created_at'));
   assert.ok(tables.get('mcp_response_cache').has('created_at'));
 });
+
+const OPERATION_ROLE_DEFAULTS = {
+  operationId: { column: 'id', why: 'the handle a caller quotes' },
+  startedAt: { column: 'started_at', why: 'when the work began' },
+  progress: { column: 'progress', why: 'how far along it is' },
+  stage: { column: 'status', why: 'which step it is in' },
+  cancellation: { column: 'cancel_requested_at', why: 'that a stop was asked for' },
+  retry: { column: 'attempts', why: 'how many times it has been tried' },
+  result: { column: 'result', why: 'what it produced' },
+  error: { column: 'last_error', why: 'why it failed' },
+  requestId: { column: 'idempotency_key', why: 'the reference a reader quotes' },
+  cost: { column: 'usage', why: 'what it spent' },
+  completedAt: { column: 'completed_at', why: 'when it ended' },
+};
+
+const OPERATION_MIGRATION = {
+  '0001_runs.sql':
+    'create table if not exists public.widget_runs (\n' +
+    '  id uuid primary key,\n  user_id uuid,\n  created_at timestamptz,\n  updated_at timestamptz,\n' +
+    '  started_at timestamptz,\n  progress int,\n  status text,\n  cancel_requested_at timestamptz,\n' +
+    '  attempts int,\n  result jsonb,\n  last_error text,\n  idempotency_key text,\n' +
+    '  usage jsonb,\n  completed_at timestamptz\n);\n',
+};
+
+const OPERATION_DECLARATION = {
+  operationId: 'id',
+  startedAt: 'started_at',
+  progress: 'progress',
+  stage: 'status',
+  cancellation: 'cancel_requested_at',
+  retry: 'attempts',
+  result: 'result',
+  error: 'last_error',
+  requestId: 'idempotency_key',
+  cost: 'usage',
+  completedAt: 'completed_at',
+};
+
+function operationContract(overrides = {}) {
+  return {
+    roles: {
+      ...BASE_ROLES,
+      ...OPERATION_ROLE_DEFAULTS,
+      version: { column: 'server_version', why: 'the concurrency token' },
+    },
+    tables: {},
+    gaps: [],
+    operations: { widget_runs: OPERATION_DECLARATION },
+    ...overrides,
+  };
+}
+
+test('an operation table that declares no operation fields fails', () => {
+  const errors = errorsFor({
+    migrations: OPERATION_MIGRATION,
+    contract: operationContract({ operations: {} }),
+  });
+  assert.ok(
+    errors.some((error) => error.includes('widget_runs records one run of something')),
+    errors.join('\n'),
+  );
+});
+
+test('an operation field that names a column no migration adds fails', () => {
+  const errors = errorsFor({
+    migrations: OPERATION_MIGRATION,
+    contract: operationContract({
+      operations: { widget_runs: { ...OPERATION_DECLARATION, cost: 'spend_microusd' } },
+    }),
+  });
+  assert.ok(
+    errors.some((error) => error.includes('plays cost with spend_microusd')),
+    errors.join('\n'),
+  );
+});
+
+test('an operation that says it has no such field has to say why', () => {
+  const errors = errorsFor({
+    migrations: OPERATION_MIGRATION,
+    contract: operationContract({
+      operations: { widget_runs: { ...OPERATION_DECLARATION, progress: { none: '' } } },
+    }),
+  });
+  assert.ok(
+    errors.some((error) => error.includes('has no progress and does not say why')),
+    errors.join('\n'),
+  );
+});
+
+test('an excluded operation needs a reason and goes when it stops looking like one', () => {
+  const errors = errorsFor({
+    migrations: OPERATION_MIGRATION,
+    contract: operationContract({
+      operations: {},
+      notOperations: [
+        { table: 'widget_runs' },
+        { table: 'widget_lists', why: 'a list, not a run' },
+      ],
+    }),
+  });
+  assert.ok(
+    errors.some((error) =>
+      error.includes('widget_runs is excluded from the operations and carries no reason'),
+    ),
+    errors.join('\n'),
+  );
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        'widget_lists is excluded from the operations and is no longer named like one',
+      ),
+    ),
+    errors.join('\n'),
+  );
+});
+
+test('a concurrently edited resource with no version fails', () => {
+  const errors = errorsFor({
+    migrations: OPERATION_MIGRATION,
+    contract: operationContract({
+      concurrency: { widgets: { table: 'widget_runs', why: 'two people edit it' } },
+    }),
+  });
+  assert.ok(
+    errors.some((error) => error.includes('which two people can edit, and carries no version')),
+    errors.join('\n'),
+  );
+});
+
+test('a concurrent resource may declare the column that already plays the version role', () => {
+  const errors = errorsFor({
+    migrations: {
+      ...OPERATION_MIGRATION,
+      '0002_widgets.sql':
+        'create table if not exists public.widgets (\n  id uuid primary key,\n  user_id uuid,\n  created_at timestamptz,\n  version bigint\n);\n',
+    },
+    contract: operationContract({
+      tables: { widgets: { version: 'version' } },
+      concurrency: { widgets: { table: 'widgets', why: 'two people edit it' } },
+    }),
+  });
+  assert.ok(!errors.some((error) => error.includes('carries no version')), errors.join('\n'));
+});
+
+test('the row version migration adds the columns the concurrency contract depends on', () => {
+  const tables = readTableColumns(REPO_ROOT);
+  for (const table of [
+    'project_knowledge_files',
+    'organization_admin_policies',
+    'scheduled_tasks',
+    'agent_tools',
+  ]) {
+    assert.ok(tables.get(table).has('server_version'), table);
+  }
+  for (const table of [
+    'api_keys',
+    'device_refresh_tokens',
+    'github_installations',
+    'media_assets',
+    'organization_admin_api_keys',
+    'organization_spend_alerts',
+    'shared_sessions',
+  ]) {
+    assert.ok(tables.get(table).has('updated_at'), table);
+  }
+});

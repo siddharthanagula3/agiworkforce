@@ -1,0 +1,235 @@
+{
+  "classes": {
+    "authentication": {
+      "why": "the caller has not proved who they are, or the proof expired",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "sign_in",
+      "codes": ["UNAUTHORIZED", "MFA_REQUIRED"]
+    },
+    "authorization": {
+      "why": "the caller is known and this principal may not do it",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "request_access",
+      "codes": ["FORBIDDEN", "PERMISSION_REQUIRED", "DISABLED_BY_ROLE"]
+    },
+    "policy": {
+      "why": "an administrator or a jurisdiction refused it, not the principal's role",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "change_policy",
+      "codes": [
+        "IP_NOT_ALLOWED",
+        "POLICY_BLOCKED",
+        "DISABLED_BY_USER",
+        "DISABLED_BY_ORGANIZATION",
+        "DISABLED_BY_WORKSPACE",
+        "DISABLED_BY_DEVICE_POLICY",
+        "UNSUPPORTED_BY_REGION"
+      ]
+    },
+    "entitlement": {
+      "why": "the plan or the seat does not carry it, so paying changes the answer",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "upgrade_plan",
+      "codes": [
+        "PAYMENT_REQUIRED",
+        "UPGRADE_REQUIRED",
+        "SEAT_REQUIRED",
+        "ENTITLEMENT_REQUIRED",
+        "FEATURE_EXPERIMENTAL",
+        "FEATURE_CLOSED_BETA"
+      ]
+    },
+    "validation": {
+      "why": "the request itself is malformed, so nothing downstream was attempted",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "correct_input",
+      "codes": ["VALIDATION_ERROR", "INVALID_INPUT", "PAYLOAD_TOO_LARGE"]
+    },
+    "unsupported": {
+      "why": "this build, surface, model or host cannot do it at all, so paying would not help",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "choose_another",
+      "codes": [
+        "CAPABILITY_UNAVAILABLE",
+        "UNSUPPORTED_BY_MODEL",
+        "UNSUPPORTED_BY_PROVIDER",
+        "UNSUPPORTED_BY_ROUTE",
+        "UNSUPPORTED_BY_SURFACE",
+        "UNSUPPORTED_BY_OPERATING_SYSTEM",
+        "FEATURE_DEPRECATED",
+        "CONNECTED_ACCOUNT_REQUIRED",
+        "DESKTOP_HOST_REQUIRED",
+        "BROWSER_EXTENSION_REQUIRED"
+      ]
+    },
+    "conflict": {
+      "why": "someone else wrote the row first and this write would silently overwrite them",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "refresh",
+      "codes": ["CONFLICT"]
+    },
+    "not_found": {
+      "why": "nothing with that identifier is readable by this caller",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "choose_another",
+      "codes": ["NOT_FOUND", "PGRST116"]
+    },
+    "deleted": {
+      "why": "it existed and no longer does, which is not the same as never having existed",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "restore",
+      "codes": ["RESOURCE_DELETED", "FEATURE_REMOVED"]
+    },
+    "rate_limit": {
+      "why": "too many requests in a window, and waiting is enough",
+      "retryable": true,
+      "providerDetail": "hidden",
+      "suggestedAction": "wait",
+      "codes": ["RATE_LIMIT_EXCEEDED"]
+    },
+    "quota": {
+      "why": "an allowance for the period is spent, so waiting out a window does not help",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "upgrade_plan",
+      "codes": ["QUOTA_EXCEEDED"]
+    },
+    "provider_unavailable": {
+      "why": "an upstream we call on the caller's behalf is down or degraded",
+      "retryable": true,
+      "providerDetail": "summary",
+      "suggestedAction": "retry",
+      "codes": [
+        "SERVICE_UNAVAILABLE",
+        "PROVIDER_UNAVAILABLE",
+        "PROVIDER_DEGRADED",
+        "TEMPORARILY_UNAVAILABLE",
+        "MAINTENANCE",
+        "STRIPE_ERROR"
+      ]
+    },
+    "timeout": {
+      "why": "the work was started and no answer arrived inside the budget, so its outcome is unknown",
+      "retryable": true,
+      "providerDetail": "hidden",
+      "suggestedAction": "retry",
+      "codes": ["TIMEOUT"]
+    },
+    "network": {
+      "why": "the request left and the transport failed or returned something unreadable",
+      "retryable": true,
+      "providerDetail": "hidden",
+      "suggestedAction": "retry",
+      "codes": ["NETWORK_ERROR", "INVALID_RESPONSE"]
+    },
+    "offline": {
+      "why": "the request was never made, so nothing was refused and nothing was consumed",
+      "retryable": true,
+      "providerDetail": "hidden",
+      "suggestedAction": "reconnect",
+      "codes": ["OFFLINE"]
+    },
+    "storage": {
+      "why": "a blob or file store refused the read or write, which is not the database failing",
+      "retryable": true,
+      "providerDetail": "summary",
+      "suggestedAction": "retry",
+      "codes": ["STORAGE_ERROR"]
+    },
+    "database": {
+      "why": "the system of record refused the statement or was unreachable",
+      "retryable": true,
+      "providerDetail": "hidden",
+      "suggestedAction": "retry",
+      "codes": ["CLOUD_DB_ERROR"]
+    },
+    "search": {
+      "why": "the retrieval backend failed, so an answer would be built on nothing",
+      "retryable": true,
+      "providerDetail": "summary",
+      "suggestedAction": "retry",
+      "codes": ["SEARCH_ERROR"]
+    },
+    "tool": {
+      "why": "a tool the model called failed inside its own execution",
+      "retryable": true,
+      "providerDetail": "summary",
+      "suggestedAction": "retry",
+      "codes": ["TOOL_ERROR"]
+    },
+    "connector": {
+      "why": "a connected third-party account refused or failed, and the reader chose that connection",
+      "retryable": true,
+      "providerDetail": "summary",
+      "suggestedAction": "reconnect",
+      "codes": ["CONNECTOR_ERROR"]
+    },
+    "sandbox": {
+      "why": "the isolated execution environment failed to start, or died while running",
+      "retryable": true,
+      "providerDetail": "summary",
+      "suggestedAction": "retry",
+      "codes": ["SANDBOX_ERROR"]
+    },
+    "safety": {
+      "why": "the request or the answer was refused on safety grounds, which no retry changes",
+      "retryable": false,
+      "providerDetail": "hidden",
+      "suggestedAction": "revise_request",
+      "codes": ["SAFETY_BLOCKED"]
+    },
+    "internal": {
+      "why": "a defect on our side that the reader can do nothing about",
+      "retryable": true,
+      "providerDetail": "hidden",
+      "suggestedAction": "contact_support",
+      "codes": ["INTERNAL_ERROR"]
+    }
+  },
+  "unraisedCodes": [
+    {
+      "code": "RESOURCE_DELETED",
+      "why": "a read of a soft-deleted row answers 404 today, so a reader cannot tell a row that was removed from one that never existed.",
+      "raisedBy": "the resource read paths that consult deleted_at: apps/web/lib/services and the routes that load a single resource."
+    },
+    {
+      "code": "STORAGE_ERROR",
+      "why": "blob failures reach the reader as INTERNAL_ERROR, so a transient store outage looks like a defect in the product.",
+      "raisedBy": "apps/web/lib/storage and the upload routes."
+    },
+    {
+      "code": "SEARCH_ERROR",
+      "why": "a retrieval backend failure is answered as INTERNAL_ERROR, so the reader is not told the answer was built without sources.",
+      "raisedBy": "apps/web/lib/search and the retrieval routes."
+    },
+    {
+      "code": "TOOL_ERROR",
+      "why": "a tool failure is carried as a tool status and flattened to INTERNAL_ERROR on the wire.",
+      "raisedBy": "the tool execution path in apps/web/lib/tools."
+    },
+    {
+      "code": "CONNECTOR_ERROR",
+      "why": "a third-party connector failure is answered as SERVICE_UNAVAILABLE, which reads as our outage rather than theirs.",
+      "raisedBy": "apps/web/lib/connectors."
+    },
+    {
+      "code": "SANDBOX_ERROR",
+      "why": "a sandbox that fails to start answers SERVICE_UNAVAILABLE, so a quota problem and a crash look alike.",
+      "raisedBy": "the code execution path in apps/web/lib/sandbox."
+    },
+    {
+      "code": "SAFETY_BLOCKED",
+      "why": "a safety refusal is carried in the answer body rather than as a code, so no log or metric counts it.",
+      "raisedBy": "apps/web/lib/safety and the chat completion route."
+    }
+  ]
+}

@@ -44,6 +44,15 @@
 export type PluginPublisherKind = 'first-party' | 'third-party' | 'partner';
 
 /** Every valid {@link PluginPublisherKind}. */
+/**
+ * The shape a plugin manifest is written against. Three surfaces read the
+ * same JSON, so a reader that meets a higher one refuses the manifest
+ * instead of installing the half it recognises.
+ */
+export const PLUGIN_MANIFEST_SCHEMA_VERSION = 1;
+
+export const PLUGIN_MANIFEST_MIN_SCHEMA_VERSION = 1;
+
 export const PLUGIN_PUBLISHER_KINDS: readonly PluginPublisherKind[] = [
   'first-party',
   'third-party',
