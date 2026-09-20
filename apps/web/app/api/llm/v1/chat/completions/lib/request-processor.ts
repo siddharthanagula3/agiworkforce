@@ -2662,7 +2662,10 @@ export async function processRequest(
   if (chatRequest.mcp_context) {
     try {
       const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
-      if (context) chatRequest.messages.unshift({ role: 'system', content: context });
+      if (context) {
+        chatRequest.messages.unshift({ role: 'system', content: context });
+        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'untrusted_context');
+      }
     } catch (error) {
       if (error instanceof McpContextError) {
         return {
@@ -4155,7 +4158,7 @@ export async function processRequest(
     }
     if (dynamicPreambleBlock) {
       // Inserted after every other leading system message (the client's own
-      // system text, MCP context, JSON/research mode directives) so those
+      // system text, JSON/research mode directives) so those
       // stay ahead of the boundary too: none of them vary with the timestamp
       // or matched skills/memories, so none belong in the uncacheable tail.
       const firstNonSystemIndex = internalMessages.findIndex((msg) => msg.role !== 'system');
