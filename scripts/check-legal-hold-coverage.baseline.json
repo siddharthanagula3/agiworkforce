@@ -1,0 +1,4 @@
+{
+  "note": "Destructive paths that reach a store a legal hold can name and never ask about holds. This list is EMPTY and stays empty: every site now carries the predicate inside the statement that destroys. The guard fails on any new one, and an entry recorded here must carry both a reason and the fix that closes it.",
+  "unguarded": []
+}

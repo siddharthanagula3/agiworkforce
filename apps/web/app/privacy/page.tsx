@@ -643,7 +643,8 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
         <strong>Retention:</strong> about 30 days.
         <br />
         <strong>Enforced by:</strong> a daily scheduled job hard-deletes temporary conversations
-        past the window; messages go with them.
+        past the window; messages go with them. A workspace legal hold that covers a conversation
+        keeps it until the hold is released.
       </>
     ),
   },
@@ -800,7 +801,7 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Temporary chat',
     value:
-      'The composer. A temporary conversation is hard-deleted by a daily job about 30 days later, messages with it.',
+      'The composer. A temporary conversation is hard-deleted by a daily job about 30 days later, messages with it, unless a workspace legal hold covers it.',
   },
   {
     label: 'Delete a conversation or a file',

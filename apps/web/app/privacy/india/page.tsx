@@ -154,7 +154,10 @@ const RETENTION: readonly LedgerRow[] = [
     value:
       'Kept until you delete them or delete your account. There is no automatic expiry on ordinary conversations today, and we will not describe one until it runs.',
   },
-  { label: 'Temporary chats', value: 'About 30 days, hard-deleted by a daily job.' },
+  {
+    label: 'Temporary chats',
+    value: 'About 30 days, hard-deleted by a daily job unless a workspace legal hold covers them.',
+  },
   {
     label: 'Deleted files',
     value: '30 days in the recently-deleted bin, then the underlying objects are removed.',

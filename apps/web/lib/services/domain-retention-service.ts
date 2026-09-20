@@ -10,6 +10,7 @@ import {
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import { legalHoldExclusion, legalHoldPredicate } from './legal-hold-gate';
 import {
   holdCovers,
   listLegalHolds,
@@ -27,9 +28,46 @@ const DOMAIN_HOLD_RESOURCE: Partial<Record<RetentionDomain, LegalHoldResourceTyp
   research: 'conversation',
 };
 
+export function domainHoldResource(domain: RetentionDomain): LegalHoldResourceType | null {
+  return DOMAIN_HOLD_RESOURCE[domain] ?? null;
+}
+
 function holdAppliesTo(hold: LegalHold, domain: RetentionDomain): boolean {
   const resource = DOMAIN_HOLD_RESOURCE[domain];
   return resource === undefined || holdCovers(hold, resource);
+}
+
+// $1 is the workspace and $3 the store, null for a domain no hold vocabulary
+// names and therefore suspended by any hold over the person.
+function heldPredicate(alias: string, negated: boolean): string {
+  const render = negated ? legalHoldExclusion : legalHoldPredicate;
+  return render(null, {
+    alias,
+    nextParamIndex: 3,
+    coversParam: '$3',
+    organization: '$1',
+    owner: `${alias}.user_id`,
+  }).sql;
+}
+
+function notHeld(alias: string): string {
+  return heldPredicate(alias, true);
+}
+
+// The second statement of an object-backed sweep, where $1 is the id list:
+// carried again so a hold placed during object deletion still wins.
+function notHeldById(alias: string): string {
+  return legalHoldExclusion(null, {
+    alias,
+    nextParamIndex: 3,
+    coversParam: '$3',
+    organization: '$2',
+    owner: `${alias}.user_id`,
+  }).sql;
+}
+
+function isHeld(alias: string): string {
+  return heldPredicate(alias, false);
 }
 
 export const DOMAIN_RETENTION_BATCH = 200;
@@ -40,7 +78,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export interface DomainSweepContext {
   organizationId: string;
   cutoff: string;
-  heldUserIds: readonly string[];
+  /** The store a hold must name to suspend this sweep, null for every store. */
+  resourceType: LegalHoldResourceType | null;
   limit: number;
 }
 
@@ -102,18 +141,22 @@ function memberScoped(alias: string): string {
   return `exists (
       select 1 from public.organization_members m
        where m.organization_id = $1 and m.user_id = ${alias}.user_id
-    ) and not (${alias}.user_id = any($3::text[]))`;
+    ) and ${notHeld(alias)}`;
 }
 
 function rowsOnlySweeper(options: { heldSql: string; deleteSql: string }): DomainSweeper {
   return {
     countHeld: (db, context) =>
-      countRows(db, options.heldSql, [context.organizationId, context.cutoff, context.heldUserIds]),
+      countRows(db, options.heldSql, [
+        context.organizationId,
+        context.cutoff,
+        context.resourceType,
+      ]),
     async sweepBatch(db, context) {
       const deleted = await db.query<{ id: string }>(options.deleteSql, [
         context.organizationId,
         context.cutoff,
-        context.heldUserIds,
+        context.resourceType,
         context.limit,
       ]);
       return {
@@ -134,11 +177,15 @@ function objectBackedSweeper(options: {
 }): DomainSweeper {
   return {
     countHeld: (db, context) =>
-      countRows(db, options.heldSql, [context.organizationId, context.cutoff, context.heldUserIds]),
+      countRows(db, options.heldSql, [
+        context.organizationId,
+        context.cutoff,
+        context.resourceType,
+      ]),
     async sweepBatch(db, context) {
       const candidates = await db.query<{ id: string; object_keys: string[] | null }>(
         options.candidatesSql,
-        [context.organizationId, context.cutoff, context.heldUserIds, context.limit],
+        [context.organizationId, context.cutoff, context.resourceType, context.limit],
       );
       if (candidates.length === 0) {
         return { recordsDeleted: 0, objectsDeleted: 0, objectsFailed: 0, candidates: 0 };
@@ -152,7 +199,11 @@ function objectBackedSweeper(options: {
       const removed =
         removable.length === 0
           ? []
-          : await db.query<{ id: string }>(options.deleteSql, [removable]);
+          : await db.query<{ id: string }>(options.deleteSql, [
+              removable,
+              context.organizationId,
+              context.resourceType,
+            ]);
       return {
         recordsDeleted: removed.length,
         objectsDeleted: deleted,
@@ -170,16 +221,16 @@ function artifactsSweeper(): DomainSweeper {
         db,
         `select
            (select count(*) from public.web_artifacts
-             where organization_id = $1 and updated_at < $2 and user_id = any($3::text[]))
+             where organization_id = $1 and updated_at < $2 and ${isHeld('web_artifacts')})
            +
            (select count(*) from public.published_artifacts pa
               join public.web_conversations c on c.id = pa.conversation_id
              where c.organization_id = $1 and pa.updated_at < $2
-               and pa.user_id = any($3::text[])) as count`,
-        [context.organizationId, context.cutoff, context.heldUserIds],
+               and ${isHeld('pa')}) as count`,
+        [context.organizationId, context.cutoff, context.resourceType],
       ),
     async sweepBatch(db, context) {
-      const params = [context.organizationId, context.cutoff, context.heldUserIds, context.limit];
+      const params = [context.organizationId, context.cutoff, context.resourceType, context.limit];
       const published = await db.query<{ id: string }>(
         `delete from public.published_artifacts
           where id in (
@@ -187,7 +238,7 @@ function artifactsSweeper(): DomainSweeper {
               join public.web_conversations c on c.id = pa.conversation_id
              where c.organization_id = $1
                and pa.updated_at < $2
-               and not (pa.user_id = any($3::text[]))
+               and ${notHeld('pa')}
              order by pa.updated_at asc
              limit $4
           )
@@ -200,7 +251,7 @@ function artifactsSweeper(): DomainSweeper {
             select id from public.web_artifacts
              where organization_id = $1
                and updated_at < $2
-               and not (user_id = any($3::text[]))
+               and ${notHeld('web_artifacts')}
              order by updated_at asc
              limit $4
           )
@@ -230,7 +281,7 @@ export function createDomainSweepers(
   return {
     projects: objectBackedSweeper({
       heldSql: `select count(*)::int as count from public.user_projects
-                 where organization_id = $1 and updated_at < $2 and user_id = any($3::text[])`,
+                 where organization_id = $1 and updated_at < $2 and ${isHeld('user_projects')}`,
       candidatesSql: `select p.id,
                              coalesce(array_agg(k.storage_uri) filter (where k.storage_uri is not null),
                                       '{}') as object_keys
@@ -238,11 +289,14 @@ export function createDomainSweepers(
                         left join public.project_knowledge_files k on k.project_id = p.id
                        where p.organization_id = $1
                          and p.updated_at < $2
-                         and not (p.user_id = any($3::text[]))
+                         and ${notHeld('p')}
                        group by p.id, p.updated_at
                        order by p.updated_at asc
                        limit $4`,
-      deleteSql: `delete from public.user_projects where id = any($1::uuid[]) returning id`,
+      deleteSql: `delete from public.user_projects target
+                   where target.id = any($1::uuid[])
+                     and ${notHeldById('target')}
+                   returning target.id`,
       deleteObjects: async (uris) => {
         const keyByUri = new Map<string, string>();
         for (const uri of uris) {
@@ -262,14 +316,14 @@ export function createDomainSweepers(
                  where organization_id = $1
                    and state in ('completed', 'failed', 'cancelled', 'archived')
                    and coalesce(completed_at, updated_at) < $2
-                   and user_id = any($3::text[])`,
+                   and ${isHeld('cloud_agent_runs')}`,
       deleteSql: `delete from public.cloud_agent_runs
                    where id in (
                      select id from public.cloud_agent_runs
                       where organization_id = $1
                         and state in ('completed', 'failed', 'cancelled', 'archived')
                         and coalesce(completed_at, updated_at) < $2
-                        and not (user_id = any($3::text[]))
+                        and ${notHeld('cloud_agent_runs')}
                       order by updated_at asc
                       limit $4
                    )
@@ -280,14 +334,14 @@ export function createDomainSweepers(
                  where organization_id = $1
                    and state in ('failed', 'closed')
                    and coalesce(closed_at, updated_at) < $2
-                   and user_id = any($3::text[])`,
+                   and ${isHeld('cloud_code_sessions')}`,
       deleteSql: `delete from public.cloud_code_sessions
                    where id in (
                      select id from public.cloud_code_sessions
                       where organization_id = $1
                         and state in ('failed', 'closed')
                         and coalesce(closed_at, updated_at) < $2
-                        and not (user_id = any($3::text[]))
+                        and ${notHeld('cloud_code_sessions')}
                       order by updated_at asc
                       limit $4
                    )
@@ -295,17 +349,21 @@ export function createDomainSweepers(
     }),
     files: objectBackedSweeper({
       heldSql: `select count(*)::int as count from public.media_assets
-                 where organization_id = $1 and created_at < $2 and user_id = any($3::text[])`,
+                 where organization_id = $1 and created_at < $2
+                   and ${isHeld('media_assets')}`,
       candidatesSql: `select id,
                              case when storage_pathname is null then '{}'::text[]
                                   else array[storage_pathname] end as object_keys
                         from public.media_assets
                        where organization_id = $1
                          and created_at < $2
-                         and not (user_id = any($3::text[]))
+                         and ${notHeld('media_assets')}
                        order by created_at asc
                        limit $4`,
-      deleteSql: `delete from public.media_assets where id = any($1::uuid[]) returning id`,
+      deleteSql: `delete from public.media_assets target
+                   where target.id = any($1::uuid[])
+                     and ${notHeldById('target')}
+                   returning target.id`,
       deleteObjects: media,
     }),
     artifacts: artifactsSweeper(),
@@ -314,7 +372,7 @@ export function createDomainSweepers(
                  where t.revoked_at is not null and t.revoked_at < $2
                    and exists (select 1 from public.organization_members m
                                 where m.organization_id = $1 and m.user_id = t.user_id)
-                   and t.user_id = any($3::text[])`,
+                   and ${isHeld('t')}`,
       deleteSql: `delete from public.connector_oauth_grants
                    where id in (
                      select t.id from public.connector_oauth_grants t
@@ -331,7 +389,7 @@ export function createDomainSweepers(
                  where t.status in ('revoked', 'expired') and t.updated_at < $2
                    and exists (select 1 from public.organization_members m
                                 where m.organization_id = $1 and m.user_id = t.user_id)
-                   and t.user_id = any($3::text[])`,
+                   and ${isHeld('t')}`,
       deleteSql: `delete from public.device_pairings
                    where id in (
                      select t.id from public.device_pairings t
@@ -348,7 +406,7 @@ export function createDomainSweepers(
                  where t.created_at < $2
                    and exists (select 1 from public.organization_members m
                                 where m.organization_id = $1 and m.user_id = t.user_id)
-                   and t.user_id = any($3::text[])`,
+                   and ${isHeld('t')}`,
       deleteSql: `delete from public.notifications
                    where id in (
                      select t.id from public.notifications t
@@ -369,7 +427,7 @@ export function createDomainSweepers(
                  where t.created_at < $2
                    and exists (select 1 from public.organization_members m
                                 where m.organization_id = $1 and m.user_id = t.user_id)
-                   and t.user_id = any($3::text[])`,
+                   and ${isHeld('t')}`,
       deleteSql: `delete from public.research_reports
                    where id in (
                      select t.id from public.research_reports t
@@ -464,9 +522,7 @@ export async function sweepOrganizationDomain(
   const context: DomainSweepContext = {
     organizationId: policy.organizationId,
     cutoff: base.cutoff,
-    heldUserIds: holds
-      .filter((hold) => hold.scope === 'member' && hold.subjectUserId)
-      .map((hold) => hold.subjectUserId as string),
+    resourceType: domainHoldResource(policy.domain),
     limit: DOMAIN_RETENTION_BATCH,
   };
 

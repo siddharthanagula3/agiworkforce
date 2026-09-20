@@ -6,6 +6,7 @@ import {
   MANAGED_CLOUD_MESSAGE_SUBTREE_VALUE,
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
+import { legalHoldExclusion, refuseHeldDeletion } from '@/lib/services/legal-hold-gate';
 
 export type ThreadScope = {
   conversationId: string;
@@ -354,15 +355,31 @@ export async function resolveSurvivingLeaf(
   return deepest?.id ?? sibling.id;
 }
 
+// A short count means the statement declined a row, which can only be a hold,
+// so the whole transaction is refused rather than left spliced around it.
 export async function deleteMessages(
   tx: DatabaseAdapter,
   conversationId: string,
   messageIds: string[],
+  scope?: ThreadScope,
 ): Promise<void> {
-  await tx.execute('delete from web_messages where conversation_id = $1 and id = any($2::uuid[])', [
-    conversationId,
-    messageIds,
-  ]);
+  const exclusion = legalHoldExclusion('message', { alias: 'm', nextParamIndex: 3 });
+  const deleted = await tx.query<{ id: string }>(
+    `delete from web_messages m
+      where m.conversation_id = $1 and m.id = any($2::uuid[])
+        and ${exclusion.sql}
+      returning m.id`,
+    [conversationId, messageIds, ...exclusion.params],
+  );
+  if (deleted.length === messageIds.length) return;
+
+  const kept = new Set(deleted.map((row) => row.id));
+  await refuseHeldDeletion({
+    resourceType: 'message',
+    resourceId: messageIds.find((id) => !kept.has(id)) ?? conversationId,
+    userId: scope?.userId ?? '',
+    organizationId: scope?.organizationId ?? null,
+  });
 }
 
 export function isHttpError(error: unknown): boolean {

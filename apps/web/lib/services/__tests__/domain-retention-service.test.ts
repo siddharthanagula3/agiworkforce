@@ -176,7 +176,7 @@ describe('per-domain retention sweep', () => {
     expect(sweepInsert(calls)?.params[4]).toBe('held');
   });
 
-  it('exempts a member under hold and reports what was withheld', async () => {
+  it('leaves the hold to the statement and reports what it withheld', async () => {
     const { db, calls } = fakeDb((sql) => {
       if (/count\(\*\)/.test(sql)) return [{ count: 3 }];
       if (/delete from public\.notifications/.test(sql)) return [{ id: 'n1' }];
@@ -190,9 +190,11 @@ describe('per-domain retention sweep', () => {
     );
 
     const deletion = calls.find((call) => /delete from public\.notifications/.test(call.sql));
-    expect(deletion?.sql).toMatch(/not \(t\.user_id = any\(\$3::text\[\]\)\)/);
+    expect(deletion?.sql).toMatch(/not exists/);
+    expect(deletion?.sql).toMatch(/legal_hold_custodians/);
     expect(deletion?.sql).toMatch(/organization_members/);
-    expect(deletion?.params[2]).toEqual(['held-user']);
+    // A store no hold vocabulary names, so any hold over the person suspends it.
+    expect(deletion?.params[2]).toBeNull();
     expect(result).toMatchObject({ outcome: 'deleted', recordsDeleted: 1, recordsHeld: 3 });
   });
 
@@ -222,7 +224,7 @@ describe('per-domain retention sweep', () => {
         .sweepBatch(db, {
           organizationId: ORG,
           cutoff: NOW.toISOString(),
-          heldUserIds: [],
+          resourceType: null,
           limit: 1,
         })
         .then(() => calls.map((call) => call.sql).join('\n'));
@@ -238,14 +240,15 @@ describe('per-domain retention sweep', () => {
     await createDomainSweepers().research.sweepBatch(db, {
       organizationId: ORG,
       cutoff: NOW.toISOString(),
-      heldUserIds: ['held-user'],
+      resourceType: 'conversation',
       limit: 1,
     });
 
     const sql = calls.map((call) => call.sql).join('\n');
     expect(sql).toMatch(/delete from public\.research_reports/);
     expect(sql).toMatch(/organization_members/);
-    expect(sql).toMatch(/not \(t\.user_id = any\(\$3::text\[\]\)\)/);
+    expect(sql).toMatch(/not exists/);
+    expect(sql).toMatch(/legal_hold_custodians/);
   });
 
   it('stops after a short batch instead of looping to the ceiling', async () => {

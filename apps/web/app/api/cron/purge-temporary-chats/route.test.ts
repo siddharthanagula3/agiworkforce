@@ -35,7 +35,11 @@ describe('GET /api/cron/purge-temporary-chats', () => {
   });
 
   it('retires the files a temporary chat received on the same clock as the chat', async () => {
-    mockQuery.mockResolvedValueOnce([{ count: 3 }]).mockResolvedValueOnce([{ count: 2 }]);
+    mockQuery
+      .mockResolvedValueOnce([{ count: 0 }])
+      .mockResolvedValueOnce([{ count: 0 }])
+      .mockResolvedValueOnce([{ count: 3 }])
+      .mockResolvedValueOnce([{ count: 2 }]);
 
     const response = await GET(cronRequest());
     const body = (await response.json()) as { purged: number; attachmentsRetired: number };
@@ -44,12 +48,16 @@ describe('GET /api/cron/purge-temporary-chats', () => {
     expect(body.purged).toBe(3);
     expect(body.attachmentsRetired).toBe(2);
 
-    const [conversationSql, conversationParams] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const purges = mockQuery.mock.calls.filter(
+      ([sql]) => !/count\(\*\)::int as count\s+from public\.\w+ candidate/i.test(String(sql)),
+    ) as Array<[string, unknown[]]>;
+    const [conversationSql, conversationParams] = purges[0] as [string, unknown[]];
     expect(conversationSql).toMatch(/delete from web_conversations/i);
-    const [mediaSql, mediaParams] = mockQuery.mock.calls[1] as [string, unknown[]];
+    const [mediaSql, mediaParams] = purges[1] as [string, unknown[]];
     expect(mediaSql).toMatch(/update public\.media_assets/i);
     expect(mediaSql).toMatch(/set deleted_at = now\(\)/i);
-    expect(mediaSql).toMatch(/where temporary_chat/i);
+    expect(mediaSql).toMatch(/candidate\.temporary_chat/i);
+    expect(mediaSql).toMatch(/legal_hold_custodians/i);
     expect(mediaParams[0]).toBe(conversationParams[0]);
   });
 
@@ -58,7 +66,13 @@ describe('GET /api/cron/purge-temporary-chats', () => {
 
     await GET(cronRequest());
 
-    const mediaSql = String((mockQuery.mock.calls[1] as [string])[0]);
+    const mediaSql = String(
+      (
+        mockQuery.mock.calls.filter(
+          ([sql]) => !/count\(\*\)::int as count\s+from public\.\w+ candidate/i.test(String(sql)),
+        )[1] as [string]
+      )[0],
+    );
     expect(mediaSql).not.toMatch(/delete from public\.media_assets/i);
   });
 });

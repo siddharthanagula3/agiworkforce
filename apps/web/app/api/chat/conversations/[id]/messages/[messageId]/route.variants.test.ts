@@ -63,7 +63,13 @@ function givenDatabase(responders: Responder[]) {
   const answer = async (sql: string, params: unknown[] = []) => {
     log.push({ sql, params });
     const responder = responders.find((candidate) => candidate.match.test(sql));
-    return responder ? responder.rows : [];
+    if (responder) return responder.rows;
+    // The delete returns the rows it took, because a short count is how the
+    // route learns a legal hold declined one of them.
+    if (REMOVE.test(sql)) {
+      return ((params[1] as string[] | undefined) ?? []).map((id) => ({ id }));
+    }
+    return [];
   };
   mocks.query.mockImplementation(answer);
   mocks.execute.mockImplementation(async (sql: string, params: unknown[] = []) => {
@@ -113,7 +119,8 @@ describe('DELETE /api/chat/conversations/[id]/messages/[messageId], splice', () 
 
     expect(response.status).toBe(200);
     expect(entry(SPLICE)?.params).toEqual([PARENT_ID, CONVERSATION_ID, MESSAGE_ID]);
-    expect(entry(REMOVE)?.params).toEqual([CONVERSATION_ID, [MESSAGE_ID]]);
+    // The third parameter is the store the hold predicate asks about.
+    expect(entry(REMOVE)?.params).toEqual([CONVERSATION_ID, [MESSAGE_ID], 'message']);
     expect(orderOf(SPLICE)).toBeLessThan(orderOf(REMOVE));
   });
 
@@ -141,7 +148,8 @@ describe('DELETE /api/chat/conversations/[id]/messages/[messageId], splice', () 
 
     expect(entry(LEAF_SET)).toBeUndefined();
     expect(entry(SUBTREE)).toBeUndefined();
-    expect(entry(REMOVE)?.params).toEqual([CONVERSATION_ID, [MESSAGE_ID]]);
+    // The third parameter is the store the hold predicate asks about.
+    expect(entry(REMOVE)?.params).toEqual([CONVERSATION_ID, [MESSAGE_ID], 'message']);
   });
 
   it('refuses a message that is not in this conversation and deletes nothing', async () => {
@@ -172,7 +180,7 @@ describe('DELETE /api/chat/conversations/[id]/messages/[messageId], subtree', ()
     const response = await DELETE(request(true), context);
 
     expect(response.status).toBe(200);
-    expect(entry(REMOVE)?.params).toEqual([CONVERSATION_ID, [MESSAGE_ID, CHILD_ID]]);
+    expect(entry(REMOVE)?.params).toEqual([CONVERSATION_ID, [MESSAGE_ID, CHILD_ID], 'message']);
     expect(entry(SPLICE)).toBeUndefined();
     expect(entry(LEAF_SET)).toBeUndefined();
   });

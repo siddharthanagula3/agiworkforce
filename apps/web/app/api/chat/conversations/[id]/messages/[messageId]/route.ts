@@ -165,7 +165,7 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
         leafId = await resolveSurvivingLeaf(tx, conversationId, messageId, target.parent_id);
         await setActiveLeaf(tx, threadScope, leafId);
       }
-      await deleteMessages(tx, conversationId, doomed);
+      await deleteMessages(tx, conversationId, doomed, threadScope);
       return leafId;
     }
 
@@ -175,7 +175,7 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
       leafId = target.parent_id;
       await setActiveLeaf(tx, threadScope, leafId);
     }
-    await deleteMessages(tx, conversationId, [messageId]);
+    await deleteMessages(tx, conversationId, [messageId], threadScope);
     return leafId;
   });
 
