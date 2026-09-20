@@ -113,7 +113,25 @@ test('CI propagates coverage failures and uploads only explicit coverage reports
   const artifact = steps.find((step) => step.name === 'Preserve coverage evidence');
   assert.equal(artifact.with['if-no-files-found'], 'error');
   assert.equal(
-    steps.find((step) => step.name === 'Upload Coverage to Codecov').with.disable_search,
+    workflow.jobs['upload-coverage'].steps.find(
+      (step) => step.name === 'Upload Coverage to Codecov',
+    ).with.disable_search,
     true,
   );
+});
+
+test('only the isolated main-push uploader receives OIDC permission', () => {
+  const workflow = parse(
+    fs.readFileSync(new URL('../.github/workflows/test-l1.yml', import.meta.url), 'utf8'),
+  );
+  assert.equal(workflow.permissions['id-token'], undefined);
+  assert.equal(workflow.jobs['test-l1'].permissions?.['id-token'], undefined);
+  const job = workflow.jobs['upload-coverage'];
+  assert.equal(job.needs, 'test-l1');
+  assert.ok(job.if.includes("github.event_name == 'push'"));
+  assert.deepEqual(job.permissions, { contents: 'read', 'id-token': 'write' });
+  assert.ok(job.steps.every((step) => !step.run));
+  const upload = job.steps.find((step) => step.name === 'Upload Coverage to Codecov');
+  assert.equal(upload.with.use_oidc, true);
+  assert.equal(upload.with.fail_ci_if_error, true);
 });

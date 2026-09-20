@@ -87,15 +87,6 @@ jobs:
             coverage/coverage-summary.json
           if-no-files-found: error
 
-      - name: Upload Coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
-        with:
-          files: ./coverage/coverage-final.json
-          disable_search: true
-          fail_ci_if_error: false
-          verbose: true
-
       - name: Verify Boundaries
         if: always()
         run: pnpm check:boundaries
@@ -103,3 +94,30 @@ jobs:
       - name: Verify LLM Failures
         if: always()
         run: pnpm check:llm-failures:staged
+
+  upload-coverage:
+    needs: test-l1
+    if: ${{ always() && github.event_name == 'push' && needs.test-l1.result != 'cancelled' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout source identity
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Download coverage evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: coverage
+          path: coverage
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage/coverage-final.json
+          disable_search: true
+          use_oidc: true
+          fail_ci_if_error: true
+          verbose: true

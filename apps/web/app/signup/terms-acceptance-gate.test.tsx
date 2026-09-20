@@ -34,9 +34,17 @@ const signInState = vi.hoisted(() => ({
   reset: vi.fn(),
 }));
 
+const clerkState = vi.hoisted(() => ({
+  loaded: true,
+  on: vi.fn((_event: string, listener: () => void, options?: { notify?: boolean }) => {
+    if (options?.notify) listener();
+  }),
+  off: vi.fn(),
+}));
+
 vi.mock('@clerk/nextjs', () => ({
   AuthenticateWithRedirectCallback: () => null,
-  useClerk: () => ({ loaded: true }),
+  useClerk: () => clerkState,
   useSignIn: () => ({ signIn: signInState, errors: null, fetchStatus: 'idle' }),
   useSignUp: () => ({ signUp: signUpState, errors: null, fetchStatus: 'idle' }),
 }));
