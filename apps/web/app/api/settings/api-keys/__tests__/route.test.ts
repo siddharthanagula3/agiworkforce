@@ -36,6 +36,28 @@ function params(keyId: string) {
   return { params: Promise.resolve({ keyId }) };
 }
 
+function createRequest(body: Record<string, unknown>) {
+  return req('http://localhost:3000/api/settings/api-keys', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+function createdRow(expiresAt: string | null) {
+  return {
+    id: KEY_ID,
+    user_id: 'user-1',
+    name: 'New key',
+    key_hash: 'hash',
+    key_prefix: 'abc123',
+    scopes: ['models:read'],
+    last_used_at: null,
+    expires_at: expiresAt,
+    revoked_at: null,
+    created_at: '2026-06-01T00:00:00.000Z',
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetUserScopedDb.mockResolvedValue({
@@ -98,6 +120,54 @@ describe('creating an API key', () => {
     expect(mockAudit).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1', eventType: 'api_key_created' }),
     );
+  });
+
+  it('writes no expiry when the caller asks for none', async () => {
+    mockQuery.mockResolvedValueOnce([{ count: '0' }]).mockResolvedValueOnce([createdRow(null)]);
+
+    const response = await POST(createRequest({ name: 'New key', scopes: ['models:read'] }));
+
+    expect(response.status).toBe(201);
+    expect(mockQuery.mock.calls[1]?.[1]).toHaveLength(6);
+    expect((mockQuery.mock.calls[1]?.[1] as unknown[])[5]).toBeNull();
+  }, 20000);
+
+  it('carries the expiry the caller asked for into the insert and the response', async () => {
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    mockQuery
+      .mockResolvedValueOnce([{ count: '0' }])
+      .mockResolvedValueOnce([createdRow(expiresAt)]);
+
+    const response = await POST(
+      createRequest({ name: 'New key', scopes: ['models:read'], expiresAt }),
+    );
+
+    expect(response.status).toBe(201);
+    expect((mockQuery.mock.calls[1]?.[1] as unknown[])[5]).toBe(expiresAt);
+    const body = (await response.json()) as { api_key: { expires_at: string | null } };
+    expect(body.api_key.expires_at).toBe(expiresAt);
+    expect(mockAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ expiresAt }) }),
+    );
+  }, 20000);
+
+  it('refuses an expiry in the past without creating anything', async () => {
+    mockQuery.mockResolvedValueOnce([{ count: '0' }]);
+
+    const response = await POST(
+      createRequest({
+        name: 'New key',
+        scopes: ['models:read'],
+        expiresAt: new Date(Date.now() - 1000).toISOString(),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO api_keys'),
+      expect.anything(),
+    );
+    expect(mockAudit).not.toHaveBeenCalled();
   });
 });
 

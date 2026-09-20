@@ -21,6 +21,7 @@ const CreateKeySchema = z.object({
     .min(1, 'Select at least one scope')
     .max(API_KEY_SCOPE_VALUES.length)
     .refine((scopes) => new Set(scopes).size === scopes.length, 'Scopes must be unique'),
+  expiresAt: z.string().datetime().nullish(),
 });
 
 function maskRow(row: ApiKeyRow) {
@@ -31,6 +32,7 @@ function maskRow(row: ApiKeyRow) {
     scopes: resolveApiKeyScopes(row.scopes),
     created_at: row.created_at,
     last_used_at: row.last_used_at ?? null,
+    expires_at: row.expires_at ?? null,
   };
 }
 
@@ -69,6 +71,8 @@ async function handleCreate(request: NextRequest) {
   }
   const { name, scopes } = parsed.data;
 
+  const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
+
   const [countRow] = await db.query<{ count: string }>(
     `select count(*) as count from public.api_keys where user_id = $1 and revoked_at is null`,
     [userId],
@@ -78,7 +82,13 @@ async function handleCreate(request: NextRequest) {
     throw createError.validation('You may not have more than 20 active API keys at once');
   }
 
-  const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(db, userId, name, scopes);
+  const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(
+    db,
+    userId,
+    name,
+    scopes,
+    expiresAt,
+  );
 
   logger.info({ userId, keyId: row.id }, 'API key created');
 
@@ -91,6 +101,7 @@ async function handleCreate(request: NextRequest) {
       resourceId: row.id,
       resourceName: name,
       scopes: resolveApiKeyScopes(row.scopes),
+      ...(expiresAt ? { expiresAt: expiresAt.toISOString() } : {}),
     },
   });
 

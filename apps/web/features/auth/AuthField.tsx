@@ -1,7 +1,7 @@
 'use client';
 
 import type { InputHTMLAttributes, ReactNode } from 'react';
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 
 import {
   AUTH_ERROR_CLASS,
@@ -27,6 +27,21 @@ export function AuthField({
   const errorId = `${fieldId}-error`;
   const hintId = `${fieldId}-hint`;
   const described = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(' ');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const wasErrored = useRef(false);
+
+  // Submitting leaves focus on the button, so the message the field just grew
+  // is behind whoever is reading the page rather than in front of them.
+  useEffect(() => {
+    const errored = Boolean(error);
+    if (errored && !wasErrored.current) {
+      const active = document.activeElement;
+      const alreadyOnAnErroredField =
+        active instanceof HTMLInputElement && active.getAttribute('aria-invalid') === 'true';
+      if (!alreadyOnAnErroredField && active !== inputRef.current) inputRef.current?.focus();
+    }
+    wasErrored.current = errored;
+  }, [error]);
 
   return (
     <div>
@@ -36,6 +51,7 @@ export function AuthField({
       <div className="relative mt-2">
         <input
           {...input}
+          ref={inputRef}
           id={fieldId}
           className={`${AUTH_INPUT_CLASS}${trailing ? ' pr-14' : ''}`}
           aria-invalid={error ? true : undefined}
