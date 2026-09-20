@@ -6,6 +6,7 @@
 import process from 'node:process';
 import {
   CONTEXT_LOADER,
+  findUncheckedProjectContextLoads,
   findUnloadedProjectRenders,
   findUnscopedProjectReads,
   projectScopedTables,
@@ -36,10 +37,30 @@ export function renderers(repoRoot) {
   return repoRoot ? findUnloadedProjectRenders(repoRoot) : findUnloadedProjectRenders();
 }
 
+export function uncheckedLoads(repoRoot) {
+  return repoRoot ? findUncheckedProjectContextLoads(repoRoot) : findUncheckedProjectContextLoads();
+}
+
 function main() {
   const tables = [...projectScopedTables()].sort();
   const violations = run();
   const unloaded = renderers();
+  const unchecked = uncheckedLoads();
+
+  if (unchecked.length > 0) {
+    console.error(`Callers of ${CONTEXT_LOADER} that do not handle a null project:\n`);
+    for (const finding of unchecked) {
+      console.error(
+        `  ${finding.file}:${finding.line}` +
+          (finding.binding ? `  (${finding.binding} is never tested)` : '  (result is not bound)'),
+      );
+    }
+    console.error(
+      '\nThe loader answers null for a project that is archived, deleted, or not this\n' +
+        'account\u2019s. Refuse the turn instead of running without the project.',
+    );
+    process.exit(1);
+  }
 
   if (unloaded.length > 0) {
     console.error('Project prompts built without the scoped loader:\n');
@@ -66,7 +87,7 @@ function main() {
   console.log(
     `check-project-context-boundary: ${tables.length} project-scoped tables, ` +
       `${BASELINE.length} recorded exception(s), no unscoped project reads, ` +
-      `every project prompt built through ${CONTEXT_LOADER}.`,
+      `every project prompt built through ${CONTEXT_LOADER}, every load null-checked.`,
   );
 }
 

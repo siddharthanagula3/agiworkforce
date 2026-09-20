@@ -150,6 +150,68 @@ export const CONTEXT_RENDERERS = Object.freeze([
 ]);
 
 /**
+ * The loader answers null for a project that is archived, deleted, or no longer
+ * this account's, so a caller that does not test the result runs unscoped.
+ */
+function handlesNull(source, name) {
+  return new RegExp(
+    [
+      `!\\s*${name}\\b`,
+      `\\bif\\s*\\(\\s*${name}\\s*\\)`,
+      `\\b${name}\\s*(?:===|!==|==|!=)\\s*null`,
+      `\\b${name}\\s*\\?`,
+      `\\b${name}\\s*&&`,
+    ].join('|'),
+  ).test(source);
+}
+
+/**
+ * How far past the call the test may sit. A null test further away than this is
+ * not guarding this call, and the same name is often a parameter elsewhere.
+ */
+const NULL_CHECK_WINDOW_LINES = 25;
+
+function windowAfter(source, index) {
+  const rest = source.slice(index);
+  return rest.split('\n').slice(0, NULL_CHECK_WINDOW_LINES).join('\n');
+}
+
+export function findUncheckedProjectContextLoads(
+  repoRoot = REPO_ROOT,
+  files = productionFiles(repoRoot),
+) {
+  const findings = [];
+  const call = new RegExp(`\\b${CONTEXT_LOADER}\\s*\\(`, 'g');
+  const assignment = new RegExp(
+    `(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=]+)?=[^;]*?\\b${CONTEXT_LOADER}\\s*\\($`,
+  );
+
+  for (const relative of files) {
+    if (relative.endsWith('lib/services/project-context-service.ts')) continue;
+    let source;
+    try {
+      source = stripComments(readFileSync(path.join(repoRoot, relative), 'utf8'));
+    } catch {
+      continue;
+    }
+    call.lastIndex = 0;
+    let match;
+    while ((match = call.exec(source))) {
+      const line = source.slice(0, match.index).split('\n').length;
+      const assigned = assignment.exec(source.slice(0, match.index + match[0].length));
+      if (!assigned) {
+        findings.push({ file: relative, line, binding: null });
+        continue;
+      }
+      if (!handlesNull(windowAfter(source, match.index), assigned[1])) {
+        findings.push({ file: relative, line, binding: assigned[1] });
+      }
+    }
+  }
+  return findings;
+}
+
+/**
  * Modules that render a project into a prompt without loading it through the
  * scoped loader, which is how an unscoped project reaches a model.
  */

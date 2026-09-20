@@ -8,7 +8,13 @@ import {
 } from '@agiworkforce/context-engine';
 import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { getModelMetadataById, getSlotForModel, getTierPolicy } from '@agiworkforce/types';
+import {
+  DomainErrorCode,
+  getModelMetadataById,
+  getSlotForModel,
+  getTierPolicy,
+  type DomainErrorCodeValue,
+} from '@agiworkforce/types';
 import {
   ADAPTER_PROVIDERS,
   resolveWireMode,
@@ -89,6 +95,24 @@ const SCHEDULED_TASK_DIRECTIVE =
   'No one is watching this run, so never ask a question or wait for input: use the tools ' +
   'you have, and if a step is impossible say so in the result. ' +
   'Do not claim to have performed external actions unless a tool result proves it.';
+
+/**
+ * A run bound to a project its owner can no longer read: archived, deleted, or
+ * outside the workspace the task now belongs to. The chat route refuses the same
+ * state rather than answering without the project, and nobody is watching this
+ * one, so it ends before it spends anything.
+ */
+export class ScheduledProjectContextUnavailableError extends Error {
+  readonly code: DomainErrorCodeValue = DomainErrorCode.RESOURCE_DELETED;
+
+  constructor(readonly projectId: string) {
+    super(
+      'This scheduled task is bound to a project that is archived, deleted, or no longer readable. ' +
+        'The run was stopped before it called a model. Restore the project, or remove it from the task.',
+    );
+    this.name = 'ScheduledProjectContextUnavailableError';
+  }
+}
 
 function validateAgentTask(task: ScheduleTask): string {
   if (task.actionType !== 'agent') {
@@ -555,6 +579,9 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   const projectContext = task.projectId
     ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
     : null;
+  if (task.projectId && !projectContext) {
+    throw new ScheduledProjectContextUnavailableError(task.projectId);
+  }
   const resolved = await resolveScheduledContext({ task, runId, scope, projectContext });
   const systemPrompt = [
     resolved.projectPrompt,
