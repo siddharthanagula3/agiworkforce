@@ -84,7 +84,7 @@ function transcriptionRequest(
   const webmMagic = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]);
   const content = bytes ?? new Uint8Array([...webmMagic, ...new Uint8Array(32)]);
   const body = new FormData();
-  body.append('file', new Blob([content], { type: mimeType }), 'a.webm');
+  body.append('file', new Blob([content.slice().buffer], { type: mimeType }), 'a.webm');
   return new NextRequest('http://localhost/api/llm/v1/audio/transcriptions', {
     method: 'POST',
     body,

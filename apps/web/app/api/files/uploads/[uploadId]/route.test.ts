@@ -93,7 +93,7 @@ describe('PUT a part', () => {
   it('sends a stored part to the configured malware scanner', async () => {
     vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
     const fetchMock = vi.fn(
-      async () =>
+      async (_input: RequestInfo | URL) =>
         new Response(JSON.stringify({ safe: true }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
