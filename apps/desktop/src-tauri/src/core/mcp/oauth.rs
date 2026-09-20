@@ -455,7 +455,7 @@ impl McpOAuthManager {
         let token_result = client
             .exchange_code(AuthorizationCode::new(code.to_string()))
             .set_pkce_verifier(PkceCodeVerifier::new(pending.verifier))
-            .request_async(oauth2::reqwest::async_http_client)
+            .request_async(crate::sys::security::egress_policy::send_configured_oauth_request)
             .await
             .map_err(|e| {
                 McpError::ConnectionError(format!("OAuth token exchange failed: {}", e))
@@ -622,7 +622,7 @@ impl McpOAuthManager {
 
         let token_result = client
             .exchange_refresh_token(&oauth2::RefreshToken::new(refresh_token.to_string()))
-            .request_async(oauth2::reqwest::async_http_client)
+            .request_async(crate::sys::security::egress_policy::send_configured_oauth_request)
             .await
             .map_err(|e| {
                 McpError::ConnectionError(format!(

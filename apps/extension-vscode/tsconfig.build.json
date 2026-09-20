@@ -4,7 +4,11 @@
     "composite": true,
     "declaration": true,
     "declarationDir": "./out/types",
+    "emitDeclarationOnly": true,
     "noEmit": false
   },
-  "references": [{ "path": "../../packages/contracts/types" }, { "path": "../../packages/client/client-runtime" }]
+  "references": [
+    { "path": "../../packages/contracts/types" },
+    { "path": "../../packages/client/client-runtime" }
+  ]
 }

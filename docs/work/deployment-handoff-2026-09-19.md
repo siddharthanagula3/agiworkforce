@@ -971,3 +971,48 @@ Next: push this JavaScript follow-up with hooks enabled, then inspect CI,
 CodeQL and dependency alerts for the resulting commit. Passing local checks
 must not be described as a verified green remote pipeline. The independent
 production-backup prerequisite above remains unresolved.
+
+### Subsequent CI findings and unsuppressed dependency audit
+
+Remote `b8ebbb886` contains the 84-test web follow-up. The next run exposed
+React 19 type identity drift and VS Code's legacy CommonJS TypeScript handling
+of shared JSON import attributes. Workspace React types are now aligned at
+19.3.0. VS Code typechecking uses bundler resolution; integration test bundles
+use the existing esbuild pipeline and retain strict typechecking. The public
+DOMPurify Config type replaces its CommonJS-only namespace reference, with no
+sanitizer-policy change. All 62 workspace typecheck tasks pass; the forced VS
+Code project-reference build passes; all 221 webview tests and all nine packaged
+VSIX/real CLI integration tests pass. A mismatched local VS Code cache contained
+1.137.0 under a 1.131.0 directory; it was preserved outside the cache and the
+actual pinned version was downloaded before the successful run.
+
+The Typesafe skill integrity failure came from Markdown table formatting after
+its original hash was recorded. The pinned upstream skill, formatted with the
+repository's Prettier, is byte-identical to the checked-in skill. Regeneration
+changed only that skill's hash; integrity verification now passes.
+
+An independent Rust audit run outside the repository (ignore list empty)
+identified one previously suppressed vulnerability: RUSTSEC-2026-0258 in h2
+0.3.27. The all-target/all-feature dependency graph identified oauth2's bundled
+reqwest 0.11 as the sole remaining source. The adapter now uses the existing
+reqwest 0.13 transport through the host egress owner, retaining configured
+local/private OAuth endpoints, certificate verification, request/response data
+and disabled redirects. All four code/refresh exchange sites use it. Cargo
+removed the obsolete HTTP stack; the vulnerability suppression and its policy
+registration were deleted. Both unsuppressed Rust and JavaScript dependency
+audits now report zero vulnerability-class findings. Rust still reports
+maintenance, unsoundness (glib) and yanked-crate warnings; this is not a claim
+that those warnings or all security risks are gone.
+
+The independent transport review found no new bypass or regression, and
+identified an existing unbounded body read. The final adapter reuses the shared
+MCP OAuth bounded reader for that response. The initial 72 OAuth cases, 19
+egress cases, Rust library Clippy and dependency bans/licenses/sources checks
+passed. The four final transport regressions pass, including rejection above
+the canonical OAuth response-size ceiling; the final lint rerun is pending.
+
+Jev selected the shared transport at 0.98 confidence (fingerprint
+`f17c00a5402d49cd29c5bcfa2fb9b83ff61c9b83d2fc33484c984aaa35837727`),
+and bundler-based VS Code compilation / React type alignment at 0.99 / 1.00
+(fingerprint `62b793fb7f3d804f653d10d576a573fde4b50521c6a53ec58f1f2a8f80d1ffd8`).
+Remote CI and CodeQL still require verification after this batch is pushed.

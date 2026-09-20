@@ -479,6 +479,47 @@ impl Default for PublicHttpClient {
     }
 }
 
+// Configured OAuth servers may be local or private. Never follow redirects:
+// a 307/308 could forward the client secret or refresh token to another origin.
+pub async fn send_configured_oauth_request(
+    request: oauth2::HttpRequest,
+) -> Result<oauth2::HttpResponse, std::io::Error> {
+    let config = crate::core::llm::providers::http_client_factory::HttpClientConfig::default();
+    let mut builder = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(std::time::Duration::from_secs(config.connect_timeout_secs));
+    if let Some(seconds) = config.read_timeout_secs {
+        builder = builder.timeout(std::time::Duration::from_secs(seconds));
+    }
+    let client = builder.build().map_err(std::io::Error::other)?;
+    let method = reqwest::Method::from_bytes(request.method.as_str().as_bytes())
+        .map_err(std::io::Error::other)?;
+    let mut outgoing = client.request(method, request.url).body(request.body);
+    for (name, value) in &request.headers {
+        outgoing = outgoing.header(name.as_str(), value.as_bytes());
+    }
+    let response = outgoing.send().await.map_err(std::io::Error::other)?;
+    let status_code = oauth2::http::StatusCode::from_u16(response.status().as_u16())
+        .map_err(std::io::Error::other)?;
+    let mut headers = oauth2::http::HeaderMap::new();
+    for (name, value) in response.headers() {
+        headers.append(
+            oauth2::http::header::HeaderName::from_bytes(name.as_str().as_bytes())
+                .map_err(std::io::Error::other)?,
+            oauth2::http::HeaderValue::from_bytes(value.as_bytes())
+                .map_err(std::io::Error::other)?,
+        );
+    }
+    let body = agiworkforce_mcp::security::read_body_capped(response, "OAuth token")
+        .await
+        .map_err(std::io::Error::other)?;
+    Ok(oauth2::HttpResponse {
+        status_code,
+        headers,
+        body,
+    })
+}
+
 /// True when two URLs share scheme, host and effective port.
 fn same_origin(left: &url::Url, right: &url::Url) -> bool {
     left.scheme() == right.scheme()
@@ -503,6 +544,169 @@ pub(crate) fn leading_ipv4_literal(domain: &str) -> Option<Ipv4Addr> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    async fn oauth_fixture(
+        status: &str,
+        headers: &str,
+        body: &str,
+    ) -> (url::Url, tokio::task::JoinHandle<String>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url =
+            url::Url::parse(&format!("http://{}/token", listener.local_addr().unwrap())).unwrap();
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n{headers}\r\n{body}",
+            body.len(),
+        );
+        let task = tokio::spawn(async move {
+            let (mut stream, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
+                    .await
+                    .unwrap()
+                    .unwrap();
+            let mut request = Vec::new();
+            loop {
+                let mut chunk = [0; 1024];
+                let read = stream.read(&mut chunk).await.unwrap();
+                assert!(read > 0 && request.len() < 8192);
+                request.extend_from_slice(&chunk[..read]);
+                let text = String::from_utf8_lossy(&request);
+                if let Some(end) = text.find("\r\n\r\n") {
+                    let length: usize = text[..end]
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse().unwrap())
+                        })
+                        .unwrap_or(0);
+                    if request.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            stream.write_all(response.as_bytes()).await.unwrap();
+            String::from_utf8(request).unwrap()
+        });
+        (url, task)
+    }
+
+    #[tokio::test]
+    async fn oauth_code_and_refresh_exchanges_preserve_protocol() {
+        use oauth2::{
+            AuthUrl, AuthorizationCode, ClientId, ClientSecret, RefreshToken, TokenResponse,
+            TokenUrl,
+        };
+        for refresh in [false, true] {
+            let (url, incoming) = oauth_fixture(
+                "200 OK",
+                "Content-Type: application/json\r\n",
+                r#"{"access_token":"fixture-access","token_type":"bearer","expires_in":3600}"#,
+            )
+            .await;
+            let client = oauth2::basic::BasicClient::new(
+                ClientId::new("fixture-client".into()),
+                Some(ClientSecret::new("fixture-secret".into())),
+                AuthUrl::new("https://example.test/authorize".into()).unwrap(),
+                Some(TokenUrl::new(url.to_string()).unwrap()),
+            );
+            let token = if refresh {
+                client
+                    .exchange_refresh_token(&RefreshToken::new("fixture-refresh".into()))
+                    .request_async(send_configured_oauth_request)
+                    .await
+                    .unwrap()
+            } else {
+                client
+                    .exchange_code(AuthorizationCode::new("fixture-code".into()))
+                    .request_async(send_configured_oauth_request)
+                    .await
+                    .unwrap()
+            };
+            assert_eq!(token.access_token().secret(), "fixture-access");
+            let request = incoming.await.unwrap();
+            assert!(request.starts_with("POST /token HTTP/1.1\r\n"));
+            assert!(request.to_lowercase().contains("authorization: basic "));
+            assert!(request.contains(if refresh {
+                "grant_type=refresh_token"
+            } else {
+                "grant_type=authorization_code"
+            }));
+            assert!(request.contains(if refresh {
+                "refresh_token=fixture-refresh"
+            } else {
+                "code=fixture-code"
+            }));
+        }
+    }
+
+    #[tokio::test]
+    async fn oauth_transport_preserves_error_status_body_and_repeated_headers() {
+        let body = r#"{"error":"invalid_grant"}"#;
+        let (url, incoming) = oauth_fixture(
+            "400 Bad Request",
+            "Content-Type: application/json\r\nX-Fixture: first\r\nX-Fixture: second\r\n",
+            body,
+        )
+        .await;
+        let response = send_configured_oauth_request(oauth2::HttpRequest {
+            url,
+            method: oauth2::http::Method::POST,
+            headers: oauth2::http::HeaderMap::new(),
+            body: b"code=a%2Bb".to_vec(),
+        })
+        .await
+        .unwrap();
+        assert_eq!(response.status_code.as_u16(), 400);
+        assert_eq!(response.body, body.as_bytes());
+        assert_eq!(response.headers.get_all("x-fixture").iter().count(), 2);
+        assert!(incoming.await.unwrap().ends_with("code=a%2Bb"));
+    }
+
+    #[tokio::test]
+    async fn oauth_transport_rejects_oversized_token_responses() {
+        let body = "x".repeat(agiworkforce_mcp::security::MAX_METADATA_BODY_BYTES + 1);
+        let (url, incoming) =
+            oauth_fixture("200 OK", "Content-Type: application/json\r\n", &body).await;
+        let error = send_configured_oauth_request(oauth2::HttpRequest {
+            url,
+            method: oauth2::http::Method::POST,
+            headers: oauth2::http::HeaderMap::new(),
+            body: b"code=fixture".to_vec(),
+        })
+        .await
+        .unwrap_err();
+        assert!(error.to_string().contains("response body exceeds"));
+        incoming.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn oauth_transport_never_forwards_credentials_on_redirect() {
+        let destination = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let headers = format!(
+            "Location: http://{}/capture\r\n",
+            destination.local_addr().unwrap()
+        );
+        let (url, incoming) = oauth_fixture("307 Temporary Redirect", &headers, "").await;
+        let response = send_configured_oauth_request(oauth2::HttpRequest {
+            url,
+            method: oauth2::http::Method::POST,
+            headers: oauth2::http::HeaderMap::new(),
+            body: b"refresh_token=fixture-refresh".to_vec(),
+        })
+        .await
+        .unwrap();
+        assert_eq!(response.status_code.as_u16(), 307);
+        assert!(incoming
+            .await
+            .unwrap()
+            .contains("refresh_token=fixture-refresh"));
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(50), destination.accept())
+                .await
+                .is_err()
+        );
+    }
 
     /// A resolver with a fixed table, so the address-based judgement can be
     /// tested without depending on what the machine's DNS happens to answer.

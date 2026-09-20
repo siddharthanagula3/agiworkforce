@@ -59,7 +59,25 @@ function copyCodiconAssets() {
 
 async function build() {
   try {
-    if (isWatch) {
+    if (process.argv.includes('--tests')) {
+      const testRoot = path.join(__dirname, 'src', 'test');
+      const entryPoints = fs
+        .readdirSync(testRoot, { recursive: true })
+        .filter((entry) => entry.endsWith('.ts'))
+        .map((entry) => path.join(testRoot, entry));
+      await esbuild.build({
+        entryPoints,
+        outbase: testRoot,
+        outdir: path.join(__dirname, 'out', 'test'),
+        bundle: true,
+        platform: 'node',
+        target: 'node18',
+        format: 'cjs',
+        external: ['vscode', '@vscode/test-electron', 'mocha', 'glob'],
+        sourcemap: true,
+        logLevel: 'info',
+      });
+    } else if (isWatch) {
       const ctx = await esbuild.context(buildOptions);
       const webviewCtx = await esbuild.context(webviewOptions);
       await Promise.all([ctx.watch(), webviewCtx.watch()]);

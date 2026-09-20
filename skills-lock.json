@@ -626,7 +626,7 @@
       "sourceType": "github",
       "audience": "developer",
       "declaredVersion": null,
-      "computedHash": "sha256-tree-v1:087554737ed3d773bfadf6885559b6ecbfa0a0366fa709ce545f95767a1a4df3"
+      "computedHash": "sha256-tree-v1:cf095a1ea48673468f7c2f98adfb620f7ce35b42429ae487d05b53be1ded503b"
     },
     "vercel-composition-patterns": {
       "path": ".agents/skills/vercel-composition-patterns",
