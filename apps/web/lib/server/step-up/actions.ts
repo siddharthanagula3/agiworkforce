@@ -43,6 +43,11 @@ export const STEP_UP_ACTIONS = {
     freshnessSeconds: 300,
     consequence: 'Every other signed-in device is signed out.',
   },
+  'security.compromise_resolve': {
+    freshnessSeconds: 300,
+    consequence:
+      'The hold on your account is lifted and you are no longer asked to reset your password.',
+  },
 } as const satisfies Record<string, StepUpActionSpec>;
 
 export type StepUpAction = keyof typeof STEP_UP_ACTIONS;

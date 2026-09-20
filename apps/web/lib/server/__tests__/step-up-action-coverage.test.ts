@@ -56,11 +56,13 @@ function callSites(): Map<string, string[]> {
  */
 const UNENFORCED: Readonly<Record<string, string>> = {
   'account.delete':
-    'app/api/user/delete-account/route.ts schedules the deletion and asks for no fresh factor',
+    'deletion is reversible inside its grace window, and an account with no second factor must be able to delete itself',
   'email.change':
     'no server route changes the account email; the identity provider owns that flow in the browser',
   'api_credential.reveal':
     'nothing reads stored credential material back: api-keys are returned once at creation and masked afterwards',
+  'session.revoke_all':
+    'signing every other device out is protective, so app/api/settings/sessions/route.ts asks for no fresh factor: verifySecondFactor answers not_enrolled for an account without one, and an account being taken over is the account least able to produce a code',
 };
 
 describe('the step-up registry and the routes that use it', () => {

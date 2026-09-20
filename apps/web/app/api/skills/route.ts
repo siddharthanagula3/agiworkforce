@@ -37,6 +37,7 @@ import {
 import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
+import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
@@ -46,6 +47,8 @@ const CATALOG_PARAM = 'catalog';
 const CATALOG_ALL = 'all';
 const MULTIPART_CONTENT_TYPE = 'multipart/form-data';
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
+const ZIP_MIME = 'application/zip';
+const MARKDOWN_MIME = 'text/markdown';
 
 function isZipArchive(bytes: Uint8Array): boolean {
   return ZIP_MAGIC.every((byte, index) => bytes[index] === byte);
@@ -64,6 +67,11 @@ async function readUploadedSkillDraft(request: NextRequest) {
     throw createError.validation(SKILL_UPLOAD_UNREADABLE_MESSAGE);
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const fileName = 'name' in file && typeof file.name === 'string' ? file.name : undefined;
+  await refuseUnsafeUpload(bytes, isZipArchive(bytes) ? ZIP_MIME : MARKDOWN_MIME, {
+    leadsObject: true,
+    filename: fileName,
+  });
 
   let source: string;
   if (isZipArchive(bytes)) {
