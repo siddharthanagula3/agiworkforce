@@ -43,8 +43,9 @@ export function AuthField({
         />
         {trailing}
       </div>
-      {hint ? (
-        <p id={hintId} role="status" className={AUTH_HINT_CLASS}>
+      {/* The region outlives its text: one mounted together with its content is often not announced. */}
+      {hint !== undefined ? (
+        <p id={hintId} role="status" className={hint ? AUTH_HINT_CLASS : 'sr-only'}>
           {hint}
         </p>
       ) : null}
