@@ -8,6 +8,17 @@ The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
 
+## CI-COVERAGE-GATE-2026-09-20
+
+The Priority Level 1 coverage step hid 462 failed tests in run `35499143990`
+with `|| true`. Root execution mixed Vitest versions and package working
+directories; the intended 75% line threshold also used an invalid option.
+The package-owned runner repair preserves all 23 projects and existing package
+floors, propagates failures, and merges fresh reports. Focused harness tests pass;
+full aggregate coverage and remote workflow verification remain pending. Do not
+lower the floor or count the old green job as successful coverage. Evidence and
+next verification: [deployment handoff](docs/work/deployment-handoff-2026-09-19.md#coverage-gate-integrity-follow-up).
+
 ## WEB-MARKDOWN-TABLE-ALIGN-2026-09-19
 
 Browser TB02 copied valid Markdown with a right-aligned numeric column, but the rendered

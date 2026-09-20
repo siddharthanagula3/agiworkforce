@@ -1,7 +1,7 @@
 const PROJECTS_BLOCK_RE = /projects\s*:\s*\[([\s\S]*?)\]/;
 const PROJECT_ENTRY_RE = /['"]([^'"]+)['"]/g;
 const LINES_THRESHOLD_RE = /thresholds\s*:\s*\{[^}]*\blines\s*:\s*(\d+(?:\.\d+)?)/;
-const ROOT_THRESHOLD_RE = /--coverage\.threshold\.lines=(\d+(?:\.\d+)?)/;
+const ROOT_THRESHOLD_RE = /--coverage\.thresholds\.lines=(\d+(?:\.\d+)?)/;
 
 export function parseProjects(rootConfigSource) {
   const block = PROJECTS_BLOCK_RE.exec(rootConfigSource);
@@ -48,7 +48,7 @@ export function checkFloors({ floors, missingConfigs, rootFloor }, recorded) {
   }
 
   if (rootFloor === null) {
-    errors.push('the root test:coverage script no longer passes --coverage.threshold.lines');
+    errors.push('the root test:coverage script no longer passes --coverage.thresholds.lines');
   } else if (rootFloor < recorded.rootFloor) {
     errors.push(
       `the repository-wide line floor dropped from ${recorded.rootFloor} to ${rootFloor}; a floor ` +
