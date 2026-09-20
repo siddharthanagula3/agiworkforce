@@ -52,6 +52,9 @@ function stubDb(exclusions: readonly string[], rows: { synced?: unknown[] } = {}
     if (text.includes("settings -> 'memory'")) {
       return [{ memory: { excludedTerms: exclusions } }];
     }
+    if (text.includes("settings -> 'capabilities'")) {
+      return [{ capabilities: { memory: true } }];
+    }
     if (text.includes('applied_rows')) return rows.synced ?? [];
     if (text.includes('select content from user_memories')) return [];
     if (text.includes('insert into user_memories')) return [storedRow(ALLOWED_CONTENT)];

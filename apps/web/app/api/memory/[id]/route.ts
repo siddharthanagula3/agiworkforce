@@ -9,6 +9,7 @@ import type { UserMemoryRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { assertMemoryWriteAllowed } from '@/lib/services/memory-write-service';
 import {
+  memoryWriteAdmission,
   parseMemoryExpiry,
   unexpiredMemoryPredicate,
   workspaceMemoryPredicate,
@@ -104,6 +105,14 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     }
     const content = body.content.trim();
     await assertMemoryWriteAllowed(db, { userId, content });
+    const admission = await memoryWriteAdmission(db, {
+      userId,
+      content,
+      category: null,
+      source: 'web',
+      organizationId: organizationId ?? null,
+    });
+    if (!admission.eligible) throw createError.forbidden(admission.message).asUserSafe();
     params.push(content);
     assignments.push(`content = $${params.length}`);
   }

@@ -13,6 +13,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
 import {
+  loadMemoryWritePolicies,
+  memoryWriteAdmission,
+} from '@/lib/services/managed-memory-context-service';
+import {
   activeMemoryPredicate,
   workspaceMemoryPredicate,
 } from '@/lib/services/managed-memory-context-service';
@@ -140,10 +144,36 @@ async function handlePost(request: NextRequest) {
   });
   const refused = rejected.map(({ candidate, term }) => ({ id: candidate.id, term }));
 
+  // A push carrying new text is a memory write and passes the same gate the web
+  // surface does. A push that only deletes is how a client obeys a switch that
+  // was turned off, so it is never blocked here.
+  const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
+  const blocked: Array<{ id: string; reason: string }> = [];
+  const admitted = [];
+  for (const memory of allowed) {
+    if (memory.isDeleted === true) {
+      admitted.push(memory);
+      continue;
+    }
+    const decision = await memoryWriteAdmission(
+      db,
+      {
+        userId,
+        content: memory.content,
+        category: memory.category ?? null,
+        source: memory.source ?? 'web',
+        organizationId: organizationId ?? null,
+      },
+      { policies },
+    );
+    if (decision.eligible) admitted.push(memory);
+    else blocked.push({ id: memory.id, reason: decision.reason });
+  }
+
   const applied: Array<{ id: string; server_version: string }> = [];
   const conflicts: Array<{ id: string; current: MemoryDelta | null }> = [];
   try {
-    if (allowed.length > 0) {
+    if (admitted.length > 0) {
       const rows = await db.query<{
         kind: 'applied' | 'conflict';
         id: string;
@@ -208,7 +238,7 @@ async function handlePost(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [userId, JSON.stringify(allowed), organizationId ?? null],
+        [userId, JSON.stringify(admitted), organizationId ?? null],
       );
       for (const row of rows) {
         if (row.kind === 'applied' && row.server_version !== null) {
@@ -225,7 +255,13 @@ async function handlePost(request: NextRequest) {
       conflict.current ? [conflict.current] : [],
     );
     const cursor = maxServerVersion('0', applied, conflictRows);
-    return NextResponse.json({ protocolVersion: 2, applied, conflicts, rejected: refused, cursor });
+    return NextResponse.json({
+      protocolVersion: 2,
+      applied,
+      conflicts,
+      rejected: refused,
+      cursor,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync push failed');
     throw createError.internal('Failed to push memory changes');

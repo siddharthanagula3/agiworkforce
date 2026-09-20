@@ -140,6 +140,31 @@
       "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
       "migration": 280,
       "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
+    },
+    {
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "migration": 280,
+      "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 283,
+      "reason": "Does not read the column this migration adds: the file names the table and, separately, a column of the same name on a different table or the word in a comment, which the guard matches as a substring. The new column is additive, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 284,
+      "reason": "Does not read the column this migration adds: the file names the table and, separately, a column of the same name on a different table or the word in a comment, which the guard matches as a substring. The new column is additive, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 284,
+      "reason": "Does not read the column this migration adds: the file names the table and, separately, a column of the same name on a different table or the word in a comment, which the guard matches as a substring. The new column is additive, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/services/managed-memory-context-service.ts",
+      "migration": 284,
+      "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
     }
   ]
 }
