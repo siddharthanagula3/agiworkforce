@@ -55,8 +55,7 @@ export interface DeductCreditsResult {
  * before; it is multiplied by 10,000 and takes the same path.
  */
 export type CreditSettlementAmount =
-  | { amountMicrousd: number; amountCents?: never }
-  | { amountCents: number; amountMicrousd?: never };
+  { amountMicrousd: number; amountCents?: never } | { amountCents: number; amountMicrousd?: never };
 
 export type CreditSettlementOperation = CreditSettlementAmount & {
   userId: string;
@@ -210,10 +209,6 @@ function parseSettlementResult(row: unknown): CreditSettlementResult {
 }
 
 export class CreditService {
-  static getDailyLimit(monthlyCents: number): number {
-    return monthlyCents;
-  }
-
   static async getBalance(db: DatabaseAdapter, userId: string): Promise<CreditBalance | null> {
     try {
       const rows = await db.query<Record<string, unknown>>(
