@@ -1,0 +1,430 @@
+{
+  "roles": {
+    "resourceType": {
+      "column": "resource_type",
+      "why": "what kind of object the row is, for a table that stores more than one kind"
+    },
+    "schemaVersion": {
+      "carriedBy": "packages/contracts/types/src/resource-metadata-contract.ts",
+      "why": "the shape a stored row was written against, a property of the canonical schema rather than of each row"
+    },
+    "ownerAccount": {
+      "column": "user_id",
+      "why": "the account the row belongs to, the value every isolation policy compares against"
+    },
+    "organization": {
+      "column": "organization_id",
+      "why": "the organization the row is scoped to, null for a personal row"
+    },
+    "workspace": {
+      "column": "workspace_id",
+      "why": "the workspace the row is filed under, for a tenant that partitions its work"
+    },
+    "project": {
+      "column": "project_id",
+      "why": "the project the row is filed under, null when it is loose"
+    },
+    "createdBy": {
+      "column": "created_by",
+      "why": "the principal that created the row, which is not always its owner"
+    },
+    "updatedBy": {
+      "column": "updated_by",
+      "why": "the principal that last wrote the row"
+    },
+    "createdAt": {
+      "column": "created_at",
+      "why": "when the row came into existence"
+    },
+    "updatedAt": {
+      "column": "updated_at",
+      "why": "when the row was last written"
+    },
+    "deletedAt": {
+      "column": "deleted_at",
+      "why": "when the row was soft deleted, null while it is alive"
+    },
+    "archivedAt": {
+      "column": "archived_at",
+      "why": "when the row was archived, which hides it without deleting it"
+    },
+    "version": {
+      "column": "server_version",
+      "why": "the optimistic-concurrency token an If-Match precondition quotes"
+    },
+    "visibility": {
+      "column": "visibility",
+      "why": "who may read the row beyond its owner"
+    },
+    "retentionClass": {
+      "column": "retention_days",
+      "why": "how long the row is kept before a retention sweep removes it"
+    },
+    "source": {
+      "column": "source",
+      "why": "what produced the row, for a table fed by more than one path"
+    },
+    "originSurface": {
+      "column": "origin_surface",
+      "why": "which product surface produced the row"
+    },
+    "parent": {
+      "declaredPerTable": true,
+      "why": "the owning row, for a child object whose ownership is its parent's"
+    }
+  },
+  "tables": {
+    "account_compromise_responses": {
+      "createdAt": "opened_at",
+      "updatedAt": "resolved_at"
+    },
+    "admin_request_idempotency": {
+      "updatedAt": "completed_at"
+    },
+    "authentication_attempts": {
+      "createdAt": "occurred_at"
+    },
+    "beta_redemptions": {
+      "createdAt": "redeemed_at"
+    },
+    "cloud_code_agent_approvals": {
+      "updatedAt": "decided_at"
+    },
+    "cloud_code_agent_steps": {
+      "createdAt": "started_at"
+    },
+    "cloud_code_terminal_entries": {
+      "createdAt": "started_at"
+    },
+    "cloud_managed_waitlist": {
+      "createdAt": "joined_at"
+    },
+    "connector_call_events": {
+      "createdAt": "occurred_at"
+    },
+    "connector_oauth_authorizations": {
+      "updatedAt": "consumed_at"
+    },
+    "consent_records": {
+      "createdAt": "recorded_at"
+    },
+    "conversation_branch_messages": {
+      "parent": {
+        "column": "branch_id",
+        "table": "conversation_branches"
+      }
+    },
+    "conversation_tags": {
+      "createdAt": "classified_at"
+    },
+    "ediscovery_exports": {
+      "createdAt": "started_at"
+    },
+    "erasure_tombstones": {
+      "createdAt": "erased_at"
+    },
+    "event_trigger_events": {
+      "createdAt": "received_at"
+    },
+    "free_daily_usage_reservations": {
+      "updatedAt": "settled_at"
+    },
+    "github_pr_review_attempts": {
+      "createdAt": "attempted_at",
+      "updatedAt": "completed_at"
+    },
+    "github_webhook_deliveries": {
+      "createdAt": "received_at"
+    },
+    "identity_risk_observations": {
+      "createdAt": "observed_at"
+    },
+    "mcp_discovery_cache": {
+      "createdAt": "updated_at"
+    },
+    "messaging_connections": {
+      "createdAt": "connected_at"
+    },
+    "mobile_iap_notification_receipts": {
+      "createdAt": "received_at",
+      "updatedAt": "processed_at"
+    },
+    "notebook_runs": {
+      "createdAt": "started_at"
+    },
+    "notifications": {
+      "updatedAt": "read_at"
+    },
+    "object_backup_replicas": {
+      "createdAt": "replicated_at"
+    },
+    "organization_admin_delegations": {
+      "updatedAt": "revoked_at"
+    },
+    "organization_commercial_agreements": {
+      "updatedAt": "superseded_at"
+    },
+    "organization_key_rewrap_runs": {
+      "createdAt": "started_at"
+    },
+    "organization_members": {
+      "createdAt": "joined_at"
+    },
+    "organization_policy_revisions": {
+      "createdAt": "changed_at"
+    },
+    "organization_service_principals": {
+      "updatedAt": "disabled_at"
+    },
+    "plugin_installations": {
+      "createdAt": "installed_at"
+    },
+    "plugin_marketplace_installations": {
+      "createdAt": "installed_at"
+    },
+    "plugin_package_scans": {
+      "createdAt": "scanned_at"
+    },
+    "processed_stripe_events": {
+      "createdAt": "processed_at"
+    },
+    "product_metric_days": {
+      "createdAt": "computed_at"
+    },
+    "project_knowledge_files": {
+      "parent": {
+        "column": "project_id",
+        "table": "user_projects"
+      }
+    },
+    "provider_cost_reconciliation_days": {
+      "createdAt": "fetched_at"
+    },
+    "referrals": {
+      "ownerAccount": "referrer_id"
+    },
+    "release_downloads": {
+      "createdAt": "downloaded_at"
+    },
+    "release_events": {
+      "createdAt": "recorded_at"
+    },
+    "revoked_jwts": {
+      "createdAt": "revoked_at"
+    },
+    "routing_decision_traces": {
+      "updatedAt": "completed_at"
+    },
+    "scheduled_task_runs": {
+      "createdAt": "started_at",
+      "updatedAt": "completed_at",
+      "parent": {
+        "column": "task_id",
+        "table": "scheduled_tasks"
+      }
+    },
+    "shared_sessions": {
+      "ownerAccount": "owner_id"
+    },
+    "study_sessions": {
+      "createdAt": "started_at",
+      "updatedAt": "ended_at"
+    },
+    "support_access_events": {
+      "createdAt": "occurred_at"
+    },
+    "support_action_proposals": {
+      "updatedAt": "consumed_at"
+    },
+    "support_handoff_sessions": {
+      "ownerAccount": "owner_user_id"
+    },
+    "team_members": {
+      "createdAt": "joined_at"
+    },
+    "user_connectors": {
+      "createdAt": "connected_at"
+    },
+    "voice_sessions": {
+      "createdAt": "started_at",
+      "updatedAt": "last_seen_at"
+    },
+    "web_artifact_versions": {
+      "parent": {
+        "column": "artifact_id",
+        "table": "web_artifacts"
+      }
+    },
+    "web_messages": {
+      "parent": {
+        "column": "conversation_id",
+        "table": "web_conversations"
+      }
+    },
+    "website_auto_economy_trial_usage": {
+      "createdAt": "first_prompt_at",
+      "updatedAt": "last_prompt_at"
+    }
+  },
+  "gaps": [
+    {
+      "table": "api_keys",
+      "role": "updatedAt",
+      "standIn": "last_used_at and revoked_at",
+      "why": "a rename or a scope change rewrites the row and moves neither column, so the last write is unrecoverable.",
+      "fix": "add updated_at with a before-update trigger, as the resource_row_timestamps migration did for organization_members."
+    },
+    {
+      "table": "device_refresh_tokens",
+      "role": "updatedAt",
+      "standIn": "used_at, revoked_at and compromised_at",
+      "why": "three columns each record one transition and none of them records the most recent write.",
+      "fix": "add updated_at with a before-update trigger."
+    },
+    {
+      "table": "github_installations",
+      "role": "updatedAt",
+      "standIn": "ownership_verified_at",
+      "why": "an access-token refresh and the review toggle both rewrite the row without moving any timestamp.",
+      "fix": "add updated_at with a before-update trigger."
+    },
+    {
+      "table": "media_assets",
+      "role": "updatedAt",
+      "standIn": "deleted_at",
+      "why": "a new asset version rewrites version and parent_version_id while the row records only its deletion.",
+      "fix": "add updated_at with a before-update trigger."
+    },
+    {
+      "table": "organization_admin_api_keys",
+      "role": "updatedAt",
+      "standIn": "last_used_at and revoked_at",
+      "why": "a scope change rewrites the row and moves neither column, so the last write is unrecoverable.",
+      "fix": "add updated_at with a before-update trigger, as the resource_row_timestamps migration did for organization_members."
+    },
+    {
+      "table": "organization_spend_alerts",
+      "role": "updatedAt",
+      "standIn": "created_at",
+      "why": "recipients_notified and spent_cents are rewritten as the period runs and no column follows them.",
+      "fix": "add updated_at with a before-update trigger."
+    },
+    {
+      "table": "shared_conversations",
+      "role": "visibility",
+      "standIn": "expires_at",
+      "why": "the share row records only when the link dies, never who the link was meant for.",
+      "fix": "add visibility alongside the token and have the share route read it, as published_artifacts does."
+    },
+    {
+      "table": "shared_sessions",
+      "role": "updatedAt",
+      "standIn": "created_at",
+      "why": "messages and total_messages grow after the share is created and no column records the growth.",
+      "fix": "add updated_at with a before-update trigger."
+    }
+  ],
+  "shareTokenColumn": "token",
+  "undeclaredDispositions": [
+    {
+      "child": "cloud_agent_approval_checkpoints",
+      "parent": "cloud_agent_runs",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "cloud_agent_events",
+      "parent": "cloud_agent_runs",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "cloud_agent_execution_operations",
+      "parent": "cloud_agent_runs",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "cloud_code_agent_turns",
+      "parent": "cloud_code_sessions",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "cloud_code_terminal_entries",
+      "parent": "cloud_code_sessions",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "credit_transactions",
+      "parent": "token_credits",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "image_generation_jobs",
+      "parent": "managed_usage_requests",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "media_assets",
+      "parent": "organizations",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "media_assets",
+      "parent": "web_conversations",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "organization_group_managers",
+      "parent": "organization_members",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "organization_member_roles",
+      "parent": "organization_members",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "organization_project_access",
+      "parent": "organization_members",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "organization_project_access",
+      "parent": "organization_shared_projects",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "project_knowledge_files",
+      "parent": "project_knowledge_files",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "release_downloads",
+      "parent": "releases",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "subscriptions",
+      "parent": "profiles",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "support_handoff_sessions",
+      "parent": "support_agent_presence",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "token_credits",
+      "parent": "subscriptions",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "video_generation_jobs",
+      "parent": "managed_usage_requests",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    },
+    {
+      "child": "web_messages",
+      "parent": "web_messages",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+    }
+  ]
+}
