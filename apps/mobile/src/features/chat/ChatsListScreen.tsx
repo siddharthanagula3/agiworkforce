@@ -43,6 +43,7 @@ import {
   useArtifactStore,
 } from '@/src/features/artifacts/store';
 import { collectGeneratedImages } from '@/src/features/library/collectGeneratedImages';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import {
   buildMobileGlobalSearchGroups,
   collectSearchableMobileFiles,
@@ -390,6 +391,7 @@ export function ChatsListScreen() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <View
         style={{
+          ...contentColumn('reading'),
           minHeight: 52,
           paddingVertical: 4,
           paddingHorizontal: 12,
@@ -460,6 +462,7 @@ export function ChatsListScreen() {
           </View>
         )}
         contentContainerStyle={{
+          ...contentColumn('reading'),
           paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
           flexGrow: hasResults ? 0 : 1,
         }}

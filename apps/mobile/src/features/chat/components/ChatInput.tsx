@@ -53,6 +53,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, radii } from '@/src/ui/theme';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -660,8 +661,12 @@ export function ChatInput({
 
   return (
     <View
+      testID="chat.composer"
       className="px-4 pt-2"
-      style={{ paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 6, 16) }}
+      style={{
+        ...contentColumn('reading'),
+        paddingBottom: keyboardVisible ? 8 : Math.max(insets.bottom + 6, 16),
+      }}
     >
       {/* "What will be sent" disclosure, the destination stays visible above
           the composer before every send, and expands to the full payload
