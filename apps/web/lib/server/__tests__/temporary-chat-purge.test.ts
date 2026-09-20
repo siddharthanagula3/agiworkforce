@@ -33,18 +33,20 @@ describe('purgeTemporaryChatFiles', () => {
   it('deletes the stored bytes and the row for a temporary-chat file past the window', async () => {
     const query = vi
       .fn()
+      .mockResolvedValueOnce([{ count: 0 }])
       .mockResolvedValueOnce([{ id: 'asset-1', storage_pathname: 'temp/asset-1.png' }])
       .mockResolvedValueOnce([{ id: 'asset-1' }]);
 
     const result = await purgeTemporaryChatFiles({ query }, { nowMs: NOW_MS });
 
-    const [selectSql, selectParams] = query.mock.calls[0] as [string, unknown[]];
-    expect(selectSql).toContain('where temporary_chat');
+    const [selectSql, selectParams] = query.mock.calls[1] as [string, unknown[]];
+    expect(selectSql).toContain('candidate.temporary_chat');
+    expect(selectSql).toContain('legal_hold_custodians');
     expect(selectParams[0]).toBe(temporaryFileCutoff(NOW_MS).toISOString());
     expect(deleteStoredMediaObjects).toHaveBeenCalledWith(['temp/asset-1.png']);
-    const [deleteSql, deleteParams] = query.mock.calls[1] as [string, unknown[]];
+    const [deleteSql, deleteParams] = query.mock.calls[2] as [string, unknown[]];
     expect(deleteSql).toContain('delete from public.media_assets');
-    expect(deleteSql).toContain('and temporary_chat');
+    expect(deleteSql).toContain('target.temporary_chat');
     expect(deleteParams[0]).toEqual(['asset-1']);
     expect(result).toMatchObject({ candidates: 1, purged: 1, objectsFailed: 0 });
   });
@@ -56,11 +58,13 @@ describe('purgeTemporaryChatFiles', () => {
     });
     const query = vi
       .fn()
+      .mockResolvedValueOnce([{ count: 0 }])
       .mockResolvedValueOnce([{ id: 'asset-1', storage_pathname: 'temp/asset-1.png' }]);
 
     const result = await purgeTemporaryChatFiles({ query }, { nowMs: NOW_MS });
 
-    expect(query).toHaveBeenCalledTimes(1);
+    // The hold count, then the candidate read, and no delete.
+    expect(query).toHaveBeenCalledTimes(2);
     expect(result).toMatchObject({ purged: 0, objectsFailed: 1 });
   });
 
