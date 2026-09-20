@@ -42,7 +42,7 @@ const REDACTIONS: [RegExp, string][] = [
  * than applied quietly, because the chunks are otherwise verbatim history.
  */
 const DASH_FOLD: [RegExp, string][] = [
-  [/\u2014/gu, '-'],
+  [new RegExp(String.fromCodePoint(0x2014), 'gu'), '-'],
   [/\u2013/gu, '-'],
 ];
 
