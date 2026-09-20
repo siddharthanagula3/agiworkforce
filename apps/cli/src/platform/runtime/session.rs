@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use crate::cli_options::PermissionMode;
 use crate::features::plan::plan_mode::Plan;
 use crate::models::Message;
+use crate::platform::runtime::validation_run::ValidationKind;
 
 /// Write `contents` to `target` via a tempfile-then-rename so partial writes
 /// are never visible to readers.  Callers that need cross-process
@@ -271,6 +272,7 @@ pub struct ManagedSessionAutoRouting {
 
 pub const MANAGED_SESSION_MAX_APPROVALS: usize = 1_000;
 pub const MANAGED_SESSION_MAX_FILE_CHANGES: usize = 5_000;
+pub const MANAGED_SESSION_MAX_VALIDATIONS: usize = 1_000;
 const MANAGED_SESSION_ACTIVITY_TEXT_MAX_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -310,6 +312,41 @@ pub struct ManagedSessionFileChange {
     pub tool: String,
     pub tool_call_id: String,
     pub changed_at: DateTime<Utc>,
+}
+
+/// How a check the session ran came out. `Interrupted` is a run that started
+/// and never reported, so nothing about the work was proved by it.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagedSessionValidationOutcome {
+    Passed,
+    Failed,
+    Interrupted,
+}
+
+/// One check the session ran against the work: the command, what kind of check
+/// it is, how it came out, and the commit it ran against.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ManagedSessionValidation {
+    pub command: String,
+    pub kind: ValidationKind,
+    pub outcome: ManagedSessionValidationOutcome,
+    pub ran_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+}
+
+/// What a coding session holds that its transcript does not: the work it was
+/// asked to do and what it has established about it.
+#[derive(Debug, Clone)]
+pub struct SessionWorkingState<'a> {
+    pub objective: Option<&'a str>,
+    pub decisions: &'a [ManagedSessionApproval],
+    pub plan: Option<&'a Plan>,
+    pub modified_files: &'a [ManagedSessionFileChange],
+    pub validations: &'a [ManagedSessionValidation],
+    pub branch: Option<&'a str>,
+    pub worktree_root: Option<&'a Path>,
 }
 
 /// Make recorded activity text safe to persist and to hand to a protocol
@@ -376,6 +413,13 @@ pub struct ManagedSession {
     pub approvals: Vec<ManagedSessionApproval>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub file_changes: Vec<ManagedSessionFileChange>,
+    /// Checks this session ran against the work, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub validations: Vec<ManagedSessionValidation>,
+    /// What the session was asked to do, kept when it arrives. The transcript
+    /// it came in on is compacted away; this is not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub objective: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
     // --- v2 session-state fields (all optional for backward compat with v1 files) ---
@@ -440,6 +484,10 @@ struct ManagedSessionJsonlHeader {
     approvals: Vec<ManagedSessionApproval>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     file_changes: Vec<ManagedSessionFileChange>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    validations: Vec<ManagedSessionValidation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    objective: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     archived_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -491,6 +539,8 @@ impl ManagedSession {
             repository: None,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            validations: Vec::new(),
+            objective: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -581,6 +631,8 @@ impl ManagedSession {
             repository: source.repository.clone(),
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            validations: Vec::new(),
+            objective: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -633,8 +685,28 @@ impl ManagedSession {
     /// Add a message and refresh the session timestamp.
     #[allow(dead_code)]
     pub fn push_message(&mut self, message: Message) {
+        if self.objective.is_none() && message.role == "user" {
+            let text = activity_text(&message.text_content());
+            if !text.trim().is_empty() {
+                self.objective = Some(text);
+            }
+        }
         self.messages.push(message);
         self.touch();
+    }
+
+    /// What the session is working on and what it has established, as it
+    /// stands after any amount of the transcript has been compacted away.
+    pub fn working_state(&self) -> SessionWorkingState<'_> {
+        SessionWorkingState {
+            objective: self.objective.as_deref().or(self.title.as_deref()),
+            decisions: &self.approvals,
+            plan: self.current_plan.as_ref(),
+            modified_files: &self.file_changes,
+            validations: &self.validations,
+            branch: self.git_branch.as_deref(),
+            worktree_root: self.worktree_root.as_deref(),
+        }
     }
 
     /// Refresh the `updated_at` timestamp.
@@ -908,6 +980,8 @@ impl ManagedSession {
                         repository: record.repository,
                         approvals: record.approvals,
                         file_changes: record.file_changes,
+                        validations: record.validations,
+                        objective: record.objective,
                         archived_at: record.archived_at,
                         permission_mode: record.permission_mode,
                         plan_mode: record.plan_mode,
@@ -1023,6 +1097,25 @@ impl ManagedSession {
                 MANAGED_SESSION_TITLE_MAX_UTF16,
             )?;
         }
+        if self.validations.len() > MANAGED_SESSION_MAX_VALIDATIONS {
+            bail!(
+                "Managed session records more than {MANAGED_SESSION_MAX_VALIDATIONS} validations"
+            );
+        }
+        for validation in &self.validations {
+            validate_summary_text(
+                &validation.command,
+                "validation command",
+                MANAGED_SESSION_TITLE_MAX_UTF16,
+            )?;
+            if let Some(commit) = &validation.commit {
+                validate_summary_text(
+                    commit,
+                    "validation commit",
+                    MANAGED_SESSION_MODEL_MAX_UTF16,
+                )?;
+            }
+        }
 
         if self.messages.len() > MANAGED_SESSION_MAX_MESSAGES {
             bail!("Managed session contains more than {MANAGED_SESSION_MAX_MESSAGES} messages");
@@ -1078,6 +1171,8 @@ impl ManagedSession {
             repository: self.repository.clone(),
             approvals: self.approvals.clone(),
             file_changes: self.file_changes.clone(),
+            validations: self.validations.clone(),
+            objective: self.objective.clone(),
             archived_at: self.archived_at,
             permission_mode: self.permission_mode,
             plan_mode: self.plan_mode,
@@ -1286,6 +1381,8 @@ mod tests {
             repository: None,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            validations: Vec::new(),
+            objective: None,
             archived_at: None,
             permission_mode,
             plan_mode,
@@ -1338,6 +1435,8 @@ mod tests {
             repository: None,
             approvals: Vec::new(),
             file_changes: Vec::new(),
+            validations: Vec::new(),
+            objective: None,
             archived_at: None,
             permission_mode,
             plan_mode,
