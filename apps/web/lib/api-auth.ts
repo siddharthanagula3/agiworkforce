@@ -22,6 +22,10 @@ import {
 } from '@/lib/server/identity-account';
 import { accountAccessDecision, type AccountStatus } from '@/lib/auth/account-status';
 import { readAccountStatus } from '@/lib/auth/account-lifecycle';
+import {
+  endSessionPastAbsoluteLifetime,
+  isSessionPastAbsoluteLifetime,
+} from '@/lib/auth/session-age';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
@@ -124,6 +128,19 @@ async function assertWorkspaceNotLockedDown(userId: string, request?: NextReques
   await assertTenantNotLockedDown(organizationId);
 }
 
+// The provider's expiry renews on every use, so without this an over-age session works for ever.
+async function assertSessionWithinAbsoluteLifetime(
+  sessionId: string | null,
+  userId: string,
+): Promise<void> {
+  if (!sessionId) return;
+  const identity = getIdentityProvider();
+  if (!(await isSessionPastAbsoluteLifetime(identity, sessionId, userId, Date.now()))) return;
+
+  await endSessionPastAbsoluteLifetime(identity, sessionId, userId);
+  throw createError.unauthorized();
+}
+
 export async function assertAccountActive(userId: string, request?: NextRequest): Promise<void> {
   await assertAccountLifecycleActive(userId);
   await assertWorkspaceNotLockedDown(userId, request);
@@ -198,7 +215,16 @@ function authResultFor(account: AuthenticatedAccount, email?: string | null): Au
   };
 }
 
-async function verifyBearerToken(token: string, request: NextRequest): Promise<AuthResult | null> {
+interface VerifiedBearer {
+  auth: AuthResult;
+  /** Null for a device token, which is bound to a credential family rather than a session. */
+  sessionId: string | null;
+}
+
+async function verifyBearerToken(
+  token: string,
+  request: NextRequest,
+): Promise<VerifiedBearer | null> {
   const developerToken = verifyDeveloperTokenSignature(token);
   if (developerToken) {
     try {
@@ -216,9 +242,12 @@ async function verifyBearerToken(token: string, request: NextRequest): Promise<A
       );
     }
     return {
-      userId: developerToken.userId,
-      ...(developerToken.email ? { email: developerToken.email } : {}),
-      surfaceClass: 'developer',
+      auth: {
+        userId: developerToken.userId,
+        ...(developerToken.email ? { email: developerToken.email } : {}),
+        surfaceClass: 'developer',
+      },
+      sessionId: null,
     };
   }
 
@@ -241,8 +270,11 @@ async function verifyBearerToken(token: string, request: NextRequest): Promise<A
     if (!account) return null;
     const boundSurface = bindSurfaceFromClaims(claims.raw);
     return {
-      ...authResultFor(account, claims.email),
-      ...(boundSurface ? { boundSurface } : {}),
+      auth: {
+        ...authResultFor(account, claims.email),
+        ...(boundSurface ? { boundSurface } : {}),
+      },
+      sessionId: claims.sessionId,
     };
   }
 
@@ -293,22 +325,25 @@ export async function getClerkAuthUser(
       throw createError.unauthorized();
     }
 
-    const result = await verifyBearerToken(token, request);
-    if (result) {
-      await assertAccountActive(result.userId, request);
-      setTenantScope({ userId: result.userId });
-      await assertMfaPolicyUnlessExemptOwner(result.userId, options.mfaGateExemptForOwner ?? false);
-      await assertIpAllowList(result.userId, request);
-      return result;
+    const verified = await verifyBearerToken(token, request);
+    if (verified) {
+      const { auth, sessionId } = verified;
+      await assertSessionWithinAbsoluteLifetime(sessionId, auth.userId);
+      await assertAccountActive(auth.userId, request);
+      setTenantScope({ userId: auth.userId });
+      await assertMfaPolicyUnlessExemptOwner(auth.userId, options.mfaGateExemptForOwner ?? false);
+      await assertIpAllowList(auth.userId, request);
+      return auth;
     }
 
     throw createError.unauthorized();
   }
 
-  const { subject } = await getRequestIdentity();
+  const { subject, sessionId } = await getRequestIdentity();
   const account = subject === null ? null : await accountForSubject(subject, request);
   if (account) {
     const userId = account.accountId;
+    await assertSessionWithinAbsoluteLifetime(sessionId, userId);
     await assertAccountActive(userId, request);
     setTenantScope({ userId });
     await assertMfaPolicyUnlessExemptOwner(userId, options.mfaGateExemptForOwner ?? false);

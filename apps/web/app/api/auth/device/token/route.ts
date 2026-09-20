@@ -19,6 +19,7 @@ import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { devicePairingFlow } from '@/lib/validations/device';
+import { DEVICE_POLL_INTERVAL_SECONDS } from '../grant-policy';
 
 export const runtime = 'nodejs';
 
@@ -43,9 +44,27 @@ function termsAcceptanceUrl(request: NextRequest, userCode: string): string {
   return url.toString();
 }
 
+/**
+ * RFC 8628 answers a client that polls too fast with slow_down and the interval
+ * to use, not with a bare throttle the client can only read as a transport fault.
+ */
+function slowDown(throttled: NextResponse): NextResponse {
+  const retryAfter = throttled.headers.get('Retry-After');
+  return NextResponse.json(
+    {
+      error: 'slow_down',
+      interval: Math.max(DEVICE_POLL_INTERVAL_SECONDS, Number(retryAfter) || 0),
+    },
+    {
+      status: throttled.status,
+      headers: { ...noStore.headers, ...(retryAfter ? { 'Retry-After': retryAfter } : {}) },
+    },
+  );
+}
+
 async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-poll');
-  if (rateLimitResponse) return rateLimitResponse;
+  if (rateLimitResponse) return slowDown(rateLimitResponse);
 
   let body: unknown;
   try {
@@ -95,8 +114,13 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   if (record.status === 'consumed') {
     return NextResponse.json({ error: 'expired_token' }, { status: 400, ...noStore });
   }
-  if (record.status !== 'approved' || !record.user_id) {
+  if (record.status === 'pending') {
     return NextResponse.json({ error: 'authorization_pending' }, { status: 403, ...noStore });
+  }
+  // Every state the schema allows is named above, so anything left is a row no
+  // approval produced: refusing ends the wait instead of polling for ever.
+  if (record.status !== 'approved' || !record.user_id) {
+    return NextResponse.json({ error: 'access_denied' }, { status: 400, ...noStore });
   }
 
   // The code stays approved and unconsumed so the client can keep polling while the account

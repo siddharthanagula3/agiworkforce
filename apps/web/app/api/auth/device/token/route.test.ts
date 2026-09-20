@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -33,6 +33,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+import { DEVICE_POLL_INTERVAL_SECONDS } from '../grant-policy';
 import { POST } from './route';
 
 describe('POST /api/auth/device/token', () => {
@@ -153,6 +154,86 @@ describe('POST /api/auth/device/token', () => {
     expect(response.status).toBe(403);
     expect(response.headers.get('access-control-allow-origin')).toBe('https://tauri.localhost');
     await expect(response.json()).resolves.toEqual({ error: 'authorization_pending' });
+  });
+
+  function poll(deviceCode = '0a9ae561-8447-4ce4-afca-1c205d69bbad') {
+    return new NextRequest('https://agiworkforce.com/api/auth/device/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://tauri.localhost' },
+      body: JSON.stringify({ device_code: deviceCode }),
+    });
+  }
+
+  function codeRow(status: string) {
+    return {
+      device_id: '0a9ae561-8447-4ce4-afca-1c205d69bbad',
+      device_name: 'AGI CLI',
+      user_code: 'ABCD-2345',
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      status,
+      user_id: 'user-1',
+      user_email: null,
+    };
+  }
+
+  it('never mints a token for a code left in a state it cannot come back from', async () => {
+    for (const status of ['denied', 'revoked', 'expired', 'consumed']) {
+      mocks.query.mockReset().mockResolvedValue([codeRow(status)]);
+      mocks.issueDeveloperToken.mockClear();
+
+      const response = await POST(poll());
+
+      expect(response.status, `${status} was not refused`).toBe(400);
+      expect(mocks.issueDeveloperToken, `${status} minted a token`).not.toHaveBeenCalled();
+    }
+  });
+
+  it('refuses an expired code by its deadline even before anything marks it', async () => {
+    mocks.query
+      .mockReset()
+      .mockResolvedValue([
+        { ...codeRow('approved'), expires_at: new Date(Date.now() - 1_000).toISOString() },
+      ]);
+
+    const response = await POST(poll());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'expired_token' });
+    expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+    expect(mocks.execute.mock.calls[0]?.[0]).toContain("status = 'expired'");
+  });
+
+  it('tells a client polling too fast to slow down, and names the interval', async () => {
+    const { withRateLimit } = await import('@/lib/rate-limit');
+    vi.mocked(withRateLimit).mockResolvedValueOnce(
+      NextResponse.json(
+        { error: 'Too many requests' },
+        {
+          status: 429,
+          headers: { 'Retry-After': '9' },
+        },
+      ),
+    );
+
+    const response = await POST(poll());
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('9');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({ error: 'slow_down', interval: 9 });
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('never suggests polling faster than the interval it advertised', async () => {
+    const { withRateLimit } = await import('@/lib/rate-limit');
+    vi.mocked(withRateLimit).mockResolvedValueOnce(
+      NextResponse.json({ error: 'Too many requests' }, { status: 429 }),
+    );
+
+    const response = await POST(poll());
+    const body = (await response.json()) as { interval: number };
+
+    expect(body.interval).toBe(DEVICE_POLL_INTERVAL_SECONDS);
   });
 
   it('points a stale-assent poll at re-acceptance instead of burning the code', async () => {

@@ -94,6 +94,28 @@ export async function notifyNewDeviceRegistered(
   });
 }
 
+/**
+ * A spent credential presented a second time means someone else holds a copy.
+ * The device it belonged to is already signed out by the time this is sent.
+ */
+export async function notifyDeviceCredentialCompromised(
+  db: DatabaseAdapter,
+  input: { userId: string; sessionRef: string; deviceName: string | null },
+): Promise<void> {
+  const label = input.deviceName?.trim() || 'A signed-in device';
+  await recordNotification(db, {
+    userId: input.userId,
+    category: 'security',
+    severity: 'error',
+    title: `${label} was signed out to protect your account`,
+    message:
+      'Its sign-in credential was presented twice, which happens when a copy of it has been taken. ' +
+      'Sign in on that device again, and if you did not expect this, review your account security.',
+    target: { kind: 'settings', id: DEVICES_SETTINGS_SECTION },
+    dedupeKey: `device-credential-compromised:${input.sessionRef}`,
+  });
+}
+
 export async function notifyDeviceDisconnected(
   db: DatabaseAdapter,
   input: { userId: string; deviceId: string; kind: string; name: string | null },
