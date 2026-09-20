@@ -105,7 +105,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 93 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-19.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 95 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-19.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -381,6 +381,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-20',
+                        value:
+                          'Re-measured after the deletion graph was closed over the database schema instead of a hand-kept list. Three stores had kept an erased account\u2019s identifiers: referrals, the cloud waitlist and device installations. Referrals and device installations joined the enumerated erasure list, which grew from 93 user-scoped tables to 95; the cloud waitlist is keyed by address rather than by account and joined the address-keyed erasure list.',
+                      },
                       {
                         label: '2026-09-19',
                         value:

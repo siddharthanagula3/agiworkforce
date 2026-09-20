@@ -84,6 +84,7 @@ describe('GET what a legal hold preserves', () => {
       resourceType: 'conversation',
       table: 'web_conversations',
       preserved: 4,
+      referenceOnly: 0,
     });
     expect(asked.map((entry) => entry.params[0])).toEqual([
       'conversation',
@@ -104,7 +105,9 @@ describe('GET what a legal hold preserves', () => {
     const body = await (await call()).json();
 
     expect(asked).toHaveLength(1);
-    expect(body.stores).toEqual([{ resourceType: 'file', table: 'media_assets', preserved: 3 }]);
+    expect(body.stores).toEqual([
+      { resourceType: 'file', table: 'media_assets', preserved: 3, referenceOnly: 0 },
+    ]);
   });
 
   it('says so when an active hold is preserving nothing at all', async () => {
