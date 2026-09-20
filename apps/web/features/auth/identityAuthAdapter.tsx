@@ -30,12 +30,8 @@ const FIRST_FACTOR_METHODS: Readonly<Record<string, AuthMethodId>> = {
   passkey: 'passkey',
 };
 
-/**
- * An address an enterprise connection covers is the organization's to
- * authenticate, so its connection outranks any personal factor the same account
- * also holds. Falling through to an emailed code would let someone keep a
- * personal way in to an account the organization has taken over.
- */
+// An address an enterprise connection covers is the organization's to
+// authenticate, so that connection outranks any personal factor on the account.
 const ENTERPRISE_SSO_STRATEGY = 'enterprise_sso';
 
 const SECOND_FACTOR_KINDS: Readonly<Record<string, AuthSecondFactorKind>> = {
