@@ -46,7 +46,9 @@ async function handleGetMemories(request: NextRequest) {
               to_jsonb(m)->>'project_id' as project_id,
               p.name as project_name
        from user_memories m
-       left join user_projects p on p.id::text = to_jsonb(m)->>'project_id'
+       left join user_projects p
+         on p.id::text = to_jsonb(m)->>'project_id'
+        and p.deleted_at is null
        where m.user_id = $1 and ${activeMemoryPredicate('m.')}
          and ${workspaceMemoryPredicate(4, 'm.')}
        order by m.pinned desc, m.updated_at desc

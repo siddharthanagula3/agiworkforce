@@ -306,41 +306,6 @@
       "table": "web_conversations",
       "class": "ownership-check",
       "why": "The read resolves which project a conversation belongs to so a memory is written into the right scope; it returns no conversation content."
-    },
-    {
-      "file": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
-      "table": "web_conversations",
-      "class": "defect",
-      "why": "Compaction reads the conversation summary without excluding a withdrawn conversation, so a deleted thread can still be summarised into a model prompt.",
-      "fix": "Add deleted_at is null to the compaction conversation read."
-    },
-    {
-      "file": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
-      "table": "web_messages",
-      "class": "defect",
-      "why": "Compaction selects the persisted message ids with no deletion predicate, so a message the user deleted is still eligible to enter the model context.",
-      "fix": "Add m.deleted_at is null to the persisted-id read, matching the thread read."
-    },
-    {
-      "file": "apps/web/lib/services/retrieval-index-service.ts",
-      "table": "cloud_code_sessions",
-      "class": "defect",
-      "why": "Retrieval rebuilds a developer session document without excluding archived sessions, so an archived session is still eligible for a model context that the shared contract says it is not.",
-      "fix": "Add archived_at is null to the developer_session branch of the retrieval read."
-    },
-    {
-      "file": "apps/web/app/api/memory/route.ts",
-      "table": "user_projects",
-      "class": "defect",
-      "why": "The memory list joins the project name with no deletion predicate, so a deleted project is still named beside the memories it scoped.",
-      "fix": "Add p.deleted_at is null to the left join."
-    },
-    {
-      "file": "apps/web/lib/services/managed-memory-context-service.ts",
-      "table": "user_projects",
-      "class": "defect",
-      "why": "The memory context resolves the project row with no deletion predicate, so a deleted project can still scope what a model is given.",
-      "fix": "Add deleted_at is null to the project read."
     }
   ],
   "hardDeleteStores": {

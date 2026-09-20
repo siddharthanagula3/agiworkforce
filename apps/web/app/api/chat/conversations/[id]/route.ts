@@ -36,9 +36,16 @@ function isUndefinedColumn(error: unknown): boolean {
   );
 }
 
+// The cached compaction summary is model-facing text written from this
+// conversation, so it goes when the conversation does rather than waiting for a
+// restore to hand it back.
 const DELETE_CONVERSATION_SQL = `
   update web_conversations
-     set deleted_at = now(), updated_at = now()
+     set deleted_at = now(),
+         updated_at = now(),
+         compaction_summary = null,
+         compaction_summary_through_message_id = null,
+         compaction_summary_digest = null
    where id = $1
      and user_id = $2
      and organization_id is not distinct from $3

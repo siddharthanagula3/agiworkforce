@@ -130,6 +130,16 @@
       "file": "apps/web/lib/server/risk-signals.ts",
       "migration": 278,
       "reason": "Reads columns this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
+      "migration": 280,
+      "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
+      "migration": 280,
+      "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
     }
   ]
 }
