@@ -6,7 +6,13 @@ import {
   IDENTITY_SECURITY_EVENT_KEYS,
   IDENTITY_SECURITY_EVENTS,
 } from '@/lib/services/identity-events/catalogue';
-import { RISK_SIGNALS, assessRisk, type RiskObservation } from '@/lib/server/risk-signals';
+import {
+  FACTOR_CHANGE_EVENTS,
+  RISK_SIGNALS,
+  assessRisk,
+  type RiskContext,
+  type RiskObservation,
+} from '@/lib/server/risk-signals';
 
 const WEB_ROOT = path.resolve(import.meta.dirname, '../..');
 const RISK_SOURCE = fs.readFileSync(path.join(WEB_ROOT, 'lib/server/risk-signals.ts'), 'utf8');
@@ -26,6 +32,7 @@ function observation(overrides: Partial<RiskObservation> = {}): RiskObservation 
     latitude: null,
     longitude: null,
     deviceRef: 'device-known',
+    userAgentRef: 'client-known',
     surface: 'web',
     observedAt: at(0),
     ...overrides,
@@ -38,11 +45,27 @@ function observation(overrides: Partial<RiskObservation> = {}): RiskObservation 
  * fails here rather than sitting unreachable.
  */
 const REACHES: Readonly<
-  Record<(typeof RISK_SIGNALS)[number], { history: RiskObservation[]; current: RiskObservation }>
+  Record<
+    (typeof RISK_SIGNALS)[number],
+    { history: RiskObservation[]; current: RiskObservation; context?: RiskContext }
+  >
 > = {
   new_device: {
     history: [observation({ observedAt: at(-86_400_000) })],
     current: observation({ deviceRef: 'device-unseen' }),
+  },
+  new_browser: {
+    history: [observation({ observedAt: at(-86_400_000) })],
+    current: observation({ userAgentRef: 'client-unseen' }),
+  },
+  credential_stuffing: {
+    history: [],
+    current: observation(),
+    context: { otherAccountsFailedFromAddress: 3 },
+  },
+  recovery_attempt: {
+    history: [],
+    current: observation({ eventKey: 'recovery_requested' }),
   },
   new_location: {
     history: [observation({ observedAt: at(-86_400_000) })],
@@ -74,10 +97,11 @@ const REACHES: Readonly<
  * drawn from any of these would refuse sign-ins along a protected line while
  * looking like a security control.
  */
-const PROTECTED_ATTRIBUTES = [
+const PROTECTED_ATTRIBUTES: readonly (string | RegExp)[] = [
   'gender',
   'sex',
-  'age',
+  // A prefix match would read the client header name as an age.
+  /\bage(?![a-z])/i,
   'birth',
   'dob',
   'ethnic',
@@ -107,7 +131,7 @@ describe('the risk engine speaks one vocabulary with the identity catalogue', ()
       const fixture = REACHES[signal];
       expect(fixture, `${signal} has no history that produces it`).toBeDefined();
       expect(
-        assessRisk(fixture.history, fixture.current).signals,
+        assessRisk(fixture.history, fixture.current, fixture.context).signals,
         `${signal} is declared but unreachable`,
       ).toContain(signal);
     }
@@ -123,16 +147,8 @@ describe('the risk engine speaks one vocabulary with the identity catalogue', ()
   });
 
   it('pairs the factor change with an event the catalogue actually emits', () => {
-    const factorChangeBlock = RISK_SOURCE.slice(
-      RISK_SOURCE.indexOf('FACTOR_CHANGE_EVENTS'),
-      RISK_SOURCE.indexOf(']', RISK_SOURCE.indexOf('FACTOR_CHANGE_EVENTS')),
-    );
-    const factorChangeEvents = [...factorChangeBlock.matchAll(/'([a-z_]+)'/g)].map(
-      (match) => match[1]!,
-    );
-
-    expect(factorChangeEvents.length).toBeGreaterThan(0);
-    const unknown = factorChangeEvents.filter(
+    expect(FACTOR_CHANGE_EVENTS.size).toBeGreaterThan(0);
+    const unknown = [...FACTOR_CHANGE_EVENTS].filter(
       (event) => !(IDENTITY_SECURITY_EVENT_KEYS as readonly string[]).includes(event),
     );
     expect(
@@ -143,18 +159,17 @@ describe('the risk engine speaks one vocabulary with the identity catalogue', ()
   });
 
   it('covers a change to each credential a person signs in with', () => {
-    const factorChangeBlock = RISK_SOURCE.slice(
-      RISK_SOURCE.indexOf('FACTOR_CHANGE_EVENTS'),
-      RISK_SOURCE.indexOf(']', RISK_SOURCE.indexOf('FACTOR_CHANGE_EVENTS')),
-    );
     for (const event of [
       'password_changed',
       'email_changed',
       'passkey_added',
       'backup_codes_regenerated',
       'two_factor_disabled',
+      'recovery_requested',
     ]) {
-      expect(factorChangeBlock, `${event} is not treated as a change of factor`).toContain(event);
+      expect(FACTOR_CHANGE_EVENTS.has(event), `${event} is not treated as a change of factor`).toBe(
+        true,
+      );
     }
   });
 
@@ -173,8 +188,10 @@ describe('the risk engine speaks one vocabulary with the identity catalogue', ()
 
   it('infers nothing from who a person is', () => {
     const found = PROTECTED_ATTRIBUTES.filter((attribute) =>
-      new RegExp(`\\b${attribute}`, 'i').test(RISK_SOURCE),
-    );
+      (attribute instanceof RegExp ? attribute : new RegExp(`\\b${attribute}`, 'i')).test(
+        RISK_SOURCE,
+      ),
+    ).map(String);
     expect(
       found,
       `the risk engine reads an attribute that describes the person rather than the request: ` +

@@ -15,6 +15,14 @@ const mocks = vi.hoisted(() => ({
     organizationId: null,
   })),
   recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
+  secretMode: vi.fn(
+    async (
+      ..._args: unknown[]
+    ): Promise<{ mode: 'warn' | 'redact' | 'block'; organizationId: string | null }> => ({
+      mode: 'warn',
+      organizationId: null,
+    }),
+  ),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -41,6 +49,10 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
+}));
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  resolveSecretHandlingPolicy: (...a: unknown[]) => mocks.secretMode(...a),
 }));
 
 const { POST, GET, PATCH } = await import('./route');
@@ -94,6 +106,7 @@ describe('POST /api/artifacts/publish', () => {
     vi.clearAllMocks();
     mocks.csrf.mockResolvedValue(null);
     mocks.rateLimit.mockResolvedValue(null);
+    mocks.secretMode.mockResolvedValue({ mode: 'warn', organizationId: null });
     mocks.query.mockResolvedValue([publishRow()]);
     mocks.scopedDb.mockResolvedValue({
       db: {
@@ -147,6 +160,46 @@ describe('POST /api/artifacts/publish', () => {
   it('does not record an audit event when the content is clean', async () => {
     await POST(postRequest(VALID_BODY));
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.secretMode).not.toHaveBeenCalled();
+  });
+
+  it('refuses the publish when the workspace policy blocks secrets', async () => {
+    mocks.secretMode.mockResolvedValue({ mode: 'block', organizationId: 'org-1' });
+    const stripeKey = `sk_live_${'a'.repeat(30)}`;
+
+    const response = await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+    const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
+      eventType: string;
+      organizationId: string | null;
+      outcome: string;
+    };
+    expect(event.eventType).toBe('dlp_content_blocked');
+    expect(event.outcome).toBe('denied');
+    expect(event.organizationId).toBe('org-1');
+  });
+
+  it('refuses the publish when the workspace policy cannot be read', async () => {
+    mocks.secretMode.mockRejectedValue(new Error('policy store unreachable'));
+    const stripeKey = `sk_live_${'a'.repeat(30)}`;
+
+    const response = await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
+  });
+
+  it('redacts rather than warns, because a published link is world readable', async () => {
+    const stripeKey = `sk_live_${'a'.repeat(30)}`;
+    await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
+
+    expect(mocks.secretMode).toHaveBeenCalled();
+    const [, params] = insertCall();
+    expect(String(params[7])).not.toContain(stripeKey);
+    const event = mocks.recordAuditEvent.mock.calls[0]![0] as { detail: Record<string, unknown> };
+    expect(event.detail['status']).toBe('redacted');
   });
 
   it('refuses a cross-site publish before writing anything', async () => {
@@ -354,6 +407,7 @@ describe('published artifact version history', () => {
     vi.clearAllMocks();
     mocks.csrf.mockResolvedValue(null);
     mocks.rateLimit.mockResolvedValue(null);
+    mocks.secretMode.mockResolvedValue({ mode: 'warn', organizationId: null });
     mocks.scopedDb.mockResolvedValue({
       db: {
         query: (...args: unknown[]) => mocks.query(...args),
@@ -437,6 +491,28 @@ describe('published artifact version history', () => {
 
     const [, params] = insertCall();
     expect(params[7]).toBe('<h1>v1</h1>');
+  });
+
+  it('refuses to restore a version whose content the policy now blocks', async () => {
+    mocks.secretMode.mockResolvedValue({ mode: 'block', organizationId: 'org-1' });
+    const stripeKey = `sk_live_${'a'.repeat(30)}`;
+    mocks.query.mockImplementation(
+      routeVersionQueries({
+        ownership: [{ id: 'row-1', artifact_id: 'artifact-1', conversation_id: null }],
+        target: [versionRow({ content: `key='${stripeKey}'` })],
+      }),
+    );
+
+    const response = await PATCH(
+      new NextRequest('https://agiworkforce.com/api/artifacts/publish', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: TOKEN, version: 1 }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
   });
 
   it('answers 404 for a version that is not in the history', async () => {

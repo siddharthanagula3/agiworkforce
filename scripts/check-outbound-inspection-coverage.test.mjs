@@ -72,19 +72,28 @@ const ALL_WIRED = {
   'apps/web/app/api/connectors/route.ts': CALL_SITE('connector_write'),
   'apps/web/app/api/share/route.ts': CALL_SITE('share'),
   'apps/web/app/api/uploads/route.ts': CALL_SITE('upload'),
+  'apps/web/app/api/artifacts/publish/route.ts': CALL_SITE('artifact_publish'),
 };
 
-test('passes when every channel but the one it owes is inspected', () => {
+test('passes when every declared channel is inspected', () => {
   const result = run(fixture(ALL_WIRED));
   assert.equal(result.code, 0);
-  assert.match(result.output, /4 outbound channels, 3 inspected at 3 call sites, 1 owed/);
+  assert.match(result.output, /4 outbound channels, 4 inspected at 4 call sites, 0 owed/);
 });
 
-test('fails when a channel loses its only call site', () => {
-  const { 'apps/web/app/api/share/route.ts': _dropped, ...rest } = ALL_WIRED;
-  const result = run(fixture(rest));
-  assert.equal(result.code, 1);
-  assert.match(result.output, /the channel 'share' is declared but nothing calls/);
+test('fails for whichever channel loses its only call site', () => {
+  for (const dropped of Object.keys(ALL_WIRED)) {
+    const rest = Object.fromEntries(
+      Object.entries(ALL_WIRED).filter(([relative]) => relative !== dropped),
+    );
+    const channel = [...wiredChannels(ALL_WIRED[dropped])][0];
+    const result = run(fixture(rest));
+    assert.equal(result.code, 1, `dropping ${channel} was accepted`);
+    assert.match(
+      result.output,
+      new RegExp(`the channel '${channel}' is declared but nothing calls`),
+    );
+  }
 });
 
 test('fails when a scanner claims a channel the vocabulary does not have', () => {
@@ -107,15 +116,12 @@ test('fails when the inspection stops recording what it blocked', () => {
   assert.match(result.output, /no longer records what it blocked or redacted/);
 });
 
-test('fails when the owed channel is wired but its baseline entry stays', () => {
+test('fails when a new channel is declared with nothing behind it', () => {
   const result = run(
-    fixture({
-      ...ALL_WIRED,
-      'apps/web/app/api/artifacts/publish/route.ts': CALL_SITE('artifact_publish'),
-    }),
+    fixture(ALL_WIRED, MODULE.replace("| 'upload';", "| 'upload' | 'webhook_post';")),
   );
   assert.equal(result.code, 1);
-  assert.match(result.output, /is wired now; remove its baseline entry/);
+  assert.match(result.output, /the channel 'webhook_post' is declared but nothing calls/);
 });
 
 test('fails when the module is gone', () => {
