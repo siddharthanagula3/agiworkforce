@@ -1170,3 +1170,50 @@ Logs: `/tmp/agi-windows-portability-final.log` and the earlier diagnostic
 CLI Clippy passed with `-D warnings -D unsafe-code`. Rust formatting and diff
 checks passed. The security-gate policy continues to allow its separate,
 explicitly registered maintenance advisory and local lock-drift exclusions.
+
+### Remote verification checkpoint after `f9777a111`
+
+The normal pre-commit and clean-worktree pre-push checks passed, and remote main
+advanced to `f9777a111`. CI run `35501315844` now enforces Windows test failures;
+its Windows job is `106053497365`. `/tmp/agi-windows-strict-ci-watch.log` records
+progress. No Windows runtime success is claimed until the actual test output is
+available. The coordinator worktree is
+`/Users/siddhartha/.codex/worktrees/ci-security-continuation/agiworkforce`.
+
+The previous run `35499143996` completed, including its repaired Next production
+build: 383 static pages, successful TypeScript, 41 successful build tasks, and
+22,894 passing web tests across 2,174 files. Raw evidence:
+`/tmp/agi-js-99fd-final.log`. The new commit changes no JavaScript application
+package, so its affected-package lint/typecheck/test/build steps select zero
+tasks; its separate webview suite passes 221 cases. Do not describe that short
+job as a fresh full web build. Its raw log is `/tmp/agi-js-f977-final.log`.
+
+The obsolete production workflow `35501303092` targeted `99fd8a995` and waited
+for `production-web` approval before any deploy started. It was canceled so the
+known masked-Windows result cannot promote or block the corrected release queue.
+Jev selected that action at confidence 0.98, request hash
+`b102fb4f6bb992cd5407723ca11b94e6cd03092c5394e460f761f412836e52a2`.
+No approval requirement or production configuration was changed. The separate
+signaling workflow `35501303198` passed its service tests and is building its
+container. Production backup credentials and the required approval remain gates.
+
+Next action: inspect raw Windows test results for run `35501315844`, repair any
+remaining native failures rather than suppressing them, then recheck final CI,
+CodeQL `35501315321`, Rust Security `35501315847`, and open security alerts.
+
+### Signaling cleanup package identity
+
+Signaling run `35501303198` passed tests and its container build, but its advisory
+cleanup job `106054256531` failed with `get versions API failed. Package not
+found.` The build publishes `${github.repository}/signaling-server`; cleanup
+incorrectly requested only `signaling-server`. Cleanup now derives the owner and
+complete package name from the canonical `IMAGE_NAME`, preserving its existing
+five-untagged-version retention setting and permissions. The action documents
+owner and package name as separate inputs:
+[delete-package-versions](https://github.com/actions/delete-package-versions#usage).
+Jev selected this scoped repair at confidence 0.99, request hash
+`4c39ca4c502d28d32263fd3c9209287a344a85aea38a11bedff48465760290e2`.
+Evidence: `/tmp/agi-signaling-cleanup-failure.log`. CLI package enumeration is
+unavailable because its credential lacks `read:packages`; the workflow uses its
+own package-enabled token. Actual cleanup success remains a remote requirement.
+Railway and Fly deployments were skipped; no production service URL is configured.

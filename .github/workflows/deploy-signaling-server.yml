@@ -337,10 +337,18 @@ jobs:
       packages: write
 
     steps:
+      - name: Resolve the published container package
+        id: package
+        shell: bash
+        run: |
+          printf 'owner=%s\n' "${IMAGE_NAME%%/*}" >> "$GITHUB_OUTPUT"
+          printf 'name=%s\n' "${IMAGE_NAME#*/}" >> "$GITHUB_OUTPUT"
+
       - name: Delete old container images
         uses: actions/delete-package-versions@v5
         with:
-          package-name: signaling-server
+          owner: ${{ steps.package.outputs.owner }}
+          package-name: ${{ steps.package.outputs.name }}
           package-type: container
           min-versions-to-keep: 5
           delete-only-untagged-versions: true
