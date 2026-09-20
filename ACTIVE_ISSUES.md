@@ -8,6 +8,22 @@ The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
 
+## CI-NATIVE-CACHE-2026-09-20
+
+The four explicit Rust caches in `.github/workflows/ci.yml` target
+`apps/desktop/src-tauri/target`, but Cargo's workspace output is root `target`.
+Windows run `35503385094` restored a 305 MB registry/source cache for the wrong
+path, plus a separate setup-toolchain cache for the correct root path containing
+only 1,357 bytes. Both immutable entries then reported up to date. This supports
+avoidable cold-build work, not a claim that all native runtime is cache overhead.
+The current run uses a changed lockfile hash, so its implicit root cache may
+populate correctly. No timeout or cache-caused correctness failure was observed.
+Consolidate cache ownership around Cargo metadata's actual target directory in
+a separate performance change, with one cold/warm comparison and no relaxed
+checks. Escalate only if cache behavior blocks the current correctness run.
+Evidence: `/tmp/agi-windows-9c24-clean.log`, job `106059036315`, and
+`.github/workflows/ci.yml` cache declarations.
+
 ## CI-COVERAGE-GATE-2026-09-20
 
 The Priority Level 1 coverage step hid 462 failed tests in run `35499143990`
@@ -17,7 +33,15 @@ The package-owned runner repair preserves all 23 projects and existing package
 floors, propagates failures, and merges fresh reports. The full run measured
 79.79% aggregate coverage with 33,710 passing tests and three stale signup-fixture
 failures. Those three now pass in a targeted rerun. Routing and sync package-floor
-gaps also pass after meaningful boundary tests. Remote workflow verification remains pending. Do not
+gaps also pass after meaningful boundary tests. The next remote run `35505437305`
+measured 79.79% and exposed two web failures: missing Chromium and 64 MiB fixture
+compression exceeding the test timeout under instrumentation. The follow-up installs
+Chromium and uses a measured 256 KiB fixture above the same ratio ceiling; all 12
+focused browser/security cases and 20 harness checks pass. Remote revalidation remains pending.
+Codecov accepted GitHub OIDC issuance but rejected repository lookup with HTTP 404
+`Repository not found`; its browser setup is blocked at GitHub sign-in. Activate or
+repair the existing Codecov repository connection, then rerun the failed uploader.
+Do not disable the upload failure gate or broaden token permissions. Do not
 lower the floor or count the old green job as successful coverage. Evidence and
 next verification: [deployment handoff](docs/work/deployment-handoff-2026-09-19.md#coverage-gate-integrity-follow-up).
 
