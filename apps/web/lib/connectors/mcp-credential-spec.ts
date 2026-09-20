@@ -6,7 +6,7 @@ import {
 } from '@modelcontextprotocol/client';
 
 import { logger } from '@/lib/logger';
-import { assertResolvedPublicHostname, pinnedPublicFetch } from '@/lib/egress-policy';
+import { createDeadline, guardedFetch } from '@/lib/url-fetch/guarded-fetch';
 import { AUTHORIZATION_HEADER_NAME, BEARER_VALUE_PREFIX } from '@/lib/custom-connector-crypto';
 import { NeonMcpResponseCacheStore } from '@/lib/connectors/mcp-runtime-cache';
 import {
@@ -149,20 +149,29 @@ export function parseChallengeScheme(wwwAuthenticate: string | null): string | n
   return match?.[1] ?? null;
 }
 
+/**
+ * The challenge belongs to the server the user registered. A redirect would be
+ * a different server answering for it, so no hop is allowed.
+ */
 async function challengeScheme(mcpUrl: string): Promise<string | null> {
+  const deadline = createDeadline(PROBE_TIMEOUT_MS);
   try {
-    await assertResolvedPublicHostname(mcpUrl);
-    const response = await pinnedPublicFetch(mcpUrl, {
+    const outcome = await guardedFetch(new URL(mcpUrl), {
+      deadline,
+      maxRedirects: 0,
       method: 'POST',
-      headers: { 'content-type': JSON_MEDIA_TYPE, accept: PROBE_ACCEPT },
       body: initializeProbeBody(),
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      headers: { 'content-type': JSON_MEDIA_TYPE, accept: PROBE_ACCEPT },
     });
+    if (!outcome.ok || outcome.kind !== 'response') return null;
+    const response = outcome.response;
     await response.body?.cancel().catch(() => undefined);
     if (!CHALLENGE_STATUSES.has(response.status)) return null;
     return parseChallengeScheme(response.headers.get(WWW_AUTHENTICATE_HEADER));
   } catch {
     return null;
+  } finally {
+    deadline.release();
   }
 }
 
