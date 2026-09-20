@@ -31,7 +31,6 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'artifacts/publish/[token]/route.ts', reason: 'own_content' },
   { route: 'auth/desktop-token/route.ts', reason: 'no_governed_state' },
   { route: 'auth/device/code/route.ts', reason: 'no_governed_state' },
-  { route: 'auth/device/refresh/route.ts', reason: 'no_governed_state' },
   { route: 'auth/device/token/route.ts', reason: 'no_governed_state' },
   { route: 'beta/apply/route.ts', reason: 'pre_account' },
   { route: 'chat/conversations/[id]/branches/route.ts', reason: 'own_content' },

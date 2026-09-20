@@ -26,3 +26,37 @@ export function hasOutlivedAbsoluteLifetime(createdAt: number | null, now: numbe
   const deadline = sessionAbsoluteDeadline(createdAt);
   return deadline !== null && deadline <= now;
 }
+
+/**
+ * `idle` is the provider's own expiry, which renews on use and so ends a session
+ * that stopped being used; `absolute` is this product's cap on total age.
+ */
+export type SessionLifetimeBound = 'idle' | 'absolute';
+
+export interface SessionLifetime {
+  createdAt: number | null;
+  expireAt: number | null;
+}
+
+export function hasOutlivedIdleLifetime(expireAt: number | null, now: number): boolean {
+  return expireAt !== null && expireAt <= now;
+}
+
+/**
+ * The one answer to "should this session still be honoured". Both bounds are
+ * asked here so a caller cannot enforce one and forget the other.
+ */
+export function sessionLifetimeExceeded(
+  session: SessionLifetime,
+  now: number,
+): SessionLifetimeBound | null {
+  if (hasOutlivedAbsoluteLifetime(session.createdAt, now)) return 'absolute';
+  if (hasOutlivedIdleLifetime(session.expireAt, now)) return 'idle';
+  return null;
+}
+
+export const SESSION_LIFETIME_AUDIT_SOURCE: Readonly<Record<SessionLifetimeBound, string>> =
+  Object.freeze({
+    absolute: 'absolute_session_timeout',
+    idle: 'idle_session_timeout',
+  });

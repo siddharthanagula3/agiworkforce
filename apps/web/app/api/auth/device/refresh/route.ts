@@ -15,6 +15,11 @@ import {
 } from '@/lib/server/device-refresh-token';
 import { issueDeveloperToken } from '@/lib/server/developer-token';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordAuditEvent } from '@/lib/security-audit';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+import { finishFamilyAsCompromised } from '@/lib/server/refresh-token-family';
+import { notifyDeviceCredentialCompromised } from '@/lib/services/account-activity-notifications';
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 
 export const runtime = 'nodejs';
@@ -53,7 +58,15 @@ type RotationResult =
       accessExpiresIn: number;
       refreshToken: string;
     }
-  | { kind: 'invalid' | 'expired' | 'replayed' | 'erased' | 'terms_required' };
+  | {
+      kind: 'replayed';
+      userId: string;
+      familyId: string;
+      deviceName: string | null;
+      revoked: number;
+      compromiseRecorded: boolean;
+    }
+  | { kind: 'invalid' | 'expired' | 'erased' | 'terms_required' };
 
 async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'device-poll');
@@ -99,13 +112,20 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     }
 
     if (current.used_at) {
-      await tx.execute(
-        `UPDATE device_refresh_tokens
-            SET revoked_at = COALESCE(revoked_at, $2)
-          WHERE family_id = $1`,
-        [current.family_id, nowIso],
-      );
-      return { kind: 'replayed' };
+      const outcome = await finishFamilyAsCompromised(tx, {
+        familyId: current.family_id,
+        userId: current.user_id,
+        reason: 'replayed',
+        at: nowIso,
+      });
+      return {
+        kind: 'replayed',
+        userId: current.user_id,
+        familyId: current.family_id,
+        deviceName: current.device_name,
+        revoked: outcome.revoked,
+        compromiseRecorded: outcome.compromiseRecorded,
+      };
     }
     if (current.revoked_at) return { kind: 'invalid' };
     if (new Date(current.expires_at) <= new Date()) {
@@ -177,6 +197,45 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
         acceptance_url: termsAcceptanceUrl(request),
       },
       { status: 403, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  if (result.kind === 'replayed') {
+    const sessionRef = pseudonymizeIdentifier(result.familyId, 'device-session', 12);
+    logger.warn(
+      {
+        reason: result.kind,
+        sessionRef,
+        revoked: result.revoked,
+        compromiseRecorded: result.compromiseRecorded,
+      },
+      'Device refresh credential replayed; family finished as compromised',
+    );
+    try {
+      await notifyDeviceCredentialCompromised(
+        createClaimedUserScopedDb(db, { userId: result.userId, organizationId: null }),
+        { userId: result.userId, sessionRef, deviceName: result.deviceName },
+      );
+    } catch (error) {
+      logger.warn({ error, sessionRef }, 'Device compromise notice could not be recorded');
+    }
+    await recordAuditEvent({
+      userId: result.userId,
+      eventType: 'refresh_family_compromised',
+      request,
+      severity: 'critical',
+      detail: {
+        resourceType: 'session',
+        resourceId: sessionRef,
+        source: 'device_refresh_replay',
+        reason: 'replayed',
+        count: result.revoked,
+        status: result.compromiseRecorded ? 'recorded' : 'revoked_only',
+      },
+    });
+    return NextResponse.json(
+      { error: 'invalid_grant' },
+      { status: 400, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 

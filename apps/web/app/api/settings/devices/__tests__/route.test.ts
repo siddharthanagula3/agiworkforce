@@ -535,6 +535,24 @@ describe('reporting a device lost', () => {
     });
   }
 
+  it('tells the account holder the device is gone, naming it', async () => {
+    bindRegisteredDevice();
+
+    const response = await DELETE(unlinkRequest({ lost: true }), params(REGISTERED_ID));
+
+    expect(response.status).toBe(200);
+    expect(mockNotifyDisconnected).toHaveBeenCalledTimes(1);
+    const [, notice] = mockNotifyDisconnected.mock.calls[0] as unknown as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(notice).toMatchObject({
+      deviceId: REGISTERED_ID,
+      kind: 'desktop',
+      name: 'Stolen laptop',
+    });
+  });
+
   it('finishes the credential family for good and withdraws remote control', async () => {
     bindRegisteredDevice();
 
