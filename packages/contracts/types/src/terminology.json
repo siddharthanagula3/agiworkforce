@@ -1,0 +1,117 @@
+{
+  "why": "A glossary nobody can check is a document. Every term here names the one artifact in the tree that owns it, so two words that mean the same thing cannot both be canonical and a word that quietly acquired a second meaning fails rather than drifts.",
+  "terms": [
+    {
+      "term": "account",
+      "means": "the person who signed in; the thing a login resolves to and the thing a row belongs to",
+      "owns": { "kind": "columnRole", "key": "owner" }
+    },
+    {
+      "term": "tenant",
+      "means": "the scope a row is filed under, which is a question about the row and never an object in its own right",
+      "owns": { "kind": "columnRole", "key": "tenant" }
+    },
+    {
+      "term": "organization",
+      "means": "the billed and governed company an account belongs to; the object a tenant scope points at",
+      "owns": { "kind": "table", "key": "organizations" }
+    },
+    {
+      "term": "workspace",
+      "means": "the named container a member switches between, personal or organizational; it is not the organization, because a personal one has no organization at all",
+      "owns": { "kind": "table", "key": "workspaces" }
+    },
+    {
+      "term": "capability",
+      "means": "something the product can do on a surface, before anybody asks whether this caller may",
+      "owns": {
+        "kind": "vocabulary",
+        "file": "packages/contracts/types/src/capabilities.ts",
+        "symbol": "PlatformCapability"
+      }
+    },
+    {
+      "term": "entitlement",
+      "means": "what the plan the account pays for carries",
+      "owns": {
+        "kind": "vocabulary",
+        "file": "packages/contracts/types/src/billing-catalog.ts",
+        "symbol": "BillingPlanCapability"
+      }
+    },
+    {
+      "term": "policy",
+      "means": "what the organization has decided its members may do, whatever their plan carries",
+      "owns": {
+        "kind": "vocabulary",
+        "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+        "symbol": "WORKSPACE_FEATURES"
+      }
+    },
+    {
+      "term": "permission",
+      "means": "what this member's role lets them administer, whatever the organization allows its members generally",
+      "owns": {
+        "kind": "vocabulary",
+        "file": "packages/contracts/types/src/enterprise/permissions.ts",
+        "symbol": "ADMIN_PERMISSION_AREAS"
+      }
+    },
+    {
+      "term": "conversation",
+      "means": "the stored thread of messages; chat is the surface it is read on",
+      "owns": { "kind": "concept", "key": "conversation" }
+    },
+    {
+      "term": "artifact",
+      "means": "a document or program the assistant produced that the user keeps",
+      "owns": { "kind": "concept", "key": "artifact" }
+    },
+    {
+      "term": "connector",
+      "means": "a connection to a third party the account authorized",
+      "owns": { "kind": "concept", "key": "connector" }
+    },
+    {
+      "term": "schedule",
+      "means": "a task the product runs later without being asked again",
+      "owns": { "kind": "concept", "key": "schedule" }
+    }
+  ],
+  "distinctions": [
+    {
+      "words": ["account", "tenant", "organization", "workspace"],
+      "why": "conflating them is how a personal workspace inherits an organization's policy and how deleting a company deletes a person"
+    },
+    {
+      "words": ["capability", "entitlement", "policy", "permission"],
+      "why": "each answers a different question, so a refusal that names the wrong one sends the user to buy an upgrade that cannot help them"
+    }
+  ],
+  "retired": [
+    { "word": "org", "use": "organization" },
+    { "word": "orgs", "use": "organization" },
+    { "word": "ws", "use": "workspace" },
+    { "word": "msg", "use": "message" },
+    { "word": "msgs", "use": "message" },
+    { "word": "convo", "use": "conversation" },
+    { "word": "convos", "use": "conversation" },
+    { "word": "usr", "use": "account" },
+    { "word": "acct", "use": "account" },
+    { "word": "perm", "use": "permission" },
+    { "word": "perms", "use": "permission" },
+    { "word": "ent", "use": "entitlement" }
+  ],
+  "namedSurfaces": {
+    "apiRoot": "apps/web/app/api",
+    "promptRoot": "apps/web/lib/prompts"
+  },
+  "conflations": [
+    {
+      "concept": "workspace",
+      "tables": ["workspaces", "organizations"],
+      "why": "one concept owns the table for the container and the table for the company, so nothing in the registry distinguishes a personal workspace from the organization a workspace may belong to, and workspaces.kind is the only thing that does",
+      "fix": "split the registry entry into an organization concept over organizations and organization_members and a workspace concept over workspaces, with the workspace parented on the organization when workspaces.kind is organization"
+    }
+  ]
+}

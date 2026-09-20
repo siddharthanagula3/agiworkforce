@@ -1,0 +1,142 @@
+{
+  "why": "A server that cannot tell which build is calling it cannot refuse a dangerously old one, cannot degrade a feature for a client that will not render it, and cannot answer 'which version broke' after the fact. These three headers are the whole handshake, and every surface that reaches the API owes all three.",
+  "headers": {
+    "surface": {
+      "value": "x-agi-surface",
+      "symbol": "SURFACE_REQUEST_HEADER",
+      "declaredIn": "apps/web/lib/observability/request-labels.ts",
+      "answers": "which product surface is calling"
+    },
+    "clientVersion": {
+      "value": "x-agi-client-version",
+      "symbol": "CLIENT_VERSION_HEADER",
+      "declaredIn": "packages/contracts/cloud-contracts/src/me.ts",
+      "answers": "which build of that surface the user is running"
+    },
+    "apiVersion": {
+      "value": "x-agi-api-version",
+      "symbol": "API_VERSION_REQUEST_HEADER",
+      "declaredIn": "apps/web/lib/api-gateway-policy.ts",
+      "answers": "which request and response shapes that build was written against"
+    }
+  },
+  "clients": [
+    {
+      "surface": "web",
+      "roots": ["apps/web/lib/hooks", "apps/web/features", "apps/web/shared"],
+      "sends": ["surface"],
+      "defects": [
+        {
+          "header": "clientVersion",
+          "fix": "set CLIENT_VERSION_HEADER from the build version in apps/web/lib/hooks/useChatStream.ts beside the X-AGI-Surface header it already sets"
+        },
+        {
+          "header": "apiVersion",
+          "fix": "set API_VERSION_REQUEST_HEADER to API_CONTRACT_VERSION in apps/web/lib/hooks/useChatStream.ts so the gateway can refuse a shape this build never saw"
+        }
+      ]
+    },
+    {
+      "surface": "desktop",
+      "roots": ["apps/desktop/src", "apps/desktop/electron"],
+      "sends": ["surface"],
+      "defects": [
+        {
+          "header": "clientVersion",
+          "fix": "apps/desktop/src/services/cloudAccountAuth.ts already sends DESKTOP_CLIENT_VERSION; move that header into the shared request builder in apps/desktop/src/api/cloudApi.ts so every desktop call carries it, not one"
+        },
+        {
+          "header": "apiVersion",
+          "fix": "set API_VERSION_REQUEST_HEADER in the shared request builder in apps/desktop/src/api/cloudApi.ts"
+        }
+      ]
+    },
+    {
+      "surface": "mobile",
+      "roots": ["apps/mobile/services", "apps/mobile/lib", "apps/mobile/app"],
+      "sends": ["surface"],
+      "defects": [
+        {
+          "header": "clientVersion",
+          "fix": "set CLIENT_VERSION_HEADER from the Expo build version in the header block of apps/mobile/services/api.ts and apps/mobile/services/streaming.ts"
+        },
+        {
+          "header": "apiVersion",
+          "fix": "set API_VERSION_REQUEST_HEADER in the same header block in apps/mobile/services/api.ts and apps/mobile/services/streaming.ts"
+        }
+      ]
+    },
+    {
+      "surface": "cli",
+      "roots": ["apps/cli/src"],
+      "sends": ["surface"],
+      "defects": [
+        {
+          "header": "clientVersion",
+          "fix": "add .header(\"x-agi-client-version\", env!(\"CARGO_PKG_VERSION\")) beside the X-AGI-Surface header in apps/cli/src/cloud/client.rs and the four other request builders that set it"
+        },
+        {
+          "header": "apiVersion",
+          "fix": "add the x-agi-api-version header to the same request builders in apps/cli/src, taking the value from one shared constant rather than a literal per call site"
+        }
+      ]
+    },
+    {
+      "surface": "vscode",
+      "roots": ["apps/extension-vscode/src"],
+      "sends": ["surface"],
+      "defects": [
+        {
+          "header": "clientVersion",
+          "fix": "the eight clients under apps/extension-vscode/src/features each build their own header object; give them one shared builder that sets X-Client, X-AGI-Surface, the client version and the api version together"
+        },
+        {
+          "header": "apiVersion",
+          "fix": "same shared builder under apps/extension-vscode/src sets API_VERSION_REQUEST_HEADER"
+        }
+      ]
+    },
+    {
+      "surface": "chrome",
+      "roots": ["apps/extension/src"],
+      "sends": ["surface"],
+      "defects": [
+        {
+          "header": "clientVersion",
+          "fix": "the ten clients under apps/extension/src/features/cloud-bridge each build their own header object; give them one shared builder that sets the surface, the client version from the manifest version and the api version"
+        },
+        {
+          "header": "apiVersion",
+          "fix": "same shared builder under apps/extension/src/features/cloud-bridge sets API_VERSION_REQUEST_HEADER"
+        }
+      ]
+    }
+  ],
+  "server": {
+    "latest": {
+      "file": "apps/web/lib/api-gateway-policy.ts",
+      "symbol": "API_CONTRACT_VERSION"
+    },
+    "advertisedOn": {
+      "file": "apps/web/lib/error-handler.ts",
+      "symbol": "API_VERSION_RESPONSE_HEADER"
+    },
+    "minimumSupported": null,
+    "defects": [
+      {
+        "claim": "minimumSupported",
+        "fix": "export MINIMUM_SUPPORTED_API_CONTRACT_VERSION beside API_CONTRACT_VERSION in apps/web/lib/api-gateway-policy.ts, send it on every response next to API_VERSION_RESPONSE_HEADER in apps/web/lib/error-handler.ts, and refuse below it with the PROTOCOL_VERSION_UNSUPPORTED code the version registry already names"
+      }
+    ]
+  },
+  "negotiation": {
+    "module": "packages/contracts/types/src/client-capability-manifest.ts",
+    "statesSymbol": "CLIENT_UPGRADE_STATES",
+    "requiredStates": ["current", "upgrade_optional", "upgrade_required", "unsupported"],
+    "unknownHandlers": [
+      "readClientCapabilityManifest",
+      "resolveClientUpgrade",
+      "degradeUnsupported"
+    ]
+  }
+}

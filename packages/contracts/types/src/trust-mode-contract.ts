@@ -90,6 +90,10 @@ export function isPrivacyMode(value: string): value is PrivacyMode {
   return (PRIVACY_MODES as readonly string[]).includes(value);
 }
 
+export function isStorageLocation(value: unknown): value is StorageLocation {
+  return typeof value === 'string' && (STORAGE_LOCATIONS as readonly string[]).includes(value);
+}
+
 export function isDowngrade(from: PrivacyMode, to: PrivacyMode): boolean {
   return TRUST_MODE_STRICTNESS.indexOf(to) > TRUST_MODE_STRICTNESS.indexOf(from);
 }

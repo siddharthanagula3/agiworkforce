@@ -158,19 +158,31 @@ export {
   CONCEPT_REGISTRY,
   ORIGIN_SURFACES,
   RESOURCE_COLUMN_CONTRACT,
+  conceptByAlias,
   conceptForTable,
   getConcept,
   isConceptName,
   isOriginSurface,
   resourceColumn,
+  tableDisposition,
+  type ConceptAccessRule,
+  type ConceptDataClass,
   type ConceptRecord,
   type ConceptRegistry,
+  type ConceptRetention,
+  type ConceptStorageScope,
   type OriginSurface,
   type ResourceColumnContract,
   type ResourceColumnRole,
+  type TableDisposition,
+  type TableDispositionRecord,
 } from './concept-registry';
 
 export * from './resource-lifecycle';
+
+export * from './client-capability-manifest';
+export * from './feature-release';
+export * from './request-identity';
 
 export * from './file-reference';
 export * from './file-model';
