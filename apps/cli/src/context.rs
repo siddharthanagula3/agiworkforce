@@ -288,33 +288,33 @@ pub fn detect_project_language(cwd: &str) -> Option<String> {
 
 /// Detect CI/CD providers from config files in the project root.
 ///.
+/// The file or directory each CI provider is recognised by, read both as a
+/// provider list and as a setup source.
+pub const CI_MARKERS: &[(&str, &str)] = &[
+    (".github/workflows", "GitHub Actions"),
+    (".gitlab-ci.yml", "GitLab CI"),
+    ("Jenkinsfile", "Jenkins"),
+    (".circleci", "CircleCI"),
+    (".travis.yml", "Travis CI"),
+    ("azure-pipelines.yml", "Azure Pipelines"),
+    ("bitbucket-pipelines.yml", "Bitbucket Pipelines"),
+];
+
+/// Compose file names, in the order Compose itself resolves them.
+pub const COMPOSE_FILES: &[&str] = &[
+    "compose.yaml",
+    "compose.yml",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+];
+
 pub fn detect_ci_providers(cwd: &str) -> Vec<String> {
     let dir = Path::new(cwd);
-    let mut providers = Vec::new();
-
-    if dir.join(".github").join("workflows").is_dir() {
-        providers.push("GitHub Actions".to_string());
-    }
-    if dir.join(".gitlab-ci.yml").exists() {
-        providers.push("GitLab CI".to_string());
-    }
-    if dir.join("Jenkinsfile").exists() {
-        providers.push("Jenkins".to_string());
-    }
-    if dir.join(".circleci").is_dir() {
-        providers.push("CircleCI".to_string());
-    }
-    if dir.join(".travis.yml").exists() {
-        providers.push("Travis CI".to_string());
-    }
-    if dir.join("azure-pipelines.yml").exists() {
-        providers.push("Azure Pipelines".to_string());
-    }
-    if dir.join("bitbucket-pipelines.yml").exists() {
-        providers.push("Bitbucket Pipelines".to_string());
-    }
-
-    providers
+    CI_MARKERS
+        .iter()
+        .filter(|(marker, _)| dir.join(marker).exists())
+        .map(|(_, provider)| (*provider).to_string())
+        .collect()
 }
 
 /// Detect monorepo orchestration tool from well-known config files.
@@ -343,27 +343,7 @@ pub fn detect_monorepo_type(cwd: &str) -> Option<String> {
 /// Detect the package manager / build system from lockfile presence.
 ///.
 pub fn detect_package_manager(cwd: &str) -> Option<String> {
-    let dir = Path::new(cwd);
-
-    // Ordered by specificity: lockfiles that uniquely identify a tool first.
-    let markers: &[(&str, &str)] = &[
-        ("pnpm-lock.yaml", "pnpm"),
-        ("yarn.lock", "yarn"),
-        ("package-lock.json", "npm"),
-        ("bun.lockb", "bun"),
-        ("Cargo.lock", "cargo"),
-        ("go.sum", "go modules"),
-        ("Pipfile.lock", "pipenv"),
-        ("poetry.lock", "poetry"),
-    ];
-
-    for (file, label) in markers {
-        if dir.join(file).exists() {
-            return Some((*label).to_string());
-        }
-    }
-
-    None
+    crate::repo::setup::package_manager_label(Path::new(cwd)).map(str::to_string)
 }
 
 /// Detect containerization / orchestration technologies.
@@ -375,7 +355,7 @@ pub fn detect_containerization(cwd: &str) -> Vec<String> {
     if dir.join("Dockerfile").exists() {
         tools.push("docker".to_string());
     }
-    if dir.join("docker-compose.yml").exists() || dir.join("docker-compose.yaml").exists() {
+    if COMPOSE_FILES.iter().any(|name| dir.join(name).exists()) {
         tools.push("docker-compose".to_string());
     }
     if dir.join(".devcontainer").is_dir() {
@@ -1775,6 +1755,10 @@ mod tests {
 
         let layout = crate::repo::RepositoryLayout {
             root: PathBuf::from(&path),
+            opened_at: PathBuf::from(&path),
+            vcs: crate::repo::VersionControl::Git,
+            shallow: false,
+            submodules: Vec::new(),
             git_dir: PathBuf::from(&path).join(".git"),
             common_dir: PathBuf::from(&path).join(".git"),
             bare: false,

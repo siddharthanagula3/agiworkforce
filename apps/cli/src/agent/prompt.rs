@@ -1,7 +1,142 @@
+use agiworkforce_protocol::code_domain::CodeCapability;
+
 use crate::compaction;
 use crate::context::SystemContext;
 use crate::memory::{self, MemoryManager};
 use crate::skills;
+
+/// How a working principle is kept. An instruction is stated to the model and
+/// depends on it; a gate is enforced by the host whatever the model decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Enforcement {
+    Instruction,
+    Gate(CodeCapability),
+}
+
+/// One rule the coding agent works under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WorkingPrinciple {
+    pub statement: &'static str,
+    pub enforcement: Enforcement,
+}
+
+impl WorkingPrinciple {
+    const fn stated(statement: &'static str) -> Self {
+        Self {
+            statement,
+            enforcement: Enforcement::Instruction,
+        }
+    }
+
+    const fn gated(statement: &'static str, capability: CodeCapability) -> Self {
+        Self {
+            statement,
+            enforcement: Enforcement::Gate(capability),
+        }
+    }
+
+    pub fn capability(&self) -> Option<CodeCapability> {
+        match self.enforcement {
+            Enforcement::Gate(capability) => Some(capability),
+            Enforcement::Instruction => None,
+        }
+    }
+}
+
+/// The principles the agent works under, in the order they are stated to it.
+/// This list is the source: the prompt is rendered from it, so a principle
+/// added here reaches the model without anyone editing prose.
+pub const WORKING_PRINCIPLES: &[WorkingPrinciple] = &[
+    WorkingPrinciple::stated(
+        "Read the architecture that is already here before adding a parallel one: find the \
+         existing client, store, loader or service and extend it rather than standing up a second.",
+    ),
+    WorkingPrinciple::stated(
+        "Use the repository's own tooling: its package manager, its lockfile, its scripts and its \
+         task runner, not a command you would have used in a repository of your own.",
+    ),
+    WorkingPrinciple::stated(
+        "Prefer a deterministic tool over a guess: read the file, run the search, parse the \
+         output. Do not answer from recollection of a codebase you can open.",
+    ),
+    WorkingPrinciple::stated(
+        "Treat compiler, type checker and linter diagnostics as the authority on the code. When a \
+         diagnostic disagrees with your expectation, the diagnostic is right and the expectation \
+         is the thing to re-examine.",
+    ),
+    WorkingPrinciple::stated(
+        "Treat what the browser, the test runner and the process actually printed as the \
+         authority on runtime behaviour, over any reasoning about what the frontend should do.",
+    ),
+    WorkingPrinciple::stated(
+        "Do reversible local work first and keep irreversible remote actions to the end, where \
+         the user can still decide against them.",
+    ),
+    WorkingPrinciple::stated(
+        "Stay inside the scope the user opened. Work in the directory and the package the task \
+         names; widening it is a thing to propose, not to do.",
+    ),
+    WorkingPrinciple::gated(
+        "Never write over the user's own uncommitted changes. Name the files at risk and let the \
+         user decide before anything touches them.",
+        CodeCapability::FileWrite,
+    ),
+    WorkingPrinciple::gated(
+        "Respect the repository's policy on its branches: protected branches, the default branch \
+         and force pushes are the repository's decision, not yours.",
+        CodeCapability::GitPush,
+    ),
+    WorkingPrinciple::gated(
+        "Respect workspace and administrator policy. It only ever narrows what this session may \
+         do, and it is never negotiated around.",
+        CodeCapability::ExternalApiWrite,
+    ),
+    WorkingPrinciple::gated(
+        "Never deploy to production as a side effect of another task. A deployment is its own \
+         request, named as one.",
+        CodeCapability::ExternalApiWrite,
+    ),
+    WorkingPrinciple::gated(
+        "Never use an account, token or credential the user did not point you at, and never read \
+         a secret's value into your output.",
+        CodeCapability::NetworkAccess,
+    ),
+    WorkingPrinciple::stated(
+        "Never report validation that did not happen. A check you did not run, or that failed, is \
+         reported as that, never as success.",
+    ),
+    WorkingPrinciple::stated(
+        "Never write mock implementations, fixtures or stand-in data unless the task asks for \
+         them. Wire the real thing or report that you could not.",
+    ),
+    WorkingPrinciple::stated(
+        "Make the targeted fix. Rewriting a file, a module or a component wholesale when a narrow \
+         change would do throws away work that was not yours to discard.",
+    ),
+    WorkingPrinciple::stated(
+        "A session outlives its surface and its context window. Carry the objective, the \
+         decisions, the plan and the modified-file set forward; never assume a process you \
+         started is still running.",
+    ),
+];
+
+/// The principles as the model is given them. A principle the host enforces
+/// says so, so the model knows which rules it cannot talk its way past.
+pub fn render_working_principles() -> String {
+    let mut rendered = String::from("\n# How you work\n");
+    for principle in WORKING_PRINCIPLES {
+        rendered.push_str("- ");
+        rendered.push_str(principle.statement);
+        if let Some(capability) = principle.capability() {
+            rendered.push_str(&format!(
+                " The host gates this: permission to {} is checked before the action runs.",
+                capability.label()
+            ));
+        }
+        rendered.push('\n');
+    }
+    rendered
+}
 
 const LLM_FAILURE_PREVENTION_CONTRACT: &str = "\n\
 Software-building quality contract:\n\
@@ -158,6 +293,7 @@ pub(super) fn build_system_prompt(
          - Tools run under a user-selected permission mode; some calls need the user's approval. If the user denies a tool, do not re-attempt the identical call, reconsider why and adjust your approach.\n",
     );
     prompt.push_str(LLM_FAILURE_PREVENTION_CONTRACT);
+    prompt.push_str(&render_working_principles());
 
     if !deferred_names.is_empty() {
         prompt.push_str(&format!(
@@ -254,8 +390,122 @@ pub(super) fn build_reviewed_continuation_system_prompt(
 mod tests {
     use super::{
         build_reviewed_continuation_system_prompt, encode_untrusted_context,
-        UNTRUSTED_MEMORY_CONTEXT_RULES,
+        render_working_principles, Enforcement, UNTRUSTED_MEMORY_CONTEXT_RULES, WORKING_PRINCIPLES,
     };
+    use agiworkforce_protocol::code_domain::{
+        CodeCapability, CodePermissionProfile, PermissionDecision,
+    };
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn every_working_principle_reaches_the_model() {
+        let prompt = build_reviewed_continuation_system_prompt("managed", "managed_cloud");
+        assert!(!WORKING_PRINCIPLES.is_empty());
+        for principle in WORKING_PRINCIPLES {
+            assert!(
+                prompt.contains(principle.statement),
+                "a principle the agent works under never reaches the prompt: {:?}",
+                principle.statement
+            );
+        }
+    }
+
+    #[test]
+    fn no_principle_is_stated_twice_or_left_empty() {
+        let statements: BTreeSet<&str> = WORKING_PRINCIPLES
+            .iter()
+            .map(|principle| principle.statement)
+            .collect();
+        assert_eq!(statements.len(), WORKING_PRINCIPLES.len());
+        for principle in WORKING_PRINCIPLES {
+            assert!(
+                principle.statement.len() > 40,
+                "a principle says too little to act on: {:?}",
+                principle.statement
+            );
+            assert!(!principle.statement.contains('\t'));
+        }
+        let rendered = render_working_principles();
+        assert_eq!(
+            rendered
+                .lines()
+                .filter(|line| line.starts_with("- "))
+                .count(),
+            WORKING_PRINCIPLES.len()
+        );
+    }
+
+    /// A principle the host enforces names a real capability, and that
+    /// capability is one a read-only session does not simply get.
+    #[test]
+    fn every_host_enforced_principle_rests_on_a_capability_the_profile_withholds() {
+        let read_only = CodePermissionProfile::read_only();
+        let gated: Vec<CodeCapability> = WORKING_PRINCIPLES
+            .iter()
+            .filter_map(super::WorkingPrinciple::capability)
+            .collect();
+        assert!(
+            !gated.is_empty(),
+            "no principle is enforced by anything but the model's cooperation"
+        );
+        let stated = WORKING_PRINCIPLES
+            .iter()
+            .filter(|principle| principle.enforcement == Enforcement::Instruction)
+            .count();
+        assert_eq!(
+            stated + gated.len(),
+            WORKING_PRINCIPLES.len(),
+            "a principle claims neither an instruction nor a gate"
+        );
+        for capability in gated {
+            assert!(
+                CodeCapability::ALL.contains(&capability),
+                "{capability:?} is not a capability the permission model knows"
+            );
+            assert_ne!(
+                read_only.decision(capability),
+                PermissionDecision::Allow,
+                "a read-only session is handed {} outright",
+                capability.label()
+            );
+        }
+    }
+
+    #[test]
+    fn an_administrator_cap_only_ever_narrows_what_a_session_may_do() {
+        use agiworkforce_protocol::code_domain::{AdminPolicyCap, CodeCapabilities};
+
+        let chosen = CodePermissionProfile::full_access();
+        let capped = chosen.clone().under_admin_cap(AdminPolicyCap::new(
+            "workspace policy",
+            CodeCapabilities::uniform(PermissionDecision::Deny),
+        ));
+        for capability in CodeCapability::ALL.iter().copied() {
+            assert_eq!(
+                capped.decision(capability),
+                PermissionDecision::Deny,
+                "{} escaped the workspace policy",
+                capability.label()
+            );
+            assert_eq!(
+                capped.capped_by_admin(capability),
+                chosen.decision(capability) != PermissionDecision::Deny,
+                "{} misreports who is refusing it",
+                capability.label()
+            );
+        }
+        assert!(capped.display_label().contains("workspace policy"));
+
+        let uncapped = CodePermissionProfile::read_only().under_admin_cap(AdminPolicyCap::new(
+            "workspace policy",
+            CodeCapabilities::uniform(PermissionDecision::Allow),
+        ));
+        assert_ne!(
+            uncapped.decision(CodeCapability::FileWrite),
+            PermissionDecision::Allow,
+            "an administrator cap widened a session the user kept narrow"
+        );
+    }
 
     #[test]
     fn recalled_memory_is_untrusted_and_cannot_override_the_current_request() {
