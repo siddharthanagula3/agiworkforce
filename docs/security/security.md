@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-09-07
+Last updated: 2026-09-20
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -644,27 +644,60 @@ byte. Nothing about this accepted risk has changed yet: no deployment sets
 lives only as a deployment environment variable.
 
 A KMS-backed provider does not require touching `envelope.ts`, `sealEnvelope`,
-or `openEnvelope`. It needs three things. First, a way to identify a wrapped
+or `openEnvelope`. It needs two things. First, a way to identify a wrapped
 data key per key id, in the same `<NAME>` / `<NAME>_ID` / `<NAME>_RETIRED`
 shape the env provider already uses, holding whatever the vendor SDK expects
 instead of raw bytes: an ARN, a key id, or a ciphertext blob. Second, an
 unwrap call that turns one of those references into 32 raw bytes, passed to
-`createKmsKeyProvider(unwrap)`. Third, because `unwrap` runs synchronously,
-an integrator backed by an async vendor SDK call must resolve the data key
-before constructing the provider, for example by fetching it once at process
-start rather than on every `resolveKeyRing` call. Adopting one moves this
-risk from "an operator holds the only copy of the key" to "the KMS vendor's
-availability and access controls hold it," which is a real change of risk,
-not its removal, and should get its own review before it is treated as
+`createKmsKeyProvider(unwrap)`. That unwrap is asynchronous: `KmsUnwrapFn`
+returns a promise and `createKmsKeyProvider` returns an `AsyncKeyProvider`
+whose `resolveKeyRing` is awaited, so a vendor SDK call needs no separate
+pre-fetch. What it does need is the cache the provider holds, because a KMS
+round trip per envelope would sit in the path of every read. That cache is
+bounded rather than permanent (`cacheTtlMs`, five minutes by default) and
+`invalidate()` drops named wrapped keys immediately, which is what makes a
+revocation take effect now instead of at the end of the window. Adopting one
+moves this risk from "an operator holds the only copy of the key" to "the KMS
+vendor's availability and access controls hold it," which is a real change of
+risk, not its removal, and should get its own review before it is treated as
 closing this acceptance.
+
+Three vendor adapters are now written rather than hypothetical:
+`lib/crypto/kms-providers.ts` speaks AWS KMS, GCP Cloud KMS and Azure Key
+Vault, and `createKmsProviderRegistry` omits any vendor this deployment holds
+no credentials for, so a workspace whose key lives there is refused at
+resolution rather than served from somewhere else. `lib/crypto/platform-keys.ts`
+puts the platform's own data key behind the same seam under
+`AGI_PLATFORM_KEY_PROVIDER`. Neither changes the acceptance above on its own:
+the default is still `env`, and provisioning a key, a cross-account grant and
+the credentials to assume it is a founder action against real vendor accounts.
 
 The same interface carries a per-tenant derivation hook: `deriveTenantKey`
 runs HKDF over a provider's ring key with the organization id as the HKDF
-info parameter, so customer-managed keys per organization become a provider
-concern rather than a schema change. It is off by default. `loadKeyRing` and
-the providers above never call it on their own; a caller must ask for it
-explicitly through `resolveTenantKeyRing`, and nothing in this codebase does
-that yet.
+info parameter. This is no longer off by default. `platformTenantKeyRing` in
+`lib/crypto/cmek.ts` calls `resolveTenantKeyRing` for every workspace that has
+not brought its own key, so one tenant's ciphertext does not open under
+another tenant's derived ring; `apps/web/lib/crypto/envelope.properties.test.ts`
+is where that is asserted, in both directions, including against the root the
+rings were derived from. A workspace that has brought its own key goes through
+`organizationKeyRing` in `lib/server/organization-encryption-keys.ts` instead,
+and a revoked, unreachable or unconfigured customer key is refused there rather
+than falling through to the platform root.
+
+#### Associated data is a binding, not a label
+
+`sealEnvelope` and `openEnvelope` take an optional context that is bound into
+the GCM authentication tag, so a ciphertext sealed for one purpose, resource or
+tenant does not open under another. The part worth writing down is the
+exception: a ciphertext carrying NO associated data opens under every context,
+because there is nothing in its tag to contradict one. `openEnvelope` therefore
+makes the answer a required field, `EnvelopeContext.acceptUnbound`, and refuses
+an unbound ciphertext unless the call site has said it still holds rows sealed
+before its context existed. Two do, both recorded with their reason in
+`scripts/check-crypto-context-binding.mjs`, which fails on a third: connector
+secrets written before the purpose became associated data, and the rewrap that
+re-seals them. Those rows are owed a re-seal, after which both entries leave
+the baseline and the guard refuses their return.
 
 ### Rotating a key
 
