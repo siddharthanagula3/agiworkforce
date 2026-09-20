@@ -182,6 +182,19 @@ const ALLOWLIST = [
       'the Library, which clears the flag, is never in the candidate set.',
   },
   {
+    match: /lib\/services\/semantic-decisions\/trace-service\.ts$/,
+    tables: ['semantic_decision_traces'],
+    reason:
+      'the table has no tenant column to constrain by, deliberately: every row is a bounded ' +
+      'label or a bin from a vocabulary decided in code, with no state, no candidate text and ' +
+      'no subject, so it identifies nobody and sits outside the account and workspace erasure ' +
+      'cascades (0274). It is scanned here only because that migration turns RLS on as defence ' +
+      'in depth against a future app_rls grant, which is a stronger position than the sibling ' +
+      'routing_decision_traces table, not a weaker one. The insert is keyed by the decision id ' +
+      'the host minted, and the delete is a time-based fleet sweep on the retention window run ' +
+      'from the model-rollout cron, which has no caller to constrain by.',
+  },
+  {
     match: /lib\/server\/data-region\.ts$/,
     tables: ['organizations'],
     reason:

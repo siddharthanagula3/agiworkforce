@@ -1,3 +1,4 @@
+import { DECISION_FLAG_PREFIX } from './decision-flags';
 import type { FlagEvaluation } from './evaluate-flags';
 import { PROVIDER_FLAG_PREFIX, TENANT_LOCKDOWN_FLAG_KEY } from './kill-switches';
 import { ROLLOUT_FLAG_PREFIX } from './rollout-rings';
@@ -56,12 +57,16 @@ export function routingFlagInputs(
  * Rollout rings are held back too. They are per surface and per release channel,
  * so the raw evaluation names every other surface's staged builds; the caller
  * reads its own through the ring gate instead.
+ *
+ * Decision flags are held back for the same reason as the supplier ones: a
+ * client that could read the mode could tell a shadow turn from a served one.
  */
 const SERVER_ONLY_FLAG_PREFIXES: readonly string[] = [
   ROUTING_FLAG_PREFIX,
   PROVIDER_FLAG_PREFIX,
   TENANT_LOCKDOWN_FLAG_KEY,
   ROLLOUT_FLAG_PREFIX,
+  DECISION_FLAG_PREFIX,
 ];
 
 export function clientVisibleFlags(evaluations: Readonly<Record<string, FlagEvaluation>>): {

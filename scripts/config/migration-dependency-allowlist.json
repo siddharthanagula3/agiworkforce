@@ -1,4 +1,10 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/lib/services/semantic-decisions/trace-service.ts",
+      "migration": 274,
+      "reason": "semantic_decision_traces is written and swept only from this module, and every write is reached through the semantic decision host, which reports itself disabled unless a decision.<kind> flag serves shadow or enabled. No such flag exists, so no statement runs against the table before the deploy runbook applies 0274; a write that did reach an unmigrated database is caught and dropped by the fire-and-forget wrapper rather than failing a turn. The rollout cron's sweep goes through this module too, and its existing catch turns an unmigrated delete into a 500 that the next run recovers from."
+    }
+  ]
 }

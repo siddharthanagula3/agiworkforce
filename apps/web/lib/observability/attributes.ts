@@ -40,6 +40,12 @@ export const OBSERVABILITY_ATTRIBUTE = {
   completionStatus: 'agi.completion.status',
   completionReportedStatus: 'agi.completion.reported_status',
   completionReason: 'agi.completion.reason',
+  decisionKind: 'agi.decision.kind',
+  decisionMode: 'agi.decision.mode',
+  decisionOutcome: 'agi.decision.outcome',
+  decisionQuestion: 'agi.decision.question',
+  decisionFallbackReason: 'agi.decision.fallback_reason',
+  decisionConfidenceBin: 'agi.decision.confidence_bin',
 } as const;
 
 export type ObservabilityAttribute =

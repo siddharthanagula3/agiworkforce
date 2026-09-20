@@ -90,6 +90,8 @@ import {
 import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
+import { canonicalPrivacyMode } from '@/lib/services/semantic-decisions/eligibility';
+import { scheduleTurnSignalsShadow } from '@/lib/services/semantic-decisions/turn-signals';
 import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
 import {
   evaluateModelAccess,
@@ -3136,15 +3138,37 @@ export async function processRequest(
   const routeDecision: AutoRouteDecision =
     freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.routeDecision : baseRouteDecision;
   const routingTrace = buildRoutingDecisionTrace(baseRoutingRequest, routeDecision);
+  const tracedWorkspaceId = (await scopedDbPromise).organizationId;
   persistRoutingDecision({
     trace: routingTrace,
     requestId,
     userId,
-    organizationId: (await scopedDbPromise).organizationId,
+    organizationId: tracedWorkspaceId,
     surface: chatSurface,
     kind: 'served',
     flagVariants: rolloutInputs.flagVariants,
     promptIds: turnPromptStamps(chatRequest, rolloutInputs.promptVariants),
+  });
+
+  // Shadow only: the family above is already decided and already used, and the
+  // work is deferred past the response inside the schedule call.
+  scheduleTurnSignalsShadow({
+    request,
+    requestId,
+    userId,
+    organizationId: tracedWorkspaceId,
+    plan: subscription.plan_tier ?? null,
+    surface: chatSurface,
+    modelSelection: routeSelection,
+    latestUserMessage: lastUserText,
+    previousUserMessage:
+      routingHistory.filter((message) => message.role === 'user').at(-1)?.content ?? null,
+    hasAttachments: (routingAttachments?.length ?? 0) > 0,
+    baselineTaskFamily: routeTaskFamily,
+    privacyMode: canonicalPrivacyMode(MANAGED_WEB_CLOUD_TRUST_MODE),
+    zeroDataRetentionOnly,
+    workspaceModelPolicy,
+    residencyRegion,
   });
 
   if (routeDecision.status === 'unavailable') {

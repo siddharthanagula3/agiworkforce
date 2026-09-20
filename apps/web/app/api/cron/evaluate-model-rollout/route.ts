@@ -13,6 +13,7 @@ import {
   resolveRolloutEvaluationConfig,
   type RolloutAlert,
 } from '@/lib/services/model-rollout/rollout-evaluation-service';
+import { purgeExpiredSemanticDecisionTraces } from '@/lib/services/semantic-decisions/trace-service';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
@@ -82,11 +83,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let alerts: RolloutAlert[];
   let benchmarks: number;
   let purged: number;
+  let purgedDecisions: number;
   try {
     const metrics = await readCohortMetrics(windowStart, windowEnd);
     benchmarks = await recordRolloutBenchmarks(metrics, windowStart, windowEnd);
     alerts = detectRolloutAlerts(metrics, config);
     purged = await purgeExpiredRoutingTraces(config, nowMs);
+    // The same class of record on the same window, so one dial retires both
+    // rather than a second cron nobody remembers.
+    purgedDecisions = await purgeExpiredSemanticDecisionTraces(config, nowMs);
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },
@@ -97,7 +102,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const fresh = await claimNewAlerts(alerts);
   if (fresh.length === 0) {
-    return NextResponse.json({ benchmarks, purged, alerts: alerts.length, paged: 'not_needed' });
+    return NextResponse.json({
+      benchmarks,
+      purged,
+      purgedDecisions,
+      alerts: alerts.length,
+      paged: 'not_needed',
+    });
   }
 
   const environment = environmentLabel();
@@ -129,6 +140,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({
     benchmarks,
     purged,
+    purgedDecisions,
     alerts: alerts.length,
     paged,
     emailed: sent.delivered,
