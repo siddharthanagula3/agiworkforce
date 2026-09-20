@@ -18,7 +18,10 @@
 import {
   createFileReference,
   fileReferenceIdentity,
+  FILE_REFERENCE_ROLES,
+  type FileAvailability,
   type FileOrigin,
+  type FileOwnerScope,
   type FileReference,
   type FileReferenceInput,
 } from './file-reference';
@@ -63,6 +66,14 @@ export interface ManagedFileInput extends FileReferenceInput {
   parentVersionId?: string | null;
   lineage?: Partial<FileLineage>;
 }
+
+/** Every fact a managed file carries, named once for its consumers and guards. */
+export const MANAGED_FILE_ROLES = {
+  ...FILE_REFERENCE_ROLES,
+  version: 'version',
+} as const satisfies Readonly<Record<string, keyof ManagedFile>>;
+
+export type ManagedFileRole = keyof typeof MANAGED_FILE_ROLES;
 
 export function isFileDerivation(value: unknown): value is FileDerivation {
   return (FILE_DERIVATIONS as readonly unknown[]).includes(value);
@@ -109,30 +120,35 @@ export interface NextFileVersionInput {
   checksumSha256?: string | null;
   name?: string;
   mediaType?: string;
+  createdAt?: string | null;
 }
 
 /**
- * The next revision of the same file. The lineage is carried forward unchanged:
- * a new version is the same file, so where it originally came from does not move.
+ * The next revision of the same file. Lineage, owner and visibility carry
+ * forward; the parse and index statuses do not, because these are new bytes.
  */
 export function nextFileVersion(current: ManagedFile, input: NextFileVersionInput): ManagedFile {
+  const mediaType = input.mediaType ?? current.mediaType;
   return {
     ...current,
     id: input.id,
     uri: input.uri,
     name: input.name ?? current.name,
-    mediaType: input.mediaType ?? current.mediaType,
+    mediaType,
     byteCount:
       input.byteCount === undefined ? current.byteCount : Math.max(0, Math.trunc(input.byteCount)),
     checksumSha256: input.checksumSha256 === undefined ? null : input.checksumSha256,
+    parseStatus: current.parseStatus === 'not_applicable' ? 'not_applicable' : 'pending',
+    indexStatus: 'not_indexed',
+    createdAt: input.createdAt === undefined ? current.createdAt : input.createdAt,
     version: current.version + 1,
     parentVersionId: current.id,
   };
 }
 
 /**
- * A different file produced from this one. It starts its own version chain,
- * and it names the source it came from so the chain can be walked back.
+ * A different file produced from this one. It starts its own version chain and
+ * stays in the source's tenant: an export of my file is still mine.
  */
 export function deriveManagedFile(
   source: ManagedFile,
@@ -140,6 +156,7 @@ export function deriveManagedFile(
 ): ManagedFile {
   return createManagedFile({
     ...input,
+    owner: input.owner ?? source.owner,
     version: 1,
     parentVersionId: null,
     lineage: {
@@ -176,19 +193,176 @@ export function latestFileVersion(files: readonly ManagedFile[]): ManagedFile | 
   return sortFileVersions(files)[0] ?? null;
 }
 
+/**
+ * The document classes the product claims to read, declared once.
+ *
+ * Admission, extraction routing and the Library filter each decided which
+ * extensions counted, so a `.tsv` was admitted by the composer, routed as
+ * opaque bytes and then listed as a spreadsheet.
+ */
+export const DOCUMENT_FAMILIES = ['document', 'structured_data', 'presentation'] as const;
+export type DocumentFamily = (typeof DOCUMENT_FAMILIES)[number];
+
+/** The decoder family that reads a class. It is a property of the bytes, not of a surface. */
+export const DOCUMENT_EXTRACTORS = ['text', 'office', 'pdf'] as const;
+export type DocumentExtractor = (typeof DOCUMENT_EXTRACTORS)[number];
+
+export interface DocumentClass {
+  id: string;
+  label: string;
+  family: DocumentFamily;
+  extractor: DocumentExtractor;
+  mediaTypes: readonly string[];
+  extensions: readonly string[];
+}
+
+export const DOCUMENT_CLASSES: readonly DocumentClass[] = [
+  {
+    id: 'pdf',
+    label: 'PDF',
+    family: 'document',
+    extractor: 'pdf',
+    mediaTypes: ['application/pdf'],
+    extensions: ['pdf'],
+  },
+  {
+    id: 'docx',
+    label: 'DOCX',
+    family: 'document',
+    extractor: 'office',
+    mediaTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    extensions: ['docx'],
+  },
+  {
+    id: 'txt',
+    label: 'TXT',
+    family: 'document',
+    extractor: 'text',
+    mediaTypes: ['text/plain'],
+    extensions: ['txt', 'text'],
+  },
+  {
+    id: 'markdown',
+    label: 'Markdown',
+    family: 'document',
+    extractor: 'text',
+    mediaTypes: ['text/markdown', 'text/x-markdown'],
+    extensions: ['md', 'markdown'],
+  },
+  {
+    id: 'html',
+    label: 'HTML',
+    family: 'document',
+    extractor: 'text',
+    mediaTypes: ['text/html'],
+    extensions: ['html', 'htm'],
+  },
+  {
+    id: 'csv',
+    label: 'CSV',
+    family: 'structured_data',
+    extractor: 'text',
+    mediaTypes: ['text/csv', 'application/csv', 'application/x-csv'],
+    extensions: ['csv'],
+  },
+  {
+    id: 'tsv',
+    label: 'TSV',
+    family: 'structured_data',
+    extractor: 'text',
+    mediaTypes: ['text/tab-separated-values'],
+    extensions: ['tsv'],
+  },
+  {
+    id: 'xlsx',
+    label: 'XLSX',
+    family: 'structured_data',
+    extractor: 'office',
+    mediaTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    extensions: ['xlsx'],
+  },
+  {
+    id: 'json',
+    label: 'JSON',
+    family: 'structured_data',
+    extractor: 'text',
+    mediaTypes: ['application/json', 'text/json'],
+    extensions: ['json'],
+  },
+  {
+    id: 'jsonl',
+    label: 'JSONL',
+    family: 'structured_data',
+    extractor: 'text',
+    mediaTypes: ['application/jsonl', 'application/x-ndjson'],
+    extensions: ['jsonl', 'ndjson'],
+  },
+  {
+    id: 'xml',
+    label: 'XML',
+    family: 'structured_data',
+    extractor: 'text',
+    mediaTypes: ['application/xml', 'text/xml'],
+    extensions: ['xml'],
+  },
+  {
+    id: 'yaml',
+    label: 'YAML',
+    family: 'structured_data',
+    extractor: 'text',
+    mediaTypes: ['application/yaml', 'application/x-yaml', 'text/yaml'],
+    extensions: ['yaml', 'yml'],
+  },
+  {
+    id: 'pptx',
+    label: 'PPTX',
+    family: 'presentation',
+    extractor: 'office',
+    mediaTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    extensions: ['pptx'],
+  },
+] as const;
+
+export function bareMediaType(mediaType: string): string {
+  return (mediaType.split(';')[0] ?? '').trim().toLowerCase();
+}
+
+export function fileExtension(fileName: string): string {
+  const trimmed = fileName.trim().toLowerCase();
+  const dot = trimmed.lastIndexOf('.');
+  return dot > 0 ? trimmed.slice(dot + 1) : '';
+}
+
+const DOCUMENT_CLASS_BY_MEDIA_TYPE: ReadonlyMap<string, DocumentClass> = new Map(
+  DOCUMENT_CLASSES.flatMap((entry) => entry.mediaTypes.map((type) => [type, entry] as const)),
+);
+
+const DOCUMENT_CLASS_BY_EXTENSION: ReadonlyMap<string, DocumentClass> = new Map(
+  DOCUMENT_CLASSES.flatMap((entry) => entry.extensions.map((ext) => [ext, entry] as const)),
+);
+
+/**
+ * The declared class for these bytes, or null when the product never claimed
+ * to read them. The media type wins; a renamed file is still what it is.
+ */
+export function documentClassFor(fileName: string, mediaType: string): DocumentClass | null {
+  return (
+    DOCUMENT_CLASS_BY_MEDIA_TYPE.get(bareMediaType(mediaType)) ??
+    DOCUMENT_CLASS_BY_EXTENSION.get(fileExtension(fileName)) ??
+    null
+  );
+}
+
+export function documentClassById(id: string): DocumentClass | null {
+  return DOCUMENT_CLASSES.find((entry) => entry.id === id) ?? null;
+}
+
 const MEDIA_TYPES_BY_EXTENSION: Readonly<Record<string, string>> = {
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  pdf: 'application/pdf',
-  csv: 'text/csv',
-  tsv: 'text/tab-separated-values',
-  md: 'text/markdown',
-  markdown: 'text/markdown',
-  txt: 'text/plain',
-  html: 'text/html',
-  json: 'application/json',
-  xml: 'application/xml',
+  ...Object.fromEntries(
+    DOCUMENT_CLASSES.flatMap((entry) =>
+      entry.extensions.map((ext) => [ext, entry.mediaTypes[0] ?? 'application/octet-stream']),
+    ),
+  ),
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -203,12 +377,33 @@ const MEDIA_TYPES_BY_EXTENSION: Readonly<Record<string, string>> = {
  * without this each one guessed, and the same `.xlsx` was three types.
  */
 export function fileMediaTypeForName(fileName: string): string {
-  const extension = fileName.toLowerCase().split('.').pop() ?? '';
-  return MEDIA_TYPES_BY_EXTENSION[extension] ?? 'application/octet-stream';
+  return MEDIA_TYPES_BY_EXTENSION[fileExtension(fileName)] ?? 'application/octet-stream';
+}
+
+export const LOCAL_DEVICE_FILE_ID_PREFIX = 'localfile_';
+
+function localIdentityDigest(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+/**
+ * The catalogued id for bytes on a device. It is derived from the device and
+ * the path rather than being the path, so moving the file does not rename it
+ * and two devices holding the same path are two files, not one.
+ */
+export function localDeviceFileId(path: string, deviceId?: string | null): string {
+  const device = (deviceId ?? '').trim();
+  const scope = device.length > 0 ? device : 'unpaired';
+  return `${LOCAL_DEVICE_FILE_ID_PREFIX}${localIdentityDigest(scope)}_${localIdentityDigest(path)}`;
 }
 
 export interface LocalDeviceFileInput {
-  /** Absolute path or `file://` uri. It is the identity: nothing has catalogued these bytes. */
+  /** Absolute path or `file://` uri. It is the address, never the identity. */
   path: string;
   name: string;
   byteCount?: number;
@@ -218,6 +413,12 @@ export interface LocalDeviceFileInput {
   lineage?: Partial<FileLineage>;
   version?: number;
   parentVersionId?: string | null;
+  /** The device the bytes sit on, so the same path elsewhere is a different file. */
+  deviceId?: string | null;
+  fileId?: string;
+  owner?: Partial<FileOwnerScope> | null;
+  availability?: Partial<FileAvailability> | null;
+  createdAt?: string | null;
 }
 
 /**
@@ -228,7 +429,7 @@ export function localDeviceManagedFile(input: LocalDeviceFileInput): ManagedFile
   const origin = input.origin ?? 'generated';
   const mediaType = input.mediaType ?? fileMediaTypeForName(input.name);
   return createManagedFile({
-    id: input.path,
+    id: input.fileId ?? localDeviceFileId(input.path, input.deviceId ?? null),
     name: input.name,
     mediaType,
     byteCount: input.byteCount ?? 0,
@@ -238,6 +439,9 @@ export function localDeviceManagedFile(input: LocalDeviceFileInput): ManagedFile
     parseStatus:
       origin === 'generated' || !isTextLikeFileMediaType(mediaType) ? 'not_applicable' : 'pending',
     sourceSurface: input.sourceSurface ?? null,
+    owner: input.owner ?? null,
+    availability: input.availability ?? null,
+    createdAt: input.createdAt ?? null,
     version: input.version ?? 1,
     parentVersionId: input.parentVersionId ?? null,
     lineage: input.lineage ?? {},

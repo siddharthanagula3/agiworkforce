@@ -7,7 +7,14 @@
  * the grouping and the lineage walk, which is all three surfaces needed.
  */
 
-import { latestFileVersion, sortFileVersions, type ManagedFile } from '@agiworkforce/types';
+import {
+  canReadFileReference,
+  documentClassFor,
+  latestFileVersion,
+  sortFileVersions,
+  type FileOwnerScope,
+  type ManagedFile,
+} from '@agiworkforce/types';
 
 export interface LibraryEntry {
   /** The newest revision. The older ones are in `versions`, newest first. */
@@ -119,4 +126,88 @@ export function derivedFromFile(
     (candidate) => candidate.id === parentId || candidate.parentVersionId === parentId,
   );
   return versions.find((candidate) => candidate.id === parentId) ?? latestFileVersion(versions);
+}
+
+/**
+ * A page of Library rows for one reader. Keyset, not offset: the Library is
+ * written to while it is read, and offsets repeat a row the moment it is.
+ */
+export interface LibraryPageQuery {
+  reader: Partial<FileOwnerScope>;
+  documentClassIds?: readonly string[];
+  search?: string;
+  cursor?: string | null;
+  limit?: number;
+}
+
+export interface LibraryPage {
+  entries: LibraryEntry[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export const LIBRARY_PAGE_SIZE = 24;
+export const LIBRARY_MAX_PAGE_SIZE = 100;
+
+export function libraryEntryCursor(entry: LibraryEntry): string {
+  return `${entry.file.createdAt ?? ''}|${entry.file.id}`;
+}
+
+function matchesSearch(file: ManagedFile, search: string): boolean {
+  return file.name.toLowerCase().includes(search);
+}
+
+/**
+ * Only the reader's own rows. The filter is the reference's owner scope, so a
+ * file that lost its tenant is invisible rather than visible to everybody.
+ */
+export function readableByOwner(
+  files: readonly ManagedFile[],
+  reader: Partial<FileOwnerScope>,
+): ManagedFile[] {
+  return files.filter((file) => canReadFileReference(file, reader));
+}
+
+export function listLibraryPage(
+  files: readonly ManagedFile[],
+  query: LibraryPageQuery,
+): LibraryPage {
+  const limit = Math.min(
+    Math.max(1, Math.trunc(query.limit ?? LIBRARY_PAGE_SIZE)),
+    LIBRARY_MAX_PAGE_SIZE,
+  );
+  const search = query.search?.trim().toLowerCase() ?? '';
+  const classes = query.documentClassIds ? new Set(query.documentClassIds) : null;
+
+  const visible = readableByOwner(files, query.reader);
+  const entries = buildLibraryEntries(visible)
+    .filter((entry) => search.length === 0 || matchesSearch(entry.file, search))
+    .filter((entry) => {
+      if (!classes) return true;
+      const documentClass = documentClassFor(entry.file.name, entry.file.mediaType);
+      return documentClass !== null && classes.has(documentClass.id);
+    })
+    .sort((left, right) => libraryEntryCursor(right).localeCompare(libraryEntryCursor(left)));
+
+  const after = query.cursor ?? null;
+  const page = (
+    after === null ? entries : entries.filter((e) => libraryEntryCursor(e) < after)
+  ).slice(0, limit + 1);
+  const hasMore = page.length > limit;
+  const rows = hasMore ? page.slice(0, limit) : page;
+  const last = rows[rows.length - 1];
+  return { entries: rows, nextCursor: hasMore && last ? libraryEntryCursor(last) : null, hasMore };
+}
+
+/**
+ * The rows a delete may touch. A destructive Library action resolves its
+ * targets through this, so a row somebody else owns is never among them.
+ */
+export function deletableByOwner(
+  files: readonly ManagedFile[],
+  reader: Partial<FileOwnerScope>,
+  ids: readonly string[],
+): ManagedFile[] {
+  const wanted = new Set(ids);
+  return readableByOwner(files, reader).filter((file) => wanted.has(file.id));
 }
