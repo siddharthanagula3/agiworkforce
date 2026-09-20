@@ -31,6 +31,17 @@ describe('routing flag inputs', () => {
       coding_balanced: true,
     });
   });
+
+  it('separates response assessment observation from application', () => {
+    const inputs = routingFlagInputs({
+      'routing.response_assessment': evaluation('routing.response_assessment', 'on'),
+      'routing.response_assessment_apply': evaluation('routing.response_assessment_apply', 'off'),
+    });
+    expect(inputs).toMatchObject({
+      enableResponseAssessment: true,
+      applyResponseAssessment: false,
+    });
+  });
 });
 
 describe('client-visible flags', () => {

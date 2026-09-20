@@ -23673,6 +23673,15 @@
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
     },
+    "vercel_gateway/evaluation": {
+      "provider": "vercel_gateway",
+      "apiFamily": "evaluation",
+      "adapter": "@agiworkforce/providers-vercel-gateway",
+      "trustModes": ["managed_cloud"],
+      "features": {},
+      "protocol": "provider_native",
+      "hostPolicy": "allowlist_only"
+    },
     "xai/chat-completions": {
       "provider": "xai",
       "apiFamily": "chat_completions",
@@ -40154,6 +40163,33 @@
       "kind": "routing_policy",
       "defaultAlias": "auto",
       "fallbackSlot": "workhorse_general",
+      "semanticResponseAssessment": {
+        "model": "typesafe-ai/jev",
+        "developer": "typesafe-ai",
+        "transportProvider": "vercel_gateway",
+        "upstreamProvider": "typesafe-ai",
+        "harnessId": "vercel_gateway/evaluation",
+        "promptId": "routing.response_assessment",
+        "contextTokens": 32000,
+        "promotionEndsOn": "2026-09-25",
+        "pricing": {
+          "inputPerMillion": 0,
+          "outputPerMillion": 0,
+          "currency": "USD",
+          "source": "https://vercel.com/ai-gateway/models/jev",
+          "verifiedOn": "2026-09-20"
+        },
+        "limits": {
+          "maxStateBytes": 4096,
+          "maxInputTokensPerRequest": 2048,
+          "timeoutMs": 2000,
+          "maxInFlight": 16,
+          "dailyInputTokenCap": 1000000,
+          "minimumSelectedProbability": 0.7
+        },
+        "zeroDataRetentionVerified": false,
+        "residencyRegions": []
+      },
       "profileOrder": ["economy", "balanced", "premium"],
       "autoProfileByTask": {
         "simple_chat": "economy",

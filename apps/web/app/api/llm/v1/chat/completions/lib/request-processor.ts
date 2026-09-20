@@ -173,6 +173,7 @@ import {
   resolveWithObservedCapabilities,
   type WebCloudRolloutInputs,
 } from '@/lib/services/model-rollout/rollout-routing-inputs';
+import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
@@ -3008,7 +3009,7 @@ export async function processRequest(
       ).family
     : null;
 
-  const routeUsage = {
+  const baseRouteUsage = {
     ...(routeBudgetRemainingCents !== undefined
       ? { budgetRemainingCents: routeBudgetRemainingCents }
       : {}),
@@ -3076,6 +3077,44 @@ export async function processRequest(
   // region is already served from it, and `EXCLUDED_ROUTE_HOSTS` is that
   // region's own answer about which transports may carry its traffic.
   const residencyRegion = resolveResidencyRegion(workspaceRegion?.effective, rolloutInputs.region);
+  const scopedForAssessment = await scopedDbPromise;
+  const semanticResponseAssessment = await timePhase(CHAT_TURN_PHASE.responseAssessment, () =>
+    assessSemanticResponseBudget({
+      requestId,
+      requestedModel,
+      surface: chatSurface,
+      isFreePlan: isFreePlanTier(subscription.plan_tier),
+      hasMedia: (routingAttachments?.length ?? 0) > 0,
+      initialBudget: initialResponseBudget,
+      zeroDataRetentionOnly,
+      residencyRegion,
+      workspaceModelPolicy,
+      enableResponseAssessment: rolloutInputs.enableResponseAssessment,
+      applyResponseAssessment: rolloutInputs.applyResponseAssessment,
+      message: lastUserText,
+      taskType: resolvedTaskType,
+      userId,
+      organizationId: scopedForAssessment.organizationId,
+      promptVariants: rolloutInputs.promptVariants,
+      signal: request.signal,
+    }),
+  );
+  const routingResponseBudget =
+    chatSurface === 'api' || !adaptiveResponseBudgetEnabled
+      ? null
+      : planResponseBudget({
+          message: lastUserText,
+          taskType: resolvedTaskType,
+          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          requestedMaxOutputTokens,
+          semanticAssessment: semanticResponseAssessment.assessment,
+        });
+  const routeUsage = {
+    ...baseRouteUsage,
+    ...(routingResponseBudget
+      ? { estimatedOutputTokens: routingResponseBudget.outputTokenBudget }
+      : {}),
+  };
 
   const { decision: baseRouteDecision, routingRequest: baseRoutingRequest } =
     await resolveWithObservedCapabilities(
@@ -3154,7 +3193,17 @@ export async function processRequest(
   const freeLanePlan = freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.plan : null;
   const routeDecision: AutoRouteDecision =
     freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.routeDecision : baseRouteDecision;
-  const routingTrace = buildRoutingDecisionTrace(baseRoutingRequest, routeDecision);
+  const routingTrace = buildRoutingDecisionTrace(
+    baseRoutingRequest,
+    routeDecision,
+    semanticResponseAssessment.trace,
+  );
+  const routingPromptIds = [
+    ...turnPromptStamps(chatRequest, rolloutInputs.promptVariants),
+    ...(semanticResponseAssessment.trace.promptStamp
+      ? [semanticResponseAssessment.trace.promptStamp]
+      : []),
+  ];
   persistRoutingDecision({
     trace: routingTrace,
     requestId,
@@ -3163,7 +3212,7 @@ export async function processRequest(
     surface: chatSurface,
     kind: 'served',
     flagVariants: rolloutInputs.flagVariants,
-    promptIds: turnPromptStamps(chatRequest, rolloutInputs.promptVariants),
+    promptIds: routingPromptIds,
   });
 
   if (routeDecision.status === 'unavailable') {
@@ -3760,6 +3809,7 @@ export async function processRequest(
           apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
           requestedMaxOutputTokens,
           modelMaxOutputTokens: resolveMaxOutputTokens(chatRequest.model),
+          semanticAssessment: semanticResponseAssessment.assessment,
         });
   let maxTokens =
     responseBudget?.outputTokenBudget ??

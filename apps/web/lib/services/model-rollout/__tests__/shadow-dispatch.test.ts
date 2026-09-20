@@ -85,7 +85,7 @@ const SHADOW: ShadowMirror = {
 };
 
 const SERVED_TRACE = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   requestId: 'request-1',
   selection: 'auto',
   taskType: 'coding',
@@ -122,6 +122,7 @@ const SERVED_TRACE = {
     canaryCohorts: {},
   },
   observed: { failureRate: null, latencyP50Ms: null },
+  responseAssessment: null,
 } as unknown as RoutingDecisionTrace;
 
 function input(): ShadowDispatchInput {

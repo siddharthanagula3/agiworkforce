@@ -42,6 +42,7 @@
     "@agiworkforce/provider-protocol": "workspace:*",
     "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/providers-factory": "workspace:*",
+    "@agiworkforce/providers-vercel-gateway": "workspace:^",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/search": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
