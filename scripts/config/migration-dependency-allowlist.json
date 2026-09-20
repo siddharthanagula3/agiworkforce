@@ -1,4 +1,55 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/app/api/settings/organization/route.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/authorization/subject.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/connectors/mcp-custom-connections.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/server/scim/scim-provisioning-service.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/services/active-workspace-service.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/services/organization-invitation-service.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/services/organization-policy-override-service.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/user-connector-tools.ts",
+      "migration": 274,
+      "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
+    }
+  ]
 }

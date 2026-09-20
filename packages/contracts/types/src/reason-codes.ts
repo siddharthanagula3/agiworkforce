@@ -36,12 +36,18 @@ export const CAPABILITY_DENIAL_REASONS = [
   'disabled_by_user',
   'disabled_by_organization',
   'disabled_by_workspace',
+  'disabled_by_role',
+  'disabled_by_device_policy',
+  'unsupported_by_model',
   'unsupported_by_provider',
   'unsupported_by_route',
   'unsupported_by_surface',
+  'unsupported_by_operating_system',
+  'unsupported_by_region',
   'requires_permission',
   'requires_connected_account',
   'requires_desktop_host',
+  'requires_browser_extension',
   'requires_upgrade',
   'requires_seat',
   'entitlement_missing',
@@ -52,12 +58,33 @@ export const CAPABILITY_DENIAL_REASONS = [
   'provider_degraded',
   'provider_unavailable',
   'offline',
+  'temporarily_unavailable',
+  'maintenance',
   'feature_experimental',
   'feature_closed_beta',
   'feature_deprecated',
+  'feature_removed',
 ] as const;
 
 export type CapabilityDenialReason = (typeof CAPABILITY_DENIAL_REASONS)[number];
+
+/**
+ * What a capability is right now: available, or unavailable for exactly one
+ * stated reason. A surface reads this instead of inventing its own words for
+ * off, locked, greyed out or coming soon.
+ */
+export const CAPABILITY_ENABLED = 'enabled';
+
+export const CAPABILITY_STATES = [
+  CAPABILITY_ENABLED,
+  ...CAPABILITY_DENIAL_REASONS,
+] as const satisfies readonly string[];
+
+export type CapabilityState = (typeof CAPABILITY_STATES)[number];
+
+export function isCapabilityState(value: string): value is CapabilityState {
+  return (CAPABILITY_STATES as readonly string[]).includes(value);
+}
 
 export interface CapabilityDenialDescriptor {
   reason: CapabilityDenialReason;
@@ -116,14 +143,42 @@ export const CAPABILITY_DENIAL_TAXONOMY: Readonly<
       icon: 'auth',
     },
   ),
+  disabled_by_role: descriptor('disabled_by_role', 'policy', DenialErrorCode.DISABLED_BY_ROLE, {
+    title: 'Not open to your role',
+    message: 'The role you hold in this organization does not include this feature.',
+    suggestion: 'Ask an administrator to move you to a role that has it.',
+    icon: 'auth',
+  }),
+  disabled_by_device_policy: descriptor(
+    'disabled_by_device_policy',
+    'policy',
+    DenialErrorCode.DISABLED_BY_DEVICE_POLICY,
+    {
+      title: 'Blocked on this device',
+      message: 'A device policy your organization set stops this from running here.',
+      suggestion: 'Use a managed device that meets the policy, or ask an administrator.',
+      icon: 'auth',
+    },
+  ),
+  unsupported_by_model: descriptor(
+    'unsupported_by_model',
+    'capability',
+    DenialErrorCode.UNSUPPORTED_BY_MODEL,
+    {
+      title: 'Not supported by this model',
+      message: 'The model you selected cannot do this.',
+      suggestion: 'Pick a model that supports it and send the message again.',
+      icon: 'warning',
+    },
+  ),
   unsupported_by_provider: descriptor(
     'unsupported_by_provider',
     'capability',
     DenialErrorCode.UNSUPPORTED_BY_PROVIDER,
     {
-      title: 'Not supported by this model',
-      message: 'The model you selected cannot do this.',
-      suggestion: 'Pick a model that supports it and send the message again.',
+      title: 'Not offered by this provider',
+      message: 'The provider serving this model does not offer that at all.',
+      suggestion: 'Pick a model from another provider and send the message again.',
       icon: 'warning',
     },
   ),
@@ -146,6 +201,28 @@ export const CAPABILITY_DENIAL_TAXONOMY: Readonly<
       title: 'Not available here',
       message: 'This app does not offer that yet.',
       suggestion: 'Open the web app, where this is available.',
+      icon: 'info',
+    },
+  ),
+  unsupported_by_operating_system: descriptor(
+    'unsupported_by_operating_system',
+    'capability',
+    DenialErrorCode.UNSUPPORTED_BY_OPERATING_SYSTEM,
+    {
+      title: 'Not available on this operating system',
+      message: 'This needs a platform feature your operating system does not provide.',
+      suggestion: 'Run it on a supported operating system.',
+      icon: 'info',
+    },
+  ),
+  unsupported_by_region: descriptor(
+    'unsupported_by_region',
+    'policy',
+    DenialErrorCode.UNSUPPORTED_BY_REGION,
+    {
+      title: 'Not available in your region',
+      message: 'This is not offered where your account is served from.',
+      suggestion: 'Check the regional availability notes in your settings.',
       icon: 'info',
     },
   ),
@@ -179,6 +256,17 @@ export const CAPABILITY_DENIAL_TAXONOMY: Readonly<
       title: 'Needs the desktop app',
       message: 'This runs on your own machine, so the desktop app has to be running.',
       suggestion: 'Open the desktop app and try again from there.',
+      icon: 'info',
+    },
+  ),
+  requires_browser_extension: descriptor(
+    'requires_browser_extension',
+    'prerequisite',
+    DenialErrorCode.BROWSER_EXTENSION_REQUIRED,
+    {
+      title: 'Needs the browser extension',
+      message: 'This reads the page you are on, so the browser extension has to be installed.',
+      suggestion: 'Install the extension, then try again from the page.',
       icon: 'info',
     },
   ),
@@ -262,6 +350,23 @@ export const CAPABILITY_DENIAL_TAXONOMY: Readonly<
     suggestion: 'Reconnect, then try again.',
     icon: 'network',
   }),
+  temporarily_unavailable: descriptor(
+    'temporarily_unavailable',
+    'connectivity',
+    DenialErrorCode.TEMPORARILY_UNAVAILABLE,
+    {
+      title: 'Unavailable right now',
+      message: 'Something this depends on is not answering at the moment.',
+      suggestion: 'Try again shortly; nothing you did caused this.',
+      icon: 'network',
+    },
+  ),
+  maintenance: descriptor('maintenance', 'prerequisite', DenialErrorCode.MAINTENANCE, {
+    title: 'Down for planned work',
+    message: 'This is switched off while scheduled work on it finishes.',
+    suggestion: 'Check the status page for when it comes back.',
+    icon: 'info',
+  }),
   feature_experimental: descriptor(
     'feature_experimental',
     'capability',
@@ -295,6 +400,12 @@ export const CAPABILITY_DENIAL_TAXONOMY: Readonly<
       icon: 'info',
     },
   ),
+  feature_removed: descriptor('feature_removed', 'capability', DenialErrorCode.FEATURE_REMOVED, {
+    title: 'Removed from the product',
+    message: 'This was taken out and will not come back.',
+    suggestion: 'Export anything you still need from your settings.',
+    icon: 'info',
+  }),
 };
 
 export function isCapabilityDenialReason(value: string): value is CapabilityDenialReason {
@@ -341,4 +452,103 @@ export interface CapabilityDenialRemedy {
   requiredPlan?: BillingPlanTier;
   requiredPermission?: OrganizationPermission;
   requiredConnector?: string;
+  requiredDevice?: string;
+  retryAfterSeconds?: number;
+  documentationUrl?: string;
+}
+
+export const CAPABILITY_REMEDY_FIELDS = [
+  'requiredPlan',
+  'requiredPermission',
+  'requiredConnector',
+  'requiredDevice',
+  'retryAfterSeconds',
+] as const satisfies readonly (keyof CapabilityDenialRemedy)[];
+
+export type CapabilityRemedyField = (typeof CAPABILITY_REMEDY_FIELDS)[number];
+
+/**
+ * The one field a reason cannot be honest without. "Upgrade" that does not say
+ * to what, or "try again" that does not say when, is not a remedy.
+ */
+const REMEDY_OBLIGATIONS: Readonly<Partial<Record<CapabilityDenialReason, CapabilityRemedyField>>> =
+  {
+    requires_upgrade: 'requiredPlan',
+    requires_seat: 'requiredPlan',
+    entitlement_missing: 'requiredPlan',
+    payment_required: 'requiredPlan',
+    requires_permission: 'requiredPermission',
+    disabled_by_role: 'requiredPermission',
+    requires_connected_account: 'requiredConnector',
+    requires_desktop_host: 'requiredDevice',
+    requires_browser_extension: 'requiredDevice',
+    disabled_by_device_policy: 'requiredDevice',
+    rate_limited: 'retryAfterSeconds',
+    quota_exceeded: 'retryAfterSeconds',
+    provider_degraded: 'retryAfterSeconds',
+    provider_unavailable: 'retryAfterSeconds',
+    offline: 'retryAfterSeconds',
+    temporarily_unavailable: 'retryAfterSeconds',
+    maintenance: 'retryAfterSeconds',
+  };
+
+export function capabilityRemedyObligation(
+  reason: CapabilityDenialReason,
+): CapabilityRemedyField | null {
+  return REMEDY_OBLIGATIONS[reason] ?? null;
+}
+
+export function missingCapabilityRemedy(
+  reason: CapabilityDenialReason,
+  remedy: CapabilityDenialRemedy | undefined,
+): CapabilityRemedyField | null {
+  const required = capabilityRemedyObligation(reason);
+  if (required === null) return null;
+  return remedy?.[required] === undefined ? required : null;
+}
+
+export interface CapabilityStateExplanation extends Required<
+  Pick<FriendlyError, 'title' | 'message' | 'suggestion' | 'icon'>
+> {
+  state: CapabilityState;
+  reason: CapabilityDenialReason | null;
+  decidedBy: DenialDecider | null;
+  errorCode: AnyErrorCodeValue | null;
+  remedy: CapabilityDenialRemedy;
+  retryable: boolean;
+}
+
+/**
+ * Everything a surface needs to render an unavailable capability without
+ * inventing copy: what state it is in, why in machine-readable terms, the
+ * sentence a reader sees, and what would lift it.
+ */
+export function describeCapabilityState(
+  state: CapabilityState,
+  options: { remedy?: CapabilityDenialRemedy; translate?: DenialCopyLookup } = {},
+): CapabilityStateExplanation {
+  if (state === CAPABILITY_ENABLED) {
+    return {
+      state,
+      reason: null,
+      decidedBy: null,
+      errorCode: null,
+      remedy: {},
+      retryable: false,
+      title: 'Available',
+      message: 'This is available to you now.',
+      suggestion: 'Go ahead and use it.',
+      icon: 'info',
+    };
+  }
+  const entry = CAPABILITY_DENIAL_TAXONOMY[state];
+  return {
+    state,
+    reason: state,
+    decidedBy: entry.decidedBy,
+    errorCode: entry.errorCode,
+    remedy: options.remedy ?? {},
+    retryable: capabilityRemedyObligation(state) === 'retryAfterSeconds',
+    ...describeCapabilityDenial(state, options.translate),
+  };
 }

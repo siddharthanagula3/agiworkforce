@@ -1,0 +1,580 @@
+{
+  "entries": [
+    {
+      "file": "apps/desktop/src/api/agent.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/api/agent.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/agent-collaboration/AgentCollaborationPanel.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/agi/AgentTaskMonitor.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/agi/BackgroundAgentsPanel.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/agi/IterationProgressPanel.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/agi/ProgressIndicator.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/agi/ProgressIndicator.tsx",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/background-tasks/BackgroundTasksPanel.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/execution/ThinkingPanel.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/governance/ToolHistoryTable.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/governance/ToolHistoryTable.tsx",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/features/onboarding/OnboardingWizard.tsx",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/desktop/src/features/research/ResearchProgress.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/hooks/agenticEventUtils.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/hooks/agenticEventUtils.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/hooks/useAgenticEvents.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/hooks/useAgenticEvents.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/hooks/useBackgroundTasks.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/hooks/useWorkflows.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/lib/intentClassifier.ts",
+      "symbol": "BillingPlanTier",
+      "family": "plan access",
+      "why": "restates plan tiers in local literals; import the tier predicates from billing-catalog."
+    },
+    {
+      "file": "apps/desktop/src/lib/messageArtifacts.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/lib/runtimeActivity.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/lib/streamContentRuntime.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/lib/streamLifecycle.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/lib/tauri-mock.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/lib/toolStreamRuntime.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/runtime/cloudStreamDeltas.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/runtime/cloudToolApproval.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/runtime/persistedCloudMessage.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/runtime/persistedCloudMessage.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/runtime/WebRuntime.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/backgroundAgentStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/chat/agentStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/cloudTaskBadgeStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/editingStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/editingStore.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/executionStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/executionStore.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/mcpbStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/mediaGenerationStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/researchStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/schedulerStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/workflowStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/stores/workflowStore.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/types/analytics.ts",
+      "symbol": "BillingPlanTier",
+      "family": "plan access",
+      "why": "restates plan tiers in local literals; import the tier predicates from billing-catalog."
+    },
+    {
+      "file": "apps/desktop/src/types/chatEvents.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/types/mcp.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/types/mcp.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/types/media.ts",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/desktop/src/types/provider.ts",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/desktop/src/types/toolCalling.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/desktop/src/types/toolCalling.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/extension/src/features/background/scheduled-task-cancellation.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/extension/src/features/browser-tools/networkCapture.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/extension/src/features/side-panel/schedulesSection.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/app/(app)/companion/agent/[id].tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/lib/dispatchAgentValidator.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/lib/providerStreamClient.ts",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/mobile/services/cloudSyncEngine.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/services/cloudSyncEngine.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageGenProgress.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/StatusStep.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/VideoGenProgress.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/WebSearchToolCard.tsx",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/utils/agentActivityState.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/utils/agentActivityState.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/image/services/imagegen.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/store.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/store.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/src/features/video/services/videogen.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/stores/agentStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/stores/agentStore.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/mobile/stores/chat/chatMessageStore.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/admin/services/service-health-metrics.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/admin/services/service-health-metrics.ts",
+      "symbol": "TOOL_STATUSES",
+      "family": "tool support",
+      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/chat/components/ToolCallCard.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/chat/utils/agiwork-plan.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/code/hooks/use-local-tests.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/marketing/components/FeatureScenes.tsx",
+      "symbol": "ADMIN_PERMISSION_AREAS",
+      "family": "policy",
+      "why": "restates permission areas in local literals; import them from enterprise/permissions."
+    },
+    {
+      "file": "apps/web/features/marketing/components/LandingSections.tsx",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/web/features/marketing/components/RouteFlow.tsx",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/web/features/media/services/media-api-service.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/media/services/media-api-service.ts",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/shared/stores/agent-metrics-store.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/shared/stores/company-hub-store.ts",
+      "symbol": "Provider",
+      "family": "provider identity",
+      "why": "restates provider identifiers in local literals; ask the adapter what a provider can do instead of naming it."
+    },
+    {
+      "file": "apps/web/shared/stores/media-store.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/shared/stores/mission-control-store.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    },
+    {
+      "file": "apps/web/shared/types/multi-agent-chat.ts",
+      "symbol": "LIFECYCLE_STATUSES",
+      "family": "lifecycle state names",
+      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
+    }
+  ]
+}
