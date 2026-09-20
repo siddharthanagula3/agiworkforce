@@ -258,6 +258,7 @@ export type AuditEventType =
   | 'retention_sweep_completed'
   | 'legal_hold_created'
   | 'legal_hold_released'
+  | 'deletion_blocked_by_legal_hold'
   | 'secret_detected'
   | 'spend_cap_exceeded'
   | 'ip_not_allowed'
@@ -458,6 +459,7 @@ const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditE
   'organization_deletion_completed',
   'legal_hold_created',
   'legal_hold_released',
+  'deletion_blocked_by_legal_hold',
   'retention_sweep_completed',
   'domain_retention_sweep_completed',
   'retention_policy_changed',
@@ -827,6 +829,7 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'admin_api_key_revoked':
       return 'admin_api_key';
     case 'ediscovery_export':
+    case 'deletion_blocked_by_legal_hold':
       return 'legal_hold';
     case 'dlp_content_blocked':
       return 'dlp';

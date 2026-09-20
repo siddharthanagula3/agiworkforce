@@ -1,5 +1,11 @@
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { holdableResourceForTable } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import {
+  countHeldRows,
+  isLegalHoldResourceType,
+  legalHoldExclusion,
+} from '@/lib/services/legal-hold-gate';
 import {
   RESOURCE_DELETION_POLICIES,
   resourcePurgeStatement,
@@ -10,6 +16,8 @@ export interface ResourcePurgeTableResult {
   readonly resource: string;
   readonly table: string;
   readonly purged: number;
+  /** Rows past their window that an active legal hold preserved. */
+  readonly heldFromPurge: number;
   readonly skippedReason: string | null;
   readonly error: string | null;
 }
@@ -17,6 +25,7 @@ export interface ResourcePurgeTableResult {
 export interface ResourcePurgeResult {
   readonly tables: readonly ResourcePurgeTableResult[];
   readonly purged: number;
+  readonly heldFromPurge: number;
   readonly skipped: number;
   readonly failed: number;
 }
@@ -52,12 +61,8 @@ function purgeOrder(): readonly ResourceDeletionPolicy[] {
 
 const BY_TABLE = new Map(RESOURCE_DELETION_POLICIES.map((policy) => [policy.table, policy]));
 
-/**
- * A row that addresses object storage, or cascades to one that does, is not
- * this sweep's to delete: the row is the only address of the bytes, so
- * dropping it here would leave them behind for ever. The job named beside the
- * column deletes the object first and the row after it.
- */
+// A row addressing object storage is the only address of the bytes, so the job
+// named beside the column deletes the object first and the row after.
 function objectStorageOwner(
   policy: ResourceDeletionPolicy,
   seen: ReadonlySet<string> = new Set(),
@@ -76,11 +81,18 @@ function objectStorageOwner(
   return null;
 }
 
-/**
- * Ends the recovery window. A table that fails is recorded and the sweep
- * continues: one unavailable table must not hold every other resource past
- * the window it was promised.
- */
+// Shared by the purge and by the count of what it left behind, so the two
+// cannot disagree about which rows were due.
+function dueWindow(policy: ResourceDeletionPolicy): { where: string; params: unknown[] } {
+  return {
+    where: `candidate.${policy.softDeleteColumn} is not null
+        and candidate.${policy.softDeleteColumn} < now() - $1::interval`,
+    params: [`${policy.recoveryWindowDays} days`],
+  };
+}
+
+// One unavailable table must not hold every other resource past its window. A
+// held row is deferred, not forgotten: the run after the release takes it.
 export async function purgeSoftDeletedResources(db: DatabaseAdapter): Promise<ResourcePurgeResult> {
   const tables: ResourcePurgeTableResult[] = [];
 
@@ -91,6 +103,7 @@ export async function purgeSoftDeletedResources(db: DatabaseAdapter): Promise<Re
         resource: policy.resource,
         table: policy.table,
         purged: 0,
+        heldFromPurge: 0,
         skippedReason:
           owner.sweep === null
             ? `${owner.table} holds object storage and no sweep deletes those objects yet`
@@ -100,17 +113,44 @@ export async function purgeSoftDeletedResources(db: DatabaseAdapter): Promise<Re
       continue;
     }
 
-    const statement = resourcePurgeStatement(policy);
+    const declared = holdableResourceForTable(policy.table)?.resourceType;
+    const resourceType =
+      declared !== undefined && isLegalHoldResourceType(declared) ? declared : null;
+    const window = dueWindow(policy);
     try {
+      // The hold is part of the DELETE, so a hold placed while this run is in
+      // flight still wins; the count is only for the report.
+      const heldFromPurge =
+        resourceType === null
+          ? 0
+          : await countHeldRows(db, resourceType, {
+              table: policy.table,
+              alias: 'candidate',
+              where: window.where,
+              params: window.params,
+            });
+
+      const statement = resourcePurgeStatement(
+        policy,
+        resourceType === null
+          ? null
+          : legalHoldExclusion(resourceType, {
+              alias: 'candidate',
+              nextParamIndex: 3,
+            }),
+      );
       const rows = await db.query<PurgeKeyRow>(statement.sql, [...statement.params]);
       tables.push({
         resource: policy.resource,
         table: policy.table,
         purged: rows.length,
+        heldFromPurge,
         skippedReason: null,
         error: null,
       });
     } catch (error) {
+      // Nothing was destroyed: the hold predicate is inside the statement, so a
+      // hold set that cannot be read fails the DELETE rather than widening it.
       const message = error instanceof Error ? error.message : String(error);
       logger.error(
         { event: 'resource_purge_failed', table: policy.table, error: message },
@@ -120,6 +160,7 @@ export async function purgeSoftDeletedResources(db: DatabaseAdapter): Promise<Re
         resource: policy.resource,
         table: policy.table,
         purged: 0,
+        heldFromPurge: 0,
         skippedReason: null,
         error: message,
       });
@@ -129,6 +170,7 @@ export async function purgeSoftDeletedResources(db: DatabaseAdapter): Promise<Re
   return {
     tables,
     purged: tables.reduce((total, entry) => total + entry.purged, 0),
+    heldFromPurge: tables.reduce((total, entry) => total + entry.heldFromPurge, 0),
     skipped: tables.filter((entry) => entry.skippedReason !== null).length,
     failed: tables.filter((entry) => entry.error !== null).length,
   };
