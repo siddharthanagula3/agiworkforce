@@ -813,7 +813,7 @@ export async function loadProjectMemoryScope(
     `select coalesce((to_jsonb(user_projects)->>'uses_global_memory')::boolean, true)
               as uses_global_memory
        from user_projects
-      where id = $1::uuid and user_id = $2
+      where id = $1::uuid and user_id = $2 and deleted_at is null
       limit 1`,
     [params.projectId, params.userId],
   );

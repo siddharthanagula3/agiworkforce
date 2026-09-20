@@ -6,6 +6,7 @@ import {
   formatManagedMemorySystemPrompt,
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
+  loadProjectMemoryScope,
   persistManagedAutoMemoryFacts,
   type ManagedMemoryPolicy,
 } from '../managed-memory-context-service';
@@ -300,5 +301,36 @@ describe('persistManagedAutoMemoryFacts', () => {
       persistManagedAutoMemoryFacts({ query }, { userId: 'user-1', candidates: [] }),
     ).resolves.toEqual({ extracted: 0, inserted: 0, excluded: 0 });
     expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadProjectMemoryScope', () => {
+  function projectDb(project: { uses_global_memory: boolean; deleted_at: string | null }) {
+    const query = vi.fn();
+    query.mockImplementation(async (sql: string) => {
+      if (!String(sql).includes('from user_projects')) return [];
+      const withheld = String(sql).includes('deleted_at is null') && project.deleted_at !== null;
+      return withheld ? [] : [{ uses_global_memory: project.uses_global_memory }];
+    });
+    return query;
+  }
+
+  it('reads the memory posture of a live project', async () => {
+    const query = projectDb({ uses_global_memory: false, deleted_at: null });
+
+    await expect(
+      loadProjectMemoryScope({ query }, { userId: 'user-1', projectId: 'project-1' }),
+    ).resolves.toEqual({ projectId: 'project-1', usesGlobalMemory: false });
+  });
+
+  it('does not let a withdrawn project scope what a model is given', async () => {
+    const query = projectDb({
+      uses_global_memory: false,
+      deleted_at: '2026-09-19T00:00:00.000Z',
+    });
+
+    await expect(
+      loadProjectMemoryScope({ query }, { userId: 'user-1', projectId: 'project-1' }),
+    ).resolves.toEqual({ projectId: null, usesGlobalMemory: true });
   });
 });

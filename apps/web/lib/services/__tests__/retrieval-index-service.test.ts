@@ -189,6 +189,75 @@ describe('indexRetrievalDocument', () => {
   });
 });
 
+describe('developer session documents', () => {
+  const SESSION_DOCUMENT = {
+    ...DOCUMENT,
+    id: '33333333-3333-4333-8333-333333333333',
+    source_kind: 'developer_session',
+    source_id: '44444444-4444-4444-8444-444444444444',
+  };
+
+  function sessionDb(archivedAt: string | null) {
+    const statements: Array<{ sql: string; params: unknown[] }> = [];
+    const run = async (sql: string, params: unknown[] = []) => {
+      statements.push({ sql, params });
+      if (sql.includes("set status = 'indexing'")) return [SESSION_DOCUMENT];
+      if (sql.includes('from cloud_code_sessions')) {
+        const withheld = sql.includes('archived_at is null') && archivedAt !== null;
+        return withheld ? [] : [{ title: 'Parser work', repository_url: null }];
+      }
+      if (sql.includes('from cloud_code_agent_turns')) {
+        return [{ id: 'turn-1', goal: 'Fix the parser', final_message: 'Parser fixed.' }];
+      }
+      return [];
+    };
+    const db = {
+      query: vi.fn(run),
+      execute: vi.fn(async (sql: string, params: unknown[] = []) => {
+        await run(sql, params);
+        return 1;
+      }),
+      transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+        callback(db as unknown as DatabaseAdapter),
+      ),
+      withUser: vi.fn(),
+      withOrg: vi.fn(),
+      dispose: vi.fn(),
+    };
+    return { db: db as unknown as DatabaseAdapter, statements };
+  }
+
+  it('indexes the turns of an active session', async () => {
+    mocks.embed.mockImplementation(async ({ texts }: { texts: string[] }) => ({
+      vectors: texts.map(() => vector()),
+      model: 'embedding-model',
+      routeId: 'route',
+    }));
+    const { db, statements } = sessionDb(null);
+
+    expect(await indexRetrievalDocument(db, SESSION_DOCUMENT.id, 'run-1')).toMatchObject({
+      kind: 'indexed',
+    });
+    const insert = statements.find((entry) => entry.sql.includes('insert into retrieval_chunks'));
+    expect((insert?.params[10] as string[]).join(' ')).toContain('Parser fixed.');
+  });
+
+  it('removes the document of an archived session instead of rebuilding it', async () => {
+    const { db, statements } = sessionDb('2026-09-19T00:00:00.000Z');
+
+    expect(await indexRetrievalDocument(db, SESSION_DOCUMENT.id, 'run-1')).toEqual({
+      kind: 'removed',
+    });
+    expect(
+      statements.find((entry) => entry.sql.includes('delete from retrieval_documents'))?.params,
+    ).toEqual([SESSION_DOCUMENT.id, SESSION_DOCUMENT.user_id]);
+    expect(statements.some((entry) => entry.sql.includes('insert into retrieval_chunks'))).toBe(
+      false,
+    );
+    expect(mocks.embed).not.toHaveBeenCalled();
+  });
+});
+
 describe('reserveDueRetrievalDocuments', () => {
   it('holds due documents with skip-locked claiming and the attempt ceiling', async () => {
     const { db, statements } = fakeDb();
