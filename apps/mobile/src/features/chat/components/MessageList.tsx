@@ -16,6 +16,7 @@ import type { ResearchPlanDecision } from './research/ResearchRunCard';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type { ChatMessage } from '@/types/chat';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
@@ -84,23 +85,27 @@ export function MessageList({
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
-      <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply} colors={colors}>
-        <MessageBubble
-          message={item}
-          onApprove={onApprove}
-          onReject={onReject}
-          onDeleteMessage={onDeleteMessage}
-          onRetryMessage={onRetryMessage}
-          onSwitchModel={onSwitchModel}
-          onEditMessage={onEditMessage}
-          onReaction={onReaction}
-          onResolveToolApproval={onResolveToolApproval}
-          onResearchPlanDecision={onResearchPlanDecision}
-          onRetryResearch={onRetryResearch}
-          onStopResearch={onStopResearch}
-          isResumingResearch={resumingResearchMessageId === item.id}
-        />
-      </SwipeReplyWrapper>
+      // The column is on the row, not on the list, so a swipe anywhere in the
+      // pane still scrolls the thread on a tablet.
+      <View testID="chat.message-row" style={contentColumn('reading')}>
+        <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply} colors={colors}>
+          <MessageBubble
+            message={item}
+            onApprove={onApprove}
+            onReject={onReject}
+            onDeleteMessage={onDeleteMessage}
+            onRetryMessage={onRetryMessage}
+            onSwitchModel={onSwitchModel}
+            onEditMessage={onEditMessage}
+            onReaction={onReaction}
+            onResolveToolApproval={onResolveToolApproval}
+            onResearchPlanDecision={onResearchPlanDecision}
+            onRetryResearch={onRetryResearch}
+            onStopResearch={onStopResearch}
+            isResumingResearch={resumingResearchMessageId === item.id}
+          />
+        </SwipeReplyWrapper>
+      </View>
     ),
     [
       colors,
@@ -123,11 +128,15 @@ export function MessageList({
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
 
   if (messages.length === 0) {
-    return <ChatEmptyState onPairDesktop={onPairDesktop} />;
+    return (
+      <View style={[styles.container, contentColumn('reading')]}>
+        <ChatEmptyState onPairDesktop={onPairDesktop} />
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="chat.message-list" style={styles.container}>
       <FlashList
         ref={listRef}
         data={messages}
@@ -155,26 +164,31 @@ export function MessageList({
         }
       />
 
-      {/* Scroll-to-bottom floating chevron. */}
-      <Animated.View
-        style={[styles.fab, fabStyle]}
-        pointerEvents={showScrollButton ? 'auto' : 'none'}
-      >
-        <Pressable
-          onPress={scrollToBottom}
-          accessibilityLabel="Scroll to bottom"
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            styles.fabButton,
-            {
-              backgroundColor: colors.teal,
-              opacity: pressed ? 0.82 : 1,
-            },
-          ]}
-        >
-          <ChevronDown size={20} color={colors.accentText} strokeWidth={2.5} />
-        </Pressable>
-      </Animated.View>
+      {/* Anchored to the reading column, so it stays over the thread rather
+          than drifting to the edge of a wide pane. */}
+      <View pointerEvents="box-none" style={styles.fabOverlay}>
+        <View pointerEvents="box-none" style={[styles.fabColumn, contentColumn('reading')]}>
+          <Animated.View
+            style={[styles.fab, fabStyle]}
+            pointerEvents={showScrollButton ? 'auto' : 'none'}
+          >
+            <Pressable
+              onPress={scrollToBottom}
+              accessibilityLabel="Scroll to bottom"
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.fabButton,
+                {
+                  backgroundColor: colors.teal,
+                  opacity: pressed ? 0.82 : 1,
+                },
+              ]}
+            >
+              <ChevronDown size={20} color={colors.accentText} strokeWidth={2.5} />
+            </Pressable>
+          </Animated.View>
+        </View>
+      </View>
     </View>
   );
 }
@@ -182,6 +196,16 @@ export function MessageList({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  fabOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+  },
+  fabColumn: {
+    alignItems: 'center',
   },
   fab: {
     position: 'absolute',

@@ -263,6 +263,28 @@ describe('DrawerContent', () => {
     expect(queryByText('Cloud Chat')).toBeNull();
   });
 
+  it('lifts pinned chats above the rest and keeps them when the list is capped', () => {
+    useChatStore.setState({
+      conversations: Array.from({ length: 10 }, (_, index) => ({
+        id: `local-${index + 1}`,
+        title: `Local recent ${index + 1}`,
+        updatedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        messageCount: 1,
+        pinned: index === 9,
+        executionMode: 'local',
+      })),
+    });
+
+    const { getByText, getAllByLabelText } = renderDrawer();
+    const titles = getAllByLabelText(/^Open conversation: /).map((node) =>
+      (node.props.accessibilityLabel as string).replace('Open conversation: ', ''),
+    );
+
+    expect(titles[0]).toBe('Local recent 10');
+    expect(getByText('Local recent 10')).toBeTruthy();
+  });
+
   it('caps visible recents so the drawer footer does not cover chat rows', () => {
     useChatStore.setState({
       conversations: Array.from({ length: 10 }, (_, index) => ({

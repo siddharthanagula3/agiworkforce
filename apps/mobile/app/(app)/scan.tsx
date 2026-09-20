@@ -27,6 +27,7 @@ import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
 
@@ -74,9 +75,7 @@ export default function ScanScreen() {
     return () => clearTimeout(timeout);
   }, [permission?.granted, phase, cameraReady]);
 
-  const handleClose = useCallback(() => {
-    router.back();
-  }, [router]);
+  const handleClose = useGoBack('/(app)/(tabs)/chat');
 
   const scanImage = useCallback(async (uri: string) => {
     setCapturedUri(uri);
