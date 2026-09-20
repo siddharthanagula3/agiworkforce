@@ -1,12 +1,20 @@
-
 import { describe, expect, it } from 'vitest';
+import { DOCUMENT_CLASSES, documentClassById } from '@agiworkforce/types';
 import {
+  libraryResourceTypeFor,
   LibraryItemSchema,
   LibraryListQuerySchema,
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
+  LIBRARY_KINDS,
   LIBRARY_MAX_PAGE_SIZE,
+  LIBRARY_RESOURCE_TYPES,
 } from '../library';
+
+const mediaTypeOf = (id: string) => documentClassById(id)?.mediaTypes[0] ?? '';
+const OFFICE_DOCX = mediaTypeOf('docx');
+const OFFICE_XLSX = mediaTypeOf('xlsx');
+const OFFICE_PPTX = mediaTypeOf('pptx');
 
 const item = {
   id: '22222222-2222-4222-8222-222222222222',
@@ -95,5 +103,66 @@ describe('LibraryListResponseSchema', () => {
       LibraryListResponseSchema.safeParse({ items: [], has_more: false, next_offset: null })
         .success,
     ).toBe(true);
+  });
+});
+
+describe('Library resource types', () => {
+  it('gives every declared document class a resource type that is not the storage kind', () => {
+    for (const documentClass of DOCUMENT_CLASSES) {
+      const extension = documentClass.extensions[0] ?? documentClass.id;
+      const resourceType = libraryResourceTypeFor({
+        mime_type: documentClass.mediaTypes[0] ?? 'application/octet-stream',
+        file_name: `sample.${extension}`,
+      });
+      expect(LIBRARY_RESOURCE_TYPES).toContain(resourceType);
+      expect(resourceType).not.toBe('other');
+      expect(LIBRARY_KINDS as readonly string[]).not.toContain(resourceType);
+    }
+  });
+
+  it('separates documents, PDFs, spreadsheets and presentations', () => {
+    const typeOf = (file_name: string, mime_type: string) =>
+      libraryResourceTypeFor({ file_name, mime_type });
+    expect(typeOf('brief.docx', OFFICE_DOCX)).toBe('document');
+    expect(typeOf('brief.pdf', 'application/pdf')).toBe('pdf');
+    expect(typeOf('numbers.xlsx', OFFICE_XLSX)).toBe('spreadsheet');
+    expect(typeOf('numbers.csv', 'text/csv')).toBe('spreadsheet');
+    expect(typeOf('deck.pptx', OFFICE_PPTX)).toBe('presentation');
+  });
+
+  it('keeps generated files and artifacts as their own types', () => {
+    expect(
+      libraryResourceTypeFor({
+        file_name: 'chart',
+        mime_type: 'application/octet-stream',
+        origin: 'generated',
+      }),
+    ).toBe('generated_file');
+    expect(
+      libraryResourceTypeFor({
+        file_name: 'dashboard.html',
+        mime_type: 'text/html',
+        surface: 'artifact',
+      }),
+    ).toBe('artifact');
+  });
+
+  it('reaches each of the six listable resource types the Library promises', () => {
+    const promised = [
+      'document',
+      'pdf',
+      'spreadsheet',
+      'presentation',
+      'generated_file',
+      'artifact',
+    ];
+    for (const type of promised) expect(LIBRARY_RESOURCE_TYPES).toContain(type);
+    expect(new Set(LIBRARY_RESOURCE_TYPES).size).toBe(LIBRARY_RESOURCE_TYPES.length);
+  });
+
+  it('accepts a resource-type filter on the list query and refuses an unknown one', () => {
+    const parsed = LibraryListQuerySchema.parse({ resource_type: 'pdf,spreadsheet' });
+    expect(parsed.resource_type).toEqual(['pdf', 'spreadsheet']);
+    expect(LibraryListQuerySchema.safeParse({ resource_type: 'folder' }).success).toBe(false);
   });
 });
