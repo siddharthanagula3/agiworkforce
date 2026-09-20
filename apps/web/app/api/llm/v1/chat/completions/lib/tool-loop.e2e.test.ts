@@ -12,8 +12,8 @@ function requireCatalogModelId(predicate: (model: ModelMetadata) => boolean): st
 const FREE_QWEN_MODEL = requireCatalogModelId(
   (model) => model.provider === 'qwen' && model.capabilities.tools,
 );
-const FREE_OPENAI_MODEL = requireCatalogModelId(
-  (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'free',
+const BILLED_OPENAI_MODEL = requireCatalogModelId(
+  (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'basic',
 );
 const PAID_OPENAI_MODEL = requireCatalogModelId(
   (model) => model.provider === 'openai' && model.tierPolicy?.minTier === 'pro',
@@ -380,8 +380,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
 
   it('stops a Free tool loop before a provider turn that cannot fit', async () => {
     const processed = makeProcessed();
-    processed.chatRequest.model = FREE_OPENAI_MODEL;
-    processed.llmRequest.model = FREE_OPENAI_MODEL;
+    processed.chatRequest.model = BILLED_OPENAI_MODEL;
+    processed.llmRequest.model = BILLED_OPENAI_MODEL;
     processed.llmRequest.max_tokens = 8_192;
     processed.maxTokens = 8_192;
     processed.freeTrial = {

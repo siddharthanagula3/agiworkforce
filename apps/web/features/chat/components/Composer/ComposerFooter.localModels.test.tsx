@@ -10,6 +10,7 @@ import type {
 import { ComposerFooter } from './ComposerFooter';
 import { useLocalModelSelection } from '@features/desktop-host';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
+import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
@@ -27,6 +28,14 @@ const TINY_MODEL: LocalModel = {
   serverLabel: 'Ollama',
   name: 'tinyfixture:135m',
   sizeBillion: 0.13452,
+};
+
+const PRO_SUBSCRIPTION: SubscriptionPlan = {
+  tier: 'pro',
+  display_name: 'Pro',
+  status: 'active',
+  current_period_end: null,
+  plan_name: 'Pro',
 };
 
 let snapshot: LocalModelSnapshot;
@@ -78,6 +87,7 @@ beforeEach(() => {
   snapshot = { granted: false, servers: [reachable] };
   listedModels = [LOCAL_MODEL];
   useLocalModelSelection.getState().select(null);
+  useBillingStore.setState({ subscription: PRO_SUBSCRIPTION, unauthenticated: false });
   vi.stubGlobal(
     'fetch',
     vi.fn().mockResolvedValue(new Response(JSON.stringify({ models: [] }), { status: 200 })),

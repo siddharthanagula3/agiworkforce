@@ -10,6 +10,10 @@ const { mockCheckoutCreate, mockGetCheckoutPriceSelection, mockDbQuery } = vi.ho
   mockDbQuery: vi.fn(),
 }));
 
+const waitlistAccessMocks = vi.hoisted(() => ({
+  hasAccess: vi.fn(async () => true),
+}));
+
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -54,6 +58,10 @@ vi.mock('@/lib/server/rls-db', () => ({
       organizationId: null,
     };
   }),
+}));
+
+vi.mock('@/lib/server/billing-waitlist-access', () => ({
+  hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 
 vi.mock('stripe', () => {
@@ -106,6 +114,7 @@ describe('POST /api/checkout', () => {
       return [];
     });
     identityState.userId = 'test-user-id';
+    waitlistAccessMocks.hasAccess.mockResolvedValue(true);
   });
 
   it('should return 401 if user is not authenticated', async () => {

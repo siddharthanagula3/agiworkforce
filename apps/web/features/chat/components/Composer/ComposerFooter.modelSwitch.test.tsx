@@ -16,6 +16,14 @@ interface Catalogued {
   budget: number;
 }
 
+const PRO_SUBSCRIPTION = {
+  tier: 'pro',
+  display_name: 'Pro',
+  status: 'active',
+  current_period_end: null,
+  plan_name: 'Pro',
+} as const;
+
 function catalogued(model: AIModel): Catalogued | null {
   const meta = getModelMetadataById(model.id);
   if (!meta?.contextWindow) return null;
@@ -61,7 +69,7 @@ let anchor: Catalogued;
 let target: Catalogued;
 
 beforeAll(async () => {
-  useBillingStore.setState({ subscription: null, unauthenticated: true });
+  useBillingStore.setState({ subscription: PRO_SUBSCRIPTION, unauthenticated: false });
   useModelStore.setState({ selectedModelId: AVAILABLE_MODELS[0]!.id });
   seedConversation([]);
   const user = userEvent.setup();
@@ -84,7 +92,7 @@ function overflowingTurn(): Record<string, unknown> {
 }
 
 beforeEach(() => {
-  useBillingStore.setState({ subscription: null, unauthenticated: true });
+  useBillingStore.setState({ subscription: PRO_SUBSCRIPTION, unauthenticated: false });
   useModelStore.setState({ selectedModelId: anchor.model.id });
   seedConversation([]);
 });

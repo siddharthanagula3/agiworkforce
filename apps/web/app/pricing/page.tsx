@@ -46,6 +46,8 @@ import {
   UpgradeConfirmDialog,
   type UpgradeConfirmRequest,
 } from '@features/billing/components/UpgradeConfirmDialog';
+import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitlistDialog';
+import type { UpgradeWaitlistRequest } from '@features/billing/services/upgrade-waitlist';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { managedUsageMultiplier } from '@/lib/billing/managed-usage-caps';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -59,9 +61,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Reveal } from '@/features/marketing/components/Reveal';
 import { toUserMessage } from '@/lib/user-error-message';
 
-// Paid-plan checkout (2026-07-04): open by default, matching the
-// managed-compute public-alpha decision (2026-06-27, lib/managed-compute-gate.ts).
-// The env var is retained ONLY as an incident-response kill-switch: set
+// The env var is an incident-response kill-switch: set
 // NEXT_PUBLIC_CHECKOUT_ENABLED=0 (or 'false'/'off') to re-gate.
 //
 // NEXT_PUBLIC_CHECKOUT_ENABLED MUST be kept equal to the server-side
@@ -355,6 +355,7 @@ export default function PricingPage() {
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
   const [portalPending, setPortalPending] = useState(false);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
+  const [waitlistRequest, setWaitlistRequest] = useState<UpgradeWaitlistRequest | null>(null);
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
@@ -654,29 +655,48 @@ export default function PricingPage() {
       return;
     }
 
-    setPendingPlan(plan);
+    setWaitlistRequest({
+      plan,
+      billingInterval: isProPlanTier(plan)
+        ? annual
+          ? 'yearly'
+          : 'monthly'
+        : isPerSeatBillingPlan(plan)
+          ? teamInterval
+          : 'monthly',
+      ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats } : {}),
+    });
+  }
+
+  async function startInitialCheckout(request: UpgradeWaitlistRequest) {
+    if (!user) throw new Error('Please sign in to upgrade.');
+    setPendingPlan(request.plan);
     const toastId = toast.loading(t('redirectingToCheckout'));
     try {
       const userId = user.id;
       const userEmail = user.email || '';
-      if (isBasicPlanTier(plan)) {
+      if (isBasicPlanTier(request.plan)) {
         await upgradeToBasicPlan({ userId, userEmail });
-      } else if (isProPlanTier(plan)) {
-        await upgradeToProPlan({ userId, userEmail, billingPeriod: annual ? 'yearly' : 'monthly' });
-      } else if (isMaxPlanTier(plan)) {
+      } else if (isProPlanTier(request.plan)) {
+        await upgradeToProPlan({
+          userId,
+          userEmail,
+          billingPeriod: request.billingInterval,
+        });
+      } else if (isMaxPlanTier(request.plan)) {
         await upgradeToMaxPlan({ userId, userEmail });
-      } else if (isMax15xPlanTier(plan)) {
+      } else if (isMax15xPlanTier(request.plan)) {
         await upgradeToMax15xPlan({ userId, userEmail });
-      } else if (isPerSeatBillingPlan(plan)) {
+      } else if (isPerSeatBillingPlan(request.plan)) {
         await upgradeToTeamPlan({
-          seats: teamSeats,
-          ...(teamInterval === 'yearly' ? { billingPeriod: 'yearly' } : {}),
+          seats: request.seats ?? MIN_PURCHASABLE_SEATS,
+          ...(request.billingInterval === 'yearly' ? { billingPeriod: 'yearly' } : {}),
         });
       }
       toast.dismiss(toastId);
     } catch (err) {
       toast.dismiss(toastId);
-      toast.error(toUserMessage(err, t('checkoutFailed')));
+      throw err;
     } finally {
       setPendingPlan(null);
     }
@@ -1567,6 +1587,11 @@ export default function PricingPage() {
           toast.success('Your plan has been upgraded.');
           void settleUpgradedPlan();
         }}
+      />
+      <UpgradeWaitlistDialog
+        request={waitlistRequest}
+        onClose={() => setWaitlistRequest(null)}
+        onAccessGranted={startInitialCheckout}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { managedUsageBucketLabel } from '@agiworkforce/types';
+import { getModelMetadataById, managedUsageBucketLabel } from '@agiworkforce/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 
@@ -13,10 +13,12 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 import { __resetManagedUsageSummaryForTest } from '@/lib/hooks/useManagedUsageSummary';
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { UsageSection } from '../UsageSection';
 import { SettingsSectionNavigationProvider } from '../../components/SettingsSectionLink';
 
 const originalFetch = global.fetch;
+const freeTrialModelName = getModelMetadataById(FREE_TRIAL_MODEL)?.name;
 
 afterEach(() => {
   global.fetch = originalFetch;
@@ -63,31 +65,16 @@ beforeEach(() => {
 });
 
 describe('UsageSection', () => {
-  it('shows all four usage windows using the shared vocabulary', async () => {
+  it('replaces free-plan meters with a paid-plan waitlist prompt', async () => {
     render(React.createElement(UsageSection));
-    expect(await screen.findByText(managedUsageBucketLabel('session'))).toBeTruthy();
-    expect(screen.getByText(managedUsageBucketLabel('weekly'))).toBeTruthy();
-    expect(screen.getByText(managedUsageBucketLabel('weeklyFlagship'))).toBeTruthy();
-    expect(screen.getByText(managedUsageBucketLabel('period'))).toBeTruthy();
-    expect(screen.getAllByText(/40% left/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/60% left/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/50% left/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/resets in/i)).toHaveLength(4);
-    // The headline figure reads the same direction the bar fills.
-    expect(screen.getAllByText('60% used').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('40% used').length).toBeGreaterThan(0);
-  });
-
-  it('renders the flagship weekly window the contract has always carried (PAR-1)', async () => {
-    render(React.createElement(UsageSection));
-    expect(await screen.findByText(managedUsageBucketLabel('weeklyFlagship'))).toBeTruthy();
-    expect(screen.getAllByText(/\b5% left/).length).toBeGreaterThan(0);
-  });
-
-  it('shows a relative countdown alongside the absolute reset instant', async () => {
-    render(React.createElement(UsageSection));
-    await screen.findByText(managedUsageBucketLabel('session'));
-    expect(screen.getAllByText(/resets in .*\(.*\)/i).length).toBeGreaterThan(0);
+    expect(await screen.findByText('Upgrade for higher capacity')).toBeTruthy();
+    expect(screen.getByText(new RegExp(freeTrialModelName ?? 'included free router'))).toBeTruthy();
+    expect(screen.getByRole('link', { name: /join the upgrade waitlist/i })).toHaveAttribute(
+      'href',
+      '/pricing',
+    );
+    expect(screen.queryAllByTestId('progress')).toHaveLength(0);
+    expect(screen.queryByText('Plan usage limits')).toBeNull();
   });
 
   it('reports never-loaded and stale states honestly', async () => {
@@ -110,7 +97,7 @@ describe('UsageSection', () => {
 
   it('drops the plan chip, already shown on Billing', async () => {
     render(React.createElement(UsageSection));
-    await screen.findByText('Plan usage limits');
+    await screen.findByText('Upgrade for higher capacity');
     expect(screen.queryByText('Free')).toBeNull();
     expect(screen.queryByText('Pro')).toBeNull();
   });
