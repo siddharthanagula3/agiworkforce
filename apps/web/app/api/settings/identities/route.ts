@@ -30,7 +30,7 @@ const REFUSAL: Readonly<Record<'last_sign_in_method' | 'primary_sign_in_method',
 };
 
 async function handleList(request: NextRequest): Promise<NextResponse> {
-  const rateLimitResponse = await withRateLimit(request, 'me');
+  const rateLimitResponse = await withRateLimit(request, 'settings-identities-list');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getUserScopedDb(request, SCOPE);
@@ -48,7 +48,11 @@ async function handleUnlink(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, '2fa-setup', `user:${userId}`);
+  const rateLimitResponse = await withRateLimit(
+    request,
+    'settings-identity-unlink',
+    `user:${userId}`,
+  );
   if (rateLimitResponse) return rateLimitResponse;
 
   const parsed = UnlinkSchema.safeParse(await request.json().catch(() => null));

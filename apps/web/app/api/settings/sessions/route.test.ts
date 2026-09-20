@@ -86,6 +86,12 @@ function providerError(status: number, retryAfter?: number): Error {
   });
 }
 
+function revokeAllRequest() {
+  return new Request('http://localhost:3000/api/settings/sessions', {
+    method: 'DELETE',
+  }) as never;
+}
+
 function bearerRequest(method: 'GET' | 'DELETE', token: string) {
   return new Request('http://localhost:3000/api/settings/sessions', {
     method,
@@ -264,15 +270,28 @@ describe('/api/settings/sessions', () => {
       }
     });
 
+    // Signing other devices out is protective, and the control that calls this
+    // sends no step-up header. Gating it would lock out the person who most
+    // needs it: one who suspects a takeover and holds no second factor.
+    it('ends every other session without asking for a second factor', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')],
+        totalCount: 2,
+      });
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(200);
+      expect(mockRevokeSession.mock.calls.map(([id]) => id)).toContain('sess_other');
+    });
+
     it('revokes other devices before ending the current session', async () => {
       mockGetSessionList.mockResolvedValue({
         data: [session('sess_current'), session('sess_other')],
         totalCount: 2,
       });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(mockRevokeSession.mock.calls.map(([id]) => id)).toEqual([
@@ -280,10 +299,9 @@ describe('/api/settings/sessions', () => {
         'sess_current',
       ]);
       expect(await response.json()).toMatchObject({ currentSessionRevoked: true, revokedCount: 2 });
-      expect(mockNeonExecute).toHaveBeenCalledWith(
-        expect.stringContaining('device_refresh_tokens'),
-        ['user-1'],
-      );
+      expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('device_refresh_tokens'), [
+        'user-1',
+      ]);
     });
 
     it('keeps the current session active and reports progress when a device cannot be revoked', async () => {
@@ -293,9 +311,7 @@ describe('/api/settings/sessions', () => {
       });
       mockRevokeSession.mockRejectedValueOnce(providerError(500));
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(502);
       expect(mockRevokeSession).toHaveBeenCalledTimes(1);
@@ -316,9 +332,7 @@ describe('/api/settings/sessions', () => {
         .mockRejectedValueOnce(providerError(429, 0))
         .mockResolvedValue({ status: 'revoked' });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ revokedCount: 2, currentSessionRevoked: true });
@@ -336,9 +350,7 @@ describe('/api/settings/sessions', () => {
       });
       mockRevokeSession.mockRejectedValue(providerError(429, 0));
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(502);
       expect(mockRevokeSession).toHaveBeenCalledTimes(3);
@@ -359,9 +371,7 @@ describe('/api/settings/sessions', () => {
         return { status: 'revoked' };
       });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ currentSessionRevoked: true });
@@ -410,9 +420,7 @@ describe('/api/settings/sessions', () => {
         return { status: 'revoked' };
       });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({

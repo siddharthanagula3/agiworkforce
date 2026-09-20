@@ -10,6 +10,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
+import { UPLOAD_REJECTED_MESSAGE, scanUploadBytes } from '@/lib/security/upload-scan';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import {
   buildManagedComputeGateResponse,
@@ -386,7 +387,37 @@ async function handleTranscriptions(request: NextRequest) {
       },
     );
   }
-  const headBytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const audioBytes = new Uint8Array(await file.arrayBuffer());
+  const headBytes = audioBytes.subarray(0, 12);
+  const uploadName = 'name' in file && typeof file.name === 'string' ? file.name : undefined;
+  // The bytes go to the transcription provider and are dropped: nothing stores
+  // or serves them, so an AV round trip would only cost dictation latency.
+  const scan = await scanUploadBytes(audioBytes, mimeEssence, {
+    leadsObject: true,
+    filename: uploadName,
+    externalScan: false,
+  });
+  if (!scan.ok) {
+    logger.warn(
+      { findings: scan.findings },
+      '[transcriptions] refused audio that failed content inspection',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message: UPLOAD_REJECTED_MESSAGE,
+          type: 'invalid_request_error',
+        },
+      },
+      {
+        status: 400,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
   if (!isLikelyAudio(headBytes)) {
     return NextResponse.json(
       {

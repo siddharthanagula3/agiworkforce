@@ -500,6 +500,23 @@ export const rateLimitConfigs = {
     // Ends every session, so a repeat is never a way to reach anything.
     failClosed: true,
   },
+  'settings-account-compromise-resolve': {
+    limit: 5,
+    window: '1 m',
+    // Lifts a lockdown, so a limiter outage must not turn it into a free retry.
+    failClosed: true,
+  },
+  'settings-identities-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-identity-unlink': {
+    limit: 10,
+    window: '1 m',
+    // Removes a way into the account, so a limiter outage must not open it.
+    failClosed: true,
+  },
   'settings-audit-logs': {
     limit: 60,
     window: '1 m',

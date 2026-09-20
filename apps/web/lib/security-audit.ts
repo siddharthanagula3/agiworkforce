@@ -367,13 +367,15 @@ export type AuditEventType =
   | 'new_location_sign_in'
   | 'account_recovery_requested'
   /**
-   * The risk engine fired, the account holder said they were compromised, and
-   * the guided response finished. All three are separate: a signal that nobody
-   * acted on and a contained account are different states.
+   * The risk engine fired, the account holder said they were compromised, the
+   * guided response finished, and the hold it left was lifted. All four are
+   * separate: a signal nobody acted on, a contained account and an account
+   * released back to its owner are different states.
    */
   | 'risk_signal_detected'
   | 'account_compromise_reported'
   | 'account_compromise_contained'
+  | 'account_compromise_resolved'
   | 'admin_delegation_granted'
   | 'admin_delegation_revoked'
   | 'admin_delegation_refused';

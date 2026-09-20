@@ -16,6 +16,7 @@ import {
   revokeInBatches,
   type IdentitySessionOperations,
 } from '@/lib/server/session-revocation';
+import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import { hasOutlivedAbsoluteLifetime, sessionAbsoluteDeadline } from '@/lib/auth/session-policy';
 import { isRegistryMissing } from '../devices/schema-state';
 
@@ -175,13 +176,7 @@ async function handleRevokeAll(request: NextRequest) {
   const identity = getIdentityProvider();
   const result = await revokeEveryOtherSession(identity, userId, currentSessionId);
   const currentSession = result.currentSession;
-  await db.execute(
-    `update device_refresh_tokens
-        set revoked_at = coalesce(revoked_at, now())
-      where user_id = $1
-        and revoked_at is null`,
-    [userId],
-  );
+  await revokeEveryDeviceRefreshCredential(db, userId);
 
   const settled = result.ended.length + result.alreadyGone.length;
 

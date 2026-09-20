@@ -134,6 +134,30 @@ describe('POST /notebook/files (upload)', () => {
     );
   });
 
+  it('refuses a file whose bytes are an executable, and writes nothing', async () => {
+    const formData = new FormData();
+    const executable = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+    formData.set('file', new File([executable], 'notes.csv', { type: 'text/csv' }));
+    formData.set('path', 'notes.csv');
+
+    const response = await POST(uploadRequest(formData), context);
+
+    expect(response.status).toBe(400);
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
+  it('refuses a file carrying a live key, and writes nothing', async () => {
+    const formData = new FormData();
+    const leaked = Buffer.from('AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE\n');
+    formData.set('file', new File([leaked], 'env.txt', { type: 'text/plain' }));
+    formData.set('path', 'env.txt');
+
+    const response = await POST(uploadRequest(formData), context);
+
+    expect(response.status).toBe(400);
+    expect(mockWriteFile).not.toHaveBeenCalled();
+  });
+
   it('rejects a request with no file', async () => {
     const formData = new FormData();
     formData.set('path', 'data.csv');

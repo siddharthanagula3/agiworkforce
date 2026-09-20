@@ -6,6 +6,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isMissingPluginMarketplaceSchema } from '@/lib/services/plugin-marketplace-service';
 import { storeOwnedPluginSource } from '@/lib/services/plugin-owned-source-service';
@@ -43,6 +44,8 @@ function fallbackName(fileName: string | null, provided: string | null): string 
   return base.length > 0 ? base : SOURCE_KIND_UPLOAD;
 }
 
+const PLUGIN_ARCHIVE_MIME = 'application/zip';
+
 function invalidUpload(message: string, issues?: readonly string[]): NextResponse {
   return NextResponse.json(
     { error: { code: INVALID_UPLOAD_CODE, message, ...(issues ? { issues } : {}) } },
@@ -64,6 +67,10 @@ async function readArchiveField(
   if (!file || typeof file === 'string') return invalidUpload(UPLOAD_NOT_AN_ARCHIVE_MESSAGE);
   const buffer = await file.arrayBuffer();
   const fileName = 'name' in file && typeof file.name === 'string' ? file.name : '';
+  await refuseUnsafeUpload(new Uint8Array(buffer), PLUGIN_ARCHIVE_MIME, {
+    leadsObject: true,
+    filename: fileName || undefined,
+  });
   const provided = form.get(PLUGIN_UPLOAD_NAME_FIELD);
   return {
     bytes: new Uint8Array(buffer),

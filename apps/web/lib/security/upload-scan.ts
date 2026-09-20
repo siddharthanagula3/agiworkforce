@@ -2,6 +2,7 @@ import 'server-only';
 
 import { isSensitiveFile } from '@agiworkforce/utils';
 
+import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { filenameIsUnsafe, sanitizeFilename } from '@/lib/redaction';
 
@@ -16,11 +17,16 @@ import { scanForSecrets } from './secrets-audit';
  * those look at the BYTES, so a file whose declared type disagrees with its
  * actual content, the classic type-confusion vector, passed cleanly.
  *
- * Two ingest paths run this, and they are the only two that accept
- * user-supplied bytes: `/api/uploads/chat-attachment/complete` (chat
- * attachments) and `POST /api/projects/[id]/knowledge-files` via
+ * Every route that materialises caller-supplied bytes runs this, and
+ * `scripts/check-upload-inspection-coverage.mjs` enumerates them from the
+ * route tree so a new one cannot skip it. The two-phase paths scan where the
+ * object becomes usable rather than where the first part lands:
+ * `/api/uploads/chat-attachment/complete` (chat attachments) and
+ * `POST /api/projects/[id]/knowledge-files` via
  * `lib/server/project-knowledge-extraction.ts` (project sources). Both delete
- * the stored object on rejection.
+ * the stored object on rejection. The single-request routes call
+ * `refuseUnsafeUpload` before the bytes are stored, so there is nothing to
+ * purge.
  *
  * This scans the real bytes. It is deliberately signature- and
  * structure-based rather than a virus-definition database: the checks below
@@ -319,14 +325,60 @@ async function runExternalScanner(bytes: Uint8Array): Promise<UploadScanFinding[
   }
 }
 
+export const UPLOAD_REJECTED_MESSAGE =
+  'This file could not be accepted because its contents failed a safety check.';
+
+/**
+ * For the routes that hold the bytes in one request. Nothing is stored yet, so
+ * a rejection needs no purge, and the findings stay in the log rather than
+ * telling the uploader which check to evade.
+ */
+export async function refuseUnsafeUpload(
+  bytes: Uint8Array,
+  declaredMime: string,
+  position: UploadScanPosition,
+): Promise<UploadScanResult> {
+  const scan = await scanUploadBytes(bytes, declaredMime, position);
+  if (!scan.ok) {
+    logger.warn(
+      {
+        declaredMime,
+        leadsObject: position.leadsObject,
+        filename: position.filename ? sanitizeFilename(position.filename) : undefined,
+        findings: scan.findings,
+      },
+      '[upload-scan] refused an upload that failed content inspection',
+    );
+    throw createError.validation(UPLOAD_REJECTED_MESSAGE);
+  }
+  return scan;
+}
+
+/**
+ * Where these bytes sit in the object. Structural inspection reads the
+ * signature that leads a file, so it is meaningful only for the leading bytes:
+ * part two of a PNG does not start with the PNG signature, and running the
+ * whole-object check on it refuses every legitimate multi-part upload.
+ */
+export interface UploadScanPosition {
+  leadsObject: boolean;
+  filename?: string;
+  /** Defaults to true. False only where the bytes are neither stored nor served; the call site says why. */
+  externalScan?: boolean;
+}
+
+const NO_STRUCTURAL_FINDINGS: UploadScanResult = { ok: true, findings: [] };
+const NO_EXTERNAL_FINDINGS: UploadScanFinding[] = [];
+
 export async function scanUploadBytes(
   bytes: Uint8Array,
   declaredMime: string,
-  filename?: string,
+  position: UploadScanPosition,
 ): Promise<UploadScanResult> {
-  const structural = inspectUploadBytes(bytes, declaredMime);
+  const { leadsObject, filename, externalScan = true } = position;
+  const structural = leadsObject ? inspectUploadBytes(bytes, declaredMime) : NO_STRUCTURAL_FINDINGS;
   const credentials = scanUploadForCredentials(bytes, declaredMime, filename);
-  const external = await runExternalScanner(bytes);
+  const external = externalScan ? await runExternalScanner(bytes) : NO_EXTERNAL_FINDINGS;
   const findings = [...structural.findings, ...credentials, ...external];
 
   const reported = credentials.filter((finding) => !uploadFindingRejects(finding));

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { objectChecksum, type UploadedPart } from '@agiworkforce/object-storage';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -23,6 +24,8 @@ import {
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ uploadId: string }> };
+
+const FIRST_PART = 1;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -109,6 +112,9 @@ async function handleUploadPart(
   );
   const body = new Uint8Array(await request.arrayBuffer());
   assertPartSize(partNumber, body.byteLength);
+  // Fails fast so a rejected object is not carried to 256 MB first. Only part
+  // one leads the object; the assembled bytes are inspected at completion.
+  await refuseUnsafeUpload(body, session.mimeType, { leadsObject: partNumber === FIRST_PART });
 
   const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
   const part = await target.store.uploadPart({
@@ -121,6 +127,26 @@ async function handleUploadPart(
   });
 
   return NextResponse.json({ part });
+}
+
+/**
+ * The only place the whole object exists. A per-part scan cannot see a
+ * signature or a secret that straddles a part boundary, so the assembled bytes
+ * are read back once and the object is purged when they are refused.
+ */
+async function inspectAssembledObject(
+  target: ReturnType<typeof resumableUploadTarget>,
+  fileName: string,
+  mimeType: string,
+): Promise<void> {
+  const object = await target.store.get(target.bucket, target.key);
+  if (!object) throw createError.internal('The completed upload could not be read back.');
+  try {
+    await refuseUnsafeUpload(object.data, mimeType, { leadsObject: true, filename: fileName });
+  } catch (error) {
+    await target.store.delete(target.bucket, target.key);
+    throw error;
+  }
 }
 
 async function handleCompleteUpload(
@@ -156,6 +182,7 @@ async function handleCompleteUpload(
   }
 
   await target.store.completeMultipartUpload({ ...handle, parts });
+  await inspectAssembledObject(target, parsed.data.fileName, session.mimeType);
 
   const id = await upsertVideoMediaAsset(
     {

@@ -67,6 +67,26 @@ function isCompromiseColumnMissing(error: unknown): boolean {
   return /compromised_at|compromised_reason/.test(message) && /does not exist/.test(message);
 }
 
+const REVOKE_EVERY = `
+  update device_refresh_tokens
+     set revoked_at = coalesce(revoked_at, now())
+   where user_id = $1
+     and revoked_at is null
+   returning id`;
+
+/**
+ * Every device credential the account holds, for the acts that end every
+ * session: signing out everywhere, and containing a compromise. A provider
+ * session sweep leaves these alive, and a live refresh row mints a new one.
+ */
+export async function revokeEveryDeviceRefreshCredential(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<number> {
+  const revoked = await db.query<{ id: string }>(REVOKE_EVERY, [userId]);
+  return revoked.length;
+}
+
 /**
  * Forced reauthentication needs no push: a developer token is honoured only
  * while its family has a live row, so it dies on the device's next request.
