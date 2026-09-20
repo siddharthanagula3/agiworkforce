@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getProviderOfferings } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({
@@ -120,6 +121,7 @@ describe('local Free selector completion boundary', () => {
   it('streams the exact offering as explicit user-key traffic with no paid media dispatch', async () => {
     const response = await post();
     expect(response.status).toBe(200);
+    expect(getUserScopedDb).toHaveBeenCalledWith(expect.any(NextRequest));
     expect(await response.text()).toContain('[DONE]');
     expect(mocks.stream).toHaveBeenCalledWith(
       model,

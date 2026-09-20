@@ -79,7 +79,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
   if (csrf) return csrf;
   const limit = await withRateLimit(request, 'llm-completion-ip');
   if (limit) return limit;
-  const scoped = await getUserScopedDb(request, { apiKeyScope: 'inference:write' });
+  const scoped = await getUserScopedDb(request);
   await assertAccountActive(scoped.userId);
   const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

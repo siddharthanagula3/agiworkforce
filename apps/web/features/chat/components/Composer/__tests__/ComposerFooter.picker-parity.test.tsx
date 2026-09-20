@@ -381,7 +381,10 @@ describe('ComposerFooter · picker keyboard', () => {
     const dialog = mountAndOpen();
     const rows = modelRows(dialog);
 
-    await waitFor(() => expect(document.activeElement).toBe(rows[0]));
+    const freeSection = within(dialog).getByRole('button', { name: 'Free' });
+    await waitFor(() => expect(document.activeElement).toBe(freeSection));
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(rows[0]);
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(rows[1]);
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
@@ -391,7 +394,7 @@ describe('ComposerFooter · picker keyboard', () => {
     fireEvent.keyDown(document.activeElement!, { key: 'End' });
     expect(document.activeElement).toBe(planPageLink(dialog));
     fireEvent.keyDown(document.activeElement!, { key: 'Home' });
-    expect(document.activeElement).toBe(rows[0]);
+    expect(document.activeElement).toBe(freeSection);
 
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Models' })).not.toBeInTheDocument();

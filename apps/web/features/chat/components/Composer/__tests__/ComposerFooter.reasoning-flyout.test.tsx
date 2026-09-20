@@ -245,7 +245,8 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => ({
   assessModelSwitchCache: () => ({ warn: false, resetsCache: false }),
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   useConfirmAction: () => ({ confirm: () => undefined, dialog: null }),
   useMenuKeyboard: () => undefined,
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
