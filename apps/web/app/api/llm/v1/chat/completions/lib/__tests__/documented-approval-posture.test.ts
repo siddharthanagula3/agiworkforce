@@ -11,10 +11,10 @@ import {
   resolveToolMetadata,
 } from '../tool-metadata';
 import { classifyToolLoopInputs } from '../tool-loop-routing';
+import { TOOL_CALL_GATE_RANKS, TOOL_CALL_GATE_REASONS } from '../tool-call-gate';
 
 const REPO = resolve(process.cwd(), '../..');
 const SECURITY_DOC = resolve(REPO, 'docs/security/security.md');
-const GATE_MODULE = resolve(REPO, 'apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts');
 
 function documentSection(heading: string): string {
   const source = readFileSync(SECURITY_DOC, 'utf8');
@@ -81,18 +81,20 @@ describe('the approval posture section 1.1 publishes', () => {
   });
 
   it('names every machine reason the gate can return, and no others', () => {
-    const gate = readFileSync(GATE_MODULE, 'utf8');
-    const start = gate.indexOf('type ToolCallGate = {');
-    expect(start).toBeGreaterThan(0);
-    const union = gate.slice(start, gate.indexOf('};', start));
-    const reasons = new Set([...union.matchAll(/'([a-z_]+)'/g)].map((match) => match[1]!));
-    reasons.delete('allow');
-    reasons.delete('ask');
-    reasons.delete('deny');
     const documented = new Set(
       tableRows(section, /^\| \d+\s*\|/).map((cells) => cells[3]!.replace(/`/g, '')),
     );
-    expect([...documented].sort()).toEqual([...reasons].sort());
+    expect([...documented].sort()).toEqual([...TOOL_CALL_GATE_REASONS].sort());
+  });
+
+  it('publishes one row per gate rank, in the order the gate applies them', () => {
+    const rows = tableRows(section, /^\| \d+\s*\|/);
+    expect(rows.map((cells) => Number(cells[0]))).toEqual(
+      TOOL_CALL_GATE_RANKS.map((rank) => rank.rank),
+    );
+    expect(rows.map((cells) => cells[3]!.replace(/`/g, ''))).toEqual(
+      TOOL_CALL_GATE_RANKS.map((rank) => rank.reason),
+    );
   });
 });
 

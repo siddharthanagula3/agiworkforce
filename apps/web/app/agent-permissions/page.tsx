@@ -14,16 +14,22 @@ import {
 import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import {
+  buildToolApprovalPolicyRows,
+  buildToolApprovalToolRows,
+  toolApprovalPolicySentence,
+  TOOL_APPROVAL_PRECEDENCE,
+} from '@/lib/tool-approval-view';
 
 export const metadata = buildMetadata({
   title: 'Approvals',
   description:
-    'What the AGI agent may do without asking, what always requires approval, which connector scopes are actually requested, and every way to revoke access.',
+    'What the AGI agent asks before doing, which account settings let a tool run without asking, which connector scopes are actually requested, and every way to revoke access.',
   path: '/agent-permissions',
 });
 
 const SECTIONS = [
-  { label: 'These run without asking', id: 'no-ask' },
+  { label: 'By default, the agent asks', id: 'default-authority' },
   { label: 'These always ask', id: 'always-ask' },
   { label: 'What the injection escalation does not catch', id: 'honest-limits' },
   { label: 'A block is enforced on the server', id: 'blocking' },
@@ -32,33 +38,6 @@ const SECTIONS = [
   { label: 'What is actually requested today', id: 'connectors' },
   { label: 'Every way to take access back', id: 'revocation' },
 ] as const;
-
-const NO_ASK: { k: string; v: string }[] = [
-  {
-    k: 'Web search',
-    v: 'Runs a search and reads the results. Classified as a read that accepts untrusted content and creates an egress path, because a search query is a place secrets can leak and a result page is attacker-influenced text.',
-  },
-  {
-    k: 'Fetch a page',
-    v: 'Fetches a single URL through an SSRF-guarded path. Same classification as search, for the same reasons.',
-  },
-  {
-    k: 'Run code',
-    v: 'Executes model-authored code in an isolated cloud sandbox belonging to that conversation, not on your device. Classified as an irreversible execute action that creates an egress path.',
-  },
-  {
-    k: 'Write a file, create a folder',
-    v: "Writes inside the conversation's own sandbox workspace. Not your filesystem, not your cloud storage. A file write is classified as irreversible; a folder create is reversible.",
-  },
-  {
-    k: 'Create a document file',
-    v: 'Generates a Word document (.docx), a PowerPoint deck (.pptx), an Excel workbook (.xlsx), a PDF (.pdf) or a CSV (.csv) on our servers and attaches it to the conversation for you to download. Those five formats are the whole of it, and it never edits a file you already have. Reversible, no egress path.',
-  },
-  {
-    k: 'Run a skill',
-    v: "Loads a skill's instructions into the turn. Skills act through the tools above and are gated by them.",
-  },
-];
 
 const REVOKE: { k: string; v: string }[] = [
   {
@@ -129,29 +108,44 @@ export default function AgentPermissionsPage() {
               <PolicyContents sections={SECTIONS} />
             </div>
             <div className="agi-ds-sticky-flow">
-              <Section id="no-ask" labelledBy="agi-perm-noask-title" rule>
+              <Section id="default-authority" labelledBy="agi-perm-default-title" rule>
                 <Stack gap="loose">
                   <div>
-                    <Eyebrow>Managed Cloud · no approval</Eyebrow>
-                    <h2 className="agi-ds-h2" id="agi-perm-noask-title">
-                      These run without asking.
+                    <Eyebrow>Managed Cloud · default authority</Eyebrow>
+                    <h2 className="agi-ds-h2" id="agi-perm-default-title">
+                      By default, the agent asks.
                     </h2>
                     <Prose>
-                      In Managed Cloud, a turn that offers no connector or MCP tool runs in
-                      automatic approval mode. With no saved preference of your own, the built-in
-                      tools below execute without a prompt. This is a deliberate design choice: each
-                      one acts inside a read-only or isolated boundary, and prompting on every web
-                      search would train you to click through prompts that matter. It is stated
-                      plainly here rather than implied away.
+                      One account-wide setting decides what may run without asking, and it governs
+                      our own built-in tools as well as connectors. A new account is set to
+                      &ldquo;Ask before every action&rdquo;, so in Managed Cloud every tool call
+                      waits for you, the built-in tools below included. A built-in tool runs with no
+                      prompt only once you choose one of the other two settings, or save
+                      &ldquo;Always allow&rdquo; for that one tool.
                     </Prose>
                   </div>
                   <Ledger
-                    caption="Tools that run without asking"
-                    rows={NO_ASK.map((row) => ({ label: row.k, value: row.v }))}
+                    caption="What each account default runs without asking"
+                    rows={buildToolApprovalPolicyRows().map((row) => ({
+                      label: row.label,
+                      value: toolApprovalPolicySentence(row),
+                    }))}
+                  />
+                  <h3 className="agi-ds-h3">The built-in tools, and what each one does.</h3>
+                  <Ledger
+                    caption="Built-in tools"
+                    rows={buildToolApprovalToolRows().map((row) => ({
+                      label: row.label,
+                      value: row.description,
+                    }))}
                   />
                   <Prose>
-                    You can still override any of them: set a tool to &ldquo;Needs approval&rdquo;
-                    or &ldquo;Blocked&rdquo; and your setting takes precedence over automatic mode.
+                    You can override the account default one tool at a time, in both directions: set
+                    a tool to &ldquo;Always allow&rdquo; and it stops asking, set it to &ldquo;Needs
+                    approval&rdquo; or &ldquo;Blocked&rdquo; and it asks or is refused whatever the
+                    default says. &ldquo;Skip approvals&rdquo; is also a workspace decision: where a
+                    workspace withholds it, the account falls back to asking before every action
+                    rather than to the middle setting nobody chose.
                   </Prose>
                 </Stack>
               </Section>
@@ -168,18 +162,18 @@ export default function AgentPermissionsPage() {
                     items={[
                       {
                         meta: 'Connectors',
-                        title: 'Every connector and MCP tool',
-                        body: 'When a turn carries any connector or MCP tool, the whole turn switches to manual approval mode. These tools cross an external or mutating boundary, so they are gated by default and on every turn, not once at connect time.',
+                        title: 'Every connector and MCP tool we do not know',
+                        body: 'A connector or MCP tool in the turn puts the whole turn into manual approval mode. A tool we have not classified is treated as an irreversible write that can move data out, which no account default runs on its own, so it asks under all three settings. The three GitHub tools are classified: reading a pull-request diff can run without asking, posting a comment or a review cannot.',
                       },
                       {
                         meta: 'Your setting',
                         title: 'Anything you marked "Needs approval"',
-                        body: 'A saved "ask" verdict outranks automatic mode, so you can pull any built-in tool back into the approval flow.',
+                        body: 'A saved "ask" verdict outranks automatic mode and the account default alike, so you can pull any built-in tool back into the approval flow.',
                       },
                       {
                         meta: 'Escalation',
                         title: 'A tool call that trips the injection escalation',
-                        body: 'When untrusted content has entered the conversation, a private authenticated source is reachable, and the pending call can move data out of the boundary, an otherwise automatic approval escalates to a human decision. See the limits below.',
+                        body: 'When untrusted content has entered the conversation, a private authenticated source is reachable, and the pending call can move data out of the boundary, a call that would otherwise run escalates to a human decision. On an unattended run there is nobody to ask, so it is refused. See the limits below.',
                       },
                     ]}
                   />
@@ -187,15 +181,10 @@ export default function AgentPermissionsPage() {
                   <h3 className="agi-ds-h3">The precedence order, in full.</h3>
                   <Ledger
                     caption="Approval precedence order"
-                    rows={[
-                      { label: '1. Blocked by you', value: 'Denied. Nothing overrides this.' },
-                      { label: '2. Allowed by you, escalation triggered', value: 'Asks anyway.' },
-                      { label: '3. Allowed by you', value: 'Runs.' },
-                      { label: '4. "Needs approval" by you', value: 'Asks.' },
-                      { label: '5. Manual mode (a connector tool is in the turn)', value: 'Asks.' },
-                      { label: '6. Escalation triggered', value: 'Asks.' },
-                      { label: '7. Otherwise', value: 'Runs.' },
-                    ]}
+                    rows={TOOL_APPROVAL_PRECEDENCE.map((row) => ({
+                      label: `${row.rank}. ${row.condition}`,
+                      value: row.outcome,
+                    }))}
                   />
                 </Stack>
               </Section>
@@ -233,7 +222,7 @@ export default function AgentPermissionsPage() {
                       {
                         meta: 'Override',
                         title: 'It cannot stop you approving',
-                        body: 'The check gates automatic approval only. If it escalates and you approve, the call runs.',
+                        body: 'The check turns a call that would have run into a call that asks. If it escalates and you approve, the call runs.',
                       },
                     ]}
                   />

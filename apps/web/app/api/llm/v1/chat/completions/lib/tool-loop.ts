@@ -246,16 +246,20 @@ import {
 import { executeSkillTool, SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import {
   isParallelSafeTool,
-  isSensitiveSourceTool,
   PLATFORM_TOOL_METADATA,
   toolAcceptsUntrustedContent,
-  toolCreatesEgressPath,
 } from './tool-metadata';
+import {
+  batchIntroducesUntrustedContent,
+  resolveToolCallGate,
+  sensitiveSourceReachable,
+  untrustedToolContentInContext,
+  type ToolCallGate,
+} from './tool-call-gate';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
-import { policyAutoApprovesTool } from './tool-approval-policy';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
@@ -2685,77 +2689,38 @@ export async function* runToolLoop(
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
   const privateContextPresent = hasPrivateContext(processed, messages);
-  const sensitiveSourceAvailable =
-    privateContextPresent ||
-    mcpTools.some((def) => isSensitiveSourceTool(def)) ||
-    [...availableTools].some((name) => isSensitiveSourceTool({ qualifiedName: name }));
-  let untrustedContentInContext = messages.some(
-    (message) =>
-      Array.isArray(message.tool_calls) &&
-      parseAssistantToolCalls(message.tool_calls).some((call) =>
-        toolAcceptsUntrustedContent(call.qualifiedName),
-      ),
+  const sensitiveSourceAvailable = sensitiveSourceReachable({
+    privateContextPresent,
+    offeredTools: mcpTools,
+    availableToolNames: [...availableTools],
+  });
+  let untrustedContentInContext = untrustedToolContentInContext(
+    messages.flatMap((message) =>
+      Array.isArray(message.tool_calls)
+        ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
+        : [],
+    ),
   );
 
-  type ToolCallGate = {
-    verdict: 'allow' | 'ask' | 'deny';
-    reason:
-      | 'blocked_by_user_permission'
-      | 'always_allow'
-      | 'user_requires_approval'
-      | 'manual_approval_mode'
-      | 'auto_approval_mode'
-      | 'account_default_read_only'
-      | 'lethal_trifecta';
-  };
-
-  // An egress escalation can never be silently allowed. Interactively it asks a
-  // human; on an unattended run (no one to ask) it must deny rather than fall
-  // through to auto-allow, or injected instructions could reach an egress tool.
-  function escalatedGate(reason: ToolCallGate['reason']): ToolCallGate {
-    return { verdict: unattended ? 'deny' : 'ask', reason };
-  }
-
-  function resolveToolCallGate(
+  function gateForToolCall(
     toolCall: PendingToolCall,
     batch: readonly PendingToolCall[] = [],
   ): ToolCallGate {
-    const saved = connectorPermissions.levelFor(toolCall.qualifiedName);
-    if (saved === 'deny') return { verdict: 'deny', reason: 'blocked_by_user_permission' };
-
-    if (deviceHost && isDeviceStepTool(toolCall.qualifiedName)) {
-      return { verdict: 'allow', reason: 'auto_approval_mode' };
-    }
-
-    // A whole batch is gated before any of it runs, while the flag below is only
-    // set once a result comes back, so one turn asking for url_fetch and an
-    // egress tool together used to gate the egress call with the flag still
-    // false and auto-allow it on an unattended run. Another call in the same
-    // batch counts; the call being gated does not, because the content it
-    // fetches does not exist until after it has run.
-    const batchIntroducesUntrustedContent = batch.some(
-      (other) => other.id !== toolCall.id && toolAcceptsUntrustedContent(other.qualifiedName),
+    return resolveToolCallGate(
+      {
+        qualifiedName: toolCall.qualifiedName,
+        savedLevel: connectorPermissions.levelFor(toolCall.qualifiedName),
+        batchIntroducesUntrustedContent: batchIntroducesUntrustedContent(toolCall.id, batch),
+      },
+      {
+        approvalMode,
+        toolApprovalPolicy,
+        unattended,
+        deviceHostPresent: deviceHost !== undefined,
+        untrustedContentInContext,
+        sensitiveSourceAvailable,
+      },
     );
-
-    const trifecta =
-      (untrustedContentInContext || batchIntroducesUntrustedContent) &&
-      sensitiveSourceAvailable &&
-      toolCreatesEgressPath(toolCall.qualifiedName);
-
-    if (saved === 'allow') {
-      return trifecta
-        ? escalatedGate('lethal_trifecta')
-        : { verdict: 'allow', reason: 'always_allow' };
-    }
-    if (saved === 'ask') return { verdict: 'ask', reason: 'user_requires_approval' };
-    if (approvalMode === 'manual') {
-      return !trifecta && policyAutoApprovesTool(toolApprovalPolicy, toolCall.qualifiedName)
-        ? { verdict: 'allow', reason: 'account_default_read_only' }
-        : { verdict: 'ask', reason: 'manual_approval_mode' };
-    }
-    return trifecta
-      ? escalatedGate('lethal_trifecta')
-      : { verdict: 'allow', reason: 'auto_approval_mode' };
   }
 
   function blockedToolResultMessage(qualifiedName: string): string {
@@ -4760,7 +4725,7 @@ export async function* runToolLoop(
 
       const gatedCalls = pendingToolCalls.map((tc) => ({
         tc,
-        gate: resolveToolCallGate(tc, pendingToolCalls),
+        gate: gateForToolCall(tc, pendingToolCalls),
       }));
       const blockedCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'deny');
       const approvalCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'ask');
