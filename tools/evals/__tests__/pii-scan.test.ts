@@ -1,6 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 
-import { scanDatasets, scanText } from '../scripts/pii-scan.mjs';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import {
+  MEASUREMENTS_DIR,
+  RECORDINGS_DIR,
+  SCANNED_DIRS,
+  scanDatasets,
+  scanEvalCorpora,
+  scanText,
+} from '../scripts/pii-scan.mjs';
 
 describe('the dataset PII scan', () => {
   it('finds the patterns that mean a row came from a real person', () => {
@@ -38,6 +48,19 @@ describe('the dataset PII scan', () => {
     expect(scanText('plans start at $9 per month for 10,000 messages')).toEqual([]);
   });
 
+  it('does not read a card out of a longer token or the fraction part of a float', () => {
+    expect(
+      scanText('"fingerprint": "56596183270395748b3b10289109bca5b498cb9bbeeb597732d152bafc651df6"'),
+    ).toEqual([]);
+    expect(scanText('"totalUsd": 0.0014726799999999999')).toEqual([]);
+    expect(scanText('charged to 4111 1111 1111 1111 on the 4th')).toEqual([
+      expect.objectContaining({ kind: 'payment-card' }),
+    ]);
+    expect(scanText('charged to 4111111111111111.')).toEqual([
+      expect.objectContaining({ kind: 'payment-card' }),
+    ]);
+  });
+
   it('reports the file and line so a failing row can be found', () => {
     const findings = scanText('clean line\nmail rex@northwind-logistics.co.uk\n');
 
@@ -47,5 +70,28 @@ describe('the dataset PII scan', () => {
 
   it('passes over every committed corpus and fixture', () => {
     expect(scanDatasets()).toEqual([]);
+  });
+
+  it('passes over the recorded provider responses and the measurement outputs', () => {
+    expect(scanDatasets(RECORDINGS_DIR)).toEqual([]);
+    expect(scanDatasets(MEASUREMENTS_DIR)).toEqual([]);
+    expect(scanEvalCorpora()).toEqual([]);
+  });
+
+  describe('a credential written where a run puts its output', () => {
+    const planted = path.join(RECORDINGS_DIR, 'pii-scan-probe.tmp.json');
+
+    afterEach(() => fs.rmSync(planted, { force: true }));
+
+    it('fails the scan the whole tree runs under', () => {
+      const credential = ['sk', 'live', 'plantedprobe0123456789'].join('_');
+      fs.writeFileSync(planted, JSON.stringify({ text: `rotated ${credential} today` }), 'utf8');
+
+      expect(scanEvalCorpora()).toEqual([
+        expect.objectContaining({ kind: 'credential', file: planted }),
+      ]);
+      expect(SCANNED_DIRS).toContain(RECORDINGS_DIR);
+      expect(SCANNED_DIRS).toContain(MEASUREMENTS_DIR);
+    });
   });
 });

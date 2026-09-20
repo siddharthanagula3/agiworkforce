@@ -1815,6 +1815,22 @@ export function resolveTurnPromptCache(input: {
 }
 
 /**
+ * Whether a second copy of this turn's messages may be sent to a shadow route.
+ *
+ * The mirror is a duplicate of the user's prompt sent to a model the user did
+ * not ask for, purely to measure a candidate. A Temporary Chat promises nothing
+ * outlives the turn and a zero-retention workspace promises the provider keeps
+ * nothing; a mirror breaks both, so the same privacy class that refuses a
+ * cached prefix refuses a mirror.
+ */
+export function turnMayBeShadowMirrored(input: {
+  temporaryChat: boolean;
+  zeroDataRetentionOnly: boolean;
+}): boolean {
+  return resolvePromptCachePrivacyClass(input) === 'standard';
+}
+
+/**
  * The residency region routing must admit against, or `null` when the workspace
  * has asked for nothing beyond the region this deployment already processes in.
  *
@@ -4271,7 +4287,10 @@ export async function processRequest(
   const failoverRoutes =
     freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks);
 
-  if (routeDecision.shadow) {
+  if (
+    routeDecision.shadow &&
+    turnMayBeShadowMirrored({ temporaryChat: conversationIsTemporary, zeroDataRetentionOnly })
+  ) {
     scheduleShadowDispatch({
       shadow: routeDecision.shadow,
       servedTrace: routingTrace,

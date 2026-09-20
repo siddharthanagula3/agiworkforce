@@ -126,8 +126,10 @@ export function createPlatformKeyService(
   }
 
   function unseal(value: string, name: string): string {
-    return openEnvelope(requireUnsealingRing(name), value, 'b64-iv-ct-tag', PLATFORM_SECRET_CONTEXT)
-      .plaintext;
+    return openEnvelope(requireUnsealingRing(name), value, 'b64-iv-ct-tag', {
+      value: PLATFORM_SECRET_CONTEXT,
+      acceptUnbound: false,
+    }).plaintext;
   }
 
   function secret(envName: string): string {

@@ -172,8 +172,10 @@ async function openAuditSigningSecret(
   ciphertext: string,
 ): Promise<string> {
   const { ring } = await organizationKeyRing(db, organizationId);
-  return openEnvelope(ring, ciphertext, 'hex-triple', auditSigningSecretContext(organizationId))
-    .plaintext;
+  return openEnvelope(ring, ciphertext, 'hex-triple', {
+    value: auditSigningSecretContext(organizationId),
+    acceptUnbound: false,
+  }).plaintext;
 }
 
 export async function readAuditDestination(
