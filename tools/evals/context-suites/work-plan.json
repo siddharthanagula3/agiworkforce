@@ -1,0 +1,121 @@
+{
+  "suite": "work-plan",
+  "version": 1,
+  "priority": "P0",
+  "passThreshold": 1,
+  "measures": "whether a run's goal and its plan outrank everything the run retrieved, and whether a connector the account or the workspace has not approved can reach the plan at all",
+  "provenance": "hand written 2026-09-20 against the context engine's precedence and admission checks; no run data",
+  "cases": [
+    {
+      "id": "work-plan/puts-the-goal-and-the-plan-ahead-of-what-the-run-retrieved",
+      "risk": "low",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "sources": [
+        {
+          "sourceClass": "connector_result",
+          "locator": "linear://issue/AGI-1",
+          "text": "Issue AGI-1 is open and unassigned."
+        },
+        {
+          "sourceClass": "current_task_state",
+          "locator": "run/r-1/plan",
+          "text": "Step 1 read the issue. Step 2 draft the reply."
+        },
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/morning-meetings",
+          "text": "Prefers meetings before noon."
+        },
+        {
+          "sourceClass": "agent_instruction",
+          "locator": "run/r-1/goal",
+          "text": "Close the release checklist."
+        }
+      ],
+      "expect": {
+        "includes": [
+          "agent_instruction:run/r-1/goal",
+          "current_task_state:run/r-1/plan",
+          "account_memory:memory/morning-meetings",
+          "connector_result:linear://issue/AGI-1"
+        ],
+        "order": ["agent_instruction", "current_task_state", "account_memory", "connector_result"]
+      }
+    },
+    {
+      "id": "work-plan/never-plans-with-a-connector-the-account-has-not-approved",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "disabledToggles": ["capabilities.connectors"],
+      "sources": [
+        {
+          "sourceClass": "agent_instruction",
+          "locator": "run/r-1/goal",
+          "text": "Close the release checklist."
+        },
+        {
+          "sourceClass": "connector_result",
+          "locator": "linear://issue/AGI-1",
+          "text": "Issue AGI-1 is open and unassigned."
+        }
+      ],
+      "expect": {
+        "includes": ["agent_instruction:run/r-1/goal"],
+        "excludes": ["connector_result:linear://issue/AGI-1"],
+        "excludedFor": { "connector_result:linear://issue/AGI-1": "source_disabled" },
+        "order": ["agent_instruction"]
+      }
+    },
+    {
+      "id": "work-plan/never-plans-with-a-connector-a-workspace-has-not-approved",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": "org-1" },
+      "policy": { "allowConnectorResults": false },
+      "sources": [
+        {
+          "sourceClass": "agent_instruction",
+          "locator": "run/r-1/goal",
+          "organizationId": "org-1",
+          "text": "Close the release checklist."
+        },
+        {
+          "sourceClass": "connector_result",
+          "locator": "linear://issue/AGI-1",
+          "organizationId": "org-1",
+          "text": "Issue AGI-1 is open and unassigned."
+        }
+      ],
+      "expect": {
+        "excludes": ["connector_result:linear://issue/AGI-1"],
+        "excludedFor": { "connector_result:linear://issue/AGI-1": "policy_denied" },
+        "order": ["agent_instruction"]
+      }
+    },
+    {
+      "id": "work-plan/never-plans-with-another-workspaces-connector-result",
+      "risk": "high",
+      "isolation": true,
+      "actor": { "userId": "u-1", "organizationId": "org-1" },
+      "sources": [
+        {
+          "sourceClass": "current_task_state",
+          "locator": "run/r-1/plan",
+          "organizationId": "org-1",
+          "text": "Step 1 read the issue. Step 2 draft the reply."
+        },
+        {
+          "sourceClass": "connector_result",
+          "locator": "linear://issue/NW-9",
+          "organizationId": "org-2",
+          "text": "Northwind diligence findings are attached."
+        }
+      ],
+      "expect": {
+        "includes": ["current_task_state:run/r-1/plan"],
+        "excludes": ["connector_result:linear://issue/NW-9"],
+        "excludedFor": { "connector_result:linear://issue/NW-9": "permission_denied" },
+        "neverMentions": ["diligence"]
+      }
+    }
+  ]
+}

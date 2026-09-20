@@ -1,0 +1,116 @@
+{
+  "suite": "past-chat-retrieval",
+  "version": 1,
+  "priority": "P0",
+  "passThreshold": 1,
+  "measures": "whether an earlier conversation is recalled behind account memory, and whether another account's chat or a chat the account has stopped sharing can reach the turn",
+  "provenance": "hand written 2026-09-20 against the context engine's admission and ownership checks; no account data",
+  "cases": [
+    {
+      "id": "past-chat-retrieval/recalls-an-earlier-chat-behind-account-memory",
+      "risk": "low",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "sources": [
+        {
+          "sourceClass": "past_chat",
+          "locator": "conversation/c-9#m-2",
+          "authoredBy": "user",
+          "conversationId": "c-9",
+          "text": "The interface polish checklist I wrote for the release."
+        },
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/morning-meetings",
+          "text": "Prefers meetings before noon."
+        }
+      ],
+      "expect": {
+        "includes": ["account_memory:memory/morning-meetings", "past_chat:conversation/c-9#m-2"],
+        "order": ["account_memory", "past_chat"]
+      }
+    },
+    {
+      "id": "past-chat-retrieval/never-recalls-a-chat-the-account-switched-off",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "disabledToggles": ["capabilities.searchPastChats"],
+      "sources": [
+        {
+          "sourceClass": "past_chat",
+          "locator": "conversation/c-9#m-2",
+          "authoredBy": "user",
+          "text": "The interface polish checklist I wrote for the release."
+        }
+      ],
+      "expect": {
+        "excludes": ["past_chat:conversation/c-9#m-2"],
+        "excludedFor": { "past_chat:conversation/c-9#m-2": "source_disabled" }
+      }
+    },
+    {
+      "id": "past-chat-retrieval/never-recalls-a-chat-a-workspace-disallows",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": "org-1" },
+      "policy": { "allowPastChats": false },
+      "sources": [
+        {
+          "sourceClass": "past_chat",
+          "locator": "conversation/c-9#m-2",
+          "authoredBy": "user",
+          "organizationId": "org-1",
+          "text": "The interface polish checklist I wrote for the release."
+        }
+      ],
+      "expect": {
+        "excludes": ["past_chat:conversation/c-9#m-2"],
+        "excludedFor": { "past_chat:conversation/c-9#m-2": "policy_denied" }
+      }
+    },
+    {
+      "id": "past-chat-retrieval/never-recalls-another-accounts-chat",
+      "risk": "high",
+      "isolation": true,
+      "actor": { "userId": "u-1", "organizationId": null },
+      "sources": [
+        {
+          "sourceClass": "past_chat",
+          "locator": "conversation/c-9#m-2",
+          "authoredBy": "user",
+          "ownerUserId": "u-1",
+          "text": "The interface polish checklist I wrote for the release."
+        },
+        {
+          "sourceClass": "past_chat",
+          "locator": "conversation/c-77#m-4",
+          "authoredBy": "user",
+          "ownerUserId": "u-2",
+          "text": "Northwind severance terms we agreed on Friday."
+        }
+      ],
+      "expect": {
+        "includes": ["past_chat:conversation/c-9#m-2"],
+        "excludes": ["past_chat:conversation/c-77#m-4"],
+        "excludedFor": { "past_chat:conversation/c-77#m-4": "permission_denied" },
+        "neverMentions": ["severance"]
+      }
+    },
+    {
+      "id": "past-chat-retrieval/never-recalls-a-chat-into-a-temporary-chat",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "temporaryChat": true,
+      "sources": [
+        {
+          "sourceClass": "past_chat",
+          "locator": "conversation/c-9#m-2",
+          "authoredBy": "user",
+          "text": "The interface polish checklist I wrote for the release."
+        }
+      ],
+      "expect": {
+        "excludes": ["past_chat:conversation/c-9#m-2"],
+        "excludedFor": { "past_chat:conversation/c-9#m-2": "temporary_chat" }
+      }
+    }
+  ]
+}
