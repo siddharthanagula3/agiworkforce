@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Client } from 'pg';
+import { PostgresDatabaseAdapter } from '@agiworkforce/data-layer';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 const identity = vi.hoisted(() => ({ deleteUser: vi.fn(async () => undefined) }));
@@ -27,7 +27,7 @@ const fixture = {
   organizationId: randomUUID(),
 };
 
-let client: Client;
+let client: PostgresDatabaseAdapter;
 
 async function seed(): Promise<void> {
   await client.query(
@@ -108,8 +108,8 @@ async function cleanup(): Promise<void> {
 // llm-guardrail-allow: Live database writes require AGI_TEST_LIVE_ACCOUNT_ERASURE=1 and an explicitly supplied AGI_LIVE_DATABASE_URL.
 describe.skipIf(!live)('scheduled account erasure, live PostgreSQL', () => {
   beforeAll(async () => {
-    client = new Client({ connectionString: liveDatabaseUrl });
-    await client.connect();
+    if (!liveDatabaseUrl) throw new Error('Live database URL is required.');
+    client = new PostgresDatabaseAdapter({ connectionString: liveDatabaseUrl });
     await cleanup();
     await seed();
   });
@@ -117,7 +117,7 @@ describe.skipIf(!live)('scheduled account erasure, live PostgreSQL', () => {
   afterAll(async () => {
     if (!client) return;
     await cleanup();
-    await client.end();
+    await client.dispose();
   });
 
   it('deletes subject stores, anonymizes retained financial records and closes the tombstone', async () => {
@@ -136,7 +136,7 @@ describe.skipIf(!live)('scheduled account erasure, live PostgreSQL', () => {
          (select count(*)::text from public.web_conversations where user_id = $1) as conversation`,
       [fixture.userId],
     );
-    expect(deleted.rows[0]).toEqual({ profile: '0', settings: '0', conversation: '0' });
+    expect(deleted[0]).toEqual({ profile: '0', settings: '0', conversation: '0' });
 
     const related = await client.query<{
       identities: string;
@@ -150,7 +150,7 @@ describe.skipIf(!live)('scheduled account erasure, live PostgreSQL', () => {
            as "betaApplications"`,
       [fixture.userId, fixture.email],
     );
-    expect(related.rows[0]).toEqual({ identities: '0', credits: '0', betaApplications: '0' });
+    expect(related[0]).toEqual({ identities: '0', credits: '0', betaApplications: '0' });
 
     const retained = await client.query<{
       providerCostUserId: string | null;
@@ -175,7 +175,7 @@ describe.skipIf(!live)('scheduled account erasure, live PostgreSQL', () => {
         fixture.userId,
       ],
     );
-    expect(retained.rows[0]).toEqual({
+    expect(retained[0]).toEqual({
       providerCostUserId: null,
       organizationUsageUserId: null,
       personalUsageRows: '0',
