@@ -33,6 +33,7 @@ import { IMAGE_CAPTURE_QUALITY } from '@/src/features/media/image-normalization'
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export default function CameraScreen() {
   const router = useRouter();
@@ -68,9 +69,7 @@ export default function CameraScreen() {
     return () => clearTimeout(timeout);
   }, [permission?.granted, capturedUri, cameraReady]);
 
-  const handleClose = useCallback(() => {
-    router.back();
-  }, [router]);
+  const handleClose = useGoBack('/(app)/(tabs)/chat');
 
   const handleCapture = useCallback(async () => {
     if (!cameraRef.current || isCapturing || !cameraReady) return;

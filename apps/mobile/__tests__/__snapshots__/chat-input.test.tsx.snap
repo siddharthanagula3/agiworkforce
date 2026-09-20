@@ -5,9 +5,13 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
   className="px-4 pt-2"
   style={
     {
+      "alignSelf": "center",
+      "maxWidth": 720,
       "paddingBottom": 16,
+      "width": "100%",
     }
   }
+  testID="chat.composer"
 >
   <View
     testID="attachment-preview"
@@ -230,9 +234,13 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
   className="px-4 pt-2"
   style={
     {
+      "alignSelf": "center",
+      "maxWidth": 720,
       "paddingBottom": 16,
+      "width": "100%",
     }
   }
+  testID="chat.composer"
 >
   <View
     testID="attachment-preview"

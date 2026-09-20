@@ -25,6 +25,7 @@ import {
   isSelectableModelIdForAccess,
 } from '@/src/features/model-picker/service';
 import type { ModelDef } from '@/src/features/model-picker/service';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 function installLabel(status: ModelInstallJob['status']): string {
   switch (status) {
@@ -64,9 +65,7 @@ export default function ModelsScreen() {
     void hydrateInstalledModels();
   }, [hydrateInstalledModels]);
 
-  const handleBack = useCallback(() => {
-    router.navigate('/(app)/settings/general' as Parameters<typeof router.navigate>[0]);
-  }, [router]);
+  const handleBack = useGoBack('/(app)/settings/general');
 
   const openPicker = useCallback(() => {
     pickerRef.current?.snapToIndex(0);

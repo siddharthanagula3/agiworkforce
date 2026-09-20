@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 import { View, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -13,6 +12,7 @@ import { Card } from '@/components/ui/card';
 import { useThemeColors } from '@/src/ui/theme';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 type ImportStatus = 'idle' | 'picking' | 'parsing' | 'importing' | 'done' | 'error';
 
@@ -43,7 +43,6 @@ const SOURCE_DESCRIPTIONS: Record<ImportSource, string> = {
 const IMPORT_SOURCES: ImportSource[] = ['chatgpt', 'claude', 'gemini', 'text'];
 
 export default function MemoryImportScreen() {
-  const router = useRouter();
   const colors = useThemeColors();
   const { bulkInsert } = useMemoryStore();
 
@@ -158,9 +157,7 @@ export default function MemoryImportScreen() {
     });
   }, []);
 
-  const goBackToMemory = useCallback(() => {
-    router.navigate('/(app)/settings/memory' as Parameters<typeof router.navigate>[0]);
-  }, [router]);
+  const goBackToMemory = useGoBack('/(app)/settings/memory');
 
   const isProcessing =
     state.status === 'picking' || state.status === 'parsing' || state.status === 'importing';
