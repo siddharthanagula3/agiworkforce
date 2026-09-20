@@ -320,6 +320,7 @@ remote-databases = ["dep:tokio-postgres", "dep:postgres-types", "dep:deadpool-po
 
 
 [build-dependencies]
+embed-resource = "3.0.6"
 tauri-build = { version = "2.5.6", features = ["isolation"] }
 
 [dev-dependencies]
