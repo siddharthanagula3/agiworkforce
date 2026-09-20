@@ -113,7 +113,8 @@ describe('the network allow lists', () => {
     });
     expect(refused?.status).toBe(403);
     expect(
-      ((await (refused as Response).json()) as { error: Record<string, string> }).error.code,
+      ((await (refused as Response).json()) as { error: { code: string; control: string } }).error
+        .code,
     ).toBe('code_host_not_allowed');
   });
 
@@ -130,7 +131,8 @@ describe('the network allow lists', () => {
       server: 'mcp.elsewhere.test',
     });
     expect(
-      ((await (outside as Response).json()) as { error: Record<string, string> }).error.code,
+      ((await (outside as Response).json()) as { error: { code: string; control: string } }).error
+        .code,
     ).toBe('code_mcp_server_not_allowed');
 
     governedWith({ allowMcpServers: false, allowedMcpServers: ['mcp.example.com'] });
@@ -139,7 +141,8 @@ describe('the network allow lists', () => {
       server: 'mcp.example.com',
     });
     expect(
-      ((await (off as Response).json()) as { error: Record<string, string> }).error.control,
+      ((await (off as Response).json()) as { error: { code: string; control: string } }).error
+        .control,
     ).toBe('allowMcpServers');
   });
 });

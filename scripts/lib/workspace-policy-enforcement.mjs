@@ -155,7 +155,9 @@ export function findUnenforcedKeys(scanRoot) {
     if (kind === 'feature') return enforcedFeatures.has(key);
     if (kind !== 'code') return enforcedIdentifiers.has(key);
     const acts = actsByControl.get(key);
-    if (!acts || acts.size === 0) return false;
+    // A control the decision function maps to no act is not an act at all, such
+    // as a retention window: it is enforced where a decision reads it by name.
+    if (!acts || acts.size === 0) return enforcedIdentifiers.has(key);
     return [...acts].some((act) => invokedActs.has(act));
   };
 

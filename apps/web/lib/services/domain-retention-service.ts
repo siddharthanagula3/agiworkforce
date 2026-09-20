@@ -2,11 +2,13 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  RETENTION_DAYS_MIN,
   RETENTION_DOMAINS,
   isRetentionDomain,
   type DomainRetentionPolicy,
   type RetentionDomain,
 } from '@agiworkforce/types';
+import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
@@ -18,6 +20,7 @@ import {
   type LegalHoldResourceType,
   type RetentionSweepOutcome,
 } from './retention-service';
+import { readOrganizationPolicy, readWorkspaceCodeControls } from './organization-policy-service';
 
 // A hold names resource types; a domain with no such type stays held by every hold.
 const DOMAIN_HOLD_RESOURCE: Partial<Record<RetentionDomain, LegalHoldResourceType>> = {
@@ -95,10 +98,15 @@ export interface DomainSweeper {
   sweepBatch(db: DatabaseAdapter, context: DomainSweepContext): Promise<DomainBatchResult>;
 }
 
+export type RetentionWindowSource =
+  'domain_policy' | 'workspace_code_control' | 'domain_policy_after_unreadable_workspace_policy';
+
 export interface DomainSweepResult {
   organizationId: string;
   domain: RetentionDomain;
   retentionDays: number;
+  /** Which rule produced retentionDays, so a dry run says why it chose it. */
+  retentionSource: RetentionWindowSource;
   cutoff: string;
   outcome: RetentionSweepOutcome;
   recordsDeleted: number;
@@ -441,6 +449,45 @@ export function createDomainSweepers(
   };
 }
 
+interface ResolvedRetentionWindow {
+  retentionDays: number;
+  source: RetentionWindowSource;
+}
+
+// A workspace's shorter Code session retention wins, floored so a typo cannot purge overnight.
+// An unreadable policy keeps the longer window: deleting early on a read error cannot be undone.
+export async function resolveDomainRetentionWindow(
+  db: DatabaseAdapter,
+  organizationId: string,
+  domain: RetentionDomain,
+  retentionDays: number,
+): Promise<ResolvedRetentionWindow> {
+  if (domain !== 'code_sessions') return { retentionDays, source: 'domain_policy' };
+
+  let codeRetention: number | null;
+  try {
+    const policy = await readOrganizationPolicy(db, organizationId);
+    codeRetention = readWorkspaceCodeControls(policy?.metadata).sessionRetentionDays;
+  } catch (error) {
+    logger.error(
+      { error, organizationId, domain },
+      '[domain-retention] workspace Code retention unreadable; keeping the longer domain window',
+    );
+    return {
+      retentionDays,
+      source: 'domain_policy_after_unreadable_workspace_policy',
+    };
+  }
+
+  if (codeRetention === null || codeRetention <= 0 || codeRetention >= retentionDays) {
+    return { retentionDays, source: 'domain_policy' };
+  }
+  return {
+    retentionDays: Math.max(codeRetention, RETENTION_DAYS_MIN),
+    source: 'workspace_code_control',
+  };
+}
+
 async function recordDomainSweep(db: DatabaseAdapter, result: DomainSweepResult): Promise<void> {
   await db.query(
     `insert into public.organization_domain_retention_sweeps
@@ -479,11 +526,18 @@ export async function sweepOrganizationDomain(
   const now = options.now ?? new Date();
   const sweeper = (options.sweepers ?? createDomainSweepers())[policy.domain];
   const readHolds = options.readHolds ?? ((handle, id) => listLegalHolds(handle, id));
+  const window = await resolveDomainRetentionWindow(
+    db,
+    policy.organizationId,
+    policy.domain,
+    policy.retentionDays,
+  );
   const base: DomainSweepResult = {
     organizationId: policy.organizationId,
     domain: policy.domain,
-    retentionDays: policy.retentionDays,
-    cutoff: new Date(now.getTime() - policy.retentionDays * DAY_MS).toISOString(),
+    retentionDays: window.retentionDays,
+    retentionSource: window.source,
+    cutoff: new Date(now.getTime() - window.retentionDays * DAY_MS).toISOString(),
     outcome: 'nothing_due',
     recordsDeleted: 0,
     recordsHeld: 0,
