@@ -225,6 +225,22 @@ test('a foreign key that does not say what a parent delete does fails', () => {
   );
 });
 
+/** Every answer a foreign key cannot express has to say why nothing needs it. */
+const UNUSED_ANSWERS = {
+  archive_child: 'no parent archives its children',
+  detach_child: 'no edge clears the link',
+  ask_user: 'no delete offers a choice',
+  preserve_shared_derivative: 'no derivative outlives its parent',
+  preserve_external_source: 'nothing here owns an external row',
+  block_deletion: 'every edge cascades',
+};
+
+function withoutAnswer(answer) {
+  const rest = { ...UNUSED_ANSWERS };
+  delete rest[answer];
+  return rest;
+}
+
 test('a declared disposition passes and a stale record of one fails', () => {
   const migrations = {
     '0001_parent.sql':
@@ -235,7 +251,12 @@ test('a declared disposition passes and a stale record of one fails', () => {
   assert.deepEqual(
     errorsFor({
       migrations,
-      contract: { roles: { createdAt: BASE_ROLES.createdAt }, tables: {}, gaps: [] },
+      contract: {
+        roles: { createdAt: BASE_ROLES.createdAt },
+        tables: {},
+        gaps: [],
+        childDispositionsNotUsed: withoutAnswer('delete_child'),
+      },
     }),
     [],
   );
@@ -245,12 +266,103 @@ test('a declared disposition passes and a stale record of one fails', () => {
       roles: BASE_ROLES,
       tables: {},
       gaps: [],
-      undeclaredDispositions: [{ child: 'children', parent: 'parents', why: 'historic' }],
+      childDispositionsNotUsed: withoutAnswer('delete_child'),
+      undeclaredDispositions: [
+        { child: 'children', parent: 'parents', why: 'historic', answer: 'block_deletion' },
+      ],
     },
   });
   assert.ok(
     stale.some((error) => error.includes('no longer describes a real gap')),
     stale.join('\n'),
+  );
+});
+
+test('an undeclared disposition has to answer the dependency graph', () => {
+  const migrations = {
+    '0001_parent.sql':
+      'create table if not exists public.parents (\n  id uuid primary key,\n  created_at timestamptz not null\n);\n',
+    '0002_child.sql':
+      'create table if not exists public.children (\n  id uuid primary key,\n  parent_id uuid not null references public.parents(id),\n  created_at timestamptz not null\n);\n',
+  };
+  const errors = errorsFor({
+    migrations,
+    contract: {
+      roles: { createdAt: BASE_ROLES.createdAt },
+      tables: {},
+      gaps: [],
+      childDispositionsNotUsed: withoutAnswer('block_deletion'),
+      undeclaredDispositions: [{ child: 'children', parent: 'parents', why: 'historic' }],
+    },
+  });
+  assert.ok(
+    errors.some((error) => error.includes('answers "undefined"')),
+    errors.join('\n'),
+  );
+});
+
+test('an answer no edge gives has to say why the product never needs it', () => {
+  const migrations = {
+    '0001_parent.sql':
+      'create table if not exists public.parents (\n  id uuid primary key,\n  created_at timestamptz not null\n);\n',
+    '0002_child.sql':
+      'create table if not exists public.children (\n  id uuid primary key,\n  parent_id uuid not null references public.parents(id) on delete cascade,\n  created_at timestamptz not null\n);\n',
+  };
+  const missing = errorsFor({
+    migrations,
+    contract: {
+      roles: { createdAt: BASE_ROLES.createdAt },
+      tables: {},
+      gaps: [],
+      childDispositionsNotUsed: { archive_child: 'no parent archives its children' },
+    },
+  });
+  assert.ok(
+    missing.some((error) => error.includes('offers "ask_user" and no edge answers it')),
+    missing.join('\n'),
+  );
+
+  const stale = errorsFor({
+    migrations,
+    contract: {
+      roles: { createdAt: BASE_ROLES.createdAt },
+      tables: {},
+      gaps: [],
+      childDispositionsNotUsed: { ...UNUSED_ANSWERS, delete_child: 'nothing cascades here' },
+    },
+  });
+  assert.ok(
+    stale.some((error) => error.includes('is recorded as unused')),
+    stale.join('\n'),
+  );
+});
+
+test('a set null edge detaches the child and a restrict edge blocks the delete', () => {
+  const migrations = {
+    '0001_parent.sql':
+      'create table if not exists public.parents (\n  id uuid primary key,\n  created_at timestamptz not null\n);\n',
+    '0002_child.sql':
+      'create table if not exists public.children (\n  id uuid primary key,\n  parent_id uuid references public.parents(id) on delete set null,\n  created_at timestamptz not null\n);\n',
+    '0003_ledger.sql':
+      'create table if not exists public.ledgers (\n  id uuid primary key,\n  parent_id uuid not null references public.parents(id) on delete restrict,\n  created_at timestamptz not null\n);\n',
+  };
+  assert.deepEqual(
+    errorsFor({
+      migrations,
+      contract: {
+        roles: { createdAt: BASE_ROLES.createdAt },
+        tables: {},
+        gaps: [],
+        childDispositionsNotUsed: {
+          delete_child: 'nothing cascades here',
+          archive_child: 'no parent archives its children',
+          ask_user: 'no delete offers a choice',
+          preserve_shared_derivative: 'no derivative outlives its parent',
+          preserve_external_source: 'nothing here owns an external row',
+        },
+      },
+    }),
+    [],
   );
 });
 

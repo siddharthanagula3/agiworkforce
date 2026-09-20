@@ -1,0 +1,52 @@
+{
+  "keyColumnMatch": "(idempotency_key|dedupe_key|client_event_id|provider_event_id|^event_id$|request_fingerprint)",
+  "enforcementMatch": "idempoten|on conflict|dedupe|already_processed|is already|already used",
+  "operations": {
+    "billing": {
+      "why": "A retried charge takes the money twice and the second one is not a mistake anybody can see without reconciling the ledger.",
+      "enforcedBy": "apps/web/db/neon/0020_functions.sql",
+      "tables": ["credit_idempotency_keys", "credit_settlement_jobs"]
+    },
+    "webhooks": {
+      "why": "A provider retries until it gets a 2xx, so a handler that is not fenced applies the same subscription change on every retry.",
+      "enforcedBy": "apps/web/app/api/stripe-webhook/lib/idempotency.ts",
+      "tables": ["processed_stripe_events", "organization_subscription_state_transitions"]
+    },
+    "tool-actions": {
+      "why": "A tool call replayed after a lost response sends the message, files the ticket or makes the commit a second time.",
+      "enforcedBy": "apps/web/lib/server/idempotency.ts",
+      "tables": ["admin_request_idempotency", "automation_audit_events", "cloud_code_agent_turns"]
+    },
+    "schedule-execution": {
+      "why": "A schedule that fires twice for one due time runs the work twice and tells the reader twice.",
+      "enforcedBy": "apps/web/lib/services/schedule-service.ts",
+      "tables": ["scheduled_task_runs", "background_jobs", "notifications"]
+    },
+    "upload-finalize": {
+      "why": "Finalizing the same upload twice creates a second asset for one set of bytes and bills the storage twice.",
+      "enforcedBy": "apps/web/lib/server/scanned-document-text.ts",
+      "tables": []
+    },
+    "external-writes": {
+      "why": "A generation request replayed against a provider is paid for twice and returns two different results for one prompt.",
+      "enforcedBy": "apps/web/lib/server/video-generation-jobs.ts",
+      "tables": ["video_generation_jobs", "image_generation_jobs", "managed_usage_requests"]
+    },
+    "account-deletion": {
+      "why": "A second erasure of an account already erased must be a no-op rather than an error the caller retries forever.",
+      "enforcedBy": "apps/web/lib/server/account-erasure.ts",
+      "tables": []
+    },
+    "provisioning": {
+      "why": "A directory sync that replays creates the member twice and the second one carries no grants.",
+      "enforcedBy": "apps/web/lib/server/scim/scim-provisioning-service.ts",
+      "tables": []
+    },
+    "invite-acceptance": {
+      "why": "Accepting the same invitation twice would seat the member twice and bill for both seats; the status transition is the fence and a second accept is refused as already used.",
+      "enforcedBy": "apps/web/lib/services/organization-invitation-service.ts",
+      "tables": []
+    }
+  },
+  "advisoryKeys": []
+}

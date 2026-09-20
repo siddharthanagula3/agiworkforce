@@ -327,102 +327,122 @@
     {
       "child": "cloud_agent_approval_checkpoints",
       "parent": "cloud_agent_runs",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "cloud_agent_events",
       "parent": "cloud_agent_runs",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "cloud_agent_execution_operations",
       "parent": "cloud_agent_runs",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "cloud_code_agent_turns",
       "parent": "cloud_code_sessions",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "cloud_code_terminal_entries",
       "parent": "cloud_code_sessions",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "credit_transactions",
       "parent": "token_credits",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "image_generation_jobs",
       "parent": "managed_usage_requests",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "media_assets",
       "parent": "organizations",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "media_assets",
       "parent": "web_conversations",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "organization_group_managers",
       "parent": "organization_members",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "organization_member_roles",
       "parent": "organization_members",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "organization_project_access",
       "parent": "organization_members",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "organization_project_access",
       "parent": "organization_shared_projects",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "project_knowledge_files",
       "parent": "project_knowledge_files",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "release_downloads",
       "parent": "releases",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "subscriptions",
       "parent": "profiles",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "support_handoff_sessions",
       "parent": "support_agent_presence",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "token_credits",
       "parent": "subscriptions",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "video_generation_jobs",
       "parent": "managed_usage_requests",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     },
     {
       "child": "web_messages",
       "parent": "web_messages",
-      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared."
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
     }
   ],
   "operations": {
@@ -730,5 +750,11 @@
       "table": "agent_tools",
       "why": "an agent definition is edited while a run is loading it"
     }
+  },
+  "childDispositionsNotUsed": {
+    "archive_child": "No parent archives its children. Archive is a per-resource flag a surface writes, and nothing reads a parent archive to decide a child is archived too.",
+    "ask_user": "No deletion offers the owner a choice about the children. Every parent delete either cascades or is blocked, and the confirmation names the consequence rather than asking for a disposition.",
+    "preserve_shared_derivative": "A published artifact cascades from the conversation it came from, so no derivative outlives its parent once the parent is really gone. Soft delete is what keeps the derivative reachable today.",
+    "preserve_external_source": "Nothing in the schema owns a row in somebody else external system. A connector holds a grant, and revoking it leaves the external document untouched because no row here points at it."
   }
 }
