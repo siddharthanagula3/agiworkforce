@@ -1,0 +1,1639 @@
+{
+  "suite": "review_security_gate",
+  "generatedAt": "2026-09-20T09:19:15.615Z",
+  "baseline": {
+    "production": "apps/web/lib/code-review/pipeline.ts:103 runs every pass in REVIEW_PASSES over every chunk, so the security pass is a constant yes. That constant is the prediction scored below.",
+    "passes": ["correctness", "security"],
+    "note": "summary is the production constant. pathOnlyRule is the docs, lockfile and snapshot skip the ranking proposes to run first, scored over the same cases."
+  },
+  "summary": {
+    "all": {
+      "scored": 95,
+      "correct": 38,
+      "accuracy": 0.4
+    },
+    "calibration": {
+      "scored": 34,
+      "correct": 16,
+      "accuracy": 0.4706
+    },
+    "heldout": {
+      "scored": 61,
+      "correct": 22,
+      "accuracy": 0.3607
+    },
+    "byTag": {
+      "ambiguous": {
+        "scored": 0,
+        "correct": 0,
+        "accuracy": null
+      },
+      "cjk": {
+        "scored": 3,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "embedded_instruction": {
+        "scored": 5,
+        "correct": 3,
+        "accuracy": 0.6
+      },
+      "indirect": {
+        "scored": 10,
+        "correct": 8,
+        "accuracy": 0.8
+      },
+      "long_irrelevant": {
+        "scored": 6,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "near_miss": {
+        "scored": 37,
+        "correct": 3,
+        "accuracy": 0.0811
+      },
+      "negation": {
+        "scored": 4,
+        "correct": 4,
+        "accuracy": 1
+      },
+      "non_english": {
+        "scored": 11,
+        "correct": 0,
+        "accuracy": 0
+      },
+      "plain": {
+        "scored": 57,
+        "correct": 34,
+        "accuracy": 0.5965
+      }
+    },
+    "ambiguous": {
+      "cases": 9,
+      "answeredWithADefensibleOption": 9
+    }
+  },
+  "pathOnlyRule": {
+    "pattern": "/(^|\\/)(docs?\\/|CHANGELOG\\.md$)|\\.md$|__snapshots__\\/|\\.snap$|(^|\\/)(pnpm-lock\\.yaml|package-lock\\.json|Cargo\\.lock)$/",
+    "casesDecided": 16,
+    "casesDecidedIds": [
+      "rs-058",
+      "rs-059",
+      "rs-060",
+      "rs-061",
+      "rs-062",
+      "rs-063",
+      "rs-064",
+      "rs-065",
+      "rs-066",
+      "rs-067",
+      "rs-069",
+      "rs-070",
+      "rs-071",
+      "rs-072",
+      "rs-073",
+      "rs-203"
+    ],
+    "summary": {
+      "all": {
+        "scored": 95,
+        "correct": 54,
+        "accuracy": 0.5684
+      },
+      "calibration": {
+        "scored": 34,
+        "correct": 22,
+        "accuracy": 0.6471
+      },
+      "heldout": {
+        "scored": 61,
+        "correct": 32,
+        "accuracy": 0.5246
+      },
+      "byTag": {
+        "ambiguous": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "cjk": {
+          "scored": 3,
+          "correct": 0,
+          "accuracy": 0
+        },
+        "embedded_instruction": {
+          "scored": 5,
+          "correct": 4,
+          "accuracy": 0.8
+        },
+        "indirect": {
+          "scored": 10,
+          "correct": 9,
+          "accuracy": 0.9
+        },
+        "long_irrelevant": {
+          "scored": 6,
+          "correct": 2,
+          "accuracy": 0.3333
+        },
+        "near_miss": {
+          "scored": 37,
+          "correct": 11,
+          "accuracy": 0.2973
+        },
+        "negation": {
+          "scored": 4,
+          "correct": 4,
+          "accuracy": 1
+        },
+        "non_english": {
+          "scored": 11,
+          "correct": 0,
+          "accuracy": 0
+        },
+        "plain": {
+          "scored": 57,
+          "correct": 42,
+          "accuracy": 0.7368
+        }
+      },
+      "ambiguous": {
+        "cases": 9,
+        "answeredWithADefensibleOption": 9
+      }
+    }
+  },
+  "modelCallsPerChunk": {
+    "production": 2,
+    "afterPathOnlyRule": 1.846,
+    "note": "Two passes per chunk today. The path rule removes the security pass on the chunks it decides, and nothing else."
+  },
+  "rows": [
+    {
+      "id": "rs-001",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-002",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2237,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-003",
+      "split": "calibration",
+      "tags": ["near_miss", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 1111,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-004",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 365,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-005",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-006",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 612,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-007",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5517,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-008",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3139,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-009",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5453,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-010",
+      "split": "heldout",
+      "tags": ["near_miss", "negation", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 991,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-011",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1293,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-012",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2130,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-013",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3152,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-014",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 1427,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-015",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-016",
+      "split": "calibration",
+      "tags": ["near_miss", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 1040,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-017",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3924,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-018",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 741,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-019",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 428,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-020",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2299,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-021",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 499,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-022",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 666,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-023",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 6003,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-024",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6003,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-026",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 742,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-027",
+      "split": "heldout",
+      "tags": ["negation", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1159,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-028",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6308,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-030",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1989,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-031",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2871,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-032",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5509,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-033",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2675,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-034",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1514,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-035",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-036",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 846,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-037",
+      "split": "calibration",
+      "tags": ["near_miss", "long_irrelevant", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-038",
+      "split": "heldout",
+      "tags": ["plain", "negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3210,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-039",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-040",
+      "split": "heldout",
+      "tags": ["near_miss", "long_irrelevant"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-041",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-042",
+      "split": "heldout",
+      "tags": ["near_miss", "long_irrelevant"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-043",
+      "split": "heldout",
+      "tags": ["plain", "negation", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3295,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-044",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 4929,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-045",
+      "split": "heldout",
+      "tags": ["plain", "negation", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1720,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-046",
+      "split": "calibration",
+      "tags": ["near_miss", "long_irrelevant"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2758,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-047",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 1887,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-048",
+      "split": "heldout",
+      "tags": ["plain", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-049",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3293,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-050",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5564,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-051",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1347,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-052",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-055",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2025,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-056",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-057",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1952,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-058",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-059",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-060",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-061",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5416,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-062",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 723,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-063",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6054,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-064",
+      "split": "heldout",
+      "tags": ["plain", "long_irrelevant"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6010,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-065",
+      "split": "heldout",
+      "tags": ["near_miss", "long_irrelevant"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-066",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 4870,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-067",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-069",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 4334,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-070",
+      "split": "heldout",
+      "tags": ["near_miss", "indirect"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2600,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-071",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 403,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-072",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3250,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-073",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 782,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-074",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1345,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-075",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3749,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-076",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2602,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-077",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5333,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-078",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 635,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-079",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 624,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-082",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 967,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-083",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2772,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-084",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5176,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-085",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3930,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-086",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2500,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-087",
+      "split": "heldout",
+      "tags": ["plain", "long_irrelevant"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6000,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-088",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1631,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-089",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3405,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-090",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1379,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-091",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 3135,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-093",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 518,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-094",
+      "split": "heldout",
+      "tags": ["near_miss", "indirect"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 1159,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-096",
+      "split": "calibration",
+      "tags": ["near_miss", "ambiguous"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "chunkBytes": 3754,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-099",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 440,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-101",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 554,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-102",
+      "split": "calibration",
+      "tags": ["non_english", "cjk", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 481,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-103",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 437,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-104",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 567,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-105",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 709,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-106",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 480,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-107",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 500,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-108",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 489,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-109",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 482,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-110",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 678,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-111",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 470,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-201",
+      "split": "calibration",
+      "tags": ["embedded_instruction", "near_miss"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 6108,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-202",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2379,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-203",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5500,
+        "pathOnlyRuleSkips": true
+      }
+    },
+    {
+      "id": "rs-204",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 2691,
+        "pathOnlyRuleSkips": false
+      }
+    },
+    {
+      "id": "rs-205",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "chunkBytes": 5598,
+        "pathOnlyRuleSkips": false
+      }
+    }
+  ]
+}

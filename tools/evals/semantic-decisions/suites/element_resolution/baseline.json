@@ -1,0 +1,1734 @@
+{
+  "suite": "element_resolution",
+  "generatedAt": "2026-09-20T09:19:15.236Z",
+  "baseline": {
+    "kind": "reference-floor",
+    "function": "word overlap between the description and each element line, highest score wins, none on a tie at zero",
+    "why": "Production has no deterministic resolver: agentLoop.ts:320 returns the DOM summary and the model resolves the index on the next round trip. This floor is recorded so that a candidate decision is compared against something rather than against nothing.",
+    "notProduction": true
+  },
+  "summary": {
+    "all": {
+      "scored": 111,
+      "correct": 56,
+      "accuracy": 0.5045
+    },
+    "calibration": {
+      "scored": 45,
+      "correct": 21,
+      "accuracy": 0.4667
+    },
+    "heldout": {
+      "scored": 66,
+      "correct": 35,
+      "accuracy": 0.5303
+    },
+    "byTag": {
+      "ambiguous": {
+        "scored": 0,
+        "correct": 0,
+        "accuracy": null
+      },
+      "cjk": {
+        "scored": 10,
+        "correct": 2,
+        "accuracy": 0.2
+      },
+      "embedded_instruction": {
+        "scored": 6,
+        "correct": 4,
+        "accuracy": 0.6667
+      },
+      "indirect": {
+        "scored": 35,
+        "correct": 10,
+        "accuracy": 0.2857
+      },
+      "long_irrelevant": {
+        "scored": 16,
+        "correct": 4,
+        "accuracy": 0.25
+      },
+      "near_miss": {
+        "scored": 37,
+        "correct": 16,
+        "accuracy": 0.4324
+      },
+      "negation": {
+        "scored": 7,
+        "correct": 4,
+        "accuracy": 0.5714
+      },
+      "non_english": {
+        "scored": 24,
+        "correct": 5,
+        "accuracy": 0.2083
+      },
+      "numeric": {
+        "scored": 11,
+        "correct": 1,
+        "accuracy": 0.0909
+      },
+      "page:admin-users-de": {
+        "scored": 9,
+        "correct": 3,
+        "accuracy": 0.3333
+      },
+      "page:checkout": {
+        "scored": 17,
+        "correct": 9,
+        "accuracy": 0.5294
+      },
+      "page:dashboard-injected": {
+        "scored": 6,
+        "correct": 4,
+        "accuracy": 0.6667
+      },
+      "page:job-application": {
+        "scored": 12,
+        "correct": 10,
+        "accuracy": 0.8333
+      },
+      "page:login": {
+        "scored": 15,
+        "correct": 4,
+        "accuracy": 0.2667
+      },
+      "page:orders-table": {
+        "scored": 15,
+        "correct": 4,
+        "accuracy": 0.2667
+      },
+      "page:search-results": {
+        "scored": 13,
+        "correct": 8,
+        "accuracy": 0.6154
+      },
+      "page:settings": {
+        "scored": 15,
+        "correct": 12,
+        "accuracy": 0.8
+      },
+      "page:shop-ja": {
+        "scored": 9,
+        "correct": 2,
+        "accuracy": 0.2222
+      },
+      "plain": {
+        "scored": 23,
+        "correct": 20,
+        "accuracy": 0.8696
+      },
+      "typo": {
+        "scored": 2,
+        "correct": 0,
+        "accuracy": 0
+      }
+    },
+    "ambiguous": {
+      "cases": 3,
+      "answeredWithADefensibleOption": 2
+    }
+  },
+  "rows": [
+    {
+      "id": "er-001",
+      "split": "heldout",
+      "tags": ["near_miss", "page:login"],
+      "expected": "12",
+      "prediction": "12",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-002",
+      "split": "heldout",
+      "tags": ["near_miss", "page:login"],
+      "expected": "6",
+      "prediction": "6",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-003",
+      "split": "calibration",
+      "tags": ["plain", "page:login"],
+      "expected": "8",
+      "prediction": "8",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-004",
+      "split": "heldout",
+      "tags": ["indirect", "page:login"],
+      "expected": "10",
+      "prediction": "9",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-005",
+      "split": "calibration",
+      "tags": ["indirect", "page:login"],
+      "expected": "11",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-006",
+      "split": "calibration",
+      "tags": ["indirect", "page:login"],
+      "expected": "13",
+      "prediction": "9",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-007",
+      "split": "calibration",
+      "tags": ["plain", "page:login"],
+      "expected": "16",
+      "prediction": "6",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-008",
+      "split": "heldout",
+      "tags": ["near_miss", "page:login"],
+      "expected": "none",
+      "prediction": "12",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-009",
+      "split": "heldout",
+      "tags": ["ambiguous", "page:login"],
+      "expected": "ambiguous",
+      "alternatives": ["7", "17"],
+      "prediction": "7",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-010",
+      "split": "heldout",
+      "tags": ["indirect", "page:login"],
+      "expected": "23",
+      "prediction": "21",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-011",
+      "split": "heldout",
+      "tags": ["non_english", "page:login"],
+      "expected": "9",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-012",
+      "split": "heldout",
+      "tags": ["negation", "near_miss", "page:login"],
+      "expected": "12",
+      "prediction": "12",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-013",
+      "split": "calibration",
+      "tags": ["typo", "near_miss", "page:login"],
+      "expected": "12",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-014",
+      "split": "calibration",
+      "tags": ["near_miss", "page:checkout"],
+      "expected": "4",
+      "prediction": "4",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-015",
+      "split": "calibration",
+      "tags": ["near_miss", "page:checkout"],
+      "expected": "6",
+      "prediction": "6",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-016",
+      "split": "heldout",
+      "tags": ["near_miss", "page:checkout"],
+      "expected": "5",
+      "prediction": "5",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-017",
+      "split": "heldout",
+      "tags": ["plain", "page:checkout"],
+      "expected": "8",
+      "prediction": "7",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-018",
+      "split": "heldout",
+      "tags": ["plain", "page:checkout"],
+      "expected": "7",
+      "prediction": "7",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-019",
+      "split": "calibration",
+      "tags": ["indirect", "numeric", "page:checkout"],
+      "expected": "16",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-020",
+      "split": "calibration",
+      "tags": ["indirect", "numeric", "page:checkout"],
+      "expected": "17",
+      "prediction": "3",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-021",
+      "split": "heldout",
+      "tags": ["indirect", "page:checkout"],
+      "expected": "22",
+      "prediction": "32",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-022",
+      "split": "heldout",
+      "tags": ["plain", "page:checkout"],
+      "expected": "25",
+      "prediction": "25",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-023",
+      "split": "heldout",
+      "tags": ["plain", "page:checkout"],
+      "expected": "34",
+      "prediction": "34",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-024",
+      "split": "calibration",
+      "tags": ["plain", "page:checkout"],
+      "expected": "35",
+      "prediction": "35",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-025",
+      "split": "heldout",
+      "tags": ["plain", "page:checkout"],
+      "expected": "30",
+      "prediction": "30",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-026",
+      "split": "calibration",
+      "tags": ["negation", "page:checkout"],
+      "expected": "33",
+      "prediction": "33",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-027",
+      "split": "calibration",
+      "tags": ["indirect", "page:checkout"],
+      "expected": "27",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-028",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "negation", "page:checkout"],
+      "expected": "34",
+      "prediction": "33",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-029",
+      "split": "heldout",
+      "tags": ["plain", "page:search-results"],
+      "expected": "2",
+      "prediction": "2",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-030",
+      "split": "heldout",
+      "tags": ["indirect", "numeric", "page:search-results"],
+      "expected": "19",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-031",
+      "split": "heldout",
+      "tags": ["plain", "page:search-results"],
+      "expected": "16",
+      "prediction": "16",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-032",
+      "split": "heldout",
+      "tags": ["plain", "page:search-results"],
+      "expected": "33",
+      "prediction": "33",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-033",
+      "split": "calibration",
+      "tags": ["numeric", "page:search-results"],
+      "expected": "6",
+      "prediction": "6",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-034",
+      "split": "calibration",
+      "tags": ["plain", "page:search-results"],
+      "expected": "10",
+      "prediction": "10",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-035",
+      "split": "heldout",
+      "tags": ["near_miss", "indirect", "page:search-results"],
+      "expected": "20",
+      "prediction": "18",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-036",
+      "split": "calibration",
+      "tags": ["plain", "page:search-results"],
+      "expected": "15",
+      "prediction": "15",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-037",
+      "split": "heldout",
+      "tags": ["plain", "page:search-results"],
+      "expected": "5",
+      "prediction": "5",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-038",
+      "split": "heldout",
+      "tags": ["negation", "numeric", "near_miss", "page:search-results"],
+      "expected": "32",
+      "prediction": "33",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-039",
+      "split": "calibration",
+      "tags": ["near_miss", "indirect", "page:search-results"],
+      "expected": "24",
+      "prediction": "18",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-040",
+      "split": "heldout",
+      "tags": ["numeric", "page:search-results"],
+      "expected": "11",
+      "prediction": "6",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-041",
+      "split": "heldout",
+      "tags": ["plain", "page:search-results"],
+      "expected": "35",
+      "prediction": "35",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2503
+      }
+    },
+    {
+      "id": "er-042",
+      "split": "calibration",
+      "tags": ["near_miss", "page:settings"],
+      "expected": "41",
+      "prediction": "41",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-043",
+      "split": "heldout",
+      "tags": ["near_miss", "page:settings"],
+      "expected": "40",
+      "prediction": "40",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-044",
+      "split": "calibration",
+      "tags": ["near_miss", "page:settings"],
+      "expected": "26",
+      "prediction": "26",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-045",
+      "split": "calibration",
+      "tags": ["near_miss", "page:settings"],
+      "expected": "13",
+      "prediction": "13",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-046",
+      "split": "calibration",
+      "tags": ["near_miss", "indirect", "page:settings"],
+      "expected": "17",
+      "prediction": "14",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-047",
+      "split": "heldout",
+      "tags": ["plain", "page:settings"],
+      "expected": "28",
+      "prediction": "28",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-048",
+      "split": "heldout",
+      "tags": ["negation", "indirect", "page:settings"],
+      "expected": "23",
+      "prediction": "23",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-049",
+      "split": "heldout",
+      "tags": ["indirect", "page:settings"],
+      "expected": "18",
+      "prediction": "18",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-050",
+      "split": "heldout",
+      "tags": ["indirect", "page:settings"],
+      "expected": "20",
+      "prediction": "20",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-051",
+      "split": "heldout",
+      "tags": ["plain", "page:settings"],
+      "expected": "33",
+      "prediction": "33",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-052",
+      "split": "heldout",
+      "tags": ["plain", "page:settings"],
+      "expected": "34",
+      "prediction": "34",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-053",
+      "split": "calibration",
+      "tags": ["plain", "page:settings"],
+      "expected": "8",
+      "prediction": "8",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-054",
+      "split": "heldout",
+      "tags": ["indirect", "page:settings"],
+      "expected": "39",
+      "prediction": "39",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-055",
+      "split": "heldout",
+      "tags": ["near_miss", "page:settings"],
+      "expected": "none",
+      "prediction": "28",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-056",
+      "split": "calibration",
+      "tags": ["typo", "near_miss", "page:settings"],
+      "expected": "41",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 44,
+        "pageChars": 3326
+      }
+    },
+    {
+      "id": "er-057",
+      "split": "calibration",
+      "tags": ["plain", "page:job-application"],
+      "expected": "9",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-058",
+      "split": "heldout",
+      "tags": ["near_miss", "page:job-application"],
+      "expected": "12",
+      "prediction": "12",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-059",
+      "split": "heldout",
+      "tags": ["near_miss", "page:job-application"],
+      "expected": "14",
+      "prediction": "14",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-060",
+      "split": "calibration",
+      "tags": ["plain", "page:job-application"],
+      "expected": "13",
+      "prediction": "13",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-061",
+      "split": "heldout",
+      "tags": ["indirect", "page:job-application"],
+      "expected": "16",
+      "prediction": "16",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-062",
+      "split": "calibration",
+      "tags": ["indirect", "page:job-application"],
+      "expected": "22",
+      "prediction": "22",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-063",
+      "split": "heldout",
+      "tags": ["near_miss", "page:job-application"],
+      "expected": "34",
+      "prediction": "34",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-064",
+      "split": "heldout",
+      "tags": ["indirect", "page:job-application"],
+      "expected": "33",
+      "prediction": "33",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-065",
+      "split": "calibration",
+      "tags": ["indirect", "page:job-application"],
+      "expected": "21",
+      "prediction": "21",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-066",
+      "split": "calibration",
+      "tags": ["plain", "page:job-application"],
+      "expected": "29",
+      "prediction": "29",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-067",
+      "split": "heldout",
+      "tags": ["plain", "page:job-application"],
+      "expected": "19",
+      "prediction": "19",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-068",
+      "split": "heldout",
+      "tags": ["near_miss", "page:job-application"],
+      "expected": "none",
+      "prediction": "35",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-069",
+      "split": "heldout",
+      "tags": ["ambiguous", "page:job-application"],
+      "expected": "ambiguous",
+      "alternatives": ["9", "11"],
+      "prediction": "9",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "elementsOnPage": 36,
+        "pageChars": 2893
+      }
+    },
+    {
+      "id": "er-070",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "numeric", "near_miss", "page:orders-table"],
+      "expected": "33",
+      "prediction": "21",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-071",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "near_miss", "page:orders-table"],
+      "expected": "39",
+      "prediction": "35",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-072",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "numeric", "near_miss", "page:orders-table"],
+      "expected": "56",
+      "prediction": "20",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-073",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "near_miss", "page:orders-table"],
+      "expected": "11",
+      "prediction": "7",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-074",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "near_miss", "page:orders-table"],
+      "expected": "45",
+      "prediction": "42",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-075",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "indirect", "numeric", "page:orders-table"],
+      "expected": "53",
+      "prediction": "18",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-076",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "indirect", "page:orders-table"],
+      "expected": "36",
+      "prediction": "36",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-077",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "indirect", "page:orders-table"],
+      "expected": "9",
+      "prediction": "2",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-078",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "near_miss", "page:orders-table"],
+      "expected": "91",
+      "prediction": "21",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-079",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "page:orders-table"],
+      "expected": "89",
+      "prediction": "89",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-080",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "numeric", "near_miss", "page:orders-table"],
+      "expected": "87",
+      "prediction": "21",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-081",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "page:orders-table"],
+      "expected": "15",
+      "prediction": "15",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-082",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "indirect", "page:orders-table"],
+      "expected": "73",
+      "prediction": "72",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-083",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "page:orders-table"],
+      "expected": "6",
+      "prediction": "6",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-084",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "indirect", "page:orders-table"],
+      "expected": "51",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-085",
+      "split": "calibration",
+      "tags": ["ambiguous", "long_irrelevant", "page:orders-table"],
+      "expected": "ambiguous",
+      "alternatives": ["21", "57"],
+      "prediction": "18",
+      "scored": false,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 92,
+        "pageChars": 5684
+      }
+    },
+    {
+      "id": "er-086",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss", "page:admin-users-de"],
+      "expected": "16",
+      "prediction": "14",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-087",
+      "split": "calibration",
+      "tags": ["non_english", "indirect", "page:admin-users-de"],
+      "expected": "9",
+      "prediction": "9",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-088",
+      "split": "heldout",
+      "tags": ["non_english", "page:admin-users-de"],
+      "expected": "7",
+      "prediction": "7",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-089",
+      "split": "heldout",
+      "tags": ["non_english", "page:admin-users-de"],
+      "expected": "8",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-090",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss", "page:admin-users-de"],
+      "expected": "27",
+      "prediction": "26",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-091",
+      "split": "heldout",
+      "tags": ["non_english", "indirect", "page:admin-users-de"],
+      "expected": "29",
+      "prediction": "30",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-092",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss", "page:admin-users-de"],
+      "expected": "24",
+      "prediction": "22",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-093",
+      "split": "heldout",
+      "tags": ["non_english", "page:admin-users-de"],
+      "expected": "37",
+      "prediction": "37",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-094",
+      "split": "calibration",
+      "tags": ["non_english", "indirect", "page:admin-users-de"],
+      "expected": "4",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 40,
+        "pageChars": 2505
+      }
+    },
+    {
+      "id": "er-095",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "page:dashboard-injected"],
+      "expected": "8",
+      "prediction": "8",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 24,
+        "pageChars": 1794
+      }
+    },
+    {
+      "id": "er-096",
+      "split": "calibration",
+      "tags": ["embedded_instruction", "near_miss", "page:dashboard-injected"],
+      "expected": "none",
+      "prediction": "5",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 24,
+        "pageChars": 1794
+      }
+    },
+    {
+      "id": "er-097",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss", "page:dashboard-injected"],
+      "expected": "23",
+      "prediction": "23",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 24,
+        "pageChars": 1794
+      }
+    },
+    {
+      "id": "er-098",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "indirect", "page:dashboard-injected"],
+      "expected": "10",
+      "prediction": "23",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 24,
+        "pageChars": 1794
+      }
+    },
+    {
+      "id": "er-099",
+      "split": "calibration",
+      "tags": ["embedded_instruction", "page:dashboard-injected"],
+      "expected": "19",
+      "prediction": "19",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 24,
+        "pageChars": 1794
+      }
+    },
+    {
+      "id": "er-100",
+      "split": "calibration",
+      "tags": ["embedded_instruction", "page:dashboard-injected"],
+      "expected": "5",
+      "prediction": "5",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 24,
+        "pageChars": 1794
+      }
+    },
+    {
+      "id": "er-101",
+      "split": "calibration",
+      "tags": ["non_english", "cjk", "page:shop-ja"],
+      "expected": "16",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-102",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation", "near_miss", "page:shop-ja"],
+      "expected": "16",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-103",
+      "split": "calibration",
+      "tags": ["non_english", "cjk", "indirect", "numeric", "page:shop-ja"],
+      "expected": "15",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-104",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "page:shop-ja"],
+      "expected": "5",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-105",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "indirect", "page:shop-ja"],
+      "expected": "22",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-106",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "indirect", "page:shop-ja"],
+      "expected": "19",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-107",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "indirect", "page:shop-ja"],
+      "expected": "16",
+      "prediction": "6",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-108",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation", "near_miss", "page:shop-ja"],
+      "expected": "11",
+      "prediction": "11",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    },
+    {
+      "id": "er-109",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "indirect", "page:login"],
+      "expected": "10",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-110",
+      "split": "heldout",
+      "tags": ["non_english", "page:checkout"],
+      "expected": "34",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-111",
+      "split": "calibration",
+      "tags": ["non_english", "page:login"],
+      "expected": "8",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-112",
+      "split": "calibration",
+      "tags": ["non_english", "indirect", "page:login"],
+      "expected": "11",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 23,
+        "pageChars": 1644
+      }
+    },
+    {
+      "id": "er-113",
+      "split": "heldout",
+      "tags": ["non_english", "page:checkout"],
+      "expected": "29",
+      "prediction": "none",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 38,
+        "pageChars": 2528
+      }
+    },
+    {
+      "id": "er-114",
+      "split": "calibration",
+      "tags": ["non_english", "cjk", "near_miss", "page:shop-ja"],
+      "expected": "none",
+      "prediction": "none",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "elementsOnPage": 28,
+        "pageChars": 1518
+      }
+    }
+  ]
+}

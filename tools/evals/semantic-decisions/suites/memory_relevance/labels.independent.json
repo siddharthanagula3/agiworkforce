@@ -1,0 +1,508 @@
+{
+  "labeller": "label-b",
+  "labels": {
+    "mr-001": {
+      "label": {
+        "relevant": ["df-m06", "df-m07"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "medium",
+      "note": "df-m07 (Postgres/Neon) is plausible debugging context but not certain to be needed."
+    },
+    "mr-002": {
+      "label": {
+        "relevant": ["df-m07"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-003": {
+      "label": {
+        "relevant": ["df-m09"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-004": {
+      "label": {
+        "relevant": ["df-m19"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-005": {
+      "label": {
+        "relevant": ["df-m06"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "medium",
+      "note": "settlement rows plausibly relate to the ledger/reconciliation system they own, though it isn't stated outright."
+    },
+    "mr-006": {
+      "label": {
+        "relevant": ["df-m18", "df-m06"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "medium",
+      "note": "'I'm on next week' is read as oncall, confirmed by df-m18; df-m06 names the system they'd likely need to review."
+    },
+    "mr-007": {
+      "label": {
+        "relevant": ["df-m05"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-008": {
+      "label": {
+        "relevant": [],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-009": {
+      "label": {
+        "relevant": ["df-m12"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-010": {
+      "label": {
+        "relevant": ["df-m11", "df-m07"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-011": {
+      "label": {
+        "relevant": ["df-m05", "df-m18"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "medium",
+      "note": "df-m05 (Eastern time) is needed to schedule with London; df-m18 (oncall) is a plausible but unconfirmed link to 'handover'."
+    },
+    "mr-012": {
+      "label": {
+        "relevant": ["df-m22", "df-m06"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "medium",
+      "note": "df-m22 names the manager; df-m06 is a plausible but unstated link between the outage and their service."
+    },
+    "mr-013": {
+      "label": {
+        "relevant": [],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high",
+      "note": "the question is a generic definition; the standing list still passes despite the 'ignore memories' instruction, since the filter shouldn't honour text it is filtering."
+    },
+    "mr-014": {
+      "label": {
+        "relevant": ["df-m04"],
+        "standing_instruction": ["df-m01", "df-m02", "df-m03", "df-m16", "df-m17", "df-m20"]
+      },
+      "certainty": "high"
+    },
+    "mr-015": {
+      "label": {
+        "relevant": ["hh-m02", "hh-m03", "hh-m04", "hh-m07", "hh-m10", "hh-m14"],
+        "standing_instruction": ["hh-m01", "hh-m15"]
+      },
+      "certainty": "high"
+    },
+    "mr-016": {
+      "label": { "relevant": ["hh-m08"], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high"
+    },
+    "mr-017": {
+      "label": { "relevant": ["hh-m05"], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high"
+    },
+    "mr-018": {
+      "label": { "relevant": ["hh-m05", "hh-m06"], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high"
+    },
+    "mr-019": {
+      "label": { "relevant": ["hh-m16"], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high"
+    },
+    "mr-020": {
+      "label": {
+        "relevant": ["hh-m02", "hh-m03", "hh-m07", "hh-m13", "hh-m14"],
+        "standing_instruction": ["hh-m01", "hh-m15"]
+      },
+      "certainty": "medium",
+      "note": "hh-m13's monthly Sunday visit plausibly explains this specific lunch, but that link isn't stated outright."
+    },
+    "mr-021": {
+      "label": { "relevant": [], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high"
+    },
+    "mr-022": {
+      "label": { "relevant": ["hh-m12"], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high"
+    },
+    "mr-023": {
+      "label": {
+        "relevant": ["hh-m02", "hh-m03", "hh-m04", "hh-m07", "hh-m10", "hh-m14"],
+        "standing_instruction": ["hh-m01", "hh-m15"]
+      },
+      "certainty": "high"
+    },
+    "mr-024": {
+      "label": {
+        "relevant": ["hh-m09", "hh-m02", "hh-m03", "hh-m04", "hh-m07", "hh-m10", "hh-m14"],
+        "standing_instruction": ["hh-m01", "hh-m15"]
+      },
+      "certainty": "high"
+    },
+    "mr-025": {
+      "label": { "relevant": ["hh-m05"], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "medium",
+      "note": "confirms she's a primary teacher, though her own year group (5) isn't the one that normally sits the phonics check (Year 1)."
+    },
+    "mr-026": {
+      "label": {
+        "relevant": ["hh-m02", "hh-m09", "hh-m10"],
+        "standing_instruction": ["hh-m01", "hh-m15"]
+      },
+      "certainty": "medium",
+      "note": "all three plausibly bear on whether a slow cooker would help, though none is stated as the direct cause."
+    },
+    "mr-027": {
+      "label": { "relevant": ["hh-m11"], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high"
+    },
+    "mr-028": {
+      "label": { "relevant": [], "standing_instruction": ["hh-m01", "hh-m15"] },
+      "certainty": "high",
+      "note": "standing instructions still pass despite the 'ignore every preference' instruction; no other fact bears on how heat pumps work."
+    },
+    "mr-029": {
+      "label": { "relevant": ["de-m06"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-030": {
+      "label": { "relevant": ["de-m04"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-031": {
+      "label": { "relevant": ["de-m05"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-032": {
+      "label": { "relevant": ["de-m12"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-033": {
+      "label": {
+        "relevant": ["de-m11", "de-m13"],
+        "standing_instruction": ["de-m01", "de-m09", "de-m10"]
+      },
+      "certainty": "medium",
+      "note": "de-m11 (accountant handles filing) and de-m13 (home studio) both plausibly bear on expense declaration, though neither is certain to be decisive."
+    },
+    "mr-034": {
+      "label": { "relevant": ["de-m07"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-035": {
+      "label": { "relevant": [], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-036": {
+      "label": {
+        "relevant": ["de-m08", "de-m11"],
+        "standing_instruction": ["de-m01", "de-m09", "de-m10"]
+      },
+      "certainty": "medium",
+      "note": "de-m08 explains the agency reference; whether 'esto' means accounts work (de-m11) is unclear."
+    },
+    "mr-037": {
+      "label": { "relevant": ["de-m14"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-038": {
+      "label": { "relevant": ["de-m06"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "medium",
+      "note": "the day-rate billing model plausibly shapes how a scope-creep clause should read."
+    },
+    "mr-039": {
+      "label": { "relevant": ["de-m06"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "low",
+      "note": "de-m01 (Spanish) is directly contradicted by 'answer in English this once'; a defensible reading drops it for this turn, but I kept it per the filter-should-not-self-override principle since this is genuinely arguable."
+    },
+    "mr-040": {
+      "label": { "relevant": [], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high",
+      "note": "de-m09's 'worked examples over theory' is directly contradicted by this request, but the filter should not honour a turn-level override, so the standing list still passes."
+    },
+    "mr-041": {
+      "label": { "relevant": [], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "medium",
+      "note": "de-m02 (brand designer) is topically adjacent but doesn't change the content of generic logo ideas."
+    },
+    "mr-042": {
+      "label": { "relevant": ["de-m13"], "standing_instruction": ["de-m01", "de-m09", "de-m10"] },
+      "certainty": "high"
+    },
+    "mr-043": {
+      "label": {
+        "relevant": ["rs-m04"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "medium",
+      "note": "layered oxides are a common cathode chemistry in their subfield (sodium-ion), though not stated as an exact match."
+    },
+    "mr-044": {
+      "label": {
+        "relevant": ["rs-m11", "rs-m07"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "medium",
+      "note": "rs-m11 explains the reviewer context directly; rs-m07 (grant deadline) is a plausible but unstated factor in whether the extra experiment is feasible."
+    },
+    "mr-045": {
+      "label": {
+        "relevant": ["rs-m12", "rs-m04"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "high"
+    },
+    "mr-046": {
+      "label": {
+        "relevant": ["rs-m07", "rs-m11"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "high"
+    },
+    "mr-047": {
+      "label": {
+        "relevant": ["rs-m16", "rs-m04"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "medium",
+      "note": "rs-m16 (Python/numpy) is clearly relevant to how the plotting is done; rs-m04 gives domain context for the data."
+    },
+    "mr-048": {
+      "label": {
+        "relevant": ["rs-m06", "rs-m18"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "high"
+    },
+    "mr-049": {
+      "label": {
+        "relevant": ["rs-m08"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "high"
+    },
+    "mr-050": {
+      "label": {
+        "relevant": ["rs-m12", "rs-m19"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "high"
+    },
+    "mr-051": {
+      "label": {
+        "relevant": ["rs-m18"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "high"
+    },
+    "mr-052": {
+      "label": {
+        "relevant": ["rs-m21"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "medium",
+      "note": "their own thesis being on this exact topic is a striking, likely relevant irony, though the message doesn't make the connection explicit."
+    },
+    "mr-053": {
+      "label": {
+        "relevant": ["rs-m04"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "medium",
+      "note": "Prussian blue analogues are a well-known sodium-ion cathode family, tying this to their subfield."
+    },
+    "mr-054": {
+      "label": {
+        "relevant": ["rs-m24"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "high"
+    },
+    "mr-055": {
+      "label": {
+        "relevant": ["rs-m04"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "medium",
+      "note": "electrode slurry solvent selection ties to their battery-cathode work; rs-m26 (no clarifying questions) is already standing."
+    },
+    "mr-056": {
+      "label": {
+        "relevant": ["rs-m12"],
+        "standing_instruction": ["rs-m01", "rs-m02", "rs-m09", "rs-m10", "rs-m22", "rs-m26"]
+      },
+      "certainty": "medium",
+      "note": "'the conference' plausibly refers to rs-m12; the other appointment is unnamed."
+    },
+    "mr-057": {
+      "label": {
+        "relevant": ["op-m15", "op-m09"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "high"
+    },
+    "mr-058": {
+      "label": { "relevant": ["op-m15"], "standing_instruction": ["op-m01", "op-m27", "op-m29"] },
+      "certainty": "medium",
+      "note": "signing-key rotation plausibly relates to their internal CA, though not stated outright."
+    },
+    "mr-059": {
+      "label": { "relevant": ["op-m11"], "standing_instruction": ["op-m01", "op-m27", "op-m29"] },
+      "certainty": "high"
+    },
+    "mr-060": {
+      "label": { "relevant": ["op-m12"], "standing_instruction": ["op-m01", "op-m27", "op-m29"] },
+      "certainty": "high"
+    },
+    "mr-061": {
+      "label": {
+        "relevant": ["op-m06", "op-m05"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "high"
+    },
+    "mr-062": {
+      "label": {
+        "relevant": ["op-m17", "op-m04", "op-m05", "op-m06"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "medium",
+      "note": "op-m17 explains the motivation and op-m04 names the paging path directly; op-m05/op-m06 are the telemetry stack that would actually be trimmed."
+    },
+    "mr-063": {
+      "label": { "relevant": ["op-m10"], "standing_instruction": ["op-m01", "op-m27", "op-m29"] },
+      "certainty": "high"
+    },
+    "mr-064": {
+      "label": {
+        "relevant": ["op-m08", "op-m18", "op-m07"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "medium",
+      "note": "op-m08 anchors the handover itself; op-m18 and op-m07 are plausible but not certain factors in what the note should cover."
+    },
+    "mr-065": {
+      "label": {
+        "relevant": ["op-m23", "op-m08"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "medium",
+      "note": "'a long one' is read as a training run for the half marathon; op-m08 gives the handover time the 6am start is measured against."
+    },
+    "mr-066": {
+      "label": {
+        "relevant": ["op-m25", "op-m07"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "medium",
+      "note": "op-m25 (holiday over that period) is a plausible link to the freeze; op-m07 matters for coordinating the announcement across time zones."
+    },
+    "mr-067": {
+      "label": {
+        "relevant": ["op-m13", "op-m09", "op-m03"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "high"
+    },
+    "mr-068": {
+      "label": { "relevant": [], "standing_instruction": ["op-m01", "op-m27", "op-m29"] },
+      "certainty": "high"
+    },
+    "mr-069": {
+      "label": { "relevant": ["op-m28"], "standing_instruction": ["op-m01", "op-m27", "op-m29"] },
+      "certainty": "high",
+      "note": "the literal question is answered by op-m28 regardless of the 'most recent memory only' framing in the instruction, which should not be honoured."
+    },
+    "mr-070": {
+      "label": {
+        "relevant": ["op-m07", "op-m04"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "high"
+    },
+    "mr-071": {
+      "label": {
+        "relevant": ["op-m06", "op-m05", "op-m17"],
+        "standing_instruction": ["op-m01", "op-m27", "op-m29"]
+      },
+      "certainty": "medium",
+      "note": "op-m06/op-m05 name the observability stack a new screen would draw from; op-m17 is a budget constraint on what can be added."
+    },
+    "mr-072": {
+      "label": { "relevant": ["op-m14"], "standing_instruction": ["op-m01", "op-m27", "op-m29"] },
+      "certainty": "high"
+    },
+    "mr-073": {
+      "label": { "relevant": ["sj-m09"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high"
+    },
+    "mr-074": {
+      "label": { "relevant": ["sj-m06", "sj-m11"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "medium",
+      "note": "sj-m06 confirms the part-time job; sj-m11 (weekend shifts) is a plausible but not certain factor in the scheduling conflict."
+    },
+    "mr-075": {
+      "label": { "relevant": ["sj-m05"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high"
+    },
+    "mr-076": {
+      "label": { "relevant": ["sj-m08", "sj-m03"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "medium",
+      "note": "sj-m08 (8GB RAM) is directly needed; sj-m03 (civil engineering) suggests what kind of analysis software this might be."
+    },
+    "mr-077": {
+      "label": { "relevant": ["sj-m03"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high"
+    },
+    "mr-078": {
+      "label": { "relevant": ["sj-m12", "sj-m02"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high"
+    },
+    "mr-079": {
+      "label": { "relevant": ["sj-m04"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high"
+    },
+    "mr-080": {
+      "label": { "relevant": ["sj-m10"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high"
+    },
+    "mr-081": {
+      "label": { "relevant": ["sj-m03"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "low",
+      "note": "sj-m01 (Japanese) and sj-m07 (short answers) are directly contradicted by 'Answer in English and take as long as you like'; I kept them standing per the filter-should-not-self-override principle, but this is the genuinely open question the suite flags."
+    },
+    "mr-082": {
+      "label": { "relevant": [], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "medium",
+      "note": "sj-m03 (civil engineering) is topically adjacent but neither unnamed deadline can be identified from the text."
+    },
+    "mr-083": {
+      "label": { "relevant": ["sj-m09"], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high"
+    },
+    "mr-084": {
+      "label": { "relevant": [], "standing_instruction": ["sj-m01", "sj-m07"] },
+      "certainty": "high",
+      "note": "standing instructions still pass despite the 'ignore all memories' instruction; there is no content question to attach a fact to."
+    }
+  }
+}

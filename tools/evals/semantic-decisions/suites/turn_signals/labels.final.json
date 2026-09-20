@@ -1,0 +1,2577 @@
+{
+  "suite": "turn_signals",
+  "rule": "two blind labellers must agree",
+  "labels": {
+    "ts-001": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-002": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-003": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-004": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-005": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-006": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1, 2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-007": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-008": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-009": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-010": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-011": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-012": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-013": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-014": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-015": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-016": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0, 1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-017": {
+      "label": {
+        "needs_current_info": {
+          "scored": false,
+          "why": "contested",
+          "votes": [true, false]
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "deep_research",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-018": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0, 1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-019": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-020": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-021": {
+      "label": {
+        "needs_current_info": {
+          "scored": false,
+          "why": "contested",
+          "votes": [false, true]
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1, 2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-022": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-023": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-024": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-025": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-026": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-027": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-028": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-029": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-030": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-031": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "agentic_work",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-032": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "scored": false,
+          "why": "contested",
+          "votes": [false, true]
+        },
+        "task_family": {
+          "value": "agentic_work",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-033": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "agentic_work",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-034": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "scored": false,
+          "why": "contested",
+          "votes": [false, true]
+        },
+        "task_family": {
+          "value": "agentic_work",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-035": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "document_authoring",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-036": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "simple_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-037": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "simple_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-038": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "simple_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-039": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "simple_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-040": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-041": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-042": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-043": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-044": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-045": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-046": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-047": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-048": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-049": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["general_chat", "caller_tool_loop"]
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-050": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-051": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-052": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "scored": false,
+          "why": "contested",
+          "votes": [true, false]
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-053": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-054": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "document_authoring",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-055": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-056": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [1, 2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-057": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-058": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-059": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-060": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0, 1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-061": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-062": {
+      "label": {
+        "needs_current_info": {
+          "scored": false,
+          "why": "contested",
+          "votes": [true, false]
+        },
+        "needs_external_tools": {
+          "scored": false,
+          "why": "contested",
+          "votes": [true, false]
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["general_chat", "web_grounded_answer"]
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-063": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1, 2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-064": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-065": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-066": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-067": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-068": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-069": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-070": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-071": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0, 1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-072": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-073": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-074": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "deep_research",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-075": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "simple_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-076": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-077": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0, 1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-078": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-079": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-080": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-081": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0, 1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-082": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-083": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "scored": false,
+          "why": "contested",
+          "votes": [true, false]
+        },
+        "needs_code": {
+          "value": true,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["code_execution", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [1, 2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-084": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-085": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-086": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-087": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-088": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-089": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-090": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "extended_thinking",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-091": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-092": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-093": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "scored": false,
+          "why": "contested",
+          "votes": [true, false]
+        },
+        "needs_code": {
+          "value": true,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["code_execution", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-094": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "contested",
+          "votes": ["extended_thinking", "general_chat"]
+        },
+        "complexity4": {
+          "accept": [2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-095": {
+      "label": {
+        "needs_current_info": {
+          "scored": false,
+          "why": "ambiguous"
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "scored": false,
+          "why": "ambiguous"
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-096": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "scored": false,
+          "why": "ambiguous"
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1, 2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-097": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "scored": false,
+          "why": "ambiguous"
+        },
+        "task_family": {
+          "scored": false,
+          "why": "ambiguous"
+        },
+        "complexity4": {
+          "accept": [1, 2],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-098": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-099": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "agentic_work",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [2, 3],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-100": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-101": {
+      "label": {
+        "needs_current_info": {
+          "value": false,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": false,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "general_chat",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [1],
+          "scored": true
+        }
+      },
+      "scored": true
+    },
+    "ts-102": {
+      "label": {
+        "needs_current_info": {
+          "value": true,
+          "scored": true
+        },
+        "needs_external_tools": {
+          "value": true,
+          "scored": true
+        },
+        "needs_code": {
+          "value": false,
+          "scored": true
+        },
+        "task_family": {
+          "value": "web_grounded_answer",
+          "scored": true
+        },
+        "complexity4": {
+          "accept": [0, 1],
+          "scored": true
+        }
+      },
+      "scored": true
+    }
+  }
+}

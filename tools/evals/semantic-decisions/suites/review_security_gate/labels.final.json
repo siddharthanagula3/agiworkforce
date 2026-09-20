@@ -1,0 +1,437 @@
+{
+  "suite": "review_security_gate",
+  "rule": "two blind labellers must agree",
+  "labels": {
+    "rs-001": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-002": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-003": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-004": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-005": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-006": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-007": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-008": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-009": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-010": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-011": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-012": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-013": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-014": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-015": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-016": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-017": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-018": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-019": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-020": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-021": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-022": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-023": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-024": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-026": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-027": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-028": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-030": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-031": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-032": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-033": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-034": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-035": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-036": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-037": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-038": {
+      "label": null,
+      "scored": false,
+      "why": "contested",
+      "votes": ["yes", "no"]
+    },
+    "rs-039": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-040": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-041": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-042": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-043": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-044": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-045": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-046": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-047": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-048": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-049": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-050": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-051": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-052": {
+      "label": null,
+      "scored": false,
+      "why": "contested",
+      "votes": ["yes", "no"]
+    },
+    "rs-055": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-056": {
+      "label": null,
+      "scored": false,
+      "why": "contested",
+      "votes": ["yes", "no"]
+    },
+    "rs-057": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-058": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-059": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-060": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-061": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-062": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-063": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-064": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-065": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-066": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-067": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-069": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-070": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-071": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-072": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-073": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-074": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-075": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-076": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-077": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-078": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-079": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-082": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-083": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-084": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-085": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-086": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-087": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-088": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-089": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-090": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-091": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-093": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-094": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-096": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "rs-099": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-101": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-102": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-103": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-104": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-105": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-106": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-107": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-108": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-109": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-110": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-111": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-201": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-202": {
+      "label": "yes",
+      "scored": true
+    },
+    "rs-203": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-204": {
+      "label": "no",
+      "scored": true
+    },
+    "rs-205": {
+      "label": "yes",
+      "scored": true
+    }
+  }
+}

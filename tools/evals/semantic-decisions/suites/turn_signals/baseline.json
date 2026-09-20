@@ -1,0 +1,3058 @@
+{
+  "suite": "turn_signals",
+  "generatedAt": "2026-09-20T09:19:13.689Z",
+  "baseline": {
+    "family": "classifyTaskLocally, packages/ai/routing/src/classify.ts, called with the latest user message and empty history",
+    "needs_current_info": "resolveWebSearchRequirement, apps/web/lib/web-search/required-search.ts, with researchTask derived from the classifier as request-processor.ts:4049 does",
+    "needs_external_tools": "applyImplicitManagedToolIntent, apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:516, any of web_search, web_fetch, office_creation, code_execution",
+    "needs_code": "the code_execution flag set by the same call",
+    "complexity": "no production component answers this, so it is recorded as not-measured rather than guessed",
+    "note": "Every function above is the real one, imported and called. No regex was copied into this script."
+  },
+  "summary": {
+    "family": {
+      "all": {
+        "scored": 97,
+        "correct": 28,
+        "accuracy": 0.2887
+      },
+      "calibration": {
+        "scored": 37,
+        "correct": 11,
+        "accuracy": 0.2973
+      },
+      "heldout": {
+        "scored": 60,
+        "correct": 17,
+        "accuracy": 0.2833
+      },
+      "byTag": {
+        "ambiguous": {
+          "scored": 1,
+          "correct": 0,
+          "accuracy": 0
+        },
+        "cjk": {
+          "scored": 4,
+          "correct": 0,
+          "accuracy": 0
+        },
+        "embedded_instruction": {
+          "scored": 6,
+          "correct": 2,
+          "accuracy": 0.3333
+        },
+        "indirect": {
+          "scored": 14,
+          "correct": 3,
+          "accuracy": 0.2143
+        },
+        "long_irrelevant": {
+          "scored": 5,
+          "correct": 1,
+          "accuracy": 0.2
+        },
+        "near_miss": {
+          "scored": 12,
+          "correct": 1,
+          "accuracy": 0.0833
+        },
+        "negation": {
+          "scored": 15,
+          "correct": 3,
+          "accuracy": 0.2
+        },
+        "non_english": {
+          "scored": 14,
+          "correct": 2,
+          "accuracy": 0.1429
+        },
+        "numeric": {
+          "scored": 15,
+          "correct": 4,
+          "accuracy": 0.2667
+        },
+        "plain": {
+          "scored": 41,
+          "correct": 19,
+          "accuracy": 0.4634
+        },
+        "typo": {
+          "scored": 8,
+          "correct": 4,
+          "accuracy": 0.5
+        }
+      },
+      "ambiguous": {
+        "cases": 5,
+        "answeredWithADefensibleOption": 4
+      }
+    },
+    "needs_current_info": {
+      "all": {
+        "scored": 101,
+        "correct": 82,
+        "accuracy": 0.8119
+      },
+      "calibration": {
+        "scored": 39,
+        "correct": 29,
+        "accuracy": 0.7436
+      },
+      "heldout": {
+        "scored": 62,
+        "correct": 53,
+        "accuracy": 0.8548
+      },
+      "byTag": {
+        "ambiguous": {
+          "scored": 3,
+          "correct": 3,
+          "accuracy": 1
+        },
+        "cjk": {
+          "scored": 4,
+          "correct": 3,
+          "accuracy": 0.75
+        },
+        "embedded_instruction": {
+          "scored": 6,
+          "correct": 5,
+          "accuracy": 0.8333
+        },
+        "indirect": {
+          "scored": 16,
+          "correct": 12,
+          "accuracy": 0.75
+        },
+        "long_irrelevant": {
+          "scored": 5,
+          "correct": 4,
+          "accuracy": 0.8
+        },
+        "near_miss": {
+          "scored": 12,
+          "correct": 10,
+          "accuracy": 0.8333
+        },
+        "negation": {
+          "scored": 15,
+          "correct": 12,
+          "accuracy": 0.8
+        },
+        "non_english": {
+          "scored": 14,
+          "correct": 10,
+          "accuracy": 0.7143
+        },
+        "numeric": {
+          "scored": 15,
+          "correct": 14,
+          "accuracy": 0.9333
+        },
+        "plain": {
+          "scored": 42,
+          "correct": 37,
+          "accuracy": 0.881
+        },
+        "typo": {
+          "scored": 8,
+          "correct": 8,
+          "accuracy": 1
+        }
+      },
+      "ambiguous": {
+        "cases": 1,
+        "answeredWithADefensibleOption": 1
+      }
+    },
+    "needs_external_tools": {
+      "all": {
+        "scored": 101,
+        "correct": 67,
+        "accuracy": 0.6634
+      },
+      "calibration": {
+        "scored": 39,
+        "correct": 26,
+        "accuracy": 0.6667
+      },
+      "heldout": {
+        "scored": 62,
+        "correct": 41,
+        "accuracy": 0.6613
+      },
+      "byTag": {
+        "ambiguous": {
+          "scored": 3,
+          "correct": 3,
+          "accuracy": 1
+        },
+        "cjk": {
+          "scored": 4,
+          "correct": 3,
+          "accuracy": 0.75
+        },
+        "embedded_instruction": {
+          "scored": 6,
+          "correct": 5,
+          "accuracy": 0.8333
+        },
+        "indirect": {
+          "scored": 16,
+          "correct": 11,
+          "accuracy": 0.6875
+        },
+        "long_irrelevant": {
+          "scored": 5,
+          "correct": 3,
+          "accuracy": 0.6
+        },
+        "near_miss": {
+          "scored": 12,
+          "correct": 7,
+          "accuracy": 0.5833
+        },
+        "negation": {
+          "scored": 15,
+          "correct": 12,
+          "accuracy": 0.8
+        },
+        "non_english": {
+          "scored": 14,
+          "correct": 9,
+          "accuracy": 0.6429
+        },
+        "numeric": {
+          "scored": 15,
+          "correct": 11,
+          "accuracy": 0.7333
+        },
+        "plain": {
+          "scored": 42,
+          "correct": 28,
+          "accuracy": 0.6667
+        },
+        "typo": {
+          "scored": 8,
+          "correct": 7,
+          "accuracy": 0.875
+        }
+      },
+      "ambiguous": {
+        "cases": 1,
+        "answeredWithADefensibleOption": 1
+      }
+    },
+    "needs_code": {
+      "all": {
+        "scored": 101,
+        "correct": 98,
+        "accuracy": 0.9703
+      },
+      "calibration": {
+        "scored": 38,
+        "correct": 37,
+        "accuracy": 0.9737
+      },
+      "heldout": {
+        "scored": 63,
+        "correct": 61,
+        "accuracy": 0.9683
+      },
+      "byTag": {
+        "ambiguous": {
+          "scored": 3,
+          "correct": 3,
+          "accuracy": 1
+        },
+        "cjk": {
+          "scored": 4,
+          "correct": 4,
+          "accuracy": 1
+        },
+        "embedded_instruction": {
+          "scored": 6,
+          "correct": 6,
+          "accuracy": 1
+        },
+        "indirect": {
+          "scored": 15,
+          "correct": 15,
+          "accuracy": 1
+        },
+        "long_irrelevant": {
+          "scored": 5,
+          "correct": 4,
+          "accuracy": 0.8
+        },
+        "near_miss": {
+          "scored": 12,
+          "correct": 12,
+          "accuracy": 1
+        },
+        "negation": {
+          "scored": 15,
+          "correct": 15,
+          "accuracy": 1
+        },
+        "non_english": {
+          "scored": 14,
+          "correct": 13,
+          "accuracy": 0.9286
+        },
+        "numeric": {
+          "scored": 15,
+          "correct": 13,
+          "accuracy": 0.8667
+        },
+        "plain": {
+          "scored": 42,
+          "correct": 41,
+          "accuracy": 0.9762
+        },
+        "typo": {
+          "scored": 8,
+          "correct": 8,
+          "accuracy": 1
+        }
+      },
+      "ambiguous": {
+        "cases": 1,
+        "answeredWithADefensibleOption": 1
+      }
+    },
+    "complexity": {
+      "all": {
+        "scored": 0,
+        "correct": 0,
+        "accuracy": null
+      },
+      "calibration": {
+        "scored": 0,
+        "correct": 0,
+        "accuracy": null
+      },
+      "heldout": {
+        "scored": 0,
+        "correct": 0,
+        "accuracy": null
+      },
+      "byTag": {
+        "ambiguous": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "cjk": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "embedded_instruction": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "indirect": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "long_irrelevant": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "near_miss": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "negation": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "non_english": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "numeric": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "plain": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        },
+        "typo": {
+          "scored": 0,
+          "correct": 0,
+          "accuracy": null
+        }
+      },
+      "ambiguous": {
+        "cases": 102,
+        "answeredWithADefensibleOption": 0
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "ts-001",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": true
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-002",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-003",
+      "split": "heldout",
+      "tags": ["plain", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-004",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-005",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-006",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-007",
+      "split": "heldout",
+      "tags": ["plain", "typo", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-008",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-009",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-010",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-011",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "frontier"
+      }
+    },
+    {
+      "id": "ts-012",
+      "split": "calibration",
+      "tags": ["plain", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-013",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-014",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-015",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "predicted": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "explicit_intent",
+        "flags": {
+          "web_search": true,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-016",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": true,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "freshness",
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-017",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-018",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": true,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "freshness",
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-019",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-020",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": true,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "freshness",
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-021",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": true,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-022",
+      "split": "heldout",
+      "tags": ["plain", "negation"],
+      "predicted": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-023",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-024",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-025",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-026",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-027",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-028",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "predicted": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-029",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-030",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-031",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-032",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-033",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-034",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-035",
+      "split": "calibration",
+      "tags": ["plain", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": true,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-036",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-037",
+      "split": "calibration",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-038",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-039",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-040",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-041",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-042",
+      "split": "heldout",
+      "tags": ["plain"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-043",
+      "split": "calibration",
+      "tags": ["plain", "negation"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-044",
+      "split": "calibration",
+      "tags": ["plain", "negation"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-045",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-046",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "predicted": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-047",
+      "split": "heldout",
+      "tags": ["near_miss", "negation"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-048",
+      "split": "calibration",
+      "tags": ["near_miss", "numeric"],
+      "predicted": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "research_task",
+        "flags": {
+          "web_search": true,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-049",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-050",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "predicted": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "explicit_intent",
+        "flags": {
+          "web_search": true,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-051",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "predicted": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-052",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": true
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": true,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-053",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-054",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-055",
+      "split": "calibration",
+      "tags": ["negation"],
+      "predicted": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "explicit_intent",
+        "flags": {
+          "web_search": true,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-056",
+      "split": "calibration",
+      "tags": ["negation", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-057",
+      "split": "calibration",
+      "tags": ["negation"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-058",
+      "split": "heldout",
+      "tags": ["negation"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-059",
+      "split": "heldout",
+      "tags": ["negation"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-060",
+      "split": "calibration",
+      "tags": ["negation", "near_miss"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-061",
+      "split": "heldout",
+      "tags": ["negation"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-062",
+      "split": "calibration",
+      "tags": ["negation"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-063",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-064",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-065",
+      "split": "heldout",
+      "tags": ["indirect", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-066",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-067",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-068",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-069",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-070",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-071",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-072",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-073",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-074",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-075",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-076",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-077",
+      "split": "heldout",
+      "tags": ["non_english", "cjk"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-078",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-079",
+      "split": "heldout",
+      "tags": ["non_english", "cjk"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-080",
+      "split": "heldout",
+      "tags": ["non_english", "numeric"],
+      "predicted": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-081",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-082",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-083",
+      "split": "calibration",
+      "tags": ["non_english", "numeric"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-084",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-085",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-086",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "predicted": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-087",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "predicted": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-088",
+      "split": "calibration",
+      "tags": ["embedded_instruction", "negation"],
+      "predicted": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "explicit_intent",
+        "flags": {
+          "web_search": true,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-089",
+      "split": "calibration",
+      "tags": ["embedded_instruction"],
+      "predicted": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-090",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-091",
+      "split": "heldout",
+      "tags": ["long_irrelevant"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-092",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "near_miss", "numeric"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-093",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "numeric"],
+      "predicted": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-094",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "numeric", "indirect"],
+      "predicted": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      }
+    },
+    {
+      "id": "ts-095",
+      "split": "heldout",
+      "tags": ["ambiguous"],
+      "predicted": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": "explicit_intent",
+        "flags": {
+          "web_search": true,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-096",
+      "split": "calibration",
+      "tags": ["ambiguous"],
+      "predicted": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-097",
+      "split": "calibration",
+      "tags": ["ambiguous", "indirect"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-098",
+      "split": "calibration",
+      "tags": ["ambiguous", "indirect"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-099",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      }
+    },
+    {
+      "id": "ts-100",
+      "split": "heldout",
+      "tags": ["indirect", "typo"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    },
+    {
+      "id": "ts-101",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      }
+    },
+    {
+      "id": "ts-102",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "predicted": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": null,
+        "searchSource": null,
+        "flags": {
+          "web_search": false,
+          "web_fetch": false,
+          "office_creation": false,
+          "code_execution": false
+        }
+      },
+      "expected": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      }
+    }
+  ]
+}
