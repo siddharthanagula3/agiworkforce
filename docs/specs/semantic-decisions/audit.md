@@ -1,7 +1,7 @@
 # Semantic decision audit and Jev evaluation
 
-Status: In progress; foundation, managed host and one shadow consumer implemented; every
-decision kind is disabled and no production request evaluates one
+Status: In progress; foundation, managed host, four shadow consumers and a held-out live
+benchmark implemented; every decision kind is disabled and no production request evaluates one
 Owner: AI platform maintainers
 Last updated: 2026-09-20
 
@@ -307,6 +307,108 @@ changed downstream routes and tails require end-to-end traces. For skill/RAG con
 measure final serialized prompt tokens and provider cache usage, not the count of shortlist
 items. The present selector already shortlists skills, so the sign of savings is unknown.
 
+## Second sweep and held-out benchmark
+
+A six-slice read of every model-driven decision followed the lexical inventory above, which
+its own text says cannot see wrapped calls, direct `fetch` inference or injected runners.
+It produced 95 findings and 64 rejections, and 68 of the findings were absent from
+`inventory.csv`. The per-slice evidence is in `tools/evals/semantic-decisions/` alongside
+the suites; the ranking rule was deterministic code first, then a cached result, then a
+semantic decision, then a cheap model, then the model in use today.
+
+Three conclusions changed the plan.
+
+1. **The largest savings needed no model.** The browser agent loop resent every screenshot
+   and DOM observation on every step, so input grew with the square of the run length.
+   `pruneObservationHistory` keeps the newest two of each and stubs the rest: on a synthetic
+   20-step run the bytes resent at step 20 fall from 1,643,104 to 258,299, the whole run from
+   16.98 MB to 4.73 MB, and the text part (what is billed as input tokens) by 97.7 percent.
+   The CLI deferred its own tool schemas behind `tool_search` but never MCP tools; it now
+   defers those beyond a 16-tool budget. The router docstring promised a model fallback
+   below 0.6 confidence that exists nowhere; it says so now.
+2. **The managed chat path calls no model to classify anything.** Intent, freshness, skill
+   relevance, connector tool selection and memory selection are regex or lexical. A semantic
+   decision there adds a call, so it earns its place only by shrinking what the primary
+   model reads, by gating a real model call, or by fixing a measured quality failure.
+3. **The native candidates are parked.** Every closed-set model call in the Tauri layer
+   (intent detector, process classifier, criterion check, plan review, keyword tiering,
+   thinking budget) runs under Local or BYOK trust, which a hosted decision service may not
+   receive, and that layer is not reachable from the Electron shell that ships.
+
+### Method
+
+Six suites, 576 cases, under `tools/evals/semantic-decisions/suites/`. Inputs mirror the
+production call sites exactly and use real material where it exists: the repository's
+connector catalogs, real diff chunks from this repository's history, the extension's own
+element-list format. Every suite carries plain cases, near misses that share vocabulary
+with a positive, negation, indirect phrasing, non-English including CJK, inputs carrying an
+instruction aimed at the classifier, long irrelevant input and deliberately ambiguous
+cases. Each production baseline is the real production function run over the same inputs.
+
+Ground truth is two blind labellers. The second never saw the author's labels, the
+baselines or the provenance files. `suites/adjudicate.mjs` scores a case only where they
+agree; contested and ambiguous cases are reported and never counted as errors for either
+side. For set-valued decisions the agreed items are the core that recall is measured on,
+single-vote items are neutral, and everything else counts against precision. Agreement was
+98.8 percent on the memory gate, 96.8 on the review gate, 99.1 on element resolution, 97 on
+each boolean turn signal and 86 on task family; 8 of the 12 contested families were the same
+pair, `extended_thinking` against `general_chat`, which is evidence that the pair should not
+be asked as a choice at all. The rule was fixed before any model output existed.
+
+`bench.mts` builds every request through the production question modules, judges every
+response with the production validator, chooses thresholds on the calibration split only
+and evaluates once on held-out. The run on 2026-09-20 against `jev-1.13.0` made 551 calls:
+550 answered, 1 invalid response, no provider error, timeout or rate limit, 1,205,581 input
+tokens, $0.0506. Raw per-case answers are in `results/`.
+
+### Held-out results
+
+| Decision                   | Production today                                                       | Semantic decision, gated                                                                               | Cost per 1,000               | p50 / p95    |
+| -------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------- | ------------ |
+| `memory_worth_extracting`  | 62.2 percent; 7 durable facts missed, 10 wasted extraction calls in 45 | 97.8 percent; 0 missed, 1 wasted                                                                       | $0.018                       | 165 / 229 ms |
+| `review_security_gate`     | security pass on every chunk: 39 of 59 unnecessary                     | path rule then Noul: 35 of 39 skipped, 0 of 20 needed passes skipped                                   | $0.061                       | 162 / 224 ms |
+| `connector_tool_shortlist` | 65.2 percent recall of needed tools in 6,788 bytes                     | 73.9 percent recall in 399 bytes; precision 4.2 to 79.6 percent                                        | $0.201                       | 199 / 284 ms |
+| `element_resolution`       | lexical floor 53.0 percent; production spends a reasoning round trip   | ungated 93.9 percent; gated acts on 72 percent with no wrong index, escalates 28                       | $0.068                       | 170 / 219 ms |
+| `memory_relevance`         | everything injected, precision 10.8 percent                            | recall 1.00, no standing instruction dropped, 44 percent of characters removed, only at confidence 0.9 | $0.176                       | 189 / 330 ms |
+| `turn_signals` freshness   | 85.3 percent, recall 27.3 (8 of 11 missed)                             | 96.7 percent, recall 100                                                                               | $0.048 for the whole battery | 184 / 330 ms |
+| `turn_signals` needs tools | 66.1 percent, recall 10.5 (17 of 19 missed)                            | 87.1 percent, recall 68.4                                                                              | same call                    | same call    |
+| `turn_signals` task family | 50.0 percent                                                           | 69.6 percent ungated                                                                                   | same call                    | same call    |
+
+Non-English and CJK were not a weak slice in any suite, which is the opposite of the
+regexes they were compared with and most of why the numbers move. The weak slices are
+indirect phrasing for the tool shortlist (56.5 percent recall), near misses for the memory
+gate (81 percent) and `needs_code`, which has two positives in 97 cases and is unmeasurable.
+
+### How to read these numbers
+
+They are small held-out sets built by us, not production traffic. Zero misses among 20
+positives bounds the true miss rate only below roughly 14 percent at 95 percent
+confidence. That is an acceptable prior for a memory gate, where a miss costs one
+unremembered fact, and not for a security gate, where a miss hides a finding. No kind
+leaves shadow on this evidence alone; shadow on real traffic is what supplies the volume.
+
+Cost has to be read against what is removed. The tool shortlist spends about 4,800 input
+tokens at $0.042 per million ($0.0002) to remove about 6,400 bytes, roughly 1,600 input
+tokens, from every connector turn of a primary model priced two orders of magnitude
+higher, and raises recall while doing it. The memory gate spends $0.00002 to decide
+whether a cheap-model extraction call runs, and recovers the facts the regex loses. Memory
+relevance is the marginal one: about 4,200 tokens per decision, most of it instruction
+text repeated per memory, to remove a few hundred characters at the suite's memory sizes.
+It pays only for accounts with large memory sets, so code should gate it on unpinned
+memory volume, and the question should be restructured before it is judged again.
+
+### Recommendation per kind
+
+| Kind                       | Next step                                                                                                                                  | Exit gate to `enabled`                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory_worth_extracting`  | shadow on real traffic now; it is post-turn, so latency is free                                                                            | wasted-call and lost-fact rates from the trace match the benchmark over a week                                                                        |
+| `connector_tool_shortlist` | shadow now                                                                                                                                 | core-tool recall at or above the lexical shortlist on real turns, measured by whether a deferred tool had to be loaded through `load_connector_tools` |
+| `turn_signals`             | shadow now, freshness and needs-tools only; drop `needs_code`, and replace the `extended_thinking` family option with the complexity score | fewer forced searches that returned nothing used, fewer answers that needed a search and did not get one                                              |
+| `review_security_gate`     | wire the consumer in shadow; never skip under security-sensitive paths                                                                     | zero skipped chunks that the security pass, still running in shadow, produced a finding for, over several hundred reviewed PRs                        |
+| `element_resolution`       | needs a managed endpoint, because the extension holds no key; pilot behind the existing approval and post-action checks                    | wrong-index rate of zero on a recorded browser task set, fewer reasoning round trips per task                                                         |
+| `memory_relevance`         | restructure the question to cut per-memory instruction overhead, gate on memory volume in code, benchmark again                            | standing instructions never dropped; net input saved above decision cost                                                                              |
+| `skill_offer`              | full-catalog suite still to build                                                                                                          | as `connector_tool_shortlist`                                                                                                                         |
+
 ## Rollout and remaining work
 
 1. P0: done. The shared runner, adapter and eval tools are retained and all customer traffic
@@ -364,6 +466,6 @@ budget for the previous image route; neither file is modified here. No full repo
 or production load test was performed.
 
 `check:reference-integrity` reports three existing unresolved references: two CLI comments
-to `packages/alpha/package.json` and the break-glass runbook's old migration path. Repository
+to a fixture package manifest that does not exist and the break-glass runbook's old migration path. Repository
 organization, provider-adapter boundary, doc status and non-Markdown artifact checks pass.
 Spec-artifact and lock-drift checks skip because their optional input directories are absent.
