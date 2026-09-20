@@ -6,7 +6,7 @@ Last updated: 2026-09-20
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
-sections 1 to 4, and section 5 records reviews that are closed. Root `SECURITY.md`
+sections 1 to 5, and section 6 records reviews that are closed. Root `SECURITY.md`
 holds the vulnerability reporting policy and points here. Three documents stay
 outside this file on purpose: `apps/extension/docs/threat-model.md` is owned by
 the extension surface, `docs/runbooks/incident-response.md` is an operational
@@ -18,7 +18,8 @@ procedure, and `docs/compliance/dpdp-audit-log.md` is regulation-specific.
 | 2       | Connector OAuth scope ceilings       | Platform lead                      |
 | 3       | Encryption key rotation              | Platform lead                      |
 | 4       | Tauri updater signing key custody    | Platform lead                      |
-| 5       | Closed reviews                       | Platform lead                      |
+| 5       | Data retention, erasure and holds    | Legal/compliance and Platform lead |
+| 6       | Closed reviews                       | Platform lead                      |
 
 ---
 
@@ -929,7 +930,90 @@ separate key domain.
 
 ---
 
-## 5. Closed reviews
+## 5. Data retention, erasure and legal hold
+
+Owner: Legal/compliance and Platform lead. The mechanics and their limits are in
+`docs/compliance/legal-hold-and-ediscovery.md`; the operator procedure is in
+`docs/runbooks/legal-hold.md`; the per-store table is
+`docs/architecture/RETENTION_MATRIX.md`. This section states the posture and the
+gaps it deliberately records.
+
+### 5.1 The deletion graph is closed over the schema, not over a list
+
+An erasure that enumerates a hand-written list of tables is complete only as
+long as somebody remembers to add to it. `scripts/check-retention-graph.mjs`
+reads every live table out of the migrations in `apps/web/db/neon`, subtracts
+the ones a migration dropped, and requires each remaining table that holds a
+subject reference to be reached by one of three rules: an erasure inventory
+names it, a chain of `on delete cascade` foreign keys carries it from a table an
+inventory names, or `UNDELETED_USER_TABLES` states in words why it outlives the
+subject. A column that names a person is what triggers the requirement, so a new
+table with a `user_id`, an `account_id`, an `owner_id` or any `_email` column
+fails the guard until somebody decides its disposition. There is no allowlist:
+a table that names nobody needs no rule.
+
+The guard is what found five stores that no rule reached: `referrals` kept an
+erased account's id and invited address, `cloud_waitlist` kept the address,
+`device_installations` kept the account's installed devices, `copyright_notices`
+had its retention decided in a migration comment and nowhere the graph could
+read, and `release_events` was an audit trail nobody had classified. The first
+three are now erased with the account, the last two are retained with their
+reasons stated.
+
+### 5.2 Erasure reaches bytes, caches and addresses, not only rows
+
+Account erasure deletes stored media objects before their rows, so a failed
+object delete leaves a retryable row rather than an unreachable object; it
+sweeps conversation backups, project knowledge objects, avatars, the sandbox
+session cache and the connector response cache, whose rows are keyed by a digest
+and reachable only by rebuilding the contexts this account cached under; and it
+deletes by matching the profile's address in the tables whose identity is the
+address rather than the account (`EMAIL_SCOPED_USER_TABLES`). Both account and
+workspace erasure report per store, and `resolveDeletionStatus` returns
+`complete` only when every attempted store cleared and every object was freed.
+
+### 5.3 A hold is part of every destructive statement
+
+The predicate in `apps/web/lib/services/legal-hold-gate.ts` is rendered inside
+the WHERE clause of each statement that destroys, never evaluated into a list of
+rows first: a hold placed between a read and a delete has to win, and a
+candidate list computed beforehand cannot let it.
+`scripts/check-legal-hold-coverage.mjs` judges that per statement, from the
+source, and reports 16 of 16 gated with an empty baseline. Account and workspace
+erasure refuse the whole operation instead, so a held subject is never partly
+erased. A refusal is audited as `deletion_blocked_by_legal_hold` with
+`outcome: 'denied'`.
+
+### 5.4 Gaps this section records rather than papers over
+
+- **The soft-delete purge ships off.** `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is
+  unset by default, so on a deployment that has not set it the recovery window
+  for conversations, messages, artifacts, projects and knowledge files does not
+  end on schedule. `media_assets` is purged by a separate cron that is always
+  on. Until the switch is turned on, the published recovery window is honoured
+  for one store out of six.
+- **A hold does not preserve what this product never stored.** A knowledge file
+  or media asset row whose storage pointer is null is a reference to content
+  held elsewhere. The preservation endpoint and the export manifest count those
+  separately as `referenceOnly` rather than claiming them.
+- **A hold cannot be amended.** There is no route that edits a live hold's
+  custodians or resource types; narrowing or widening a matter means placing a
+  new hold and releasing the old one, in that order.
+- **A hold beats the temporary chat promise.** Held temporary chats and their
+  attachments survive their window and are purged on the first run after the
+  hold is released. Published copy that promises temporary chats are not
+  retained has to carry that exception.
+- **Backups are not reached by an erasure.** Object backup copies are deleted
+  alongside the primary objects they track, but a restored database backup
+  reintroduces rows an erasure removed. `erasure_tombstones` is the suppression
+  list that makes that recoverable rather than silent, and `syncErasureLedger`
+  re-arms a tombstone whose row came back. The tombstone table is itself in
+  `UNDELETED_USER_TABLES`, because erasing an account must not erase the record
+  that it must stay erased.
+
+---
+
+## 6. Closed reviews
 
 Reviews that reached a verdict and are no longer separate documents. Git history
 holds the full text of each.

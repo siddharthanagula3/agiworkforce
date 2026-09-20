@@ -127,6 +127,8 @@ interface SelectSpec {
   limit: number | null;
   /** Target-list expressions the caller reads back, e.g. `exists (...) as held`. */
   computed: Array<{ name: string; predicate: Predicate }>;
+  /** `count(*)` entries, each with the FILTER that narrows it or null. */
+  aggregates: Array<{ name: string; filter: Predicate | null }>;
 }
 
 export class SqlSubsetParser {
@@ -205,6 +207,11 @@ export class SqlSubsetParser {
   }
 
   private comparison(): Predicate {
+    // A literal, e.g. the `where false` of a FILTER that can never match.
+    if (this.peek()?.value === 'true' || this.peek()?.value === 'false') {
+      const literal = this.take().value === 'true';
+      return () => literal;
+    }
     // A bare boolean column, e.g. `candidate.temporary_chat`.
     const next = this.peek(1);
     if (
@@ -356,11 +363,29 @@ export class SqlSubsetParser {
     let depth = 0;
     let projection = '';
     const computed: Array<{ name: string; predicate: Predicate }> = [];
+    const aggregates: Array<{ name: string; filter: Predicate | null }> = [];
     while (this.peek() && !(depth === 0 && this.peek()?.value === 'from')) {
       if (depth === 0 && ['exists', 'not'].includes(this.peek()?.value ?? '')) {
         const predicate = this.expression();
         this.expect('as');
         computed.push({ name: this.take().value, predicate });
+        continue;
+      }
+      if (depth === 0 && this.peek()?.value === 'count') {
+        this.expect('count');
+        this.expect('(');
+        this.expect('*');
+        this.expect(')');
+        let filter: Predicate | null = null;
+        if (this.accept('filter')) {
+          this.expect('(');
+          this.expect('where');
+          filter = this.expression();
+          this.expect(')');
+        }
+        if (this.accept('as')) aggregates.push({ name: this.take().value, filter });
+        else aggregates.push({ name: 'count', filter });
+        this.accept(',');
         continue;
       }
       const token = this.take();
@@ -395,7 +420,7 @@ export class SqlSubsetParser {
       const bound = this.operandTerm();
       limit = Number(bound(new Map()));
     }
-    return { table, alias, joins, where, projection, limit, computed };
+    return { table, alias, joins, where, projection, limit, computed, aggregates };
   }
 
   private source(): { table: string; alias: string } {
@@ -491,6 +516,16 @@ export class FakePostgres {
     const parser = new SqlSubsetParser(tokenize(sql), params, this.tables);
     const spec = parser.select();
     const matched = parser.rows(spec);
+    if (spec.aggregates.length > 0) {
+      const counted: Row = {};
+      for (const aggregate of spec.aggregates) {
+        counted[aggregate.name] =
+          aggregate.filter === null
+            ? matched.length
+            : matched.filter((env) => aggregate.filter?.(env) === true).length;
+      }
+      return [counted as unknown as T];
+    }
     if (/count\s*\(\s*\*\s*\)/i.test(sql)) return [{ count: matched.length } as unknown as T];
     return matched.map((env) => {
       const row: Row = { ...(env.get(spec.alias) ?? {}) };

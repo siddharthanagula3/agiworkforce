@@ -26,7 +26,12 @@ import {
   purgeMcpResponseCachePartitions,
 } from '@/lib/connectors/mcp-runtime-cache';
 
-export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }> = [
+export const USER_SCOPED_TABLES: ReadonlyArray<{
+  table: string;
+  column: string;
+  /** A second column naming the same person, ORed into the delete. */
+  alsoColumn?: string;
+}> = [
   { table: 'retrieval_chunks', column: 'user_id' },
   { table: 'retrieval_documents', column: 'user_id' },
   { table: 'web_conversations', column: 'user_id' },
@@ -119,8 +124,44 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'identity_risk_observations', column: 'user_id' },
   { table: 'account_compromise_responses', column: 'user_id' },
   { table: 'authentication_attempts', column: 'user_id' },
+  { table: 'device_installations', column: 'account_id' },
+  { table: 'referrals', column: 'referrer_id', alsoColumn: 'referred_user_id' },
   { table: 'profiles', column: 'id' },
 ];
+
+/**
+ * Tables whose identity is the address, not the account: signing up for them
+ * does not require one, so the generic delete above never sees the rows.
+ */
+export const EMAIL_SCOPED_USER_TABLES: ReadonlyArray<{
+  table: string;
+  column: string;
+  reason: string;
+}> = [
+  {
+    table: 'beta_applications',
+    column: 'email',
+    reason: 'Applying does not require an account, so most rows carry a null user_id.',
+  },
+  {
+    table: 'cloud_waitlist',
+    column: 'email',
+    reason: 'The waitlist is keyed by address alone and has no subject column.',
+  },
+  {
+    table: 'referrals',
+    column: 'referred_email',
+    reason: 'An invitation records the address it was sent to before an account exists.',
+  },
+];
+
+/**
+ * Every distinct table account erasure deletes from, across both lists. This is
+ * the figure the public pages publish, not either list's own length.
+ */
+export const ERASED_USER_TABLES: readonly string[] = [
+  ...new Set([...USER_SCOPED_TABLES, ...EMAIL_SCOPED_USER_TABLES].map((entry) => entry.table)),
+].sort();
 
 const PROFILE_TABLE = 'profiles';
 const ORGANIZATION_USAGE_LEDGER_TABLE = 'organization_usage_ledger';
@@ -148,23 +189,31 @@ async function anonymizeUserReference(
   await db.execute(`update public.${table} set ${column} = null where ${column} = $1`, [userId]);
 }
 
-async function deleteBetaApplicationsByEmail(
+// Several passes can touch one table; a failure recorded by the first must not
+// be overwritten by a later pass that deleted nothing it was looking for.
+function recordTableOutcome(
+  tables: AccountErasureReport['tables'],
+  table: string,
+  result: AccountErasureReport['tables'][string],
+): void {
+  const previous = tables[table];
+  if (previous !== undefined && previous.deleted !== true && result.deleted === true) return;
+  tables[table] = result;
+}
+
+async function deleteByProfileEmail(
   db: { execute: (sql: string, params: unknown[]) => Promise<unknown> },
+  table: string,
+  column: string,
   userId: string,
 ): Promise<void> {
-  try {
-    await db.execute(
-      `delete from public.beta_applications
-        where lower(email) in (
-          select lower(email) from public.profiles where id = $1 and email is not null
-        )`,
-      [userId],
-    );
-  } catch (error) {
-    if (isSchemaAbsent(error)) return;
-    logger.error({ userId, error }, 'Account erasure failed to clear beta applications by email');
-    throw error;
-  }
+  await db.execute(
+    `delete from public.${table}
+      where lower(${column}) in (
+        select lower(email) from public.profiles where id = $1 and email is not null
+      )`,
+    [userId],
+  );
 }
 
 /**
@@ -310,6 +359,12 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'Legal preservation scope (0261). Active custodians block erasure; released-hold rows remain matter history, and added_by_user_id is legal provenance.',
   plugin_registry_lifecycle_events:
     'Global extension audit history (0259). actor_user_id identifies the operator behind a lifecycle change affecting other accounts.',
+  copyright_notices:
+    'A rights-holder claim made ABOUT content by a third party. Erasing the accused account must not erase the record of the claim against it, so target_owner_id is plain text rather than a reference.',
+  release_events:
+    'Hash-chained release audit trail. actor names the operator or workflow behind a promotion, not a customer, and deleting a row breaks the chain.',
+  account_security_settings: 'Cascades from profiles.',
+  support_ticket_escalations: 'Cascades from support_tickets.',
 };
 
 export interface AccountErasureReport {
@@ -849,12 +904,22 @@ export async function eraseUserAccountData(
     const tables: AccountErasureReport['tables'] = {};
     const anonymized: AccountErasureReport['anonymized'] = {};
 
-    // beta_applications is the one user-scoped table whose identity is usually
-    // the email, not user_id: applying does not require an account, so most
-    // rows have a null user_id and the generic delete below cannot see them.
-    // Without this sweep an erased user's name and email survive in the intake
-    // table indefinitely.
-    await deleteBetaApplicationsByEmail(db, userId);
+    for (const { table, column } of EMAIL_SCOPED_USER_TABLES) {
+      try {
+        await deleteByProfileEmail(db, table, column, userId);
+        recordTableOutcome(tables, table, { deleted: true });
+      } catch (error) {
+        if (isSchemaAbsent(error)) {
+          recordTableOutcome(tables, table, { deleted: false, skipped: true });
+          continue;
+        }
+        recordTableOutcome(tables, table, {
+          deleted: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        logger.error({ userId, table, error }, 'Account erasure failed to clear rows by address');
+      }
+    }
     await eraseConnectorResponseCache(db, userId);
 
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
@@ -874,26 +939,28 @@ export async function eraseUserAccountData(
       }
     }
 
-    for (const { table, column } of USER_SCOPED_TABLES) {
+    for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
       if (table === PROFILE_TABLE) continue;
       if (table === 'user_projects' && knowledge.failed > 0) {
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
+      const subject =
+        alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
       try {
-        await db.execute(`delete from public.${table} where ${column} = $1`, [userId]);
-        tables[table] = { deleted: true };
+        await db.execute(`delete from public.${table} where ${subject}`, [userId]);
+        recordTableOutcome(tables, table, { deleted: true });
       } catch (error) {
         // A missing workspace content table is not a benign skip: it would
         // report content erased that was never reached.
         if (isSchemaAbsent(error) && !isWorkspaceScopedContentTable(table)) {
-          tables[table] = { deleted: false, skipped: true };
+          recordTableOutcome(tables, table, { deleted: false, skipped: true });
           continue;
         }
-        tables[table] = {
+        recordTableOutcome(tables, table, {
           deleted: false,
           error: error instanceof Error ? error.message : String(error),
-        };
+        });
         logger.error({ userId, table, error }, 'Account erasure failed for table');
       }
     }

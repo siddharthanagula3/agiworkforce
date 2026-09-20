@@ -4,20 +4,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
+import { HOLDABLE_RESOURCES } from '@agiworkforce/types';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   EDISCOVERY_GENESIS_HASH,
   EdiscoveryManifestBuilder,
   UNFILTERED_EXPORT,
   ediscoveryCustodyHash,
+  exportSourceTable,
   exportedCustodians,
   exportedResourceTypes,
   iterateLegalHoldExport,
   recordEdiscoveryExport,
+  unexportableResourceTypes,
   type EdiscoveryCustodyInput,
   type EdiscoveryFilter,
 } from '../ediscovery-export-service';
-import type { LegalHold } from '../retention-service';
+import { LEGAL_HOLD_RESOURCE_TYPES, type LegalHold } from '../retention-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 
@@ -53,12 +57,20 @@ const TABLES: Array<[RegExp, string]> = [
   [/from public\.cloud_agent_runs/, 'work_run'],
 ];
 
+/** The alias each source gives its own table, as the SQL spells it. */
+function sqlAlias(table: string): string {
+  return (
+    { project_knowledge_files: 'k', media_assets: 'f', cloud_agent_runs: 'r' }[table] ??
+    table.replace(/^(web|user)_/u, '')[0]!
+  );
+}
+
 function readHarness(rows: Record<string, Record<string, unknown>[]> = {}) {
-  const reads: Array<{ resourceType: string; params: unknown[] }> = [];
+  const reads: Array<{ resourceType: string; params: unknown[]; sql: string }> = [];
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
     const resourceType = TABLES.find(([re]) => re.test(String(sql)))?.[1];
     if (!resourceType) return [];
-    reads.push({ resourceType, params });
+    reads.push({ resourceType, params, sql: String(sql) });
     return rows[resourceType] ?? [];
   });
   return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, reads };
@@ -78,6 +90,50 @@ async function drain(
 
 describe('export scope', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('has a source for every store a hold can name', () => {
+    expect(unexportableResourceTypes()).toEqual([]);
+    for (const resource of HOLDABLE_RESOURCES) {
+      expect(
+        exportSourceTable(resource.resourceType as (typeof LEGAL_HOLD_RESOURCE_TYPES)[number]),
+        `the export reads no table for ${resource.resourceType}`,
+      ).toBe(resource.table);
+    }
+  });
+
+  it('marks a held row whose bytes live outside this product as a reference', async () => {
+    const h = readHarness({
+      file: [
+        { id: 'a1', created_at: '2026-08-02T00:00:00.000Z', content_preserved: true },
+        { id: 'a2', created_at: '2026-08-03T00:00:00.000Z', content_preserved: false },
+      ],
+    });
+
+    const chunks: Array<{ resourceType: string; referenceOnly: number }> = [];
+    for await (const chunk of iterateLegalHoldExport(
+      h.db,
+      hold(),
+      filter({ resourceTypes: ['file'] }),
+    )) {
+      chunks.push({ resourceType: chunk.resourceType, referenceOnly: chunk.referenceOnly });
+    }
+
+    expect(chunks).toContainEqual({ resourceType: 'file', referenceOnly: 1 });
+  });
+
+  it('asks the database which rows it actually holds the bytes for', async () => {
+    const h = readHarness();
+    await drain(h.db, hold(), filter());
+
+    for (const resource of HOLDABLE_RESOURCES) {
+      const sql = h.reads.find((read) => read.resourceType === resource.resourceType)?.sql ?? '';
+      expect(sql, `${resource.resourceType} is never read`).toContain('as content_preserved');
+      if (resource.storedContentColumn === null) continue;
+      expect(sql, `${resource.resourceType} reports every row as preserved content`).toContain(
+        `(${sqlAlias(resource.table)}.${resource.storedContentColumn} is not null)`,
+      );
+    }
+  });
 
   it('reads only the stores the filter names', async () => {
     const h = readHarness();
@@ -161,20 +217,44 @@ describe('manifest', () => {
     expect(manifest.records).toBe(3);
     expect(manifest.bytes).toBe(first.byteLength + second.byteLength);
     expect(manifest.sha256).toBe(createHash('sha256').update(first).update(second).digest('hex'));
-    expect(manifest.entries).toEqual([
-      {
-        resourceType: 'hold',
-        records: 1,
-        bytes: first.byteLength,
-        sha256: createHash('sha256').update(first).digest('hex'),
-      },
-      {
-        resourceType: 'conversation',
-        records: 2,
-        bytes: second.byteLength,
-        sha256: createHash('sha256').update(second).digest('hex'),
-      },
+    expect(manifest.entries).toContainEqual({
+      resourceType: 'hold',
+      records: 1,
+      bytes: first.byteLength,
+      referenceOnly: 0,
+      sha256: createHash('sha256').update(first).digest('hex'),
+    });
+    expect(manifest.entries).toContainEqual({
+      resourceType: 'conversation',
+      records: 2,
+      bytes: second.byteLength,
+      referenceOnly: 0,
+      sha256: createHash('sha256').update(second).digest('hex'),
+    });
+  });
+
+  it('states a zero for a store in scope that produced nothing', () => {
+    const manifest = new EdiscoveryManifestBuilder(hold(), UNFILTERED_EXPORT).build(
+      '2026-09-18T00:00:00.000Z',
+    );
+
+    expect(manifest.entries.map((entry) => entry.resourceType)).toEqual([
+      'hold',
+      ...LEGAL_HOLD_RESOURCE_TYPES,
     ]);
+    for (const entry of manifest.entries) {
+      expect(entry.records, `${entry.resourceType} claims records nothing produced`).toBe(0);
+    }
+  });
+
+  it('counts a held row whose bytes this product never stored as a reference', () => {
+    const builder = new EdiscoveryManifestBuilder(hold(), UNFILTERED_EXPORT);
+    builder.add('file', 3, new TextEncoder().encode('{"type":"file"}\n'), 2);
+
+    const manifest = builder.build('2026-09-18T00:00:00.000Z');
+
+    expect(manifest.referenceOnly).toBe(2);
+    expect(manifest.entries.find((entry) => entry.resourceType === 'file')?.referenceOnly).toBe(2);
   });
 
   it('can be built twice without the digest changing under it', () => {

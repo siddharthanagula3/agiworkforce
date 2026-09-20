@@ -395,6 +395,8 @@ export interface HeldResourceCount {
   resourceType: LegalHoldResourceType;
   table: string;
   preserved: number;
+  /** Rows whose bytes live somewhere this product cannot preserve. */
+  referenceOnly: number;
 }
 
 // A hold whose scope selects nothing reads as active and preserves no evidence,
@@ -407,20 +409,31 @@ export async function countHeldResources(
   const counts: HeldResourceCount[] = [];
   for (const resourceType of resourceTypes) {
     if (!holdCovers(hold, resourceType)) continue;
-    const table = holdableResource(resourceType)?.table;
-    if (table === undefined) continue;
+    const resource = holdableResource(resourceType);
+    if (resource === null) continue;
     const predicate = legalHoldPredicate(resourceType, {
       alias: 'held',
       nextParamIndex: 1,
       holdId: hold.id,
     });
-    const rows = await db.query<{ count: number | string }>(
-      `select count(*)::int as count
-         from public.${table} held
+    // A row whose stored-content column is null is a reference to bytes held
+    // elsewhere; counting it as preserved claims evidence nobody has.
+    const referenceOnly =
+      resource.storedContentColumn === null
+        ? 'count(*) filter (where false)::int'
+        : `count(*) filter (where held.${resource.storedContentColumn} is null)::int`;
+    const rows = await db.query<{ count: number | string; reference_only: number | string }>(
+      `select count(*)::int as count, ${referenceOnly} as reference_only
+         from public.${resource.table} held
         where ${predicate.sql}`,
       predicate.params,
     );
-    counts.push({ resourceType, table, preserved: Number(rows[0]?.count ?? 0) });
+    counts.push({
+      resourceType,
+      table: resource.table,
+      preserved: Number(rows[0]?.count ?? 0),
+      referenceOnly: Number(rows[0]?.reference_only ?? 0),
+    });
   }
   return counts;
 }
