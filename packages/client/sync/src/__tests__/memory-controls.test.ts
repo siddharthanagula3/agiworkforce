@@ -56,6 +56,37 @@ describe('memory controls sync on their own path', () => {
     expect(merged.serverVersion).toBe('12');
   });
 
+  it.each([
+    { serverDays: 30, localDays: null, expectedDays: 30 },
+    { serverDays: 30, localDays: 7, expectedDays: 7 },
+    { serverDays: 7, localDays: 30, expectedDays: 7 },
+  ])(
+    'keeps the shorter retention after a newer device sync: $serverDays/$localDays',
+    ({ serverDays, localDays, expectedDays }) => {
+      const merged = mergeMemoryControls(
+        controls({ retentionDays: serverDays }),
+        controls({
+          retentionDays: localDays,
+          serverVersion: '11',
+          updatedAt: '2026-09-19T00:00:00.000Z',
+        }),
+      );
+      expect(merged.retentionDays).toBe(expectedDays);
+      expect(merged.serverVersion).toBe('11');
+      expect(merged.updatedAt).toBe('2026-09-19T00:00:00.000Z');
+    },
+  );
+
+  it('pushes changed category consent even when the disabled count is unchanged', () => {
+    const lastPushed = controls({ disabledCategories: ['fact'] });
+    const current = controls({ disabledCategories: ['preference'] });
+    expect(memoryControlsMatch(current, lastPushed)).toBe(false);
+    expect(shouldPushMemoryControls(current, lastPushed)).toBe(true);
+    expect(memoryControlsMatch(current, controls({ disabledCategories: ['preference'] }))).toBe(
+      true,
+    );
+  });
+
   it('keeps memory off on a device that switched it off while the server still says on', () => {
     const local = controls({ enabled: false, serverVersion: '10' });
     const applied = applyMemoryControlsDelta(

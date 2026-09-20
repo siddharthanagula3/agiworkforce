@@ -14,8 +14,10 @@ The Priority Level 1 coverage step hid 462 failed tests in run `35499143990`
 with `|| true`. Root execution mixed Vitest versions and package working
 directories; the intended 75% line threshold also used an invalid option.
 The package-owned runner repair preserves all 23 projects and existing package
-floors, propagates failures, and merges fresh reports. Focused harness tests pass;
-full aggregate coverage and remote workflow verification remain pending. Do not
+floors, propagates failures, and merges fresh reports. The full run measured
+79.79% aggregate coverage with 33,710 passing tests and three stale signup-fixture
+failures. Those three now pass in a targeted rerun. Routing and sync package-floor
+gaps also pass after meaningful boundary tests. Remote workflow verification remains pending. Do not
 lower the floor or count the old green job as successful coverage. Evidence and
 next verification: [deployment handoff](docs/work/deployment-handoff-2026-09-19.md#coverage-gate-integrity-follow-up).
 

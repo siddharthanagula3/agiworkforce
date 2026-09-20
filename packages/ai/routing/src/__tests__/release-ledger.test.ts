@@ -8,7 +8,11 @@ import {
   channelVocabularyDrift,
   lifecycleStagesForChannel,
 } from '../promotion/channels';
-import { ledgerPromptStamps, malformedPromptReleaseIds } from '../promotion/prompt-release';
+import {
+  ledgerPromptStamps,
+  malformedPromptReleaseIds,
+  parsePromptRelease,
+} from '../promotion/prompt-release';
 import {
   applyRecord,
   currentRelease,
@@ -80,6 +84,45 @@ describe('the release ledger', () => {
     expect(releaseLedgerProblems({ policyVersion: 4, records: [BOOTSTRAP] })).toEqual([
       'policyVersion 4 does not name the newest record v1',
     ]);
+  });
+
+  it.each([
+    { patch: { id: '' }, problem: 'record 1 names no artifact id' },
+    { patch: { reason: '' }, problem: 'record 1 records no reason' },
+    { patch: { effectiveOn: 'undated' }, problem: 'record 1 effectiveOn undated is not a date' },
+  ])('rejects malformed release metadata: $problem', ({ patch, problem }) => {
+    expect(releaseLedgerProblems(ledgerOf({ ...BOOTSTRAP, ...patch }))).toContain(problem);
+  });
+
+  it.each([
+    { patch: { gate: '' }, problem: 'quality signal names no gate' },
+    { patch: { commit: 'abc' }, problem: 'quality signal commit abc is not a full sha' },
+    {
+      patch: { measuredOn: 'undated' },
+      problem: 'quality signal measuredOn undated is not a date',
+    },
+  ])('rejects invalid eval provenance even for a held verdict: $problem', ({ patch, problem }) => {
+    expect(
+      releaseLedgerProblems(ledgerOf({ ...BOOTSTRAP, quality: { ...HELD, ...patch } })),
+    ).toContain(`routing_policy:auto v1 ${problem}`);
+  });
+
+  it('looks up the exact prompt version and never borrows another version release', () => {
+    const ledger = ledgerOf({
+      version: 1,
+      artifact: 'prompt',
+      id: 'product.system@3',
+      channel: 'internal',
+      effectiveOn: '2026-09-18',
+      reason: 'evaluate this prompt text',
+    });
+    expect(parsePromptRelease(ledger, 'product.system', 3)).toEqual({
+      promptId: 'product.system',
+      version: 3,
+      channel: 'internal',
+    });
+    expect(parsePromptRelease(ledger, 'product.system', 4)).toBeNull();
+    expect(parsePromptRelease(ledger, 'other.prompt', 3)).toBeNull();
   });
 
   it('refuses traffic on canary or stable with no eval quality signal', () => {
