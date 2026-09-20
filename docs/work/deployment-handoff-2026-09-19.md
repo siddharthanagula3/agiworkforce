@@ -1017,3 +1017,89 @@ Jev selected the shared transport at 0.98 confidence (fingerprint
 and bundler-based VS Code compilation / React type alignment at 0.99 / 1.00
 (fingerprint `62b793fb7f3d804f653d10d576a573fde4b50521c6a53ec58f1f2a8f80d1ffd8`).
 Remote CI and CodeQL still require verification after this batch is pushed.
+
+### Public-page CI fixture follow-up
+
+Commit `6c382b80d` is on main. GitHub reports zero open Dependabot alerts;
+the JavaScript CodeQL analysis closed the repaired findings, leaving five
+Rust alerts awaiting a fresh Rust analysis. These are pending verification,
+not dismissed findings.
+
+The preceding web CI run exposed 22 enterprise page failures from requests to
+the deliberately non-routable `clerk-ci.invalid` provider. A local reproduction
+with the same placeholder key failed at the same request assertion. The suite
+now reuses the existing signed-out provider fixture only for loopback targets;
+explicit remote targets still use the real provider. The fixture intercepts
+both Clerk browser bundles. Page, console and request assertions remain intact.
+Jev selected this approach at 0.99 confidence (fingerprint
+`8cba2d68398d239d982f5bf9ef8d590a1159b4d2c2f506985b0ef5863f36f9dc`).
+
+The development-server rerun encountered HMR WebSocket errors and auth
+readiness failures, so it was stopped and replaced with the production build
+used by CI. That build, including TypeScript, passes. All 37 enterprise and auth
+accessibility cases pass against it with two workers and zero retries. The
+previously flaky signup field-error case also passes five isolated repetitions
+without retries. The remaining fixture consumers pass 14 cases with one existing
+conditional skip. Targeted ESLint, Prettier and diff whitespace checks pass.
+Evidence: `/tmp/agi-enterprise-repro.log`,
+`/tmp/agi-fixture-production-build.log`,
+`/tmp/agi-enterprise-production-fixed.log`,
+`/tmp/agi-auth-readiness-stability.log`, `/tmp/agi-auth-fixture-consumers.log`.
+
+The subsequent Rust analysis at `43787483` closed four of the five alerts.
+Residual alert #793 still classified `parsed.username()` in the crash envelope
+URL as cleartext transmission. Independent review confirmed the only upload
+path rejects non-HTTPS DSNs, builds an HTTPS URL, and uses a client with
+`https_only(true)` and redirects disabled. The installed reqwest 0.13.5
+implementation rejects HTTP before connecting, including when proxies are
+configured. All 16 focused crash-report tests pass, including rejection before
+any connection reaches the local listener and expected valid envelope content
+(`/tmp/agi-crash-alert-verification.log`). No live HTTPS delivery was exercised.
+Jev selected evidence-backed false-positive disposition at 0.99 confidence
+(`b0b87516c032151c2918b3a28a4cb376940808ebd3b3556b9d67d17e944d1ad9`).
+Alert #793 was dismissed with this evidence; no scanner rule was disabled.
+At that checkpoint, GitHub reported zero open code-scanning alerts and zero open
+Dependabot alerts; the subsequent analysis is recorded below.
+
+Next: preserve the running native CI checks, push the fixture correction, and
+verify fresh CI results. The most recent remote Rust security, repository
+operability, skill-integrity, cross-version and standalone desktop E2E workflows
+pass. The main CI build remains in progress.
+The separate-region production object-backup prerequisite remains unresolved.
+
+The follow-up cloud inspection confirms the primary private bucket is in WNAM.
+Cloudflare documents an EU jurisdiction endpoint as a supported separate
+location, but the current Wrangler OAuth session receives HTTP 403 / code 9109
+from token administration (`GET /user/tokens`). No scoped backup credential was
+available and no production configuration was changed. The existing Neon
+project is in `aws-us-east-1`, outside the `us-east-2` availability stated by the
+installed Neon Object Storage guidance. Cloudflare references:
+[data locations](https://developers.cloudflare.com/r2/reference/data-location/)
+and [scoped R2 credentials](https://developers.cloudflare.com/r2/api/tokens/).
+
+The Rust analysis of `6c382b80d` raised #808 at the shared OAuth adapter.
+All three reported sources are `#[cfg(test)]` loopback fixtures using dummy
+credentials. The live fixed-provider manager selects HTTPS token endpoints;
+the configurable desktop MCP OAuth manager has no live callers in the repository.
+The separate shared MCP OAuth implementation validates remote HTTPS endpoints.
+Independent review confirmed this reachability distinction. The shared adapter
+itself accepts HTTP, so this disposition does not claim it enforces TLS for
+arbitrary future callers.
+
+Jev selected verification and false-positive disposition at 1.0 confidence
+(`be0e47fe001407bca05fd4cac1704d88e812bfc530b7933945da171ef6a6f4ad`).
+After building the isolated checkout's missing native-host prerequisite, all four
+focused OAuth transport tests pass: code/refresh protocol preservation, error
+status/body/repeated headers, capped response bodies, and refusal to forward
+credentials on redirects. The investigator also passed all three canonical MCP
+HTTPS-enforcement tests. Evidence: `/tmp/agi-native-host-build.log` and
+`/tmp/agi-oauth-alert-verification.log`. Alert #808 was dismissed as a test-only
+false positive with this evidence; no scanner configuration changed. GitHub
+again reports zero open code-scanning and Dependabot alerts.
+
+Remote CI on `6c382b80d` now passes Windows and macOS Rust checks, Linux default
+Rust tests/Clippy, all-feature Clippy, iOS build/onboarding, desktop/Chrome E2E,
+VS Code with the real CLI, security scans, contracts, DB/RLS and repository
+guards. The complete affected JavaScript test step passed in 41m23s; its
+remaining webview/build steps are still in progress. The only completed failed
+job is the web E2E fixture failure addressed by the pending browser correction.
