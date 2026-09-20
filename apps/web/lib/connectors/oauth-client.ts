@@ -1,9 +1,8 @@
-
 import 'server-only';
 
 import { z } from 'zod';
 
-import { assertResolvedPublicHostname } from '@/lib/egress-policy';
+import { createDeadline, credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
 import type { ConnectorOAuthProvider } from '@/lib/connectors/oauth-registry';
 
 const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
@@ -24,6 +23,30 @@ const tokenResponseSchema = z.object({
 const tokenErrorSchema = z.object({
   error: z.string().min(1).max(120),
 });
+
+/** Names the host and the reason, never the secret that was being sent. */
+function tokenTransportError(refusal: string, endpoint: URL): ConnectorOAuthTokenError {
+  if (refusal === 'redirect_refused') {
+    return new ConnectorOAuthTokenError(
+      `Token endpoint ${endpoint.host} answered with a redirect; a credentialed exchange is ` +
+        'never followed to another location',
+      502,
+      null,
+    );
+  }
+  if (refusal === 'timeout' || refusal === 'cancelled') {
+    return new ConnectorOAuthTokenError(
+      `Token endpoint ${endpoint.host} did not answer`,
+      504,
+      null,
+    );
+  }
+  return new ConnectorOAuthTokenError(
+    `Token endpoint ${endpoint.host} could not be reached safely`,
+    502,
+    null,
+  );
+}
 
 export interface OAuthTokenResult {
   accessToken: string;
@@ -66,13 +89,23 @@ function applyClientAuthentication(
   form.set('client_secret', provider.clientSecret);
 }
 
+/**
+ * A token endpoint that answers with a redirect is not a token endpoint. The
+ * request carries the client secret, and a 307 or 308 would replay it to
+ * whatever host the redirect names, so the exchange fails instead.
+ */
 async function postToTokenEndpoint(
   provider: ConnectorOAuthProvider,
   tokenUrl: string,
   form: URLSearchParams,
   requestedScopes: string[],
 ): Promise<OAuthTokenResult> {
-  await assertResolvedPublicHostname(tokenUrl);
+  let endpoint: URL;
+  try {
+    endpoint = new URL(tokenUrl);
+  } catch {
+    throw new ConnectorOAuthTokenError('Token endpoint is not a usable URL', 502, null);
+  }
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -80,12 +113,21 @@ async function postToTokenEndpoint(
   };
   applyClientAuthentication(provider, form, headers);
 
-  const response = await fetch(tokenUrl, {
-    method: 'POST',
-    headers,
-    body: form,
-    signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
-  });
+  const deadline = createDeadline(TOKEN_REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    const outcome = await credentialedFetch(endpoint, {
+      deadline,
+      redirects: 'refuse',
+      method: 'POST',
+      headers,
+      body: form,
+    });
+    if (!outcome.ok) throw tokenTransportError(outcome.refusal, endpoint);
+    response = outcome.response;
+  } finally {
+    deadline.release();
+  }
 
   const rawBody: unknown = await response.json().catch(() => null);
 
@@ -160,22 +202,27 @@ export async function revokeTokenAtProvider(
   tokenTypeHint: 'access_token' | 'refresh_token',
 ): Promise<boolean> {
   if (!provider.revocationUrl) return false;
+  const deadline = createDeadline(TOKEN_REQUEST_TIMEOUT_MS);
   try {
-    await assertResolvedPublicHostname(provider.revocationUrl);
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Content-Type': 'application/x-www-form-urlencoded',
     };
     const form = new URLSearchParams({ token, token_type_hint: tokenTypeHint });
     applyClientAuthentication(provider, form, headers);
-    const response = await fetch(provider.revocationUrl, {
+    const outcome = await credentialedFetch(new URL(provider.revocationUrl), {
+      deadline,
+      redirects: 'refuse',
       method: 'POST',
       headers,
       body: form,
-      signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
     });
-    return response.ok;
+    if (!outcome.ok) return false;
+    await outcome.response.body?.cancel().catch(() => undefined);
+    return outcome.response.ok;
   } catch {
     return false;
+  } finally {
+    deadline.release();
   }
 }

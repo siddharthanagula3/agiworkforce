@@ -27,6 +27,8 @@ const SHARED = 'apps/web/lib/url-fetch/guarded-fetch.ts';
 const TOOL_SURFACES = ['apps/web/lib/url-fetch', 'apps/web/lib/web-search'];
 
 const SEARCH_ROOTS = ['apps/web/lib', 'apps/web/app'];
+const MCP_POLICY_MARKER = 'McpEgressPolicy';
+const SHARED_CALLS = ['guardedFetch(', 'credentialedFetch('];
 const GUARD = 'assertResolvedPublicHostname';
 const SHARED_CALL = 'guardedFetch(';
 const SAFE_REDIRECT_MODES = ['manual', 'error'];
@@ -108,6 +110,19 @@ for (const surface of TOOL_SURFACES) {
   if (!uses) {
     failures.push(`${surface} never calls guardedFetch, so the shared vetting is not in its path`);
   }
+}
+
+// An MCP dial carries the user's credential to a server the user named, so the
+// hops are this process's to follow, never the SDK's.
+for (const file of scoped) {
+  const source = fs.readFileSync(file, 'utf8');
+  if (!source.includes(MCP_POLICY_MARKER)) continue;
+  if (SHARED_CALLS.some((call) => source.includes(call))) continue;
+  failures.push(
+    `${relative(file)} hands the MCP client a fetch of its own, so the client follows redirects ` +
+      `this process never vets and carries the credential wherever they lead. Route it through ` +
+      `credentialedFetch with redirects: 'same-origin'.`,
+  );
 }
 
 if (scoped.length === 0) {
