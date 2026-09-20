@@ -1,4 +1,9 @@
-import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
+import {
+  CLIENT_NAME_REQUEST_HEADER,
+  CLIENT_VERSION_HEADER,
+  SURFACE_REQUEST_HEADER,
+  VSCODE_CLIENT_NAME,
+} from '@agiworkforce/cloud-contracts';
 import { isProductAnalyticsSurface } from '@agiworkforce/types';
 
 import {
@@ -6,14 +11,13 @@ import {
   SUPPORTED_API_CONTRACT_VERSIONS,
 } from '@/lib/api-gateway-policy';
 
-import { clientVersionLabel } from './client-versions';
+import { UNKNOWN_CLIENT_VERSION_LABEL, clientVersionLabel } from './client-versions';
 
-export const SURFACE_REQUEST_HEADER = 'x-agi-surface';
-export const CLIENT_NAME_REQUEST_HEADER = 'x-client';
+export { CLIENT_NAME_REQUEST_HEADER, SURFACE_REQUEST_HEADER };
 
 export const UNSUPPORTED_PROTOCOL_LABEL = 'unsupported';
+export const UNKNOWN_PROTOCOL_LABEL = 'unknown';
 
-const VSCODE_CLIENT_NAME = 'vscode-extension';
 const VSCODE_SURFACE = 'vscode';
 
 export type RequestHeaderReader = (name: string) => string | null | undefined;
@@ -29,7 +33,9 @@ function headerValue(read: RequestHeaderReader, name: string): string {
 }
 
 // Each label is checked against a closed set the repository owns: the analytics
-// surfaces, the registry's admitted release series, the supported contracts.
+// surfaces, the registry's admitted release series, the supported contracts. A
+// build that names neither is counted as unknown rather than left out, so a
+// release-health split shows the traffic it cannot yet attribute.
 export function httpRequestLabels(read: RequestHeaderReader): HttpRequestLabels {
   const labels: {
     surface?: string;
@@ -42,11 +48,13 @@ export function httpRequestLabels(read: RequestHeaderReader): HttpRequestLabels 
   const surface = client === VSCODE_CLIENT_NAME ? VSCODE_SURFACE : claimed;
   if (isProductAnalyticsSurface(surface)) labels.surface = surface;
 
-  const version = clientVersionLabel(headerValue(read, CLIENT_VERSION_HEADER));
-  if (version) labels.clientVersion = version;
+  labels.clientVersion =
+    clientVersionLabel(headerValue(read, CLIENT_VERSION_HEADER)) ?? UNKNOWN_CLIENT_VERSION_LABEL;
 
   const protocol = headerValue(read, API_VERSION_REQUEST_HEADER);
-  if (protocol) {
+  if (!protocol) {
+    labels.protocolVersion = UNKNOWN_PROTOCOL_LABEL;
+  } else {
     labels.protocolVersion = SUPPORTED_API_CONTRACT_VERSIONS.has(protocol)
       ? protocol
       : UNSUPPORTED_PROTOCOL_LABEL;

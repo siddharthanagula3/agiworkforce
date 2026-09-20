@@ -18,11 +18,6 @@
     "why": "a sign-in nobody recorded cannot be disputed, revoked or explained afterwards",
     "defects": [
       {
-        "route": "apps/web/app/api/device/approve/route.ts",
-        "why": "approving a device grants a second machine the account's session, and the sibling route apps/web/app/api/auth/device/approve/route.ts records device_authorization_approved for the same act while this one records nothing",
-        "fix": "call recordAuditEvent with device_authorization_approved and device_authorization_denied in apps/web/app/api/device/approve/route.ts, the way apps/web/app/api/auth/device/approve/route.ts already does"
-      },
-      {
         "route": "apps/web/app/api/device/link/route.ts",
         "why": "linking mints the pairing code the approval consumes, so a trail that starts at approval cannot say which device asked",
         "fix": "add an entry for device/link/route.ts to UNAUDITED_MUTATING_ROUTES in apps/web/lib/services/audit-coverage/registry.ts with reason no_governed_state, or record the code it mints"

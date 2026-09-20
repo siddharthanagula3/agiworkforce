@@ -187,12 +187,13 @@ pub async fn fetch_latest_release() -> anyhow::Result<CliRelease> {
         .timeout(RELEASE_FETCH_TIMEOUT)
         .build()?;
 
-    let response = client
-        .get(format!("{base}{CLI_RELEASE_PATH}"))
-        .header("Accept", "application/json")
-        .header("X-AGI-Surface", "cli")
-        .send()
-        .await?;
+    let response = crate::cloud::handshake::apply(
+        client
+            .get(format!("{base}{CLI_RELEASE_PATH}"))
+            .header("Accept", "application/json"),
+    )
+    .send()
+    .await?;
 
     let status = response.status();
     if status.as_u16() == 404 {

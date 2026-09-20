@@ -57,6 +57,7 @@
       "suggestedAction": "choose_another",
       "codes": [
         "CAPABILITY_UNAVAILABLE",
+        "CLIENT_UPDATE_REQUIRED",
         "UNSUPPORTED_BY_MODEL",
         "UNSUPPORTED_BY_PROVIDER",
         "UNSUPPORTED_BY_ROUTE",

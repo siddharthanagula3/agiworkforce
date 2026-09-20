@@ -82,10 +82,10 @@ async function handleDeviceLink(request: NextRequest) {
         await db.execute(
           `INSERT INTO device_authorization_codes
              (device_id, device_name, device_type, device_fingerprint, user_code, status,
-              user_id, user_email, user_name, access_token, refresh_token,
+              user_id, user_email, user_name,
               authorized_at, consumed_at, denied_at, revoked_at, expires_at, updated_at)
            VALUES ($1, $2, $3, NULL, $4, 'pending',
-                   NULL, NULL, NULL, NULL, NULL,
+                   NULL, NULL, NULL,
                    NULL, NULL, NULL, NULL, $5, $6)`,
           [
             device_id,

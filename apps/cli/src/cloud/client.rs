@@ -192,11 +192,12 @@ impl CloudClient {
     }
 
     fn request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
-        self.http
-            .request(method, format!("{}{path}", self.base))
-            .header("Authorization", format!("Bearer {}", self.jwt))
-            .header("Accept", "application/json")
-            .header("X-AGI-Surface", "cli")
+        crate::cloud::handshake::apply(
+            self.http
+                .request(method, format!("{}{path}", self.base))
+                .header("Authorization", format!("Bearer {}", self.jwt))
+                .header("Accept", "application/json"),
+        )
     }
 
     async fn send<T: DeserializeOwned>(builder: reqwest::RequestBuilder) -> Result<T, CloudError> {

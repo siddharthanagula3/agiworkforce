@@ -41,8 +41,6 @@ interface ConsumedRow {
   user_id: string | null;
   user_email: string | null;
   user_name: string | null;
-  access_token: string | null;
-  refresh_token: string | null;
 }
 
 async function handleDevicePoll(request: NextRequest) {
@@ -157,8 +155,7 @@ async function handleDevicePoll(request: NextRequest) {
     if (data.status === 'approved' && data.user_id) {
       const consumedRows = await db.query<ConsumedRow>(
         `WITH locked AS (
-           SELECT status, expires_at, user_id, user_email, user_name,
-                  access_token, refresh_token
+           SELECT status, expires_at, user_id, user_email, user_name
              FROM device_authorization_codes
             WHERE device_id = $1
             FOR UPDATE
@@ -167,20 +164,16 @@ async function handleDevicePoll(request: NextRequest) {
            UPDATE device_authorization_codes d
               SET status      = 'consumed',
                   consumed_at = NOW(),
-                  access_token  = NULL,
-                  refresh_token = NULL,
-                  updated_at    = NOW()
+                  updated_at  = NOW()
              FROM locked
             WHERE d.device_id = $1
               AND locked.status = 'approved'
          )
          SELECT
-           locked.status::text        AS status,
-           locked.user_id             AS user_id,
-           locked.user_email          AS user_email,
-           locked.user_name           AS user_name,
-           locked.access_token::text  AS access_token,
-           locked.refresh_token::text AS refresh_token
+           locked.status::text AS status,
+           locked.user_id      AS user_id,
+           locked.user_email   AS user_email,
+           locked.user_name    AS user_name
            FROM locked`,
         [device_id],
       );

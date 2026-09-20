@@ -17,6 +17,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 const MAX_VISIBLE_TEXT_CHARACTERS = 512_000;
 const RUN_LIST_PAGE_SIZE = 25;
@@ -49,8 +50,7 @@ export type ChromeManagedRunControlResult =
 type ChromeManagedRunControlError = Extract<ChromeManagedRunControlResult, { status: 'error' }>;
 
 export type ChromeManagedRunCancellationResult =
-  | { status: 'success'; run: CloudAgentRun }
-  | ChromeManagedRunControlError;
+  { status: 'success'; run: CloudAgentRun } | ChromeManagedRunControlError;
 
 function createDefaultClient(token: string): ManagedCloudAgentRunClient {
   return createManagedCloudAgentRunClient({
@@ -59,7 +59,7 @@ function createDefaultClient(token: string): ManagedCloudAgentRunClient {
     decorateMutationHeaders: (headers) => ({
       ...headers,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
     }),
   });
 }
@@ -230,8 +230,7 @@ export interface ChromeManagedRunListRequest {
 }
 
 export type ChromeManagedRunListResult =
-  | { status: 'success'; page: CloudAgentRunListPage }
-  | ChromeManagedRunControlError;
+  { status: 'success'; page: CloudAgentRunListPage } | ChromeManagedRunControlError;
 
 export async function listChromeManagedRuns(
   request: ChromeManagedRunListRequest = {},
@@ -273,8 +272,7 @@ export interface ReadChromeManagedRunJournalRequest {
 }
 
 export type ChromeManagedRunJournalResult =
-  | { status: 'success'; journal: ChromeManagedRunJournal }
-  | ChromeManagedRunControlError;
+  { status: 'success'; journal: ChromeManagedRunJournal } | ChromeManagedRunControlError;
 
 export async function readChromeManagedRunJournal(
   request: ReadChromeManagedRunJournalRequest,
@@ -348,9 +346,7 @@ export async function readChromeManagedRunJournal(
 }
 
 export type ChromeManagedRunApprovalErrorCode =
-  | ChromeManagedRunControlError['code']
-  | 'already_resolved'
-  | 'approval_expired';
+  ChromeManagedRunControlError['code'] | 'already_resolved' | 'approval_expired';
 
 export interface ResolveChromeManagedRunApprovalRequest {
   runId: string;

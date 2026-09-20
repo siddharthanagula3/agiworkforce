@@ -241,14 +241,17 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
         // surface, and refuses one with no idempotency key. The key is minted
         // per spec, and a spec is built per request, so a retry of one request
         // reuses its key while two turns never share one.
-        extra_headers: vec![
-            ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
-            ("X-AGI-Surface".to_string(), "cli".to_string()),
-            (
-                "Idempotency-Key".to_string(),
-                format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
-            ),
-        ],
+        extra_headers: crate::cloud::handshake::headers()
+            .into_iter()
+            .map(|(name, value)| (name.to_string(), value.to_string()))
+            .chain([
+                ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
+                (
+                    "Idempotency-Key".to_string(),
+                    format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
+                ),
+            ])
+            .collect(),
     })
 }
 
@@ -732,16 +735,20 @@ mod tests {
     }
 
     #[test]
-    fn managed_cloud_requests_name_the_cli_surface() {
+    fn managed_cloud_requests_name_the_surface_the_build_and_the_contract() {
+        use crate::cloud::handshake;
+
         let spec = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
             .expect("a trusted host resolves");
-        assert!(
-            spec.extra_headers
-                .iter()
-                .any(|(name, value)| name == "X-AGI-Surface" && value == "cli"),
-            "Managed Cloud rejects a request that does not name its surface: {:?}",
-            spec.extra_headers
-        );
+        for (name, value) in handshake::headers() {
+            assert!(
+                spec.extra_headers
+                    .iter()
+                    .any(|(sent, carried)| sent == name && carried == value),
+                "Managed Cloud refuses a request that does not identify its build: {:?}",
+                spec.extra_headers
+            );
+        }
     }
 
     #[test]
