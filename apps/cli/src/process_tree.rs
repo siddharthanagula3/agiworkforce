@@ -395,6 +395,23 @@ fn is_executable_file(path: &Path) -> bool {
     path.is_file()
 }
 
+pub(crate) fn shell_command(script: &str) -> Command {
+    let mut command = Command::new("sh");
+    command.arg("-c");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        // MSYS/Cygwin consumes paired backslashes inside quoted argv; CRT escaping
+        // only doubles them before quotes and would corrupt JSON in the script.
+        let argument = format!("\"{}\"", script.replace('\\', "\\\\").replace('"', "\\\""));
+        command.as_std_mut().raw_arg(argument);
+    }
+    #[cfg(not(windows))]
+    command.arg(script);
+    command
+}
+
 /// Run a subprocess to completion while capturing stdout/stderr.
 ///
 /// `stdin` is written and closed concurrently with output collection. When

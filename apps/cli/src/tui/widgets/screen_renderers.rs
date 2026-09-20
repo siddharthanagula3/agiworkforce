@@ -335,7 +335,7 @@ pub fn render_agents(
                 .map(|p| {
                     format!(
                         "    Project agents ({})",
-                        p.join(".agiworkforce/agents").display()
+                        p.join(".agiworkforce").join("agents").display()
                     )
                 })
                 .unwrap_or_else(|| "    Project agents".to_string());

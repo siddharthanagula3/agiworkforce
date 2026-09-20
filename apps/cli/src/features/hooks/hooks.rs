@@ -1213,8 +1213,7 @@ async fn run_hook_process(hook: &Hook, input_json: &str) -> std::io::Result<std:
     let timeout = Duration::from_secs(hook.timeout);
     let stdin = Some(input_json.as_bytes().to_vec());
     if !hook_requires_sandbox(hook) {
-        let mut cmd = tokio::process::Command::new("sh");
-        cmd.arg("-c").arg(&hook.command);
+        let cmd = crate::process_tree::shell_command(&hook.command);
         return crate::process_tree::output(cmd, stdin, Some(timeout)).await;
     }
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
@@ -1811,6 +1810,60 @@ mod tests {
         assert!(result.stdout.contains("test_output"));
         assert!(!result.blocked);
         assert!(!result.should_stop);
+    }
+
+    #[tokio::test]
+    async fn hook_json_preserves_paths_quotes_and_shell_metacharacters() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        for path in [
+            r"C:\Users\Test User\notes.txt",
+            r"\\server\share\folder\",
+            r"\\?\C:\folder\notes.txt",
+            "quote'\" $HOME $(printf injected) `printf injected` ; & | < > * ? [x]",
+            "資料/notes.txt",
+            "line\nwith\tcontrol\rcharacters",
+        ] {
+            let expected = serde_json::json!({"updated_input": {"path": path}});
+            let hook = Hook {
+                command: format!(
+                    "printf '%s' {}",
+                    crate::sandbox::shell_quote(&expected.to_string())
+                ),
+                args: Vec::new(),
+                timeout: 5,
+                blocking: true,
+                matcher: None,
+                if_condition: None,
+                source: HookSource::User,
+            };
+            let result = run_single_hook(&hook, "{}").await;
+            assert!(result.success, "hook failed: {}", result.stderr);
+            assert_eq!(
+                result.updated_input,
+                Some(expected["updated_input"].clone()),
+                "hook corrupted {path:?}: stdout={:?}, stderr={:?}",
+                result.stdout,
+                result.stderr,
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn hook_stdin_remains_json_when_shell_arguments_are_encoded() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let input = serde_json::json!({"updated_input": {"path": r"C:\Users\Test User\notes.txt"}});
+        let hook = Hook {
+            command: "cat".to_string(),
+            args: Vec::new(),
+            timeout: 5,
+            blocking: true,
+            matcher: None,
+            if_condition: None,
+            source: HookSource::User,
+        };
+        let result = run_single_hook(&hook, &input.to_string()).await;
+        assert!(result.success, "{}", result.stderr);
+        assert_eq!(result.updated_input, Some(input["updated_input"].clone()));
     }
 
     #[tokio::test]
