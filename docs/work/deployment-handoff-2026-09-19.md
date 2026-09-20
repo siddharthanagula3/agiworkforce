@@ -1619,13 +1619,34 @@ outside-repository path and a resolved external symlink still fail containment;
 existing allowed relative and absolute paths remain controls. Production code
 and security policy are unchanged. All eight focused Git/shared-path cases pass.
 Evidence: `/tmp/agi-linux-31ecfa-clean.log`, `/tmp/agi-git-path-before.log`,
-`/tmp/agi-git-path-after.log`. Hold this follow-up until the current Windows run
-finishes so its runtime evidence is not canceled.
+`/tmp/agi-git-path-after.log`.
 
 Completed on the pushed commit: main security scans, repository guards, database/
-RLS, contracts, macOS Rust, all-feature Clippy, desktop E2E, web E2E/accessibility,
-Rust Security, Repo Operability, pinned actions, cross-version and Guardian.
-JavaScript/TypeScript, Actions and Ruby CodeQL analyses passed; Rust analysis,
-coverage, Windows and the JavaScript test/build lane remain pending. The Rust
-audit reports zero vulnerabilities under the existing policy; maintenance and
+RLS, contracts, JavaScript lint/typecheck/test/build, macOS Rust, all-feature
+Clippy, desktop E2E, web E2E/accessibility, Rust Security, Repo Operability,
+pinned actions, cross-version and Guardian. CodeQL run `35509236121` passed all
+four language analyses and its security audit. Fresh GitHub API queries report
+zero open code-scanning alerts and zero open Dependabot alerts. The Rust audit
+reports zero vulnerabilities under the existing policy; maintenance and
 unsoundness warning-policy debt is unchanged and was not represented as absent.
+
+Windows job `106074185871` compiled the repair and passed manifest verification,
+then stopped while compiling the desktop test executable because a Windows-only
+Piper test called `contains` on `anyhow::Error`. It did not reach native test
+execution. The assertion now renders the error before checking its message. A
+focused harness compiles the relevant module and its tests for
+`x86_64-pc-windows-msvc`; all seven Piper bundle tests pass locally. Fresh native
+Windows execution remains required.
+
+Priority Level 1 run `35509236745` ran every package suite. The web package had
+22,895 passes, one timeout and six skips; all other package suites completed, the
+aggregate line result was 79.8% against the unchanged 75% floor, and package floors
+passed. The timeout constructed eleven 2 MB zip members with DEFLATE even though
+the assertion exercises only the declared expanded-size preflight. That one
+fixture now uses ZIP STORE, retains the eleven-member 22 MB expansion and unchanged
+20 MB production limit, and completes its focused rejection in 0.7 seconds. Jev
+selected the fixture-only repair at confidence 0.98, request
+`855208cf0b37b707aaa016f53037c7edae63d5c959262bb49d5bc565032f1965`.
+The separate upload job still receives a valid GitHub OIDC token and then receives
+Codecov HTTP 404 `Repository not found`; repository connection remains an external
+blocking prerequisite.
