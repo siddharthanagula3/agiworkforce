@@ -166,6 +166,33 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         aggregation: 'p95',
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion)],
       },
+      // A rollout is judged on the arm, not the release: two cohorts share one
+      // build, and a canary that is worse is invisible in any per-release read.
+      {
+        id: 'turn-failure-ratio-by-cohort',
+        title: 'Failed share of turns, by cohort',
+        metric: METRIC_NAME.turns,
+        aggregation: 'ratio',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+        ],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.turnOutcome)]: 'failed' },
+      },
+      {
+        id: 'turn-latency-p95-by-cohort',
+        title: 'Turn wall time p95, by cohort',
+        metric: METRIC_NAME.turnDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort)],
+      },
+      {
+        id: 'turn-latency-p99-by-cohort',
+        title: 'Turn wall time p99, by cohort',
+        metric: METRIC_NAME.turnDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort)],
+      },
       {
         id: 'latency-p99-by-release',
         title: 'Request latency p99 by release',
@@ -203,6 +230,33 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         aggregation: 'max',
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
       },
+      // Age says the front of the queue is old; depth says how much is behind
+      // it. A queue draining steadily under a burst and one that has stopped
+      // look the same on age alone.
+      {
+        id: 'queue-depth',
+        title: 'Queue depth by status',
+        metric: METRIC_NAME.queueDepth,
+        aggregation: 'max',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.queueName),
+          attributeKey(LOCAL_METRIC_LABEL.queueStatus),
+        ],
+      },
+      {
+        id: 'queue-wait-p95',
+        title: 'Wait before a job is claimed, p95',
+        metric: METRIC_NAME.queueWait,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
+      },
+      {
+        id: 'queue-wait-p99',
+        title: 'Wait before a job is claimed, p99',
+        metric: METRIC_NAME.queueWait,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
+      },
     ],
   },
   {
@@ -236,6 +290,23 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         metric: METRIC_NAME.spanDuration,
         aggregation: 'p99',
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.providerName)],
+      },
+      // The denominator of every latency read above, and the only place a
+      // domain that has stopped being traced at all becomes visible.
+      {
+        id: 'span-rate-by-domain',
+        title: 'Spans by domain',
+        metric: METRIC_NAME.spanCount,
+        aggregation: 'rate',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.spanDomain)],
+      },
+      {
+        id: 'span-error-ratio-by-domain',
+        title: 'Failed share of spans, by domain',
+        metric: METRIC_NAME.spanCount,
+        aggregation: 'ratio',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.spanDomain)],
+        match: { [attributeKey(LOCAL_METRIC_LABEL.spanStatus)]: 'error' },
       },
     ],
   },
@@ -320,6 +391,36 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         metric: METRIC_NAME.mediaCallbacks,
         aggregation: 'rate',
         groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.outcome)],
+      },
+      // A generation that succeeds on its third try is a success in the rate
+      // above and three times the cost and latency underneath it.
+      {
+        id: 'media-attempt-rate',
+        title: 'Attempts per generation, by outcome',
+        metric: METRIC_NAME.mediaAttempts,
+        aggregation: 'rate',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.attempt)],
+      },
+      {
+        id: 'media-attempt-latency-p95',
+        title: 'Attempt latency p95',
+        metric: METRIC_NAME.mediaAttemptDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.provider)],
+      },
+      {
+        id: 'media-attempt-latency-p99',
+        title: 'Attempt latency p99',
+        metric: METRIC_NAME.mediaAttemptDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.provider)],
+      },
+      {
+        id: 'media-safety-rate',
+        title: 'Safety decisions by kind',
+        metric: METRIC_NAME.mediaSafety,
+        aggregation: 'rate',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.decision)],
       },
     ],
   },

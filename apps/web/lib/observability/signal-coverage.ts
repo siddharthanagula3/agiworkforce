@@ -122,6 +122,7 @@ export interface SpanDomainEvidence {
 }
 
 const SPAN_COVERAGE_TEST = 'apps/web/lib/__tests__/span-domain-coverage.test.ts';
+const INTEGRATION_SPAN_TEST = 'apps/web/lib/__tests__/span-domain-coverage.integrations.test.ts';
 const DATABASE_SPAN_TEST = 'apps/web/lib/observability/database-span.test.ts';
 
 export const SPAN_DOMAIN_EVIDENCE: readonly SpanDomainEvidence[] = [
@@ -138,26 +139,10 @@ export const SPAN_DOMAIN_EVIDENCE: readonly SpanDomainEvidence[] = [
     why: 'no call site opens it: the name is in the vocabulary and nothing in the product uses it',
   },
   { domain: 'http', provenBy: SPAN_COVERAGE_TEST },
-  {
-    domain: 'model',
-    provenBy: null,
-    why: 'opened by apps/web/lib/observability/provider-tracer.ts and the gateway route; no test drives a provider call through it',
-  },
-  {
-    domain: 'queue',
-    provenBy: null,
-    why: 'apps/web/lib/jobs/job-drain.ts meters queue depth, wait and age but opens no span around a drained job',
-  },
+  { domain: 'model', provenBy: INTEGRATION_SPAN_TEST },
+  { domain: 'queue', provenBy: INTEGRATION_SPAN_TEST },
   { domain: 'retrieval', provenBy: SPAN_COVERAGE_TEST },
-  {
-    domain: 'sandbox',
-    provenBy: null,
-    why: 'opened by apps/web/lib/e2b/tracing.ts; no test drives a sandbox call through it',
-  },
+  { domain: 'sandbox', provenBy: INTEGRATION_SPAN_TEST },
   { domain: 'task', provenBy: SPAN_COVERAGE_TEST },
-  {
-    domain: 'tool',
-    provenBy: null,
-    why: 'opened by apps/web/lib/mcp-tool-executor.ts and the gateway tool loop; no test drives either through the span',
-  },
+  { domain: 'tool', provenBy: INTEGRATION_SPAN_TEST },
 ];

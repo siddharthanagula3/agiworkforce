@@ -24,6 +24,7 @@ export const OBSERVABILITY_ATTRIBUTE = {
   remoteDeviceId: 'agi.remote.device_id',
   failureKind: 'agi.failure.kind',
   errorType: 'error.type',
+  errorFingerprint: 'agi.error.fingerprint',
   serviceVersion: 'service.version',
   deploymentId: 'deployment.id',
   deploymentEnvironment: 'deployment.environment.name',

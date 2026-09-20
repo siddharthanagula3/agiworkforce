@@ -11,7 +11,10 @@ import {
 import {
   resolveDependencyReadiness,
   type DependencyCriticality,
+  type DependencyReadiness,
 } from '@/lib/config/dependency-readiness';
+import { recordConfigurationState, recordFailure } from '@/lib/observability/metrics';
+import { dependencySignal } from '@/lib/observability/signal-coverage';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
@@ -27,6 +30,7 @@ import {
   RENDER_CACHE_TAGS,
 } from '@/lib/server/render-cache';
 
+const HEALTH_PROBE_ERROR_TYPE = 'health_probe';
 const DATABASE_PROBE_MIN_INTERVAL_SECONDS = 3_600;
 const DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY = 'agi-health-probe:database-last-success-at';
 const SEARCH_INDEX_PROBE_LAST_SUCCESS_REDIS_KEY = 'agi-health-probe:search-index-last-success-at';
@@ -155,6 +159,41 @@ async function checkSearchIndex(): Promise<CapabilityCheck> {
   }
 }
 
+/**
+ * Which check speaks for a dependency once its configuration is present.
+ * Configured and failing is a different state from never configured, and the
+ * configuration gauge is the only place that difference is standing data.
+ */
+const DEPENDENCY_LIVE_CHECK: Readonly<Record<string, keyof HealthCheckResult['checks']>> = {
+  database: 'database',
+  billing: 'stripe',
+  context_engine: 'search',
+  model_providers: 'chat',
+};
+
+/**
+ * The configuration state of every dependency, plus the fault of any that is
+ * configured and not answering. Which counter a fault lands on is the signal
+ * registry's decision, not this file's: a dependency it declares unwatched,
+ * with its reason, is recorded as a state and nothing else.
+ */
+function reportDependencyConfiguration(
+  readiness: readonly DependencyReadiness[],
+  checks: HealthCheckResult['checks'],
+): void {
+  for (const state of readiness) {
+    const live = DEPENDENCY_LIVE_CHECK[state.dependency.id];
+    const failing = live !== undefined && checks[live].status !== 'healthy';
+    recordConfigurationState({
+      component: state.dependency.id,
+      state: !state.ready ? 'unavailable' : failing ? 'invalid' : 'ok',
+    });
+    if (!failing) continue;
+    const signal = dependencySignal(state.dependency.id);
+    if (signal?.failureKind) recordFailure(signal.failureKind, HEALTH_PROBE_ERROR_TYPE);
+  }
+}
+
 export async function runHealthChecks(): Promise<HealthCheckResult> {
   const checks: HealthCheckResult['checks'] = {
     database: { status: 'unhealthy' },
@@ -262,6 +301,8 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     : nonCoreHealthy
       ? 'healthy'
       : 'degraded';
+
+  reportDependencyConfiguration(readiness, checks);
 
   return {
     status,

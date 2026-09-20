@@ -163,13 +163,14 @@ async function runJob(
       withSpan(
         'background_job.run',
         {
-          domain: 'task',
+          domain: 'queue',
           kind: 'consumer',
           attributes: {
             [OBSERVABILITY_ATTRIBUTE.queueName]: job.queue,
             [OBSERVABILITY_ATTRIBUTE.queueJobId]: job.id,
             'job.kind': job.kind,
             'job.attempt': job.attempts,
+            'job.max_attempts': job.maxAttempts,
           },
         },
         () =>

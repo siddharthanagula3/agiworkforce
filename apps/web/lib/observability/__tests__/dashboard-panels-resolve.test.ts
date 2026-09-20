@@ -11,7 +11,13 @@ import { OBSERVABILITY_ATTRIBUTE, resetDeploymentAttributesCache } from '../attr
 import { METRIC_LABEL_BOUND, resetLabelCardinality } from '../cardinality';
 import { withSpan } from '../span';
 import { SERVICE_DASHBOARDS, attributeKey, dashboardPanels, panelQuery } from '../dashboards';
-import { recordMediaCallback, recordMediaGeneration, recordMediaPoll } from '../media-telemetry';
+import {
+  recordMediaAttempt,
+  recordMediaCallback,
+  recordMediaGeneration,
+  recordMediaPoll,
+  recordMediaSafety,
+} from '../media-telemetry';
 import {
   METRIC_NAME,
   recordBrowserTask,
@@ -24,6 +30,7 @@ import {
   recordNotificationDelivery,
   recordQueueAge,
   recordQueueDepth,
+  recordQueueWait,
   recordRejection,
   recordRoutingDecision,
   recordSpanMetrics,
@@ -107,6 +114,7 @@ async function emitEverySignal(): Promise<void> {
     errorType: 'timeout',
   });
   recordQueueDepth({ queue: 'digest', status: 'queued', count: 3 });
+  recordQueueWait({ queue: 'digest', waitMs: 42 });
   recordQueueAge({ queue: 'digest', oldestQueuedAgeMs: 10, stuck: 1 });
   recordBrowserTask({ status: 'failed', surface: 'web', errorType: 'blocked' });
   recordNotificationDelivery({ channel: 'email', outcome: 'delivered' });
@@ -163,6 +171,7 @@ async function emitEverySignal(): Promise<void> {
         mode: 'chat',
         trustMode: 'managed',
         workspaceKind: 'personal',
+        cohort: 'canary,newComposer=on',
         cache,
         timeToFirstTokenMs: 120,
         durationMs: 900,
@@ -183,6 +192,21 @@ async function emitEverySignal(): Promise<void> {
   });
   recordMediaPoll({ media: 'video', outcome: 'pending', provider: 'runway' });
   recordMediaCallback({ media: 'video', outcome: 'accepted', provider: 'runway' });
+  recordMediaAttempt({
+    media: 'image',
+    outcome: 'failed',
+    attempt: 2,
+    provider: 'openai',
+    model: 'gpt-image',
+    latencyMs: 30,
+  });
+  recordMediaSafety({
+    media: 'image',
+    decision: 'blocked',
+    reason: 'policy',
+    surface: 'web',
+    provider: 'openai',
+  });
 }
 
 async function emittedLabels(): Promise<Map<string, Set<string>>> {

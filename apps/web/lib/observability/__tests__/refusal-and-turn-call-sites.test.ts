@@ -303,7 +303,7 @@ describe('a served turn is measured where its decision was traced', () => {
     observed: { failureRate: null, latencyP50Ms: null },
   };
 
-  function decision(kind: 'served' | 'shadow') {
+  function decision(kind: 'served' | 'shadow', flagVariants: Record<string, string> = {}) {
     return {
       trace,
       requestId: 'req_1',
@@ -311,7 +311,7 @@ describe('a served turn is measured where its decision was traced', () => {
       organizationId: 'org_1',
       surface: 'web',
       kind,
-      flagVariants: {},
+      flagVariants,
     } as Parameters<typeof persistRoutingDecision>[0];
   }
 
@@ -337,6 +337,47 @@ describe('a served turn is measured where its decision was traced', () => {
     expect(cost).toHaveLength(1);
     const ttft = await seriesFor(METRIC_NAME.turnTimeToFirstToken);
     expect(ttft).toHaveLength(1);
+  });
+
+  // Two arms share one build, so a canary that is worse than its control is
+  // invisible in anything grouped by release alone.
+  it('labels the turn with the rollout arm and the flag variants it was served under', async () => {
+    persistRoutingDecision(decision('served', { newComposer: 'on', autoRouter: 'v3' }));
+    persistRoutingDecisionOutcome({
+      requestId: 'req_1',
+      kind: 'served',
+      outcome: 'succeeded',
+      ttftMs: 120,
+      durationMs: 900,
+      providerCostMicrousd: 2_400,
+    });
+
+    const turns = await seriesFor(METRIC_NAME.turns);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.attributes[attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort)]).toBe(
+      'ga,autoRouter=v3,newComposer=on',
+    );
+  });
+
+  it('opens one series per cohort however the variants were ordered', async () => {
+    persistRoutingDecision(decision('served', { autoRouter: 'v3', newComposer: 'on' }));
+    persistRoutingDecisionOutcome({
+      requestId: 'req_1',
+      kind: 'served',
+      outcome: 'succeeded',
+      durationMs: 900,
+    });
+    persistRoutingDecision(decision('served', { newComposer: 'on', autoRouter: 'v3' }));
+    persistRoutingDecisionOutcome({
+      requestId: 'req_1',
+      kind: 'served',
+      outcome: 'succeeded',
+      durationMs: 900,
+    });
+
+    const turns = await seriesFor(METRIC_NAME.turns);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.value).toBe(2);
   });
 
   it('counts the routes tried before the one that answered', async () => {
