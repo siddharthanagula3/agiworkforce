@@ -66,8 +66,6 @@ pub struct DangerousOpEvent {
     pub paths: Vec<String>,
 }
 
-/// Validates path security by canonicalizing first, then checking for traversal attacks.
-/// Returns the canonical PathBuf on success to prevent TOCTOU vulnerabilities.
 pub(crate) fn validate_path_security(path: &str) -> Result<PathBuf, String> {
     // Basic validation before any filesystem operations
     if path.is_empty() {
@@ -83,9 +81,30 @@ pub(crate) fn validate_path_security(path: &str) -> Result<PathBuf, String> {
         return Err("Path contains null bytes which is not allowed".to_string());
     }
 
-    // Canonicalize the path BEFORE checking for traversal
-    // This prevents bypass attacks using encoded sequences or symlinks
-    let canonical_path = if Path::new(path).exists() {
+    if Path::new(path)
+        .components()
+        .any(|part| part == std::path::Component::ParentDir)
+    {
+        return Err(
+            "Path contains directory traversal (..) which is not allowed for security reasons"
+                .to_string(),
+        );
+    }
+    #[cfg(windows)]
+    if matches!(
+        Path::new(path).components().next(),
+        Some(std::path::Component::Prefix(_))
+    ) && !Path::new(path).is_absolute()
+    {
+        return Err("Drive-relative paths are not allowed".to_string());
+    }
+
+    let path_exists = match fs::symlink_metadata(path) {
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(format!("Failed to inspect path '{}': {}", path, error)),
+    };
+    let canonical_path = if path_exists {
         // For existing paths, canonicalize directly
         fs::canonicalize(path).map_err(|e| format!("Failed to resolve path '{}': {}", path, e))?
     } else {
@@ -124,19 +143,6 @@ pub(crate) fn validate_path_security(path: &str) -> Result<PathBuf, String> {
 
     // Convert to string for security checks
     let canonical_str = canonical_path.to_string_lossy();
-
-    // Check for directory traversal in the CANONICAL path
-    // This catches attempts that might have been encoded or used symlinks
-    if canonical_str.contains("..") {
-        warn!(
-            "Directory traversal detected after canonicalization: original='{}', canonical='{}'",
-            path, canonical_str
-        );
-        return Err(
-            "Path contains directory traversal (..) which is not allowed for security reasons"
-                .to_string(),
-        );
-    }
 
     // Check blacklisted paths against the CANONICAL path
     if is_blacklisted_path(&canonical_str) {
@@ -254,28 +260,13 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
     ];
 
     let path_str = path.to_string_lossy();
-    let path_str_for_prefix = path_str.as_ref();
-    // Match the prefix as either `prefix`, `prefix/...`, or `prefix\...`
-    //, the Windows backslash form is needed for paths like
-    // `C:\Windows\System32\kernel32.dll`, which would otherwise slip
-    // past a `/`-only separator check on Linux/macOS callers.
-    let starts_with_prefix = |hay: &str, prefix: &str| {
-        hay == prefix
-            || hay.starts_with(&format!("{prefix}/"))
-            || hay.starts_with(&format!("{prefix}\\"))
-    };
-    if BLOCKED_PREFIXES
-        .iter()
-        .any(|p| starts_with_prefix(path_str_for_prefix, p))
-    {
-        return true;
-    }
-
     let path_lower = path_str.to_lowercase();
-    if BLOCKED_PREFIXES
-        .iter()
-        .any(|p| starts_with_prefix(&path_lower, &p.to_lowercase()))
-    {
+    if BLOCKED_PREFIXES.iter().any(|prefix| {
+        crate::sys::security::blocked_paths::path_is_within(
+            Path::new(&path_lower),
+            Path::new(&prefix.to_lowercase()),
+        )
+    }) {
         return true;
     }
 

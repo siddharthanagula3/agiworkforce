@@ -1537,3 +1537,61 @@ Windows manifest verification and the main JavaScript job are still running.
 Evidence: `/tmp/agi-linux-d6def.log`, run `35505437427`.
 The combined follow-up now touches a web test, so the earlier cancellation-only
 scope result does not describe this combined diff; web verification is required.
+
+### Windows runtime repair after manifest verification
+
+Run `35505437427` is complete. The Windows manifests passed, followed by 2,667
+CLI passes and desktop execution with 5,266 passes, 180 failures and 46 existing
+ignores. Other main-CI lanes passed, including Linux/macOS Rust, all-feature
+Clippy, full JavaScript tests/builds, iOS, browser E2E/accessibility and security.
+CodeQL `35505436633` passed all four languages; fresh GitHub APIs report zero open
+code-scanning and Dependabot alerts. Deployment workflows were skipped after CI
+failed, which is not deployment verification.
+
+The Windows candidate confines UI Automation and all cached native interfaces to
+an MTA worker, using bounded messages carrying ordinary data. Worker shutdown
+releases interfaces before COM uninitialization. Shared path comparisons reconcile
+ordinary/verbatim Windows paths, case and separators while preserving each
+caller's deny policy and using the original canonical path for operations.
+Traversal is rejected before filesystem resolution; benign names containing two
+dots remain accepted. Platform test fixtures use actual temporary directories and
+platform shell/runner contracts. Memory tests stop holding plaintext handles open
+during encrypted migration; MCP fixtures receive explicit paths without changing
+HOME or the imported-server consent gate.
+
+Jev selected this bounded repair under request
+`e094be82aa21d43b790fc78af16b784f48696cee07b7ac4b60d556ba9d1e82bb`.
+Windows UIA module and test metadata cross-compilation passes; actual Windows
+execution remains pending. Source and failure evidence:
+`/tmp/agi-windows-d6def-clean.log`, `/tmp/agi-windows-uia-check.log`.
+The Codecov HTTP 404 repository-connection blocker is unchanged; no authentication
+or protected production environment review was bypassed.
+
+Independent review reproduced a remaining dangling-symlink route in both write
+validators: an allowed alias to an absent protected file was retained and later
+followed by the write. Both validators now distinguish an absent path from an
+unresolved link and reject resolution errors. The extracted production-method
+probe failed its new regression before correction (15 passes, one failure) and
+passed all 16 checks afterward, including existing-link and ordinary temporary-file
+controls. Evidence: `/tmp/agi-path-boundary-before.log`,
+`/tmp/agi-path-boundary-after.log`. Windows UIA library Clippy also passes with
+`-D warnings -D unsafe-code` in the isolated cross-target compile harness.
+A broader test-target Clippy probe found seven pre-existing UIA fixture lints
+(length checks and an unjoined child); it is not the owning CI's library-only
+Clippy contract and was not represented as passing. The complete desktop test
+binary is being rebuilt for final affected-boundary execution.
+
+Final affected desktop execution: `cargo test -p agiworkforce-desktop --lib
+--offline -- <affected filters>` passed 114 tests, zero failures/ignores. Filters
+covered both path validators and their legitimate controls, shared blocked paths,
+MCP configuration, memory/outcome fixtures, encryption preservation/wrong-key/
+corruption tests, platform sandbox/archive/permissions fixtures and rate-limit
+contracts. Evidence: `/tmp/agi-windows-focused-tests.log` (complete selected test
+names). `cargo fmt --all -- --check`, `git diff --check`, and
+`pnpm check:rust-egress-boundary` also passed. These local results do not replace
+native Windows runtime verification.
+
+Owning desktop library lint passed: `cargo clippy -p agiworkforce-desktop --lib
+--offline -- -D warnings -D unsafe-code` (2m33s), evidence
+`/tmp/agi-windows-local-clippy.log`. The staged secret guard passed all 54 harness
+checks and scanned 13,352 files with its existing reviewed exemptions unchanged.

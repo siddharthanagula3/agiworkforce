@@ -6386,6 +6386,8 @@ mod tests {
         use std::sync::Arc;
         use tokio::sync::Barrier;
 
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("test.txt");
         let guard = Arc::new(ToolExecutionGuard::new());
         // file_delete has max_rate_per_minute = 5
         let num_tasks = 10;
@@ -6395,10 +6397,11 @@ mod tests {
         for _ in 0..num_tasks {
             let guard = Arc::clone(&guard);
             let barrier = Arc::clone(&barrier);
+            let path = path.clone();
             handles.push(tokio::spawn(async move {
                 barrier.wait().await;
                 guard
-                    .validate_tool_call("file_delete", &json!({"path": "/tmp/test.txt"}))
+                    .validate_tool_call("file_delete", &json!({"path": path}))
                     .await
             }));
         }
@@ -6482,7 +6485,7 @@ mod tests {
             .validate_tool_call(
                 "file_list",
                 &serde_json::json!({
-                    "path": "/tmp",
+                    "path": std::env::temp_dir(),
                     "limit": 100,
                     "offset": 0,
                     "exclude": [".git", "node_modules"],

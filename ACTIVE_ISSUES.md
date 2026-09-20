@@ -8,6 +8,29 @@ The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
 
+## CI-WINDOWS-RUNTIME-2026-09-20
+
+Main CI `35505437427` verified both Windows embedded manifests and passed all
+2,667 CLI tests. Desktop execution reached 5,266 passes, 180 failures and 46
+existing ignores. Most failures share a production COM defect: initialization
+occurred once per process while UI Automation interfaces moved across threads.
+Separate production path failures expose ordinary/verbatim Windows prefix
+mismatches and traversal checking after canonicalization erased parent segments.
+The candidate confines native COM interfaces to an owned MTA worker and shares
+Windows-aware deny comparisons while preserving each caller's policy. Independent
+review also reproduced dangling symlinks bypassing both nonexistent-write validators;
+the candidate rejects unresolved links and retains valid resolved-link behavior. Remaining
+failures use Unix-only paths, shell syntax, unsupported sandbox/archive assumptions,
+process-global HOME mutation, or plaintext fixture connections held open during
+encrypted migration. Correct these fixtures without weakening production guards.
+Windows module/test cross-compilation and 114 local affected tests pass; native
+Windows runtime revalidation is still required. Linux, macOS, all-feature Clippy, JavaScript tests/builds, iOS, browser
+E2E/accessibility and security jobs passed on the same remote commit. CodeQL
+completed with zero open code-scanning alerts; Dependabot also reports zero open
+alerts. Codecov connection and deployment review remain separate blockers.
+Evidence: `/tmp/agi-windows-d6def-clean.log`, `/tmp/agi-windows-uia-check.log`, and
+[deployment handoff](docs/work/deployment-handoff-2026-09-19.md).
+
 ## CI-NATIVE-CACHE-2026-09-20
 
 The four explicit Rust caches in `.github/workflows/ci.yml` target

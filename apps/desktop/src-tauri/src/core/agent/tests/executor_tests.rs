@@ -47,11 +47,11 @@ mod tests {
 
     #[test]
     fn validate_file_path_valid_path_succeeds() {
-        // /tmp always exists on macOS/Linux
-        let result = TaskExecutor::validate_file_path("/tmp");
+        let temp = tempfile::tempdir().unwrap();
+        let result = TaskExecutor::validate_file_path(temp.path().to_str().unwrap());
         assert!(
             result.is_ok(),
-            "/tmp should be a valid accessible path, got: {:?}",
+            "Temporary directory should be accessible, got: {:?}",
             result.err()
         );
     }
@@ -123,11 +123,56 @@ mod tests {
 
     #[test]
     fn validate_write_path_valid_temp_path_succeeds() {
-        let result = TaskExecutor::validate_write_path("/tmp/test_write_file.txt");
+        let temp = tempfile::tempdir().unwrap();
+        let result = TaskExecutor::validate_write_path(
+            temp.path().join("test_write_file.txt").to_str().unwrap(),
+        );
         assert!(
             result.is_ok(),
-            "/tmp/test_write_file.txt should be a valid write path, got: {:?}",
+            "Temporary file should be a valid write path, got: {:?}",
             result.err()
+        );
+    }
+    #[cfg(unix)]
+    #[test]
+    fn validate_write_path_rejects_dangling_symlinks_and_preserves_resolved_links() {
+        let temp = tempfile::tempdir().unwrap();
+        let target = temp.path().join("missing.txt");
+        let link = temp.path().join("link.txt");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(TaskExecutor::validate_write_path(link.to_str().unwrap()).is_err());
+        assert!(!target.exists());
+        std::fs::write(&target, b"existing").unwrap();
+        assert_eq!(
+            TaskExecutor::validate_write_path(link.to_str().unwrap()).unwrap(),
+            std::fs::canonicalize(&target).unwrap()
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn canonical_home_secrets_are_rejected_for_nonexistent_write_targets() {
+        let home = std::fs::canonicalize(dirs::home_dir().unwrap()).unwrap();
+        for directory in [".ssh", ".config", ".gnupg"] {
+            let target = home.join(directory).join("new-secret");
+            let error = TaskExecutor::validate_write_path(target.to_str().unwrap()).unwrap_err();
+            assert!(error.to_string().contains("protected user path"));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn canonical_system_directories_are_rejected_for_reads_and_writes() {
+        let path = std::fs::canonicalize(r"C:\Windows\System32").unwrap();
+        assert!(TaskExecutor::validate_file_path(path.to_str().unwrap())
+            .unwrap_err()
+            .to_string()
+            .contains("protected system path"));
+        assert!(
+            TaskExecutor::validate_write_path(path.join("new-file").to_str().unwrap())
+                .unwrap_err()
+                .to_string()
+                .contains("protected system path")
         );
     }
 }

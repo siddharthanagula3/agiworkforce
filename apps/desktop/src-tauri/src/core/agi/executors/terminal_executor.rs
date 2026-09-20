@@ -1276,8 +1276,16 @@ mod tests {
             Some(cwd.to_string_lossy().as_ref()),
             &[],
             &sandbox_preferences(true),
-        )
-        .unwrap();
+        );
+        if cfg!(windows) {
+            assert!(launch
+                .err()
+                .expect("Windows must reject the unsupported sandbox")
+                .to_string()
+                .contains("not supported on Windows"));
+            return;
+        }
+        let launch = launch.unwrap();
 
         assert!(launch.sandboxed);
         assert!(launch.args.iter().any(|arg| arg == "--settings"));

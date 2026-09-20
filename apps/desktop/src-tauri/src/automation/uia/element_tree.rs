@@ -13,7 +13,7 @@ use windows::Win32::UI::Accessibility::{
     UIA_PROPERTY_ID,
 };
 
-impl UIAutomationService {
+impl UIAutomationState {
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
         let desktop = self.root_element()?;
 

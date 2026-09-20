@@ -443,16 +443,22 @@ impl TaskExecutor {
                     }
                     break r;
                 }
-                Err(_) => {
-                    if let Some(name) = tmp.file_name() {
-                        tail.push(name.to_owned());
-                        match tmp.parent() {
-                            Some(p) => tmp = p,
-                            None => break tmp.to_path_buf(),
-                        }
-                    } else {
-                        break tmp.to_path_buf();
+                Err(error) => {
+                    let absent = matches!(
+                        std::fs::symlink_metadata(tmp),
+                        Err(ref metadata_error)
+                            if metadata_error.kind() == std::io::ErrorKind::NotFound
+                    );
+                    if error.kind() != std::io::ErrorKind::NotFound || !absent {
+                        return Err(anyhow::anyhow!("Path cannot be safely resolved: {}", error));
                     }
+                    let name = tmp
+                        .file_name()
+                        .ok_or_else(|| anyhow::anyhow!("Path has no resolvable ancestor"))?;
+                    tail.push(name.to_owned());
+                    tmp = tmp
+                        .parent()
+                        .ok_or_else(|| anyhow::anyhow!("Path has no resolvable ancestor"))?;
                 }
             }
         };
@@ -477,7 +483,10 @@ impl TaskExecutor {
         ];
 
         for prefix in BLOCKED {
-            if path.starts_with(prefix) {
+            if crate::sys::security::blocked_paths::path_is_within(
+                path,
+                std::path::Path::new(prefix),
+            ) {
                 return Err(anyhow::anyhow!(
                     "Access denied: '{}' is a protected system path",
                     path.display()
@@ -497,7 +506,10 @@ impl TaskExecutor {
             };
 
             for prefix in &home_blocked {
-                if path.starts_with(prefix) {
+                if crate::sys::security::blocked_paths::path_is_within(
+                    path,
+                    std::path::Path::new(prefix),
+                ) {
                     return Err(anyhow::anyhow!(
                         "Access denied: '{}' is a protected user path",
                         path.display()

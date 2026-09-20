@@ -317,9 +317,11 @@ mod tests {
         }
         drop(conn);
 
-        let global = std::sync::Arc::new(MemoryManager::new(db_path.to_str().unwrap()).unwrap());
+        let global = std::sync::Arc::new(MemoryManager::from_connection(
+            rusqlite::Connection::open(&db_path).unwrap(),
+        ));
         let project = std::sync::Arc::new(tokio::sync::RwLock::new(
-            ProjectMemoryManager::new(db_path.to_str().unwrap()).unwrap(),
+            ProjectMemoryManager::from_connection(rusqlite::Connection::open(&db_path).unwrap()),
         ));
         (temp_dir, global, project)
     }
