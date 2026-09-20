@@ -12,6 +12,32 @@ repository-owned release path, deploy the website and its required services,
 prove `https://agiworkforce.com` serves the resulting commit, and hand the
 release to a separate comprehensive production QA session.
 
+## Main push attempt, 2026-09-20
+
+The owner explicitly requested all current changes on `main`. The 74-path working
+tree was committed as `1cec706bc`; the live erasure test adapter repair is
+`053729ff8`. A normal `git push origin HEAD:main` was attempted with hooks enabled.
+The isolated pre-push checkout rejected the direct PostgreSQL import in the live
+erasure test; it now uses the canonical data-layer adapter. Subsequent guard runs
+also corrected a QA evidence model literal to a catalog reference, used the
+user-scoped connection for free-quota workspace policy evaluation, and preserved
+real transitive exports in the quota-route test mocks.
+
+Affected verification: 289 tests passed, with one live database test intentionally
+skipped unless explicitly configured. The adjusted erasure suites then passed nine
+tests (one live skip), and the adjusted quota route passed nine tests. Secret
+scanning, pre-commit checks, the boundary guard, model-literal guard and RLS guard
+passed. The remaining operability sequence reaches the migration-dependency
+blocker; no hook or safety policy was disabled.
+
+A fresh Vercel production environment pull returned empty database URL values, so
+it could not establish the database status. A subsequent read-only Neon MCP query
+against the production branch confirmed **248 applied migrations, maximum sequence
+248**. Migrations 0249 through 0273 therefore remain unapplied. The independent
+object-backup prerequisite recorded below remains unresolved. Production migrations
+were not applied. Remote `main` remains `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`;
+no production deployment or successful push is claimed.
+
 ## Release ledger
 
 | Item                   | Current evidence                                                                                                                                                                                                                             | State                                                                                                                                     |
