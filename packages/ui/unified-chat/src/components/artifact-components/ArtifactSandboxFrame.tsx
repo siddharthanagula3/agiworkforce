@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 
@@ -9,6 +8,7 @@ import {
   type ArtifactRenderPayload,
   type SandboxIncomingMessage,
 } from '../../lib/artifact-sandbox';
+import { reportClientFailure } from '../../lib/client-failures';
 
 const SANDBOX_HANDSHAKE_TIMEOUT_MS = 3_000;
 
@@ -72,7 +72,10 @@ export function ArtifactSandboxFrame({
   const degrade = useCallback(() => {
     if (connectedRef.current) return;
     setUseFallback((already) => {
-      if (!already) onFallback?.();
+      if (!already) {
+        reportClientFailure({ failure: 'artifact_load', detail: 'timeout' });
+        onFallback?.();
+      }
       return true;
     });
   }, [onFallback]);
@@ -97,6 +100,7 @@ export function ArtifactSandboxFrame({
         return;
       }
       if (data.type === 'render-error') {
+        reportClientFailure({ failure: 'artifact_load', detail: 'render' });
         onRenderError?.(data.error ?? 'The artifact failed to render.');
       }
     };

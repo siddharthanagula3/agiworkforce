@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
+import { reportClientFailure } from '../lib/client-failures';
 import { cn } from '../lib/utils';
 
 interface ActionBarProps {
@@ -20,6 +21,7 @@ export function ActionBar({ messageId, content, onRetry, onFeedback }: ActionBar
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
+      reportClientFailure({ failure: 'code_copy', detail: 'permission_denied' });
       return;
     }
   }

@@ -426,7 +426,9 @@ describe('every request carries what the caller said it was', () => {
     async (_request: Request) => new Response('ok', { status: 200 }),
   );
 
-  it('labels the surface, the client build and the contract version', async () => {
+  // The build is the release series, not the exact patch: patch moves weekly and
+  // is what made this label unbounded.
+  it('labels the surface, the client release series and the contract version', async () => {
     await handled(
       request({
         'x-agi-surface': 'desktop',
@@ -439,7 +441,7 @@ describe('every request carries what the caller said it was', () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]?.attributes[SURFACE]).toBe('desktop');
     expect(requests[0]?.attributes[attributeKey(OBSERVABILITY_ATTRIBUTE.clientVersion)]).toBe(
-      '2026.9.1',
+      '2026.9',
     );
     expect(requests[0]?.attributes[attributeKey(OBSERVABILITY_ATTRIBUTE.protocolVersion)]).toBe(
       '2026-09-17',
