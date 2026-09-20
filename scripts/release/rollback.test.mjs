@@ -8,6 +8,7 @@ import {
   parseArguments,
   readEnvironment,
   requestRollback,
+  runRollback,
   teamQuery,
 } from './rollback.mjs';
 
@@ -126,4 +127,66 @@ test('a refused rollback is an error, not a silent no-op', async () => {
     () => requestRollback(async () => ({ ok: false, status: 403 }), CONFIG, 'dpl_good', 'why'),
     RollbackError,
   );
+});
+
+function recordingFetch(calls) {
+  return async (url, init = {}) => {
+    calls.push({ url, method: init.method ?? 'GET' });
+    if (url.includes('/v9/projects/')) {
+      return { ok: true, status: 200, json: async () => ({ targets: { production: SERVING } }) };
+    }
+    if (url.includes('/v6/deployments')) {
+      return { ok: true, status: 200, json: async () => ({ deployments: DEPLOYMENTS }) };
+    }
+    return { ok: true, status: 200, json: async () => ({}) };
+  };
+}
+
+const ENV = {
+  VERCEL_TOKEN: 'token',
+  VERCEL_ORG_ID: 'team_abc',
+  VERCEL_PROJECT_ID: 'prj_1',
+  GITHUB_ACTOR: 'operator',
+};
+
+test('a dry run resolves the plan and issues no write of any kind', async () => {
+  const calls = [];
+  const result = await runRollback({
+    argv: ['--dry-run', '--reason', 'checking the path'],
+    env: ENV,
+    fetchImpl: recordingFetch(calls),
+  });
+
+  assert.deepEqual(result, { rolledBack: false, targetId: 'dpl_good', currentId: 'dpl_new' });
+  assert.deepEqual(
+    calls.map((call) => call.method),
+    ['GET', 'GET'],
+  );
+  assert.ok(!calls.some((call) => call.url.includes('/rollback/')));
+});
+
+test('a dry run writes no audit event, so it cannot be mistaken for a rollback', async () => {
+  const calls = [];
+  await runRollback({
+    argv: ['--dry-run', '--reason', 'checking the path'],
+    env: { ...ENV, AGI_DATABASE_URL: 'postgresql://127.0.0.1:1/nothing-listens-here' },
+    fetchImpl: recordingFetch(calls),
+  });
+  assert.equal(calls.length, 2);
+});
+
+test('a real rollback posts to the rollback endpoint after reading the plan', async () => {
+  const calls = [];
+  const result = await runRollback({
+    argv: ['--reason', 'bad deploy'],
+    env: ENV,
+    fetchImpl: recordingFetch(calls),
+  });
+
+  assert.equal(result.rolledBack, true);
+  assert.equal(result.targetId, 'dpl_good');
+  const write = calls.find((call) => call.method === 'POST');
+  assert.ok(write, 'no POST was made');
+  assert.ok(write.url.includes('/rollback/dpl_good'));
+  assert.ok(decodeURIComponent(write.url).includes('description=bad+deploy'));
 });
