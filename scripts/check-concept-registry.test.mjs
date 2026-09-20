@@ -7,16 +7,20 @@ import test from 'node:test';
 import {
   AUDIT_VOCABULARY_PATH,
   DEEP_LINK_PATH,
+  ORGANIZATION_PERMISSIONS_PATH,
   RETENTION_VOCABULARY_PATH,
+  WORKSPACE_POLICY_PATH,
   checkAliases,
   checkConceptRegistry,
   checkDesignations,
+  checkFacets,
   checkSchemaHomes,
   checkTableDispositions,
   checkUiState,
   findDuplicateVocabularies,
   loadRegistry,
   missingContractColumns,
+  readForeignKeys,
   readSchemaInventory,
   readVocabularies,
 } from './check-concept-registry.mjs';
@@ -462,4 +466,292 @@ test('an alias nothing in the object spells fails', () => {
     errors.some((error) => error.includes('a name nothing uses')),
     errors.join('\n'),
   );
+});
+
+const PERMISSIONS_FIXTURE =
+  "export const ADMIN_PERMISSION_AREAS = ['members', 'roles'] as const;\n" +
+  "export const FEATURE_ORGANIZATION_PERMISSIONS = ['feature.content.view'] as const;\n" +
+  "export const BUILT_IN_ORGANIZATION_ROLE_KEYS = ['owner', 'admin'] as const;\n" +
+  "export type LegacyOrganizationPermission = 'content.read' | 'members.manage';\n";
+
+const POLICY_FIXTURE =
+  "export const WORKSPACE_FEATURES = ['work', 'code'] as const;\n" +
+  "export const WORKSPACE_CODE_CONTROL_KEYS = ['allowedHosts'] as const;\n" +
+  'export interface WorkspaceControls {\n' +
+  '  featureAccess: WorkspaceFeatureAccess;\n' +
+  '  defaultModelId: string | null;\n' +
+  '}\n';
+
+const FACET_SUBJECTS = [{ name: 'probe', table: 'probes', why: 'the object under inventory' }];
+
+function facetInventory(columns = ['id', 'user_id']) {
+  return { tables: new Map([['probes', { createdIn: 1, columns: new Set(columns) }]]) };
+}
+
+function facetRun({ facets, inventory = facetInventory(), foreignKeys = new Map(), files = {} }) {
+  const errors = [];
+  const counted = checkFacets({
+    registry: {
+      concepts: [{ ...CLEAN_CONCEPT, facetSubjects: FACET_SUBJECTS, facets }],
+    },
+    inventory,
+    foreignKeys,
+    repoRoot: fixtureRoot({
+      [ORGANIZATION_PERMISSIONS_PATH]: PERMISSIONS_FIXTURE,
+      [WORKSPACE_POLICY_PATH]: POLICY_FIXTURE,
+      ...files,
+    }),
+    errors,
+  });
+  return { errors, counted };
+}
+
+function facet(kind, source, extra = {}) {
+  return {
+    id: 'probe-facet',
+    subject: 'probe',
+    claim: 'the probe carries the thing this facet cites',
+    kind,
+    source,
+    ...extra,
+  };
+}
+
+test('a facet inventory that matches the tree raises nothing', () => {
+  const { errors, counted } = facetRun({
+    facets: [facet('column', { table: 'probes', column: 'user_id' })],
+  });
+  assert.deepEqual(errors, []);
+  assert.equal(counted, 1);
+});
+
+test('a column facet fails when the column leaves the final schema', () => {
+  const { errors } = facetRun({
+    facets: [facet('column', { table: 'probes', column: 'retired_at' })],
+    inventory: facetInventory(['id']),
+  });
+  assert.ok(
+    errors.some((error) => error.includes('probes.retired_at')),
+    errors.join('\n'),
+  );
+});
+
+test('a table facet fails when the foreign key to the parent is gone', () => {
+  const source = { table: 'probe_readings', references: 'probes' };
+  const inventory = facetInventory();
+  inventory.tables.set('probe_readings', { createdIn: 2, columns: new Set(['id']) });
+
+  const bound = facetRun({
+    facets: [facet('table', source)],
+    inventory,
+    foreignKeys: new Map([['probe_readings', new Map([['probe_id', 'probes']])]]),
+  });
+  assert.deepEqual(bound.errors, []);
+
+  const orphaned = facetRun({
+    facets: [facet('table', source)],
+    inventory,
+    foreignKeys: new Map([['probe_readings', new Map([['tenant_id', 'organizations']])]]),
+  });
+  assert.ok(
+    orphaned.errors.some((error) => error.includes('nothing keeps the child with its parent')),
+    orphaned.errors.join('\n'),
+  );
+});
+
+test('a contract facet fails when the symbol stops being exported', () => {
+  const file = 'packages/contracts/types/src/probe-contract.ts';
+  const { errors } = facetRun({
+    facets: [facet('contract', { file, symbol: 'PROBE_MODES' })],
+    files: { [file]: 'const PROBE_MODES = [];\n' },
+  });
+  assert.ok(
+    errors.some((error) => error.includes('no longer exports PROBE_MODES')),
+    errors.join('\n'),
+  );
+});
+
+test('a permission facet fails when the key leaves the grid', () => {
+  const granted = facetRun({ facets: [facet('permission', { key: 'admin.roles.manage' })] });
+  assert.deepEqual(granted.errors, []);
+
+  const { errors } = facetRun({ facets: [facet('permission', { key: 'admin.billing.manage' })] });
+  assert.ok(
+    errors.some((error) => error.includes('admin.billing.manage')),
+    errors.join('\n'),
+  );
+});
+
+test('a policy-key facet fails when the key leaves the workspace policy contract', () => {
+  const resolved = facetRun({ facets: [facet('policy-key', { key: 'featureAccess.code' })] });
+  assert.deepEqual(resolved.errors, []);
+
+  const { errors } = facetRun({ facets: [facet('policy-key', { key: 'featureAccess.voice' })] });
+  assert.ok(
+    errors.some((error) => error.includes('featureAccess.voice')),
+    errors.join('\n'),
+  );
+});
+
+test('a route facet fails when the route stops naming the table', () => {
+  const file = 'apps/web/app/api/probes/route.ts';
+  const reading = facetRun({
+    facets: [facet('route', { file, table: 'probes' })],
+    files: { [file]: "await db.query('select id from public.probes');\n" },
+  });
+  assert.deepEqual(reading.errors, []);
+
+  const { errors } = facetRun({
+    facets: [facet('route', { file, table: 'probes' })],
+    files: { [file]: 'return listProbes();\n' },
+  });
+  assert.ok(
+    errors.some((error) => error.includes('no longer names probes')),
+    errors.join('\n'),
+  );
+});
+
+test('a route facet outside the route tree is not a route', () => {
+  const file = 'apps/web/lib/services/probe-service.ts';
+  const { errors } = facetRun({
+    facets: [facet('route', { file, table: 'probes' })],
+    files: { [file]: 'public.probes\n' },
+  });
+  assert.ok(
+    errors.some((error) => error.includes('is not a route under')),
+    errors.join('\n'),
+  );
+});
+
+test('an absent facet fails once the product grows the facet', () => {
+  const missing = facetRun({
+    facets: [
+      facet('absent', { instead: 'the reading rows carry it', absentColumn: 'last_reading_at' }),
+    ],
+  });
+  assert.deepEqual(missing.errors, []);
+
+  const { errors } = facetRun({
+    facets: [
+      facet('absent', { instead: 'the reading rows carry it', absentColumn: 'last_reading_at' }),
+    ],
+    inventory: facetInventory(['id', 'user_id', 'last_reading_at']),
+  });
+  assert.ok(
+    errors.some((error) => error.includes('Record it as a column facet')),
+    errors.join('\n'),
+  );
+});
+
+test('an absent facet with no substitute is a gap nobody can act on', () => {
+  const { errors } = facetRun({ facets: [facet('absent', { instead: '  ' })] });
+  assert.ok(
+    errors.some((error) => error.includes('names nothing that stands in for it')),
+    errors.join('\n'),
+  );
+});
+
+test('a facet naming an undeclared subject or an unknown kind is refused', () => {
+  const stray = facetRun({
+    facets: [facet('column', { table: 'probes', column: 'id' }, { subject: 'sensor' })],
+  });
+  assert.ok(
+    stray.errors.some((error) => error.includes('which this concept does not declare')),
+    stray.errors.join('\n'),
+  );
+
+  const unknown = facetRun({ facets: [facet('presence', { table: 'probes' })] });
+  assert.ok(
+    unknown.errors.some((error) => error.includes('unknown facet kind')),
+    unknown.errors.join('\n'),
+  );
+});
+
+test('a facet citing a table the concept does not own is refused', () => {
+  const { errors } = facetRun({
+    facets: [facet('column', { table: 'organizations', column: 'id' })],
+  });
+  assert.ok(
+    errors.some((error) => error.includes('which this concept does not own')),
+    errors.join('\n'),
+  );
+});
+
+test('the schema inventory drops what a later migration drops', () => {
+  const inventory = readSchemaInventory([
+    {
+      name: '0100_probe.sql',
+      ordinal: 100,
+      sql:
+        'create table if not exists public.probe (\n  id uuid primary key,\n  legacy_token text\n);\n' +
+        'create table if not exists public.probe_legacy (\n  id uuid primary key\n);',
+    },
+    {
+      name: '0101_probe_cleanup.sql',
+      ordinal: 101,
+      sql:
+        'alter table public.probe drop column if exists legacy_token;\n' +
+        'alter table public.probe rename column id to probe_id;\n' +
+        'drop table if exists public.probe_legacy;',
+    },
+  ]);
+
+  assert.equal(inventory.tables.has('probe_legacy'), false);
+  assert.deepEqual([...inventory.tables.get('probe').columns].sort(), ['probe_id']);
+});
+
+test('a renamed table keeps its columns under the new name', () => {
+  const inventory = readSchemaInventory([
+    {
+      name: '0100_probe.sql',
+      ordinal: 100,
+      sql: 'create table if not exists public.probe (\n  id uuid primary key\n);',
+    },
+    { name: '0101_rename.sql', ordinal: 101, sql: 'alter table public.probe rename to sensor;' },
+  ]);
+
+  assert.equal(inventory.tables.has('probe'), false);
+  assert.deepEqual([...inventory.tables.get('sensor').columns], ['id']);
+});
+
+test('foreign keys come from inline, constraint and added-column references', () => {
+  const keys = readForeignKeys([
+    {
+      name: '0100_probe.sql',
+      ordinal: 100,
+      sql:
+        'create table if not exists public.probe_readings (\n' +
+        '  id uuid primary key,\n' +
+        '  probe_id uuid not null references public.probes(id) on delete cascade,\n' +
+        '  foreign key (tenant_id) references public.organizations(id)\n' +
+        ');',
+    },
+    {
+      name: '0101_probe_owner.sql',
+      ordinal: 101,
+      sql: 'alter table public.probe_readings\n  add column if not exists workspace_id uuid references public.workspaces(id);',
+    },
+  ]);
+
+  assert.deepEqual(
+    [...keys.get('probe_readings')].sort(),
+    [
+      ['probe_id', 'probes'],
+      ['tenant_id', 'organizations'],
+      ['workspace_id', 'workspaces'],
+    ].sort(),
+  );
+});
+
+test('the shipped hierarchy inventory names every facet subject and dates every gap', () => {
+  const concept = loadRegistry().concepts.find((entry) => entry.name === 'workspace');
+  const subjects = new Set(concept.facetSubjects.map((entry) => entry.name));
+
+  assert.deepEqual([...subjects].sort(), ['membership', 'organization', 'workspace']);
+  for (const entry of concept.facets) {
+    assert.ok(subjects.has(entry.subject), entry.id);
+    assert.ok(entry.claim.length > 20, entry.id);
+    if (entry.kind !== 'absent') continue;
+    assert.ok(entry.source.instead.length > 20, entry.id);
+  }
 });
