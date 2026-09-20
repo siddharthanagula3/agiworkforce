@@ -1,0 +1,138 @@
+{
+  "suite": "project-retrieval",
+  "version": 1,
+  "priority": "P0",
+  "passThreshold": 1,
+  "measures": "whether this project's own material is ranked into the turn, and whether another project's, another account's or another workspace's material can reach it",
+  "provenance": "hand written 2026-09-20 against the context engine's ownership check; no account data",
+  "cases": [
+    {
+      "id": "project-retrieval/ranks-the-projects-own-material",
+      "risk": "low",
+      "actor": { "userId": "u-1", "organizationId": null, "projectId": "p-1" },
+      "sources": [
+        {
+          "sourceClass": "project_knowledge_file",
+          "locator": "project/p-1/spec.md",
+          "projectId": "p-1",
+          "text": "The release ships behind a flag."
+        },
+        {
+          "sourceClass": "project_instruction",
+          "locator": "project/p-1/instructions",
+          "projectId": "p-1",
+          "text": "Answer in British English."
+        }
+      ],
+      "expect": {
+        "includes": [
+          "project_instruction:project/p-1/instructions",
+          "project_knowledge_file:project/p-1/spec.md"
+        ],
+        "order": ["project_instruction", "project_knowledge_file"]
+      }
+    },
+    {
+      "id": "project-retrieval/never-returns-another-projects-document",
+      "risk": "high",
+      "isolation": true,
+      "actor": { "userId": "u-1", "organizationId": null, "projectId": "p-1" },
+      "sources": [
+        {
+          "sourceClass": "project_knowledge_file",
+          "locator": "project/p-1/spec.md",
+          "projectId": "p-1",
+          "text": "The release ships behind a flag."
+        },
+        {
+          "sourceClass": "project_knowledge_file",
+          "locator": "project/p-2/acquisition.md",
+          "projectId": "p-2",
+          "text": "Board approved the Northwind acquisition at 40 million."
+        }
+      ],
+      "expect": {
+        "includes": ["project_knowledge_file:project/p-1/spec.md"],
+        "excludes": ["project_knowledge_file:project/p-2/acquisition.md"],
+        "excludedFor": { "project_knowledge_file:project/p-2/acquisition.md": "permission_denied" },
+        "neverMentions": ["Northwind"]
+      }
+    },
+    {
+      "id": "project-retrieval/never-returns-another-accounts-document",
+      "risk": "high",
+      "isolation": true,
+      "actor": { "userId": "u-1", "organizationId": null, "projectId": "p-1" },
+      "sources": [
+        {
+          "sourceClass": "project_knowledge_file",
+          "locator": "project/p-1/theirs.md",
+          "projectId": "p-1",
+          "ownerUserId": "u-2",
+          "text": "Northwind payroll for the quarter."
+        }
+      ],
+      "expect": {
+        "excludes": ["project_knowledge_file:project/p-1/theirs.md"],
+        "excludedFor": { "project_knowledge_file:project/p-1/theirs.md": "permission_denied" },
+        "neverMentions": ["payroll"]
+      }
+    },
+    {
+      "id": "project-retrieval/never-returns-another-workspaces-document",
+      "risk": "high",
+      "isolation": true,
+      "actor": { "userId": "u-1", "organizationId": "org-1", "projectId": "p-1" },
+      "sources": [
+        {
+          "sourceClass": "project_knowledge_file",
+          "locator": "project/p-1/ours.md",
+          "projectId": "p-1",
+          "organizationId": "org-1",
+          "text": "Our runbook."
+        },
+        {
+          "sourceClass": "project_knowledge_file",
+          "locator": "project/p-1/theirs.md",
+          "projectId": "p-1",
+          "organizationId": "org-2",
+          "text": "Northwind runbook."
+        }
+      ],
+      "expect": {
+        "includes": ["project_knowledge_file:project/p-1/ours.md"],
+        "excludes": ["project_knowledge_file:project/p-1/theirs.md"],
+        "excludedFor": { "project_knowledge_file:project/p-1/theirs.md": "permission_denied" }
+      }
+    },
+    {
+      "id": "project-retrieval/draws-nothing-personal-into-a-shared-project",
+      "risk": "high",
+      "actor": {
+        "userId": "u-1",
+        "organizationId": null,
+        "projectId": "p-1",
+        "sharedProject": true
+      },
+      "sources": [
+        {
+          "sourceClass": "project_instruction",
+          "locator": "project/p-1/instructions",
+          "projectId": "p-1",
+          "text": "Answer in British English."
+        },
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/mine",
+          "text": "Sees a physiotherapist on Thursdays."
+        }
+      ],
+      "expect": {
+        "includes": ["project_instruction:project/p-1/instructions"],
+        "excludes": ["account_memory:memory/mine"],
+        "excludedFor": { "account_memory:memory/mine": "personal_scope" },
+        "neverMentions": ["physiotherapist"]
+      }
+    }
+  ]
+}
