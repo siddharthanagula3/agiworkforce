@@ -15,6 +15,7 @@ import {
   writeConsolidatedMemory,
   type ManagedMemoryPolicy,
 } from '../managed-memory-context-service';
+import { answerMemoryPolicyQuery } from './memory-policy-stub';
 
 const MEMORY_ON: ManagedMemoryPolicy = {
   enabled: true,
@@ -33,10 +34,12 @@ const NOW = Date.parse('2026-09-17T00:00:00.000Z');
 
 type Call = [string, unknown[]];
 
+function memoryStatement(calls: Call[]): Call | undefined {
+  return calls.find(([sql]) => sql.includes('into user_memories'));
+}
+
 function recordingDb(respond: (sql: string) => unknown[] = () => []) {
-  const query = vi.fn(async (sql: string) =>
-    sql.includes('organization_admin_policies') ? WORKSPACE_MEMORY_ON : respond(sql),
-  );
+  const query = vi.fn(async (sql: string) => answerMemoryPolicyQuery(sql) ?? respond(sql));
   return { db: { query: query as never }, calls: () => query.mock.calls as unknown as Call[] };
 }
 
@@ -104,7 +107,7 @@ describe('consolidated memory write', () => {
         source: 'web',
         organizationId: ORG,
       },
-      { organizationPolicy: UNGOVERNED_MEMORY_POLICY },
+      { policies: { organization: UNGOVERNED_MEMORY_POLICY, user: MEMORY_ON } },
     );
 
     expect(row?.outcome).toBe('merged');
@@ -128,7 +131,7 @@ describe('consolidated memory write', () => {
     });
 
     expect(row?.superseded_ids).toEqual(['m1']);
-    const [sql, params] = calls()[0]!;
+    const [sql, params] = memoryStatement(calls())!;
     expect(sql).toContain('set superseded_by = inserted.id::uuid, superseded_at = now()');
     expect(sql).not.toMatch(/delete from user_memories/);
     expect(params[9]).toEqual(['user lives in %', 'i live in %']);
@@ -151,9 +154,10 @@ describe('consolidated memory write', () => {
       pinned: true,
     });
 
-    const [autoSql, autoParams] = calls()[0]!;
+    const writes = calls().filter(([sql]) => sql.includes('into user_memories'));
+    const [autoSql, autoParams] = writes[0]!;
     expect(autoParams[10]).toBe(0);
-    expect(calls()[1]![1][10]).toBe(2);
+    expect(writes[1]![1][10]).toBe(2);
     expect(autoSql).toContain(
       "case when existing.pinned then 2 when coalesce(existing.source, 'web') = 'auto' then 0 else 1 end",
     );

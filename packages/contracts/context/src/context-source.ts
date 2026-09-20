@@ -43,6 +43,53 @@ export type ContextAuthorship = (typeof CONTEXT_AUTHORSHIPS)[number];
 
 export type ContextTrustLevel = 'instruction' | 'reference' | 'untrusted';
 
+export const CONTEXT_POLICY_FLAGS = [
+  'allowMemory',
+  'allowPastChats',
+  'allowConnectorResults',
+  'allowWebResults',
+] as const;
+
+export type ContextPolicyFlag = (typeof CONTEXT_POLICY_FLAGS)[number];
+
+export const CONTEXT_SOURCE_SCOPES = [
+  'account',
+  'project',
+  'workspace',
+  'conversation',
+  'request',
+  'device',
+] as const;
+
+export type ContextSourceScope = (typeof CONTEXT_SOURCE_SCOPES)[number];
+
+export const CONTEXT_SENSITIVITIES = ['system', 'personal', 'project', 'external'] as const;
+
+export type ContextSensitivity = (typeof CONTEXT_SENSITIVITIES)[number];
+
+export const CONTEXT_RETENTIONS = ['durable', 'conversation', 'request'] as const;
+
+export type ContextRetention = (typeof CONTEXT_RETENTIONS)[number];
+
+export const CONTEXT_INVALIDATION_TRIGGERS = [
+  'memory_changed',
+  'conversation_changed',
+  'project_changed',
+  'library_changed',
+  'connector_changed',
+  'settings_changed',
+  'policy_changed',
+] as const;
+
+export type ContextInvalidationTrigger = (typeof CONTEXT_INVALIDATION_TRIGGERS)[number];
+
+export type ContextSourceToggle =
+  | { readonly kind: 'always_on' }
+  | { readonly kind: 'user_setting'; readonly key: string }
+  | { readonly kind: 'project_setting'; readonly key: string }
+  | { readonly kind: 'device_setting'; readonly key: string }
+  | { readonly kind: 'per_request' };
+
 export interface ContextSourceProducer {
   readonly surface: 'web' | 'cli' | 'desktop' | 'mobile' | 'extension';
   readonly module: string;
@@ -60,9 +107,41 @@ export interface ContextSourceClassPolicy {
   readonly canBeRetrieved: boolean;
   readonly canBeExported: boolean;
   readonly fenceTag: string | null;
+  /** What the user turns off to stop this class entering a turn. */
+  readonly enabledBy: ContextSourceToggle;
+  /** The workspace flag that overrides the user, or null when only the user decides. */
+  readonly policyFlag: ContextPolicyFlag | null;
+  readonly scope: ContextSourceScope;
+  readonly sensitivity: ContextSensitivity;
+  readonly retention: ContextRetention;
+  readonly invalidatedBy: readonly ContextInvalidationTrigger[];
+  readonly excludedFromTemporaryChat: boolean;
+  /** The sentence a user is shown when they ask why this reached the turn. */
+  readonly explanation: string;
   /** Loaders that already emit this class as a typed source; empty until one does. */
   readonly producedBy: readonly ContextSourceProducer[];
 }
+
+/**
+ * Highest authority first. This is the one order every surface assembles in and
+ * the reverse of the order a source is dropped in when the budget runs out.
+ */
+export const CONTEXT_SOURCE_PRECEDENCE: readonly ContextSourceClass[] = [
+  'security_policy',
+  'agent_instruction',
+  'template_instruction',
+  'project_instruction',
+  'local_repository_instruction',
+  'current_task_state',
+  'user_upload',
+  'account_memory',
+  'project_knowledge_file',
+  'project_sibling_chat',
+  'past_chat',
+  'library_file',
+  'connector_result',
+  'web_result',
+];
 
 const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy } = {
   account_memory: {
@@ -75,6 +154,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: 'account_memories',
+    enabledBy: { kind: 'user_setting', key: 'capabilities.memory' },
+    policyFlag: 'allowMemory',
+    scope: 'account',
+    sensitivity: 'personal',
+    retention: 'durable',
+    invalidatedBy: ['memory_changed', 'settings_changed', 'policy_changed'],
+    excludedFromTemporaryChat: true,
+    explanation: 'Saved to your Memory from an earlier conversation.',
     producedBy: [
       {
         surface: 'web',
@@ -93,6 +180,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: 'past_chats',
+    enabledBy: { kind: 'user_setting', key: 'capabilities.searchPastChats' },
+    policyFlag: 'allowPastChats',
+    scope: 'account',
+    sensitivity: 'personal',
+    retention: 'durable',
+    invalidatedBy: ['conversation_changed', 'settings_changed', 'policy_changed'],
+    excludedFromTemporaryChat: true,
+    explanation: 'Recalled from one of your earlier chats.',
     producedBy: [
       {
         surface: 'web',
@@ -111,6 +206,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: null,
+    enabledBy: { kind: 'project_setting', key: 'instructions' },
+    policyFlag: null,
+    scope: 'project',
+    sensitivity: 'project',
+    retention: 'durable',
+    invalidatedBy: ['project_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'Set as instructions on this project.',
     producedBy: [
       {
         surface: 'web',
@@ -129,6 +232,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: 'project_knowledge',
+    enabledBy: { kind: 'project_setting', key: 'knowledge' },
+    policyFlag: null,
+    scope: 'project',
+    sensitivity: 'project',
+    retention: 'durable',
+    invalidatedBy: ['project_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'A file added to this project\u2019s knowledge.',
     producedBy: [
       {
         surface: 'web',
@@ -147,6 +258,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: 'project_chats',
+    enabledBy: { kind: 'project_setting', key: 'uses_global_memory' },
+    policyFlag: 'allowPastChats',
+    scope: 'project',
+    sensitivity: 'project',
+    retention: 'durable',
+    invalidatedBy: ['conversation_changed', 'project_changed'],
+    excludedFromTemporaryChat: true,
+    explanation: 'Another chat inside this project.',
     producedBy: [
       {
         surface: 'web',
@@ -165,6 +284,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: 'library_files',
+    enabledBy: { kind: 'user_setting', key: 'capabilities.library' },
+    policyFlag: null,
+    scope: 'account',
+    sensitivity: 'personal',
+    retention: 'durable',
+    invalidatedBy: ['library_changed', 'settings_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'A file in your library.',
     producedBy: [],
   },
   user_upload: {
@@ -177,6 +304,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: 'user_uploads',
+    enabledBy: { kind: 'per_request' },
+    policyFlag: null,
+    scope: 'request',
+    sensitivity: 'personal',
+    retention: 'request',
+    invalidatedBy: [],
+    excludedFromTemporaryChat: false,
+    explanation: 'A file you attached to this message.',
     producedBy: [],
   },
   connector_result: {
@@ -189,6 +324,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: false,
     canBeExported: false,
     fenceTag: 'connector_results',
+    enabledBy: { kind: 'user_setting', key: 'capabilities.connectors' },
+    policyFlag: 'allowConnectorResults',
+    scope: 'account',
+    sensitivity: 'external',
+    retention: 'request',
+    invalidatedBy: ['connector_changed', 'settings_changed', 'policy_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'Fetched from a connector you have linked.',
     producedBy: [],
   },
   web_result: {
@@ -201,6 +344,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: false,
     canBeExported: false,
     fenceTag: 'web_results',
+    enabledBy: { kind: 'per_request' },
+    policyFlag: 'allowWebResults',
+    scope: 'request',
+    sensitivity: 'external',
+    retention: 'request',
+    invalidatedBy: ['policy_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'Fetched from the web for this message.',
     producedBy: [],
   },
   security_policy: {
@@ -213,6 +364,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: false,
     fenceTag: null,
+    enabledBy: { kind: 'always_on' },
+    policyFlag: null,
+    scope: 'workspace',
+    sensitivity: 'system',
+    retention: 'durable',
+    invalidatedBy: ['policy_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'A safety rule that applies to every turn.',
     producedBy: [],
   },
   agent_instruction: {
@@ -225,6 +384,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: null,
+    enabledBy: { kind: 'always_on' },
+    policyFlag: null,
+    scope: 'conversation',
+    sensitivity: 'system',
+    retention: 'conversation',
+    invalidatedBy: [],
+    excludedFromTemporaryChat: false,
+    explanation: 'The goal this run was given.',
     producedBy: [
       {
         surface: 'web',
@@ -243,6 +410,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: null,
+    enabledBy: { kind: 'always_on' },
+    policyFlag: null,
+    scope: 'workspace',
+    sensitivity: 'system',
+    retention: 'durable',
+    invalidatedBy: ['policy_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'Part of the template this chat was started from.',
     producedBy: [],
   },
   local_repository_instruction: {
@@ -255,6 +430,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: false,
     canBeExported: false,
     fenceTag: null,
+    enabledBy: { kind: 'device_setting', key: 'repository_instructions' },
+    policyFlag: null,
+    scope: 'device',
+    sensitivity: 'project',
+    retention: 'conversation',
+    invalidatedBy: ['project_changed'],
+    excludedFromTemporaryChat: false,
+    explanation: 'Read from an instructions file in your checkout.',
     producedBy: [],
   },
   current_task_state: {
@@ -267,6 +450,14 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
     canBeRetrieved: true,
     canBeExported: true,
     fenceTag: null,
+    enabledBy: { kind: 'always_on' },
+    policyFlag: null,
+    scope: 'conversation',
+    sensitivity: 'system',
+    retention: 'conversation',
+    invalidatedBy: [],
+    excludedFromTemporaryChat: false,
+    explanation: 'The plan this run is working through.',
     producedBy: [
       {
         surface: 'web',

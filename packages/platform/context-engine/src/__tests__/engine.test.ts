@@ -155,14 +155,23 @@ describe('resolveContext', () => {
         if (sql.includes('insert into')) {
           rows.push({
             turn_id: params[0],
-            user_id: params[1],
-            organization_id: params[2],
-            project_id: params[3],
-            created_at: params[4],
-            included_count: params[5],
-            budget_used_chars: params[6],
-            content_digest: params[7],
-            entries: JSON.parse(String(params[8])),
+            manifest_id: params[1],
+            assembler_version: params[2],
+            user_id: params[3],
+            organization_id: params[4],
+            project_id: params[5],
+            created_at: params[6],
+            included_count: params[7],
+            budget_used_chars: params[8],
+            token_estimate: params[9],
+            actual_token_count: params[10],
+            budget_tokens: params[11],
+            reserved_output_tokens: params[12],
+            over_budget: params[13],
+            temporary_chat: params[14],
+            versions: JSON.parse(String(params[15])),
+            content_digest: params[16],
+            entries: JSON.parse(String(params[17])),
           });
           return [];
         }

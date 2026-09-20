@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { ManagedMemoryContextDb } from '../managed-memory-context-service';
+import { answerMemoryPolicyQuery } from './memory-policy-stub';
 import {
   MAX_MEMORY_EXCLUSIONS,
   isMemoryExcluded,
@@ -20,6 +21,8 @@ function fakeDb(options: { settings?: unknown; inserted?: string[] } = {}) {
     calls,
     query: async (sql: string, params?: unknown[]) => {
       calls.push({ sql, params });
+      const policy = answerMemoryPolicyQuery(sql);
+      if (policy) return policy as never;
       if (sql.includes("settings -> 'memory'")) {
         return (options.settings === undefined ? [] : [{ memory: options.settings }]) as never;
       }

@@ -17,6 +17,11 @@ import {
 } from '@/lib/memory/import-parser';
 import { persistImportedMemories, type ImportMemoryDb } from '@/lib/memory/import-store';
 import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
+import {
+  loadMemoryWritePolicies,
+  memoryWriteAdmission,
+  workspaceMemoryPredicate,
+} from '@/lib/services/managed-memory-context-service';
 
 interface ImportRequestBody {
   mode?: string;
@@ -25,13 +30,17 @@ interface ImportRequestBody {
   sourceName?: string;
 }
 
+// Deduped against the workspace the import is landing in. Reading every
+// workspace's memories to answer a personal import would cross the boundary.
 async function loadExistingNormalizedKeys(
   db: ImportMemoryDb,
   userId: string,
+  organizationId: string | null,
 ): Promise<Set<string>> {
   const rows = await db.query<{ content: string }>(
-    `select content from user_memories where user_id = $1 and is_deleted = false`,
-    [userId],
+    `select content from user_memories
+      where user_id = $1 and is_deleted = false and ${workspaceMemoryPredicate(2)}`,
+    [userId, organizationId],
   );
   return new Set(rows.map((row) => normalizeMemoryKey(row.content)));
 }
@@ -54,8 +63,8 @@ async function handleDryRun(request: NextRequest, body: ImportRequestBody) {
     throw error;
   }
 
-  const { db, userId } = await getUserScopedDb(request);
-  const existingKeys = await loadExistingNormalizedKeys(db, userId);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const existingKeys = await loadExistingNormalizedKeys(db, userId, organizationId ?? null);
   const items = buildImportPreview(parsed.items, existingKeys);
 
   return NextResponse.json({
@@ -95,7 +104,7 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
   );
   const sourceValue = importSourceValue(sourceName);
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const { allowed, rejected } = await partitionMemoryWrites(db, {
     userId,
@@ -103,9 +112,28 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
     contentOf: (item) => item,
   });
 
+  const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
+  const admitted: string[] = [];
+  let blockedCount = 0;
+  for (const item of allowed) {
+    const decision = await memoryWriteAdmission(
+      db,
+      {
+        userId,
+        content: item,
+        category: null,
+        source: sourceValue,
+        organizationId: organizationId ?? null,
+      },
+      { policies },
+    );
+    if (decision.eligible) admitted.push(item);
+    else blockedCount += 1;
+  }
+
   let result;
   try {
-    result = await persistImportedMemories(db, { userId, items: allowed, source: sourceValue });
+    result = await persistImportedMemories(db, { userId, items: admitted, source: sourceValue });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to import memories');
     throw createError.internal('Failed to import memories');
@@ -118,6 +146,7 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
       sourceValue,
       insertedCount: result.insertedCount,
       skippedDuplicateCount: result.skippedDuplicateCount,
+      blockedCount,
       excludedCount: rejected.length,
       memories: result.memories.map((row) => ({
         id: row.id,

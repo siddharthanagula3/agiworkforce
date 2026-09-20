@@ -15,12 +15,12 @@ import {
   MemoryIneligibleError,
   activeMemoryPredicate,
   loadMemoryExclusions,
-  loadOrganizationMemoryPolicy,
   matchedMemoryExclusion,
-  memoryEligibilityGate,
+  memoryWriteAdmission,
   workspaceMemoryPredicate,
   writeConsolidatedMemory,
   type ManagedMemoryContextDb,
+  type MemoryIneligibilityReason,
 } from '@/lib/services/managed-memory-context-service';
 import { excludedMemoryMessage } from '@/lib/services/memory-write-service';
 
@@ -35,6 +35,17 @@ export interface MemoryCommandScope {
   organizationId: string | null;
   projectId?: string | null;
   conversationId?: string | null;
+  /** A temporary chat may still forget; it may never teach Memory anything. */
+  temporaryChat?: boolean;
+}
+
+const MEMORY_OFF_REASONS: ReadonlySet<MemoryIneligibilityReason> = new Set([
+  'user_memory_disabled',
+  'organization_memory_disabled',
+]);
+
+function commandRefusalReason(reason: MemoryIneligibilityReason) {
+  return MEMORY_OFF_REASONS.has(reason) ? ('memory_disabled' as const) : ('ineligible' as const);
 }
 
 export type MemoryCommandResult =
@@ -63,23 +74,19 @@ export function createMemoryCommandPorts(
         return { eligible: false, reason: 'excluded', message: excludedMemoryMessage(exclusion) };
       }
 
-      const organizationPolicy = await loadOrganizationMemoryPolicy(db, scope.organizationId);
-      const decision = memoryEligibilityGate({
-        write: {
-          userId: scope.userId,
-          content: fact,
-          category: null,
-          source: MEMORY_COMMAND_SOURCE,
-          organizationId: scope.organizationId,
-          projectId: scope.projectId ?? null,
-        },
-        organizationPolicy,
+      const decision = await memoryWriteAdmission(db, {
+        userId: scope.userId,
+        content: fact,
+        category: null,
+        source: MEMORY_COMMAND_SOURCE,
+        organizationId: scope.organizationId,
+        projectId: scope.projectId ?? null,
+        temporaryChat: scope.temporaryChat === true,
       });
       if (decision.eligible) return { eligible: true };
       return {
         eligible: false,
-        reason:
-          decision.reason === 'organization_memory_disabled' ? 'memory_disabled' : 'ineligible',
+        reason: commandRefusalReason(decision.reason),
         message: decision.message,
       };
     },
