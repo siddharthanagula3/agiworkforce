@@ -9,6 +9,8 @@ const API_ROOT = join(WEB_ROOT, 'app', 'api');
 const SKIP = /^(?:\.|node_modules$|\.next$|dist$|build$|out$|coverage$|target$|__mocks__$)/;
 const SOURCE = /\.(?:tsx?|mts|mjs|jsx?|rs|swift|kt|json|html|ya?ml)$/;
 const TEST_FILE = /\.(?:test|spec)\.[tj]sx?$/;
+// A registry names a route by its file path, which is never a call to it.
+const ROUTE_FILE_PATH = /app\/api\/[^\s'"`]*route\.tsx?/g;
 
 /**
  * A route nothing calls is either a mistake or a decision. This pins the
@@ -115,6 +117,18 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'cross-surface explicit remember and confirmed-forget command protocol',
   },
   {
+    url: '/api/completion',
+    why: 'retired managed-execution endpoint kept so an old client gets one fixed refusal; only registries name it',
+  },
+  {
+    url: '/api/me/routing-preferences',
+    why: 'the chat request path reads these preferences server side; no settings control calls the route yet',
+  },
+  {
+    url: '/api/settings/identities',
+    why: 'lists and unlinks sign-in methods behind step-up; the settings pane that calls it is not built yet',
+  },
+  {
     url: '/api/settings/security/compromise',
     why: 'authenticated emergency account-compromise response, not a routine settings control',
   },
@@ -183,7 +197,7 @@ function callerCorpus(): string[] {
     })
     .map((file) => {
       try {
-        return readFileSync(file, 'utf8');
+        return readFileSync(file, 'utf8').replace(ROUTE_FILE_PATH, '');
       } catch {
         return '';
       }

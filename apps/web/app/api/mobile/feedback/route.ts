@@ -6,7 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getOptionalAuthUser } from '@/lib/api-auth';
 import { normalizeDiagnostics } from '@/lib/support/diagnostics/schema';
 import { deployEnvironment, releaseSha } from '@/lib/server/hosting';
 
@@ -37,7 +37,7 @@ async function handleSubmitFeedback(request: NextRequest) {
     deployEnv: deployEnvironment() ?? null,
   });
 
-  const { subject: userId } = await getRequestIdentity();
+  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
 
   const db = getNeonDb();
   try {

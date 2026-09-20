@@ -21,7 +21,7 @@ import {
   normalizeToken,
   type PublicContentTarget,
 } from '../admin/takedown/lib/public-target';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getOptionalAuthUser } from '@/lib/api-auth';
 
 // Public intake for a rights-holder notice about content this deployment serves
 // at a public URL. It is unauthenticated on purpose: the person whose work was
@@ -169,12 +169,7 @@ async function handleNotice(request: NextRequest): Promise<NextResponse> {
     throw createError.notFound('Nothing is published at that URL any more');
   }
 
-  let reporterUserId: string | null = null;
-  try {
-    reporterUserId = (await getRequestIdentity()).subject ?? null;
-  } catch {
-    reporterUserId = null;
-  }
+  const reporterUserId = (await getOptionalAuthUser(request))?.userId ?? null;
 
   const reference = generateReference();
 

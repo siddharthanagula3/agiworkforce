@@ -218,7 +218,7 @@ function makeFakeDb() {
 
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
-import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
+import { assertAccountActive, getClerkAuthUser, getOptionalAuthUser } from '@/lib/api-auth';
 import {
   createUpstashKeyValueStore,
   type KeyValueStore,
@@ -1255,5 +1255,99 @@ describe('getClerkAuthUser · a database without the identity bridge', () => {
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
     ).rejects.toThrow();
+  });
+});
+
+describe('getOptionalAuthUser · the gate a signed-out caller does not need', () => {
+  const LOCKED_ORGANIZATION = '44444444-4444-4444-8444-444444444444';
+
+  function bindWorkspace(organizationId: string | null, locked: boolean) {
+    const inner = mockNeonQuery.getMockImplementation();
+    mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      const s = String(sql).toLowerCase();
+      if (s.includes('from public.user_settings')) {
+        return organizationId ? [{ organization_id: organizationId }] : [];
+      }
+      if (s.includes('from public.feature_flags')) {
+        return locked && organizationId
+          ? [
+              {
+                flag_name: 'tenant.lockdown',
+                user_id: null,
+                organization_id: organizationId,
+                variant: 'off',
+                enabled: false,
+                expires_at: null,
+              },
+            ]
+          : [];
+      }
+      return inner ? ((await inner(sql, params)) as unknown[]) : [];
+    });
+  }
+
+  function request(): NextRequest {
+    return new NextRequest('http://localhost/api/feedback');
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+    vi.mocked(getKeyValueStore).mockReturnValue(null as unknown as KeyValueStore);
+  });
+
+  it('answers null for a caller with no session at all', async () => {
+    makeFakeDb();
+    mockAuth.mockResolvedValue(authSession(null));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('answers the account id for an active signed-in caller', async () => {
+    const db = makeFakeDb();
+    db.identities.set('clerk:optional-subject', {
+      identityId: 'identity-optional',
+      accountId: 'account-optional',
+    });
+    mockAuth.mockResolvedValue(authSession('optional-subject'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toEqual({
+      userId: 'account-optional',
+      identityId: 'identity-optional',
+    });
+  });
+
+  it('serves a suspended account as signed out, so support stays reachable and nothing is attributed', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('suspended-optional-user', 'suspended');
+    mockAuth.mockResolvedValue(authSession('suspended-optional-user'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('serves a caller whose workspace is locked down as signed out', async () => {
+    makeFakeDb();
+    bindWorkspace(LOCKED_ORGANIZATION, true);
+    mockAuth.mockResolvedValue(authSession('locked-optional-user'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('serves a stale cookie for an erased account as signed out', async () => {
+    const db = makeFakeDb();
+    db.erasedAccounts.add('erased-optional-user');
+    mockAuth.mockResolvedValue(authSession('erased-optional-user'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('still refuses a credential it cannot verify, rather than reading it as signed out', async () => {
+    makeFakeDb();
+    mockAuth.mockResolvedValue(authSession(null));
+
+    const bearer = new NextRequest('http://localhost/api/feedback', {
+      headers: { authorization: 'Bearer sk_live_0000000000000000_not_a_real_secret_at_all' },
+    });
+    await expect(getOptionalAuthUser(bearer)).rejects.toMatchObject({ statusCode: 401 });
   });
 });

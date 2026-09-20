@@ -7,7 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { redactSecrets } from '@/lib/support/handoff/transcript';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getOptionalAuthUser } from '@/lib/api-auth';
 import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
 import { secureFilenameSegment } from '@/lib/secure-random';
 
@@ -129,7 +129,7 @@ async function handleSubmitFeedback(request: NextRequest) {
   const safeMessage = redactSecrets(message);
   const safeLogs = typeof logs === 'string' ? redactSecrets(logs).slice(0, MAX_LOGS_CHARS) : null;
 
-  const { subject: userId } = await getRequestIdentity();
+  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
   const screenshotKey = screenshot
     ? await storeScreenshot(screenshot.data_url, userId ?? null)
     : null;

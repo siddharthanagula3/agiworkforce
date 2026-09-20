@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createError } from '@/lib/errors';
+
 const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
-  getRequestIdentity: vi.fn(),
+  getClerkAuthUser: vi.fn(),
   readServerTelemetryConsent: vi.fn(),
   recordClientFailure: vi.fn(),
 }));
@@ -11,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/identity', () => ({ getRequestIdentity: mocks.getRequestIdentity }));
+vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
 vi.mock('@/lib/server/telemetry-consent', () => ({
   readServerTelemetryConsent: mocks.readServerTelemetryConsent,
 }));
@@ -46,13 +48,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireCsrfToken.mockResolvedValue(null);
   mocks.withRateLimit.mockResolvedValue(null);
-  mocks.getRequestIdentity.mockResolvedValue({ subject: 'usr_1' });
+  mocks.getClerkAuthUser.mockResolvedValue({ userId: 'usr_1' });
   mocks.readServerTelemetryConsent.mockResolvedValue(true);
 });
 
 describe('POST /api/telemetry/client', () => {
   it('refuses a signed-out caller', async () => {
-    mocks.getRequestIdentity.mockResolvedValue({ subject: null });
+    mocks.getClerkAuthUser.mockRejectedValue(createError.unauthorized('Sign in'));
 
     const response = await POST(request({ events: [{ failure: 'mermaid_render' }] }));
 
@@ -79,7 +81,7 @@ describe('POST /api/telemetry/client', () => {
     );
     expect((await POST(request({ events: [{ failure: 'code_copy' }] }))).status).toBe(429);
 
-    expect(mocks.getRequestIdentity).not.toHaveBeenCalled();
+    expect(mocks.getClerkAuthUser).not.toHaveBeenCalled();
     expect(mocks.recordClientFailure).not.toHaveBeenCalled();
   });
 

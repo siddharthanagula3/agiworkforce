@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const routeMocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  optionalUser: vi.fn(),
+  getIdentityUser: vi.fn(),
   getOrCreateAnonSession: vi.fn(),
   requireCsrfToken: vi.fn(),
   withRateLimit: vi.fn(),
@@ -15,6 +17,19 @@ const routeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: routeMocks.auth }));
+vi.mock('@/lib/api-auth', () => ({
+  getOptionalAuthUser: routeMocks.optionalUser,
+  getClerkAuthUser: vi.fn(),
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(() => []),
+}));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityUser: routeMocks.getIdentityUser,
+  getIdentityProvider: vi.fn(),
+  getIdentityAuthorizedParties: vi.fn(() => []),
+  getRequestIdentity: vi.fn(async () => ({ subject: null })),
+  verifyIdentitySessionToken: vi.fn(async () => null),
+}));
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: routeMocks.requireCsrfToken,
   getOrCreateAnonSession: routeMocks.getOrCreateAnonSession,
@@ -91,6 +106,8 @@ beforeEach(() => {
   routeMocks.requireCsrfToken.mockResolvedValue(null);
   routeMocks.withRateLimit.mockResolvedValue(null);
   routeMocks.auth.mockResolvedValue({ userId: null });
+  routeMocks.optionalUser.mockResolvedValue(null);
+  routeMocks.getIdentityUser.mockResolvedValue({ primaryEmail: 'real@example.com' });
   routeMocks.getCurrentUserRlsDb.mockResolvedValue(null);
   routeMocks.getOrCreateAnonSession.mockResolvedValue({ id: 'anon-xyz' });
   routeMocks.listFreshOnlineAgents.mockResolvedValue([]);
@@ -161,7 +178,7 @@ describe('POST /api/support/handoff', () => {
   });
 
   it('ignores a client-supplied contactEmail when the caller is signed in', async () => {
-    routeMocks.auth.mockResolvedValue({ userId: 'user_real' });
+    routeMocks.optionalUser.mockResolvedValue({ userId: 'user_real' });
     await POST(request(validBody({ contactEmail: 'attacker@example.com' })));
 
     expect(routeMocks.insertHandoffSession).toHaveBeenCalledWith(
