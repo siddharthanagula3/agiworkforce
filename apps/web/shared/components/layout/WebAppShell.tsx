@@ -58,6 +58,7 @@ import {
   conversationDeleteConfirm,
   conversationHref,
   projectDeleteConfirm,
+  runSessionRowAction,
 } from '@shared/components/layout/sidebar-session-actions';
 import {
   copyProjectLink,
@@ -87,7 +88,10 @@ import { helpHrefForPath } from '@/lib/support/help-entry-points';
 import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
 import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/ComposerFeedbackDialog';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
-import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
+import {
+  KEYBOARD_SHORTCUT_DOCS,
+  useKeyboardShortcuts,
+} from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { onAppCommand } from '@shared/lib/app-commands';
 import { resolveAccountIdentity, type AccountIdentity } from './account-identity';
 
@@ -293,27 +297,34 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       openAfterMobileNavClose(() =>
         confirmDestructive({
           ...conversationDeleteConfirm(convo?.title),
-          onConfirm: () => deleteConversation(id),
+          onConfirm: () => runSessionRowAction('delete', () => deleteConversation(id)),
         }),
       );
     },
     [confirmDestructive, conversations, deleteConversation, openAfterMobileNavClose],
   );
   const handleRenameSession = useCallback(
-    (id: string, title: string) => void updateConversation(id, { title }),
+    (id: string, title: string) =>
+      void runSessionRowAction('rename', () => updateConversation(id, { title })),
     [updateConversation],
   );
   const handlePinSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      if (convo) void updateConversation(id, { pinned: !convo.isPinned });
+      if (!convo) return;
+      void runSessionRowAction(convo.isPinned ? 'unpin' : 'pin', () =>
+        updateConversation(id, { pinned: !convo.isPinned }),
+      );
     },
     [conversations, updateConversation],
   );
   const handleArchiveSession = useCallback(
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
-      if (convo) void updateConversation(id, { archived: !convo.isArchived });
+      if (!convo) return;
+      void runSessionRowAction(convo.isArchived ? 'restore' : 'archive', () =>
+        updateConversation(id, { archived: !convo.isArchived }),
+      );
     },
     [conversations, updateConversation],
   );
@@ -325,7 +336,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     [router],
   );
   const handleMoveToProjectSession = useCallback(
-    (sessionId: string, projectId: string) => void updateConversation(sessionId, { projectId }),
+    (sessionId: string, projectId: string) =>
+      void runSessionRowAction('moveToProject', () => updateConversation(sessionId, { projectId })),
     [updateConversation],
   );
 
@@ -388,6 +400,34 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // dialog directly when WebChatPage renders the sidebar.
   const handleProjectCreate = useCallback(() => router.push('/chat/projects?new=1'), [router]);
 
+  // The collapse control and Cmd/Ctrl+B mean the same thing: with no persistent
+  // rail there is nothing to collapse, so both toggle the drawer instead.
+  const handleToggleSidebar = useCallback(() => {
+    if (shellLayout.sidebarMode === 'persistent') {
+      setSidebarCollapsed(!collapsed);
+      return;
+    }
+    if (mobileNavOpen) {
+      setMobileNavOpen(false);
+      return;
+    }
+    openMobileNav();
+  }, [collapsed, mobileNavOpen, openMobileNav, setSidebarCollapsed, shellLayout.sidebarMode]);
+
+  const handleShowShortcuts = useCallback(
+    () => openAfterMobileNavClose(() => setKeyboardShortcutsOpen(true)),
+    [openAfterMobileNavClose],
+  );
+
+  // The shortcuts dialog on this shell lists four chords that only the chat
+  // page used to bind. A surface with no rail leaves Cmd/Ctrl+B unclaimed.
+  useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onSearch: handleOpenSearch,
+    onShowShortcuts: handleShowShortcuts,
+    onToggleSidebar: rail ? handleToggleSidebar : undefined,
+  });
+
   // ONE rail definition, shared with WebChatPage, see `app-nav-items.ts` for
   // why (the two hand-maintained copies had drifted and this shell was the only
   // one exposing Tasks).
@@ -445,7 +485,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       onOpenSettings={() => openShellSettings('general')}
       onOpenHelp={() => router.push(helpHrefForPath(pathname))}
       onOpenFeedback={() => openAfterMobileNavClose(() => setFeedbackOpen(true))}
-      onOpenKeyboardShortcuts={() => openAfterMobileNavClose(() => setKeyboardShortcutsOpen(true))}
+      onOpenKeyboardShortcuts={handleShowShortcuts}
       showUpgrade={hasSelfServeUpgradePath(currentTier)}
       onUpgrade={() => openAfterMobileNavClose(openUpgradeDialog)}
       onDownloadApps={() => router.push('/download')}
@@ -598,11 +638,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
         <Sidebar
           {...sharedSidebarProps}
           collapsed={shellLayout.sidebarMode === 'rail' ? true : collapsed}
-          onToggleCollapse={
-            shellLayout.sidebarMode === 'rail'
-              ? openMobileNav
-              : () => setSidebarCollapsed(!collapsed)
-          }
+          onToggleCollapse={handleToggleSidebar}
         />
       )}
 

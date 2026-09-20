@@ -42,6 +42,7 @@ const VIEWPORT_MARGIN = 8;
  */
 const MAX_SHIFT_PASSES = 1;
 const TRIGGER_GAP = 4;
+const TRIGGER_SELECTOR = 'button, [role="button"]';
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -75,13 +76,27 @@ export function Menu({
     onOpenChangeRef.current?.(open);
   }, [open]);
 
+  const triggerElement = useCallback(
+    () => containerRef.current?.querySelector<HTMLElement>(TRIGGER_SELECTOR) ?? null,
+    [],
+  );
+
   // Synchronous, and before any consumer state change: a panel that unmounts
   // with focus still inside it drops focus to <body>, and anything the
   // selection opens next (a confirm dialog reads document.activeElement to
   // learn what to restore to) then records <body> or whatever grabbed it.
   const focusTrigger = useCallback(() => {
-    containerRef.current?.querySelector<HTMLElement>('button, [role="button"]')?.focus();
-  }, []);
+    triggerElement()?.focus();
+  }, [triggerElement]);
+
+  // The trigger is a render prop and cannot be cloned, so the menu stamps the
+  // two attributes a screen reader needs onto it; no call site set them.
+  useIsomorphicLayoutEffect(() => {
+    const element = triggerElement();
+    if (!element) return;
+    element.setAttribute('aria-haspopup', 'menu');
+    element.setAttribute('aria-expanded', String(open));
+  }, [open, triggerElement]);
 
   const close = useCallback(() => {
     focusTrigger();
