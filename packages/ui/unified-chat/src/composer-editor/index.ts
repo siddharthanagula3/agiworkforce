@@ -7,6 +7,9 @@ export {
   COMPOSER_EDITOR_ROOT_CLASS,
 } from './ComposerEditor';
 
+export { IME_PROCESSING_KEY_CODE, isImeComposingKey } from './ime-composition';
+export type { ImeCompositionSignals } from './ime-composition';
+
 export {
   COMPOSER_BLOCK_SEPARATOR,
   composerDocumentToText,

@@ -119,6 +119,7 @@ import {
   pastedCodeFence,
   useCapability,
 } from '@agiworkforce/unified-chat';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/composer-editor';
 import type {
   ComposerAttachmentPasteDecision,
   ComposerCodePaste,
@@ -3079,6 +3080,8 @@ const ChatComposerNewComponent = ({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      const composing = isImeComposingKey(e.nativeEvent);
+
       // Forward navigation keys to SlashCommandMenu when open
       if (showSlashMenu) {
         const consumed = slashMenuRef.current?.handleKey(e.key);
@@ -3091,7 +3094,7 @@ const ChatComposerNewComponent = ({
       // The mention menu only owns navigation keys while it actually has rows
       // to navigate; an empty menu must never swallow Enter and strand a
       // message the user meant to send.
-      if (showMentions && mentionItems.length > 0 && !e.nativeEvent.isComposing) {
+      if (showMentions && mentionItems.length > 0 && !composing) {
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           setMentionIndex((prev) => (prev >= mentionItems.length - 1 ? 0 : prev + 1));
@@ -3116,7 +3119,7 @@ const ChatComposerNewComponent = ({
         attachments.length === 0 &&
         !showMentions &&
         !showSlashMenu &&
-        !e.nativeEvent.isComposing
+        !composing
       ) {
         e.preventDefault();
         onEditLastMessage();
@@ -3126,7 +3129,7 @@ const ChatComposerNewComponent = ({
       // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
       // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
       // Enter (slash) or mid-IME-composition (e.g. CJK candidates).
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && !showSlashMenu) {
+      if (e.key === 'Enter' && !e.shiftKey && !composing && !showSlashMenu) {
         e.preventDefault();
         handleSubmit();
       }
