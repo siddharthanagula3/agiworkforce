@@ -16,6 +16,7 @@ export const AUTH_BODY_CLASS = 'mt-8';
 export const AUTH_LABEL_CLASS = 'block text-center text-sm font-medium text-text-primary';
 export const AUTH_MUTED_LINE_CLASS = 'text-base text-text-muted';
 export const AUTH_ERROR_CLASS = 'mt-2 text-center text-sm text-danger-text';
+export const AUTH_HINT_CLASS = 'mt-2 text-center text-sm text-text-muted';
 export const AUTH_LINK_CLASS = 'auth-inline rounded text-accent-text underline underline-offset-4';
 export const AUTH_INPUT_CLASS = `auth-field ${CONTROL_SIZE} ${HAIRLINE} px-5 text-center text-base text-text-primary placeholder:text-text-muted`;
 export const AUTH_PRIMARY_BUTTON_CLASS = `${CONTROL} mt-8 inline-flex items-center justify-center gap-2 bg-action-primary text-base font-medium text-action-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`;

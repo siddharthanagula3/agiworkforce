@@ -3,20 +3,30 @@
 import type { InputHTMLAttributes, ReactNode } from 'react';
 import { useId } from 'react';
 
-import { AUTH_ERROR_CLASS, AUTH_INPUT_CLASS, AUTH_LABEL_CLASS } from './authStyles';
+import {
+  AUTH_ERROR_CLASS,
+  AUTH_HINT_CLASS,
+  AUTH_INPUT_CLASS,
+  AUTH_LABEL_CLASS,
+} from './authStyles';
 
 export function AuthField({
   label,
   error,
+  hint,
   trailing,
   ...input
 }: {
   label: string;
   error?: ReactNode;
+  /** A condition of the input itself, announced beside it rather than as a failure. */
+  hint?: ReactNode;
   trailing?: ReactNode;
 } & InputHTMLAttributes<HTMLInputElement>) {
   const fieldId = useId();
   const errorId = `${fieldId}-error`;
+  const hintId = `${fieldId}-hint`;
+  const described = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(' ');
 
   return (
     <div>
@@ -29,10 +39,15 @@ export function AuthField({
           id={fieldId}
           className={`${AUTH_INPUT_CLASS}${trailing ? ' pr-14' : ''}`}
           aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
+          aria-describedby={described || undefined}
         />
         {trailing}
       </div>
+      {hint ? (
+        <p id={hintId} role="status" className={AUTH_HINT_CLASS}>
+          {hint}
+        </p>
+      ) : null}
       {error ? (
         <p id={errorId} role="alert" className={AUTH_ERROR_CLASS}>
           {error}

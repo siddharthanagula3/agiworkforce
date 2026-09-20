@@ -20,7 +20,8 @@ import {
   resolveAuthenticatedAccount,
   type AuthenticatedAccount,
 } from '@/lib/server/identity-account';
-import { accountAccessDecision, effectiveAccountStatus } from '@/lib/auth/account-status';
+import { accountAccessDecision, type AccountStatus } from '@/lib/auth/account-status';
+import { readAccountStatus } from '@/lib/auth/account-lifecycle';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
@@ -105,24 +106,6 @@ function assertStatusAllowsAccess(status: string | null): void {
 }
 
 /**
- * Joined to erasure_tombstones because erasure deletes the profile row, and the
- * subject row is synthesised so "no row" means the database did not answer.
- */
-const ACCOUNT_LIFECYCLE = `
-  select profile.account_status,
-         profile.deletion_scheduled_for,
-         (tombstone.user_id is not null) as erased
-    from (select $1::text as id) subject
-    left join public.profiles profile on profile.id = subject.id
-    left join public.erasure_tombstones tombstone on tombstone.user_id = subject.id`;
-
-interface AccountLifecycleRow {
-  account_status: string | null;
-  deletion_scheduled_for: unknown;
-  erased: boolean | null;
-}
-
-/**
  * A workspace locked down during an incident reaches no route. Resolution
  * failures answer "not locked", which is the contract tenant-lockdown.ts states:
  * the switch can only ever take something down deliberately.
@@ -155,31 +138,18 @@ async function assertAccountLifecycleActive(userId: string): Promise<void> {
 
   let lastError: unknown;
   for (let attempt = 0; attempt < ACCOUNT_STATUS_ATTEMPTS; attempt++) {
-    let rows: AccountLifecycleRow[];
+    let status: AccountStatus | null;
     try {
-      const raced = await withDeadline(
-        getNeonDb().query<AccountLifecycleRow>(ACCOUNT_LIFECYCLE, [userId]),
-        ACCOUNT_STATUS_DEADLINE_MS,
-      );
+      const raced = await withDeadline(readAccountStatus(userId), ACCOUNT_STATUS_DEADLINE_MS);
       if (raced === DEADLINE_EXCEEDED) {
         lastError = new Error(`account_status lookup exceeded ${ACCOUNT_STATUS_DEADLINE_MS}ms`);
         continue;
       }
-      rows = raced;
+      status = raced;
     } catch (lookupError) {
       lastError = lookupError;
       continue;
     }
-    const row = rows[0];
-    if (!row) {
-      lastError = new Error('account lifecycle lookup returned no row');
-      continue;
-    }
-    const status = effectiveAccountStatus({
-      status: row.account_status,
-      deletionScheduled: row.deletion_scheduled_for != null,
-      erased: row.erased === true,
-    });
     await setCachedAccountStatus(userId, status);
     assertStatusAllowsAccess(status);
     return;
