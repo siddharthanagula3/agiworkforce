@@ -107,7 +107,7 @@ describe('the step-up registry and the routes that use it', () => {
   it('names the consequence of each action in a sentence the prompt can show', () => {
     for (const action of STEP_UP_ACTION_IDS) {
       const { consequence } = stepUpActionSpec(action);
-      expect(consequence, `${action} has no consequence`).toMatch(/^[A-Z].*\.$/s);
+      expect(consequence, `${action} has no consequence`).toMatch(/^[A-Z][^]*\.$/);
       expect(
         consequence.length,
         `${action} consequence is too thin to explain anything`,
