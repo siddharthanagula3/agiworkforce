@@ -386,9 +386,22 @@ async function handleCreateLiveSession(request: NextRequest) {
   // which is why the client settles one before it offers.
   let voiceSessionId: string | null = null;
   if (body.conversationId) {
+    let storeReady = false;
     try {
-      if (await isVoiceSessionStoreReady(scoped.db)) {
-        const record = await createVoiceSession({
+      storeReady = await isVoiceSessionStoreReady(scoped.db);
+    } catch (error) {
+      logger.error(
+        { event: 'voice_session_store_unreadable', error, userId, sessionId },
+        'Voice session store readiness could not be determined',
+      );
+    }
+    // The record is what a session is resumed and audited from, and a
+    // conversation with no row means it never had one. A session that runs
+    // without its row makes that false, so it is refused and not charged.
+    if (storeReady) {
+      let record: Awaited<ReturnType<typeof createVoiceSession>> = null;
+      try {
+        record = await createVoiceSession({
           db: scoped.db,
           userId,
           organizationId: scoped.organizationId,
@@ -402,13 +415,22 @@ async function handleCreateLiveSession(request: NextRequest) {
           pace,
           activeTools: offeredToolIds,
         });
-        voiceSessionId = record?.id ?? null;
+      } catch (error) {
+        logger.error(
+          { event: 'voice_session_not_persisted', error, userId, sessionId },
+          'Live voice session could not be recorded',
+        );
       }
-    } catch (error) {
-      logger.error(
-        { event: 'voice_session_not_persisted', error, userId, sessionId },
-        'Live voice session could not be recorded; the session continues unpersisted',
-      );
+      if (!record) {
+        await releaseReservation('voice_session_not_recorded');
+        return jsonError(
+          request,
+          503,
+          'voice_session_not_recorded',
+          'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
+        );
+      }
+      voiceSessionId = record.id;
     }
   }
 
