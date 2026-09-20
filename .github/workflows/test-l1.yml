@@ -100,7 +100,7 @@ jobs:
 
   upload-coverage:
     needs: test-l1
-    if: ${{ always() && github.event_name == 'push' && needs.test-l1.result != 'cancelled' }}
+    if: ${{ always() && github.event_name == 'push' && needs.test-l1.result == 'success' && vars.CODECOV_ENABLED == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -124,3 +124,23 @@ jobs:
           use_oidc: true
           fail_ci_if_error: true
           verbose: true
+
+  coverage-publication-status:
+    needs: test-l1
+    if: ${{ always() && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Report Codecov activation state
+        env:
+          CODECOV_ENABLED: ${{ vars.CODECOV_ENABLED }}
+        run: |
+          if [[ "$CODECOV_ENABLED" == "true" ]]; then
+            echo "Codecov publishing is active." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Codecov publishing is inactive"
+              echo "Coverage tests, the repository floor, and the required GitHub artifact remain enforced."
+              echo "To publish externally, install the Codecov GitHub App for this repository, complete Codecov repository setup, set the repository variable CODECOV_ENABLED to true, and rerun this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
