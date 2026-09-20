@@ -137,14 +137,18 @@ test('dropping a table from the account inventory reopens the hole it filled', (
 });
 
 test('an address-matched sweep counts as reaching its table', () => {
-  const { failures } = run({
+  const unretained = (source) => source.replace(/  cloud_waitlist:\n    '[^']*',\n/, '');
+  const unreached = run({ account: unretained });
+  assert.ok(mentions(unreached.failures, 'cloud_waitlist'), unreached.failures.join('\n'));
+
+  const swept = run({
     account: (source) =>
-      source.replace(
+      unretained(source).replace(
+        "    table: 'beta_applications',\n    column: 'email',",
         "    table: 'cloud_waitlist',\n    column: 'email',",
-        "    table: 'waitlist',\n    column: 'email',",
       ),
   });
-  assert.ok(mentions(failures, 'cloud_waitlist'), failures.join('\n'));
+  assert.ok(!mentions(swept.failures, 'cloud_waitlist'), swept.failures.join('\n'));
 });
 
 test('a retained table has to say why, not merely be listed', () => {
