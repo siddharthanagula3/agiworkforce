@@ -1,0 +1,57 @@
+{
+  "policy": {
+    "module": "packages/platform/utils/src/retryPolicy.ts",
+    "symbol": "RETRY_POLICY_DEFAULTS",
+    "fields": {
+      "maxAttempts": {
+        "minimum": 2,
+        "why": "A count is what stops a retry loop becoming a denial of service against a dependency that is already failing."
+      },
+      "baseDelayMs": {
+        "minimum": 100,
+        "why": "The first wait is what separates a retry from a second copy of the same request."
+      },
+      "multiplier": {
+        "minimum": 2,
+        "why": "Backoff is what lets a dependency recover instead of meeting the same load on every attempt."
+      },
+      "maxDelayMs": {
+        "minimum": 1000,
+        "why": "A cap on the wait is what bounds the total duration together with the attempt count, so a caller knows when it will hear an answer."
+      },
+      "jitter": {
+        "forbiddenValue": "none",
+        "why": "Without jitter every client that failed at the same moment retries at the same moment, and the recovery is the next outage."
+      },
+      "maxRetryAfterMs": {
+        "minimum": 1000,
+        "why": "A provider can ask for an arbitrarily long wait; the cap is what keeps one header from parking a request for an hour."
+      }
+    }
+  },
+  "classification": {
+    "module": "packages/platform/utils/src/retryPolicy.ts",
+    "evidence": [
+      "RetryDisposition",
+      "RetryClassification",
+      "reason",
+      "RetryStopReason",
+      "RetryTelemetryEvent"
+    ]
+  },
+  "toolRetry": {
+    "module": "packages/contracts/types/src/generated/protocol/ToolDefinition.ts",
+    "field": "retrySafety",
+    "vocabulary": {
+      "module": "packages/contracts/types/src/generated/protocol/ToolRetrySafety.ts",
+      "members": ["idempotent", "at_most_once", "unknown"]
+    }
+  },
+  "userVisibleRetry": [
+    {
+      "module": "apps/web/features/chat/lib/retryable-turn.ts",
+      "evidence": "retryable|retryableUserMessageId",
+      "why": "A turn that failed after the user sent it is the one case where trying again is the reader's call, so the surface has to know which message to resend."
+    }
+  ]
+}
