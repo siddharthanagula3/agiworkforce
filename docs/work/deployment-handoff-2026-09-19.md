@@ -1009,7 +1009,8 @@ identified an existing unbounded body read. The final adapter reuses the shared
 MCP OAuth bounded reader for that response. The initial 72 OAuth cases, 19
 egress cases, Rust library Clippy and dependency bans/licenses/sources checks
 passed. The four final transport regressions pass, including rejection above
-the canonical OAuth response-size ceiling; the final lint rerun is pending.
+the canonical OAuth response-size ceiling; the final Rust lint rerun passes.
+The security-policy regression now requires zero cargo-deny advisory exceptions.
 
 Jev selected the shared transport at 0.98 confidence (fingerprint
 `f17c00a5402d49cd29c5bcfa2fb9b83ff61c9b83d2fc33484c984aaa35837727`),
