@@ -715,6 +715,21 @@ impl AgentSession {
         self.disallowed_tools = disallowed_tools.to_vec();
     }
 
+    /// The MCP catalogue `tool_search` needs to hand over a schema the initial
+    /// list deferred. Built for that tool alone: any other call would clone
+    /// every connected schema and never read one.
+    pub(crate) fn mcp_catalog_for(
+        &self,
+        tool_name: &str,
+    ) -> Option<std::sync::Arc<Vec<ToolDefinition>>> {
+        if tool_name != "tool_search" {
+            return None;
+        }
+        self.mcp_manager
+            .as_ref()
+            .map(|manager| std::sync::Arc::new(manager.tool_definitions(self.privacy_mode)))
+    }
+
     pub(crate) fn effective_tool_definitions(&self) -> Vec<ToolDefinition> {
         let mcp_tool_definitions = self
             .mcp_manager

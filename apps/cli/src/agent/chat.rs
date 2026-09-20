@@ -1957,6 +1957,7 @@ impl TurnHost for TurnHostAdapter<'_> {
 
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
         let opts = crate::tools::ToolExecOptions {
+            mcp_tool_definitions: self.session.mcp_catalog_for(&prepared.name),
             require_confirmation: !self.session.skip_permissions,
             auto_approve_safe: self.session.auto_approve_safe,
             auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
@@ -2114,6 +2115,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             }
         } else {
             let opts = crate::tools::ToolExecOptions {
+                mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
                 require_confirmation: !self.session.skip_permissions,
                 auto_approve_safe: self.session.auto_approve_safe,
                 auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
