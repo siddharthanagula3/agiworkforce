@@ -6,6 +6,7 @@ pub(crate) mod command_shape;
 mod dangerous_commands;
 pub(crate) mod filesystem_effect;
 pub(crate) mod network_target;
+pub mod push_consent;
 
 pub use dangerous_commands::{bypasses_git_hooks, git_hook_bypass_reason, DANGEROUS_COMMANDS};
 pub(crate) use filesystem_effect::classify_filesystem_effect;
