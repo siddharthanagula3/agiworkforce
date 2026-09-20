@@ -125,3 +125,18 @@ test('the shipped column contract names a column for every required role', () =>
     assert.ok(roles[role].why.length > 10);
   }
 });
+
+test('parses leading union separators and rejects long incomplete declarations', () => {
+  const file = `${VOCABULARY_DIR}/unions.ts`;
+  const root = fixtureRoot({
+    [file]:
+      "export type Valid = | 'queued' | 'running' | 'done' | 'failed' | 'cancelled';\n" +
+      'export type Incomplete = ' +
+      " '&'".repeat(10_000),
+  });
+  const vocabularies = readVocabularies(root, [file]);
+  assert.deepEqual(
+    [...vocabularies.values()].map((v) => v.name),
+    ['Valid'],
+  );
+});

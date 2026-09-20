@@ -493,7 +493,7 @@ unverified. This is an incomplete verification checkpoint, not completion of the
 audit or launch approval. Frozen original decisions and GLOBAL NO-GO are preserved.
 
 Checkpoint, row evidence and accounting:
-`docs/work/checklist-reaudit/CURRENT_VERIFICATION.md`, `current-verification.jsonl`
+local audit artifact `CURRENT_VERIFICATION.md` (path and fingerprint in [QA_COVERAGE.json](QA_COVERAGE.json)), `current-verification.jsonl`
 and `current-verification-state.json`. The directory is locally excluded from Git;
 artifacts are saved on disk, not committed. No exclusion was changed.
 

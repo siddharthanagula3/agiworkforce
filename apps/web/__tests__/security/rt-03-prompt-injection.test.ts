@@ -144,7 +144,7 @@ describe('RT-03: GitHub webhook prompt injection defense', () => {
     });
 
     mockFetch.mockImplementation(async (url: string, _options: RequestInit) => {
-      if (typeof url === 'string' && url.includes('anthropic.com')) {
+      if (typeof url === 'string' && new URL(url).hostname === 'api.anthropic.com') {
         return {
           ok: true,
           json: async () => ({ content: [{ text: 'LGTM - looks good' }] }),

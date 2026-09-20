@@ -250,8 +250,15 @@ export function extractUnifiedDiff(output: string): string | null {
 export function diffPaths(patch: string): string[] {
   const paths = new Set<string>();
   for (const line of patch.split('\n')) {
-    const header = /^\+\+\+ b\/(.+)$/.exec(line) ?? /^diff --git a\/.+ b\/(.+)$/.exec(line);
-    if (header?.[1]) paths.add(header[1].trim());
+    if (line.startsWith('+++ b/')) {
+      const path = line.slice(6).trim();
+      if (path) paths.add(path);
+    } else if (line.startsWith('diff --git a/')) {
+      const separator = line.lastIndexOf(' b/');
+      if (separator <= 'diff --git a/'.length) continue;
+      const path = line.slice(separator + 3).trim();
+      if (path) paths.add(path);
+    }
   }
   return [...paths];
 }
@@ -294,11 +301,19 @@ export function parseTestSummary(
     };
   }
 
-  const testsLine = /^\s*Tests:?\s+(.*)$/m.exec(output)?.[1] ?? null;
+  let testsLine: string | null = null;
+  for (const line of output.split('\n')) {
+    const trimmed = line.trimStart();
+    const prefix = /^Tests:?\s/u.exec(trimmed);
+    if (prefix) {
+      testsLine = trimmed.slice(prefix[0].length).trimStart();
+      break;
+    }
+  }
   const scope = testsLine ?? output;
-  const passed = readCount(scope, [/(\d+) pass(?:ed|ing)?\b/g]);
-  const failed = readCount(scope, [/(\d+) fail(?:ed|ing|ures?)?\b/g]);
-  const skipped = readCount(scope, [/(\d+) (?:skipped|pending|todo|ignored)\b/g]);
+  const passed = readCount(scope, [/(?<!\d)(\d+) pass(?:ed|ing)?\b/g]);
+  const failed = readCount(scope, [/(?<!\d)(\d+) fail(?:ed|ing|ures?)?\b/g]);
+  const skipped = readCount(scope, [/(?<!\d)(\d+) (?:skipped|pending|todo|ignored)\b/g]);
   const status = isError || (failed ?? 0) > 0 ? 'failed' : 'passed';
   return { status, passed, failed, skipped };
 }

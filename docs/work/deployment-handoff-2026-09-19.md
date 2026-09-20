@@ -890,3 +890,72 @@ before promotion.
   database migration completed with database recovery safeguards recorded above.
 - Authentication handoff will be requested only if the final production smoke
   reaches a sign-in boundary.
+
+## CI and security repair checkpoint (2026-09-20)
+
+The repair baseline is `94fada312a53fea70519418547494c52d687c7d0` on remote
+`main`. The current patch is awaiting commit, push and remote verification.
+This checkpoint does not assert a green deployment or change the historical
+launch decision.
+
+- Replaced ambiguous regular expressions in plugin version validation, tool
+  output parsing, MCP names, environment origins and repository source guards.
+  Plugin routes now use the canonical semantic-version validator.
+- Crash uploads use an HTTPS-only client with redirects disabled. The targeted
+  transport test verifies that an HTTP destination fails before a connection.
+  CLI diagnostics no longer interpolate session paths or assertion fixture IDs.
+- Repaired JSON import attributes for Node test discovery, semantic warning
+  colour usage, and platform-specific Rust lint failures. Windows UI Automation
+  retains its existing mutex; an unshared inner Arc was unnecessary.
+- Historical audit evidence remains local. Maintained documents identify it as
+  local evidence, with paths and fingerprints in the existing coverage record,
+  rather than presenting unavailable files as checked-in references.
+- Dependency upgrades remove devalue, image-size, extract-zip and stream-json
+  advisories. The previous four audit exclusions were removed. Scoped overrides
+  use image-size 2.0.4 and Puppeteer browsers 3.2.2; Jayson 5 removes its old
+  parser dependency. Stream-json 3.7.0 requires small pnpm patches to Detox and
+  Bunyamin's Node stream entrypoints. The repository runs Node 24.
+- The auth browser fixture is signed out and cannot create sessions or authorize
+  requests. It supplies explicit provider outcomes so accessibility and keyboard
+  tests do not depend on a live identity account. Tests select the exact submit
+  button, scope alerts to the form, and enter the password step before testing
+  its reveal control. Keyboard coverage checks every visible enabled control.
+  Cookie-banner tests wait for the actual banner. The enterprise sweep defaults
+  to the build under test; production remains available through its explicit URL.
+
+Verified locally: dependency audit reports zero vulnerabilities at every severity
+with no advisory exclusions; web typecheck passes; 24 auth and cookie-scroll
+browser cases pass; the desktop suite passed 55 cases with one stale greeting
+assertion and one pre-existing skipped case, and the corrected greeting case
+passes independently. Focused security coverage passes: 36 contract cases,
+25 skill cases, 8 concept-guard cases, 17 plugin cases, 41 hash-boundary cases,
+16 crash-report cases, 120 CLI session cases, 32 environment-isolation cases,
+42 additional plugin/export/prompt-injection cases, 19 auth component cases,
+and 27 quota-authorization cases. These groups overlap and are not a unique total.
+Upgraded consumers also passed JSONL parsing and malformed-input handling,
+trace-file merge, browser-tooling module loading, PowerPoint image export and a
+mock-transport Solana RPC. No paid model calls were used for these checks.
+
+GitHub alerts 794, 795, 800, 806 and 807 were classified as false positives with
+an evidence comment on each alert, rather than changing the digest algorithms:
+
+- 794 hashes a retrieval idempotency key derived from user ID and retrieval kinds.
+- 795 indexes an API key generated with 32 random bytes, not a human password.
+- 800 hashes identity into a deterministic rollout bucket, not password storage.
+- 806 binds promotional-quota evidence to a provider-issued credential fingerprint.
+- 807 hashes ordered export metadata into a chain-of-custody integrity digest.
+
+The authentication helpers implicated by taint propagation return verified actor
+identifiers and scopes, not the bearer secrets. Functional and source review are
+recorded above; a fresh CodeQL run is still required for the repaired findings.
+The initial independent investigation completed; the subsequent independent
+review worker hit a usage limit before returning a review. The coordinator
+therefore performed the separate parser, transport and consumer review locally.
+
+The six local enterprise accessibility checks and the desktop/CLI library
+Clippy command also pass.
+
+Next: finish the staged guard chain, commit with hooks enabled,
+push to main, and inspect the resulting CI, CodeQL and dependency alerts. Passing
+local checks must not be described as a verified green remote pipeline. The
+independent production-backup prerequisite above remains unresolved.

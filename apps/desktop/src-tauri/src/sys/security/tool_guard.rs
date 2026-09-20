@@ -3236,7 +3236,7 @@ impl ToolExecutionGuard {
                         // Block Windows system drive except Users folder (already handled above)
                         if drive == 'C' && !expanded_path.starts_with("C:\\Users\\") {
                             // Allow specific safe Windows paths
-                            let safe_windows_paths = vec!["C:\\Temp\\", "C:\\temp\\"];
+                            let safe_windows_paths = ["C:\\Temp\\", "C:\\temp\\"];
                             if !safe_windows_paths
                                 .iter()
                                 .any(|p| expanded_path.starts_with(p))

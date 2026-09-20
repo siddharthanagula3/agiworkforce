@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { USER_OWNED_TABLES } from './lib/db-isolation-tables.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -197,8 +198,6 @@ export function findMutators({ repoRoot, files, tables, functions }) {
   return found;
 }
 
-const UNION_DECLARATION =
-  /export\s+type\s+([A-Za-z][A-Za-z0-9_]*)\s*=\s*((?:\s*\|?\s*'[^']+')+)\s*;/g;
 const CONST_ARRAY_DECLARATION =
   /export\s+const\s+([A-Z][A-Z0-9_]*)\s*(:[^=]+)?=\s*\[([^\]]*)\]\s*(as\s+const(?:\s+satisfies[^;]*)?)?/g;
 const DERIVED_UNION =
@@ -227,16 +226,22 @@ export function readVocabularies(repoRoot, files) {
     const derived = new Set([...source.matchAll(DERIVED_UNION)].map((match) => match[1]));
     const unionNames = new Set();
 
-    UNION_DECLARATION.lastIndex = 0;
-    let union;
-    while ((union = UNION_DECLARATION.exec(source)) !== null) {
-      unionNames.add(union[1]);
-      if (derived.has(union[1])) continue;
-      const members = [...union[2].matchAll(STRING_LITERAL)].map((literal) => literal[1]);
+    const parsed = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, false);
+    for (const statement of parsed.statements) {
+      if (!ts.isTypeAliasDeclaration(statement)) continue;
+      if (!statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword))
+        continue;
+      const nodes = ts.isUnionTypeNode(statement.type) ? statement.type.types : [statement.type];
+      if (!nodes.every((node) => ts.isLiteralTypeNode(node) && ts.isStringLiteral(node.literal)))
+        continue;
+      const name = statement.name.text;
+      unionNames.add(name);
+      if (derived.has(name)) continue;
+      const members = nodes.map((node) => node.literal.text);
       if (members.length < DUPLICATE_SHARED_MEMBER_FLOOR) continue;
-      vocabularies.set(`${relativePath}#${union[1]}`, {
+      vocabularies.set(`${relativePath}#${name}`, {
         file: relativePath,
-        name: union[1],
+        name,
         members: new Set(members),
       });
     }

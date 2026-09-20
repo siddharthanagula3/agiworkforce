@@ -998,8 +998,12 @@ fn canonical_project_root(path: &str) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_authorized_root, timed_command};
+    use super::resolve_authorized_root;
+    #[cfg(unix)]
+    use super::timed_command;
+    #[cfg(unix)]
     use std::fs;
+    #[cfg(unix)]
     use std::time::Duration;
     use tempfile::tempdir;
 

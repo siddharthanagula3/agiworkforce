@@ -4,7 +4,7 @@
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
@@ -43,7 +43,7 @@ struct CachedElement {
 ///
 /// # Safety
 ///
-/// The `IUIAutomation` COM interface is wrapped in an `Arc<Mutex<>>` to ensure
+/// The `IUIAutomation` COM interface is wrapped in a `Mutex` to ensure
 /// serialized access from any thread. While Windows COM objects created in STA
 /// (Single-Threaded Apartment) mode ideally should be accessed from their creating
 /// thread, wrapping in a Mutex ensures:
@@ -58,9 +58,9 @@ struct CachedElement {
 ///
 /// Reference: <https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/>
 pub struct UIAutomationService {
-    /// The UI Automation COM interface, wrapped in Arc<Mutex> for thread safety.
+    /// The UI Automation COM interface, wrapped in Mutex for thread safety.
     /// All access must go through `with_automation()` to ensure proper synchronization.
-    automation: Arc<Mutex<IUIAutomation>>,
+    automation: Mutex<IUIAutomation>,
     /// Cache of discovered UI elements, keyed by runtime ID.
     /// Uses parking_lot::Mutex for better performance than std::sync::Mutex.
     cache: Mutex<HashMap<String, CachedElement>>,
@@ -70,7 +70,7 @@ pub struct UIAutomationService {
 
 // SAFETY: UIAutomationService is safe to Send and Sync because:
 //
-// 1. The `IUIAutomation` COM interface is wrapped in `Arc<Mutex<>>` ensuring:
+// 1. The `IUIAutomation` COM interface is wrapped in `Mutex` ensuring:
 //    - No concurrent access (mutex serializes all operations)
 //    - Exclusive access pattern matches COM STA requirements
 //
@@ -127,7 +127,7 @@ impl UIAutomationService {
         };
 
         Ok(Self {
-            automation: Arc::new(Mutex::new(automation)),
+            automation: Mutex::new(automation),
             cache: Mutex::new(HashMap::new()),
             cache_ttl: Duration::from_secs(30),
         })
@@ -150,7 +150,7 @@ impl UIAutomationService {
         F: FnOnce(&IUIAutomation) -> R,
     {
         let guard = self.automation.lock();
-        f(&*guard)
+        f(&guard)
     }
 
     /// Gets the desktop root element.

@@ -165,14 +165,14 @@ export interface SkillUnavailability {
 
 export type SkillRequirementKind = 'tools' | 'mcp' | 'environment' | 'platform';
 
-const MCP_QUALIFIED_TOOL = /^mcp__(.+?)__.+$/;
-
 function mcpServersOffered(context: SkillToolRuntimeContext): ReadonlySet<string> {
   const servers = new Set<string>();
   for (const server of context.availableMcpServers ?? []) servers.add(server.toLowerCase());
   for (const tool of context.availableTools ?? []) {
-    const match = MCP_QUALIFIED_TOOL.exec(tool);
-    if (match?.[1]) servers.add(match[1].toLowerCase());
+    if (!tool.startsWith('mcp__') || /[\r\n\u2028\u2029]/u.test(tool)) continue;
+    const separator = tool.indexOf('__', 6);
+    if (separator < 6 || separator + 2 >= tool.length) continue;
+    servers.add(tool.slice(5, separator).toLowerCase());
   }
   return servers;
 }

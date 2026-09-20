@@ -205,17 +205,17 @@ impl VisionAutomation {
                     let mut max_x = words[i].x + words[i].width as i32;
                     let mut max_y = words[i].y + words[i].height as i32;
 
-                    for j in i..words.len() {
+                    for word in words.iter().skip(i) {
                         if !combined_text.is_empty() {
                             combined_text.push(' ');
                         }
-                        combined_text.push_str(&words[j].text);
+                        combined_text.push_str(&word.text);
 
                         // Expand bounding box to cover all words in the span
-                        min_x = min_x.min(words[j].x);
-                        min_y = min_y.min(words[j].y);
-                        max_x = max_x.max(words[j].x + words[j].width as i32);
-                        max_y = max_y.max(words[j].y + words[j].height as i32);
+                        min_x = min_x.min(word.x);
+                        min_y = min_y.min(word.y);
+                        max_x = max_x.max(word.x + word.width as i32);
+                        max_y = max_y.max(word.y + word.height as i32);
 
                         let matched = if fuzzy {
                             combined_text.to_lowercase().contains(&query_lower)

@@ -454,9 +454,8 @@ pub async fn ocr_process_with_boxes(
 
     let confidence = tess.mean_text_conf() as f32;
 
-    let words = extract_word_data(&mut tess).map_err(|e| {
+    let words = extract_word_data(&mut tess).inspect_err(|_| {
         cleanup(&processing_path, &image_path);
-        e
     })?;
 
     let processing_time = start.elapsed().as_millis() as u64;
@@ -518,9 +517,8 @@ pub async fn ocr_process_multi_language(
         }
     };
 
-    let detected_languages = detect_languages(&processing_path).map_err(|e| {
+    let detected_languages = detect_languages(&processing_path).inspect_err(|_| {
         cleanup(&processing_path, &image_path);
-        e
     })?;
 
     let primary_language = detected_languages
