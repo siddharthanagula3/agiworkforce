@@ -1403,3 +1403,45 @@ boundary tests at confidence 1.0, request
 `ccd60d0fe9fce8df115bc4b6173d0220f5762bf04eba2b1b590dff8642cafdd2`.
 Evidence: `/tmp/agi-package-coverage-full.log`,
 `/tmp/agi-routing-coverage-followup.log`, `/tmp/agi-sync-coverage-followup.log`.
+
+### Windows desktop loader repair and completed security scan
+
+Run `35503385094` now confirms all 2,667 Windows CLI tests pass (one existing
+ignored case, one filtered case). The desktop library test executable aborts
+before enumeration with `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND`. No test
+has been skipped to bypass that failure. The locked Tauri build chain emits
+its manifest as `rustc-link-arg-bins`, omitting the library test executable,
+while Tao/Muda import Common Controls v6 procedures. This matches the
+[upstream Tauri report](https://github.com/tauri-apps/tauri/issues/13419);
+the exact missing procedure was not exposed by the runner.
+
+The desktop now owns one Windows manifest, preserving Tauri's default Common
+Controls dependency. Tauri continues to own icon/version resources, with only
+its manifest emission disabled. The already-locked `embed-resource` crate
+compiles the separate manifest for every desktop artifact, including library
+tests, with missing-resource failures enforced. The branch checks the target
+OS, preserving non-Windows builds. Native CI now extracts and validates the
+embedded manifest from both the ordinary application and the actual Cargo
+library-test artifact before running the unchanged workspace tests. Jev selected
+this repair at confidence 1.0, request
+`66c0d477e07a2ca200620f52b033a06c6eacc6e26b0aa318ab5196d19f8b9bc3`.
+Native execution of this repair remains pending the next push.
+
+The completed CodeQL run `35503385040` passed all four language analyses and
+its security audit. Fresh GitHub API queries report zero open code-scanning
+alerts and zero open Dependabot alerts. iOS end-to-end job `106059036332`
+also passed. JavaScript job `106058988001` failed only the three signup mock
+cases already repaired and verified above (22,893 passing web tests).
+Evidence: `/tmp/agi-windows-9c24-clean.log`, `/tmp/agi-js-9c24.log`.
+
+Independent candidate review found no concrete regression. It retained the
+native execution gap: resource presence alone cannot prove the loader error is
+fixed, and debug binary inspection does not establish release startup. Rust
+formatting, manifest/workflow/document formatting and 26 CI selection/deployment
+contract tests pass. Evidence: `/tmp/agi-windows-workflow-tests.log` and
+`/tmp/agi-windows-manifest-format.log`.
+
+The full local macOS desktop library check also passes (`cargo check -p
+agiworkforce-desktop --lib --offline`), including the changed build script.
+The Cargo-generated lockfile adds only the direct edge to the already-locked
+resource compiler. Evidence: `/tmp/agi-windows-manifest-check.log`.
