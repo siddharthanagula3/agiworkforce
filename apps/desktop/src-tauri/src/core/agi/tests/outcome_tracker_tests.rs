@@ -3,11 +3,15 @@ mod tests {
     use crate::core::agi::outcome_tracker::OutcomeTracker;
     use crate::core::agi::process_reasoning::{Outcome, ProcessType};
     use rusqlite::Connection;
-    use tempfile::NamedTempFile;
+    use tempfile::TempDir;
 
-    fn create_tracker() -> (NamedTempFile, OutcomeTracker) {
-        let db_file = NamedTempFile::new().unwrap();
-        let db_path = db_file.path().to_string_lossy().to_string();
+    fn create_tracker() -> (TempDir, OutcomeTracker) {
+        let db_file = TempDir::new().unwrap();
+        let db_path = db_file
+            .path()
+            .join("outcomes.sqlite")
+            .to_string_lossy()
+            .to_string();
 
         let conn = Connection::open(&db_path).unwrap();
         conn.execute(
@@ -25,6 +29,7 @@ mod tests {
         )
         .unwrap();
 
+        drop(conn);
         let tracker = OutcomeTracker::new(db_path).unwrap();
         (db_file, tracker)
     }
