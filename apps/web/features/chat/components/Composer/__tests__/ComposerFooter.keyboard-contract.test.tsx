@@ -186,7 +186,10 @@ describe('ComposerFooter · picker keyboard contract', () => {
     const rows = within(dialog)
       .getAllByRole('button')
       .filter((button) => button.hasAttribute('aria-pressed'));
-    await waitFor(() => expect(document.activeElement).toBe(rows[0]));
+    const freeSection = within(dialog).getByRole('button', { name: 'Free' });
+    await waitFor(() => expect(document.activeElement).toBe(freeSection));
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(rows[0]);
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(rows[1]);
 
