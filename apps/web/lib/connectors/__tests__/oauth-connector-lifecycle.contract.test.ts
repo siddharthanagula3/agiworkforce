@@ -246,6 +246,14 @@ vi.mock('@/lib/server/neon-db', () => {
       row['access_token_expires_at'] = expiresAt;
       return [];
     }
+    // Disconnect first lists every live credential of the connector so each is revoked upstream.
+    if (q.startsWith('select access_token_enc, refresh_token_enc,')) {
+      const [userId, connectorId] = params as [string, string];
+      return mocks.grants.filter(
+        (g) =>
+          g['user_id'] === userId && g['connector_id'] === connectorId && g['revoked_at'] === null,
+      );
+    }
     if (q.startsWith('select connector_id, access_token_enc')) {
       const [userId, connectorId] = params as [string, string];
       return mocks.grants.filter(

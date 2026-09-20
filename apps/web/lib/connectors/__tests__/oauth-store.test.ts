@@ -23,6 +23,7 @@ import {
   getConnectorOAuthGrant,
   getUserConnectorOAuthGrantSummaries,
   listConnectorAccounts,
+  listRevocableConnectorTokens,
   revokeConnectorOAuthGrant,
   upsertConnectorOAuthGrant,
   __resetConnectorAccountColumnProbeForTests,
@@ -253,6 +254,65 @@ describe('grants', () => {
     await expect(getUserConnectorOAuthGrantSummaries('user-1')).resolves.toEqual([]);
     await expect(getConnectorOAuthGrant('user-1', 'linear')).resolves.toBeNull();
     await expect(revokeConnectorOAuthGrant('user-1', 'linear')).resolves.toBe(false);
+  });
+});
+
+describe('credentials a disconnect has to hand back', () => {
+  it('returns one credential per live account, unlimited and unordered by default', async () => {
+    mockQuery.mockResolvedValue([
+      {
+        account_key: 'work',
+        access_token_enc: encryptConnectorToken('work-access', 'oauth-access-token'),
+        refresh_token_enc: encryptConnectorToken('work-refresh', 'oauth-refresh-token'),
+      },
+      {
+        account_key: 'personal',
+        access_token_enc: encryptConnectorToken('personal-access', 'oauth-access-token'),
+        refresh_token_enc: null,
+      },
+    ]);
+
+    const tokens = await listRevocableConnectorTokens('user-1', 'gmail');
+
+    expect(tokens).toEqual([
+      { accountKey: 'work', token: 'work-refresh', tokenTypeHint: 'refresh_token' },
+      { accountKey: 'personal', token: 'personal-access', tokenTypeHint: 'access_token' },
+    ]);
+    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    expect(sql).toMatch(/revoked_at is null/);
+    expect(sql).not.toMatch(/limit/i);
+  });
+
+  it('narrows to one account when a key is named', async () => {
+    mockQuery.mockResolvedValue([]);
+
+    await listRevocableConnectorTokens('user-1', 'gmail', 'work');
+
+    expect(String(mockQuery.mock.calls[0]?.[0])).toMatch(/account_key = \$3/);
+    expect(mockQuery.mock.calls[0]?.[1]).toEqual(['user-1', 'gmail', 'work']);
+  });
+
+  it('skips a credential that no longer decrypts instead of failing the disconnect', async () => {
+    mockQuery.mockResolvedValue([
+      { account_key: 'work', access_token_enc: 'not:valid:ciphertext', refresh_token_enc: null },
+      {
+        account_key: 'personal',
+        access_token_enc: encryptConnectorToken('personal-access', 'oauth-access-token'),
+        refresh_token_enc: null,
+      },
+    ]);
+
+    const tokens = await listRevocableConnectorTokens('user-1', 'gmail');
+
+    expect(tokens.map((token) => token.accountKey)).toEqual(['personal']);
+  });
+
+  it('reports nothing rather than throwing when the table is absent', async () => {
+    mockQuery.mockRejectedValue(
+      Object.assign(new Error('relation does not exist'), { code: '42P01' }),
+    );
+
+    await expect(listRevocableConnectorTokens('user-1', 'gmail')).resolves.toEqual([]);
   });
 });
 

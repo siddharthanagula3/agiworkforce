@@ -642,6 +642,70 @@ export async function listConnectorAccounts(
   }));
 }
 
+export interface RevocableConnectorToken {
+  accountKey: string;
+  token: string;
+  tokenTypeHint: 'access_token' | 'refresh_token';
+}
+
+/**
+ * Every live credential a disconnect has to hand back to the provider, one per
+ * connected account. Reading a single grant would leave the accounts that are
+ * not the default live upstream after the local rows are destroyed. A row whose
+ * ciphertext no longer opens is skipped rather than failing the disconnect,
+ * since a credential nobody can read is also one nobody can present.
+ */
+export async function listRevocableConnectorTokens(
+  userId: string,
+  connectorId: string,
+  accountKey?: string | null,
+): Promise<RevocableConnectorToken[]> {
+  const db = getNeonDb();
+  let rows: Array<Pick<GrantRow, 'access_token_enc' | 'refresh_token_enc' | 'account_key'>>;
+  try {
+    rows = await withAccountColumns((accountAware) => {
+      const scoped = accountAware && accountKey !== undefined && accountKey !== null;
+      return db.query<Pick<GrantRow, 'access_token_enc' | 'refresh_token_enc' | 'account_key'>>(
+        `select access_token_enc, refresh_token_enc,
+                ${accountAware ? 'account_key' : `'${DEFAULT_CONNECTOR_ACCOUNT_KEY}' as account_key`}
+           from public.connector_oauth_grants
+          where user_id = $1 and connector_id = $2 and revoked_at is null${
+            scoped ? ' and account_key = $3' : ''
+          }`,
+        scoped
+          ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
+          : [userId, connectorId],
+      );
+    });
+  } catch (error) {
+    if (isUndefinedTable(error)) return [];
+    throw error;
+  }
+
+  const tokens: RevocableConnectorToken[] = [];
+  for (const row of rows) {
+    const sealed = row.refresh_token_enc ?? row.access_token_enc;
+    if (!sealed) continue;
+    const purpose = row.refresh_token_enc ? 'oauth-refresh-token' : 'oauth-access-token';
+    let token: string;
+    try {
+      token = decryptConnectorToken(sealed, purpose);
+    } catch {
+      logger.warn(
+        { connectorId },
+        '[connector-oauth] a stored credential could not be decrypted for revocation',
+      );
+      continue;
+    }
+    tokens.push({
+      accountKey: normalizeConnectorAccountKey(row.account_key),
+      token,
+      tokenTypeHint: row.refresh_token_enc ? 'refresh_token' : 'access_token',
+    });
+  }
+  return tokens;
+}
+
 /**
  * Both statements run together: clearing the old default first is what keeps
  * the one-live-default index from rejecting the new one.
