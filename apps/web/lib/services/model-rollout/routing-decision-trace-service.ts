@@ -3,7 +3,11 @@ import 'server-only';
 import type { RoutingDecisionTrace } from '@agiworkforce/routing';
 
 import { logger } from '@/lib/logger';
-import { recordRoutingDecision as recordRoutingDecisionMetric } from '@/lib/observability/metrics';
+import {
+  recordRoutingDecision as recordRoutingDecisionMetric,
+  recordTurnOutcome,
+  type WorkspaceKind,
+} from '@/lib/observability/metrics';
 import { normalizePromptStamps } from '@/lib/prompts/prompt-stamp';
 import { getNeonDb } from '@/lib/server/neon-db';
 
@@ -97,10 +101,41 @@ export async function completeRoutingDecision(outcome: RoutingDecisionOutcome): 
  * instance serves an unbounded number of turns.
  */
 const PENDING_TRACE_LIMIT = 2_000;
-const pendingTraces = new Set<string>();
+
+/**
+ * The dimensions a turn is attributed along live on the decision; the timings
+ * and the cost arrive with the outcome. The turn metric needs both, so the
+ * decision's facts are held until the outcome joins them.
+ */
+interface ServedTurnFacts {
+  surface: string;
+  provider: string | null;
+  modelKey: string | null;
+  routeId: string | null;
+  mode: string;
+  trustMode: string;
+  workspaceKind: WorkspaceKind;
+  fallbacks: number;
+}
+
+const pendingTraces = new Map<string, ServedTurnFacts | null>();
 
 function traceKey(requestId: string, kind: RoutingTraceKind): string {
   return `${kind}:${requestId}`;
+}
+
+function servedTurnFacts(record: RoutingDecisionRecord): ServedTurnFacts {
+  const { trace } = record;
+  return {
+    surface: record.surface,
+    provider: trace.provider,
+    modelKey: trace.modelKey,
+    routeId: trace.routeId,
+    mode: trace.taskType,
+    trustMode: trace.trustMode,
+    workspaceKind: record.organizationId ? 'organization' : 'personal',
+    fallbacks: trace.fallbacks.length,
+  };
 }
 
 /**
@@ -125,9 +160,12 @@ export function persistRoutingDecision(record: RoutingDecisionRecord): void {
     });
   }
   if (pendingTraces.size >= PENDING_TRACE_LIMIT) {
-    pendingTraces.delete(pendingTraces.values().next().value ?? '');
+    pendingTraces.delete(pendingTraces.keys().next().value ?? '');
   }
-  pendingTraces.add(traceKey(record.requestId, record.kind));
+  pendingTraces.set(
+    traceKey(record.requestId, record.kind),
+    record.kind === 'served' ? servedTurnFacts(record) : null,
+  );
   void recordRoutingDecision(record).catch((error: unknown) => {
     logger.warn(
       { error, requestId: record.requestId, kind: record.kind },
@@ -139,7 +177,25 @@ export function persistRoutingDecision(record: RoutingDecisionRecord): void {
 export function persistRoutingDecisionOutcome(outcome: RoutingDecisionOutcome): void {
   const key = traceKey(outcome.requestId, outcome.kind);
   if (!pendingTraces.has(key)) return;
+  const facts = pendingTraces.get(key) ?? null;
   if (outcome.outcome === 'succeeded') pendingTraces.delete(key);
+  if (facts) {
+    recordTurnOutcome({
+      outcome: outcome.outcome,
+      surface: facts.surface,
+      provider: facts.provider,
+      modelKey: facts.modelKey,
+      routeId: facts.routeId,
+      mode: facts.mode,
+      trustMode: facts.trustMode,
+      workspaceKind: facts.workspaceKind,
+      timeToFirstTokenMs: outcome.ttftMs,
+      durationMs: outcome.durationMs,
+      costMicroUsd: outcome.providerCostMicrousd,
+      retries: facts.fallbacks,
+      ...(outcome.errorCode ? { errorType: outcome.errorCode } : {}),
+    });
+  }
   void completeRoutingDecision(outcome).catch((error: unknown) => {
     logger.warn(
       { error, requestId: outcome.requestId, kind: outcome.kind },

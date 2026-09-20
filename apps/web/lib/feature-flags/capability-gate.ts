@@ -1,6 +1,9 @@
 import 'server-only';
 
+import type { CapabilityDenialReason } from '@agiworkforce/types';
+
 import { createError } from '@/lib/errors';
+import { recordCapabilityDenial } from '@/lib/observability/denials';
 
 import type { FlagEvaluation, FlagSubject } from './evaluate-flags';
 import { evaluateFlagsForSubject } from './flag-evaluation-service';
@@ -57,12 +60,22 @@ export async function assertCapabilityAvailable(
   nowMs: number = Date.now(),
 ): Promise<void> {
   const gate = await readKillSwitchGate(subject, nowMs);
+  const denied = (reason: CapabilityDenialReason): void => {
+    recordCapabilityDenial({
+      layer: 'capability',
+      reason,
+      surface: subject.surface,
+      organizationId: subject.workspaceId,
+    });
+  };
   if (gate.tenantLockedDown) {
+    denied('disabled_by_organization');
     throw createError.forbidden(
       'This workspace is locked down while an incident is investigated. Contact support.',
     );
   }
   if (!gate.capabilityAllowed(capability)) {
+    denied('temporarily_unavailable');
     throw createError.serviceUnavailable(
       `${label} is temporarily switched off while we investigate a problem with it.`,
     );

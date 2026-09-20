@@ -212,15 +212,39 @@ describe('SLO attainment', () => {
     expect(burnRateOf({ ...attainment, attainment: null }, 0.99)).toBeNull();
   });
 
-  it('alerts on a fast burn and says which window fired', async () => {
+  it('alerts once per objective and says which windows fired', async () => {
     const { db } = fakeDb(() => ({ eligible: '500', good: '400', latency_p95_ms: null }));
 
     const alerts = await evaluateBurnRates(NOW, db);
 
     const chat = alerts.filter((alert) => alert.id === 'chat');
-    expect(chat.map((alert) => alert.window)).toEqual(['fast', 'slow']);
+    expect(chat).toHaveLength(1);
+    expect(chat[0]?.window).toBe('fast');
+    expect(chat[0]?.windows).toEqual(['fast', 'slow']);
     expect(chat[0]?.severity).toBe('critical');
     expect(chat[0]?.burnRate).toBeCloseTo(20, 6);
+  });
+
+  it('gives one page per objective rather than one per window', async () => {
+    const { db } = fakeDb(() => ({ eligible: '500', good: '400', latency_p95_ms: null }));
+
+    const alerts = await evaluateBurnRates(NOW, db);
+
+    expect(new Set(alerts.map((alert) => alert.id)).size).toBe(alerts.length);
+    expect(new Set(alerts.map((alert) => alert.dedupeKey)).size).toBe(alerts.length);
+  });
+
+  it('names the runbook, the dashboard and the switch for every objective it alerts on', async () => {
+    const { db } = fakeDb(() => ({ eligible: '500', good: '400', latency_p95_ms: null }));
+
+    const alerts = await evaluateBurnRates(NOW, db);
+
+    expect(alerts.length).toBeGreaterThan(0);
+    for (const alert of alerts) {
+      expect(alert.owner, `${alert.id} has no operational owner`).not.toBeNull();
+      expect(alert.owner?.runbook).toMatch(/^docs\/runbooks\/.+\.md$/);
+      expect(alert.owner?.dashboardId.length).toBeGreaterThan(0);
+    }
   });
 
   it('stays silent below the sample floor, so one bad minute is not an incident', async () => {

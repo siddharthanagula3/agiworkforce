@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { findOperationalDomain, type OperationalDomain } from '@/lib/observability/ownership';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   cachedRenderInput,
@@ -223,7 +224,22 @@ export interface BurnRateAlert {
   samples: number;
   attainment: number;
   severity: BurnRateThreshold['severity'];
+  /** Every window burning for this objective, most severe first. */
+  windows: readonly BurnWindow[];
+  /** Stable while the same objective burns at the same severity. */
+  dedupeKey: string;
+  /**
+   * Who answers and what they reach for, read from the operational registry
+   * rather than restated here. Null is an objective nobody owns, which is
+   * itself the thing to fix.
+   */
+  owner: OperationalDomain | null;
 }
+
+const SEVERITY_RANK: Readonly<Record<BurnRateThreshold['severity'], number>> = {
+  critical: 2,
+  warning: 1,
+};
 
 export function burnRateOf(attainment: SloAttainment, objective: number): number | null {
   if (attainment.attainment === null) return null;
@@ -232,6 +248,24 @@ export function burnRateOf(attainment: SloAttainment, objective: number): number
   return (1 - attainment.attainment) / errorBudget;
 }
 
+interface WindowBurn {
+  threshold: BurnRateThreshold;
+  burnRate: number;
+  samples: number;
+  attainment: number;
+}
+
+function mostSevereFirst(a: WindowBurn, b: WindowBurn): number {
+  const bySeverity = SEVERITY_RANK[b.threshold.severity] - SEVERITY_RANK[a.threshold.severity];
+  return bySeverity !== 0 ? bySeverity : b.burnRate - a.burnRate;
+}
+
+/**
+ * One alert per objective, not one per window. A sharp outage trips the fast
+ * and the slow window within minutes of each other, and paging twice for one
+ * broken thing is how a pager stops being answered; the windows that fired are
+ * carried on the alert instead.
+ */
 export async function evaluateBurnRates(
   now: Date = new Date(),
   db: DatabaseAdapter = getNeonDb(),
@@ -239,24 +273,38 @@ export async function evaluateBurnRates(
   const alerts: BurnRateAlert[] = [];
 
   for (const definition of alertableSlos()) {
+    const burning: WindowBurn[] = [];
     for (const threshold of BURN_RATE_THRESHOLDS) {
       const from = new Date(now.getTime() - threshold.hours * HOUR_MS);
       const measured = await measureSlo(definition, from, now, db);
       if (measured.samples < BURN_RATE_MIN_SAMPLES) continue;
       const burnRate = burnRateOf(measured, definition.objective);
       if (burnRate === null || burnRate < threshold.burnRate) continue;
-      alerts.push({
-        id: definition.id,
-        domain: definition.domain,
-        window: threshold.window,
-        hours: threshold.hours,
+      burning.push({
+        threshold,
         burnRate,
-        threshold: threshold.burnRate,
         samples: measured.samples,
         attainment: measured.attainment ?? 0,
-        severity: threshold.severity,
       });
     }
+    if (burning.length === 0) continue;
+
+    burning.sort(mostSevereFirst);
+    const leading = burning[0]!;
+    alerts.push({
+      id: definition.id,
+      domain: definition.domain,
+      window: leading.threshold.window,
+      hours: leading.threshold.hours,
+      burnRate: leading.burnRate,
+      threshold: leading.threshold.burnRate,
+      samples: leading.samples,
+      attainment: leading.attainment,
+      severity: leading.threshold.severity,
+      windows: burning.map((burn) => burn.threshold.window),
+      dedupeKey: `slo-burn:${definition.id}:${leading.threshold.severity}`,
+      owner: findOperationalDomain(definition.id),
+    });
   }
 
   return alerts;
