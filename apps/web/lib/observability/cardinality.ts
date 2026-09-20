@@ -1,6 +1,10 @@
 import { ErrorCode } from '@agiworkforce/types';
 
 import { OBSERVABILITY_ATTRIBUTE } from './attributes';
+import { CLIENT_FAILURE_CLASSES, CLIENT_FAILURE_DETAILS } from './client-failures';
+import { CODE_ACTIONS } from './code-actions';
+import { CLIENT_VERSION_LABELS } from './client-versions';
+import { WORK_PLAN_MEASURES, WORK_PLAN_SHAPES } from './work-plan-measures';
 
 export const UNCLASSIFIED_LABEL = 'unclassified';
 export const OVERFLOW_LABEL = 'other';
@@ -94,7 +98,7 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.deploymentId]: bounded(100),
   [OBSERVABILITY_ATTRIBUTE.deploymentEnvironment]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.cloudRegion]: bounded(),
-  [OBSERVABILITY_ATTRIBUTE.clientVersion]: bounded(100),
+  [OBSERVABILITY_ATTRIBUTE.clientVersion]: enumerated(...CLIENT_VERSION_LABELS),
   [OBSERVABILITY_ATTRIBUTE.protocolVersion]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.dataRegion]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.trustMode]: bounded(),
@@ -112,6 +116,13 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.completionKind]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.completionStatus]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.completionReportedStatus]: bounded(),
+  [OBSERVABILITY_ATTRIBUTE.codeAction]: enumerated(...CODE_ACTIONS),
+  [OBSERVABILITY_ATTRIBUTE.workPlanShape]: enumerated(...WORK_PLAN_SHAPES),
+  [OBSERVABILITY_ATTRIBUTE.workPlanMeasure]: enumerated(...WORK_PLAN_MEASURES),
+  // Authored in a browser, so enumerated rather than bounded: a limit still
+  // admits as many invented values as the limit allows.
+  [OBSERVABILITY_ATTRIBUTE.clientFailureClass]: enumerated(...CLIENT_FAILURE_CLASSES),
+  [OBSERVABILITY_ATTRIBUTE.clientFailureDetail]: enumerated(...CLIENT_FAILURE_DETAILS),
 
   [LOCAL_METRIC_LABEL.spanName]: bounded(200),
   [LOCAL_METRIC_LABEL.spanDomain]: bounded(),

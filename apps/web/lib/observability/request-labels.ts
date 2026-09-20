@@ -6,6 +6,8 @@ import {
   SUPPORTED_API_CONTRACT_VERSIONS,
 } from '@/lib/api-gateway-policy';
 
+import { clientVersionLabel } from './client-versions';
+
 export const SURFACE_REQUEST_HEADER = 'x-agi-surface';
 export const CLIENT_NAME_REQUEST_HEADER = 'x-client';
 
@@ -13,7 +15,6 @@ export const UNSUPPORTED_PROTOCOL_LABEL = 'unsupported';
 
 const VSCODE_CLIENT_NAME = 'vscode-extension';
 const VSCODE_SURFACE = 'vscode';
-const CLIENT_VERSION_PATTERN = /^\d{1,6}(\.\d{1,6}){0,2}/u;
 
 export type RequestHeaderReader = (name: string) => string | null | undefined;
 
@@ -27,12 +28,8 @@ function headerValue(read: RequestHeaderReader, name: string): string {
   return (read(name) ?? '').trim();
 }
 
-/**
- * The three things a caller declares about itself, as metric labels. Each is
- * checked against a vocabulary that already exists, so a typed header can open
- * no new series: an unknown surface or client version is dropped rather than
- * counted, and an unsupported contract version reads as one label.
- */
+// Each label is checked against a closed set the repository owns: the analytics
+// surfaces, the registry's admitted release series, the supported contracts.
 export function httpRequestLabels(read: RequestHeaderReader): HttpRequestLabels {
   const labels: {
     surface?: string;
@@ -45,7 +42,7 @@ export function httpRequestLabels(read: RequestHeaderReader): HttpRequestLabels 
   const surface = client === VSCODE_CLIENT_NAME ? VSCODE_SURFACE : claimed;
   if (isProductAnalyticsSurface(surface)) labels.surface = surface;
 
-  const version = CLIENT_VERSION_PATTERN.exec(headerValue(read, CLIENT_VERSION_HEADER))?.[0];
+  const version = clientVersionLabel(headerValue(read, CLIENT_VERSION_HEADER));
   if (version) labels.clientVersion = version;
 
   const protocol = headerValue(read, API_VERSION_REQUEST_HEADER);

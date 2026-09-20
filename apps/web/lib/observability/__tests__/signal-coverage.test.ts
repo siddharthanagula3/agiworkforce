@@ -192,10 +192,10 @@ describe('the span domain vocabulary describes something', () => {
     expect(broken).toEqual([]);
   });
 
-  it('holds the unproven domains to the two the repository has today', () => {
+  it('holds the unproven domains to the one the repository has today', () => {
     const unproven = SPAN_DOMAIN_EVIDENCE.filter((evidence) => evidence.provenBy === null).map(
       (evidence) => evidence.domain,
     );
-    expect(unproven.sort()).toEqual(['billing', 'external']);
+    expect(unproven.sort()).toEqual(['billing']);
   });
 });

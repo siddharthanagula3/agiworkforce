@@ -50,6 +50,11 @@ export const OBSERVABILITY_ATTRIBUTE = {
   completionStatus: 'agi.completion.status',
   completionReportedStatus: 'agi.completion.reported_status',
   completionReason: 'agi.completion.reason',
+  codeAction: 'agi.code.action',
+  workPlanShape: 'agi.work.plan.shape',
+  workPlanMeasure: 'agi.work.plan.measure',
+  clientFailureClass: 'agi.client.failure.class',
+  clientFailureDetail: 'agi.client.failure.detail',
 } as const;
 
 export type ObservabilityAttribute =

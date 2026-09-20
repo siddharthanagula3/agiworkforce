@@ -101,6 +101,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'support/tickets/[ticketId]/escalate/route.ts', reason: 'dedicated_record' },
   { route: 'support/tickets/[ticketId]/route.ts', reason: 'dedicated_record' },
   { route: 'support/tickets/route.ts', reason: 'dedicated_record' },
+  { route: 'telemetry/client/route.ts', reason: 'no_governed_state' },
   { route: 'terms/accept/route.ts', reason: 'dedicated_record' },
   { route: 'upgrade/preview/route.ts', reason: 'no_governed_state' },
   { route: 'uploads/chat-attachment/put/route.ts', reason: 'own_content' },

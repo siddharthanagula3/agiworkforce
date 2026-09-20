@@ -805,6 +805,75 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
       },
     ],
   },
+  {
+    id: 'agi-work',
+    title: 'AGI Work plans',
+    panels: [
+      {
+        id: 'work-plan-size',
+        title: 'Steps per plan',
+        metric: METRIC_NAME.workPlanSteps,
+        aggregation: 'max',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.workPlanShape),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.workPlanMeasure),
+        ],
+      },
+      // A plan the agent revises is a plan that did not survive contact; the
+      // planned and revised series diverging is the reading of that.
+      {
+        id: 'work-planning-latency-p95',
+        title: 'Planning latency p95',
+        metric: METRIC_NAME.spanDuration,
+        aggregation: 'p95',
+        groupBy: ['span_name'],
+        match: { span_domain: 'task' },
+      },
+      {
+        id: 'work-planning-latency-p99',
+        title: 'Planning latency p99',
+        metric: METRIC_NAME.spanDuration,
+        aggregation: 'p99',
+        groupBy: ['span_name'],
+        match: { span_domain: 'task' },
+      },
+    ],
+  },
+  {
+    id: 'client-health',
+    title: 'Client health',
+    panels: [
+      {
+        id: 'client-failure-rate',
+        title: 'Client failures by class',
+        metric: METRIC_NAME.clientFailures,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.clientFailureClass)],
+      },
+      // A render fault that only one build produces is a regression; the same
+      // fault on every build is a document the renderer never handled.
+      {
+        id: 'client-failure-rate-by-release',
+        title: 'Client failures by release',
+        metric: METRIC_NAME.clientFailures,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.clientFailureClass),
+        ],
+      },
+      {
+        id: 'client-failure-rate-by-surface',
+        title: 'Client failures by surface',
+        metric: METRIC_NAME.clientFailures,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.surface),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.clientFailureDetail),
+        ],
+      },
+    ],
+  },
 ] as const;
 
 export function attributeKey(attribute: string): string {

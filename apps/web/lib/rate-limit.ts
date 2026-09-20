@@ -572,6 +572,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'client-telemetry': {
+    limit: 30,
+    window: '1 m', // a browser reports a handful of render faults per session, not a stream
+    failClosed: true, // the payload is authored in a browser; unmetered ingest is the risk
+  },
   waitlist: {
     limit: 5,
     window: '1 h', // 5 signups per hour per IP to prevent enumeration and spam
