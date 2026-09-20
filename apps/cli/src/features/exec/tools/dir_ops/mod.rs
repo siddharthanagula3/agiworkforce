@@ -304,7 +304,12 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
         }
     };
 
-    if std::path::Path::new(pattern).is_absolute() {
+    if std::path::Path::new(pattern).components().any(|component| {
+        matches!(
+            component,
+            std::path::Component::RootDir | std::path::Component::Prefix(_)
+        )
+    }) {
         return Ok(ToolResult {
             tool_name: "glob".into(),
             success: false,

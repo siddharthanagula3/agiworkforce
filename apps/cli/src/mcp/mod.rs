@@ -277,9 +277,15 @@ pub struct McpPromptArgument {
 
 /// Convert the CLI's manifest config shape into the engine's transport config.
 fn sandboxed_transport_config(config: &McpServerConfig) -> Result<TransportConfig> {
-    let transport = to_transport_config(config);
-    if !crate::sandbox::sandbox_settings().sandbox_mcp_servers || crate::sandbox::sandbox_disabled()
-    {
+    sandbox_transport(
+        to_transport_config(config),
+        crate::sandbox::sandbox_settings().sandbox_mcp_servers
+            && !crate::sandbox::sandbox_disabled(),
+    )
+}
+
+fn sandbox_transport(transport: TransportConfig, enabled: bool) -> Result<TransportConfig> {
+    if !enabled || !matches!(transport, TransportConfig::Stdio { .. }) {
         return Ok(transport);
     }
     let workspace = std::env::current_dir().context("MCP sandbox needs a working directory")?;
@@ -1710,6 +1716,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn a_sandboxed_stdio_server_launches_through_the_backend_and_keeps_its_env() {
         let mut manager =
@@ -1736,17 +1743,29 @@ mod tests {
         assert_eq!(command, "sandbox-exec");
         assert_eq!(&args[args.len() - 2..], &["uvx", "mcp-server-git"]);
         assert_eq!(wrapped_env, env);
+    }
 
-        let remote = wrap_stdio_transport(
-            &manager,
-            TransportConfig::Http {
-                url: "https://mcp.example.invalid".to_string(),
-                headers: HashMap::new(),
-                oauth: None,
-            },
-        )
-        .unwrap();
-        assert!(matches!(remote, TransportConfig::Http { .. }));
+    #[test]
+    fn remote_transports_do_not_require_a_local_sandbox() {
+        for config in [
+            McpServerConfig::http("https://mcp.example.invalid/rpc", HashMap::new()),
+            McpServerConfig::sse("https://mcp.example.invalid/sse", HashMap::new()),
+        ] {
+            let remote = sandbox_transport(to_transport_config(&config), true).unwrap();
+            assert!(matches!(
+                remote,
+                TransportConfig::Http { .. } | TransportConfig::Sse { .. }
+            ));
+        }
+    }
+
+    #[test]
+    fn stdio_transport_refuses_an_unavailable_sandbox() {
+        let workspace = tempfile::tempdir().unwrap();
+        let mut manager = crate::sandbox::SandboxManager::full_auto(workspace.path().to_path_buf());
+        manager.sandbox_type = crate::sandbox::SandboxType::None;
+        let config = McpServerConfig::stdio("uvx", vec![], HashMap::new());
+        assert!(wrap_stdio_transport(&manager, to_transport_config(&config)).is_err());
     }
 
     /// The VS Code extension over `agi app-server` loaded 11 MCP servers and

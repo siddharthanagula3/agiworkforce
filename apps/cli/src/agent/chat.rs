@@ -3625,8 +3625,10 @@ mod tests {
             (
                 "PreToolUse",
                 format!(
-                    "printf '%s' '{{\"updated_input\":{{\"path\":\"{}\"}}}}'",
-                    redirected.display()
+                    "printf '%s' {}",
+                    crate::sandbox::shell_quote(
+                        &serde_json::json!({"updated_input": {"path": redirected}}).to_string()
+                    )
                 ),
             ),
             (

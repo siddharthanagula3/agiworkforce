@@ -1279,7 +1279,7 @@ pub fn split_shell_words(input: &str) -> Vec<String> {
             escaped = false;
             continue;
         }
-        if ch == '\\' {
+        if ch == '\\' && !cfg!(windows) {
             escaped = true;
             continue;
         }
@@ -1718,6 +1718,30 @@ mod tests {
         assert_eq!(
             split_shell_words("one \"two words\" 'three words'"),
             vec!["one", "two words", "three words"]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn shell_word_split_preserves_windows_paths() {
+        assert_eq!(
+            split_shell_words(
+                r#"C:\work\file.txt "C:\two words\file.txt" \\server\share\file.txt"#
+            ),
+            vec![
+                r"C:\work\file.txt",
+                r"C:\two words\file.txt",
+                r"\\server\share\file.txt"
+            ]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn shell_word_split_preserves_unix_escapes() {
+        assert_eq!(
+            split_shell_words(r"two\ words file\\name"),
+            vec!["two words", r"file\name"]
         );
     }
 

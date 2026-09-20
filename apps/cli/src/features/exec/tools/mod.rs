@@ -2801,6 +2801,39 @@ mod path_validation_regressions {
         assert!(!result.success);
     }
 
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn glob_refuses_windows_rooted_and_prefixed_patterns() {
+        for pattern in [
+            r"\outside\*.txt",
+            r"C:*.txt",
+            r"C:\outside\*.txt",
+            r"\\server\share\*.txt",
+            r"\\?\C:\outside\*.txt",
+        ] {
+            let result = execute_glob(&args(&[("pattern", pattern)])).await.unwrap();
+            assert!(!result.success, "accepted {pattern}");
+            assert!(
+                result.output.contains("Refusing absolute glob pattern"),
+                "{}",
+                result.output
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn glob_matches_a_project_relative_pattern() {
+        let directory = tempfile::tempdir_in(".").unwrap();
+        let file = directory.path().join("example.txt");
+        std::fs::write(&file, "fixture").unwrap();
+        let base = directory.path().to_string_lossy();
+        let result = execute_glob(&args(&[("pattern", "*.txt"), ("path", &base)]))
+            .await
+            .unwrap();
+        assert!(result.success, "{}", result.output);
+        assert!(result.output.contains("example.txt"), "{}", result.output);
+    }
+
     #[tokio::test]
     async fn glob_refuses_outside_base_path() {
         let result = execute_glob(&args(&[("pattern", "*.txt"), ("path", "/etc")]))

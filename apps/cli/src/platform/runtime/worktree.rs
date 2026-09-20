@@ -305,9 +305,11 @@ mod tests {
 
     #[tokio::test]
     async fn removing_a_dirty_worktree_names_what_would_be_lost() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
         let tmp = tempfile::tempdir().unwrap();
         init_repo(tmp.path());
-        let target = tmp.path().parent().unwrap().join("wt-dirty-guard");
+        let worktrees = tempfile::tempdir().unwrap();
+        let target = worktrees.path().join("dirty-guard");
         let worktree = enter_worktree(
             tmp.path(),
             WorktreeOptions {
@@ -335,6 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn worktree_entries_carry_head_and_branch() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
         let tmp = tempfile::tempdir().unwrap();
         init_repo(tmp.path());
 
@@ -348,12 +351,14 @@ mod tests {
 
     #[tokio::test]
     async fn worktree_roundtrip() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
         let tmp = tempfile::tempdir().unwrap();
         init_repo(tmp.path());
+        let worktrees = tempfile::tempdir().unwrap();
         let opts = WorktreeOptions {
             branch: "feature-x".into(),
             base: None,
-            target_dir: Some(tmp.path().parent().unwrap().join("wt-feature-x")),
+            target_dir: Some(worktrees.path().join("feature-x")),
         };
         let wt = enter_worktree(tmp.path(), opts).await.expect("enter");
         assert!(wt.path.exists());
