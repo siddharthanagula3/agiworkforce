@@ -765,7 +765,7 @@
               "relevance_score": 0.28415586563857276
             }
           ],
-          "model": "qwen3-rerank",
+          "modelCatalogReference": "qwen-quota-217",
           "id": "84f49279-503a-9280-ba28-2fe642dfe1a5",
           "usage": {
             "total_tokens": 92
