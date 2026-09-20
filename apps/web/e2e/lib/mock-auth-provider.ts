@@ -6,6 +6,9 @@ export async function mockAuthProvider(page: Page): Promise<void> {
   await page.route('**/clerk.browser.js*', (route) =>
     route.fulfill({ contentType: 'application/javascript', body: '' }),
   );
+  await page.route('**/ui.browser.js*', (route) =>
+    route.fulfill({ contentType: 'application/javascript', body: '' }),
+  );
   await page.addInitScript(() => {
     const signIn = {
       status: 'needs_first_factor',
