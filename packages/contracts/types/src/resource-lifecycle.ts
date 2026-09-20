@@ -114,6 +114,90 @@ export const RESOURCE_LIFECYCLE_SEMANTICS: Readonly<
   },
 };
 
+/**
+ * The stores a legal hold can name, and the table each one is. A table that
+ * reaches its owner through a parent names that parent, so a hold on a person
+ * still preserves what they own indirectly.
+ */
+export interface HoldableResource {
+  readonly resourceType: string;
+  readonly table: string;
+  readonly ownerColumn: string | null;
+  readonly ownedVia: { readonly table: string; readonly column: string } | null;
+  readonly organizationColumn: string | null;
+}
+
+export const HOLDABLE_RESOURCES: readonly HoldableResource[] = [
+  {
+    resourceType: 'conversation',
+    table: 'web_conversations',
+    ownerColumn: 'user_id',
+    ownedVia: null,
+    organizationColumn: 'organization_id',
+  },
+  {
+    resourceType: 'message',
+    table: 'web_messages',
+    ownerColumn: null,
+    ownedVia: { table: 'web_conversations', column: 'conversation_id' },
+    organizationColumn: null,
+  },
+  {
+    resourceType: 'project',
+    table: 'user_projects',
+    ownerColumn: 'user_id',
+    ownedVia: null,
+    organizationColumn: 'organization_id',
+  },
+  {
+    resourceType: 'project_file',
+    table: 'project_knowledge_files',
+    ownerColumn: null,
+    ownedVia: { table: 'user_projects', column: 'project_id' },
+    organizationColumn: null,
+  },
+  {
+    resourceType: 'file',
+    table: 'media_assets',
+    ownerColumn: 'user_id',
+    ownedVia: null,
+    organizationColumn: 'organization_id',
+  },
+  {
+    resourceType: 'artifact',
+    table: 'web_artifacts',
+    ownerColumn: 'user_id',
+    ownedVia: null,
+    organizationColumn: 'organization_id',
+  },
+  {
+    resourceType: 'work_run',
+    table: 'cloud_agent_runs',
+    ownerColumn: 'user_id',
+    ownedVia: null,
+    organizationColumn: 'organization_id',
+  },
+];
+
+export const HOLDABLE_RESOURCE_TYPES: readonly string[] = HOLDABLE_RESOURCES.map(
+  (entry) => entry.resourceType,
+);
+
+export const HOLDABLE_TABLES: readonly string[] = HOLDABLE_RESOURCES.map((entry) => entry.table);
+
+export function holdableResource(resourceType: string): HoldableResource | null {
+  return HOLDABLE_RESOURCES.find((entry) => entry.resourceType === resourceType) ?? null;
+}
+
+export function holdableResourceForTable(table: string): HoldableResource | null {
+  return HOLDABLE_RESOURCES.find((entry) => entry.table === table) ?? null;
+}
+
+/** Archive and soft delete are reversible, so a hold only refuses `purged`. */
+export function holdBlocksTransition(next: ResourceLifecycleState): boolean {
+  return next === 'purged';
+}
+
 const ROLE_PERMISSIONS: Readonly<Record<ResourceRole, readonly ResourcePermission[]>> = {
   owner: ['view', 'comment', 'edit', 'share', 'transfer', 'delete'],
   editor: ['view', 'comment', 'edit'],

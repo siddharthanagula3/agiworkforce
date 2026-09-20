@@ -28,7 +28,7 @@ describe('permanentlyDeleteMediaAsset', () => {
 
   it('locks the owner-scoped trashed row, deletes bytes, then removes the row', async () => {
     query
-      .mockResolvedValueOnce([{ storage_pathname: 'users/owner/asset.bin' }])
+      .mockResolvedValueOnce([{ storage_pathname: 'users/owner/asset.bin', held: false }])
       .mockResolvedValueOnce([{ id: 'asset-1' }]);
 
     await expect(permanentlyDeleteMediaAsset('owner', 'asset-1', callerDb)).resolves.toBe(true);
@@ -37,10 +37,14 @@ describe('permanentlyDeleteMediaAsset', () => {
     expect(selectSql).toMatch(
       /user_id = \$2[\s\S]*organization_id is not distinct from \$3::uuid[\s\S]*deleted_at is not null[\s\S]*for update/i,
     );
-    expect(selectParams).toEqual(['asset-1', 'owner', 'org-1']);
+    expect(selectParams.slice(0, 3)).toEqual(['asset-1', 'owner', 'org-1']);
     expect(deleteStoredMedia).toHaveBeenCalledWith('users/owner/asset.bin');
     expect(query.mock.calls[1]?.[0]).toMatch(/delete from public\.media_assets/i);
-    expect(query.mock.calls[1]?.[1]).toEqual(['asset-1', 'owner', 'org-1']);
+    expect((query.mock.calls[1]?.[1] as unknown[]).slice(0, 3)).toEqual([
+      'asset-1',
+      'owner',
+      'org-1',
+    ]);
   });
 
   it('does not touch storage when the asset is live, foreign, or absent', async () => {
@@ -49,11 +53,15 @@ describe('permanentlyDeleteMediaAsset', () => {
     await expect(permanentlyDeleteMediaAsset('owner', 'asset-1', callerDb)).resolves.toBe(false);
     expect(deleteStoredMedia).not.toHaveBeenCalled();
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0]?.[1]).toEqual(['asset-1', 'owner', 'org-1']);
+    expect((query.mock.calls[0]?.[1] as unknown[]).slice(0, 3)).toEqual([
+      'asset-1',
+      'owner',
+      'org-1',
+    ]);
   });
 
   it('keeps the database row retryable when storage deletion fails', async () => {
-    query.mockResolvedValueOnce([{ storage_pathname: 'users/owner/asset.bin' }]);
+    query.mockResolvedValueOnce([{ storage_pathname: 'users/owner/asset.bin', held: false }]);
     deleteStoredMedia.mockRejectedValueOnce(new Error('storage unavailable'));
 
     await expect(permanentlyDeleteMediaAsset('owner', 'asset-1', callerDb)).rejects.toThrow(
