@@ -36,6 +36,13 @@ export const METRIC_NAME = {
   configurationState: 'agi.configuration.state',
   completions: 'agi.completions',
   falseSuccess: 'agi.completion.false_success',
+  denials: 'agi.denials',
+  rejections: 'agi.rejections',
+  turns: 'agi.turns',
+  turnTimeToFirstToken: 'agi.turn.time_to_first_token',
+  turnDuration: 'agi.turn.duration',
+  turnCost: 'agi.turn.cost',
+  turnRetries: 'agi.turn.retries',
   // The media instruments live in media-telemetry.ts, which imports span.ts,
   // which imports this file. Importing them back would be a cycle that leaves
   // this object half built, so the names are restated and
@@ -64,6 +71,7 @@ export type FailureKind =
 export type SpanOutcome = 'ok' | 'error';
 
 const MILLISECONDS = 'ms';
+const MICRO_USD = 'uUSD';
 const SPAN_NAME_ATTRIBUTE = 'span.name';
 const SPAN_STATUS_ATTRIBUTE = 'span.status';
 const SERVER_ERROR_STATUS = 500;
@@ -89,6 +97,13 @@ interface Instruments {
   readonly configurationState: Gauge;
   readonly completions: Counter;
   readonly falseSuccess: Counter;
+  readonly denials: Counter;
+  readonly rejections: Counter;
+  readonly turns: Counter;
+  readonly turnTimeToFirstToken: Histogram;
+  readonly turnDuration: Histogram;
+  readonly turnCost: Histogram;
+  readonly turnRetries: Counter;
 }
 
 let cached: { provider: MeterProvider; instruments: Instruments } | null = null;
@@ -117,6 +132,15 @@ function instruments(): Instruments {
     configurationState: meter.createGauge(METRIC_NAME.configurationState),
     completions: meter.createCounter(METRIC_NAME.completions),
     falseSuccess: meter.createCounter(METRIC_NAME.falseSuccess),
+    denials: meter.createCounter(METRIC_NAME.denials),
+    rejections: meter.createCounter(METRIC_NAME.rejections),
+    turns: meter.createCounter(METRIC_NAME.turns),
+    turnTimeToFirstToken: meter.createHistogram(METRIC_NAME.turnTimeToFirstToken, {
+      unit: MILLISECONDS,
+    }),
+    turnDuration: meter.createHistogram(METRIC_NAME.turnDuration, { unit: MILLISECONDS }),
+    turnCost: meter.createHistogram(METRIC_NAME.turnCost, { unit: MICRO_USD }),
+    turnRetries: meter.createCounter(METRIC_NAME.turnRetries),
   };
   cached = { provider, instruments: created };
   return created;
@@ -138,11 +162,15 @@ export function recordSpanMetrics(input: {
   domain: string;
   outcome: SpanOutcome;
   durationMs: number;
+  provider?: string | undefined;
+  model?: string | undefined;
 }): void {
   const attributes = clean({
     [SPAN_NAME_ATTRIBUTE]: input.name,
     [SPAN_DOMAIN_ATTRIBUTE]: input.domain,
     [SPAN_STATUS_ATTRIBUTE]: input.outcome,
+    [OBSERVABILITY_ATTRIBUTE.providerName]: input.provider,
+    [OBSERVABILITY_ATTRIBUTE.requestModel]: input.model,
   });
   const recorded = instruments();
   recorded.spanCount.add(1, attributes);
@@ -153,10 +181,16 @@ export function recordHttpRequest(input: {
   method: string | undefined;
   statusCode: number;
   durationMs: number;
+  surface?: string | undefined;
+  clientVersion?: string | undefined;
+  protocolVersion?: string | undefined;
 }): void {
   const attributes = clean({
     [ATTR_HTTP_REQUEST_METHOD]: input.method,
     [ATTR_HTTP_RESPONSE_STATUS_CODE]: input.statusCode,
+    [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+    [OBSERVABILITY_ATTRIBUTE.clientVersion]: input.clientVersion,
+    [OBSERVABILITY_ATTRIBUTE.protocolVersion]: input.protocolVersion,
     [OBSERVABILITY_ATTRIBUTE.errorType]:
       input.statusCode >= SERVER_ERROR_STATUS ? SERVER_ERROR_TYPE : undefined,
   });
@@ -174,6 +208,120 @@ export function recordFailure(kind: FailureKind, errorType?: string): void {
       [OBSERVABILITY_ATTRIBUTE.errorType]: errorType,
     }),
   );
+}
+
+export type DenialLayer = 'capability' | 'policy' | 'entitlement' | 'surface';
+
+/**
+ * A refusal the product made on purpose, counted by the layer that made it. The
+ * four layers refuse for different reasons and are fixed in different places:
+ * a capability the build does not carry, a policy the workspace set, an
+ * entitlement the plan does not include, and a surface the feature never
+ * supported. One counter with one reason string would make them one number.
+ */
+export function recordDenial(input: {
+  layer: DenialLayer;
+  reason: string;
+  surface: string;
+  workspaceKind?: WorkspaceKind | undefined;
+}): void {
+  instruments().denials.add(
+    1,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.denialLayer]: input.layer,
+      [OBSERVABILITY_ATTRIBUTE.denialReason]: input.reason,
+      [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+      [OBSERVABILITY_ATTRIBUTE.workspaceKind]: input.workspaceKind,
+    }),
+  );
+}
+
+export type RejectionKind =
+  | 'contract_decode'
+  | 'sync_conflict'
+  | 'unknown_event'
+  | 'unknown_content_block'
+  | 'workspace_switch';
+
+/**
+ * Input the product could not make sense of, which is a different failure from
+ * a refusal: nobody decided it, so every one of these is a contract the two
+ * ends disagree about and a client version is the first thing to look at.
+ */
+export function recordRejection(input: {
+  kind: RejectionKind;
+  reason: string;
+  surface: string;
+  clientVersion?: string | undefined;
+  protocolVersion?: string | undefined;
+}): void {
+  instruments().rejections.add(
+    1,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.rejectionKind]: input.kind,
+      [OBSERVABILITY_ATTRIBUTE.rejectionReason]: input.reason,
+      [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+      [OBSERVABILITY_ATTRIBUTE.clientVersion]: input.clientVersion,
+      [OBSERVABILITY_ATTRIBUTE.protocolVersion]: input.protocolVersion,
+    }),
+  );
+  recordFailure('api', input.kind);
+}
+
+export type WorkspaceKind = 'personal' | 'organization';
+
+export type TurnOutcome = 'succeeded' | 'failed';
+
+export type CacheOutcome = 'hit' | 'miss';
+
+/**
+ * What one served turn cost in time and money, split by the dimensions a
+ * regression is attributed along. Time to first token and wall time are
+ * separate instruments because a turn can be fast to start and slow to finish,
+ * and a p99 over their sum hides which of the two moved.
+ */
+export function recordTurnOutcome(input: {
+  outcome: TurnOutcome;
+  surface: string;
+  provider: string | null;
+  modelKey: string | null;
+  routeId?: string | null;
+  mode?: string | undefined;
+  trustMode?: string | undefined;
+  workspaceKind?: WorkspaceKind | undefined;
+  cache?: CacheOutcome | undefined;
+  timeToFirstTokenMs?: number | null | undefined;
+  durationMs?: number | null | undefined;
+  costMicroUsd?: number | null | undefined;
+  retries?: number | undefined;
+  errorType?: string | undefined;
+}): void {
+  const attributes = clean({
+    [OBSERVABILITY_ATTRIBUTE.turnOutcome]: input.outcome,
+    [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+    [OBSERVABILITY_ATTRIBUTE.providerName]: input.provider ?? undefined,
+    [OBSERVABILITY_ATTRIBUTE.requestModel]: input.modelKey ?? undefined,
+    [OBSERVABILITY_ATTRIBUTE.routeId]: input.routeId ?? undefined,
+    [OBSERVABILITY_ATTRIBUTE.requestMode]: input.mode,
+    [OBSERVABILITY_ATTRIBUTE.trustMode]: input.trustMode,
+    [OBSERVABILITY_ATTRIBUTE.workspaceKind]: input.workspaceKind,
+    [OBSERVABILITY_ATTRIBUTE.cacheOutcome]: input.cache,
+    [OBSERVABILITY_ATTRIBUTE.errorType]: input.errorType,
+  });
+  const recorded = instruments();
+  recorded.turns.add(1, attributes);
+  if (typeof input.timeToFirstTokenMs === 'number') {
+    recorded.turnTimeToFirstToken.record(nonNegative(input.timeToFirstTokenMs), attributes);
+  }
+  if (typeof input.durationMs === 'number') {
+    recorded.turnDuration.record(nonNegative(input.durationMs), attributes);
+  }
+  if (typeof input.costMicroUsd === 'number') {
+    recorded.turnCost.record(nonNegative(input.costMicroUsd), attributes);
+  }
+  const retries = Math.max(0, Math.trunc(input.retries ?? 0));
+  if (retries > 0) recorded.turnRetries.add(retries, attributes);
+  if (input.outcome === 'failed') recordFailure('model', input.errorType);
 }
 
 export type DatabaseOutcome = 'ok' | 'error';

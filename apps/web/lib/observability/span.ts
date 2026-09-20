@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { OBSERVABILITY_ATTRIBUTE } from './attributes';
 import { SPAN_DOMAIN_ATTRIBUTE, startBridgedSpan, type SpanKind } from './otel-span-bridge';
 import { recordSpanMetrics } from './metrics';
 import { redactAttributes, redactValue, type SpanAttributeValue } from './redact';
@@ -36,6 +37,10 @@ const QUIET_SPAN_DOMAIN: SpanDomain = 'database';
 
 const activeSpans = new WeakMap<TraceContext, ActiveSpan>();
 
+function spanLabel(value: SpanAttributeValue | undefined): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function annotateActiveSpan(attributes: Readonly<Record<string, unknown>>): void {
   const context = getTraceContext();
   if (!context) return;
@@ -54,6 +59,9 @@ export async function withSpan<R>(
     traceId: bridged.traceId,
     spanId: bridged.spanId,
     sampled: bridged.sampled,
+    ...(parent?.requestId === undefined ? {} : { requestId: parent.requestId }),
+    ...(parent?.organizationId === undefined ? {} : { organizationId: parent.organizationId }),
+    ...(parent?.userId === undefined ? {} : { userId: parent.userId }),
   };
   const extra: Record<string, unknown> = {};
   const span: ActiveSpan = {
@@ -68,8 +76,15 @@ export async function withSpan<R>(
   const startedAt = Date.now();
   const emit = (status: 'ok' | 'error', error?: unknown): void => {
     const durationMs = Date.now() - startedAt;
-    recordSpanMetrics({ name, domain: options.domain, outcome: status, durationMs });
     const attributes = redactAttributes({ ...options.attributes, ...extra });
+    recordSpanMetrics({
+      name,
+      domain: options.domain,
+      outcome: status,
+      durationMs,
+      provider: spanLabel(attributes[OBSERVABILITY_ATTRIBUTE.providerName]),
+      model: spanLabel(attributes[OBSERVABILITY_ATTRIBUTE.requestModel]),
+    });
     const record: Record<string, SpanAttributeValue | undefined> = {
       event: 'span',
       span_name: name,

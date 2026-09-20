@@ -47,6 +47,10 @@ describe('GET /api/admin/service-dashboards', () => {
     expect(ids).toContain('http-traffic');
     expect(ids).toContain('browser-health');
     expect(ids).toContain('notification-delivery');
+    expect(ids).toContain('security-and-identity');
+    expect(ids).toContain('connector-health');
+    expect(ids).toContain('turn-latency-and-cost');
+    expect(ids).toContain('refusals-and-rejections');
     for (const dashboard of body.dashboards) {
       expect(dashboard.panels.length).toBeGreaterThan(0);
       for (const panel of dashboard.panels) expect(panel.query).toMatch(PANEL_QUERY_SHAPE);
