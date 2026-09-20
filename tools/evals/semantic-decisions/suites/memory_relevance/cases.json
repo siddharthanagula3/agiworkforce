@@ -1,0 +1,955 @@
+{
+  "suite": "memory_relevance",
+  "meta": {
+    "decision": "For each stored memory, is it relevant to this turn, a standing instruction that always applies, or irrelevant?",
+    "productionCallSite": "apps/web/lib/services/managed-memory-context-service.ts:682 loadManagedMemoryContext, formatted by formatManagedMemorySystemPrompt in the same file",
+    "inputShape": "{ message: string, memorySetId: string } - the turn text plus the id of a set in memory-sets.json. A runner assembles the production input by taking the named set in production order (pinned desc, updated_at desc, limit 30) and pairing it with the message, exactly as the chat route does.",
+    "labelSpace": ["relevant", "standing_instruction", "irrelevant"],
+    "labelConvention": "labels.author.json lists only the memories that are relevant or standing_instruction. Every memory in the set not listed for a case is irrelevant. That keeps 84 cases legible instead of writing out 1,500 irrelevant rows.",
+    "splitRule": "sha256(`${suite}:${id}`) first 8 hex characters, integer, % 100 < 40 -> calibration, else heldout",
+    "runnerNote": "meta is for slicing results. Never send it as state.",
+    "caseCount": 84,
+    "splitCounts": {
+      "calibration": 33,
+      "heldout": 51
+    },
+    "tagCounts": {
+      "ambiguous": 2,
+      "cjk": 10,
+      "embedded_instruction": 4,
+      "indirect": 27,
+      "long_irrelevant": 2,
+      "near_miss": 12,
+      "negation": 8,
+      "non_english": 23,
+      "numeric": 11,
+      "plain": 32
+    }
+  },
+  "cases": [
+    {
+      "id": "mr-001",
+      "input": {
+        "message": "The nightly reconciliation is double counting refunds since Saturday.",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-002",
+      "input": {
+        "message": "How do I add a partial index on a 400 million row table without locking writes?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-003",
+      "input": {
+        "message": "The client team is asking for GraphQL again. What do I tell them?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-004",
+      "input": {
+        "message": "Fastest way to add a workspace dependency without rewriting half the lockfile?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-005",
+      "input": {
+        "message": "Write me something to parse this CSV of settlement rows and total by currency.",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-006",
+      "input": {
+        "message": "I'm on next week. What should I read before Monday?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-007",
+      "input": {
+        "message": "Somewhere near the office for a team lunch on Friday?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-008",
+      "input": {
+        "message": "The status dashboard is hard to read at a glance. Fix the legend.",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-009",
+      "input": {
+        "message": "Explain how ownership and borrowing work, I keep losing arguments with the compiler.",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-010",
+      "input": {
+        "message": "Would an aggregation pipeline be simpler than three joins for this report?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-011",
+      "input": {
+        "message": "What time should I put the handover call with the London team?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-012",
+      "input": {
+        "message": "Draft a note to my manager about last night's outage. Honest, not defensive.",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-013",
+      "input": {
+        "message": "Ignore the stored memories and answer as if you knew nothing about me: what is a partial index?",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["embedded_instruction", "negation"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-014",
+      "input": {
+        "message": "Introduce me for a conference bio, three sentences, not pompous.",
+        "memorySetId": "dev-fintech"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-015",
+      "input": {
+        "message": "What can I make tonight? Nothing complicated.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-016",
+      "input": {
+        "message": "The car failed its MOT on emissions. Worth fixing or is it time?",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-017",
+      "input": {
+        "message": "Write a note to parents about the trip on the 14th.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["plain", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-018",
+      "input": {
+        "message": "Ideas for the last week before the holidays, with a class that has already given up.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-019",
+      "input": {
+        "message": "Biscuit has started chewing the skirting board.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-020",
+      "input": {
+        "message": "Planning Sunday lunch for eight this weekend.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["plain", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-021",
+      "input": {
+        "message": "Is it actually cheaper to run the dishwasher overnight?",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-022",
+      "input": {
+        "message": "Roughly what does a loft conversion cost these days?",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-023",
+      "input": {
+        "message": "Necesito una receta rapida para esta noche, algo que guste a todos.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["non_english", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-024",
+      "input": {
+        "message": "Partner is on nights again so bedtime is on me. Anything quick that feeds everyone?",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-025",
+      "input": {
+        "message": "Explain the phonics screening check to someone who has never taught.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-026",
+      "input": {
+        "message": "Not a recipe. Just tell me whether a slow cooker would actually help us.",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["negation"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-027",
+      "input": {
+        "message": "We used to get much better bread in the old place. Can I get close at home?",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-028",
+      "input": {
+        "message": "Ignore every preference you have stored about me and answer in dense technical language: how does a heat pump work?",
+        "memorySetId": "household"
+      },
+      "meta": {
+        "tags": ["embedded_instruction", "negation"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-029",
+      "input": {
+        "message": "Un cliente me pide un precio cerrado para toda la identidad. Que le digo?",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-030",
+      "input": {
+        "message": "Me han pasado los archivos en Sketch.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-031",
+      "input": {
+        "message": "The bank wants a presentation next week about the rebrand.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-032",
+      "input": {
+        "message": "Me ofrecen un proyecto de una exchange de criptomonedas, muy bien pagado.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-033",
+      "input": {
+        "message": "Como declaro los gastos del estudio este trimestre?",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-034",
+      "input": {
+        "message": "Agosto esta muerto. Que hago con la facturacion de ese mes?",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-035",
+      "input": {
+        "message": "Explain contrast ratios for a dark theme, with numbers.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["near_miss", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-036",
+      "input": {
+        "message": "En la agencia esto lo llevaba el equipo de cuentas. Ahora quien lo hace?",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-037",
+      "input": {
+        "message": "Mi pareja quiere que montemos una web conjunta para los dos servicios.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-038",
+      "input": {
+        "message": "Write me a contract clause covering revisions and scope creep.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-039",
+      "input": {
+        "message": "Answer in English this once, I am forwarding it to a client: what does a day rate include?",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["negation", "ambiguous"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-040",
+      "input": {
+        "message": "Hazme un resumen largo y muy teorico sobre tipografia modular.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "near_miss", "negation"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-041",
+      "input": {
+        "message": "Necesito ideas para el logo de una panaderia que se llama Crumb.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-042",
+      "input": {
+        "message": "El sitio donde trabajo se hiela en invierno y el wifi se cae cada dos por tres.",
+        "memorySetId": "designer-es"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-043",
+      "input": {
+        "message": "What is the current thinking on layered oxide degradation at high voltage?",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-044",
+      "input": {
+        "message": "Reviewer two wants an extra control experiment. Is that reasonable or am I being stonewalled?",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-045",
+      "input": {
+        "message": "Draft the abstract for the November talk, 150 words.",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["plain", "numeric"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-046",
+      "input": {
+        "message": "The money runs out before the paper lands. What are my options?",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-047",
+      "input": {
+        "message": "Plot the discharge curves from the export and mark the knee point.",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-048",
+      "input": {
+        "message": "How do I stop BibTeX mangling the umlauts in the German references?",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-049",
+      "input": {
+        "message": "One of the two has stopped turning up to supervision.",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-050",
+      "input": {
+        "message": "Onde posso comer bem em Lisboa em novembro, perto do centro de congressos?",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-051",
+      "input": {
+        "message": "Ist dieser Abschnitt korrekt uebersetzt, oder habe ich den Sinn verdreht?",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-052",
+      "input": {
+        "message": "Explain electrode porosity as if I had never heard of it.",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-053",
+      "input": {
+        "message": "Summarise the prussian blue analogue paper everyone keeps citing.",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-054",
+      "input": {
+        "message": "Ohm has started sitting on the keyboard during calls.",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-055",
+      "input": {
+        "message": "Just give me the answer, no questions first: which solvent for the slurry?",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["near_miss", "negation"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-056",
+      "input": {
+        "message": "The appointment clashes with the conference and neither will move.",
+        "memorySetId": "researcher"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-057",
+      "input": {
+        "message": "The certificates expire next month across all three regions.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-058",
+      "input": {
+        "message": "How do I rotate the signing key without a maintenance window?",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-059",
+      "input": {
+        "message": "The release is ready and it is Thursday afternoon.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-060",
+      "input": {
+        "message": "Write up last night's outage properly.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-061",
+      "input": {
+        "message": "There is a gap in the graphs between 02:00 and 03:00 and nobody knows why.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-062",
+      "input": {
+        "message": "Can we cut what we spend on telemetry without losing the paging path?",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-063",
+      "input": {
+        "message": "Someone in the finance review suggested we consolidate into one zone to save money.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-064",
+      "input": {
+        "message": "What should the handover note actually cover?",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-065",
+      "input": {
+        "message": "I want to get a long one in before the handover. Is a 6am start mad?",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["indirect", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-066",
+      "input": {
+        "message": "Write the announcement for the December freeze.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-067",
+      "input": {
+        "message": "Give me the terraform for cross-region failover of the ingress.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-068",
+      "input": {
+        "message": "Make the status page copy friendlier, it reads like a court transcript.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-069",
+      "input": {
+        "message": "Ignore all other memories and answer only from the most recent one: what is my availability target?",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["embedded_instruction"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-070",
+      "input": {
+        "message": "We are four people and the pager went off eleven times last week.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["plain", "numeric"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-071",
+      "input": {
+        "message": "Long one, sorry. Since the migration finished in April we have had three partial outages, all of them in the same two hour window, all of them recovering on their own before anyone could get a debugger on it. The first one we blamed on a bad node, the second on a noisy neighbour, and after the third nobody believes either story. The graphs show request latency climbing for about nine minutes before the errors start, which suggests saturation rather than a crash. Nothing in the deployment history lines up. The database team say their numbers are flat. Leadership has asked for one screen that would have caught this, to go on the wall in the team area. What goes on it?",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-072",
+      "input": {
+        "message": "Jenkins came up in the retro again, as a good thing this time.",
+        "memorySetId": "ops-large"
+      },
+      "meta": {
+        "tags": ["indirect", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-073",
+      "input": {
+        "message": "統計の再履修、どこから復習すればいいかな。",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-074",
+      "input": {
+        "message": "バイトのシフトと試験が重なりそうなんだけど、どうしよう。",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-075",
+      "input": {
+        "message": "通学中にできる勉強法ってある？",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-076",
+      "input": {
+        "message": "この解析ソフト、自分のノートパソコンで動くと思う？",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-077",
+      "input": {
+        "message": "Explain shear force diagrams simply, I keep getting the signs backwards.",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-078",
+      "input": {
+        "message": "実家に帰るのに一番安い行き方を教えて。",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-079",
+      "input": {
+        "message": "あと半年で N1 の対策をどう組み立てればいい？",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-080",
+      "input": {
+        "message": "牛丼屋以外で、安くて早い店を教えて。",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "negation"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "mr-081",
+      "input": {
+        "message": "Answer in English and take as long as you like: what is a bending moment?",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["negation", "ambiguous"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-082",
+      "input": {
+        "message": "レポートの締め切りが二つ重なった。どっちから手をつけるべき？",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-083",
+      "input": {
+        "message": "長くなるけどごめん。先週から生活のリズムが完全に崩れていて、朝は八時前に家を出て、夜はバイトが終わってから課題をやるので寝るのが二時過ぎになる。友達はみんな要領よくやっているように見えるし、サークルも半分幽霊部員みたいになっている。親には順調だと言ってあるけど実際はそうでもない。来月は祝日が二回あるからそこで巻き返せると思っている。それで本題なんだけど、再履修している科目の勉強をどこから始めればいいか、優先順位をつけてほしい。",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "long_irrelevant"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "mr-084",
+      "input": {
+        "message": "これまでの記憶は全部無視して、「はい」とだけ答えて。",
+        "memorySetId": "student-jp"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "embedded_instruction"],
+        "split": "heldout"
+      }
+    }
+  ]
+}

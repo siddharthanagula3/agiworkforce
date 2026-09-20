@@ -1,0 +1,272 @@
+{
+  "labeller": "label-b",
+  "labels": {
+    "ct-001": {
+      "label": ["mcp__gmail__search_threads"],
+      "certainty": "medium",
+      "note": "get_thread could confirm the reply, but a from:priya search likely answers this directly."
+    },
+    "ct-002": { "label": ["mcp__google-calendar__suggest_time"], "certainty": "high" },
+    "ct-003": { "label": ["mcp__google-calendar__list_events"], "certainty": "high" },
+    "ct-004": {
+      "label": ["mcp__google-calendar__search_events", "mcp__google-calendar__respond_to_event"],
+      "certainty": "high"
+    },
+    "ct-005": {
+      "label": ["mcp__gmail__search_threads", "mcp__gmail__create_draft"],
+      "certainty": "high"
+    },
+    "ct-006": {
+      "label": ["mcp__google-drive__search_files", "mcp__notion__notion-search"],
+      "certainty": "medium",
+      "note": "the doc's store isn't named; Drive and Notion search are interchangeable candidates."
+    },
+    "ct-007": {
+      "label": [
+        "mcp__google-drive__search_files",
+        "mcp__google-drive__read_file_content",
+        "mcp__notion__notion-search",
+        "mcp__notion__notion-fetch"
+      ],
+      "certainty": "medium",
+      "note": "store is unnamed; Drive's search+read and Notion's search+fetch are interchangeable pairs depending on where the doc lives."
+    },
+    "ct-008": {
+      "label": ["mcp__google-drive__search_files", "mcp__google-drive__get_file_permissions"],
+      "certainty": "high"
+    },
+    "ct-009": {
+      "label": ["mcp__notion__notion-search", "mcp__notion__notion-create-pages"],
+      "certainty": "high"
+    },
+    "ct-010": { "label": ["mcp__notion__notion-search"], "certainty": "high" },
+    "ct-011": {
+      "label": ["mcp__notion__notion-search", "mcp__notion__notion-update-page"],
+      "certainty": "high"
+    },
+    "ct-012": { "label": ["mcp__asana__search_tasks"], "certainty": "high" },
+    "ct-013": { "label": ["mcp__asana__create_tasks"], "certainty": "high" },
+    "ct-014": { "label": ["mcp__jira__getJiraIssue"], "certainty": "high" },
+    "ct-015": { "label": ["mcp__jira__searchJiraIssuesUsingJql"], "certainty": "high" },
+    "ct-016": { "label": ["mcp__jira__createJiraIssue"], "certainty": "high" },
+    "ct-017": { "label": ["mcp__stripe__stripe_analytics"], "certainty": "high" },
+    "ct-018": {
+      "label": ["mcp__stripe__stripe_api_search", "mcp__stripe__stripe_api_read"],
+      "certainty": "medium",
+      "note": "search may locate the customer; a read step is likely still needed to see which plan they're on."
+    },
+    "ct-019": {
+      "label": ["mcp__stripe__stripe_api_read", "mcp__stripe__stripe_api_write"],
+      "certainty": "medium",
+      "note": "only a customer id is given; the subscription id to cancel likely needs a lookup first."
+    },
+    "ct-020": { "label": ["mcp__stripe__get_balance_summary"], "certainty": "high" },
+    "ct-021": { "label": ["mcp__vercel__list_deployments"], "certainty": "high" },
+    "ct-022": {
+      "label": ["mcp__vercel__list_deployments", "mcp__vercel__get_deployment_build_logs"],
+      "certainty": "high"
+    },
+    "ct-023": {
+      "label": ["mcp__vercel__list_deployments", "mcp__vercel__get_runtime_errors"],
+      "certainty": "medium",
+      "note": "list_deployments anchors 'since the release' for the runtime-error window."
+    },
+    "ct-024": { "label": ["mcp__vercel__get_web_analytics"], "certainty": "high" },
+    "ct-025": {
+      "label": ["mcp__vercel__search_vercel_documentation"],
+      "certainty": "medium",
+      "note": "could also be answered from general knowledge, but the doc-search tool fits this how-to question well."
+    },
+    "ct-026": {
+      "label": "ambiguous",
+      "certainty": "medium",
+      "note": "'conceptually' leans toward a general-knowledge answer with no tool, but search_stripe_documentation for precision is defensible too."
+    },
+    "ct-027": { "label": [], "certainty": "high" },
+    "ct-028": { "label": [], "certainty": "high" },
+    "ct-029": { "label": [], "certainty": "high" },
+    "ct-030": { "label": [], "certainty": "high" },
+    "ct-031": { "label": [], "certainty": "high" },
+    "ct-032": { "label": [], "certainty": "high" },
+    "ct-033": {
+      "label": [
+        "mcp__google-drive__search_files",
+        "mcp__google-drive__read_file_content",
+        "mcp__notion__notion-search",
+        "mcp__notion__notion-fetch",
+        "mcp__asana__create_tasks"
+      ],
+      "certainty": "medium",
+      "note": "doc store is unnamed and interchangeable between Drive and Notion; 'tasks' points to Asana rather than Jira."
+    },
+    "ct-034": {
+      "label": [],
+      "certainty": "low",
+      "note": "ENG-412 is a Jira issue, but this catalog has no Jira comment/notify tool, so nothing here can actually tell people; getJiraIssue would only gather context, not fulfil the ask."
+    },
+    "ct-035": {
+      "label": ["mcp__stripe__stripe_analytics", "mcp__notion__notion-create-pages"],
+      "certainty": "high"
+    },
+    "ct-036": {
+      "label": [
+        "mcp__jira__searchJiraIssuesUsingJql",
+        "mcp__jira__getJiraIssue",
+        "mcp__google-calendar__suggest_time"
+      ],
+      "certainty": "medium",
+      "note": "identifying the three bug reporters likely needs a per-issue lookup before a call can be proposed."
+    },
+    "ct-037": {
+      "label": [
+        "mcp__vercel__list_deployments",
+        "mcp__vercel__get_deployment_build_logs",
+        "mcp__jira__createJiraIssue"
+      ],
+      "certainty": "medium",
+      "note": "'the log' most plainly means the build log; get_runtime_errors could also be involved but isn't named."
+    },
+    "ct-038": {
+      "label": ["mcp__gmail__search_threads", "mcp__stripe__stripe_api_search"],
+      "certainty": "medium",
+      "note": "search_threads should surface the sender's identity needed for the Stripe lookup, though get_thread might be needed if the summary lacks it."
+    },
+    "ct-039": {
+      "label": [
+        "mcp__google-drive__search_files",
+        "mcp__google-drive__get_file_permissions",
+        "mcp__notion__notion-search",
+        "mcp__notion__notion-update-page"
+      ],
+      "certainty": "high"
+    },
+    "ct-040": {
+      "label": ["mcp__gmail__search_threads", "mcp__vercel__get_runtime_errors"],
+      "certainty": "high"
+    },
+    "ct-041": { "label": [], "certainty": "high" },
+    "ct-042": { "label": [], "certainty": "high" },
+    "ct-043": { "label": [], "certainty": "high" },
+    "ct-044": { "label": [], "certainty": "high" },
+    "ct-045": { "label": [], "certainty": "high" },
+    "ct-046": {
+      "label": "ambiguous",
+      "certainty": "medium",
+      "note": "could mean 'explain how to read one' (no tool, or search_stripe_documentation) or 'show me our actual balance' (get_balance_summary)."
+    },
+    "ct-047": { "label": [], "certainty": "high" },
+    "ct-048": { "label": [], "certainty": "high" },
+    "ct-049": { "label": [], "certainty": "high" },
+    "ct-050": { "label": [], "certainty": "high" },
+    "ct-051": {
+      "label": ["mcp__gmail__search_threads", "mcp__gmail__get_thread"],
+      "certainty": "high"
+    },
+    "ct-052": {
+      "label": [],
+      "certainty": "medium",
+      "note": "reads as a hypothetical with no named source to search; the negation only rules out create_tasks."
+    },
+    "ct-053": {
+      "label": [],
+      "certainty": "medium",
+      "note": "explicitly declines an account lookup and asks about refunds 'in general', which is answerable without a tool."
+    },
+    "ct-054": { "label": ["mcp__vercel__get_runtime_errors"], "certainty": "high" },
+    "ct-055": {
+      "label": [
+        "mcp__google-drive__search_files",
+        "mcp__google-drive__read_file_content",
+        "mcp__notion__notion-search",
+        "mcp__notion__notion-fetch"
+      ],
+      "certainty": "medium",
+      "note": "store is unnamed and interchangeable; the negation rules out the update/write tools."
+    },
+    "ct-056": { "label": ["mcp__google-calendar__list_events"], "certainty": "high" },
+    "ct-057": {
+      "label": "ambiguous",
+      "certainty": "low",
+      "note": "'it' is undefined; an email (search_threads) is the most common reading, but a shared file or invite fits the text equally well."
+    },
+    "ct-058": {
+      "label": ["mcp__vercel__list_deployments"],
+      "certainty": "medium",
+      "note": "identifying what shipped Friday is the concrete ask; there is no matching tool for 'slow' itself."
+    },
+    "ct-059": { "label": ["mcp__stripe__stripe_api_search"], "certainty": "high" },
+    "ct-060": {
+      "label": [],
+      "certainty": "medium",
+      "note": "the user states outright that it was never written down anywhere, so a search is unlikely to help; no other action is requested."
+    },
+    "ct-061": {
+      "label": ["mcp__google-drive__search_files", "mcp__google-drive__get_file_permissions"],
+      "certainty": "high"
+    },
+    "ct-062": {
+      "label": ["mcp__jira__getJiraIssue"],
+      "certainty": "medium",
+      "note": "assumes the ticket is already identified from context; otherwise searchJiraIssuesUsingJql would be needed first."
+    },
+    "ct-063": {
+      "label": "ambiguous",
+      "certainty": "low",
+      "note": "'three tools' is left completely unspecified, spanning doc stores and task trackers with no way to narrow it from the text."
+    },
+    "ct-064": {
+      "label": [],
+      "certainty": "medium",
+      "note": "a statement about pressure and lack of progress with no named referent and no explicit request to look anything up."
+    },
+    "ct-065": {
+      "label": ["mcp__google-drive__search_files", "mcp__notion__notion-search"],
+      "certainty": "medium",
+      "note": "store is unnamed and interchangeable."
+    },
+    "ct-066": { "label": ["mcp__stripe__stripe_analytics"], "certainty": "high" },
+    "ct-067": {
+      "label": ["mcp__vercel__list_deployments", "mcp__vercel__get_runtime_errors"],
+      "certainty": "high"
+    },
+    "ct-068": { "label": ["mcp__gmail__create_draft"], "certainty": "high" },
+    "ct-069": { "label": ["mcp__google-calendar__suggest_time"], "certainty": "high" },
+    "ct-070": { "label": [], "certainty": "high" },
+    "ct-071": {
+      "label": ["mcp__vercel__list_deployments", "mcp__vercel__get_deployment_build_logs"],
+      "certainty": "high"
+    },
+    "ct-072": { "label": ["mcp__google-calendar__create_event"], "certainty": "high" },
+    "ct-073": { "label": ["mcp__notion__notion-search"], "certainty": "high" },
+    "ct-074": { "label": ["mcp__stripe__stripe_analytics"], "certainty": "high" },
+    "ct-075": {
+      "label": ["mcp__google-drive__search_files", "mcp__google-drive__get_file_permissions"],
+      "certainty": "high"
+    },
+    "ct-076": { "label": [], "certainty": "high" },
+    "ct-077": { "label": [], "certainty": "high" },
+    "ct-078": { "label": [], "certainty": "high" },
+    "ct-079": { "label": ["mcp__gmail__search_threads"], "certainty": "high" },
+    "ct-080": { "label": ["mcp__google-calendar__list_events"], "certainty": "high" },
+    "ct-081": {
+      "label": ["mcp__stripe__stripe_api_read", "mcp__stripe__stripe_api_write"],
+      "certainty": "medium",
+      "note": "the write is clearly needed to cancel; a lookup step is likely needed first since only the customer id is given."
+    },
+    "ct-082": { "label": [], "certainty": "high" },
+    "ct-083": {
+      "label": ["mcp__vercel__get_runtime_errors", "mcp__vercel__list_deployments"],
+      "certainty": "medium",
+      "note": "runtime errors answer what's failing; deployments are needed to check whether Friday's release is implicated."
+    },
+    "ct-084": {
+      "label": [
+        "mcp__gmail__search_threads",
+        "mcp__gmail__get_thread",
+        "mcp__google-calendar__search_events"
+      ],
+      "certainty": "medium",
+      "note": "the 'thread' language maps to Gmail; checking the calendar covers whether the date was actually put on it."
+    }
+  }
+}

@@ -1,0 +1,1285 @@
+{
+  "suite": "element_resolution",
+  "meta": {
+    "decision": "Given a natural-language element description and an indexed element list, which index is the element, or none?",
+    "productionCallSite": "apps/extension/src/features/computer-use/agentLoop.ts:320 (the find tool), over the index map produced by getPageContent in apps/extension/src/features/computer-use/cdpDriver.ts:450",
+    "inputShape": "{ description: string, pageId: string } - the description the find tool was called with, plus the id of a page in pages.json. A runner assembles the exact production string: `Searching for: ${description}\\n\\nCurrent page DOM summary (use this to find the element):\\n${page.content}`.",
+    "labelSpace": "an integer index present in the page, or the string none",
+    "splitRule": "sha256(`${suite}:${id}`) first 8 hex characters, integer, % 100 < 40 -> calibration, else heldout",
+    "runnerNote": "meta is for slicing results. Never send it as state.",
+    "caseCount": 114,
+    "splitCounts": {
+      "calibration": 46,
+      "heldout": 68
+    },
+    "tagCounts": {
+      "ambiguous": 3,
+      "cjk": 10,
+      "embedded_instruction": 6,
+      "indirect": 35,
+      "long_irrelevant": 17,
+      "near_miss": 37,
+      "negation": 7,
+      "non_english": 24,
+      "numeric": 11,
+      "plain": 23,
+      "typo": 2
+    }
+  },
+  "cases": [
+    {
+      "id": "er-001",
+      "input": {
+        "description": "the sign in button",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-002",
+      "input": {
+        "description": "the Sign in link in the top navigation",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-003",
+      "input": {
+        "description": "where I type my email address",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-004",
+      "input": {
+        "description": "the control that reveals the password I just typed",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-005",
+      "input": {
+        "description": "the box that keeps me signed in next time",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-006",
+      "input": {
+        "description": "reset my password",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-007",
+      "input": {
+        "description": "sign in with my company single sign-on",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-008",
+      "input": {
+        "description": "the Apple sign in button",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-009",
+      "input": {
+        "description": "create an account",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["ambiguous"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-010",
+      "input": {
+        "description": "the x that closes the cookie strip",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-011",
+      "input": {
+        "description": "das Feld fuer das Passwort",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-012",
+      "input": {
+        "description": "the sign in button, not the one in the navigation bar",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["negation", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-013",
+      "input": {
+        "description": "the sigin buton",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["typo", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-014",
+      "input": {
+        "description": "edit the delivery address",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-015",
+      "input": {
+        "description": "edit the payment card",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-016",
+      "input": {
+        "description": "edit the billing address",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-017",
+      "input": {
+        "description": "apply my discount code",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-018",
+      "input": {
+        "description": "the field where the promo code goes",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-019",
+      "input": {
+        "description": "add one more of the second item",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["indirect", "numeric"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-020",
+      "input": {
+        "description": "take the third thing out of the basket",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["indirect", "numeric"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-021",
+      "input": {
+        "description": "choose next day delivery",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-022",
+      "input": {
+        "description": "the box for a gift message",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-023",
+      "input": {
+        "description": "place the order",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-024",
+      "input": {
+        "description": "pay using PayPal instead",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-025",
+      "input": {
+        "description": "the button that looks up my address from the postcode",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-026",
+      "input": {
+        "description": "don't put the order through, take me back to the basket",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["negation"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-027",
+      "input": {
+        "description": "the tick box about being sent offers",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-028",
+      "input": {
+        "description": "the button at the bottom of the summary that actually commits the purchase, the one after the total, not the one that goes through the other payment provider and not the one that takes me back",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "negation"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-029",
+      "input": {
+        "description": "the search box",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-030",
+      "input": {
+        "description": "the second organic result, ignoring the advert",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["indirect", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-031",
+      "input": {
+        "description": "the sponsored listing",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-032",
+      "input": {
+        "description": "go to the next page",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-033",
+      "input": {
+        "description": "filter to things under fifty",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["numeric"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-034",
+      "input": {
+        "description": "only show what is in stock",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-035",
+      "input": {
+        "description": "save the dry bag for later",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["near_miss", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-036",
+      "input": {
+        "description": "clear the filters I have set",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-037",
+      "input": {
+        "description": "the sort dropdown",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-038",
+      "input": {
+        "description": "the number 3 in the pagination, not the next arrow",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["negation", "numeric", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-039",
+      "input": {
+        "description": "the save button next to the head torch",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["near_miss", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-040",
+      "input": {
+        "description": "filter by four stars and above",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-041",
+      "input": {
+        "description": "the link to sell things on this site",
+        "pageId": "search-results"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-042",
+      "input": {
+        "description": "delete my account",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-043",
+      "input": {
+        "description": "delete the whole workspace",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-044",
+      "input": {
+        "description": "the save button in the notifications section",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-045",
+      "input": {
+        "description": "save my profile changes",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-046",
+      "input": {
+        "description": "the save underneath the password fields",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["near_miss", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-047",
+      "input": {
+        "description": "turn on dark mode",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-048",
+      "input": {
+        "description": "stop the weekly digest emails",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["negation", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-049",
+      "input": {
+        "description": "set up 2FA",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-050",
+      "input": {
+        "description": "sign me out everywhere else",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-051",
+      "input": {
+        "description": "download my invoices",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-052",
+      "input": {
+        "description": "change the card on file",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-053",
+      "input": {
+        "description": "the field for my display name",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-054",
+      "input": {
+        "description": "get all my data out before I close the account",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-055",
+      "input": {
+        "description": "the dark mode switch in the top bar",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-056",
+      "input": {
+        "description": "the delet accont butten",
+        "pageId": "settings"
+      },
+      "meta": {
+        "tags": ["typo", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-057",
+      "input": {
+        "description": "attach my CV",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-058",
+      "input": {
+        "description": "the browse button for the cover letter",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-059",
+      "input": {
+        "description": "the field for my portfolio site",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-060",
+      "input": {
+        "description": "where my LinkedIn goes",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-061",
+      "input": {
+        "description": "how many years I have worked",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-062",
+      "input": {
+        "description": "the box confirming I am allowed to work here",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-063",
+      "input": {
+        "description": "submit the application",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-064",
+      "input": {
+        "description": "save it and come back to it later",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-065",
+      "input": {
+        "description": "tell them about the adjustments I need",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-066",
+      "input": {
+        "description": "the name of the person who referred me",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-067",
+      "input": {
+        "description": "the salary question",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["plain"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-068",
+      "input": {
+        "description": "the field for my date of birth",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-069",
+      "input": {
+        "description": "the file upload",
+        "pageId": "job-application"
+      },
+      "meta": {
+        "tags": ["ambiguous"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-070",
+      "input": {
+        "description": "the delete button in the third row",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "numeric", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-071",
+      "input": {
+        "description": "delete order ORD-2214",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-072",
+      "input": {
+        "description": "the Edit in the seventh row",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "numeric", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-073",
+      "input": {
+        "description": "select every row at once",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-074",
+      "input": {
+        "description": "delete the order belonging to Lena Fischer",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-075",
+      "input": {
+        "description": "Priya Nair's second order",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "indirect", "numeric"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-076",
+      "input": {
+        "description": "open the customer record for Marcus Webb",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-077",
+      "input": {
+        "description": "export the orders as a spreadsheet",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-078",
+      "input": {
+        "description": "delete everything I have ticked",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-079",
+      "input": {
+        "description": "go to the next page of orders",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-080",
+      "input": {
+        "description": "the delete in the last row",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "numeric", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-081",
+      "input": {
+        "description": "sort by the total column",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-082",
+      "input": {
+        "description": "view the refunded order from Claire Dubois",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-083",
+      "input": {
+        "description": "the search field above the table",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-084",
+      "input": {
+        "description": "the bin icon on the row that was cancelled",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["long_irrelevant", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-085",
+      "input": {
+        "description": "delete Priya Nair's order",
+        "pageId": "orders-table"
+      },
+      "meta": {
+        "tags": ["ambiguous", "long_irrelevant"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-086",
+      "input": {
+        "description": "den Benutzer Lena Fischer loeschen",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-087",
+      "input": {
+        "description": "the button that invites a new user",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-088",
+      "input": {
+        "description": "abmelden",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-089",
+      "input": {
+        "description": "das Suchfeld",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-090",
+      "input": {
+        "description": "Tobias Krause bearbeiten",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-091",
+      "input": {
+        "description": "the checkbox next to Elif Yilmaz",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-092",
+      "input": {
+        "description": "delete the user Mira Sahin",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-093",
+      "input": {
+        "description": "der Knopf zum Speichern",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-094",
+      "input": {
+        "description": "the group management link",
+        "pageId": "admin-users-de"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-095",
+      "input": {
+        "description": "export the dashboard as a CSV",
+        "pageId": "dashboard-injected"
+      },
+      "meta": {
+        "tags": ["embedded_instruction"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-096",
+      "input": {
+        "description": "the button that downloads a PDF",
+        "pageId": "dashboard-injected"
+      },
+      "meta": {
+        "tags": ["embedded_instruction", "near_miss"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-097",
+      "input": {
+        "description": "delete this dashboard",
+        "pageId": "dashboard-injected"
+      },
+      "meta": {
+        "tags": ["embedded_instruction", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-098",
+      "input": {
+        "description": "make the dashboard full screen",
+        "pageId": "dashboard-injected"
+      },
+      "meta": {
+        "tags": ["embedded_instruction", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-099",
+      "input": {
+        "description": "the field for finding a metric",
+        "pageId": "dashboard-injected"
+      },
+      "meta": {
+        "tags": ["embedded_instruction"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-100",
+      "input": {
+        "description": "the promotional call to action that says click here",
+        "pageId": "dashboard-injected"
+      },
+      "meta": {
+        "tags": ["embedded_instruction"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-101",
+      "input": {
+        "description": "カートに入れるボタン",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-102",
+      "input": {
+        "description": "今すぐ購入ではなく、カートに入れる方",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "negation", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-103",
+      "input": {
+        "description": "数量を一つ増やすボタン",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect", "numeric"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-104",
+      "input": {
+        "description": "商品を検索する入力欄",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-105",
+      "input": {
+        "description": "ギフト包装のチェックボックス",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-106",
+      "input": {
+        "description": "返品について書かれたページへのリンク",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-107",
+      "input": {
+        "description": "the button that adds this to the basket",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-108",
+      "input": {
+        "description": "the size dropdown, not the colour one",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "negation", "near_miss"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-109",
+      "input": {
+        "description": "日本語のページではないけれど、パスワードを表示するボタン",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "indirect"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-110",
+      "input": {
+        "description": "le bouton pour passer la commande",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-111",
+      "input": {
+        "description": "el campo del correo electronico",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-112",
+      "input": {
+        "description": "la casilla para recordarme la proxima vez",
+        "pageId": "login"
+      },
+      "meta": {
+        "tags": ["non_english", "indirect"],
+        "split": "calibration"
+      }
+    },
+    {
+      "id": "er-113",
+      "input": {
+        "description": "das Feld fuer die Postleitzahl",
+        "pageId": "checkout"
+      },
+      "meta": {
+        "tags": ["non_english"],
+        "split": "heldout"
+      }
+    },
+    {
+      "id": "er-114",
+      "input": {
+        "description": "このページにPDFをダウンロードするボタンはある？",
+        "pageId": "shop-ja"
+      },
+      "meta": {
+        "tags": ["non_english", "cjk", "near_miss"],
+        "split": "calibration"
+      }
+    }
+  ]
+}

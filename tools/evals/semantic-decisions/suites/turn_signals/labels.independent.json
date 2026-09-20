@@ -1,0 +1,1244 @@
+{
+  "labeller": "sonnet5-blind-labeller",
+  "labels": {
+    "ts-001": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-002": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-003": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-004": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-005": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-006": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-007": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-008": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "extended_thinking",
+        "complexity4": 3
+      },
+      "certainty": "high"
+    },
+    "ts-009": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-010": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 3
+      },
+      "certainty": "high"
+    },
+    "ts-011": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "general_chat",
+        "complexity4": 2
+      },
+      "certainty": "medium",
+      "note": "needs_current_info is borderline: 'honest state of the question' could mean checking for very recent developments, or just mean synthesizing well-known complexity theory."
+    },
+    "ts-012": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "medium",
+      "note": "Could be read as a closed arithmetic puzzle (all needed numbers given), or as needing the real ferry timetable to know what other sailings exist."
+    },
+    "ts-013": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-014": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-015": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-016": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-017": {
+      "label": {
+        "family": "research",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "deep_research",
+        "complexity4": 2
+      },
+      "certainty": "medium",
+      "note": "The need is for verified, accurately-cited studies rather than clearly 'changed since training' information, so needs_current_info could reasonably go either way."
+    },
+    "ts-018": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-019": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-020": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "web_grounded_answer",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-021": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-022": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-023": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-024": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-025": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-026": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-027": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-028": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-029": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-030": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-031": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "agentic_work",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-032": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": "difficult",
+        "task_family": "agentic_work",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-033": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "agentic_work",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-034": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": "difficult",
+        "task_family": "agentic_work",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-035": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "document_authoring",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-036": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "simple_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-037": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "simple_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-038": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "simple_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-039": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "simple_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-040": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "medium",
+      "note": "Production-failure-mode framing leans technical/coding; could also be scored as general networking knowledge."
+    },
+    "ts-041": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-042": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-043": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-044": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-045": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-046": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-047": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "medium",
+      "note": "Could be scored general instead of coding since no code is written, only a system diagram."
+    },
+    "ts-048": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "extended_thinking",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-049": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "medium",
+      "note": "Searching the user's own notes doesn't fit any of the eight families cleanly; general is the closest available bucket."
+    },
+    "ts-050": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-051": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-052": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-053": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-054": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "document_authoring",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-055": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-056": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "extended_thinking",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-057": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-058": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-059": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-060": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 0
+      },
+      "certainty": "low",
+      "note": "No underlying task content is given in this message alone, so family/complexity are a guess."
+    },
+    "ts-061": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-062": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-063": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "web_grounded_answer",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-064": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "medium",
+      "note": "Reads as a systems/queueing analogy question; could also be scored general if not read as an engineering question."
+    },
+    "ts-065": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-066": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "medium",
+      "note": "802.11 power-save rules are largely stable; whether this genuinely needs a fresh check vs. recalled knowledge is a judgment call."
+    },
+    "ts-067": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "medium",
+      "note": "'The linked issue' may need to be fetched if it isn't already in context, which would make needs_external_tools true."
+    },
+    "ts-068": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-069": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "medium",
+      "note": "Could be read as a creative/communication task rather than plain advice."
+    },
+    "ts-070": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-071": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-072": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-073": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-074": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "deep_research",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-075": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "simple_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-076": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-077": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-078": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-079": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-080": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 3
+      },
+      "certainty": "high"
+    },
+    "ts-081": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-082": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-083": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": true,
+        "complexity": "medium",
+        "task_family": "code_execution",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-084": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-085": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-086": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-087": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-088": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "general_chat",
+        "complexity4": 0
+      },
+      "certainty": "high"
+    },
+    "ts-089": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 3
+      },
+      "certainty": "high"
+    },
+    "ts-090": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-091": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-092": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-093": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": true,
+        "complexity": "difficult",
+        "task_family": "code_execution",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-094": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium",
+        "task_family": "extended_thinking",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-095": {
+      "label": {
+        "family": "general",
+        "needs_current_info": "ambiguous",
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "medium",
+      "note": "needs_current_info is ambiguous: 'latest thinking' may mean checking recent sources, or may just mean explaining established sourdough-hydration theory well."
+    },
+    "ts-096": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": "ambiguous",
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 2
+      },
+      "certainty": "medium",
+      "note": "needs_code is ambiguous: a self-documenting function can just be written, but if 'explains itself' means a quine-like self-referential output, verifying it works may require running it."
+    },
+    "ts-097": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": "ambiguous",
+        "complexity": "medium",
+        "task_family": "general_chat",
+        "complexity4": 2
+      },
+      "certainty": "medium",
+      "note": "needs_code is genuinely undecidable, matching the suite's own framing: reviewing this SQL for correctness can be done by reading (and the GROUP BY/c.email issue is catchable that way), or one might want to actually run it to be sure."
+    },
+    "ts-098": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "medium",
+      "note": "'Make this faster' is a common performance idiom in coding contexts, but the previous turn is prose, so this reads as a pacing edit, not code optimization."
+    },
+    "ts-099": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult",
+        "task_family": "agentic_work",
+        "complexity4": 2
+      },
+      "certainty": "high"
+    },
+    "ts-100": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-101": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple",
+        "task_family": "general_chat",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    },
+    "ts-102": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial",
+        "task_family": "web_grounded_answer",
+        "complexity4": 1
+      },
+      "certainty": "high"
+    }
+  }
+}
