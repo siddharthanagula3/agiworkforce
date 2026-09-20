@@ -1,13 +1,25 @@
+import {
+  CONTEXT_SOURCE_CLASSES,
+  contextSourceClassPolicy,
+  contextTrustLevel,
+  INSTRUCTION_CONFLICTS as CONTRACT_CONFLICTS,
+  INSTRUCTION_LAYERS as CONTRACT_LAYERS,
+} from '@agiworkforce/context';
 import { describe, expect, it } from 'vitest';
 
 import {
   CONTEXT_ONLY_INSTRUCTION_LAYERS,
+  INSTRUCTION_CONFLICTS,
   INSTRUCTION_LAYERS,
+  instructionLayerForContextClass,
   instructionLayerRank,
+  instructionLayerTrust,
+  instructionLayerTrustMismatches,
   instructionOrderProblems,
   isContextOnlyInstructionLayer,
   isInstructionLayer,
   orderInstructionBlocks,
+  resolveInstructionConflict,
 } from '../instruction-precedence';
 
 describe('instruction precedence', () => {
@@ -56,5 +68,44 @@ describe('instruction precedence', () => {
     ]);
 
     expect(ordered.map((block) => block.text)).toEqual(['first', 'second', 'custom', 'remembered']);
+  });
+});
+
+describe('the web app resolves conflicts from the shared contract', () => {
+  it('serves the same layers and the same conflict table the contract declares', () => {
+    expect([...INSTRUCTION_LAYERS]).toEqual([...CONTRACT_LAYERS]);
+    expect(INSTRUCTION_CONFLICTS).toBe(CONTRACT_CONFLICTS);
+  });
+
+  it('gives every pair of layers one documented winner and one documented outcome', () => {
+    for (const [index, winner] of INSTRUCTION_LAYERS.entries()) {
+      for (const loser of INSTRUCTION_LAYERS.slice(index + 1)) {
+        const rule = resolveInstructionConflict(loser, winner);
+        expect(rule.winner, `${winner} vs ${loser}`).toBe(winner);
+        expect(rule.loser).toBe(loser);
+        expect(rule.loserBecomes).toBe(
+          instructionLayerTrust(loser) === 'instruction'
+            ? 'narrowed'
+            : instructionLayerTrust(loser) === 'reference'
+              ? 'ignored'
+              : 'quoted',
+        );
+      }
+    }
+  });
+
+  it('never promotes a retrieved document or a tool result into an instruction layer', () => {
+    expect(instructionLayerTrustMismatches()).toEqual([]);
+    for (const sourceClass of CONTEXT_SOURCE_CLASSES) {
+      const layer = instructionLayerForContextClass(sourceClass);
+      expect(instructionLayerTrust(layer), sourceClass).toBe(
+        contextTrustLevel(contextSourceClassPolicy(sourceClass)),
+      );
+      if (contextSourceClassPolicy(sourceClass).isExternal) {
+        expect(isContextOnlyInstructionLayer(layer), sourceClass).toBe(true);
+      }
+    }
+    expect(instructionLayerForContextClass('connector_result')).toBe('untrusted_context');
+    expect(instructionLayerForContextClass('web_result')).toBe('untrusted_context');
   });
 });
