@@ -1181,77 +1181,6 @@ impl CliDeveloperSessionHost {
         agent.validate_privacy_boundary().map_err(invalid_request)
     }
 
-    /// The record another surface needs to carry this thread on. It is built
-    /// from the stored session plus what only this running host knows: the
-    /// approvals still waiting, the turn that never finished, and the local
-    /// resources that do not travel.
-    pub async fn hand_off_thread(
-        &self,
-        params: ThreadHandoffParams,
-    ) -> Result<DeveloperSessionHandoff, DeveloperSessionHostError> {
-        let _admission = self.admit_request().await?;
-        self.validate_thread_ownership(&params.thread_id).await?;
-
-        let (last_turn, pending_approvals) = {
-            let running = self.running_turns.lock().await;
-            match running.get(&params.thread_id) {
-                Some(turn) => {
-                    let turn_id = turn.turn_id.clone();
-                    let waiting = self
-                        .pending_approvals
-                        .lock()
-                        .await
-                        .values()
-                        .filter(|approval| {
-                            approval.thread_id == params.thread_id && approval.turn_id == turn_id
-                        })
-                        .map(|approval| approval.snapshot.clone())
-                        .collect();
-                    (
-                        Some(HandoffLastTurn {
-                            turn_id,
-                            state: HandoffTurnState::Interrupted,
-                            model: None,
-                            ended_at: chrono::Utc::now().to_rfc3339(),
-                        }),
-                        waiting,
-                    )
-                }
-                None => (None, Vec::new()),
-            }
-        };
-
-        let store = self.store.clone();
-        let thread_id = params.thread_id.clone();
-        let session = tokio::task::spawn_blocking(move || {
-            store.load(ManagedSessionReference::SessionId(thread_id))
-        })
-        .await
-        .map_err(internal_error)?
-        .map_err(not_found_error)?;
-
-        let mut context = HandoffContext::to(params.to_environment);
-        context.pending_approvals = pending_approvals;
-        context.local_resources = self.local_resources_in_use().await;
-        context.last_turn = last_turn;
-        Ok(developer_session_handoff(&session, context))
-    }
-
-    /// Take a handoff addressed to this surface. A refusal is an answer, not an
-    /// error: the caller is told which surface the record was for.
-    pub async fn accept_handoff(
-        &self,
-        params: ThreadHandoffAcceptParams,
-    ) -> Result<HandoffAdmission, DeveloperSessionHostError> {
-        let _admission = self.admit_request().await?;
-        params
-            .handoff
-            .accept(HandoffEnvironment::Local)
-            .map_err(|refusal| {
-                DeveloperSessionHostError::invalid_request(handoff_refusal_message(&refusal))
-            })
-    }
-
     /// The local resources this host is running right now. They do not travel,
     /// so the receiving surface is told to start its own.
     async fn local_resources_in_use(&self) -> Vec<HandoffLocalResource> {
@@ -1620,6 +1549,77 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let summary = self.resolved_summary(resolved).await;
         self.emit("thread/forked", serde_json::json!({ "thread": summary }));
         Ok(summary)
+    }
+
+    /// The record another surface needs to carry this thread on. It is built
+    /// from the stored session plus what only this running host knows: the
+    /// approvals still waiting, the turn that never finished, and the local
+    /// resources that do not travel.
+    async fn hand_off_thread(
+        &self,
+        params: ThreadHandoffParams,
+    ) -> Result<DeveloperSessionHandoff, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+
+        let (last_turn, pending_approvals) = {
+            let running = self.running_turns.lock().await;
+            match running.get(&params.thread_id) {
+                Some(turn) => {
+                    let turn_id = turn.turn_id.clone();
+                    let waiting = self
+                        .pending_approvals
+                        .lock()
+                        .await
+                        .values()
+                        .filter(|approval| {
+                            approval.thread_id == params.thread_id && approval.turn_id == turn_id
+                        })
+                        .map(|approval| approval.snapshot.clone())
+                        .collect();
+                    (
+                        Some(HandoffLastTurn {
+                            turn_id,
+                            state: HandoffTurnState::Interrupted,
+                            model: None,
+                            ended_at: chrono::Utc::now().to_rfc3339(),
+                        }),
+                        waiting,
+                    )
+                }
+                None => (None, Vec::new()),
+            }
+        };
+
+        let store = self.store.clone();
+        let thread_id = params.thread_id.clone();
+        let session = tokio::task::spawn_blocking(move || {
+            store.load(ManagedSessionReference::SessionId(thread_id))
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(not_found_error)?;
+
+        let mut context = HandoffContext::to(params.to_environment);
+        context.pending_approvals = pending_approvals;
+        context.local_resources = self.local_resources_in_use().await;
+        context.last_turn = last_turn;
+        Ok(developer_session_handoff(&session, context))
+    }
+
+    /// Take a handoff addressed to this surface. A refusal is an answer, not an
+    /// error: the caller is told which surface the record was for.
+    async fn accept_handoff(
+        &self,
+        params: ThreadHandoffAcceptParams,
+    ) -> Result<HandoffAdmission, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        params
+            .handoff
+            .accept(HandoffEnvironment::Local)
+            .map_err(|refusal| {
+                DeveloperSessionHostError::invalid_request(handoff_refusal_message(&refusal))
+            })
     }
 
     async fn archive_thread(

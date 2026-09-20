@@ -11,6 +11,7 @@ use anyhow::{bail, Result};
 use serde_json::{json, Value};
 
 use super::git::{GitOperation, HookPolicy, PushForce, ResetMode, StashOperation};
+use crate::repo::RepositoryOperation;
 
 /// What a git tool may do, and therefore what has to happen before it runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -372,6 +373,46 @@ pub fn push_force(args: &HashMap<String, String>) -> Result<PushForce> {
 
 pub fn remote_of(args: &HashMap<String, String>) -> String {
     text(args, "remote").unwrap_or("origin").to_string()
+}
+
+/// What a git tool asks of the checkout itself, in the vocabulary
+/// [`RepositoryLayout::availability`] answers. `None` for a tool whose result
+/// does not depend on the shape of the checkout: listing branches, worktrees
+/// or stashes reads refs that a bare, shallow or unborn repository all have.
+///
+/// [`RepositoryLayout::availability`]: crate::repo::RepositoryLayout::availability
+pub fn repository_operation_for(
+    tool_name: &str,
+    args: &HashMap<String, String>,
+    submodules: &[std::path::PathBuf],
+) -> Option<RepositoryOperation> {
+    match tool_name {
+        "git_status" => Some(RepositoryOperation::ReadFiles),
+        "git_show" | "git_log" => Some(RepositoryOperation::ReadHistory),
+        "git_stage" if stages_a_submodule(args, submodules) => {
+            Some(RepositoryOperation::UpdateSubmodulePointer)
+        }
+        "git_stage" | "git_unstage" | "git_stash" | "git_stash_drop" | "git_reset"
+        | "git_clean" => Some(RepositoryOperation::EditFiles),
+        "git_merge" | "git_rebase" | "git_cherry_pick" | "git_revert" => {
+            Some(RepositoryOperation::Commit)
+        }
+        "git_branch_create" => Some(RepositoryOperation::CreateBranch),
+        _ => None,
+    }
+}
+
+/// Staging a path that a `.gitmodules` entry owns writes a new commit id into
+/// the parent's index, which is what everyone else checks out afterwards.
+fn stages_a_submodule(args: &HashMap<String, String>, submodules: &[std::path::PathBuf]) -> bool {
+    let Ok(staged) = paths(args, "paths") else {
+        return false;
+    };
+    staged.iter().any(|path| {
+        submodules
+            .iter()
+            .any(|submodule| path == submodule || path.starts_with(submodule))
+    })
 }
 
 /// The typed operation a tool call means. `git_push` is absent on purpose: a

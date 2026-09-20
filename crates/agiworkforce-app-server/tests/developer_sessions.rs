@@ -9,23 +9,25 @@ use agiworkforce_protocol::developer_session::{
     AccountTokenResponse, AcknowledgedResponse, ActiveTurnSnapshot, AppServerCapabilities,
     AppServerClientInfo, AppServerNotification, AppServerRequest, ApprovalResponseParams,
     CommandSourceKind, ContextInstructionsParams, ContextInstructionsResponse, DeveloperAgentMode,
-    DeveloperReasoningEffort, DeveloperSessionSource, DeveloperSessionTrustMode,
-    DeveloperSessionWriter, HookConfigScope, HookListResponse, HookSummary, InitializeParams,
-    InitializeResponse, InstructionFile, InstructionFileKind, LocalModelListResponse,
-    LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
-    McpServerConfiguredStatus, McpServerListResponse, McpServerScope, McpServerSummary,
-    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginScope,
+    DeveloperReasoningEffort, DeveloperSessionHandoff, DeveloperSessionSource,
+    DeveloperSessionTrustMode, DeveloperSessionWriter, HandoffAdmission, HandoffEnvironment,
+    HandoffLastTurn, HandoffLocalResource, HandoffOrigin, HandoffPosture, HandoffStart,
+    HandoffTurnState, HandoffWorkspace, HookConfigScope, HookListResponse, HookSummary,
+    InitializeParams, InitializeResponse, InstructionFile, InstructionFileKind,
+    LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpLoginParams,
+    McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse, McpServerScope,
+    McpServerSummary, ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginScope,
     PluginSetEnabledParams, PluginSummary, ProtocolVersionUnsupportedData, SettingsReadResponse,
     SettingsWriteParams, SkillCatalogScope, SkillConsentParams, SkillConsentResponse,
     SkillListResponse, SkillSetEnabledParams, SkillSummary, SlashCommandListResponse,
     SlashCommandResultKind, SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary,
-    ThreadForkParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary,
-    ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus,
-    TurnSteerParams, TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION,
-    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
-    THREAD_WRITER_CONFLICT_ERROR_CODE,
+    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
+    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse,
+    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary, ThreadWriterConflictData,
+    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams,
+    TurnSummary, DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -1708,5 +1710,300 @@ async fn a_client_that_states_no_version_is_answered_with_the_legacy_one() {
                 minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
             }
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// thread/handoff
+// ---------------------------------------------------------------------------
+
+struct HandoffHost {
+    here: HandoffEnvironment,
+}
+
+fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
+    DeveloperSessionHandoff {
+        protocol_version: DEVELOPER_SESSION_PROTOCOL_VERSION,
+        thread_id: "thread-1".to_string(),
+        origin: HandoffOrigin::DeveloperSession,
+        issued_by: DeveloperSessionSource::Cli,
+        issued_at: "2026-09-20T09:00:00Z".to_string(),
+        from_environment: HandoffEnvironment::Local,
+        to_environment: to,
+        workspace: HandoffWorkspace {
+            cwd: "/workspace".to_string(),
+            worktree_root: None,
+            repository: Some("https://github.com/example/repo.git".to_string()),
+            branch: Some("main".to_string()),
+            head_commit: Some("abc123".to_string()),
+            uncommitted_changes: true,
+        },
+        posture: HandoffPosture {
+            agent_mode: DeveloperAgentMode::Plan,
+            trust_mode: DeveloperSessionTrustMode::Local,
+            permission_profile_id: "standard".to_string(),
+        },
+        objective: Some("Finish the migration".to_string()),
+        decisions: Vec::new(),
+        plan: Vec::new(),
+        modified_files: Vec::new(),
+        validations: Vec::new(),
+        pending_approvals: vec![PendingApprovalSnapshot {
+            request_id: "approval-1".to_string(),
+            kind: "Exec".to_string(),
+            summary: "Run tests".to_string(),
+            detail: "cargo test".to_string(),
+        }],
+        last_turn: Some(HandoffLastTurn {
+            turn_id: "turn-9".to_string(),
+            state: HandoffTurnState::Interrupted,
+            model: None,
+            ended_at: "2026-09-20T08:59:00Z".to_string(),
+        }),
+        local_resources: vec![HandoffLocalResource::McpServer],
+    }
+}
+
+#[async_trait]
+impl DeveloperSessionHost for HandoffHost {
+    async fn start_thread(
+        &self,
+        _params: ThreadStartParams,
+        _client: AppServerClientInfo,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        Ok(thread("thread-1"))
+    }
+
+    async fn list_threads(
+        &self,
+        _params: ThreadListParams,
+    ) -> Result<ThreadListResponse, DeveloperSessionHostError> {
+        Ok(ThreadListResponse {
+            threads: Vec::new(),
+            next_cursor: None,
+        })
+    }
+
+    async fn list_local_models(
+        &self,
+        _params: ModelListParams,
+    ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+        Ok(LocalModelListResponse {
+            models: Vec::new(),
+            host_models: Vec::new(),
+        })
+    }
+
+    async fn resume_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        Ok(thread("thread-1"))
+    }
+
+    async fn read_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
+        Ok(ThreadReadResponse {
+            thread: thread("thread-1"),
+            messages: Vec::new(),
+            transcript_truncated: false,
+            approvals: Vec::new(),
+            file_changes: Vec::new(),
+        })
+    }
+
+    async fn fork_thread(
+        &self,
+        _params: ThreadForkParams,
+        _client: AppServerClientInfo,
+    ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+        Ok(thread("thread-1"))
+    }
+
+    async fn hand_off_thread(
+        &self,
+        params: ThreadHandoffParams,
+    ) -> Result<DeveloperSessionHandoff, DeveloperSessionHostError> {
+        let mut record = handoff_record(params.to_environment);
+        record.thread_id = params.thread_id;
+        Ok(record)
+    }
+
+    async fn accept_handoff(
+        &self,
+        params: ThreadHandoffAcceptParams,
+    ) -> Result<HandoffAdmission, DeveloperSessionHostError> {
+        params
+            .handoff
+            .accept(self.here)
+            .map_err(|refusal| DeveloperSessionHostError::invalid_request(format!("{refusal:?}")))
+    }
+
+    async fn archive_thread(
+        &self,
+        _params: ThreadIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    async fn start_turn(
+        &self,
+        _params: TurnStartParams,
+    ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        Ok(turn())
+    }
+
+    async fn steer_turn(
+        &self,
+        _params: TurnSteerParams,
+    ) -> Result<TurnSummary, DeveloperSessionHostError> {
+        Ok(turn())
+    }
+
+    async fn interrupt_turn(
+        &self,
+        _params: TurnInterruptParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    async fn respond_to_approval(
+        &self,
+        _params: ApprovalResponseParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+
+    fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
+        broadcast::channel(1).0.subscribe()
+    }
+
+    async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
+        Ok(())
+    }
+}
+
+async fn handoff_processor(here: HandoffEnvironment) -> DeveloperSessionProcessor {
+    let mut processor =
+        DeveloperSessionProcessor::new(Arc::new(HandoffHost { here }), capabilities());
+    processor.process(initialize()).await;
+    processor
+}
+
+/// A session that moves between surfaces has to leave one and be admitted by
+/// the other over the wire. Both halves of that move are app-server methods,
+/// so an editor or desktop shell reaches them the same way the CLI does.
+#[tokio::test]
+async fn a_thread_hands_off_and_is_admitted_over_the_app_server() {
+    let mut origin = handoff_processor(HandoffEnvironment::Local).await;
+    let record: DeveloperSessionHandoff = serde_json::from_value(result_of(
+        origin
+            .process(request(
+                2,
+                method::THREAD_HANDOFF,
+                ThreadHandoffParams {
+                    thread_id: "thread-7".to_string(),
+                    to_environment: HandoffEnvironment::Cloud,
+                },
+            ))
+            .await,
+    ))
+    .expect("typed handoff record");
+    assert_eq!(record.thread_id, "thread-7");
+    assert_eq!(record.to_environment, HandoffEnvironment::Cloud);
+
+    let mut destination = handoff_processor(HandoffEnvironment::Cloud).await;
+    let admission: HandoffAdmission = serde_json::from_value(result_of(
+        destination
+            .process(request(
+                2,
+                method::THREAD_HANDOFF_ACCEPT,
+                ThreadHandoffAcceptParams {
+                    handoff: record.clone(),
+                },
+            ))
+            .await,
+    ))
+    .expect("typed admission");
+    assert_eq!(
+        admission.start,
+        HandoffStart::Resume {
+            thread_id: "thread-7".to_string()
+        }
+    );
+    assert_eq!(admission.interrupted_turn.as_deref(), Some("turn-9"));
+    assert_eq!(admission.restart, vec![HandoffLocalResource::McpServer]);
+    assert_eq!(
+        admission.reask, record.pending_approvals,
+        "an approval the origin was still waiting on is re-asked here, never inherited"
+    );
+}
+
+/// The record names the surface it was addressed to. A surface that is not it
+/// says so through the method's own error rather than resuming someone else's
+/// session, and the refusal reaches the client as a failed call.
+#[tokio::test]
+async fn a_handoff_addressed_elsewhere_is_refused_by_the_receiving_surface() {
+    let mut destination = handoff_processor(HandoffEnvironment::Local).await;
+    let response = destination
+        .process(request(
+            2,
+            method::THREAD_HANDOFF_ACCEPT,
+            ThreadHandoffAcceptParams {
+                handoff: handoff_record(HandoffEnvironment::Cloud),
+            },
+        ))
+        .await;
+    assert!(
+        response.result.is_none(),
+        "a handoff for another surface must not be admitted: {:?}",
+        response.result
+    );
+    let error = response.error.expect("refusal");
+    assert_ne!(error.code, METHOD_NOT_FOUND_ERROR_CODE);
+    assert!(
+        error.message.contains("WrongDestination"),
+        "{}",
+        error.message
+    );
+}
+
+/// Both methods are dispatchable on every host. One that cannot move sessions
+/// answers that it does not implement them, which a client can act on; a
+/// method-not-found would instead look like an out-of-date server.
+#[tokio::test]
+async fn a_host_without_handoff_support_answers_unavailable_rather_than_method_not_found() {
+    let mut processor = surface_processor().await;
+    for (id, name, params) in [
+        (
+            2,
+            method::THREAD_HANDOFF,
+            serde_json::to_value(ThreadHandoffParams {
+                thread_id: "thread-1".to_string(),
+                to_environment: HandoffEnvironment::Cloud,
+            })
+            .expect("params"),
+        ),
+        (
+            3,
+            method::THREAD_HANDOFF_ACCEPT,
+            serde_json::to_value(ThreadHandoffAcceptParams {
+                handoff: handoff_record(HandoffEnvironment::Local),
+            })
+            .expect("params"),
+        ),
+    ] {
+        let error = processor
+            .process(request(id, name, params))
+            .await
+            .error
+            .unwrap_or_else(|| panic!("{name} must answer"));
+        assert_ne!(
+            error.code, METHOD_NOT_FOUND_ERROR_CODE,
+            "{name} is not dispatchable"
+        );
+        assert!(error.message.contains(name), "{}", error.message);
     }
 }

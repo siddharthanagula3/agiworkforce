@@ -4,18 +4,18 @@ use agiworkforce_protocol::developer_session::{
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
     AppServerCapabilities, AppServerClientInfo, AppServerNotification, AppServerRequest,
     AppServerResponse, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, HookListResponse, InitializeParams, InitializeResponse,
-    LocalModelListResponse, McpLoginParams, McpLoginResponse, McpServerListResponse,
-    ModelListParams, PluginListResponse, PluginSetEnabledParams, ProtocolVersionUnsupportedData,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadForkParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams,
-    TurnStartParams, TurnStartResponse, TurnSteerParams, TurnSummary,
-    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
-    THREAD_WRITER_CONFLICT_ERROR_CODE,
+    ContextInstructionsResponse, DeveloperSessionHandoff, HandoffAdmission, HookListResponse,
+    InitializeParams, InitializeResponse, LocalModelListResponse, McpLoginParams, McpLoginResponse,
+    McpServerListResponse, ModelListParams, PluginListResponse, PluginSetEnabledParams,
+    ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams, SkillConsentParams,
+    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse,
+    SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams,
+    ThreadHandoffParams, ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadStartParams, ThreadStartResponse, ThreadSummary,
+    ThreadWriterConflictData, TurnInterruptParams, TurnStartParams, TurnStartResponse,
+    TurnSteerParams, TurnSummary, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -83,6 +83,27 @@ pub trait DeveloperSessionHost: Send + Sync {
         params: ThreadForkParams,
         client: AppServerClientInfo,
     ) -> Result<ThreadSummary, DeveloperSessionHostError>;
+
+    /// The record another surface needs to carry this thread on: what is
+    /// stored plus what only a running host knows. It never moves the thread
+    /// by itself, so a host that answers it keeps serving until the receiving
+    /// surface admits the record.
+    async fn hand_off_thread(
+        &self,
+        _params: ThreadHandoffParams,
+    ) -> Result<DeveloperSessionHandoff, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_HANDOFF))
+    }
+
+    /// Offer a handoff record to this surface. A record addressed elsewhere,
+    /// speaking a protocol version this server does not, or carrying no trust
+    /// mode is refused, and the refusal says which.
+    async fn accept_handoff(
+        &self,
+        _params: ThreadHandoffAcceptParams,
+    ) -> Result<HandoffAdmission, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_HANDOFF_ACCEPT))
+    }
 
     async fn archive_thread(&self, params: ThreadIdParams)
         -> Result<(), DeveloperSessionHostError>;
@@ -492,6 +513,26 @@ impl DeveloperSessionProcessor {
                     .fork_thread(params, client)
                     .await
                     .map(|thread| serde_json::to_value(ThreadStartResponse { thread }))
+            }
+            method::THREAD_HANDOFF => {
+                let params = match parse_params::<ThreadHandoffParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .hand_off_thread(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::THREAD_HANDOFF_ACCEPT => {
+                let params = match parse_params::<ThreadHandoffAcceptParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .accept_handoff(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::THREAD_ARCHIVE => {
                 let params = match parse_params::<ThreadIdParams>(&request) {
