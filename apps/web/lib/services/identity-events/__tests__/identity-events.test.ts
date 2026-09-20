@@ -33,6 +33,7 @@ import {
   handleIdentitySecurityEvent,
   IDENTITY_SECURITY_EVENT_KEYS,
   readOpenCompromiseResponse,
+  resolveCompromiseResponse,
   respondToAccountCompromise,
 } from '../index';
 
@@ -112,6 +113,31 @@ describe('respondToAccountCompromise', () => {
     expect(execute).toHaveBeenCalledWith(
       expect.stringContaining('update public.account_compromise_responses'),
       ['resp-1', 'user-1', 2, 0],
+    );
+  });
+
+  it('revokes the device credentials the provider sweep leaves behind', async () => {
+    query
+      .mockResolvedValueOnce([{ id: 'resp-1' }])
+      .mockResolvedValueOnce([{ id: 'tok-1' }, { id: 'tok-2' }]);
+
+    const response = await respondToAccountCompromise(db, identity, {
+      userId: 'user-1',
+      trigger: 'reported',
+    });
+
+    const revocation = query.mock.calls.find(([sql]) =>
+      String(sql).includes('update device_refresh_tokens'),
+    );
+    expect(revocation, 'nothing revoked the device refresh tokens').toBeDefined();
+    expect(String(revocation?.[0])).toContain('revoked_at is null');
+    expect(revocation?.[1]).toEqual(['user-1']);
+    expect(response.deviceCredentialsRevoked).toBe(2);
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'account_compromise_contained',
+        detail: expect.objectContaining({ deleted: 2 }),
+      }),
     );
   });
 
@@ -199,5 +225,168 @@ describe('readOpenCompromiseResponse', () => {
   it('answers null when nothing is open', async () => {
     query.mockResolvedValueOnce([]);
     await expect(readOpenCompromiseResponse(db, 'user-1')).resolves.toBeNull();
+  });
+});
+
+describe('resolveCompromiseResponse', () => {
+  const OPENED_AT = '2026-09-18T12:00:00.000Z';
+  const OPENED_MS = Date.parse(OPENED_AT);
+
+  function openRow(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'resp-1',
+      trigger: 'impossible_travel',
+      opened_at: OPENED_AT,
+      resolved_at: null,
+      ...overrides,
+    };
+  }
+
+  function provider(session: Record<string, unknown> | null) {
+    return {
+      getSession: vi.fn(async () => session),
+      listUserSessions: vi.fn(),
+      revokeSession: vi.fn(),
+    } as never;
+  }
+
+  function resolve(identityStub: never, overrides: Record<string, unknown> = {}) {
+    return resolveCompromiseResponse(db, identityStub, {
+      userId: 'user-1',
+      responseId: 'resp-1',
+      currentSessionId: 'sess-new',
+      secondFactorVerified: true,
+      ...overrides,
+    });
+  }
+
+  it('closes the response once the account has signed in again and nothing else survives', async () => {
+    query.mockResolvedValueOnce([openRow()]).mockResolvedValueOnce([{ id: 'resp-1' }]);
+    mocks.revoke.mockResolvedValue({
+      ended: ['sess-old'],
+      alreadyGone: [],
+      failed: [],
+      currentSession: undefined,
+      incomplete: false,
+      targetCount: 1,
+    });
+
+    const result = await resolve(
+      provider({ id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 60_000 }),
+    );
+
+    expect(result).toEqual({
+      status: 'resolved',
+      responseId: 'resp-1',
+      outstanding: [],
+      sessionsEnded: 1,
+      supportPath: ACCOUNT_COMPROMISE_SUPPORT_PATH,
+    });
+    expect(query.mock.calls[1]?.[0]).toContain('password_reset_required = false');
+    expect(query.mock.calls[1]?.[1]).toEqual(['resp-1', 'user-1']);
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'account_compromise_resolved',
+        outcome: 'success',
+        detail: expect.objectContaining({ status: 'resolved', resourceId: 'resp-1' }),
+      }),
+    );
+  });
+
+  it('refuses a session that predates the response, so a surviving intruder cannot lift the lockdown', async () => {
+    query.mockResolvedValueOnce([openRow()]);
+
+    const result = await resolve(
+      provider({ id: 'sess-old', userId: 'user-1', createdAt: OPENED_MS - 60_000 }),
+      { currentSessionId: 'sess-old' },
+    );
+
+    expect(result.status).toBe('outstanding');
+    expect(result.outstanding).toEqual(['fresh_authentication']);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'account_compromise_resolved',
+        outcome: 'denied',
+        detail: expect.objectContaining({
+          status: 'outstanding',
+          changedKeys: ['fresh_authentication'],
+        }),
+      }),
+    );
+    expect(auditTypes()).not.toContain('account_compromise_contained');
+  });
+
+  it('refuses while a session the sweep could not end is still signed in', async () => {
+    query.mockResolvedValueOnce([openRow()]);
+    mocks.revoke.mockResolvedValue({
+      ended: ['sess-a'],
+      alreadyGone: [],
+      failed: ['sess-b'],
+      currentSession: undefined,
+      incomplete: false,
+      targetCount: 2,
+    });
+
+    const result = await resolve(
+      provider({ id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000 }),
+    );
+
+    expect(result.status).toBe('outstanding');
+    expect(result.outstanding).toEqual(['other_sessions_ended']);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('cannot close a response that belongs to another account', async () => {
+    query.mockResolvedValueOnce([]);
+
+    const result = await resolve(
+      provider({ id: 'sess-new', userId: 'user-1', createdAt: OPENED_MS + 1000 }),
+      { responseId: 'someone-elses' },
+    );
+
+    expect(result.status).toBe('not_found');
+    expect(query.mock.calls[0]?.[1]).toEqual(['someone-elses', 'user-1']);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it('refuses when the current session belongs to a different account', async () => {
+    query.mockResolvedValueOnce([openRow()]);
+
+    const result = await resolve(
+      provider({ id: 'sess-new', userId: 'user-2', createdAt: OPENED_MS + 1000 }),
+    );
+
+    expect(result.outstanding).toEqual(['fresh_authentication']);
+    expect(mocks.revoke).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op on a response that is already closed', async () => {
+    query.mockResolvedValueOnce([openRow({ resolved_at: '2026-09-18T13:00:00.000Z' })]);
+    const identityStub = provider({
+      id: 'sess-new',
+      userId: 'user-1',
+      createdAt: OPENED_MS + 1000,
+    });
+
+    const result = await resolve(identityStub);
+
+    expect(result).toMatchObject({ status: 'already_resolved', outstanding: [] });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+    expect(mocks.revoke).not.toHaveBeenCalled();
+    expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller with no session at all', async () => {
+    query.mockResolvedValueOnce([openRow()]);
+
+    const result = await resolve(provider(null), { currentSessionId: null });
+
+    expect(result.outstanding).toEqual(['fresh_authentication']);
+    expect(mocks.revoke).not.toHaveBeenCalled();
   });
 });

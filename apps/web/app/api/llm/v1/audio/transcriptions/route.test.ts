@@ -79,10 +79,12 @@ const RECORDER_WEBM_TYPE = 'audio/webm;codecs=opus';
 function transcriptionRequest(
   headers: Record<string, string> = {},
   mimeType = 'audio/webm',
+  bytes?: Uint8Array,
 ): NextRequest {
   const webmMagic = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]);
+  const content = bytes ?? new Uint8Array([...webmMagic, ...new Uint8Array(32)]);
   const body = new FormData();
-  body.append('file', new Blob([webmMagic, new Uint8Array(32)], { type: mimeType }), 'a.webm');
+  body.append('file', new Blob([content], { type: mimeType }), 'a.webm');
   return new NextRequest('http://localhost/api/llm/v1/audio/transcriptions', {
     method: 'POST',
     body,
@@ -117,11 +119,11 @@ beforeEach(() => {
   });
   mocks.reserve.mockImplementation(
     async (input: { estimatedCostMicrousd: number; estimatedCostCents: number }) => ({
-    db: { query: vi.fn() },
-    userId: 'user-1',
-    idempotencyKey: 'key-1',
-    requestHash: 'hash-1',
-    leaseToken: 'lease-1',
+      db: { query: vi.fn() },
+      userId: 'user-1',
+      idempotencyKey: 'key-1',
+      requestHash: 'hash-1',
+      leaseToken: 'lease-1',
       estimatedCostMicrousd: input.estimatedCostMicrousd,
       estimatedCostCents: input.estimatedCostCents,
     }),
@@ -150,8 +152,7 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
       planTier: 'pro',
     });
     expect(
-      (mocks.reserve.mock.calls[0]![0] as { estimatedCostMicrousd: number })
-        .estimatedCostMicrousd,
+      (mocks.reserve.mock.calls[0]![0] as { estimatedCostMicrousd: number }).estimatedCostMicrousd,
     ).toBeGreaterThan(0);
   });
 
@@ -166,11 +167,7 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
     expect(mocks.finalize.mock.calls[0]![0]).toMatchObject({
       outcome: 'completed',
-      actualCostMicrousd: estimateTranscriptionCostMicrousd(
-        TRANSCRIPTION_MODEL,
-        400_000,
-        100_000,
-      ),
+      actualCostMicrousd: estimateTranscriptionCostMicrousd(TRANSCRIPTION_MODEL, 400_000, 100_000),
       usage: {
         operation: 'transcription',
         model: TRANSCRIPTION_MODEL.id,
@@ -295,6 +292,30 @@ describe('accepted audio containers', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts no malware round trip in front of dictation, only the provider call', async () => {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
+    providerReturns({ text: 'hello' });
+    try {
+      const response = await POST(transcriptionRequest({}, RECORDER_WEBM_TYPE));
+
+      expect(response.status).toBe(200);
+      expect(mocks.fetch).toHaveBeenCalledTimes(1);
+      const [target] = mocks.fetch.mock.calls[0] as [string | URL | Request];
+      expect(String(target)).not.toContain('scanner.example.test');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('still refuses audio whose bytes are an executable, with no scanner configured', async () => {
+    const executable = new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+
+    const response = await POST(transcriptionRequest({}, RECORDER_WEBM_TYPE, executable));
+
+    expect(response.status).toBe(400);
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it('still rejects a container outside the allowlist', async () => {
