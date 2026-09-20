@@ -1,0 +1,1897 @@
+{
+  "document": "docs/security/security.md",
+  "note": "Every falsifiable sentence in the security document, the executable proof that would fail if it stopped being true, and the file that makes it true. scripts/check-security-claims.mjs enumerates the document and fails on a claim with no entry, an entry whose proof has moved, or a sentence that changed without this file.",
+  "claims": [
+    {
+      "id": "public-copy-traces-to-this-matrix",
+      "section": "1. Agent authority and connector scopes",
+      "kind": "prose",
+      "sentence": "Every public sentence on those pages must trace to a row in this section, and every row cites the implementing file.",
+      "implementation": [
+        "apps/web/app/agent-permissions/page.tsx",
+        "apps/web/app/acceptable-use/page.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/cited-source-paths-exist.test.ts",
+          "name": "source paths cited in user-facing copy still exist"
+        }
+      ]
+    },
+    {
+      "id": "approval-mode-follows-account-policy",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "It is `manual` when the turn offers an MCP or connector tool, and also whenever any offered tool is one the account's `ToolApprovalPolicy` does not auto-approve.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-routing.ts#classifyToolLoopInputs"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "puts a turn that offers only a built-in tool into manual mode"
+        }
+      ]
+    },
+    {
+      "id": "default-policy-asks-for-every-tool",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "**Consequence, and the single most important honest statement on the public pages:** the default policy is `ask_every_time` (`DEFAULT_TOOL_APPROVAL_POLICY` in `packages/contracts/types/src/tool-approval-policy.ts`) and `policyAutoApprovesTool` auto-approves nothing under it, so on a default account every tool call asks, built-in tools included.",
+      "implementation": [
+        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "ships ask_every_time as the default policy"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "auto-approves nothing under the default policy"
+        }
+      ]
+    },
+    {
+      "id": "builtin-runs-only-under-a-chosen-policy",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "A built-in tool runs with no prompt only once the account has chosen `auto_approve_read_only` or `autonomous`, or has saved `allow` for that one tool.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "auto-approves nothing under the default policy"
+        }
+      ]
+    },
+    {
+      "id": "tool-table-is-the-declared-metadata",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "Every declared platform tool, and what each policy does with it.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#PLATFORM_TOOL_METADATA"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "lists exactly the tools the platform declares metadata for"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "gives each tool the answer the policy function gives"
+        }
+      ]
+    },
+    {
+      "id": "undeclared-tool-asks-under-every-policy",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "An undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with egress, which no policy auto-approves, so it asks under every policy.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#UNKNOWN_TOOL_METADATA"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "keeps an undeclared tool asking under every policy"
+        }
+      ]
+    },
+    {
+      "id": "github-builtins-are-declared",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "The three GitHub built-ins are declared, so `get_pull_request_diff` runs under `auto_approve_read_only` while `post_issue_comment` and `post_pull_request_review` ask under every policy.",
+      "implementation": ["apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "reads a declared GitHub built-in without asking, and never a sending one"
+        }
+      ]
+    },
+    {
+      "id": "saved-deny-enforced-server-side",
+      "section": "1.1b A Block is absolute, with the accurate scope of \"absolute\"",
+      "kind": "prose",
+      "sentence": "A saved `deny` is enforced server-side before any side effect: every execution site calls `connectorPermissions.isDenied`, on the tool loop in `tool-loop.ts` and again on the approve/resume path in `approve/route.ts`, so an approving client, or a hand-rolled POST, cannot execute a blocked tool.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+        "apps/web/app/api/llm/v1/chat/completions/approve/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-tool-gate.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/connector-tool-permissions.lockdown.test.ts",
+          "name": "lockdown mode gating connector tools"
+        }
+      ]
+    },
+    {
+      "id": "platform-holds-only-the-directory-oauth-client",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "The fourth source is the only one where **the platform holds the OAuth client and the user holds the grant**.",
+      "implementation": [
+        "apps/web/lib/user-connector-tools.ts",
+        "apps/web/lib/connectors/oauth-store.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-store.test.ts",
+          "name": "grants"
+        }
+      ]
+    },
+    {
+      "id": "oauth-client-secret-never-in-the-descriptor",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "The client credentials live in `CONNECTOR_OAUTH_<ID>_CLIENT_ID` / `_CLIENT_SECRET`, never in the descriptor JSON.",
+      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-secrets.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.test.ts",
+          "name": "connector OAuth registry, availability is earned, not assumed"
+        }
+      ]
+    },
+    {
+      "id": "oauth-grants-are-personal",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "Grants are strictly personal: `connector_oauth_grants` is scoped by `user_id` with no `organization_id`, so switching workspace never inherits another member's tokens (migration 0097 header).",
+      "implementation": ["apps/web/lib/connectors/oauth-store.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-store.test.ts",
+          "name": "multiple accounts per connector"
+        },
+        {
+          "kind": "guard",
+          "file": "scripts/check-membership-isolation.mjs"
+        }
+      ]
+    },
+    {
+      "id": "no-oauth-provider-is-configured",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "As of 2026-08-05 no provider is configured in production, so this source contributes no connectors and every directory entry still reports unavailable.",
+      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.test.ts",
+          "name": "connector OAuth registry, availability is earned, not assumed"
+        }
+      ]
+    },
+    {
+      "id": "user-connectors-holds-no-credential",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "`user_connectors` holds only `connector_id + auth_type + is_active`.",
+      "implementation": ["apps/web/app/api/connectors/route.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-credential-containment.mjs"
+        }
+      ]
+    },
+    {
+      "id": "connector-post-refuses-branded-ids",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "**No tokens, no endpoint URLs.** `POST /api/connectors` returns 501 for every branded catalog connector and for device-local ids (`app/api/connectors/route.ts`).",
+      "implementation": ["apps/web/app/api/connectors/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "/api/connectors managed-cloud capability boundary"
+        }
+      ]
+    },
+    {
+      "id": "sandbox-provisioning-requires-both-switches",
+      "section": "1.6 Sandbox limits",
+      "kind": "prose",
+      "sentence": "`apps/web/lib/e2b/gate.ts`, fail-closed: provisioning requires **both** `AGI_E2B_EXECUTION=1` and `E2B_API_KEY`.",
+      "implementation": ["apps/web/lib/e2b/gate.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/gate.test.ts",
+          "name": "e2bProvisioningReady"
+        }
+      ]
+    },
+    {
+      "id": "egress-host-check-is-point-in-time",
+      "section": "1.6 Sandbox limits",
+      "kind": "prose",
+      "sentence": "This is a point-in-time check: a host that later rebinds its DNS to a private or metadata address after the session starts is not re-resolved server-side.",
+      "implementation": ["apps/web/lib/e2b/egress-host-resolution.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/egress-host-resolution.test.ts",
+          "name": "assertExtraEgressHostsResolveSafely"
+        }
+      ]
+    },
+    {
+      "id": "managed-key-never-enters-a-sandbox",
+      "section": "1.6 Sandbox limits",
+      "kind": "prose",
+      "sentence": "**A raw managed provider key never enters a sandbox**, whatever the network preset.",
+      "implementation": ["apps/web/lib/e2b/runtime.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/runtime.test.ts",
+          "name": "getE2BExecutor, harness credentials"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/runtime.test.ts",
+          "name": "getE2BExecutor, provider-proxy credential injection"
+        }
+      ]
+    },
+    {
+      "id": "proxy-coverage-is-earned-per-harness",
+      "section": "1.6 Sandbox limits",
+      "kind": "prose",
+      "sentence": "A coding harness is \"proxy-covered\" only when it has exactly one provider credential and a verified way to redirect its traffic through `provider-proxy/[...path]/route.ts` on a session-scoped, short-lived token, either an env var (`claude`, via `ANTHROPIC_BASE_URL`) or a config file the session bootstrap writes once at creation (`codex`, via `~/.codex/config.toml`'s `model_providers.<id>.base_url`/`env_key`); see `harnessIsProxyCovered` and `harnessProxyConfigFile` in `apps/web/lib/e2b/templates.ts`.",
+      "implementation": ["apps/web/lib/e2b/templates.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/templates.test.ts",
+          "name": "harness proxy coverage"
+        }
+      ]
+    },
+    {
+      "id": "uncovered-harness-is-refused",
+      "section": "1.6 Sandbox limits",
+      "kind": "prose",
+      "sentence": "For every other harness (`droid`, `amp`, `grok`, `opencode`, and any future addition with no verified override), `resolveHarnessEnvs` in `runtime.ts` withholds the managed key rather than injecting it, and `POST /api/code/sessions` refuses managed-mode session creation for it outright (`harness_credential_unavailable`) unless the caller supplies their own credential.",
+      "implementation": ["apps/web/lib/e2b/runtime.ts", "apps/web/app/api/code/sessions/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/code/sessions/route.test.ts",
+          "name": "POST /api/code/sessions, the managed-credential availability guard"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/network-policy.test.ts",
+          "name": "harnessCredentialIsAvailable"
+        }
+      ]
+    },
+    {
+      "id": "provider-proxy-gates-and-meters",
+      "section": "1.6 Sandbox limits",
+      "kind": "prose",
+      "sentence": "`sessions/[sessionId]/provider-proxy/[...path]/route.ts` gates and meters every proxied inference call the same way the other platform-funded compute entry points under `api/code` do.",
+      "implementation": [
+        "apps/web/app/api/code/sessions/[sessionId]/provider-proxy/[...path]/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/provider-proxy-metering.test.ts",
+          "name": "provider-proxy metered request parsing"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/provider-proxy-budget.test.ts",
+          "name": "coding-harness daily ceiling"
+        }
+      ]
+    },
+    {
+      "id": "oauth-registry-ships-no-providers",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "**A branded catalog connector can only be OAuth-connected where the operator configured it.** The hosted broker now exists end to end (`/api/connectors/oauth/start` → `/api/connectors/oauth/callback`, grants in `apps/web/lib/connectors/oauth-store.ts`), but `apps/web/lib/connectors/oauth-registry.ts` ships **zero** providers on purpose, a provider becomes connectable only when an operator supplies its endpoints and client credentials.",
+      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.test.ts",
+          "name": "connector OAuth registry, availability is earned, not assumed"
+        }
+      ]
+    },
+    {
+      "id": "directory-reports-only-connectable-ids",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "`GET /api/connectors` reports the ids that are genuinely connectable in a given deployment, and the catalog labels every other entry from that answer, so an unconfigured connector renders as unavailable rather than offering a Connect button that 501s.",
+      "implementation": ["apps/web/lib/user-connector-tools.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/user-connector-tools.directory.test.ts",
+          "name": "directory records in the connector tool catalog"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "/api/connectors directory records"
+        }
+      ]
+    },
+    {
+      "id": "tool-permission-panel-covers-every-connector",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "**The standing per-tool permission UI is no longer GitHub-only, and this entry used to say it was.** `ToolPermissionsPanel.tsx` is rendered by `features/settings/components/WebSettingsModal.tsx` for whichever connector the settings adapter selects, and it lists tools from live discovery (`useConnectorCapabilities`).",
+      "implementation": [
+        "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+        "apps/web/features/settings/components/WebSettingsModal.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ToolPermissionsPanel.test.tsx",
+          "name": "ToolPermissionsPanel"
+        }
+      ]
+    },
+    {
+      "id": "in-chat-card-is-the-asking-control",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "The in-chat approval card (`ToolTimeline.tsx`) remains the only control reachable while a tool is actually asking.",
+      "implementation": ["apps/web/features/chat/components/messages/ToolTimeline.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ToolPermissionsPanel.test.tsx",
+          "name": "ToolPermissionsPanel"
+        }
+      ]
+    },
+    {
+      "id": "only-github-declares-catalog-actions",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "**A connector whose tools this repository does not implement still falls back to nothing.** When discovery fails the panel shows `getDeclaredConnectorActions` from `apps/web/lib/connectors/catalog.ts`, and only the `github` entry declares any actions, so every other connector shows the discovery failure rather than a tool list.",
+      "implementation": ["apps/web/lib/connectors/catalog.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/user-connector-tools.test.ts",
+          "name": "loadUserConnectorToolDefs, github built-in gate"
+        }
+      ]
+    },
+    {
+      "id": "uploads-are-inspected-and-scanned",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "**Production requires an external malware scanner.** `apps/web/lib/security/upload-scan.ts` runs structural checks on every chat attachment and project source, and calls the external scanner at `UPLOAD_SCAN_WEBHOOK_URL` (bearer `UPLOAD_SCAN_WEBHOOK_TOKEN`), failing closed on any error or unsafe verdict.",
+      "implementation": ["apps/web/lib/security/upload-scan.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-upload-inspection-coverage.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/security/upload-scan.test.ts",
+          "name": "scanUploadBytes, external scanner requirement"
+        }
+      ]
+    },
+    {
+      "id": "scanner-is-required-in-production",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "With `UPLOAD_SCAN_REQUIRED` unset, production now treats the scanner as required, so a deployment with no scanner refuses every upload rather than admitting unscanned bytes.",
+      "implementation": ["apps/web/lib/security/upload-scan.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/security/upload-scan.test.ts",
+          "name": "external scanner requirement"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/security/upload-scan.test.ts",
+          "name": "the external scanner opt-out"
+        }
+      ]
+    },
+    {
+      "id": "catalog-declares-no-scope",
+      "section": "Read this first: no scope string is hardcoded in this repository",
+      "kind": "prose",
+      "sentence": "`apps/web/lib/connectors/catalog.ts` records `scopes: []` for every entry on purpose.",
+      "implementation": ["apps/web/lib/connectors/catalog.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "catalog-scope-source-is-operator-defined",
+      "section": "Read this first: no scope string is hardcoded in this repository",
+      "kind": "prose",
+      "sentence": "The `ConnectorScopeSource` type at the top of that file names the reason: for a cloud connector the scopes are `operator-defined`, so the repository does not know them and does not guess.",
+      "implementation": ["apps/web/lib/connectors/catalog.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "ceiling-is-enforced-at-descriptor-load",
+      "section": "Read this first: no scope string is hardcoded in this repository",
+      "kind": "prose",
+      "sentence": "So the only place this repository can enforce minimality is where that descriptor is loaded.",
+      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, operator descriptors cannot exceed it"
+        }
+      ]
+    },
+    {
+      "id": "operator-cannot-exceed-the-ceiling",
+      "section": "Read this first: no scope string is hardcoded in this repository",
+      "kind": "prose",
+      "sentence": "It exists so that the first operator who configures a provider cannot quietly request more than this file permits.",
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-scopes.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, operator descriptors cannot exceed it"
+        }
+      ]
+    },
+    {
+      "id": "github-is-reserved-in-the-registry",
+      "section": "The four connector sources, and which one has scopes at all",
+      "kind": "prose",
+      "sentence": "`github` is reserved in the OAuth registry (`RESERVED_CONNECTOR_IDS` in `oauth-registry.ts`), so it can never be configured through this path.",
+      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.test.ts",
+          "name": "connector OAuth registry, availability is earned, not assumed"
+        }
+      ]
+    },
+    {
+      "id": "every-descriptor-passes-the-ceiling",
+      "section": "Enforcement",
+      "kind": "prose",
+      "sentence": "`loadConnectorOAuthRegistry()` in `oauth-registry.ts` calls it for every descriptor it admits.",
+      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, operator descriptors cannot exceed it"
+        }
+      ]
+    },
+    {
+      "id": "over-ceiling-scopes-never-reach-the-url",
+      "section": "Enforcement",
+      "kind": "prose",
+      "sentence": "Scopes above the ceiling are dropped from the provider record before it enters the registry, so they never reach the `scope` parameter of the authorization URL, and a warning naming the connector and the dropped scopes goes to the logger.",
+      "implementation": ["apps/web/lib/connectors/oauth-registry.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, operator descriptors cannot exceed it"
+        }
+      ]
+    },
+    {
+      "id": "excessive-scope-narrows-rather-than-fails",
+      "section": "Enforcement",
+      "kind": "prose",
+      "sentence": "Loading never throws on an excessive scope: the provider still loads, only narrower.",
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, operator descriptors cannot exceed it"
+        }
+      ]
+    },
+    {
+      "id": "on-ceiling-descriptor-is-unaffected",
+      "section": "Enforcement",
+      "kind": "prose",
+      "sentence": "A descriptor with no scopes, or with only on-ceiling scopes, is unaffected.",
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, operator descriptors cannot exceed it"
+        }
+      ]
+    },
+    {
+      "id": "ceiling-test-pins-the-whole-rule",
+      "section": "Enforcement",
+      "kind": "prose",
+      "sentence": "`apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts` pins all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one survives, that the authorization URL carries only the survivors, that every `oauth2` connector in the catalog has an entry, and that no enforced ceiling admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in `oauth-scope-allowlist.ts` (`admin`, `full`, `default`, `https://mail.google.com/`, the bare Google `drive`, `calendar`, or `cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and `Mail.ReadWrite`).",
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "scope-guard-runs-outside-vitest",
+      "section": "Enforcement",
+      "kind": "prose",
+      "sentence": "`pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into `pnpm check:llm-operability`) statically parses the manifest and `scope-descriptions.ts` on every run, independent of the vitest suite, and fails the build if a ceiling admits a forbidden scope, a ceiling scope has no description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced ceiling is declared a second time anywhere else under `apps/web/lib/connectors`, `apps/web/app/api/connectors`, or `apps/web/lib/user-connector-tools.ts`.",
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-scopes.mjs"
+        }
+      ]
+    },
+    {
+      "id": "scope-literals-live-in-one-file",
+      "section": "Enforcement",
+      "kind": "prose",
+      "sentence": "That last check is what keeps \"the manifest is the only place a scope may be added\" true going forward rather than as a one-time fact: nothing outside `oauth-scope-allowlist.ts` can introduce a scope string without the guard catching the duplicate.",
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-scopes.mjs"
+        }
+      ]
+    },
+    {
+      "id": "unlisted-ids-are-unfiltered",
+      "section": "Ceiling table",
+      "kind": "prose",
+      "sentence": "Connector ids not in this table have no reviewed ceiling and are not filtered.",
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-scopes.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "non-oauth-schemes-have-no-scope-parameter",
+      "section": "Ceiling table",
+      "kind": "prose",
+      "sentence": "That includes every `api-key`, `pat`, `connection-string`, and `device-local` entry in the catalog, none of which use an OAuth scope parameter at all.",
+      "implementation": ["apps/web/lib/connectors/catalog.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "rotation-needs-no-revocation",
+      "section": "3. Encryption key rotation",
+      "kind": "prose",
+      "sentence": "How to rotate one of the AES-256-GCM keys that protect secrets at rest without revoking every connector grant and re-enrolling every 2FA user.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "production readers survive a rotation"
+        }
+      ]
+    },
+    {
+      "id": "short-lived-column-is-not-swept",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "It gets no bookkeeping column and the rotation sweep does not touch it.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "scripts/reencrypt.mjs"
+        }
+      ]
+    },
+    {
+      "id": "totp-key-is-raw-utf8",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "`TOTP_ENCRYPTION_KEY` is not hex.",
+      "implementation": ["apps/web/lib/crypto/totp-envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/totp-envelope.test.ts",
+          "name": "TOTP secret storage"
+        }
+      ]
+    },
+    {
+      "id": "desktop-token-is-never-stored",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "The desktop token minted by `apps/web/app/api/auth/desktop-token/route.ts` is also AES-256-GCM under `TOTP_ENCRYPTION_KEY`, but it is never stored: rotating that key invalidates outstanding desktop tokens and the desktop app re-pairs.",
+      "implementation": [
+        "apps/web/app/api/auth/desktop-token/route.ts",
+        "apps/web/lib/validate-env.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/totp-envelope.test.ts",
+          "name": "TOTP secret storage"
+        }
+      ]
+    },
+    {
+      "id": "default-key-id-needs-no-backfill",
+      "section": "The key ring",
+      "kind": "prose",
+      "sentence": "The default of `<NAME>_ID` and the default of every `*_key_version` column are both `1`, so a deployment that has never set either is already consistent and needs no backfill.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "key ring"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "migration 0104_key_version"
+        }
+      ]
+    },
+    {
+      "id": "key-ids-have-one-shape",
+      "section": "The key ring",
+      "kind": "prose",
+      "sentence": "Ids must match `^[A-Za-z0-9_-]{1,32}$`, the same shape the column's CHECK constraint enforces, and no id may appear twice in one ring.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "key ring"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "migration 0104_key_version"
+        }
+      ]
+    },
+    {
+      "id": "ring-aware-readers-read-retired-keys",
+      "section": "Which readers understand the ring",
+      "kind": "prose",
+      "sentence": "A ring-aware reader decrypts against every key on the ring, so rows the sweep has not reached yet are still readable with the retired key present.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "key ring"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "production readers survive a rotation"
+        }
+      ]
+    },
+    {
+      "id": "legacy-layout-survives-a-rolling-deploy",
+      "section": "Which readers understand the ring",
+      "kind": "prose",
+      "sentence": "They keep WRITING the legacy `iv:ct:tag` (or, for `totp_secret_enc`, `b64-iv-ct-tag`) layout so an instance of the previous build can read what a new instance wrote during a rolling deploy; `--format=versioned` is what moves them to the self-describing layout, and the sweep refuses it for any column whose reader is not ring-aware (`versionedReaderReady` in `scripts/reencrypt.mjs`).",
+      "implementation": ["apps/web/lib/crypto/envelope.ts", "scripts/reencrypt.mjs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "legacy layouts"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "versioned envelope"
+        }
+      ]
+    },
+    {
+      "id": "device-token-key-seals-nothing-durable",
+      "section": "Rotation cadence",
+      "kind": "prose",
+      "sentence": "`DEVICE_TOKEN_ENCRYPTION_KEY` has no sweep because it seals nothing durable. rotating it is an env swap and a redeploy, and its 12-month entry exists so the key does not outlive every other one by default.",
+      "implementation": ["apps/web/lib/validate-env.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "scripts/reencrypt.mjs"
+        }
+      ]
+    },
+    {
+      "id": "key-provider-seam-exists",
+      "section": "The seam a KMS adapter plugs into",
+      "kind": "prose",
+      "sentence": "`loadKeyRing` delegates to a `KeyProvider`, and the only provider wired up today is `envKeyProvider`, which reproduces the env-backed behavior above byte for byte.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts", "apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/key-provider.test.ts",
+          "name": "default env provider parity"
+        }
+      ]
+    },
+    {
+      "id": "kms-adapter-needs-no-envelope-change",
+      "section": "The seam a KMS adapter plugs into",
+      "kind": "prose",
+      "sentence": "A KMS-backed provider does not require touching `envelope.ts`, `sealEnvelope`, or `openEnvelope`.",
+      "implementation": ["apps/web/lib/crypto/kms-providers.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/kms-providers.test.ts",
+          "name": "AWS KMS"
+        }
+      ]
+    },
+    {
+      "id": "kms-provider-caches-bounded",
+      "section": "The seam a KMS adapter plugs into",
+      "kind": "prose",
+      "sentence": "What it does need is the cache the provider holds, because a KMS round trip per envelope would sit in the path of every read.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/key-provider.test.ts",
+          "name": "KMS-backed provider stub"
+        }
+      ]
+    },
+    {
+      "id": "tenant-rings-do-not-cross-open",
+      "section": "The seam a KMS adapter plugs into",
+      "kind": "prose",
+      "sentence": "`platformTenantKeyRing` in `lib/crypto/cmek.ts` calls `resolveTenantKeyRing` for every workspace that has not brought its own key, so one tenant's ciphertext does not open under another tenant's derived ring; `apps/web/lib/crypto/envelope.properties.test.ts` is where that is asserted, in both directions, including against the root the rings were derived from.",
+      "implementation": [
+        "apps/web/lib/crypto/cmek.ts",
+        "apps/web/lib/server/organization-encryption-keys.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · a ciphertext belongs to one tenant and one key version"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/cmek.test.ts",
+          "name": "which ring an organization gets"
+        }
+      ]
+    },
+    {
+      "id": "associated-data-binds-the-ciphertext",
+      "section": "Associated data is a binding, not a label",
+      "kind": "prose",
+      "sentence": "`sealEnvelope` and `openEnvelope` take an optional context that is bound into the GCM authentication tag, so a ciphertext sealed for one purpose, resource or tenant does not open under another.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · every corruption fails closed"
+        },
+        {
+          "kind": "guard",
+          "file": "scripts/check-crypto-context-binding.mjs"
+        }
+      ]
+    },
+    {
+      "id": "unbound-ciphertext-opens-anywhere",
+      "section": "Associated data is a binding, not a label",
+      "kind": "prose",
+      "sentence": "The part worth writing down is the exception: a ciphertext carrying NO associated data opens under every context, because there is nothing in its tag to contradict one.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · a ciphertext with no associated data"
+        }
+      ]
+    },
+    {
+      "id": "accept-unbound-is-a-required-answer",
+      "section": "Associated data is a binding, not a label",
+      "kind": "prose",
+      "sentence": "`openEnvelope` therefore makes the answer a required field, `EnvelopeContext.acceptUnbound`, and refuses an unbound ciphertext unless the call site has said it still holds rows sealed before its context existed.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-crypto-context-binding.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · a ciphertext with no associated data"
+        }
+      ]
+    },
+    {
+      "id": "unbound-baseline-can-only-shrink",
+      "section": "Associated data is a binding, not a label",
+      "kind": "prose",
+      "sentence": "Those rows are owed a re-seal, after which both entries leave the baseline and the guard refuses their return.",
+      "implementation": ["apps/web/lib/crypto/connector-secret-reseal.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-secret-reseal.mjs"
+        },
+        {
+          "kind": "guard",
+          "file": "scripts/check-crypto-context-binding.mjs"
+        }
+      ]
+    },
+    {
+      "id": "rotation-needs-no-maintenance-window",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "**No maintenance window is required for any of the four keys.** Every reader, `TOTP_ENCRYPTION_KEY` included, is ring-aware: deploy the ring (step 4) and traffic keeps working while the sweep runs.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "production readers survive a rotation"
+        }
+      ]
+    },
+    {
+      "id": "plaintext-totp-rows-are-reported-not-stamped",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "`plaintext=N` in the summary counts rows deliberately left alone: pre-encryption TOTP secrets still stored as plain Base32, which `openTotpSecret` refuses to decrypt and which belong to no key.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/totp-reencrypt.test.ts",
+          "name": "plaintext"
+        }
+      ]
+    },
+    {
+      "id": "plaintext-rows-are-never-stamped",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "They are reported, never stamped.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/totp-reencrypt.test.ts",
+          "name": "plaintext"
+        }
+      ]
+    },
+    {
+      "id": "desktop-token-writes-no-durable-column",
+      "section": "Not yet done",
+      "kind": "prose",
+      "sentence": "`app/api/auth/desktop-token/route.ts` is not on this list: it writes no durable column, and the desktop token is handed to the client and never stored.",
+      "implementation": ["apps/web/lib/validate-env.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "scripts/reencrypt.mjs"
+        }
+      ]
+    },
+    {
+      "id": "device-authorization-bearer-columns-are-dropped",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "That column was never encrypted, it held plain text that every writer set to NULL, and the `device_authorization_bearer_columns` migration drops it and its sibling `refresh_token`.",
+      "implementation": [
+        "apps/web/db/neon/0282_device_authorization_bearer_columns.sql",
+        "apps/web/lib/validate-env.ts"
+      ],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-retention-graph.mjs"
+        }
+      ]
+    },
+    {
+      "id": "updater-pubkey-is-the-only-check",
+      "section": "4. Tauri updater signing key custody",
+      "kind": "prose",
+      "sentence": "Its public half is compiled into every shipped desktop binary and is the only thing an installed client checks before applying an update.",
+      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/desktop/scripts/verify-updater-key.test.ts",
+          "name": "escrowed Tauri updater key restore drill"
+        }
+      ]
+    },
+    {
+      "id": "drill-prints-no-key-material",
+      "section": "Restore drill",
+      "kind": "prose",
+      "sentence": "It never prints key material and never contacts the network.",
+      "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/desktop/scripts/verify-updater-key.test.ts",
+          "name": "escrowed Tauri updater key restore drill"
+        }
+      ]
+    },
+    {
+      "id": "retention-graph-closes-over-the-schema",
+      "section": "5.1 The deletion graph is closed over the schema, not over a list",
+      "kind": "prose",
+      "sentence": "`scripts/check-retention-graph.mjs` reads every live table out of the migrations in `apps/web/db/neon`, subtracts the ones a migration dropped, and requires each remaining table that holds a subject reference to be reached by one of three rules: an erasure inventory names it, a chain of `on delete cascade` foreign keys carries it from a table an inventory names, or `UNDELETED_USER_TABLES` states in words why it outlives the subject.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-retention-graph.mjs"
+        }
+      ]
+    },
+    {
+      "id": "erasure-reaches-bytes-and-addresses",
+      "section": "5.2 Erasure reaches bytes, caches and addresses, not only rows",
+      "kind": "prose",
+      "sentence": "Account erasure deletes stored media objects before their rows, so a failed object delete leaves a retryable row rather than an unreachable object; it sweeps conversation backups, project knowledge objects, avatars, the sandbox session cache and the connector response cache, whose rows are keyed by a digest and reachable only by rebuilding the contexts this account cached under; and it deletes by matching the profile's address in the tables whose identity is the address rather than the account (`EMAIL_SCOPED_USER_TABLES`).",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "eraseUserAccountData"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "account erasure inventory"
+        }
+      ]
+    },
+    {
+      "id": "deletion-status-is-honest",
+      "section": "5.2 Erasure reaches bytes, caches and addresses, not only rows",
+      "kind": "prose",
+      "sentence": "Both account and workspace erasure report per store, and `resolveDeletionStatus` returns `complete` only when every attempted store cleared and every object was freed.",
+      "implementation": ["apps/web/lib/services/deletion-manifest.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/deletion-manifest.test.ts",
+          "name": "resolveDeletionStatus"
+        }
+      ]
+    },
+    {
+      "id": "hold-predicate-is-inside-the-statement",
+      "section": "5.3 A hold is part of every destructive statement",
+      "kind": "prose",
+      "sentence": "The predicate in `apps/web/lib/services/legal-hold-gate.ts` is rendered inside the WHERE clause of each statement that destroys, never evaluated into a list of rows first: a hold placed between a read and a delete has to win, and a candidate list computed beforehand cannot let it.",
+      "implementation": ["apps/web/lib/services/legal-hold-gate.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-legal-hold-coverage.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/legal-hold-gate.test.ts",
+          "name": "the hold predicate, evaluated as a database would"
+        }
+      ]
+    },
+    {
+      "id": "held-subject-is-never-partly-erased",
+      "section": "5.3 A hold is part of every destructive statement",
+      "kind": "prose",
+      "sentence": "Account and workspace erasure refuse the whole operation instead, so a held subject is never partly erased.",
+      "implementation": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/organization-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "eraseUserAccountData"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/organization-erasure.test.ts",
+          "name": "eraseOrganizationData"
+        }
+      ]
+    },
+    {
+      "id": "soft-delete-purge-is-off-by-default",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "**The soft-delete purge ships off.** `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is unset by default, so on a deployment that has not set it the recovery window for conversations, messages, artifacts, projects and knowledge files does not end on schedule.",
+      "implementation": ["apps/web/app/api/cron/purge-soft-deleted-resources/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-soft-deleted-resources/route.test.ts",
+          "name": "GET /api/cron/purge-soft-deleted-resources"
+        }
+      ]
+    },
+    {
+      "id": "media-assets-purge-is-always-on",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "`media_assets` is purged by a separate cron that is always on.",
+      "implementation": ["apps/web/lib/server/media-assets.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/media-assets.permanent-delete.test.ts",
+          "name": "media"
+        }
+      ]
+    },
+    {
+      "id": "reference-only-rows-are-counted-separately",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "**A hold does not preserve what this product never stored.** A knowledge file or media asset row whose storage pointer is null is a reference to content held elsewhere.",
+      "implementation": ["apps/web/lib/services/legal-hold-gate.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/legal-holds/[holdId]/preservation/__tests__/route.test.ts",
+          "name": "referenceOnly"
+        }
+      ]
+    },
+    {
+      "id": "a-hold-cannot-be-amended",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "**A hold cannot be amended.** There is no route that edits a live hold's custodians or resource types; narrowing or widening a matter means placing a new hold and releasing the old one, in that order.",
+      "implementation": ["apps/web/lib/services/legal-hold-gate.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-legal-hold-coverage.mjs"
+        }
+      ]
+    },
+    {
+      "id": "tombstones-suppress-restored-rows",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "**Backups are not reached by an erasure.** Object backup copies are deleted alongside the primary objects they track, but a restored database backup reintroduces rows an erasure removed.",
+      "implementation": ["apps/web/lib/server/erasure-tombstones.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/erasure-tombstones.test.ts",
+          "name": "syncErasureLedger"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/erasure-tombstones.test.ts",
+          "name": "replayErasureTombstones"
+        }
+      ]
+    },
+    {
+      "id": "tombstone-table-outlives-the-subject",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "The tombstone table is itself in `UNDELETED_USER_TABLES`, because erasing an account must not erase the record that it must stay erased.",
+      "implementation": ["apps/web/lib/server/erasure-tombstones.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-retention-graph.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/erasure-tombstones.test.ts",
+          "name": "ledger format"
+        }
+      ]
+    },
+    {
+      "id": "approval-precedence-and-tool-table",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "rows",
+      "rows": 20,
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "names every machine reason the gate can return, and no others"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "gives each tool the answer the policy function gives"
+        }
+      ]
+    },
+    {
+      "id": "the-four-connector-sources",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "rows",
+      "rows": 4,
+      "implementation": ["apps/web/lib/user-connector-tools.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-credential-containment.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/user-connector-tools.test.ts",
+          "name": "loadUserConnectorToolDefs, remote connector gate"
+        }
+      ]
+    },
+    {
+      "id": "extension-computer-use-facts",
+      "section": "1.4 Chrome extension, computer use",
+      "kind": "rows",
+      "rows": 6,
+      "implementation": ["apps/extension/src/background.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/computer-use-default-ask.test.ts",
+          "name": "computer-use default = ask-before-acting (trust-boundary P0)"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/navigate-allowlist-security.test.ts",
+          "name": "cdpDriver.assertDestinationAllowlisted, P0 security fix"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/recorder-redaction.test.ts",
+          "name": "C-05 recorder value sanitization"
+        }
+      ]
+    },
+    {
+      "id": "enforcement-machinery-values",
+      "section": "1.5 Enforcement machinery a \"what happens on violation\" section may cite",
+      "kind": "rows",
+      "rows": 8,
+      "implementation": [
+        "apps/web/lib/api-auth.ts",
+        "apps/web/lib/rate-limit.ts",
+        "apps/web/lib/api-key-scopes.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/api-auth.test.ts",
+          "name": "assertAccountActive, warm Redis cache"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/rate-limit.test.ts",
+          "name": "tier-aware ceilings"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/rate-limit.test.ts",
+          "name": "rate-limit failure policy"
+        }
+      ]
+    },
+    {
+      "id": "revocation-paths",
+      "section": "1.7 Revocation paths, the complete set",
+      "kind": "rows",
+      "rows": 9,
+      "implementation": ["apps/web/app/api/connectors/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "/api/connectors tenant scope"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-store.test.ts",
+          "name": "credentials a disconnect has to hand back"
+        }
+      ]
+    },
+    {
+      "id": "which-source-has-scopes",
+      "section": "The four connector sources, and which one has scopes at all",
+      "kind": "rows",
+      "rows": 4,
+      "implementation": ["apps/web/lib/user-connector-tools.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "the-scope-ceiling-table",
+      "section": "Ceiling table",
+      "kind": "rows",
+      "rows": 60,
+      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-connector-scopes.mjs"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts",
+          "name": "connector OAuth scope ceiling, the table itself"
+        }
+      ]
+    },
+    {
+      "id": "encrypted-columns-and-their-keys",
+      "section": "What is encrypted, and with which key",
+      "kind": "rows",
+      "rows": 6,
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "key ring"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "migration 0104_key_version"
+        }
+      ]
+    },
+    {
+      "id": "the-key-ring-env-vars",
+      "section": "The key ring",
+      "kind": "rows",
+      "rows": 3,
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "key ring"
+        }
+      ]
+    },
+    {
+      "id": "ring-aware-readers",
+      "section": "Which readers understand the ring",
+      "kind": "rows",
+      "rows": 4,
+      "implementation": [
+        "apps/web/lib/custom-connector-crypto.ts",
+        "apps/web/lib/github-app.ts",
+        "apps/web/lib/crypto/totp-envelope.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "production readers survive a rotation"
+        }
+      ]
+    }
+  ],
+  "unproven": [
+    {
+      "id": "trifecta-ignores-pasted-content",
+      "section": "1.1a Lethal-trifecta escalation and its published limits",
+      "kind": "prose",
+      "sentence": "Content the user **pasted or attached is not counted**, a real injection vector the heuristic does not see.",
+      "implementation": ["apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"],
+      "reason": "the trifecta legs are computed inside the tool-loop generator and resolveToolCallGate is a closure with no exported seam, so a behavioural proof needs the gate lifted into its own module"
+    },
+    {
+      "id": "trifecta-gates-auto-approval-only",
+      "section": "1.1a Lethal-trifecta escalation and its published limits",
+      "kind": "prose",
+      "sentence": "It gates auto-approval only.",
+      "implementation": ["apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"],
+      "reason": "the trifecta legs are computed inside the tool-loop generator and resolveToolCallGate is a closure with no exported seam, so a behavioural proof needs the gate lifted into its own module"
+    },
+    {
+      "id": "trifecta-cannot-stop-an-approver",
+      "section": "1.1a Lethal-trifecta escalation and its published limits",
+      "kind": "prose",
+      "sentence": "It cannot stop a user who approves.",
+      "implementation": ["apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"],
+      "reason": "the trifecta legs are computed inside the tool-loop generator and resolveToolCallGate is a closure with no exported seam, so a behavioural proof needs the gate lifted into its own module"
+    },
+    {
+      "id": "tauri-tree-not-reachable-from-desktop",
+      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
+      "kind": "prose",
+      "sentence": "The files below remain in the retained Tauri source tree and are not reachable from the public Electron Desktop selected by D-2026-09-15-04.",
+      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
+    },
+    {
+      "id": "public-desktop-is-managed-cloud-only",
+      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
+      "kind": "prose",
+      "sentence": "The public Desktop is managed-cloud-only and exposes neither Local/BYOK inference nor these OAuth connector flows.",
+      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
+    }
+  ],
+  "narrative": [
+    {
+      "id": "copy-is-rendered-against-one-matrix",
+      "section": "Why this section exists",
+      "kind": "prose",
+      "sentence": "The fix is not \"write more careful copy\", it is to keep a single matrix that copy is rendered against, so a behaviour change is visibly a copy change.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "no-uncited-row",
+      "section": "Why this section exists",
+      "kind": "prose",
+      "sentence": "Do not add a row you cannot cite.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "sandbox-scope-accompanies-approval-copy",
+      "section": "1.1 Managed Cloud, default tool authority",
+      "kind": "prose",
+      "sentence": "Public copy must say so in the same breath as any claim about approval, or the sentence reads worse than the reality.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "github-app-permission-set-is-external",
+      "section": "1.2 What Managed Cloud can actually connect",
+      "kind": "prose",
+      "sentence": "The GitHub App's **installation permission set is configured on GitHub and is not declared anywhere in this repository.** Public copy must say that rather than guess a permission list.",
+      "implementation": ["apps/web/lib/github-app.ts"],
+      "why": "external-fact"
+    },
+    {
+      "id": "retained-code-is-not-a-shipped-feature",
+      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
+      "kind": "prose",
+      "sentence": "This inventory records the security properties of retained code; it must not be used as evidence of a shipped Desktop feature.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "desktop-gmail-scope-narrowed",
+      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
+      "kind": "prose",
+      "sentence": "The Gmail client previously also requested `gmail.modify`, which permits changing and deleting mail; it was dropped because the desktop code only calls read and watch endpoints.",
+      "implementation": ["apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "desktop-calendar-scope-narrowed",
+      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
+      "kind": "prose",
+      "sentence": "The calendar client previously also requested the unrestricted `auth/calendar` scope alongside the two narrower scopes shown above, which made it redundant; it was dropped because the desktop code only calls calendar-list and event endpoints.",
+      "implementation": ["apps/desktop/src-tauri/src/features/calendar/google_calendar.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "desktop-scope-gap-closed",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "~~`gmail.modify` and the full `auth/calendar` scope were broader than the advertised capability.~~ Fixed 2026-09-03: the desktop Gmail and Google Calendar clients now request only `gmail.readonly`, `gmail.send`, `calendar.readonly`, and `calendar.events`, matching the endpoints each client actually calls.",
+      "implementation": ["apps/desktop/src-tauri/src/features/calendar/google_calendar.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "github-app-permission-set-undeclared",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "**The GitHub App installation permission set is not declared in this repo**, so it cannot be documented from code.",
+      "implementation": ["apps/web/lib/github-app.ts"],
+      "why": "external-fact"
+    },
+    {
+      "id": "scanner-vendor-is-a-founder-action",
+      "section": "1.8 Known gaps this file deliberately records rather than papers over",
+      "kind": "prose",
+      "sentence": "Founder action: contract a scanning vendor that accepts `POST application/octet-stream` and answers `{ \"safe\": boolean, \"detail\"?: string }` and set both variables in production, or set `UPLOAD_SCAN_REQUIRED=false` to accept structural scanning only, which logs `upload_scanner_unconfigured` once per instance.",
+      "implementation": ["docs/security/upload-scanning.md"],
+      "why": "blocked-by-human"
+    },
+    {
+      "id": "section-two-is-only-about-token-width",
+      "section": "2. Connector OAuth scope ceilings",
+      "kind": "prose",
+      "sentence": "Section 1 stays the source of truth for what the agent may do once a token exists; this section is only about how wide the token is.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "vendor-mcp-server-grants-the-capability",
+      "section": "The four connector sources, and which one has scopes at all",
+      "kind": "prose",
+      "sentence": "This repository implements none of their tools, so it cannot map a scope to an API call the way a first-party integration could.",
+      "implementation": ["apps/web/lib/connectors/mcp-endpoints.ts"],
+      "why": "external-fact"
+    },
+    {
+      "id": "desktop-gmail-scope-rationale",
+      "section": "Desktop native scopes",
+      "kind": "prose",
+      "sentence": "The Gmail client had also requested `gmail.modify`, which permits deleting and relabeling mail, but the desktop code only ever calls `users.getProfile`, `users.watch`, `users.history.list` and `users.stop`, all of which `gmail.readonly` alone authorizes.",
+      "implementation": ["apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "desktop-calendar-scope-rationale",
+      "section": "Desktop native scopes",
+      "kind": "prose",
+      "sentence": "The calendar client had also requested the unrestricted `auth/calendar` scope, but the desktop code only ever calls `calendarList.list` and the events endpoints, which `calendar.readonly` plus `calendar.events` together authorize without granting calendar deletion or sharing changes.",
+      "implementation": ["apps/desktop/src-tauri/src/features/calendar/google_calendar.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "desktop-send-path-is-separate",
+      "section": "Desktop native scopes",
+      "kind": "prose",
+      "sentence": "Neither client makes a message-send or event-delete call through any other scope; sending mail goes through a separate IMAP/SMTP path in `apps/desktop/src-tauri/src/sys/commands/email.rs` that does not use Google OAuth at all.",
+      "implementation": ["apps/desktop/src-tauri/src/sys/commands/email.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "outlook-write-scope-is-used",
+      "section": "Desktop native scopes",
+      "kind": "prose",
+      "sentence": "The Outlook Calendar client requests `Calendars.ReadWrite`, not the narrower `Calendars.Read`, and this is not over-broad: `outlook_calendar.rs` calls `create_event`, `update_event`, and `delete_event` against the Graph API in addition to `list_calendars` and `list_events`, so the write scope is used, not requested speculatively.",
+      "implementation": ["apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "rotation-cadence-is-a-calendar-obligation",
+      "section": "3. Encryption key rotation",
+      "kind": "prose",
+      "sentence": "Cadence: every 12 months per key, plus immediately on suspected exposure.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "short-lived-column-strands-only-in-flight-flows",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "Rotating its key strands in-flight flows only: a user retries the connect and it works.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "totp-key-encoding-must-not-change",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "It would orphan every enrolled secret.",
+      "implementation": ["apps/web/lib/crypto/totp-envelope.ts"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "totp-reader-became-ring-aware",
+      "section": "Which readers understand the ring",
+      "kind": "prose",
+      "sentence": "`user_two_factor.totp_secret_enc` used to be the exception: the reader built one WebCrypto key straight from `TOTP_ENCRYPTION_KEY` and never consulted `_RETIRED`.",
+      "implementation": ["apps/web/lib/crypto/totp-envelope.ts"],
+      "why": "historical-record"
+    },
+    {
+      "id": "totp-seal-lives-server-side",
+      "section": "Which readers understand the ring",
+      "kind": "prose",
+      "sentence": "It could not simply be imported into `features/settings/services/user-preferences.ts`, because that module is also bundled for the browser and `envelope.ts` needs `node:crypto`; the seal/open calls live in the new server-only sibling instead, and the four `/api/settings/2fa/*` routes call it directly.",
+      "implementation": ["apps/web/lib/crypto/totp-envelope.ts"],
+      "why": "historical-record"
+    },
+    {
+      "id": "scheduled-and-incident-rotation-are-one-procedure",
+      "section": "Rotation cadence",
+      "kind": "prose",
+      "sentence": "Scheduled rotation is the same procedure as an incident rotation, every row below runs the `Rotating a key` procedure end to end, with `scripts/reencrypt.mjs` as the sweep.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "keys-live-only-in-deployment-env",
+      "section": "Accepted risk: no KMS, no escrow",
+      "kind": "prose",
+      "sentence": "All four keys live only as deployment environment variables.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "restore-needs-the-key-bytes",
+      "section": "Accepted risk: no KMS, no escrow",
+      "kind": "prose",
+      "sentence": "What this costs, precisely: a database restore taken before a rotation is readable only if the key bytes active at backup time still exist.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "totp-loss-forces-re-enrollment",
+      "section": "Accepted risk: no KMS, no escrow",
+      "kind": "prose",
+      "sentence": "Connector grants and GitHub installations can be re-authorized by the user; enrolled TOTP secrets cannot, and every affected user must re-enroll 2FA.",
+      "implementation": ["apps/web/lib/crypto/totp-envelope.ts"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "kms-acceptance-is-revisited",
+      "section": "Accepted risk: no KMS, no escrow",
+      "kind": "prose",
+      "sentence": "It is not accepted permanently: revisit it at the next review, and revisit it immediately if a restore ever needs a key the ring no longer carries.",
+      "implementation": ["docs/security/security.md"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "env-provider-is-still-the-default",
+      "section": "The seam a KMS adapter plugs into",
+      "kind": "prose",
+      "sentence": "Nothing about this accepted risk has changed yet: no deployment sets `AGI_KEY_PROVIDER` to anything other than the default, so every key still lives only as a deployment environment variable.",
+      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "kms-adoption-changes-the-risk",
+      "section": "The seam a KMS adapter plugs into",
+      "kind": "prose",
+      "sentence": "Adopting one moves this risk from \"an operator holds the only copy of the key\" to \"the KMS vendor's availability and access controls hold it,\" which is a real change of risk, not its removal, and should get its own review before it is treated as closing this acceptance.",
+      "implementation": ["apps/web/lib/crypto/kms-providers.ts"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "retired-key-is-dropped-after-the-sweep",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "**Drop `_RETIRED`** from the deployed env once the sweep reports `scanned=0` for every target, and redeploy.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "old-key-goes-to-a-sealed-record",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "Keep the old key in a sealed record until the next rotation, it is the only way back if a restore predates the sweep.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "restore-without-the-key-is-permanent-loss",
+      "section": "Restoring a database backup",
+      "kind": "prose",
+      "sentence": "Without the old key bytes those rows are unrecoverable, that is the accepted risk recorded above, and step 6's sealed record is the only thing standing between a restore and permanent loss.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "versioned-layout-waits-for-full-deploy",
+      "section": "Moving a column to the versioned layout",
+      "kind": "prose",
+      "sentence": "Only run it after the ring-aware reader is fully deployed, no instance of an older build may still be serving that column.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "device-token-crypto-module-is-gone",
+      "section": "Not yet done",
+      "kind": "prose",
+      "sentence": "The `lib/device-token-crypto.ts` module this section used to name alongside it no longer exists.",
+      "implementation": ["apps/web/app/api/auth/desktop-token/route.ts"],
+      "why": "historical-record"
+    },
+    {
+      "id": "losing-the-updater-key-ends-auto-update",
+      "section": "4. Tauri updater signing key custody",
+      "kind": "prose",
+      "sentence": "Losing the private half permanently ends auto-update for every install that already pins the current public key.",
+      "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "leaking-the-updater-key-is-total",
+      "section": "4. Tauri updater signing key custody",
+      "kind": "prose",
+      "sentence": "Leaking the private half lets anyone sign an archive that every install accepts and executes.",
+      "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "notarization-is-a-separate-boundary",
+      "section": "4. Tauri updater signing key custody",
+      "kind": "prose",
+      "sentence": "Apple notarization does not help, the updater signature is a separate trust boundary from Developer ID.",
+      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "why": "external-fact"
+    },
+    {
+      "id": "custody-inventory-must-be-complete",
+      "section": "Custody inventory",
+      "kind": "prose",
+      "sentence": "Every location holding the private half must be listed here.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "unlisted-copy-is-a-liability",
+      "section": "Custody inventory",
+      "kind": "prose",
+      "sentence": "A copy that is not listed is an untracked liability; a listed location that no longer holds the key must be removed in the same change that destroys it.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "passphrase-is-escrowed-separately",
+      "section": "Custody inventory",
+      "kind": "prose",
+      "sentence": "The passphrase is a separate secret and must never be escrowed in the same container as the key file.",
+      "implementation": ["docs/security/security.md"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "updater-key-is-not-escrowed",
+      "section": "Custody inventory",
+      "kind": "prose",
+      "sentence": "Until an offline escrow location and a named recovery holder exist, this document describes the procedure but the key is not escrowed.",
+      "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
+      "why": "blocked-by-human"
+    },
+    {
+      "id": "key-material-never-reaches-a-log",
+      "section": "Escrow",
+      "kind": "prose",
+      "sentence": "Never print either to a terminal that scrolls into a shared log.",
+      "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "compromise-taints-every-artifact",
+      "section": "Compromise",
+      "kind": "prose",
+      "sentence": "Treat every published updater artifact signed with that key as indistinguishable from an attacker's.",
+      "implementation": ["docs/security/security.md"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "rotate-ci-secret-before-regenerating",
+      "section": "Compromise",
+      "kind": "prose",
+      "sentence": "Rotate the GitHub Actions secrets first so CI cannot keep signing with the exposed key, then generate the replacement pair.",
+      "implementation": ["docs/security/security.md"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "updater-rotation-strands-old-installs",
+      "section": "Rotation",
+      "kind": "prose",
+      "sentence": "A rotated key therefore does not reach installed clients through the updater it replaces, the release signed with the new key fails signature verification against the old pinned key, and those installs stop updating silently.",
+      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "why": "external-fact"
+    },
+    {
+      "id": "transition-release-comes-first",
+      "section": "Rotation",
+      "kind": "prose",
+      "sentence": "Only after the transition release has propagated may a release be signed with the new key.",
+      "implementation": ["apps/desktop/docs/macos-release-runbook.md"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "stranded-installs-must-reinstall",
+      "section": "Rotation",
+      "kind": "prose",
+      "sentence": "Installs that never take the transition release are stranded and must reinstall from the download page.",
+      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "why": "external-fact"
+    },
+    {
+      "id": "lost-updater-key-forces-reinstall",
+      "section": "Rotation",
+      "kind": "prose",
+      "sentence": "If the old key is unavailable, lost, or withheld because it is compromised. step 2 is impossible and **every** install must reinstall.",
+      "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
+      "why": "accepted-risk"
+    },
+    {
+      "id": "hand-written-erasure-lists-rot",
+      "section": "5.1 The deletion graph is closed over the schema, not over a list",
+      "kind": "prose",
+      "sentence": "An erasure that enumerates a hand-written list of tables is complete only as long as somebody remembers to add to it.",
+      "implementation": ["scripts/check-retention-graph.mjs"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "temporary-chat-exception-must-be-published",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "Published copy that promises temporary chats are not retained has to carry that exception.",
+      "implementation": ["docs/security/security.md"],
+      "why": "maintenance-rule"
+    },
+    {
+      "id": "cap-052-review-verdict",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "The review returned GO-WITH-CONDITIONS on seven conditions: the bridge structurally absent from every anonymous published surface, per-call consent rendered in parent chrome, server-side call and spend caps that fail closed, exact origin validation with the capability default off, the cross-origin invariant preserved, audit logging plus a kill switch, and subresource integrity on the sandbox CDN loads.",
+      "implementation": ["audit/capability-gaps.csv"],
+      "why": "historical-record"
+    },
+    {
+      "id": "retained-desktop-scope-inventory",
+      "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
+      "kind": "rows",
+      "rows": 3,
+      "implementation": ["apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "desktop-native-scope-table",
+      "section": "Desktop native scopes",
+      "kind": "rows",
+      "rows": 3,
+      "implementation": ["apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "rotation-cadence-table",
+      "section": "Rotation cadence",
+      "kind": "rows",
+      "rows": 4,
+      "implementation": ["scripts/reencrypt.mjs"],
+      "why": "operator-procedure"
+    },
+    {
+      "id": "rotation-rehearsal-log",
+      "section": "Rehearsing a rotation before the scheduled date",
+      "kind": "rows",
+      "rows": 1,
+      "implementation": ["scripts/key-rotation-drill.mjs"],
+      "why": "blocked-by-human"
+    },
+    {
+      "id": "updater-key-custody-table",
+      "section": "Custody inventory",
+      "kind": "rows",
+      "rows": 3,
+      "implementation": ["apps/desktop/scripts/verify-updater-key.mjs"],
+      "why": "blocked-by-human"
+    }
+  ]
+}
