@@ -745,7 +745,8 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
     it('serializes the downloaded bytes with portable account data and no live credentials', async () => {
       mockNeonQuery.mockImplementation((sql: unknown) => {
         const statement = String(sql);
-        if (statement.includes('from profiles')) {
+        // The waitlist section reads the address off the profile in a subquery; it is not the profile read.
+        if (statement.includes('from profiles') && !statement.includes('from cloud_waitlist')) {
           return Promise.resolve([
             {
               id: mockUser.id,

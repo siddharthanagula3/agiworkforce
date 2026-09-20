@@ -24,10 +24,6 @@ const MEMORY_ON: ManagedMemoryPolicy = {
   searchPastChats: false,
 };
 
-const WORKSPACE_MEMORY_ON = [
-  { allow_memory: true, retention_days: null, retention_enforced: false },
-];
-
 const ORG = '0190a000-0000-7000-8000-00000000a001';
 const OTHER_ORG = '0190a000-0000-7000-8000-00000000a002';
 const NOW = Date.parse('2026-09-17T00:00:00.000Z');

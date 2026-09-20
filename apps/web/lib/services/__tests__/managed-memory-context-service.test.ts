@@ -10,7 +10,7 @@ import {
   persistManagedAutoMemoryFacts,
   type ManagedMemoryPolicy,
 } from '../managed-memory-context-service';
-import { answerMemoryPolicyQuery } from './memory-policy-stub';
+import { answerMemoryPolicyQuery, asQuery } from './memory-policy-stub';
 
 const MEMORY_ON: ManagedMemoryPolicy = {
   enabled: true,
@@ -262,9 +262,11 @@ describe('applyManagedMemoryContext', () => {
 
 describe('persistManagedAutoMemoryFacts', () => {
   it('deduplicates, bounds, categorizes, and idempotently inserts auto facts', async () => {
-    const query = vi.fn(
-      async (sql: string) =>
-        answerMemoryPolicyQuery(sql) ?? [{ outcome: 'inserted', id: 'memory-1' }],
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ outcome: 'inserted', id: 'memory-1' }],
+      ),
     );
     const candidates = [
       'User prefers Rust',

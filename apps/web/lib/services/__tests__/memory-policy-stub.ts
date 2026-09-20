@@ -57,3 +57,12 @@ export function answerMemoryPolicyQuery(
   }
   return null;
 }
+
+type AdapterQuery = <T>(sql: string, params?: unknown[]) => Promise<T[]>;
+
+// A typed fake answers rows of one shape; the adapter's query is generic, so the fake is widened here once.
+export function asQuery<F extends (sql: string, params?: unknown[]) => Promise<unknown[]>>(
+  fake: F,
+): F & AdapterQuery {
+  return fake as F & AdapterQuery;
+}
