@@ -1329,11 +1329,57 @@ validation instead of claiming a lint pass over ignored files.
 The workflow now propagates coverage failures and retains exact report
 artifacts. Codecov auto-search is disabled because the earlier failed upload
 selected source files with coverage in their names after no report was generated.
-External Codecov delivery remains advisory: the previous upload returned HTTP
-400 requiring a token, and the repository has no Codecov token secret. This is
-not a verified external delivery. Dependency audit after adding the existing
+The previous advisory Codecov upload returned HTTP 400 requiring a token, and
+the repository has no Codecov token secret. The isolated OIDC follow-up below
+addresses authentication; external delivery is not yet verified. Dependency audit after adding the existing
 Istanbul coverage library reports zero vulnerabilities at every severity.
 Evidence: `/tmp/agi-priority-99fd-clean.log`,
 `/tmp/agi-root-coverage-repro.log`, `/tmp/agi-package-coverage-repro.log`,
 `/tmp/agi-coverage-floor-check.log`, `/tmp/agi-package-coverage-full.log`,
 `/tmp/agi-coverage-dependency-audit.json`.
+
+### Verified web and macOS results on `9c24ac9c5`
+
+Web job `106059036252` passed: 70 browser cases, zero failures or flaky cases,
+and nine skipped cases on the development-only preview route. Both the immediate
+provider-readiness regression and password-field accessibility case passed on
+first execution. Pricing axe accessibility also passed without retry. The public
+contrast instrument measured all 240 route/theme pairs with zero skipped pairs.
+The complete macOS compile and Clippy job `106059036311` passed, as did extended
+feature Clippy `106059036283`. Windows and Linux native execution, JavaScript
+checks, and final CodeQL analyses remain in progress at this checkpoint.
+Evidence: `/tmp/agi-web-e2e-9c24-clean.log`, CI run `35503385094`.
+
+Coverage harness commit `db2a04e7d` is local and awaiting completion of the
+current native CI run before push, to preserve its verification. The full
+operability chain and normal commit hooks passed. Full coverage measurement
+remains in progress; no aggregate pass is claimed.
+
+### Signup fixture and coverage publication follow-up
+
+The full package-owned web coverage run measured 83.5% lines: 22,893 tests
+passed, three failed, six were skipped. All three failures were in the signup
+agreement fixture, whose Clerk mock exposed only `loaded` and omitted the
+status subscription used by the verified readiness fix. The fixture now exposes
+a stable Clerk instance with `on`/`off` and immediate notification; all original
+consent, SSO and local persistence assertions remain. The failed file plus the
+auth adapter suite pass all 27 cases with coverage. Jev selected this repair at
+confidence 1.0, request
+`65a528306ff2fe9ae83a83dcfba7c1a349ed4453a0db403a678128aebf6bf31f`.
+The original full run is retained as failed evidence; the targeted result is
+not represented as a second full-suite pass.
+
+[Codecov's official action contract](https://github.com/codecov/codecov-action#using-oidc)
+supports GitHub OIDC without an upload secret. A separate main-push upload job
+now downloads the exact coverage artifact and publishes using OIDC, with upload
+failure blocking. Only this job receives `id-token: write`; it installs no
+project dependencies and runs no project code. Pull-request tests and coverage
+remain blocking and retain their artifacts, without granting their test process
+an identity token. Source checkout credentials are not persisted. Jev selected
+this approach at confidence 1.0, request
+`2f1f6c13f69211bd037340d419b9de8dce708a87f14de419ff285974c2676c9b`.
+Nineteen harness, floor and workflow isolation checks pass, as do signup-file
+ESLint, the pinned-action guard, and frozen lockfile validation. The next main
+run must verify actual Codecov account acceptance; configuration alone is not
+a successful upload. Evidence: `/tmp/agi-signup-readiness-followup.log`,
+`/tmp/agi-coverage-floor-check.log`, `/tmp/agi-coverage-frozen-lock.log`.
