@@ -60,3 +60,24 @@ export type {
   SummarySource,
   TokenAccounting,
 } from './context';
+
+export {
+  createDecisionEvaluator,
+  isDecisionResult,
+  DECISION_FALLBACK_REASONS,
+  DECISION_STATUSES,
+} from './semantic-decisions';
+export type {
+  DecisionQuestion,
+  DecisionAnswer,
+  DecisionRequest,
+  DecisionResult,
+  DecisionProvider,
+  DecisionPolicy,
+  DecisionScope,
+  DecisionOutcome,
+  DecisionObservation,
+  DecisionFallbackReason,
+} from './semantic-decisions';
+export { buildCandidateDecision, selectDecisionCandidate } from './candidate-decisions';
+export type { SemanticCandidate, CandidateSelection } from './candidate-decisions';
