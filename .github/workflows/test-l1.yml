@@ -74,7 +74,7 @@ jobs:
         continue-on-error: false
 
       - name: Generate Coverage Report
-        if: always()
+        if: ${{ !cancelled() }}
         run: pnpm test:coverage
 
       - name: Preserve coverage evidence

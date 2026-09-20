@@ -1445,3 +1445,29 @@ The full local macOS desktop library check also passes (`cargo check -p
 agiworkforce-desktop --lib --offline`), including the changed build script.
 The Cargo-generated lockfile adds only the direct edge to the already-locked
 resource compiler. Evidence: `/tmp/agi-windows-manifest-check.log`.
+
+### Push and coverage cancellation follow-up
+
+All four follow-up commits reached main at `d6def28a39b1e6a62e5f4fbc6e99a8a0f815390d`
+through the complete clean-checkout pre-push guard chain. New CI is `35505437427`,
+CodeQL `35505436633`, and package coverage `35505437305`.
+
+The obsolete root-runner coverage run `35503385112` resisted automatic and
+explicit normal cancellation, keeping the new coverage run pending. GitHub's
+[documented force-cancel endpoint](https://docs.github.com/en/rest/actions/workflow-runs#force-cancel-a-workflow-run)
+accepted cancellation (HTTP 202) of that obsolete run only. Its long coverage
+step used `always()`, which can continue through cancellation. The follow-up
+uses `!cancelled()` so prior failures still collect coverage while explicit or
+concurrency cancellation stops expensive test work. Nineteen coverage/harness
+checks pass; evidence `/tmp/agi-coverage-cancellation-tests.log`. This follow-up
+is retained locally until current native CI evidence completes, avoiding another
+immediate full-run restart. Jev selected this bounded approach at confidence 1.0,
+request `76bdd0ce05b981465eb86df133831172d9cbc142b67fbf6a16ce95fde5d451c6`.
+
+The previous Linux native job completed tests, trust boundaries and sync parity
+before the new push canceled its remaining Clippy step; it is not recorded as a
+full job pass. Evidence: `/tmp/agi-linux-9c24.log`.
+
+The obsolete run reached `cancelled` and released the slot; the new package
+coverage job `106064730904` is running. The current main database/RLS,
+contracts and Chrome E2E jobs have passed.
