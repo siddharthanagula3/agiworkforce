@@ -42,8 +42,9 @@ steps between variants, and a variant can be deleted from there.
 
 The conversation title menu renames a chat. Archiving moves it out of the
 sidebar without deleting anything, and Settings holds an **Archived chats** list
-that restores or permanently deletes them. A deleted chat goes to **Recently
-deleted** in Settings, where it can be put back or removed for good.
+that restores a chat or moves it to **Recently deleted**. A deleted chat stays
+there until you restore it; the product does not currently offer permanent chat
+deletion separately from deleting your account.
 
 ## When a chat will not load
 

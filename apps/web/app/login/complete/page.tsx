@@ -7,6 +7,8 @@ import {
   RecordTermsAcceptance,
 } from '../../signup/complete/RecordTermsAcceptance';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { AuthLayout } from '@/features/auth/AuthLayout';
+import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -40,15 +42,17 @@ export default async function LoginCompletePage({
   }
 
   return (
-    <main className="mx-auto flex min-h-[60vh] w-full max-w-md items-center justify-center p-6">
-      <div className="w-full">
-        <TermsGate
-          blockedMessage="Accept the terms above to finish signing in to your account."
-          restorePreAuthMarker={false}
-        >
+    <AuthLayout>
+      <AuthStepFrame
+        heading="Finish signing in"
+        detail={
+          <p className="text-center">Review and accept our terms to continue to your account.</p>
+        }
+      >
+        <TermsGate restorePreAuthMarker={false} confirmationLabel="Continue">
           <RecordTermsAcceptance redirectTo={redirectTo} surface="web-login" />
         </TermsGate>
-      </div>
-    </main>
+      </AuthStepFrame>
+    </AuthLayout>
   );
 }

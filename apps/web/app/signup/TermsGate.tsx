@@ -5,6 +5,7 @@ import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 
 /**
  * localStorage, not sessionStorage.
@@ -32,13 +33,16 @@ export function TermsGate({
   children,
   blockedMessage = 'Accept the terms above to create an account. Local Mode stays free and needs no account.',
   restorePreAuthMarker = true,
+  confirmationLabel,
 }: {
   children: ReactNode;
   blockedMessage?: ReactNode;
   restorePreAuthMarker?: boolean;
+  confirmationLabel?: string;
 }) {
   const [accepted, setAccepted] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const checkboxId = useId();
 
   useEffect(() => {
@@ -65,16 +69,19 @@ export function TermsGate({
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={confirmationLabel ? 'flex flex-col' : 'flex flex-col gap-5'}>
       <div className="rounded-xl border border-border bg-muted/30 p-4">
-        <label htmlFor={checkboxId} className="flex items-start gap-3 text-sm text-foreground">
+        <label
+          htmlFor={checkboxId}
+          className="flex cursor-pointer items-start gap-3 text-sm leading-relaxed text-foreground"
+        >
           <input
             id={checkboxId}
             type="checkbox"
             checked={accepted}
-            disabled={!hydrated}
+            disabled={!hydrated || confirmed}
             onChange={(event) => onToggle(event.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+            className="auth-inline mt-1 h-4 w-4 shrink-0 accent-primary"
           />
           <span>
             I agree to the{' '}
@@ -82,7 +89,7 @@ export function TermsGate({
               href={CANONICAL_POLICY_ROUTES.terms}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2"
+              className="auth-inline rounded underline underline-offset-2"
             >
               Terms of Service
             </Link>
@@ -91,20 +98,29 @@ export function TermsGate({
               href={CANONICAL_POLICY_ROUTES.privacy}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline underline-offset-2"
+              className="auth-inline rounded underline underline-offset-2"
             >
               Privacy Policy
             </Link>
             .
           </span>
         </label>
-        <p className="mt-2 pl-7 text-xs text-muted-foreground">
+        <p className="mt-3 pl-7 text-xs leading-relaxed text-muted-foreground">
           Version dated {POLICY_LAST_UPDATED.terms}. Your agreement is recorded with your account.
         </p>
       </div>
 
-      {accepted ? (
-        children
+      {confirmationLabel && !confirmed ? (
+        <button
+          type="button"
+          className={AUTH_PRIMARY_BUTTON_CLASS}
+          disabled={!hydrated || !accepted}
+          onClick={() => setConfirmed(true)}
+        >
+          {confirmationLabel}
+        </button>
+      ) : accepted ? (
+        <div className={confirmationLabel ? 'mt-8' : undefined}>{children}</div>
       ) : (
         <p className="text-sm text-muted-foreground" data-testid="terms-gate-blocked" role="status">
           {blockedMessage}

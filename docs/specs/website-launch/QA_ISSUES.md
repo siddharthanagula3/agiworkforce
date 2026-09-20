@@ -279,10 +279,13 @@ At a measured 390×844 viewport, the Account settings pane was 388px wide while 
 table was 597px wide. The Revoke/Log out action column sat beyond the initial viewport. One repair
 hides Location, Created and Last active as desktop columns below the small breakpoint and presents
 those values in a compact detail list under Device, preserving the action column. The new regression
-failed before the repair; four Account suites now pass 24 tests, and focused lint/diff checks pass.
-Post-repair pixel geometry at 390×844 and 320×700 is still open because the authenticated in-app
-browser connection failed during three bounded retries while local database and filesystem requests
-were slow. No responsive pass is claimed from the unit test alone.
+failed before the repair; four Account suites pass 24 tests. Authenticated Browser geometry now
+passes at 390×844 and 320×700: table and wrapper widths match, both action buttons remain inside the
+viewport, desktop-only columns are hidden, mobile details are visible and document width does not
+overflow. The 320px pass exposed a separate recent-activity ellipsis; that row now stacks its full
+event, device and timestamp on phones and returns to two columns at the small breakpoint. Four fresh
+Account/activity files pass 17 tests, focused lint/format/diff checks pass, and Browser text/geometry
+plus visual inspection show the full `Viewed account data ×36` label and timestamp.
 
 ## Localhost backend transport mismatch
 
@@ -305,3 +308,146 @@ attachments, and the UI never saves an HTTP error body. Project export JSON cont
 and extracted text. Account exports give every media row an authenticated file URL; that target
 denies unauthenticated/out-of-workspace access and returns bytes with the stored SHA-256. This closes
 the local deterministic limitation without writing owner files or contacting production storage.
+
+## Destructive conversation scope
+
+Settings described archive-all and delete-all as account-wide, while the canonical stats and bulk
+routes scope both operations to the active workspace. Help also called recoverable soft deletion
+permanent and the Archived chats surface advertised a permanent-delete control that does not exist.
+Four focused regressions failed on those claims before repair. Settings rows, confirmations, counts,
+Archived chats guidance and both Help articles now name the current workspace and Recently deleted
+restoration without claiming a purge schedule or separate permanent erasure.
+
+Authenticated Browser verification showed `All 2 chats in the current workspace`; both destructive
+dialogs were cancelled. The rows fit at 390×844 and 320×700 with no document overflow or visible
+clipping. A rolled-back PostgreSQL fixture soft-deleted exactly two disposable workspace chats,
+preserved the disposable personal chat, matched one disposable account schedule and left no residue.
+Nineteen files pass 252 deletion, account, Privacy and Help tests; focused lint, formatting, corpus
+drift and diff checks pass. The owner account and owner chats were untouched. Permanent chat erasure
+apart from account deletion is still unavailable and remains an explicit DATA-CONTROLS gap.
+
+## Tool-loop latency attribution
+
+Tool-loop routes persisted first-provider-line timing for health and rollout decisions but omitted the
+human-readable TTFT event used by the direct stream path. Successful steps now log the actual route,
+provider, model, request, operation and attempt, and warn on the existing breach threshold. The event
+states that its observation point is the first provider line so tool calls and thinking are not
+misreported as visible text. Three focused files pass 19 tests. This closes the local observability
+gap; provider credit exhaustion still blocks a fresh successful live response comparison.
+
+## Scheduled account erasure usage-ledger failure
+
+A disposable due account reached the real PostgreSQL erasure path and reproduced a constraint failure:
+a personal `organization_usage_ledger` row cannot survive with both `organization_id` and `user_id`
+null. The blanket anonymization update therefore stopped account deletion before identity/profile
+removal. Its retry message also hid the failing anonymization store behind the intentionally retained
+profile row.
+
+The erasure path now deletes personal ledger rows and anonymizes only organization-scoped history.
+Retry diagnostics enumerate the actual failed tables, anonymization stores, stored objects and cache
+categories. The same live probe now completes, closes the tombstone, removes subject stores,
+anonymizes retained financial records and leaves zero fixture residue. Twelve related files pass 193
+tests. External identity deletion was replaced by a spy and no object-storage bytes were seeded.
+
+## Browser-first discovery pass, 2026-09-19
+
+This pass followed the owner's revised order: discover and record issues before any further product
+repair. It used the Codex in-app Browser against `http://localhost:3100`, the existing signed-in demo
+identity and its Enterprise workspace. Desktop, tablet and phone-sized viewports were inspected. No
+model request, image/video generation, checkout, invitation, SSO activation, retention sweep,
+workspace mutation or application-source repair was made. Existing plan-limit evidence was reused
+only after its four canonical billing/usage source hashes still matched current bytes.
+
+| ID                                 | Severity            | Reproduction and observed result                                                                                                                                                                                                                                           | Expected result                                                                                         | State                                                                                          |
+| ---------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| QA-WEB-DEV-ESBUILD-DEADLOCK        | P1 QA blocker       | Two independent read-only navigation runs terminated the Next development server. Both exits end in esbuild `fatal error: all goroutines are asleep - deadlock!`; Browser then receives `ERR_CONNECTION_REFUSED`.                                                          | Normal route compilation must not terminate the QA runtime.                                             | Confirmed twice; no repair attempted.                                                          |
+| QA-WEB-ENTERPRISE-AUDIT-AUTH       | P1                  | As the signed-in Enterprise owner, open `/workspace/audit` and wait for loading to settle. The page says “The audit trail could not be loaded”; Browser console records `Authentication required`. Other protected workspace pages load in the same session.               | An authorized owner can read the audit trail, or receives a precise recoverable session-expiry flow.    | Confirmed once after a fresh server restart; no repair attempted.                              |
+| QA-WEB-POLICY-CONTRACT-CONFLICT    | P1 investigation    | Overview labels restrictive defaults ENFORCED while Policy says no saved policy means nothing is restricted. The earlier deprovisioning allegation was a misreading: Identity lists mandatory SSO and group entitlements under a separate Not yet available heading.       | Confirm effective runtime policy, then align its presentation.                                          | Policy contradiction observed; runtime cause unconfirmed. Deprovisioning allegation withdrawn. |
+| QA-WEB-PUBLIC-ENTERPRISE-OVERCLAIM | Needs qualification | Pricing advertises SSO, SCIM and audit; the local owner audit flow failed. Supporting SSO is distinct from requiring SSO, and Identity does not label deprovisioning unavailable.                                                                                          | Review claims against actual supported controls and environment prerequisites.                          | Previous blanket overclaim conclusion withdrawn; audit failure remains separately open.        |
+| QA-WEB-CHAT-FAILED-WITH-ANSWER     | P1                  | Reopen the saved Luna latency conversation. A red “Agent activity failed” block remains directly above the successful `LATENCY_WARM_OK_2026` assistant answer.                                                                                                             | Successful recovery clears or resolves the failed state so the user sees one coherent outcome.          | Confirmed in saved history; no new provider call.                                              |
+| QA-WEB-WORK-RAW-PROVIDER-ERROR     | P1                  | Open failed Work item `LATENCYSAVEFIX2026`. The main pane has a friendly unavailable message, but the AGI Work dock exposes raw `provider_billing_exhausted`.                                                                                                              | Internal provider/accounting reason codes are mapped to a consistent user-facing error.                 | Confirmed; no retry or generation.                                                             |
+| QA-WEB-STATUS-EXECUTION-BLIND      | P2 investigation    | Status reports Operational with a routing/configuration check that explicitly does not send a model message. Saved history contains provider billing failures.                                                                                                             | Make probe scope clear and assess current execution health accurately.                                  | Limited probe coverage confirmed; a saved failure does not prove a current outage.             |
+| QA-WEB-MOBILE-NAV-OFFSCREEN        | P1 responsive       | At 390×844, opening the mobile navigation drawer places New Chat, AGI Code and Search at negative x coordinates while Chat begins on-screen.                                                                                                                               | Primary navigation actions remain visible and reachable without hidden horizontal displacement.         | Confirmed by screenshot and element geometry.                                                  |
+| QA-WEB-MOBILE-COMPOSER-OVERLAP     | P1 responsive       | At 360×800, the model name and the Medium reasoning label visually merge; at 390×844 the model label truncates; at 768×1024 the AGI Work dock clips/overlaps composer controls. The document itself has no horizontal overflow, so the fault is inside the control layout. | Labels and controls remain legible and separated at supported widths and dock states.                   | Confirmed at three widths.                                                                     |
+| QA-WEB-USAGE-INCOMPLETE-IDENTITY   | P2 investigation    | Usage shows $2.03 and five turns with zero tokens plus raw member/provider identifiers. Record provenance and whether usage is fixture-derived have not been established.                                                                                                  | Explain recorded data accurately and show meaningful identities.                                        | Display observations confirmed; accounting defect unproven.                                    |
+| QA-WEB-MODEL-POLICY-NOT-LIVE       | P2                  | `/workspace/models` says its badge is what a member will actually get, then marks entries explicitly labelled `not live` as `AVAILABLE`.                                                                                                                                   | Runtime-ineligible models are not presented as actually available, or the badge is clearly policy-only. | Confirmed on multiple catalog rows.                                                            |
+| QA-WEB-CONNECTOR-DIRECTORY-ZERO    | P2                  | Settings Connectors says zero connectors indexed and that the directory is still being indexed while the same view renders many Top Connectors. One Try again leaves the contradictory state.                                                                              | Directory status and rendered catalog agree, with a useful recovery result.                             | Confirmed in two settled observations.                                                         |
+| QA-WEB-PROJECTS-SEARCH-NAME        | P2 accessibility    | `/chat/projects` exposes Search projects visually, but the search input has no label, `aria-label`, `name` or `id`; accessibility exposes an unnamed search text field.                                                                                                    | The control has a stable accessible name like Library and Models search.                                | Confirmed by DOM and accessibility tree.                                                       |
+| QA-WEB-WORK-DOCK-768               | P2 responsive       | Opening the failed Work item dock at 768×1024 compresses and overlaps the main layout; after closing it, the error line remains visibly truncated on the left.                                                                                                             | Split view and restored single-pane layout preserve readable content.                                   | Confirmed visually; grouped with the composer repair boundary.                                 |
+| QA-WEB-BILLING-CONTRACT-CONFLICT   | P2 investigation    | Personal Billing shows an active Enterprise renewal while workspace Billing has no recorded contract. A manual subscription and absent contract can coexist.                                                                                                               | Explain subscription and commercial-contract state consistently.                                        | Presentation review; billing integrity failure not established.                                |
+| QA-WEB-WORKSPACE-COPY              | P3                  | `/workspace/sharing` renders “1 member · you are a owner.”                                                                                                                                                                                                                 | Render “you are an owner.”                                                                              | Confirmed.                                                                                     |
+| QA-WEB-CHANGELOG-LOCAL-MODELS      | Withdrawn           | Planning source review found the current changelog already describes Desktop as managed cloud. The earlier stale-claim allegation is not reproducible.                                                                                                                     | Preserve accurate current copy.                                                                         | No repair required; prior classification corrected.                                            |
+
+Environment and release prerequisites discovered during the same pass are tracked separately from
+product defects:
+
+- The local migration ledger now reports 272 applied, one pending
+  (`0273_ediscovery_cascade_delete.sql`) and one checksum drift
+  (`0268_conversation_activation.sql`). Prior zero-pending/zero-drift evidence is stale.
+- One launch path reports a too-short TOTP encryption key, while the direct `apps/web` launch passes
+  that check; the effective environment therefore depends on how the server is started. Both warn
+  that local OAuth callbacks target the production host. Error reporting, tracing export, paging,
+  status mirroring, transactional email, browser push and support handoff email are not configured
+  locally.
+- The Enterprise test workspace has no verified SSO domain, no SCIM connection, no saved workspace
+  policy, no SIEM destination and no enforced retention sweep. These are configuration/readiness
+  gaps; they are not treated as proof that each underlying implementation is defective.
+- Provider credits remain exhausted. Existing Free, Basic, Pro, Max 5x and Max 15x quota evidence is
+  still source-fresh, including the exact 15× Pro monthly, weekly and five-hour Max 15x budgets, but
+  successful paid generation and output persistence were not replayed.
+
+Useful behavior observed without adding new defects: public Pricing fits 360px without document
+overflow; Individual and Team/Enterprise cards and the scrollable comparison table remain usable;
+security, pricing, help and status responses include CSP, HSTS, frame denial, content-type,
+referrer, permissions and cross-origin headers; global conversation search finds and opens saved
+matches; Study validation, schedule validation/cancel recovery, Library filters, model search,
+project tabs, Help search/article routing, Account sessions, Security, Privacy and responsive Account
+actions settle correctly. These passes are retained to avoid replaying unchanged behavior during the
+repair phase.
+
+## Planning reconciliation, 2026-09-19
+
+The earlier count of 17 confirmed defects is superseded by the row-specific dispositions above.
+The Browser sweep is broad partial discovery, not complete website requirement coverage. In
+particular, the changelog allegation and the deprovisioning-unavailable interpretation are withdrawn
+based on current source. Model eligibility, connector indexing and process-exit root causes still
+require qualification. Preserve original observations and do not count this correction as a product
+repair. The phased implementation plan and acceptance gates are in `LAUNCH_PLAN.md`.
+
+## Additional cohort verification, 2026-09-19
+
+`WEB-DRAFT-NAVIGATION-LOSS-2026-09-19` is a confirmed local P1 draft-loss case: enter an unsent new-chat draft, open Projects, then use Browser Back. The composer returns empty. Reproduced twice; canonical diagnosis and repair plan are in `ACTIVE_ISSUES.md`, with the defect registered in `docs/agent-context/known-flaws.md`. No repair attempted during QA. Search shortcut, zero-results guidance, Escape dismissal and return focus passed in the same session; retain those scoped passes. Evidence: `docs/work/checklist-reaudit/current-evidence/browser-draft-search.json`.
+
+`WEB-DRAFT-CLEAR-RESTORE-2026-09-19` is a confirmed local P2: clearing a reloaded unsent draft restores the text with a false send-failure message. Reproduced twice without sending; canonical diagnosis and plan are in `ACTIVE_ISSUES.md`. Evidence and scoped composer passes: `docs/work/checklist-reaudit/current-evidence/browser-composer.json`.
+
+`WEB-MERMAID-ERROR-DOM-LEAK-2026-09-19` (P3): invalid diagrams render a useful fallback but leave body-level error nodes in the accessibility tree after New Chat. `QA-ERASURE-HARNESS-BOUNDARY-2026-09-19` is a separate verification-harness blocker: the existing live erasure test imports `pg` outside its permitted adapter. Both are registered with diagnosis/next actions in `ACTIVE_ISSUES.md`; no repair attempted.
+
+## Free quota speech experiment qualification, 2026-09-19
+
+The existing QWEN-FREE-QUOTA-REMAINING integration work now has direct API evidence for
+translation, speech, embeddings and reranking; it does not yet have composer input controls.
+The 16-request capability matrix is recorded in evidence/qwen-free-quota.json#capabilityExperiments.
+Two provider observations must be addressed before promoting speech as verified:
+
+- Synthetic speech saying “two hundred four” was recognized as “two, paragraph four.”
+  Sending the same PCM with a corrected WAV header reproduced it; an independent local
+  speech fixture transcribed exactly. Synthesis versus recognition compatibility is
+  unresolved. This is a provider quality observation, not a proven application defect.
+- The returned speech URL used HTTP and the WAV header declared more frames than the
+  actual PCM. HTTPS GET worked without credentials; HEAD returned403. A future playback
+  adapter must validate the payload and safely handle duration/link presentation.
+
+The initial reasoning truncation was resolved for its test case by requesting a concise
+answer at the same token cap. Do not increase budgets or repeat passing generations to
+hide the unresolved speech quality gap. No production code was changed in this matrix.
+
+## Chat/image pack findings, 2026-09-19
+
+The browser-only pack batch is recorded in evidence/qwen-free-quota.json#qaPackBrowserBatch.
+Canonical new findings: WEB-MARKDOWN-TABLE-ALIGN-2026-09-19,
+WEB-INERT-CODE-ARTIFACT-2026-09-19 and WEB-FREE-MEDIA-LIBRARY-2026-09-19.
+Their diagnosis and repair acceptance live in ACTIVE_ISSUES.md. Existing draft-clear restoration,
+free-pool label rehydration and narrow composer overlap observations were reused rather than
+duplicated. MD09's200-versus240-character output is a model-content miss, not a renderer defect.
+Isolated reloads passed; earlier combined-navigation ambiguity is not a confirmed redirect bug.
+Speech, embeddings and ranking are excluded by the owner's latest instruction.

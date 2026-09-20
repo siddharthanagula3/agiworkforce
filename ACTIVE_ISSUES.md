@@ -2,11 +2,133 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-14
+Last updated: 2026-09-19
 
 The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
+
+## WEB-MARKDOWN-TABLE-ALIGN-2026-09-19
+
+Browser TB02 copied valid Markdown with a right-aligned numeric column, but the rendered
+numbers were left-aligned. `MarkdownTableCell` accepts only children; the header renderer
+also accepts only children and forces text-left. Alignment metadata is lost in this shared
+renderer. Preserve supported alignment props for headers and cells without changing escaping
+or citation handling. Verify left/center/right alignment, numeric values and local overflow
+with a focused renderer regression and the affected browser case.
+Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#qaPackBrowserBatch`.
+No repair attempted in this QA batch.
+
+## WEB-INERT-CODE-ARTIFACT-2026-09-19
+
+Browser SA01 requested an inert fenced HTML example, never a preview. The model returned
+the requested fence, but the app extracted an HTML artifact and opened a blank preview instead
+of preserving the visible code block. Source view retained the code. A script-disabled warning
+appeared and no alert was observed; this is a presentation defect, not proof of a sandbox escape.
+The candidate ownership path is MessageBubble code-block extraction/artifact promotion; exact
+opt-in gating remains to be traced. Keep instructional code examples as source while retaining
+explicitly requested artifact previews. Test both paths without weakening iframe restrictions.
+Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#qaPackBrowserBatch`.
+No repair attempted in this QA batch.
+
+## WEB-FREE-MEDIA-LIBRARY-2026-09-19
+
+Browser IG04 produced a real1024×1024 HELLO QA poster and reload retained it. Library > Images
+then settled to Your library is empty. The Free completion path emits a provider image URL in
+Markdown and records the probe result; that is not equivalent to registering an owned Library
+asset. Trace the canonical generated-media ingestion/indexing owner and connect this experimental
+route without copying ownership logic or exposing private provider links across accounts.
+Acceptance: the same authorized image appears in chat and Library, remains accessible after
+reload and respects the existing asset/privacy boundaries. Do not regenerate images to repair
+an indexing issue.
+Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#qaPackBrowserBatch`.
+No repair attempted in this QA batch.
+
+## WEB-FREE-PROVENANCE-RELOAD-2026-09-19
+
+Free quota assistant replies display “via free pool” during the live browser session,
+but that suffix disappears after a full reload. The model name and composer FREE badge
+persist. Confirmed on three synthetic replies; no evidence of paid routing or lost message
+content. Root cause is not yet traced. Compare streamed message metadata with persisted
+message serialization and rendering; preserve the canonical route provenance on rehydrate.
+Acceptance: the same source label before and after reload without inventing provenance for
+older messages. Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#browserCapabilityExperiments`.
+
+## WEB-CHAT-ANGLE-TEXT-2026-09-19
+
+A user message containing `FINAL=<number>` renders as `FINAL=`. Opening Edit message
+shows the full original placeholder; Cancel returns to the truncated rendering. This
+confirms display loss, not storage loss. Root cause remains untraced. Investigate user-message
+Markdown/HTML handling; preserve literal text without enabling unsafe HTML. Acceptance:
+angle-bracket placeholders remain visible and editable, with hostile HTML still inert.
+Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#browserCapabilityExperiments`.
+
+## WEB-MERMAID-ERROR-DOM-LEAK-2026-09-19
+
+An invalid Mermaid fixture receives the intended source-preserving fallback, but
+Mermaid also leaves body-level error-render containers outside the chat tree.
+Two remained after navigating to an empty New Chat and exposed “Syntax error in
+text” and the library version in the accessibility tree, without `aria-hidden`.
+This is stale diagnostic/accessibility noise, not evidence of a private-data leak.
+`MermaidDiagram.tsx` calls `mermaid.render` without a scoped container and its cleanup
+only sets the cancellation flag. Review supported error-render suppression and
+owned-container cleanup, preserving the visible source fallback. Verify invalid
+render, rerender and navigation leave no orphan nodes. Evidence:
+`docs/work/checklist-reaudit/current-evidence/browser-render.json`. No repair attempted.
+
+## QA-ERASURE-HARNESS-BOUNDARY-2026-09-19
+
+`pnpm check:boundaries` fails because the pre-existing untracked
+`apps/web/lib/server/__tests__/scheduled-account-erasure.live.test.ts` imports
+`pg` directly outside `@agiworkforce/data-layer`. The test provided useful local
+execution evidence, but it does not meet the repository's adapter ownership rule.
+Adapt the harness through the canonical entrypoint and rerun the boundary check
+in the repair phase. Do not weaken the guard or treat this as a production data
+leak. Evidence: `docs/work/checklist-reaudit/current-evidence/boundaries.json`.
+
+## WEB-DRAFT-CLEAR-RESTORE-2026-09-19
+
+In local Browser, type an unsent new-chat draft, reload, wait for restoration,
+then select all and delete. The draft immediately returns with “Couldn't send.
+Restored here so you can try again.” No send was attempted. This was reproduced
+twice; a second clear empties the input. The mount/restoration path and deferred
+handback effect in `ChatComposerNew.tsx` are the investigation boundary, not a
+proven root cause. Distinguish navigation/reload parking from a failed-send
+handback, then verify deliberate clearing stays empty without a false failure
+notice. Evidence: `docs/work/checklist-reaudit/current-evidence/browser-composer.json`.
+No application repair was made in this QA pass.
+
+## WEB-DRAFT-NAVIGATION-LOSS-2026-09-19
+
+Local Browser QA reproduced unsent new-chat draft loss twice: type into the
+composer at `/`, open Projects, then use Browser Back. The route returns but the
+composer is empty. The second reproduction used normal typing to rule out a
+programmatic-value-only artifact. No message was submitted. This is a current
+Next development-session failure, not a claim about every browser or production.
+
+Evidence: `docs/work/checklist-reaudit/current-evidence/browser-draft-search.json`.
+The composer lifecycle and the one-use history restoration gate in
+`apps/web/features/chat/lib/pending-composer-draft.ts` are investigation pointers;
+a root cause has not been established. In the repair phase, trace mount/cleanup
+and history restoration, add a component-level regression for the demonstrated
+path, then verify Back and Forward preserve the draft without leaking it into a
+new conversation. No application repair was made in this QA pass.
+
+## RELEASE-MAIN-PROTECTION-2026-09-19
+
+The 2026-09-19 read-only GitHub verification reports `main.protected=false`,
+required status-check enforcement `off`, an empty repository/inherited ruleset list,
+and no effective branch rules. The legacy protection endpoint returns the explicit
+`Branch not protected` response. Running CI on pushes is not equivalent to enforcing
+it before merge. This finding does not establish that production deployment bypasses
+its separate promotion workflow.
+
+Evidence is retained in `docs/work/checklist-reaudit/current-evidence/github-main.json`,
+`github-main-protection.json`, `github-rulesets.json` and `github-main-rules.json`, with
+the corresponding hashed response logs. Configure an owner-reviewed main-branch rule
+requiring pull requests and the intended successful checks, with bounded and audited
+bypass rules; then verify the effective API state and a harmless rejected change.
+Configuration was inspected only; no GitHub settings were changed during verification.
 
 **Canonical status.** This file carries the explanation and the plan. Three
 machine-readable registers stay authoritative for their own row identity

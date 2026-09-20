@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getProviderOffering } from '@agiworkforce/types';
 import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -304,14 +305,15 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
         [truncatedTitle, conversationId, userId, organizationId],
       );
 
-      scheduleConversationTitleGeneration({
-        db,
-        conversationId,
-        userId,
-        organizationId,
-        content,
-        expectedCurrentTitle: truncatedTitle,
-      });
+      if (!getProviderOffering(conversation.model ?? ''))
+        scheduleConversationTitleGeneration({
+          db,
+          conversationId,
+          userId,
+          organizationId,
+          content,
+          expectedCurrentTitle: truncatedTitle,
+        });
     }
   }
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
+import { freeQuotaSelection } from '../lib/free-quota-selection';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
@@ -859,20 +860,23 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // this Mac is outside that question entirely: it spends no plan, so it is
   // resolved after the downgrade rather than through it.
   const cloudModelId =
-    isWebsiteFreeTrial && !FREE_TRIAL_MODELS.includes(validatedSelectedModelId)
+    isWebsiteFreeTrial &&
+    !freeQuotaSelection(validatedSelectedModelId) &&
+    !FREE_TRIAL_MODELS.includes(validatedSelectedModelId)
       ? freeTrialModelId
       : validatedSelectedModelId;
   const localModelSelection = useLocalModelSelection((state) => state.selected);
   const activeModelId = localModelSelection?.id ?? cloudModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
   const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
-  const isTrialExhausted = isWebsiteFreeTrial && freeUsageLimitReached;
+  const isTrialExhausted =
+    isWebsiteFreeTrial && !freeQuotaSelection(activeModelId) && freeUsageLimitReached;
 
   useEffect(() => {
     if (!isWebsiteFreeTrial) return;
     // Free users may pick any model in the free tool set; only snap back to the
     // default when they're on something outside the set.
-    if (!FREE_TRIAL_MODELS.includes(selectedModelId)) {
+    if (!freeQuotaSelection(selectedModelId) && !FREE_TRIAL_MODELS.includes(selectedModelId)) {
       setSelectedModelId(freeTrialModelId);
     }
   }, [freeTrialModelId, isWebsiteFreeTrial, selectedModelId, setSelectedModelId]);
@@ -3103,7 +3107,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       // provider media endpoints, not text-chat adapters. A diagram, chart or
       // vector is not raster work: it stays a chat turn the Artifacts system
       // renders, rather than a picture of a diagram.
-      if (!attachments?.length && classifyTaskLocally(content, []).type === 'image_generation') {
+      if (
+        !freeQuotaSelection(activeModelId) &&
+        !attachments?.length &&
+        classifyTaskLocally(content, []).type === 'image_generation'
+      ) {
         const visualRoute = routeVisualRequest({ prompt: content, hasSourceImage: false });
         if (visualRoute.destination === 'artifact') {
           outgoingContent = visualRoute.prompt;

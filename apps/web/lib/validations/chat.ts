@@ -1,3 +1,4 @@
+import { freeQuotaSelection } from '@/features/chat/lib/free-quota-selection';
 import { z } from 'zod';
 import { listCanonicalModels, normalizeModelId, type ModelType } from '@agiworkforce/types';
 import {
@@ -31,12 +32,12 @@ export type SupportedModel = string;
 
 function isSupportedModel(val: string): val is SupportedModel {
   const canonicalModelId = normalizeModelId(val) ?? val;
-  return SUPPORTED_MODELS.includes(canonicalModelId);
+  return freeQuotaSelection(val) !== null || SUPPORTED_MODELS.includes(canonicalModelId);
 }
 
 function isSupportedMessageModel(val: string): val is SupportedModel {
   const canonicalModelId = normalizeModelId(val) ?? val;
-  return SUPPORTED_MESSAGE_MODELS.includes(canonicalModelId);
+  return freeQuotaSelection(val) !== null || SUPPORTED_MESSAGE_MODELS.includes(canonicalModelId);
 }
 
 export const UpdateConversationSchema = ManagedCloudUpdateConversationRequestSchema.extend({

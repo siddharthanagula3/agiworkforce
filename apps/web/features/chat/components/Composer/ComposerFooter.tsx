@@ -49,6 +49,8 @@ import {
   isSelectableModelId,
   type AIModel,
 } from '@shared/stores/model-store';
+import { FreeQuotaModelSection } from './FreeQuotaModelSection';
+import { freeQuotaSelection } from '@features/chat/lib/free-quota-selection';
 import { StyleSelector } from './StyleSelector';
 import { ModelCompatibilityNotice } from './ModelCompatibilityNotice';
 import {
@@ -317,6 +319,7 @@ function modelLock(
   model: AIModel,
   tier: string | null,
 ): { locked: boolean; reason?: string; kind: 'tier' | 'env' | 'coming_soon' } {
+  if (freeQuotaSelection(model.id)) return { locked: false, kind: 'tier' };
   // Availability check FIRST, a coming_soon/unavailable model is display-only:
   // never selectable, never routable, regardless of tier. This is the picker
   // side of the availability invariant (guardrail-enforced in the catalog).
@@ -1301,6 +1304,9 @@ export function ComposerFooter({
                   <span className="min-w-[3.5rem] max-w-[6rem] shrink truncate font-medium sm:max-w-[140px]">
                     {modelChangePending ? 'Saving…' : (localSelection?.name ?? selectedModel.name)}
                   </span>
+                  {freeQuotaSelection(selectedModelId) && !localSelection && (
+                    <span className={PICKER_BADGE_CLASS}>Free</span>
+                  )}
                   {localSelection && (
                     <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
                       {LOCAL_BADGE_LABEL}
@@ -1394,6 +1400,15 @@ export function ComposerFooter({
                         </>
                       ) : (
                         <>
+                          <FreeQuotaModelSection
+                            enabled={open}
+                            selectedId={selectedModelId}
+                            onSelect={(id) => {
+                              const model = findSelectableModel(id);
+                              if (model && !modelChangePending) handleSelectModel(model);
+                            }}
+                          />
+
                           {shortList.auto && (
                             <AutoRow
                               auto={shortList.auto}

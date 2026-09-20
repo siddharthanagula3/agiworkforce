@@ -305,6 +305,8 @@ import {
 
 const DEFAULT_CHAT_MAX_STEPS = 10;
 const DEFAULT_AGI_WORK_MAX_STEPS = 100;
+const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
+const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
 // teardown; it is a safety boundary, not restart-safe background execution.
 
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
@@ -2283,6 +2285,26 @@ function recordProviderStepSuccess(input: {
       input.firstProviderLineAtMs !== undefined
         ? input.firstProviderLineAtMs - input.attemptStartedAtMs
         : undefined;
+    if (ttftMs !== undefined) {
+      const latencyFields = {
+        event: 'llm_ttft_observed',
+        ...operationLogFields(input.identity),
+        provider: input.attemptProcessed.provider,
+        model: input.attemptRequest.model,
+        routeId,
+        ttftMs,
+        observationPoint: 'first_provider_line',
+        sloTargetMs: TTFT_SLO_TARGET_MS,
+        sloBreachMs: TTFT_SLO_BREACH_MS,
+      };
+      logger.info(latencyFields, '[tool-loop] first provider line observed');
+      if (ttftMs > TTFT_SLO_BREACH_MS) {
+        logger.warn(
+          { ...latencyFields, event: 'llm_ttft_slo_breach' },
+          '[tool-loop] first provider line exceeded TTFT breach threshold',
+        );
+      }
+    }
     void recordRouteOutcome(
       routeId,
       {

@@ -34,6 +34,14 @@ import {
   type PerplexityAdapterConfig,
 } from '@agiworkforce/providers-perplexity';
 import { createQwenAdapter, type QwenAdapterConfig } from '@agiworkforce/providers-qwen';
+
+export {
+  runQwenQuotaProbe,
+  streamQwenQuotaChat,
+  type QwenQuotaInput,
+  type QwenQuotaProbePolicy,
+  type QwenQuotaProbeResult,
+} from '@agiworkforce/providers-qwen';
 import {
   createVercelGatewayAdapter,
   type VercelGatewayAdapterConfig,

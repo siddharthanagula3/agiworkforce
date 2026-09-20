@@ -71,10 +71,11 @@ describe('/login/complete', () => {
     render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
     expect(screen.getByTestId('terms-gate')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Finish signing in' })).toBeInTheDocument();
     expect(screen.getByTestId('terms-recorder')).toBeInTheDocument();
     expect(mocks.recorder).toHaveBeenCalledWith({ redirectTo: '/chat', surface: 'web-login' });
     expect(mocks.gate).toHaveBeenCalledWith(
-      expect.objectContaining({ restorePreAuthMarker: false }),
+      expect.objectContaining({ restorePreAuthMarker: false, confirmationLabel: 'Continue' }),
     );
   });
 

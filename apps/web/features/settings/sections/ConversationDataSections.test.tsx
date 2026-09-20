@@ -215,7 +215,7 @@ describe('Web conversation data settings', () => {
     await waitFor(() => expect(mocks.listDeleted).toHaveBeenLastCalledWith(19));
   });
 
-  it('permanently deletes every archived chat only after confirmation', async () => {
+  it('moves every archived chat in the current workspace only after confirmation', async () => {
     render(<ArchivedChatsSection />);
 
     await screen.findByText('Archived planning');
@@ -224,7 +224,8 @@ describe('Web conversation data settings', () => {
     await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_archived'));
     expect(confirmStub.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Delete all archived chats?',
+        title: 'Delete all archived chats in this workspace?',
+        description: expect.stringContaining('current workspace'),
         variant: 'destructive',
       }),
     );
@@ -272,9 +273,19 @@ describe('Web conversation data settings', () => {
     expect(manageLinks.some((link) => link.getAttribute('href') === '/settings/archived')).toBe(
       true,
     );
+    expect(
+      screen.getByText('Restore archived chats or move them to Recently deleted.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Restore archived chats or permanently delete them.')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
     await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
+    expect(confirmStub.confirm).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        title: 'Archive all chats in this workspace?',
+        description: expect.stringContaining('current workspace'),
+      }),
+    );
     expect(useChatStore.getState().conversations[0]?.isArchived).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
@@ -310,7 +321,7 @@ describe('Web conversation data settings', () => {
     expect(revokeObjectURL).toHaveBeenCalledOnce();
   });
 
-  it('scopes delete-all by the account total, not the pages the sidebar happens to hold', async () => {
+  it('scopes delete-all by the current-workspace total, not the pages the sidebar holds', async () => {
     mocks.historyStats.mockResolvedValue({ conversationCount: 812, messageCount: 9001 });
 
     render(<PrivacySection />);
@@ -319,6 +330,8 @@ describe('Web conversation data settings', () => {
     await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
     const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
     expect(description).toContain('812');
+    expect(description).toContain('current workspace');
+    expect(description).not.toContain('in your account');
     expect(description).not.toContain(`${useChatStore.getState().conversations.length} chat`);
   });
 
@@ -334,7 +347,7 @@ describe('Web conversation data settings', () => {
     expect(description).toMatch(/restore/i);
   });
 
-  it('falls back to an unnumbered scope when the account total cannot be read', async () => {
+  it('falls back to an unnumbered workspace scope when the total cannot be read', async () => {
     mocks.historyStats.mockRejectedValue(new Error('offline'));
 
     render(<PrivacySection />);
@@ -342,7 +355,8 @@ describe('Web conversation data settings', () => {
     await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_all'));
 
     const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
-    expect(description).toContain('Every chat in your account');
+    expect(description).toContain('Every chat in the current workspace');
+    expect(description).not.toContain('in your account');
     expect(description).not.toMatch(/\ball \d+ chat/i);
   });
 });

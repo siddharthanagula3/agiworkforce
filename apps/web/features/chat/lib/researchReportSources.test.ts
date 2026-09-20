@@ -79,6 +79,13 @@ describe('stripTrailingSourceList on chat answers', () => {
 });
 
 describe('stripTrailingCitationOnlyBlock', () => {
+  it('preserves standalone deliverable links and named links after prose', () => {
+    const link = '[View generated video](<https://example.com/video.mp4>)';
+    expect(stripTrailingCitationOnlyBlock(link)).toBe(link);
+    expect(stripTrailingCitationOnlyBlock(`Your video is ready.\n\n${link}`)).toBe(
+      `Your video is ready.\n\n${link}`,
+    );
+  });
   it('drops a headingless tail of bracketed markers with a parenthesised host', () => {
     const answer = [
       'The strongest candidates are DataSpace [1], Benchmarking the Benchmarks [2].',

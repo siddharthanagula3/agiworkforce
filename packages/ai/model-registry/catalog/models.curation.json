@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-14",
+  "lastUpdated": "2026-09-19",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -222,7 +222,7 @@
       "date": "2026-06-20",
       "verifiedBy": "catalog-cleanup-2026-06-20",
       "status": "PARTIAL",
-      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
+      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash\u2192dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old\u2192new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 \u2192 glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
     },
     {
       "date": "2026-06-20",
@@ -301,6 +301,12 @@
       "verifiedBy": "catalog-developers-and-provider-labels",
       "status": "ADDITION",
       "notes": "Every model now carries a developer (who trained it) separate from its provider (which route serves it), resolved from catalog/developers.json: a first-party provider inherits its developer, a host such as groq or open_router resolves through the author segment of the upstream model id, so GPT-OSS on Groq is an OpenAI model and a synced OpenRouter entry keeps its author. The qwen provider label becomes Alibaba Model Studio because that provider id is the DashScope account that serves Qwen and third-party models; the Qwen developer label stays Qwen."
+    },
+    {
+      "date": "2026-09-19",
+      "verifiedBy": "user-qwencloud-benefits-screenshots-and-authenticated-model-list",
+      "status": "ADDITION",
+      "notes": "Added 272 provider offering observations as an explicitly separate quota inventory: 205 fully visible provider IDs and 67 truncated IDs retained as unresolved. This inventory does not admit models to production routing, override lifecycle retirement, change paid prices, or establish account-bound free eligibility. Allocation evidence remains in apps/web/config/free-pools.json. Read-only discovery with the configured key returned 169 IDs; discovery alone does not prove its account owns the screenshot allocations."
     }
   ],
   "providers": {
@@ -1512,7 +1518,7 @@
           "outputCost": 18
         }
       ],
-      "pricingNote": "Base rate (≤200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
+      "pricingNote": "Base rate (\u2264200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -4052,5 +4058,2028 @@
     "open_router",
     "nvidia_nim",
     "ollama"
-  ]
+  ],
+  "providerOfferings": {
+    "qwen-quota-001": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.8-max",
+      "displayName": "qwen3.8-max",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-002": {
+      "provider": "qwen",
+      "providerModelId": "deepseek-v4-pro-0813",
+      "displayName": "deepseek-v4-pro-0813",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-003": {
+      "provider": "qwen",
+      "providerModelId": "deepseek-v4-flash",
+      "displayName": "deepseek-v4-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-004": {
+      "provider": "qwen",
+      "providerModelId": "deepseek-v4-pro",
+      "displayName": "deepseek-v4-pro",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-005": {
+      "provider": "qwen",
+      "providerModelId": "deepseek-v3.2",
+      "displayName": "deepseek-v3.2",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-006": {
+      "provider": "qwen",
+      "providerModelId": "kimi-k2.7-code",
+      "displayName": "kimi-k2.7-code",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat",
+      "quotaThinkingRequired": true
+    },
+    "qwen-quota-007": {
+      "provider": "qwen",
+      "providerModelId": "glm-5.2",
+      "displayName": "glm-5.2",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-008": {
+      "provider": "qwen",
+      "providerModelId": "glm-5.1",
+      "displayName": "glm-5.1",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-009": {
+      "provider": "qwen",
+      "providerModelId": "wan2.6-t2v",
+      "displayName": "wan2.6-t2v",
+      "category": "video",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "video-async"
+    },
+    "qwen-quota-010": {
+      "provider": "qwen",
+      "providerModelId": "wan2.5-t2v-preview",
+      "displayName": "wan2.5-t2v-preview",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-011": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-t2v-plus",
+      "displayName": "wan2.2-t2v-plus",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-012": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-t2v-plus",
+      "displayName": "wan2.1-t2v-plus",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-013": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-t2v-turbo",
+      "displayName": "wan2.1-t2v-turbo",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-014": {
+      "provider": "qwen",
+      "providerModelId": "wan2.6-i2v-flash",
+      "displayName": "wan2.6-i2v-flash",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-015": {
+      "provider": "qwen",
+      "providerModelId": "wan2.6-i2v",
+      "displayName": "wan2.6-i2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-016": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-animate-move",
+      "displayName": "wan2.2-animate-move",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-017": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-animate-mix",
+      "displayName": "wan2.2-animate-mix",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-018": {
+      "provider": "qwen",
+      "providerModelId": "wan2.5-i2v-preview",
+      "displayName": "wan2.5-i2v-preview",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-019": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-kf2v-flash",
+      "displayName": "wan2.2-kf2v-flash",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-020": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-i2v-flash",
+      "displayName": "wan2.2-i2v-flash",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-021": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-i2v-plus",
+      "displayName": "wan2.2-i2v-plus",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-022": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-kf2v-plus",
+      "displayName": "wan2.1-kf2v-plus",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-023": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-i2v-turbo",
+      "displayName": "wan2.1-i2v-turbo",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-024": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-i2v-plus",
+      "displayName": "wan2.1-i2v-plus",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-025": {
+      "provider": "qwen",
+      "providerModelId": "wan2.6-r2v-flash",
+      "displayName": "wan2.6-r2v-flash",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-026": {
+      "provider": "qwen",
+      "providerModelId": "wan2.6-r2v",
+      "displayName": "wan2.6-r2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-027": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-image-pro",
+      "displayName": "wan2.7-image-pro",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-028": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-image",
+      "displayName": "wan2.7-image",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-029": {
+      "provider": "qwen",
+      "providerModelId": "wan2.6-image",
+      "displayName": "wan2.6-image",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-030": {
+      "provider": "qwen",
+      "providerModelId": "wan2.5-i2i-preview",
+      "displayName": "wan2.5-i2i-preview",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-031": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-max",
+      "displayName": "qwen3.7-max",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-032": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-max-2026-06-08",
+      "displayName": "qwen3.7-max-2026-06-08",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-033": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-max-2026-05-20",
+      "displayName": "qwen3.7-max-2026-05-20",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-034": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-max-2026-05-17",
+      "displayName": "qwen3.7-max-2026-05-17",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-035": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-max-preview",
+      "displayName": "qwen3.7-max-preview",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-036": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-plus",
+      "displayName": "qwen3.7-plus",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-037": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-plus-2026-05-26",
+      "displayName": "qwen3.7-plus-2026-05-26",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-038": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-flash",
+      "displayName": "qwen3.7-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-039": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-flash-2026-07-15",
+      "displayName": "qwen3.7-flash-2026-07-15",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-040": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.6-max-preview",
+      "displayName": "qwen3.6-max-preview",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-041": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.6-plus",
+      "displayName": "qwen3.6-plus",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-042": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.6-plus-2026-04-02",
+      "displayName": "qwen3.6-plus-2026-04-02",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-043": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.6-flash",
+      "displayName": "qwen3.6-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-044": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.6-flash-2026-04-16",
+      "displayName": "qwen3.6-flash-2026-04-16",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-045": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-plus",
+      "displayName": "qwen3.5-omni-plus",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-046": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-flash",
+      "displayName": "qwen3.5-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-047": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-flash-2026-02-23",
+      "displayName": "qwen3.5-flash-2026-02-23",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-048": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-plus",
+      "displayName": "qwen3.5-plus",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-049": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-plus-2026-04-20",
+      "displayName": "qwen3.5-plus-2026-04-20",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-050": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-plus-2026-02-15",
+      "displayName": "qwen3.5-plus-2026-02-15",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-051": {
+      "provider": "qwen",
+      "providerModelId": "cosyvoice-v3-plus",
+      "displayName": "cosyvoice-v3-plus",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-052": {
+      "provider": "qwen",
+      "providerModelId": "cosyvoice-v3-flash",
+      "displayName": "cosyvoice-v3-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-053": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus",
+      "displayName": "qwen-plus",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-054": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus-latest",
+      "displayName": "qwen-plus-latest",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-055": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus-2025-12-01",
+      "displayName": "qwen-plus-2025-12-01",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-056": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus-2025-09-11",
+      "displayName": "qwen-plus-2025-09-11",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-057": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus-2025-07-28",
+      "displayName": "qwen-plus-2025-07-28",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-058": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus-2025-07-14",
+      "displayName": "qwen-plus-2025-07-14",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-059": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus-2025-04-28",
+      "displayName": "qwen-plus-2025-04-28",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-060": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr-mtl",
+      "displayName": "fun-asr-mtl",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-061": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr",
+      "displayName": "fun-asr",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-062": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr-2025-11-07",
+      "displayName": "fun-asr-2025-11-07",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-063": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr-mtl-2025-08-25",
+      "displayName": "fun-asr-mtl-2025-08-25",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-064": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr-2025-08-25",
+      "displayName": "fun-asr-2025-08-25",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-065": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.6-27b",
+      "displayName": "qwen3.6-27b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-066": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.6-35b-a3b",
+      "displayName": "qwen3.6-35b-a3b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-067": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-27b",
+      "displayName": "qwen3.5-27b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-068": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-35b-a3b",
+      "displayName": "qwen3.5-35b-a3b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-069": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-122b-a10b",
+      "displayName": "qwen3.5-122b-a10b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-070": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-397b-a17b",
+      "displayName": "qwen3.5-397b-a17b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-071": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-flash",
+      "displayName": "qwen3-vl-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-072": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-flash-2026-01-22",
+      "displayName": "qwen3-vl-flash-2026-01-22",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-073": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-flash-2025-10-15",
+      "displayName": "qwen3-vl-flash-2025-10-15",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-074": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-plus",
+      "displayName": "qwen3-vl-plus",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-075": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-plus-2025-12-19",
+      "displayName": "qwen3-vl-plus-2025-12-19",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-076": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-plus-2025-09-23",
+      "displayName": "qwen3-vl-plus-2025-09-23",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-077": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-max",
+      "displayName": "qwen3-max",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-078": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-max-preview",
+      "displayName": "qwen3-max-preview",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-079": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-max-2026-01-23",
+      "displayName": "qwen3-max-2026-01-23",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-080": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-max-2025-09-23",
+      "displayName": "qwen3-max-2025-09-23",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-081": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash",
+      "displayName": "qwen3-asr-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-082": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash-2026-02-10",
+      "displayName": "qwen3-asr-flash-2026-02-10",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-083": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash-2025-09-08",
+      "displayName": "qwen3-asr-flash-2025-09-08",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-084": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-2.0-pro",
+      "displayName": "qwen-image-2.0-pro",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-085": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-2.0-pro-2026-06-22",
+      "displayName": "qwen-image-2.0-pro-2026-06-22",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-086": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-2.0-pro-2026-04-22",
+      "displayName": "qwen-image-2.0-pro-2026-04-22",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-087": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-2.0-pro-2026-03-03",
+      "displayName": "qwen-image-2.0-pro-2026-03-03",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-088": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-2.0",
+      "displayName": "qwen-image-2.0",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-089": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-2.0-2026-03-03",
+      "displayName": "qwen-image-2.0-2026-03-03",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-090": {
+      "provider": "qwen",
+      "providerModelId": "qwen-voice-enrollment",
+      "displayName": "qwen-voice-enrollment",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-091": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-vc-2026-01-22",
+      "displayName": "qwen3-tts-vc-2026-01-22",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-092": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-vd-2026-01-26",
+      "displayName": "qwen3-tts-vd-2026-01-26",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-093": {
+      "provider": "qwen",
+      "providerModelId": "qwen-flash-character",
+      "displayName": "qwen-flash-character",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-094": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash-filetrans",
+      "displayName": "qwen3-asr-flash-filetrans",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-095": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash-filetrans-2025-11-17",
+      "displayName": "qwen3-asr-flash-filetrans-2025-11-17",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-096": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-instruct-flash",
+      "displayName": "qwen3-tts-instruct-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-097": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-instruct-flash-2026-01-26",
+      "displayName": "qwen3-tts-instruct-flash-2026-01-26",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-098": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-ocr",
+      "displayName": "qwen-vl-ocr",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-099": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-ocr-2025-11-20",
+      "displayName": "qwen-vl-ocr-2025-11-20",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-100": {
+      "provider": "qwen",
+      "providerModelId": "qwen-mt-flash",
+      "displayName": "qwen-mt-flash",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-101": {
+      "provider": "qwen",
+      "providerModelId": "z-image-turbo",
+      "displayName": "z-image-turbo",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync"
+    },
+    "qwen-quota-102": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-edit-max",
+      "displayName": "qwen-image-edit-max",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-103": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-edit-max-2026-01-16",
+      "displayName": "qwen-image-edit-max-2026-01-16",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-104": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-plus",
+      "displayName": "qwen-image-plus",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-105": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image",
+      "displayName": "qwen-image",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-106": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-plus-2026-01-09",
+      "displayName": "qwen-image-plus-2026-01-09",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-107": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-max",
+      "displayName": "qwen-image-max",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-108": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-max-2025-12-30",
+      "displayName": "qwen-image-max-2025-12-30",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-109": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-edit-plus-2025-12-15",
+      "displayName": "qwen-image-edit-plus-2025-12-15",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-110": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-edit-plus-2025-10-30",
+      "displayName": "qwen-image-edit-plus-2025-10-30",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-111": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-edit-plus",
+      "displayName": "qwen-image-edit-plus",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-112": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-edit",
+      "displayName": "qwen-image-edit",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-113": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-livetranslate-flash",
+      "displayName": "qwen3-livetranslate-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-114": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-livetranslate-flash-2025-12-01",
+      "displayName": "qwen3-livetranslate-flash-2025-12-01",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-115": {
+      "provider": "qwen",
+      "providerModelId": "qwen-mt-lite",
+      "displayName": "qwen-mt-lite",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-116": {
+      "provider": "qwen",
+      "providerModelId": "qwen-mt-turbo",
+      "displayName": "qwen-mt-turbo",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-117": {
+      "provider": "qwen",
+      "providerModelId": "qwen-mt-plus",
+      "displayName": "qwen-mt-plus",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-118": {
+      "provider": "qwen",
+      "providerModelId": "qwen-plus-character",
+      "displayName": "qwen-plus-character",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-119": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-next",
+      "displayName": "qwen3-coder-next",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-120": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-32b-instruct",
+      "displayName": "qwen3-vl-32b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-121": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-32b-thinking",
+      "displayName": "qwen3-vl-32b-thinking",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-122": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-30b-a3b-instruct",
+      "displayName": "qwen3-vl-30b-a3b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-123": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-30b-a3b-thinking",
+      "displayName": "qwen3-vl-30b-a3b-thinking",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-124": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-8b-instruct",
+      "displayName": "qwen3-vl-8b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-125": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-8b-thinking",
+      "displayName": "qwen3-vl-8b-thinking",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-126": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-235b-a22b-thinking",
+      "displayName": "qwen3-vl-235b-a22b-thinking",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat",
+      "quotaThinkingRequired": true
+    },
+    "qwen-quota-127": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-vl-235b-a22b-instruct",
+      "displayName": "qwen3-vl-235b-a22b-instruct",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-128": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-next-80b-a3b-thinking",
+      "displayName": "qwen3-next-80b-a3b-thinking",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat",
+      "quotaThinkingRequired": true
+    },
+    "qwen-quota-129": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-next-80b-a3b-instruct",
+      "displayName": "qwen3-next-80b-a3b-instruct",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-130": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-30b-a3b-thinking-2507",
+      "displayName": "qwen3-30b-a3b-thinking-2507",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat",
+      "quotaThinkingRequired": true
+    },
+    "qwen-quota-131": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-30b-a3b-instruct-2507",
+      "displayName": "qwen3-30b-a3b-instruct-2507",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-132": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-235b-a22b-thinking-2507",
+      "displayName": "qwen3-235b-a22b-thinking-2507",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat",
+      "quotaThinkingRequired": true
+    },
+    "qwen-quota-133": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-235b-a22b-instruct-2507",
+      "displayName": "qwen3-235b-a22b-instruct-2507",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-134": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-14b",
+      "displayName": "qwen3-14b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-135": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-30b-a3b",
+      "displayName": "qwen3-30b-a3b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-136": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-8b",
+      "displayName": "qwen3-8b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-137": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-32b",
+      "displayName": "qwen3-32b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-138": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-235b-a22b",
+      "displayName": "qwen3-235b-a22b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-139": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-plus",
+      "displayName": "qwen3-coder-plus",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-140": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-plus-2025-09-23",
+      "displayName": "qwen3-coder-plus-2025-09-23",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-141": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-plus-2025-07-22",
+      "displayName": "qwen3-coder-plus-2025-07-22",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-142": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-flash",
+      "displayName": "qwen3-coder-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-143": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-flash-2025-07-28",
+      "displayName": "qwen3-coder-flash-2025-07-28",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-144": {
+      "provider": "qwen",
+      "providerModelId": "qwen-flash",
+      "displayName": "qwen-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-145": {
+      "provider": "qwen",
+      "providerModelId": "qwen-flash-2025-07-28",
+      "displayName": "qwen-flash-2025-07-28",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-146": {
+      "provider": "qwen",
+      "providerModelId": "wan2.6-t2i",
+      "displayName": "wan2.6-t2i",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-147": {
+      "provider": "qwen",
+      "providerModelId": "wan2.5-t2i-preview",
+      "displayName": "wan2.5-t2i-preview",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-148": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-t2i-plus",
+      "displayName": "wan2.2-t2i-plus",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-149": {
+      "provider": "qwen",
+      "providerModelId": "wan2.2-t2i-flash",
+      "displayName": "wan2.2-t2i-flash",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-150": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-t2i-plus",
+      "displayName": "wan2.1-t2i-plus",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-151": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-t2i-turbo",
+      "displayName": "wan2.1-t2i-turbo",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-152": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-flash",
+      "displayName": "qwen3-tts-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-153": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-flash-2025-11-27",
+      "displayName": "qwen3-tts-flash-2025-11-27",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-154": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-flash-2025-09-18",
+      "displayName": "qwen3-tts-flash-2025-09-18",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-155": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-omni-30b-a3b-captioner",
+      "displayName": "qwen3-omni-30b-a3b-captioner",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-156": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-omni-flash",
+      "displayName": "qwen3-omni-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-157": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-omni-flash-2025-12-01",
+      "displayName": "qwen3-omni-flash-2025-12-01",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-158": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-omni-flash-2025-09-15",
+      "displayName": "qwen3-omni-flash-2025-09-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-159": {
+      "provider": "qwen",
+      "providerModelId": "qwen-omni-turbo",
+      "displayName": "qwen-omni-turbo",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-160": {
+      "provider": "qwen",
+      "providerModelId": "qwen-omni-turbo-2025-03-26",
+      "displayName": "qwen-omni-turbo-2025-03-26",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-161": {
+      "provider": "qwen",
+      "providerModelId": "wan2.1-vace-plus",
+      "displayName": "wan2.1-vace-plus",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-162": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-omni-7b",
+      "displayName": "qwen2.5-omni-7b",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-163": {
+      "provider": "qwen",
+      "providerModelId": "qwen-turbo",
+      "displayName": "qwen-turbo",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-164": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-plus",
+      "displayName": "qwen-vl-plus",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-165": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-max",
+      "displayName": "qwen-vl-max",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-166": {
+      "provider": "qwen",
+      "providerModelId": "qvq-max",
+      "displayName": "qvq-max",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-167": {
+      "provider": "qwen",
+      "providerModelId": "qwq-plus",
+      "displayName": "qwq-plus",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-168": {
+      "provider": "qwen",
+      "providerModelId": "qwen-max",
+      "displayName": "qwen-max",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-169": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr-flash-2026-06-15",
+      "displayName": "fun-asr-flash-2026-06-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-170": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-30b-a3b-instruct",
+      "displayName": "qwen3-coder-30b-a3b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-171": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-coder-480b-a35b-instruct",
+      "displayName": "qwen3-coder-480b-a35b-instruct",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-172": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-7b-instruct",
+      "displayName": "qwen2.5-7b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-173": {
+      "provider": "qwen",
+      "providerModelId": "tongyi-embedding-vision-plus",
+      "displayName": "tongyi-embedding-vision-plus",
+      "category": "embedding",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-174": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-vl-72b-instruct",
+      "displayName": "qwen2.5-vl-72b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-175": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-omni-flash-realtime-2025-09-15",
+      "displayName": "qwen3-omni-flash-realtime-2025-09-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-176": {
+      "provider": "qwen",
+      "providerModelId": "qwen-omni-turbo-realtime-2025-05-08",
+      "displayName": "qwen-omni-turbo-realtime-2025-05-08",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-177": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-omni-flash-realtime",
+      "displayName": "qwen3-omni-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-178": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-livetranslate-flash-realtime",
+      "displayName": "qwen3-livetranslate-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-179": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-14b-instruct",
+      "displayName": "qwen2.5-14b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-180": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-plus-2025-08-15",
+      "displayName": "qwen-vl-plus-2025-08-15",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-181": {
+      "provider": "qwen",
+      "providerModelId": "qwen-turbo-latest",
+      "displayName": "qwen-turbo-latest",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-182": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-max-2025-08-13",
+      "displayName": "qwen-vl-max-2025-08-13",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-183": {
+      "provider": "qwen",
+      "providerModelId": "qwen-max-2025-01-25",
+      "displayName": "qwen-max-2025-01-25",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-184": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-vl-3b-instruct",
+      "displayName": "qwen2.5-vl-3b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-185": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-livetranslate-flash-realtime-2025-09-22",
+      "displayName": "qwen3-livetranslate-flash-realtime-2025-09-22",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-186": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-vl-32b-instruct",
+      "displayName": "qwen2.5-vl-32b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-187": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-max-latest",
+      "displayName": "qwen-vl-max-latest",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-188": {
+      "provider": "qwen",
+      "providerModelId": "qwen-turbo-2025-04-28",
+      "displayName": "qwen-turbo-2025-04-28",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-189": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-plus-latest",
+      "displayName": "qwen-vl-plus-latest",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-190": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-72b-instruct",
+      "displayName": "qwen2.5-72b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-191": {
+      "provider": "qwen",
+      "providerModelId": "qvq-max-latest",
+      "displayName": "qvq-max-latest",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-192": {
+      "provider": "qwen",
+      "providerModelId": "qvq-max-2025-03-25",
+      "displayName": "qvq-max-2025-03-25",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-193": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-flash-realtime",
+      "displayName": "qwen3-tts-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-194": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-flash-realtime-2025-09-18",
+      "displayName": "qwen3-tts-flash-realtime-2025-09-18",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-195": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash-realtime-2025-10-27",
+      "displayName": "qwen3-asr-flash-realtime-2025-10-27",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-196": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-max-2025-10-30",
+      "displayName": "qwen3-max-2025-10-30",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-197": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-plus-2025-05-07",
+      "displayName": "qwen-vl-plus-2025-05-07",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-198": {
+      "provider": "qwen",
+      "providerModelId": "tongyi-embedding-vision-flash",
+      "displayName": "tongyi-embedding-vision-flash",
+      "category": "embedding",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-199": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-14b-instruct-1m",
+      "displayName": "qwen2.5-14b-instruct-1m",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-200": {
+      "provider": "qwen",
+      "providerModelId": "qwen-omni-turbo-realtime",
+      "displayName": "qwen-omni-turbo-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-201": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-1.7b",
+      "displayName": "qwen3-1.7b",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-202": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-4b",
+      "displayName": "qwen3-4b",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-203": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-max-2025-04-08",
+      "displayName": "qwen-vl-max-2025-04-08",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-204": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash-realtime",
+      "displayName": "qwen3-asr-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-205": {
+      "provider": "qwen",
+      "providerModelId": "text-embedding-v3",
+      "displayName": "text-embedding-v3",
+      "category": "embedding",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-206": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-7b-instruct-1m",
+      "displayName": "qwen2.5-7b-instruct-1m",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-207": {
+      "provider": "qwen",
+      "providerModelId": "text-embedding-v4",
+      "displayName": "text-embedding-v4",
+      "category": "embedding",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-208": {
+      "provider": "qwen",
+      "providerModelId": "qwen-vl-plus-2025-01-25",
+      "displayName": "qwen-vl-plus-2025-01-25",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-209": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-32b-instruct",
+      "displayName": "qwen2.5-32b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-210": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr-realtime-2025-11-07",
+      "displayName": "fun-asr-realtime-2025-11-07",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-211": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-omni-flash-realtime-2025-12-01",
+      "displayName": "qwen3-omni-flash-realtime-2025-12-01",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-212": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-vc-realtime-2025-11-27",
+      "displayName": "qwen3-tts-vc-realtime-2025-11-27",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-213": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-vd-realtime-2025-12-16",
+      "displayName": "qwen3-tts-vd-realtime-2025-12-16",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-214": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-flash-realtime-2025-11-27",
+      "displayName": "qwen3-tts-flash-realtime-2025-11-27",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-215": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-vd-realtime-2025-12-16",
+      "displayName": "qwen3-tts-vd-realtime-2025-12-16",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-216": {
+      "provider": "qwen",
+      "providerModelId": "fun-asr-realtime",
+      "displayName": "fun-asr-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-217": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-rerank",
+      "displayName": "qwen3-rerank",
+      "category": "embedding",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-218": {
+      "provider": "qwen",
+      "providerModelId": "qwen2.5-vl-7b-instruct",
+      "displayName": "qwen2.5-vl-7b-instruct",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-219": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-0.6b",
+      "displayName": "qwen3-0.6b",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-220": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-instruct-flash-realtime",
+      "displayName": "qwen3-tts-instruct-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-221": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-plus-realtime-2026-03-15",
+      "displayName": "qwen3.5-omni-plus-realtime-2026-03-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-222": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-asr-flash-realtime-2026-02-10",
+      "displayName": "qwen3-asr-flash-realtime-2026-02-10",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-223": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-flash-realtime-2026-03-15",
+      "displayName": "qwen3.5-omni-flash-realtime-2026-03-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-224": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-vc-realtime-2026-01-15",
+      "displayName": "qwen3-tts-vc-realtime-2026-01-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-225": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-vd-realtime-2026-01-15",
+      "displayName": "qwen3-tts-vd-realtime-2026-01-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-226": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-flash-2026-03-15",
+      "displayName": "qwen3.5-omni-flash-2026-03-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-227": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-flash",
+      "displayName": "qwen3.5-omni-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-228": {
+      "provider": "qwen",
+      "providerModelId": "qwen3-tts-instruct-flash-realtime-2026-01-22",
+      "displayName": "qwen3-tts-instruct-flash-realtime-2026-01-22",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-229": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-flash-realtime",
+      "displayName": "qwen3.5-omni-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-230": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-videoedit",
+      "displayName": "wan2.7-videoedit",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-231": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-plus-realtime",
+      "displayName": "qwen3.5-omni-plus-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-232": {
+      "provider": "qwen",
+      "providerModelId": "happyhorse-1.1-t2v",
+      "displayName": "happyhorse-1.1-t2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-233": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-i2v-2026-04-25",
+      "displayName": "wan2.7-i2v-2026-04-25",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-234": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-t2v-2026-04-25",
+      "displayName": "wan2.7-t2v-2026-04-25",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-235": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-t2v",
+      "displayName": "wan2.7-t2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-236": {
+      "provider": "qwen",
+      "providerModelId": "happyhorse-1.0-t2v",
+      "displayName": "happyhorse-1.0-t2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-237": {
+      "provider": "qwen",
+      "providerModelId": "happyhorse-1.1-r2v",
+      "displayName": "happyhorse-1.1-r2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-238": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-i2v",
+      "displayName": "wan2.7-i2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-239": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-livetranslate-flash-realtime",
+      "displayName": "qwen3.5-livetranslate-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-240": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-r2v",
+      "displayName": "wan2.7-r2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-241": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-omni-plus-2026-03-15",
+      "displayName": "qwen3.5-omni-plus-2026-03-15",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-242": {
+      "provider": "qwen",
+      "providerModelId": "happyhorse-1.0-video-edit",
+      "displayName": "happyhorse-1.0-video-edit",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-243": {
+      "provider": "qwen",
+      "providerModelId": "happyhorse-1.0-r2v",
+      "displayName": "happyhorse-1.0-r2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-244": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.5-livetranslate-flash-realtime-2026-05-19",
+      "displayName": "qwen3.5-livetranslate-flash-realtime-2026-05-19",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-245": {
+      "provider": "qwen",
+      "providerModelId": "happyhorse-1.1-i2v",
+      "displayName": "happyhorse-1.1-i2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-246": {
+      "provider": "qwen",
+      "providerModelId": "happyhorse-1.0-i2v",
+      "displayName": "happyhorse-1.0-i2v",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-247": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.8-omni-flash",
+      "displayName": "qwen3.8-omni-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-248": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.1-tts-flash",
+      "displayName": "qwen-audio-3.1-tts-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-249": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.8-livetranslate-flash-realtime",
+      "displayName": "qwen3.8-livetranslate-flash-realtime",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-250": {
+      "provider": "qwen",
+      "providerModelId": "deepseek-v4.1-flash",
+      "displayName": "deepseek-v4.1-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-251": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.8-max-0902",
+      "displayName": "qwen3.8-max-0902",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-252": {
+      "provider": "qwen",
+      "providerModelId": "qwen-mt-image-2.0",
+      "displayName": "qwen-mt-image-2.0",
+      "category": "image",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-253": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.8-flash",
+      "displayName": "qwen3.8-flash",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-254": {
+      "provider": "qwen",
+      "providerModelId": "glm-5.3",
+      "displayName": "glm-5.3",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat",
+      "quotaThinkingRequired": true
+    },
+    "qwen-quota-255": {
+      "provider": "qwen",
+      "providerModelId": "wan3.0-video-prime",
+      "displayName": "wan3.0-video-prime",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-256": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.8-27b",
+      "displayName": "qwen3.8-27b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-257": {
+      "provider": "qwen",
+      "providerModelId": "kimi-k3",
+      "displayName": "kimi-k3",
+      "category": "chat",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-258": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.8-2.4t-a95b",
+      "displayName": "qwen3.8-2.4t-a95b",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat",
+      "quotaThinkingRequired": true
+    },
+    "qwen-quota-259": {
+      "provider": "qwen",
+      "providerModelId": "qwen3.7-text-embedding",
+      "displayName": "qwen3.7-text-embedding",
+      "category": "embedding",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-260": {
+      "provider": "qwen",
+      "providerModelId": "wan3.0-video",
+      "displayName": "wan3.0-video",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-261": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.0-realtime-plus",
+      "displayName": "qwen-audio-3.0-realtime-plus",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-262": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.0-realtime-flash",
+      "displayName": "qwen-audio-3.0-realtime-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-263": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-3.0-pro",
+      "displayName": "qwen-image-3.0-pro",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-264": {
+      "provider": "qwen",
+      "providerModelId": "qwen-image-3.0",
+      "displayName": "qwen-image-3.0",
+      "category": "image",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "image-sync",
+      "quotaImageSize": "1328*1328"
+    },
+    "qwen-quota-265": {
+      "provider": "qwen",
+      "providerModelId": "deepseek-v4-flash-0731",
+      "displayName": "deepseek-v4-flash-0731",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "qwen-quota-266": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.0-asr-flash",
+      "displayName": "qwen-audio-3.0-asr-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-267": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.0-asr-flash-streaming",
+      "displayName": "qwen-audio-3.0-asr-flash-streaming",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-268": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.0-asr-flash-filetrans",
+      "displayName": "qwen-audio-3.0-asr-flash-filetrans",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-269": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.0-tts-plus",
+      "displayName": "qwen-audio-3.0-tts-plus",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-270": {
+      "provider": "qwen",
+      "providerModelId": "qwen-audio-3.0-tts-flash",
+      "displayName": "qwen-audio-3.0-tts-flash",
+      "category": "audio",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-271": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-r2v-2026-06-12",
+      "displayName": "wan2.7-r2v-2026-06-12",
+      "category": "video",
+      "identityStatus": "exact"
+    },
+    "qwen-quota-272": {
+      "provider": "qwen",
+      "providerModelId": "wan2.7-t2v-2026-06-12",
+      "displayName": "wan2.7-t2v-2026-06-12",
+      "category": "video",
+      "identityStatus": "exact"
+    }
+  }
 }

@@ -1,5 +1,6 @@
 import {
   getModelMetadataById,
+  getProviderOffering,
   getRetiredModelMetadataById,
   type ModelAvailability,
   type ModelQualityTier,
@@ -55,7 +56,11 @@ export function getModelPresentationLabel(modelId: string | null | undefined): s
   const normalizedModelId = modelId?.trim() ?? '';
   if (!normalizedModelId) return '';
 
-  return getModelMetadataById(normalizedModelId)?.name ?? normalizedModelId;
+  return (
+    getModelMetadataById(normalizedModelId)?.name ??
+    getProviderOffering(normalizedModelId)?.displayName ??
+    normalizedModelId
+  );
 }
 
 const UNAVAILABLE_MODEL_LABEL = 'Unavailable model';
@@ -81,6 +86,7 @@ export function getManagedModelPresentationLabel(
   const retired = getRetiredModelMetadataById(normalizedModelId);
   const name = normalizedModelId
     ? (getModelMetadataById(normalizedModelId)?.name ??
+      getProviderOffering(normalizedModelId)?.displayName ??
       (retired?.metadataPreserved === true ? retired.name : UNAVAILABLE_MODEL_LABEL))
     : UNAVAILABLE_MODEL_LABEL;
 
