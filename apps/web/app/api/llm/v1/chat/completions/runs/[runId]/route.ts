@@ -16,8 +16,9 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   CloudAgentRunNotFoundError,
-  cancelPausedCloudAgentRun,
+  cancelHumanHeldCloudAgentRun,
   getCloudAgentRun,
+  isCloudAgentRunHumanHeld,
   requestCloudAgentRunCancellation,
 } from '@/lib/services/cloud-agent-run-service';
 
@@ -76,11 +77,13 @@ async function handleCancel(request: NextRequest, context: RouteContext) {
   const runId = await resolveRunId(context);
 
   try {
+    // A run parked on a person has no executor polling for the request, so the
+    // stop is completed here rather than left for a worker that never comes.
     const requested = await requestCloudAgentRunCancellation(db, { userId, runId });
-    const run =
-      requested.workState === 'paused'
-        ? await cancelPausedCloudAgentRun(db, { userId, runId })
-        : requested;
+    const parked = requested.workState ?? requested.state;
+    const run = isCloudAgentRunHumanHeld(parked)
+      ? await cancelHumanHeldCloudAgentRun(db, { userId, runId })
+      : requested;
     await recordAuditEvent({
       userId,
       organizationId,
