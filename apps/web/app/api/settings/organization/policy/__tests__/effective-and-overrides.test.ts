@@ -85,6 +85,18 @@ beforeEach(() => {
       allowedSurfaces: null,
       appliedOverrideIds: ['o-1'],
     },
+    code: {
+      allowDesktopCloudSync: false,
+      allowGithubConnection: false,
+      allowMcpServers: false,
+      allowAutomatedReview: true,
+      allowedMcpServers: ['mcp.example.com'],
+      allowedEgressHosts: ['api.example.com'],
+      sessionRetentionDays: 7,
+      appliedOverrideIds: ['o-1'],
+      revision: 4,
+      blockingRules: [{ control: 'code', scope: 'workspace', codeControl: 'allowMcpServers' }],
+    },
   });
 });
 
@@ -95,6 +107,19 @@ describe('GET /api/settings/organization/policy/effective', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('etag')).toBe(`"${ORG}:4:o-1"`);
     expect(await response.json()).toMatchObject({ governed: true, revision: 4 });
+  });
+
+  it('tells the client which Code connections the workspace permits', async () => {
+    const body = await (await getEffective(effectiveRequest())).json();
+
+    expect(body.code).toMatchObject({
+      allowDesktopCloudSync: false,
+      allowGithubConnection: false,
+      allowMcpServers: false,
+      allowedEgressHosts: ['api.example.com'],
+      sessionRetentionDays: 7,
+    });
+    expect(body.code.blockingRules[0]).toMatchObject({ codeControl: 'allowMcpServers' });
   });
 
   it('answers 304 when the client already holds this revision', async () => {

@@ -13,13 +13,16 @@ import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { buildWorkspaceCodeGateResponse } from '@/lib/services/organization-policy-code-gate';
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
+  let userId: string;
   try {
-    await getClerkAuthUser(request);
+    ({ userId } = await getClerkAuthUser(request));
   } catch (authError) {
     if (isMfaRequiredError(authError) || isIpNotAllowedError(authError)) {
       return unauthorizedResponseFor(authError);
@@ -28,6 +31,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     loginUrl.searchParams.set('redirectTo', '/connectors');
     return NextResponse.redirect(loginUrl);
   }
+
+  const codeGate = await buildWorkspaceCodeGateResponse(
+    getNeonDb(),
+    userId,
+    { act: 'connect_github' },
+    request,
+  );
+  if (codeGate) return codeGate;
 
   if (!isGitHubInstallationLinkingAvailable()) {
     return NextResponse.redirect(

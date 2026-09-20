@@ -1,0 +1,128 @@
+{
+  "routes": {
+    "apps/web/app/api/admin/audit-coverage/route.ts": {
+      "serves": "platform_only",
+      "reason": "Which event types the audit registry covers. No tenant row is read."
+    },
+    "apps/web/app/api/admin/background-jobs/route.ts": {
+      "serves": "customer_content",
+      "reason": "A dead job carries the tenant's payload and the provider error, so both are held back unless a live grant covers that workspace."
+    },
+    "apps/web/app/api/admin/content-reports/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "A member filed the report and chose the excerpt it carries, which is the queue trust and safety works."
+    },
+    "apps/web/app/api/admin/cost-operations/route.ts": {
+      "serves": "platform_only",
+      "reason": "What the platform paid providers. Aggregates, no tenant content."
+    },
+    "apps/web/app/api/admin/economics/route.ts": {
+      "serves": "platform_only",
+      "reason": "Margin and spend aggregates across the platform."
+    },
+    "apps/web/app/api/admin/feature-flags/[key]/overrides/route.ts": {
+      "serves": "platform_only",
+      "reason": "Flag overrides name a workspace or a person as a target and read nothing they own."
+    },
+    "apps/web/app/api/admin/feature-flags/[key]/route.ts": {
+      "serves": "platform_only",
+      "reason": "One flag definition and its kill switch."
+    },
+    "apps/web/app/api/admin/feature-flags/kill-switches/route.ts": {
+      "serves": "platform_only",
+      "reason": "The kill switch register."
+    },
+    "apps/web/app/api/admin/feature-flags/route.ts": {
+      "serves": "platform_only",
+      "reason": "The flag register."
+    },
+    "apps/web/app/api/admin/feature-flags/stale/route.ts": {
+      "serves": "platform_only",
+      "reason": "Flags nothing has evaluated lately."
+    },
+    "apps/web/app/api/admin/model-rollout/route.ts": {
+      "serves": "platform_only",
+      "reason": "Which models are at which rollout stage."
+    },
+    "apps/web/app/api/admin/observability/explain/route.ts": {
+      "serves": "platform_only",
+      "reason": "Why one request routed as it did: providers, models, token counts and the refusal code, never the prompt."
+    },
+    "apps/web/app/api/admin/observability/route.ts": {
+      "serves": "platform_only",
+      "reason": "Route cache and latency counters."
+    },
+    "apps/web/app/api/admin/privacy/erasures/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The subject asked to be erased by email, and the request names only that email."
+    },
+    "apps/web/app/api/admin/privacy/requests/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The open data rights queue, each row raised by the subject it names."
+    },
+    "apps/web/app/api/admin/product-metrics/route.ts": {
+      "serves": "platform_only",
+      "reason": "Counts of activity, no row a tenant owns."
+    },
+    "apps/web/app/api/admin/releases/route.ts": {
+      "serves": "platform_only",
+      "reason": "The release ledger."
+    },
+    "apps/web/app/api/admin/route-economics/route.ts": {
+      "serves": "platform_only",
+      "reason": "Per-route cost and margin aggregates."
+    },
+    "apps/web/app/api/admin/routing-health/route.ts": {
+      "serves": "platform_only",
+      "reason": "Provider fallback rates and the routing kill switches."
+    },
+    "apps/web/app/api/admin/security/route.ts": {
+      "serves": "platform_only",
+      "reason": "Security event counts, tenant lockdown and the workspace key posture. The key material itself resolves through the break-glass gate in organization-encryption-keys."
+    },
+    "apps/web/app/api/admin/service-dashboards/route.ts": {
+      "serves": "platform_only",
+      "reason": "Links and health of the platform's own dashboards."
+    },
+    "apps/web/app/api/admin/service-health/route.ts": {
+      "serves": "platform_only",
+      "reason": "Service level indicators."
+    },
+    "apps/web/app/api/admin/support-access/route.ts": {
+      "serves": "platform_only",
+      "reason": "The grant register itself: requesting, approving, revoking and verifying the trail. It reads no workspace data."
+    },
+    "apps/web/app/api/admin/takedown/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "A share or artifact its owner published to the open web, looked up by the public token anyone already holds."
+    },
+    "apps/web/app/api/operator/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "Feedback and screenshots members sent to us through the feedback form, plus the platform's own sign-up and cost registers."
+    },
+    "apps/web/app/api/plugins/[id]/lifecycle/route.ts": {
+      "serves": "platform_only",
+      "reason": "The publication state of a directory plugin."
+    },
+    "apps/web/app/api/support/handoff/agent/[sessionId]/claim/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "A member asked for a human, and claiming the session is the answer to that request."
+    },
+    "apps/web/app/api/support/handoff/agent/[sessionId]/messages/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The transcript of the conversation a member opened with support, redacted of secrets before it is served."
+    },
+    "apps/web/app/api/support/handoff/agent/presence/route.ts": {
+      "serves": "platform_only",
+      "reason": "Which support agents are online."
+    },
+    "apps/web/app/api/support/handoff/agent/queue/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The queue of members waiting for a human, each entry raised by the member in it."
+    },
+    "apps/web/app/api/support/tickets/[ticketId]/escalate/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "A ticket the member opened, escalated to the next severity."
+    }
+  }
+}

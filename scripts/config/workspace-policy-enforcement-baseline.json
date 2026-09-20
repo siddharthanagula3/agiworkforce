@@ -1,0 +1,22 @@
+{
+  "unenforced": {
+    "code:allowMcpServers": {
+      "reason": "A cloud Code session declares no MCP servers to the server: the harness inside the sandbox configures its own, so there is no server call to refuse. Enforcing it needs the session to carry its MCP servers.",
+      "enforceIn": "apps/web/lib/services/cloud-code-turn-transport.ts"
+    },
+    "code:allowedMcpServers": {
+      "reason": "A cloud Code session declares no MCP servers to the server: the harness inside the sandbox configures its own, so there is no server call to refuse. Enforcing it needs the session to carry its MCP servers.",
+      "enforceIn": "apps/web/lib/services/cloud-code-turn-transport.ts"
+    },
+    "code:sessionRetentionDays": {
+      "reason": "The code_sessions domain sweep reads its window from the domain policy alone and never takes the smaller Code value.",
+      "enforceIn": "apps/web/lib/services/domain-retention-service.ts"
+    }
+  },
+  "servedToClients": {
+    "feature:hooks": {
+      "reason": "Hooks run on the caller's own machine, so the server has no call to refuse; it publishes the switch and the CLI and desktop honour it.",
+      "servedBy": "apps/web/app/api/settings/organization/policy/effective/route.ts"
+    }
+  }
+}

@@ -12,11 +12,14 @@ import {
   assertSupportAccess,
   expireStaleSupportAccessGrants,
   findLiveSupportAccessGrant,
+  findLiveSupportAccessGrants,
   listSupportAccessEvents,
+  readOperatorContentUnderGrants,
   requestSupportAccess,
   revokeSupportAccess,
   verifySupportAccessTrail,
   withSupportAccess,
+  type SupportAccessScope,
   type SupportAccessStatus,
 } from './support-access-service';
 
@@ -140,6 +143,17 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
         (row) => row.status === 'approved' && Date.parse(row.expires_at ?? '') <= clock,
       ) as never[];
     }
+    if (sql.includes('organization_id = any ($3::uuid[])')) {
+      const wanted = params[2] as string[];
+      return grants.filter(
+        (row) =>
+          wanted.includes(row.organization_id) &&
+          row.requested_by_user_id === params[0] &&
+          row.status === 'approved' &&
+          Date.parse(row.expires_at ?? '') > clock &&
+          row.scopes.includes(params[1] as string),
+      ) as never[];
+    }
     if (sql.includes('and $3 = any (scopes)')) {
       return grants.filter(
         (row) =>
@@ -204,7 +218,10 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
   };
 }
 
-async function approvedGrant(h: ReturnType<typeof harness>, scopes = ['conversations' as const]) {
+async function approvedGrant(
+  h: ReturnType<typeof harness>,
+  scopes: SupportAccessScope[] = ['conversations'],
+) {
   const requested = await requestSupportAccess({
     db: h.db,
     organizationId: ORG,
@@ -491,5 +508,117 @@ describe('the trail cannot be quietly rewritten', () => {
       intact: false,
       reason: 'an entry names a predecessor that is not the entry before it',
     });
+  });
+});
+
+const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
+
+interface OperatorRow {
+  id: string;
+  organizationId: string | null;
+  payload: Record<string, unknown>;
+}
+
+function rows(): OperatorRow[] {
+  return [
+    { id: 'a', organizationId: ORG, payload: { body: 'tenant words' } },
+    { id: 'b', organizationId: OTHER_ORG, payload: { body: 'other tenant words' } },
+    { id: 'c', organizationId: null, payload: { body: 'no workspace at all' } },
+  ];
+}
+
+function listing(h: ReturnType<typeof harness>) {
+  return readOperatorContentUnderGrants<OperatorRow>({
+    db: h.db,
+    actorUserId: REQUESTER,
+    scope: 'conversations',
+    resourceType: 'operator_listing',
+    records: rows(),
+    organizationIdOf: (row) => row.organizationId,
+    withoutContent: (row) => ({ ...row, payload: {} }),
+  });
+}
+
+describe('an operator listing that spans workspaces', () => {
+  it('serves content only for the workspace a live grant covers', async () => {
+    const h = harness();
+    await approvedGrant(h);
+
+    const view = await listing(h);
+
+    expect(view.records[0]?.payload).toEqual({ body: 'tenant words' });
+    expect(view.records[1]?.payload).toEqual({});
+    expect(view.records[2]?.payload).toEqual({});
+    expect(view.grantedOrganizationIds).toEqual([ORG]);
+    expect(view.redactedCount).toBe(2);
+  });
+
+  it('serves nothing when the operator holds no grant anywhere', async () => {
+    const h = harness();
+
+    const view = await listing(h);
+
+    expect(view.records.every((row) => Object.keys(row.payload).length === 0)).toBe(true);
+    expect(view.grantedOrganizationIds).toEqual([]);
+    expect(view.redactedCount).toBe(3);
+  });
+
+  it('stops serving content on the next listing once the grant is revoked', async () => {
+    const h = harness();
+    const grant = await approvedGrant(h);
+    await expect(listing(h)).resolves.toMatchObject({ redactedCount: 2 });
+
+    await revokeSupportAccess({ db: h.db, grantId: grant.id, actorUserId: APPROVER });
+
+    await expect(listing(h)).resolves.toMatchObject({ redactedCount: 3 });
+  });
+
+  it('stops serving content on the next listing once the grant has expired', async () => {
+    const h = harness();
+    await approvedGrant(h);
+    await expect(listing(h)).resolves.toMatchObject({ redactedCount: 2 });
+
+    h.advance(61 * 60_000);
+
+    await expect(listing(h)).resolves.toMatchObject({ redactedCount: 3 });
+  });
+
+  it('serves nothing when the grant names a different scope', async () => {
+    const h = harness();
+    await approvedGrant(h, ['billing']);
+
+    await expect(listing(h)).resolves.toMatchObject({ redactedCount: 3 });
+  });
+
+  it('appends one accessed entry naming the grant and the rows it served', async () => {
+    const h = harness();
+    const grant = await approvedGrant(h);
+
+    await listing(h);
+
+    const accessed = h.events.filter((event) => event.event === 'accessed');
+    expect(accessed).toHaveLength(1);
+    expect(accessed[0]).toMatchObject({
+      grant_id: grant.id,
+      organization_id: ORG,
+      actor_user_id: REQUESTER,
+      resource_type: 'operator_listing',
+      row_count: 1,
+    });
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+  });
+
+  it('asks the database once for every workspace on the page', async () => {
+    const h = harness();
+    await approvedGrant(h);
+
+    const grants = await findLiveSupportAccessGrants({
+      db: h.db,
+      actorUserId: REQUESTER,
+      scope: 'conversations',
+      organizationIds: [ORG, OTHER_ORG, ORG],
+    });
+
+    expect([...grants.keys()]).toEqual([ORG]);
   });
 });
