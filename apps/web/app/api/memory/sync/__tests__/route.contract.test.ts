@@ -93,9 +93,11 @@ describe('POST /api/memory/sync { memories }, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('push ack parses against MemorySyncPushResponseSchema', async () => {
-    mockQuery.mockResolvedValue([
-      { kind: 'applied', id: MEM_ID, server_version: '9', current: null },
-    ]);
+    mockQuery.mockImplementation(async (sql: unknown) =>
+      String(sql).includes("settings -> 'capabilities'")
+        ? [{ capabilities: { memory: true } }]
+        : [{ kind: 'applied', id: MEM_ID, server_version: '9', current: null }],
+    );
 
     const res = await POST(
       new Request('http://localhost:3000/api/memory/sync', {

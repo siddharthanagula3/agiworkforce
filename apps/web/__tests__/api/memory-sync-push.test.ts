@@ -10,17 +10,21 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => undefined) })
 
 import { GET, POST } from '@/app/api/memory/sync/route';
 import { NextRequest } from 'next/server';
+import { answerMemoryPolicyQuery } from '@/lib/services/__tests__/memory-policy-stub';
 
 beforeEach(() => {
   queryMock.mockReset();
-  queryMock.mockResolvedValue([
-    {
-      kind: 'applied',
-      id: '0190a000-0000-7000-8000-000000000abc',
-      server_version: '7',
-      current: null,
-    },
-  ]);
+  queryMock.mockImplementation(
+    async (sql: unknown) =>
+      answerMemoryPolicyQuery(sql) ?? [
+        {
+          kind: 'applied',
+          id: '0190a000-0000-7000-8000-000000000abc',
+          server_version: '7',
+          current: null,
+        },
+      ],
+  );
 });
 
 function postReq(body: unknown | undefined) {
