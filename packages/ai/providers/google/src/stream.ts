@@ -140,18 +140,25 @@ function isGeminiStreamChunk(value: unknown): value is GeminiStreamChunk {
   return true;
 }
 
+// Recognised by identity in the translator below, which is the only consumer.
 const PARSE_ERROR_SENTINEL = {
-  candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [] } }],
+  candidates: [{ content: { role: 'model', parts: [] } }],
 } as unknown as GeminiStreamChunk;
 
+const STREAM_PARSE_ERROR_CODE = 'stream_parse_error';
+const STREAM_PARSE_ERROR_MESSAGE = 'The response stream carried a frame that could not be read.';
+
+// A tool call only decides the reason when the vendor closed the turn plainly.
+// A turn cut off for safety or length is truncated, whatever it called first.
 function mapFinishReason(
   reason: string | undefined,
   hasToolCall: boolean,
 ): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel' {
-  if (hasToolCall) return 'tool_use';
   switch (reason) {
+    case undefined:
+      return hasToolCall ? 'tool_use' : 'error';
     case 'STOP':
-      return 'end_turn';
+      return hasToolCall ? 'tool_use' : 'end_turn';
     case 'MAX_TOKENS':
       return 'max_tokens';
     case 'SAFETY':
@@ -246,8 +253,13 @@ export async function* translateGeminiStream(
   }> = [];
   const citationSpans = new Map<string, GeminiGroundingCitationSpan>();
   let answerText = '';
+  let parseFailed = false;
 
   for await (const chunk of chunks) {
+    if (chunk === PARSE_ERROR_SENTINEL) {
+      parseFailed = true;
+      continue;
+    }
     if (chunk.usageMetadata) {
       lastUsage = chunk.usageMetadata;
     }
@@ -363,6 +375,15 @@ export async function* translateGeminiStream(
     }
   }
 
+  if (parseFailed) {
+    yield {
+      type: 'error',
+      message: STREAM_PARSE_ERROR_MESSAGE,
+      code: STREAM_PARSE_ERROR_CODE,
+      retryable: true,
+    };
+  }
+
   if (lastUsage) {
     const usageChunk: StreamChunk = {
       type: 'usage',
@@ -385,7 +406,7 @@ export async function* translateGeminiStream(
   const effectiveFinish = lastFinish ?? blockReason;
   yield {
     type: 'stop',
-    reason: mapFinishReason(effectiveFinish, turnHadToolCall),
+    reason: parseFailed ? 'error' : mapFinishReason(effectiveFinish, turnHadToolCall),
     ...(effectiveFinish !== undefined ? { providerFinishReason: effectiveFinish } : {}),
   };
 }
