@@ -7,6 +7,10 @@ use super::common::describe_command;
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
+mod operations;
+
+pub(super) use operations::execute_git_tool;
+
 async fn worktree_approval_denial(
     tool_name: &str,
     prompt: &str,

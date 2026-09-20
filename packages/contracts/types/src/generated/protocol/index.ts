@@ -296,6 +296,8 @@ export * from './StreamErrorEvent';
 export * from './TerminalInteractionEvent';
 export * from './TextElement';
 export * from './ThreadForkParams';
+export * from './ThreadHandoffAcceptParams';
+export * from './ThreadHandoffParams';
 export * from './ThreadId';
 export * from './ThreadIdParams';
 export * from './ThreadListParams';

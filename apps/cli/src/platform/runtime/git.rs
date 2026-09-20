@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use agiworkforce_protocol::code_domain::{
-    CodeCapability, CodePermissionProfile, PermissionDecision, RepositoryId, RepositoryPolicy,
-    RepositorySnapshot,
+    ChangeKind, CodeCapability, CodePermissionProfile, PermissionDecision, RepositoryId,
+    RepositoryPolicy, RepositorySnapshot,
 };
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
@@ -57,6 +57,48 @@ pub enum StashOperation {
     Drop {
         index: usize,
     },
+}
+
+/// How far back a reset reaches. Only `Hard` touches the working tree, and it
+/// is the only one that can lose an edit git never recorded.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ResetMode {
+    Soft,
+    #[default]
+    Mixed,
+    Hard,
+}
+
+impl ResetMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Soft => "soft",
+            Self::Mixed => "mixed",
+            Self::Hard => "hard",
+        }
+    }
+
+    pub fn parse(value: &str) -> Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "soft" => Ok(Self::Soft),
+            "" | "mixed" => Ok(Self::Mixed),
+            "hard" => Ok(Self::Hard),
+            other => bail!("git reset mode must be soft, mixed or hard, not {other:?}"),
+        }
+    }
+
+    fn flag(self) -> &'static str {
+        match self {
+            Self::Soft => "--soft",
+            Self::Mixed => "--mixed",
+            Self::Hard => "--hard",
+        }
+    }
+
+    /// Whether the working tree is overwritten, losing anything uncommitted.
+    pub fn discards_working_tree(self) -> bool {
+        self == Self::Hard
+    }
 }
 
 /// Everything this API can do, as values rather than command strings.
@@ -124,6 +166,23 @@ pub enum GitOperation {
         branch: String,
         exclude: Vec<String>,
     },
+    /// Move the current branch to `rev`. `Hard` also overwrites the working
+    /// tree, which is why it is a mode rather than a flag on some other call.
+    Reset {
+        mode: ResetMode,
+        rev: String,
+    },
+    /// Delete files git is not tracking. Nothing here is recoverable from the
+    /// repository, so `ignored` is separate: it reaches build output and
+    /// local environment files a `.gitignore` deliberately hides.
+    Clean {
+        directories: bool,
+        ignored: bool,
+    },
+    BranchDelete {
+        name: String,
+        force: bool,
+    },
 }
 
 /// Whether a push may move a remote branch to a commit that is not a
@@ -158,6 +217,22 @@ impl GitOperation {
             Self::Pull { .. } => "pull",
             Self::Push { .. } => "push",
             Self::RevList { .. } => "rev-list",
+            Self::Reset { .. } => "reset",
+            Self::Clean { .. } => "clean",
+            Self::BranchDelete { .. } => "branch delete",
+        }
+    }
+
+    /// An operation that throws work away with nothing in the repository left
+    /// to recover it from. These never run on an implied approval.
+    pub fn is_destructive(&self) -> bool {
+        match self {
+            Self::Reset { mode, .. } => mode.discards_working_tree(),
+            Self::Clean { .. }
+            | Self::BranchDelete { .. }
+            | Self::Stash(StashOperation::Drop { .. }) => true,
+            Self::Push { force, .. } => *force == PushForce::WithLease,
+            _ => false,
         }
     }
 
@@ -207,6 +282,11 @@ impl GitOperation {
                 capabilities.push(CodeCapability::GitHistoryRewrite);
             }
             Self::Pull { .. } => capabilities.push(CodeCapability::FileWrite),
+            Self::Clean { .. } => capabilities.push(CodeCapability::FileWrite),
+            Self::Reset { .. } | Self::BranchDelete { .. } => {
+                capabilities.push(CodeCapability::FileWrite);
+                capabilities.push(CodeCapability::GitHistoryRewrite);
+            }
             Self::Push { force, .. } => {
                 capabilities.push(CodeCapability::GitPush);
                 if *force == PushForce::WithLease {
@@ -378,6 +458,27 @@ impl GitOperation {
                 }
                 argv
             }
+            Self::Reset { mode, rev } => {
+                vec!["reset".into(), mode.flag().into(), checked_ref(rev, "rev")?]
+            }
+            Self::Clean {
+                directories,
+                ignored,
+            } => {
+                let mut argv = vec!["clean".into(), "--force".into()];
+                if *directories {
+                    argv.push("-d".into());
+                }
+                if *ignored {
+                    argv.push("-x".into());
+                }
+                argv
+            }
+            Self::BranchDelete { name, force } => vec![
+                "branch".into(),
+                if *force { "-D" } else { "--delete" }.into(),
+                checked_ref(name, "branch")?,
+            ],
         };
         Ok(argv)
     }
@@ -638,6 +739,7 @@ pub enum PushReason {
     BranchMoved { planned: String, head: String },
     NothingToPush,
     ConsentNotForThisPush,
+    NotApproved,
 }
 
 impl PushReason {
@@ -664,6 +766,7 @@ impl PushReason {
             Self::ConsentNotForThisPush => {
                 "the approval on record was given for a different push".to_string()
             }
+            Self::NotApproved => "nobody has approved this push".to_string(),
         }
     }
 
@@ -1149,14 +1252,6 @@ impl GitApi {
         if let Some(reason) = plan.blocked_by() {
             bail!("refusing to push: {}", reason.label());
         }
-        if let Some(consent) = plan.consent() {
-            if !consent.covers(plan) {
-                bail!(
-                    "refusing to push: {}",
-                    PushReason::ConsentNotForThisPush.label()
-                );
-            }
-        }
         let mut denied = Vec::new();
         let mut ungranted = Vec::new();
         for capability in plan.capabilities() {
@@ -1172,18 +1267,29 @@ impl GitApi {
                 denied.join(", ")
             );
         }
-        if !plan.is_approved() {
-            let mut pending: Vec<String> = plan
-                .approvals()
-                .iter()
-                .map(|reason| reason.label())
-                .collect();
-            pending.extend(
-                ungranted
+        // Consent is not optional. A plan nobody had to approve is still a plan
+        // nobody did approve, so the absence of a reason to ask is not a reason
+        // to go ahead.
+        match plan.consent() {
+            Some(consent) if !consent.covers(plan) => bail!(
+                "refusing to push: {}",
+                PushReason::ConsentNotForThisPush.label()
+            ),
+            Some(_) => {}
+            None => {
+                let mut pending: Vec<String> = plan
+                    .approvals()
                     .iter()
-                    .map(|label| format!("permission to {label} has not been granted")),
-            );
-            if !pending.is_empty() {
+                    .map(|reason| reason.label())
+                    .collect();
+                pending.extend(
+                    ungranted
+                        .iter()
+                        .map(|label| format!("permission to {label} has not been granted")),
+                );
+                if pending.is_empty() {
+                    pending.push(PushReason::NotApproved.label());
+                }
                 bail!("refusing to push: {}", pending.join("; "));
             }
         }
@@ -1216,6 +1322,86 @@ impl GitApi {
             branch: plan.branch.clone(),
             head: plan.head.clone(),
             commits: plan.commits.clone(),
+        })
+    }
+
+    /// Move the current branch to `rev`. A hard reset overwrites the working
+    /// tree, so the caller names what goes with it first: [`Self::discarded_by`]
+    /// is the same read the approval prompt is built from.
+    pub async fn reset(&self, mode: ResetMode, rev: &str) -> Result<String> {
+        self.run_checked(GitOperation::Reset {
+            mode,
+            rev: rev.to_string(),
+        })
+        .await?;
+        Ok(self.rev_parse("HEAD").await?.commit)
+    }
+
+    pub async fn clean(&self, directories: bool, ignored: bool) -> Result<Vec<PathBuf>> {
+        let removing = self
+            .discarded_by(&GitOperation::Clean {
+                directories,
+                ignored,
+            })
+            .await
+            .unwrap_or_default();
+        self.run_checked(GitOperation::Clean {
+            directories,
+            ignored,
+        })
+        .await?;
+        Ok(removing)
+    }
+
+    /// Delete a branch. The repository's own policy decides first: a protected
+    /// or default branch is refused here rather than offered for approval.
+    pub async fn branch_delete(
+        &self,
+        name: &str,
+        force: bool,
+        policy: &RepositoryPolicy,
+    ) -> Result<BranchRef> {
+        if policy.is_protected(name) {
+            bail!(
+                "refusing to delete {name}: {}",
+                PushReason::ProtectedBranch.label()
+            );
+        }
+        if self.current_branch().await?.as_deref() == Some(name) {
+            bail!("refusing to delete {name}: it is the branch this checkout is on");
+        }
+        let commit = self.rev_parse(name).await?.commit;
+        self.run_checked(GitOperation::BranchDelete {
+            name: name.to_string(),
+            force,
+        })
+        .await?;
+        Ok(BranchRef {
+            name: name.to_string(),
+            is_current: false,
+            is_remote: false,
+            commit,
+            upstream: None,
+        })
+    }
+
+    /// The paths `operation` would throw away, so a prompt can name them
+    /// instead of asking the user to imagine them. An operation that discards
+    /// nothing returns an empty list.
+    pub async fn discarded_by(&self, operation: &GitOperation) -> Result<Vec<PathBuf>> {
+        let snapshot = self.status(RepositoryId::new("workspace")).await?;
+        let paths = |tracked: bool| {
+            snapshot
+                .changes
+                .iter()
+                .filter(move |change| (change.kind == ChangeKind::Untracked) != tracked)
+                .map(|change| change.path.clone())
+                .collect::<Vec<_>>()
+        };
+        Ok(match operation {
+            GitOperation::Reset { mode, .. } if mode.discards_working_tree() => paths(true),
+            GitOperation::Clean { .. } => paths(false),
+            _ => Vec::new(),
         })
     }
 
@@ -1573,6 +1759,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_operation_that_discards_work_names_what_it_would_take_first() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        let git = GitApi::at(dir.path());
+        std::fs::write(dir.path().join("README.md"), "edited\n").unwrap();
+        std::fs::write(dir.path().join("staged.rs"), "the user staged this\n").unwrap();
+        git.stage(&[PathBuf::from("staged.rs")])
+            .await
+            .expect("stage");
+        std::fs::write(dir.path().join("scratch.txt"), "untracked\n").unwrap();
+
+        let hard = GitOperation::Reset {
+            mode: ResetMode::Hard,
+            rev: "HEAD".into(),
+        };
+        assert_eq!(
+            git.discarded_by(&hard).await.unwrap(),
+            vec![PathBuf::from("README.md"), PathBuf::from("staged.rs")],
+            "a hard reset takes the tracked edit and the staged one, not the untracked file"
+        );
+        let cleaning = GitOperation::Clean {
+            directories: true,
+            ignored: false,
+        };
+        assert_eq!(
+            git.discarded_by(&cleaning).await.unwrap(),
+            vec![PathBuf::from("scratch.txt")]
+        );
+        assert!(
+            git.discarded_by(&GitOperation::Reset {
+                mode: ResetMode::Soft,
+                rev: "HEAD".into(),
+            })
+            .await
+            .unwrap()
+            .is_empty(),
+            "only a hard reset reaches the working tree"
+        );
+
+        git.reset(ResetMode::Hard, "HEAD").await.expect("reset");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("README.md")).unwrap(),
+            "hello\n"
+        );
+        assert_eq!(
+            git.clean(true, false).await.expect("clean"),
+            vec![PathBuf::from("scratch.txt")]
+        );
+        assert!(!dir.path().join("scratch.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn a_branch_delete_refuses_the_policys_branch_and_the_one_checked_out() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        let git = GitApi::at(dir.path());
+        git.branch_create("feature", None).await.expect("branch");
+
+        let guarded = RepositoryPolicy {
+            default_branch: Some("main".into()),
+            protected_branches: vec!["feature".into()],
+            ..RepositoryPolicy::default()
+        };
+        assert!(git
+            .branch_delete("feature", true, &guarded)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("protected"));
+        assert!(git
+            .branch_delete("main", true, &RepositoryPolicy::default())
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("checkout is on"));
+
+        let deleted = git
+            .branch_delete("feature", true, &RepositoryPolicy::default())
+            .await
+            .expect("delete");
+        assert_eq!(deleted.name, "feature");
+        assert!(!git
+            .branches(false)
+            .await
+            .unwrap()
+            .iter()
+            .any(|branch| branch.name == "feature"));
+    }
+
+    #[tokio::test]
     async fn the_users_own_edits_are_named_before_anything_overwrites_them() {
         let dir = tempfile::tempdir().unwrap();
         init_repo(dir.path());
@@ -1888,6 +2164,49 @@ mod tests {
             unapproved.to_string().contains("refusing to push"),
             "{unapproved}"
         );
+    }
+
+    /// A push nobody had to approve is still a push nobody did approve. Every
+    /// reason to ask can be absent and the consent is still required.
+    #[tokio::test]
+    async fn a_plan_with_nothing_to_approve_still_does_not_push_without_consent() {
+        use agiworkforce_protocol::code_domain::CodeCapabilities;
+
+        let mut granted = CodePermissionProfile::full_access();
+        granted.capabilities = CodeCapabilities::uniform(PermissionDecision::Allow);
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+        git_run(
+            &work,
+            &["push", "-q", "--set-upstream", "origin", "feature"],
+        );
+        std::fs::write(work.join("feature.txt"), "more\n").unwrap();
+        git_run(&work, &["add", "feature.txt"]);
+        git_run(&work, &["commit", "-q", "-m", "follow-up"]);
+
+        let plan = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        assert!(
+            !plan.needs_approval(),
+            "this plan is the one with no reason to ask: {:?}",
+            plan.reasons
+        );
+
+        let refused = git
+            .push(&plan, &granted)
+            .await
+            .expect_err("consent is not optional");
+        assert!(
+            refused.to_string().contains("nobody has approved"),
+            "{refused}"
+        );
+
+        let consent = consent_for(&plan).await;
+        git.push(&plan.approved(consent), &granted)
+            .await
+            .expect("the same push runs once the user has allowed it");
     }
 
     #[tokio::test]

@@ -54,6 +54,8 @@ pub mod method {
     pub const THREAD_READ: &str = "thread/read";
     pub const THREAD_RESUME: &str = "thread/resume";
     pub const THREAD_FORK: &str = "thread/fork";
+    pub const THREAD_HANDOFF: &str = "thread/handoff";
+    pub const THREAD_HANDOFF_ACCEPT: &str = "thread/handoff/accept";
     pub const THREAD_ARCHIVE: &str = "thread/archive";
     pub const THREAD_DELETE: &str = "thread/delete";
     pub const THREAD_RECONNECT: &str = "thread/reconnect";
@@ -751,6 +753,26 @@ pub struct LocalModelListResponse {
 #[ts(rename_all = "camelCase")]
 pub struct ThreadIdParams {
     pub thread_id: String,
+}
+
+/// Ask a thread for the record another surface needs to carry it on.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadHandoffParams {
+    pub thread_id: String,
+    /// Where the work is going. The record is addressed to it, and a surface
+    /// that is not it refuses the handoff rather than taking someone else's.
+    pub to_environment: HandoffEnvironment,
+}
+
+/// Offer a handoff to this surface. The answer is an admission or a refusal;
+/// neither one inherits a decision the origin was still waiting on.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadHandoffAcceptParams {
+    pub handoff: DeveloperSessionHandoff,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
