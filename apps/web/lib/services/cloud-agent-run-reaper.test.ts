@@ -6,7 +6,16 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { listCanonicalModels } from '@agiworkforce/types';
 import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
 const appendEvents = vi.hoisted(() => vi.fn(async () => undefined));
-vi.mock('./cloud-agent-run-service', () => ({ appendCloudAgentEvents: appendEvents }));
+vi.mock('./cloud-agent-run-service', async () => {
+  const actual = await vi.importActual<typeof import('./cloud-agent-run-service')>(
+    './cloud-agent-run-service',
+  );
+  return {
+    EXECUTOR_HELD_TASK_STATES: actual.EXECUTOR_HELD_TASK_STATES,
+    HUMAN_HELD_TASK_STATES: actual.HUMAN_HELD_TASK_STATES,
+    appendCloudAgentEvents: appendEvents,
+  };
+});
 const cancelWorldRun = vi.hoisted(() => vi.fn(async (_workflowRunId: string) => undefined));
 const inFlight = vi.hoisted(() => ({ now: 0, peak: 0 }));
 vi.mock('workflow/api', () => ({
@@ -30,6 +39,7 @@ import {
   CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS,
   reapOrphanedCloudAgentRuns,
 } from './cloud-agent-run-reaper';
+import { EXECUTOR_HELD_TASK_STATES, HUMAN_HELD_TASK_STATES } from './cloud-agent-run-service';
 
 function database(): DatabaseAdapter {
   return {
@@ -93,9 +103,21 @@ describe('reaping a run whose invocation is gone', () => {
 
     expect(report).toMatchObject({ reaped: 1, stoppedByUser: 0, remaining: false });
     const [sql, params] = vi.mocked(db.query).mock.calls[0] as [string, unknown[]];
-    expect(sql).toMatch(/state in \('queued', 'running'\)/);
+    expect(sql).toMatch(/state = any\(\$3::text\[\]\)/);
     expect(sql).toMatch(/updated_at < now\(\) - make_interval/);
     expect(params[0]).toBe(CLOUD_AGENT_ORPHANED_RUN_AGE_SECONDS);
+    expect(params[2]).toEqual([...EXECUTOR_HELD_TASK_STATES]);
+  });
+
+  it('sweeps every state a worker holds, so a state added later cannot be missed', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([]);
+
+    await reapOrphanedCloudAgentRuns(db);
+
+    const [, params] = vi.mocked(db.query).mock.calls[0] as [string, unknown[]];
+    const swept = params[2] as string[];
+    for (const held of EXECUTOR_HELD_TASK_STATES) expect(swept).toContain(held);
+    expect(swept).toHaveLength(EXECUTOR_HELD_TASK_STATES.length);
   });
 
   it('leaves a run parked on a person alone', async () => {
@@ -103,8 +125,10 @@ describe('reaping a run whose invocation is gone', () => {
 
     await reapOrphanedCloudAgentRuns(db);
 
-    const [sql] = vi.mocked(db.query).mock.calls[0] as [string];
-    for (const parked of ['awaiting_input', 'ready_for_review', 'paused']) {
+    const [sql, params] = vi.mocked(db.query).mock.calls[0] as [string, unknown[]];
+    const swept = params[2] as string[];
+    for (const parked of [...HUMAN_HELD_TASK_STATES, 'ready_for_review']) {
+      expect(swept).not.toContain(parked);
       expect(sql).not.toContain(parked);
     }
   });

@@ -5,19 +5,29 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { NextRequest } from 'next/server';
 
+vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(() => null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
-vi.mock('@/lib/services/cloud-agent-run-service', () => ({
-  CloudAgentRunNotFoundError: class CloudAgentRunNotFoundError extends Error {},
-  cancelPausedCloudAgentRun: vi.fn(),
-  getCloudAgentRun: vi.fn(),
-  requestCloudAgentRunCancellation: vi.fn(),
-}));
+vi.mock('@/lib/services/cloud-agent-run-service', async () => {
+  const { HUMAN_HELD_TASK_STATES } = await vi.importActual<
+    typeof import('@/lib/services/cloud-agent-run-service')
+  >('@/lib/services/cloud-agent-run-service');
+  return {
+    CloudAgentRunNotFoundError: class CloudAgentRunNotFoundError extends Error {},
+    HUMAN_HELD_TASK_STATES,
+    cancelHumanHeldCloudAgentRun: vi.fn(),
+    getCloudAgentRun: vi.fn(),
+    isCloudAgentRunHumanHeld: (state: string) =>
+      (HUMAN_HELD_TASK_STATES as readonly string[]).includes(state),
+    requestCloudAgentRunCancellation: vi.fn(),
+  };
+});
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  cancelPausedCloudAgentRun,
+  HUMAN_HELD_TASK_STATES,
+  cancelHumanHeldCloudAgentRun,
   getCloudAgentRun,
   requestCloudAgentRunCancellation,
 } from '@/lib/services/cloud-agent-run-service';
@@ -154,35 +164,39 @@ describe('/api/llm/v1/chat/completions/runs/[runId]', () => {
         cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
       },
     });
-    expect(cancelPausedCloudAgentRun).not.toHaveBeenCalled();
+    expect(cancelHumanHeldCloudAgentRun).not.toHaveBeenCalled();
   });
 
-  it('ends a paused run at once, since no executor is left to read the request', async () => {
-    vi.mocked(requestCloudAgentRunCancellation).mockResolvedValue({
-      ...run,
-      state: 'paused',
-      workState: 'paused',
-      cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
-    } as never);
-    vi.mocked(cancelPausedCloudAgentRun).mockResolvedValue({
-      ...run,
-      state: 'cancelled',
-      workState: 'cancelled',
-      cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
-    } as never);
+  it('ends a run parked on a person at once, for every state that parks one', async () => {
+    for (const parked of HUMAN_HELD_TASK_STATES) {
+      vi.clearAllMocks();
+      vi.mocked(getUserScopedDb).mockResolvedValue({ db, userId: 'user-1' } as never);
+      vi.mocked(requestCloudAgentRunCancellation).mockResolvedValue({
+        ...run,
+        state: 'awaiting_input',
+        workState: parked,
+        cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
+      } as never);
+      vi.mocked(cancelHumanHeldCloudAgentRun).mockResolvedValue({
+        ...run,
+        state: 'cancelled',
+        workState: 'cancelled',
+        cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
+      } as never);
 
-    const response = await POST(
-      new NextRequest(`http://localhost/api/llm/v1/chat/completions/runs/${run.id}`, {
-        method: 'POST',
-      }),
-      context,
-    );
+      const response = await POST(
+        new NextRequest(`http://localhost/api/llm/v1/chat/completions/runs/${run.id}`, {
+          method: 'POST',
+        }),
+        context,
+      );
 
-    expect(response.status).toBe(202);
-    expect(cancelPausedCloudAgentRun).toHaveBeenCalledWith(db, {
-      userId: 'user-1',
-      runId: run.id,
-    });
-    await expect(response.json()).resolves.toMatchObject({ run: { state: 'cancelled' } });
+      expect(response.status).toBe(202);
+      expect(cancelHumanHeldCloudAgentRun).toHaveBeenCalledWith(db, {
+        userId: 'user-1',
+        runId: run.id,
+      });
+      await expect(response.json()).resolves.toMatchObject({ run: { state: 'cancelled' } });
+    }
   });
 });
