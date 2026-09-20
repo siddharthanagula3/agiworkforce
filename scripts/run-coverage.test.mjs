@@ -130,11 +130,26 @@ test('only the isolated main-push uploader receives OIDC permission', () => {
   const job = workflow.jobs['upload-coverage'];
   assert.equal(job.needs, 'test-l1');
   assert.ok(job.if.includes("github.event_name == 'push'"));
+  assert.ok(job.if.includes("needs.test-l1.result == 'success'"));
+  assert.ok(job.if.includes("vars.CODECOV_ENABLED == 'true'"));
   assert.deepEqual(job.permissions, { contents: 'read', 'id-token': 'write' });
   assert.ok(job.steps.every((step) => !step.run));
   const upload = job.steps.find((step) => step.name === 'Upload Coverage to Codecov');
   assert.equal(upload.with.use_oidc, true);
   assert.equal(upload.with.fail_ci_if_error, true);
+});
+
+test('an unconfigured Codecov account is reported without weakening coverage validation', () => {
+  const workflow = parse(
+    fs.readFileSync(new URL('../.github/workflows/test-l1.yml', import.meta.url), 'utf8'),
+  );
+  const status = workflow.jobs['coverage-publication-status'];
+  assert.equal(status.needs, 'test-l1');
+  assert.ok(status.if.includes("github.event_name == 'push'"));
+  assert.equal(status.steps.length, 1);
+  assert.equal(status.steps[0].env.CODECOV_ENABLED, '${{ vars.CODECOV_ENABLED }}');
+  assert.match(status.steps[0].run, /Coverage tests, the repository floor/);
+  assert.match(status.steps[0].run, /CODECOV_ENABLED/);
 });
 
 test('coverage provisions Chromium before running browser-backed tests', () => {
