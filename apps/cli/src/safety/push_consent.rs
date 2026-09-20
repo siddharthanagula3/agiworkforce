@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use crate::platform::runtime::git::{PushForce, PushPlan};
 use crate::tui::approval_broker::ApprovalDecision;
 
+const SHORT_COMMIT_CHARS: usize = 12;
+
 /// What the user is shown before a push runs. Only [`request_push_consent`]
 /// builds one, so an approver answers about a plan it did not describe itself.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +23,15 @@ pub struct PushApprovalPrompt {
 
 impl PushApprovalPrompt {
     fn for_plan(plan: &PushPlan) -> Self {
+        let mut detail: Vec<String> = plan
+            .commits
+            .iter()
+            .map(|commit| {
+                let short: String = commit.commit.chars().take(SHORT_COMMIT_CHARS).collect();
+                format!("{short} {}", commit.subject)
+            })
+            .collect();
+        detail.extend(plan.approvals().into_iter().map(|reason| reason.label()));
         Self {
             remote: plan.remote.clone(),
             branch: plan.branch.clone(),
@@ -28,11 +39,7 @@ impl PushApprovalPrompt {
             commits: plan.commits.len(),
             force: plan.force,
             summary: plan.summary(),
-            detail: plan
-                .approvals()
-                .into_iter()
-                .map(|reason| reason.label())
-                .collect(),
+            detail,
         }
     }
 
@@ -61,7 +68,8 @@ impl PushApprovalPrompt {
         &self.summary
     }
 
-    /// Every reason this push needs a decision, in the order shown.
+    /// Every commit this push would send, then every reason it needs a
+    /// decision, in the order they are shown.
     pub fn detail(&self) -> &[String] {
         &self.detail
     }

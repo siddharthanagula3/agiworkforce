@@ -2027,12 +2027,19 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 40);
+        assert_eq!(defs.len(), 61);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs
             .iter()
             .any(|definition| definition.name == "resolve_conflict"));
+        assert_eq!(
+            defs.iter()
+                .filter(|definition| definition.name.starts_with("git_"))
+                .count(),
+            crate::runtime::git_tools::git_tool_specs().len(),
+            "every typed git operation is offered to the model"
+        );
     }
 
     #[test]

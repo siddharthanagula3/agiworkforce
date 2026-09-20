@@ -95,6 +95,7 @@ pub fn tool_capability(name: &str) -> AgentEventToolCategory {
     } else if normalized.contains("mcp") {
         AgentEventToolCategory::Mcp
     } else if [
+        "git_",
         "read",
         "write",
         "edit",
@@ -311,6 +312,9 @@ fn normalize_policy_alias(alias: &str) -> String {
 }
 
 fn tool_owner(name: &str) -> &'static str {
+    if name.starts_with("git_") {
+        return "cli-git";
+    }
     match name {
         "read_file" | "write_file" | "edit_file" | "multiedit" | "read_many_files"
         | "notebook_edit" => "cli-file-tools",
@@ -426,6 +430,12 @@ pub fn is_plan_mode_mutating_tool(tool_name: &str) -> bool {
 
 /// Build native API tool definitions with JSON Schema for each built-in tool.
 pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
+    let mut definitions = core_tool_definitions();
+    definitions.extend(git_tool_definitions());
+    definitions
+}
+
+fn core_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         def(
             "read_file",
@@ -912,6 +922,31 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
             }),
         ).with_size_cap(5_000).deferred(),
     ]
+}
+
+/// The typed Git API as tools, one per operation.
+///
+/// Every entry is built from `git_tools::git_tool_specs`, so a tool cannot
+/// exist with a permission class the operation it runs does not match. They are
+/// deferred: a session that never touches git pays nothing for them, and the
+/// model loads the one it needs through `tool_search`.
+pub fn git_tool_definitions() -> Vec<ToolDefinition> {
+    use super::git_tools::GitToolClass;
+
+    super::git_tools::git_tool_specs()
+        .iter()
+        .map(|spec| {
+            let definition = def(spec.name, spec.description, (spec.schema)());
+            let definition = match spec.class {
+                GitToolClass::Read => definition.read_only(),
+                _ => definition,
+            };
+            let mut definition = definition.deferred();
+            definition.permission_class = spec.class.label().to_string();
+            definition.diagnostic_tags = diagnostic_tags(spec.name, spec.class.label());
+            definition
+        })
+        .collect()
 }
 
 /// The user's own Chrome, driven through the desktop shell.
@@ -1523,6 +1558,12 @@ mod tests {
                 "lsp_completion",
                 "lsp_document_symbols",
                 "lsp_format",
+                "git_status",
+                "git_show",
+                "git_log",
+                "git_branches",
+                "git_worktrees",
+                "git_stash_list",
                 "send_message",
                 "team_task",
                 "read_messages",
@@ -1681,9 +1722,75 @@ mod tests {
             match tool.name.as_str() {
                 "update_plan" | "todo_write" => assert_eq!(tool.permission_class, "control"),
                 "ask_user" => assert_eq!(tool.permission_class, "interactive"),
+                name if super::super::git_tools::is_git_tool(name) => {
+                    let spec = super::super::git_tools::git_tool_spec(name).expect("git spec");
+                    assert_eq!(tool.permission_class, spec.class.label());
+                }
                 _ if tool.is_read_only => assert_eq!(tool.permission_class, "read_only"),
                 _ => assert_eq!(tool.permission_class, "mutating"),
             }
+        }
+    }
+
+    /// The catalog entry and the operation are one row, so a git tool cannot be
+    /// advertised with a class the executor does not enforce.
+    #[test]
+    fn every_typed_git_operation_is_offered_with_the_class_its_spec_declares() {
+        use super::super::git_tools::{git_tool_specs, GitToolClass};
+
+        let definitions = git_tool_definitions();
+        assert_eq!(definitions.len(), git_tool_specs().len());
+        for spec in git_tool_specs() {
+            let definition = definitions
+                .iter()
+                .find(|definition| definition.name == spec.name)
+                .unwrap_or_else(|| panic!("{} is missing from the catalog", spec.name));
+            assert_eq!(definition.permission_class, spec.class.label());
+            assert_eq!(definition.is_read_only, spec.class == GitToolClass::Read);
+            assert!(
+                definition.should_defer,
+                "{} must stay out of the initial schema list",
+                spec.name
+            );
+            assert_eq!(definition.owner, "cli-git");
+            assert!(definition.input_schema["properties"].is_object());
+        }
+
+        let offered: Vec<String> = all_builtin_tool_definitions()
+            .into_iter()
+            .map(|definition| definition.name)
+            .filter(|name| name.starts_with("git_"))
+            .collect();
+        assert_eq!(offered.len(), git_tool_specs().len());
+        assert!(offered.iter().any(|name| name == "git_push"));
+    }
+
+    /// A destructive git tool must never be one a permission mode can wave
+    /// through: it is neither read-only nor a file edit, which are the two
+    /// families `auto_approve_safe` and `acceptEdits` cover.
+    #[test]
+    fn no_git_tool_falls_into_a_pre_approved_family() {
+        use super::super::git_tools::{git_tool_specs, GitToolClass};
+
+        for spec in git_tool_specs() {
+            if spec.class == GitToolClass::Read {
+                continue;
+            }
+            assert!(
+                !is_file_edit_tool(spec.name),
+                "{} would be pre-approved under acceptEdits",
+                spec.name
+            );
+            let definition = git_tool_definitions()
+                .into_iter()
+                .find(|definition| definition.name == spec.name)
+                .expect("definition");
+            assert!(
+                !definition.is_read_only,
+                "{} would be pre-approved under auto-approve-safe",
+                spec.name
+            );
+            assert!(is_plan_mode_mutating_tool(spec.name));
         }
     }
 
@@ -1754,6 +1861,12 @@ mod tests {
             vec![
                 "advisor",
                 "cron_list",
+                "git_branches",
+                "git_log",
+                "git_show",
+                "git_stash_list",
+                "git_status",
+                "git_worktrees",
                 "glob",
                 "grep_files",
                 "list_directory",

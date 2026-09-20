@@ -63,6 +63,10 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread id graph");
     agiworkforce_protocol::developer_session::ThreadForkParams::export_all_to(dir)
         .expect("export developer-session thread fork graph");
+    agiworkforce_protocol::developer_session::ThreadHandoffParams::export_all_to(dir)
+        .expect("export developer-session handoff params graph");
+    agiworkforce_protocol::developer_session::ThreadHandoffAcceptParams::export_all_to(dir)
+        .expect("export developer-session handoff accept graph");
     agiworkforce_protocol::developer_session::TurnStartParams::export_all_to(dir)
         .expect("export developer-session turn graph");
     agiworkforce_protocol::developer_session::TurnSteerParams::export_all_to(dir)

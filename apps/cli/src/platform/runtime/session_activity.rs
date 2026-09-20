@@ -137,6 +137,14 @@ impl SessionActivity {
         workspace_root: Option<&Path>,
     ) {
         if let Some((command, kind)) = validation_target(args) {
+            // Read HEAD now rather than when the session opened: the agent
+            // commits mid-turn, and a check recorded against the commit it did
+            // not run on is worse than no record at all.
+            if let Some(root) = workspace_root {
+                if let Some(commit) = workspace_commit(root) {
+                    self.commit = Some(commit);
+                }
+            }
             self.record_validation(&command, kind, ManagedSessionValidationOutcome::Interrupted);
             self.pending_validations
                 .insert(call_id.to_string(), PendingValidation { command, kind });
@@ -271,6 +279,45 @@ impl SessionActivity {
     pub fn set_commit(&mut self, commit: Option<String>) {
         self.commit = commit;
     }
+}
+
+/// The commit the workspace is on, read from git's own files rather than a
+/// subprocess: this runs on the turn's event path, where a process spawn per
+/// check would be paid on every command the agent runs.
+pub fn workspace_commit(root: &Path) -> Option<String> {
+    let pointer = root.join(".git");
+    let git_dir = if pointer.is_file() {
+        let contents = std::fs::read_to_string(&pointer).ok()?;
+        let target = contents.trim().strip_prefix("gitdir:")?.trim();
+        let target = PathBuf::from(target);
+        if target.is_absolute() {
+            target
+        } else {
+            root.join(target)
+        }
+    } else {
+        pointer
+    };
+
+    let head = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
+    let head = head.trim();
+    let Some(reference) = head.strip_prefix("ref: ") else {
+        return (head.len() >= 40).then(|| head.to_string());
+    };
+    let loose = std::fs::read_to_string(git_dir.join(reference))
+        .ok()
+        .map(|commit| commit.trim().to_string())
+        .filter(|commit| !commit.is_empty());
+    loose.or_else(|| packed_commit(&git_dir, reference))
+}
+
+/// A ref git has packed away has no file of its own.
+fn packed_commit(git_dir: &Path, reference: &str) -> Option<String> {
+    let packed = std::fs::read_to_string(git_dir.join("packed-refs")).ok()?;
+    packed.lines().find_map(|line| {
+        let (commit, name) = line.split_once(' ')?;
+        (name.trim() == reference).then(|| commit.trim().to_string())
+    })
 }
 
 /// The command a tool call would run, when it is a check on the work.
@@ -477,6 +524,81 @@ mod tests {
             targets,
             vec![PathBuf::from("src/new.rs"), PathBuf::from("src/old.rs")]
         );
+    }
+
+    /// The agent commits mid-turn and then runs its checks. Reading HEAD when
+    /// the check starts is what keeps the record pointing at the code that was
+    /// actually tested.
+    #[test]
+    fn a_check_is_recorded_against_the_commit_the_workspace_was_on_when_it_started() {
+        let workspace = tempdir().expect("workspace");
+        let run = |args: &[&str]| {
+            std::process::Command::new("git")
+                .current_dir(workspace.path())
+                .args(args)
+                .output()
+                .expect("git available");
+        };
+        run(&["init", "-q", "-b", "main"]);
+        run(&["config", "user.email", "test@example.invalid"]);
+        run(&["config", "user.name", "Test"]);
+        std::fs::write(workspace.path().join("a.rs"), "first").unwrap();
+        run(&["add", "a.rs"]);
+        run(&["commit", "-q", "-m", "first"]);
+        let first = workspace_commit(workspace.path()).expect("a commit");
+        assert_eq!(first.len(), 40);
+
+        let mut activity = SessionActivity::default();
+        activity.tool_started(
+            "call-1",
+            "run_command",
+            &serde_json::json!({ "command": "cargo test -p agiworkforce-cli" }),
+            Some(workspace.path()),
+        );
+        activity.tool_finished("call-1", true);
+
+        std::fs::write(workspace.path().join("a.rs"), "second").unwrap();
+        run(&["commit", "-qam", "second"]);
+        let second = workspace_commit(workspace.path()).expect("a commit");
+        assert_ne!(first, second, "the workspace moved");
+
+        activity.tool_started(
+            "call-2",
+            "run_command",
+            &serde_json::json!({ "command": "cargo test -p agiworkforce-cli" }),
+            Some(workspace.path()),
+        );
+        activity.tool_finished("call-2", true);
+
+        let mut session = ManagedSession::new("checks", Utc::now());
+        activity.write_to(&mut session);
+        assert_eq!(session.validations.len(), 2);
+        assert_eq!(
+            session.validations[0].commit.as_deref(),
+            Some(first.as_str())
+        );
+        assert_eq!(
+            session.validations[1].commit.as_deref(),
+            Some(second.as_str()),
+            "the second check ran on the commit the first one did not"
+        );
+    }
+
+    #[test]
+    fn a_workspace_with_no_repository_records_no_commit() {
+        let workspace = tempdir().expect("workspace");
+        assert!(workspace_commit(workspace.path()).is_none());
+
+        let mut activity = SessionActivity::default();
+        activity.tool_started(
+            "call-1",
+            "run_command",
+            &serde_json::json!({ "command": "cargo test -p agiworkforce-cli" }),
+            Some(workspace.path()),
+        );
+        let mut session = ManagedSession::new("checks", Utc::now());
+        activity.write_to(&mut session);
+        assert!(session.validations[0].commit.is_none());
     }
 
     #[tokio::test]
