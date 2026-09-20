@@ -16,8 +16,37 @@ export type ActionId = string & { readonly [__brand]: 'ActionId' };
  */
 export const MESSAGE_KINDS = [
   'text',
+  /** Prose the sender marked up, which a plain-text client renders as its source. */
+  'markdown',
+  /** A source listing with a language, distinct from an artifact the reader can edit. */
+  'code',
   /** An image attachment or generated image. */
   'image',
+  /** A recording or a spoken reply, with a transcript for a client that cannot play it. */
+  'audio',
+  'video',
+  /** A file the sender attached, carried by reference rather than by value. */
+  'file',
+  /** A file this turn produced, addressable after the turn by its own id. */
+  'generated_file',
+  /** A reference to a source, which a client that cannot render it shows as a link. */
+  'citation',
+  /** A request for the reader to allow or refuse an action before it runs. */
+  'approval',
+  /** A failure the reader is meant to see, as opposed to one the transcript swallows. */
+  'error',
+  /** A place or a route, which degrades to its address rather than to an empty frame. */
+  'location',
+  /** A typed payload with a schema, for a reader that does something with it. */
+  'structured_data',
+  'table',
+  'chart',
+  /** A summary the model wrote of how it reached the answer, never the raw trace. */
+  'reasoning',
+  /** What the model did in a browser, kept separate from the tool call that drove it. */
+  'browser_action',
+  /** What the model did on the machine, kept separate from the tool call that drove it. */
+  'computer_action',
   /** A tool call request from the assistant. */
   'tool_call',
   /** A tool result returned to the assistant. */
@@ -166,6 +195,70 @@ export interface MessageBase {
 
   provider?: string;
 }
+
+export const TURN_COMPLETION_STATUSES = ['complete', 'truncated'] as const;
+
+export type TurnCompletionStatus = (typeof TURN_COMPLETION_STATUSES)[number];
+
+/** The routing decision a turn was admitted under, before any failover moved it. */
+export interface AssistantTurnRequestedRoute {
+  lane: string | null;
+  slot: string | null;
+  taskType: string | null;
+  planId: string | null;
+}
+
+/** The route that actually answered, which differs from the requested one after failover. */
+export interface AssistantTurnServedRoute {
+  provider: string;
+  harnessId: string | null;
+  usedFallback: boolean;
+  fallbackReason: string | null;
+  movedFromModel: string | null;
+  retries: number;
+}
+
+export interface AssistantTurnReasoningProfile {
+  thinking: boolean;
+  effort: string | null;
+  budgetTokens: number | null;
+}
+
+/**
+ * `observed` is what the turn's own loop reported; `evidenced` is what the
+ * persisted row can still prove ran once the loop is gone.
+ */
+export interface AssistantTurnToolInvocations {
+  offered: readonly string[];
+  observed: boolean;
+  evidenced: readonly string[];
+}
+
+/**
+ * How a persisted assistant turn was served. Every field is written on every
+ * turn, so a reader never has to tell absent from did not happen.
+ */
+export interface AssistantTurnAttribution {
+  completionStatus: TurnCompletionStatus;
+  requestedModel: string;
+  servedModel: string;
+  requestedRoute: AssistantTurnRequestedRoute;
+  servedRoute: AssistantTurnServedRoute;
+  reasoningProfile: AssistantTurnReasoningProfile;
+  toolInvocations: AssistantTurnToolInvocations;
+}
+
+export const ASSISTANT_TURN_ATTRIBUTION_KEYS = [
+  'completionStatus',
+  'requestedModel',
+  'servedModel',
+  'requestedRoute',
+  'servedRoute',
+  'reasoningProfile',
+  'toolInvocations',
+] as const satisfies readonly (keyof AssistantTurnAttribution)[];
+
+export type AssistantTurnAttributionKey = (typeof ASSISTANT_TURN_ATTRIBUTION_KEYS)[number];
 
 export interface ActionBase {
   id: ActionId;
