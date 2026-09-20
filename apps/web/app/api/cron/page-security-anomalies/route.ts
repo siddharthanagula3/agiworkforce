@@ -11,6 +11,7 @@ import {
 import { pageOnCall, type AlertSeverity } from '@/lib/server/incident/pager';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 function environmentLabel(): string {
   return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';

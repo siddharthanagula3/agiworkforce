@@ -14,6 +14,9 @@ import {
   type ProviderCostReportClient,
 } from './lib/provider-cost-reports';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
 const UPSERT_REPORTED_DAY = `insert into public.provider_cost_reconciliation_days
     (provider, day, reported_cost_microusd, source, fetched_at)
   values ($1, $2::date, $3, $4, now())

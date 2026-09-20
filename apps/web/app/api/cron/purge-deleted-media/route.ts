@@ -14,6 +14,7 @@ import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gat
 import { getObjectStore, objectStorageConfig } from '@/lib/server/object-storage-runtime';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const RECOVERY_WINDOW_DAYS = 30;
 

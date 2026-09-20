@@ -216,7 +216,9 @@ function apiHostRedirect(request: NextRequest): NextResponse | null {
     appHost,
   );
   if (!target) return null;
-  return NextResponse.redirect(target, 307);
+  const response = NextResponse.redirect(target, 307);
+  response.headers.set('Content-Security-Policy', buildCspWithNonce(btoa(crypto.randomUUID())));
+  return response;
 }
 
 export function buildApiHostRedirectTarget(
@@ -243,7 +245,18 @@ function euAccessBlock(request: NextRequest): NextResponse | null {
   const target = request.nextUrl.clone();
   target.pathname = UNAVAILABLE_PATH;
   target.search = '';
-  const response = NextResponse.rewrite(target, { status: 451 });
+  // This rewrite renders a page. Returning early past buildCspResponse left it
+  // as the one page the product serves with no Content-Security-Policy.
+  const nonce = btoa(crypto.randomUUID());
+  const csp = buildCspWithNonce(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
+  const response = NextResponse.rewrite(target, {
+    status: 451,
+    request: { headers: requestHeaders },
+  });
+  response.headers.set('Content-Security-Policy', csp);
   response.headers.set('x-agi-region-block', decision.country);
   return response;
 }

@@ -12,6 +12,7 @@ import {
 } from '@/lib/services/audit-streaming-service';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 /** Bounded per run so one crowded minute cannot queue an unbounded fan-out. */
 const MAX_DESTINATIONS_PER_RUN = 25;
