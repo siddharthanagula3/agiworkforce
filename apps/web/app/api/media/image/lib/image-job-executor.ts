@@ -25,6 +25,7 @@ import {
 import { insertMediaAssetsAtomically } from '@/lib/server/media-assets';
 import {
   claimImageGenerationJobAttempt,
+  closeCancelledImageGenerationJob,
   completeImageGenerationJob,
   deferImageGenerationJobFailure,
   failImageGenerationJob,
@@ -171,6 +172,39 @@ async function closeAttemptAsFailed(input: {
     jobId: input.job.id,
     claimToken: input.claimToken,
     publicError: input.publicError,
+    billingOutcome: settlement.billingOutcome,
+    billingSettlementStatus: settlement.billingSettlementStatus,
+  });
+}
+
+/**
+ * Whether a cancelled job is this caller's to finish. The attempt that held the
+ * claim when the cancellation arrived owns the close while its claim is live,
+ * because it is inside a provider call it already paid for; once that claim
+ * lapses without the job becoming terminal, the attempt is gone and the job
+ * would otherwise sit cancelling forever.
+ */
+export function isImageJobCancellationPending(job: ImageGenerationJob, now: number): boolean {
+  if (job.cancelRequestedAt === null || job.terminalAt !== null) return false;
+  return job.claimExpiresAt === null || Date.parse(job.claimExpiresAt) <= now;
+}
+
+/**
+ * Release the reservation a cancelled job was holding and close it. Safe to
+ * call from anywhere that has just read the job: the close itself requires the
+ * cancellation and a lapsed claim, so two callers racing settle once.
+ */
+export async function reconcileCancelledImageGenerationJob(input: {
+  db: DatabaseAdapter;
+  job: ImageGenerationJob;
+  now?: number;
+}): Promise<ImageGenerationJob | null> {
+  if (!isImageJobCancellationPending(input.job, input.now ?? Date.now())) return null;
+  const settlement = await settleFailure(input.db, input.job, 'canceled_by_user');
+  return closeCancelledImageGenerationJob({
+    db: input.db,
+    jobId: input.job.id,
+    userId: input.job.userId,
     billingOutcome: settlement.billingOutcome,
     billingSettlementStatus: settlement.billingSettlementStatus,
   });
