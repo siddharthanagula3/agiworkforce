@@ -122,7 +122,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (signalingResponse.status === 403) {
       await recordWorkspaceAuditEvent(db, request, {
         userId,
-        eventType: 'remote_pairing_initiated',
+        eventType: 'remote_pairing_claimed',
         outcome: 'failure',
         detail: {
           resourceType: 'remote_pairing',
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   await recordWorkspaceAuditEvent(db, request, {
     userId,
-    eventType: 'remote_pairing_initiated',
+    eventType: 'remote_pairing_claimed',
     detail: {
       resourceType: 'remote_pairing',
       resourceId: code,
