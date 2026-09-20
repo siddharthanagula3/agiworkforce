@@ -1471,3 +1471,69 @@ full job pass. Evidence: `/tmp/agi-linux-9c24.log`.
 The obsolete run reached `cancelled` and released the slot; the new package
 coverage job `106064730904` is running. The current main database/RLS,
 contracts and Chrome E2E jobs have passed.
+
+### Verification on `d6def28a3`
+
+Web E2E job `106064409427` passed all 70 cases with no flaky retries; its nine
+skips are the same development-only preview cases. Contrast again measured all
+240 route/theme pairs with zero missing pairs. macOS compile/Clippy, extended
+feature Clippy, repository guards, dedicated Rust security, standalone desktop
+E2E, Chrome E2E, VS Code/CLI E2E, contracts, database/RLS, cross-version and
+output-quality jobs passed. Native Windows/Linux execution, iOS, aggregate
+coverage and the remaining CodeQL analyses were still running at this checkpoint.
+Evidence: `/tmp/agi-web-e2e-d6def.log`, `/tmp/agi-rust-security-d6def.log`,
+`/tmp/agi-security-d6def.log`, `/tmp/agi-ci-d6def-watch.log`.
+
+The JavaScript dependency audit reports no known vulnerabilities. Semgrep's
+successful gate still reports its 225 raw matches accounted for by the existing
+ten reviewed allowlist entries; no allowlist or rule was relaxed. GitHub has
+zero open code-scanning and Dependabot alerts, which is distinct from claiming
+that every scanner produces zero raw matches. Existing Rust advisory exceptions
+are likewise not represented as absent; unsuppressed vulnerability-class results
+and the dependency-policy gate remain the relevant evidence.
+
+The pending cancellation-only follow-up is `31e0c200c`. Its deterministic scope
+selector reports all expensive surface lanes false; Turbo's affected dry run
+selects no package tasks. This establishes unchanged native/application scope,
+not a substitute for the follow-up workflow/coverage verification.
+Evidence: `/tmp/agi-cancellation-affected-graph.json`.
+
+Native cache investigation is recorded once as `CI-NATIVE-CACHE-2026-09-20`.
+Jev selected a non-blocking performance follow-up rather than restarting the
+current native verification, confidence 0.98, request
+`5465eea504845c6e9209302bc0a51b750384247e6952fabf1a9050b792af4063`.
+Windows compilation passed and reached the manifest verification step.
+
+### Coverage prerequisite and fixture follow-up
+
+Run `35505437305` measured 79.79% aggregate lines with all existing thresholds
+unchanged. The signup and package-floor repairs passed. Web coverage exposed a
+missing Chromium executable and a 64 MiB compression fixture timing out at 5 seconds.
+The latter reproduces locally under coverage at 5003 ms. Chromium now uses the same
+installation command as main CI. The archive fixture shares a valid workbook with
+the honest control and uses 256 KiB padding; the test measures actual inflated
+member bytes divided by ZIP bytes against the canonical 120x limit. An independent
+source/mutation probe measured 215.94x and showed removing the preflight guard
+accepts that same workbook. The streaming-member guard test remains unchanged.
+Jev selected this approach at 0.99, request
+`fb15a740f43f0c3decf5f48f4516d8f2ac66f9236fc90be9a705b484873fcab8`.
+All 12 focused browser/archive tests pass under coverage (1.28 seconds), and all
+20 coverage-harness/floor tests pass. Independent post-change review found no
+blocking regression. These targeted results do not replace full remote coverage.
+Evidence: `/tmp/agi-decompression-before.log`, `/tmp/agi-decompression-after.log`,
+`/tmp/agi-coverage-prerequisite-tests.log`, `/tmp/agi-coverage-d6def-clean.log`.
+
+The isolated Codecov uploader obtained an OIDC token, but Codecov returned HTTP404
+`Repository not found` for the exact repository slug. No Codecov secret exists;
+the available GitHub token cannot list user app installations (403). The official
+[quick start](https://docs.codecov.com/docs/quick-start) requires a connected GitHub
+app and repository setup. The browser reached GitHub sign-in for Codecov and was
+left as a handoff. Account activation is not verified, and the upload remains a
+blocking failure. Evidence: `/tmp/agi-codecov-d6def.log`.
+
+Linux native tests, trust-boundary/sync checks and final Clippy have now passed on
+`d6def28a3`; iOS release simulator build and first-run onboarding also passed.
+Windows manifest verification and the main JavaScript job are still running.
+Evidence: `/tmp/agi-linux-d6def.log`, run `35505437427`.
+The combined follow-up now touches a web test, so the earlier cancellation-only
+scope result does not describe this combined diff; web verification is required.

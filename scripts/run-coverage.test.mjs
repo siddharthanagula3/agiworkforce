@@ -136,3 +136,15 @@ test('only the isolated main-push uploader receives OIDC permission', () => {
   assert.equal(upload.with.use_oidc, true);
   assert.equal(upload.with.fail_ci_if_error, true);
 });
+
+test('coverage provisions Chromium before running browser-backed tests', () => {
+  const workflow = parse(
+    fs.readFileSync(new URL('../.github/workflows/test-l1.yml', import.meta.url), 'utf8'),
+  );
+  const steps = workflow.jobs['test-l1'].steps;
+  const browserIndex = steps.findIndex((step) => step.name === 'Install Chromium');
+  const coverageIndex = steps.findIndex((step) => step.name === 'Generate Coverage Report');
+  assert.ok(browserIndex >= 0 && browserIndex < coverageIndex);
+  assert.equal(steps[browserIndex].run, 'pnpm exec playwright install --with-deps chromium');
+  assert.notEqual(steps[browserIndex]['continue-on-error'], true);
+});
