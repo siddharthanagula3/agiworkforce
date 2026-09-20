@@ -1,7 +1,7 @@
 'use client';
 
 import { AuthenticateWithRedirectCallback, useClerk, useSignIn, useSignUp } from '@clerk/nextjs';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { classifyAuthError, isAuthNoticeKind, type AuthErrorKind } from '@/lib/auth/error-taxonomy';
 import { useAuthCopy } from './authCopy';
@@ -79,7 +79,15 @@ export function useIdentityAuthClient(
   const copyRef = useRef(copy);
   copyRef.current = copy;
 
-  const isReady = Boolean((clerk as { loaded?: boolean }).loaded);
+  const subscribeToStatus = useCallback(
+    (onChange: () => void) => {
+      clerk.on('status', onChange, { notify: true });
+      return () => clerk.off('status', onChange);
+    },
+    [clerk],
+  );
+  const readReady = useCallback(() => Boolean(clerk.loaded), [clerk]);
+  const isReady = useSyncExternalStore(subscribeToStatus, readReady, () => false);
 
   const secondFactorLabel = useCallback((kind: AuthSecondFactorKind): string => {
     const labels: Readonly<Record<AuthSecondFactorKind, string>> = {
