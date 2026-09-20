@@ -23,6 +23,8 @@ const LOADERS = ['loadUserConnectorToolDefs', 'loadUserConnectorToolCatalog'];
 const GATE_OPTION = 'isToolDenied';
 const POLICY_FILTER = 'applyConnectorPolicy';
 const SCAN_ROOTS = ['apps/web', 'packages'];
+const LOOP_ENTRY_POINTS = ['runToolLoop', 'runCloudAgentTurn'];
+const PERMISSION_OPTION = 'connectorPermissions';
 
 const SKIP_DIR = /^(node_modules|\.next|\.turbo|coverage|dist|out|build)$/u;
 const SOURCE_FILE = /\.(?:ts|tsx)$/u;
@@ -79,48 +81,94 @@ export function ungatedCalls(relativePath, source) {
   return problems;
 }
 
-const failures = [];
-let callCount = 0;
-let callerCount = 0;
-
-for (const root of SCAN_ROOTS) {
-  for (const file of walkSources(path.join(scanRoot, root))) {
-    const relative = path.relative(scanRoot, file).split(path.sep).join('/');
-    // The module that declares the loaders defines them and re-enters itself.
-    if (relative === CATALOG_MODULE) continue;
-    const source = fs.readFileSync(file, 'utf8');
-    const calls = LOADERS.reduce((total, name) => total + callArguments(source, name).length, 0);
-    if (calls === 0) continue;
-    callerCount += 1;
-    callCount += calls;
-    failures.push(...ungatedCalls(relative, source));
+/**
+ * The catalog filter decides what is OFFERED. The saved verdicts still have to
+ * reach the gate that decides what RUNS, or a tool blocked since the turn
+ * paused executes on the resume that follows.
+ */
+export function unboundLoopCalls(relativePath, source) {
+  const problems = [];
+  for (const entry of LOOP_ENTRY_POINTS) {
+    if (new RegExp(`function\\s*\\*?\\s*${entry}\\s*\\(`, 'u').test(source)) continue;
+    for (const call of callArguments(source, entry)) {
+      if (!call.text.includes(PERMISSION_OPTION)) {
+        problems.push(
+          `${relativePath}:${call.line} ${entry}() runs a turn without ${PERMISSION_OPTION}, ` +
+            `so the account's saved verdicts never reach the gate`,
+        );
+      }
+    }
   }
+  return problems;
 }
 
-/** The catalog every one of those callers reads must still be policy-filtered. */
-const catalogPath = path.join(scanRoot, CATALOG_MODULE);
-if (!fs.existsSync(catalogPath)) {
-  console.error(`check-connector-tool-gate: ${CATALOG_MODULE} is missing.`);
-  process.exit(1);
-}
-const catalogSource = fs.readFileSync(catalogPath, 'utf8');
-if (!new RegExp(`\\b${POLICY_FILTER}\\s*\\(`, 'u').test(catalogSource)) {
-  failures.push(`${CATALOG_MODULE} no longer filters the offered catalog by workspace policy`);
-}
-if (!new RegExp(`\\b${GATE_OPTION}\\b`, 'u').test(catalogSource)) {
-  failures.push(`${CATALOG_MODULE} no longer accepts a per-tool verdict from its callers`);
-}
+// Wrapped so another guard can import the walk without running this one.
+function main() {
+  const failures = [];
+  let callCount = 0;
+  let callerCount = 0;
+  let loopCallCount = 0;
 
-if (callCount === 0) {
-  console.error(
-    'check-connector-tool-gate: no catalog caller found; the walk is measuring nothing.',
+  for (const root of SCAN_ROOTS) {
+    for (const file of walkSources(path.join(scanRoot, root))) {
+      const relative = path.relative(scanRoot, file).split(path.sep).join('/');
+      // The module that declares the loaders defines them and re-enters itself.
+      if (relative === CATALOG_MODULE) continue;
+      const source = fs.readFileSync(file, 'utf8');
+      const calls = LOADERS.reduce((total, name) => total + callArguments(source, name).length, 0);
+      if (calls === 0) continue;
+      callerCount += 1;
+      callCount += calls;
+      failures.push(...ungatedCalls(relative, source));
+    }
+  }
+
+  for (const root of SCAN_ROOTS) {
+    for (const file of walkSources(path.join(scanRoot, root))) {
+      const relative = path.relative(scanRoot, file).split(path.sep).join('/');
+      const source = fs.readFileSync(file, 'utf8');
+      const bound = unboundLoopCalls(relative, source);
+      loopCallCount += LOOP_ENTRY_POINTS.reduce(
+        (total, entry) =>
+          total +
+          (new RegExp(`function\\s*\\*?\\s*${entry}\\s*\\(`, 'u').test(source)
+            ? 0
+            : callArguments(source, entry).length),
+        0,
+      );
+      failures.push(...bound);
+    }
+  }
+
+  /** The catalog every one of those callers reads must still be policy-filtered. */
+  const catalogPath = path.join(scanRoot, CATALOG_MODULE);
+  if (!fs.existsSync(catalogPath)) {
+    console.error(`check-connector-tool-gate: ${CATALOG_MODULE} is missing.`);
+    process.exit(1);
+  }
+  const catalogSource = fs.readFileSync(catalogPath, 'utf8');
+  if (!new RegExp(`\\b${POLICY_FILTER}\\s*\\(`, 'u').test(catalogSource)) {
+    failures.push(`${CATALOG_MODULE} no longer filters the offered catalog by workspace policy`);
+  }
+  if (!new RegExp(`\\b${GATE_OPTION}\\b`, 'u').test(catalogSource)) {
+    failures.push(`${CATALOG_MODULE} no longer accepts a per-tool verdict from its callers`);
+  }
+
+  if (callCount === 0) {
+    console.error(
+      'check-connector-tool-gate: no catalog caller found; the walk is measuring nothing.',
+    );
+    process.exit(1);
+  }
+
+  for (const failure of failures) console.error(`FAIL ${failure}`);
+  console.log(
+    `[connector tool gate] ${callCount} catalog load(s) in ${callerCount} surface(s), ` +
+      `${loopCallCount} turn(s) bound to saved verdicts, ${failures.length} failure(s)`,
   );
-  process.exit(1);
+  process.exitCode = failures.length === 0 ? 0 : 1;
 }
 
-for (const failure of failures) console.error(`FAIL ${failure}`);
-console.log(
-  `[connector tool gate] ${callCount} catalog load(s) in ${callerCount} surface(s), ` +
-    `${failures.length} failure(s)`,
-);
-process.exitCode = failures.length === 0 ? 0 : 1;
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}

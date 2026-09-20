@@ -43,8 +43,8 @@ change. Do not add a row you cannot cite.
 ### 1.1 Managed Cloud, default tool authority
 
 The gate is `resolveToolCallGate()` in
-`apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts`. Precedence, highest
-first:
+`apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts`, a table of
+ranks that `tool-loop.ts` calls once per tool call. Precedence, highest first:
 
 | Rank | Condition                                                                               | Verdict                   | Machine reason               |
 | ---- | --------------------------------------------------------------------------------------- | ------------------------- | ---------------------------- |
@@ -113,7 +113,7 @@ reads worse than the reality.
 
 Escalates auto-approval to a human ask when all three hold at once: untrusted
 content in context (U) + a sensitive source reachable (S) + the pending call
-creates an egress path (E). Documented in-file (`tool-loop.ts`) as a
+creates an egress path (E). Documented in-file (`tool-call-gate.ts`) as a
 mitigation, not a proof. The limits are published verbatim on `/agent-permissions`
 because a security reviewer will find them anyway:
 
@@ -580,9 +580,8 @@ sealed `device_authorization_codes.access_token`. That column was never
 encrypted, it held plain text that every writer set to NULL, and the
 `device_authorization_bearer_columns` migration drops it and its sibling
 `refresh_token`. A device's real credential is a hashed renewable pair in
-`device_refresh_tokens`. The variable is still required by
-`apps/web/lib/validate-env.ts`, so it keeps a cadence row below, but no reader
-consults it and no sweep targets it.
+`device_refresh_tokens`. `apps/web/lib/validate-env.ts` does not require it, no
+module reads it, and it can be deleted from the deployment environment.
 
 `TOTP_ENCRYPTION_KEY` is not hex. `lib/crypto/totp-envelope.ts` takes the first
 32 characters of the env value as raw bytes through
@@ -642,21 +641,16 @@ below runs the `Rotating a key` procedure end to end, with `scripts/reencrypt.mj
 sweep. Nothing here rotates itself; the date is a calendar obligation on the
 Owner named in the header.
 
-| Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                         |
-| --------------------------------------- | --------- | ---------- | --------------------------------------- | -------------------------------- |
-| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none, ring-aware reader          |
-| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none, ring-aware reader          |
-| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | none, ring-aware reader          |
-| `DEVICE_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | none, no durable column                 | in-flight device pairings re-run |
+| Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                |
+| --------------------------------------- | --------- | ---------- | --------------------------------------- | ----------------------- |
+| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none, ring-aware reader |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none, ring-aware reader |
+| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | none, ring-aware reader |
 
 Rotate ahead of the date, not on it, whenever a key could have been read by
 someone who should not have it: a leaked deployment env, a departing operator
 who held it, a restored backup handled outside the sealed record, or any
 finding that names the key. An unscheduled rotation resets the next-due date.
-
-`DEVICE_TOKEN_ENCRYPTION_KEY` has no sweep because it seals nothing durable.
-rotating it is an env swap and a redeploy, and its 12-month entry exists so the
-key does not outlive every other one by default.
 
 ### Accepted risk: no KMS, no escrow
 

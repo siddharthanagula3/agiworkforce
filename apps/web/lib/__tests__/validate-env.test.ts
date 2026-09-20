@@ -1,3 +1,6 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../price-tier-mapping', () => ({
@@ -521,5 +524,47 @@ describe('OAuth callback isolation and the config key registry', () => {
   it('registers no secret under a name the bundler ships to the browser', () => {
     vi.stubEnv('NODE_ENV', 'development');
     expect(validateConfigKeyRegistry().errors).toEqual([]);
+  });
+});
+
+describe('every encryption key the environment contract demands is one a module reads', () => {
+  const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+  const CONTRACT = path.join(REPO_ROOT, 'apps', 'web', 'lib', 'validate-env.ts');
+  const KEY_PATTERN = /[A-Z0-9_]*ENCRYPTION_KEY/g;
+
+  function declaredEncryptionKeys(): string[] {
+    return [...new Set(readFileSync(CONTRACT, 'utf8').match(KEY_PATTERN) ?? [])];
+  }
+
+  // Product code only. A build script naming a key declares a deployment
+  // requirement; it does not decrypt anything with it.
+  function productSources(): string[] {
+    return execFileSync('git', ['ls-files', 'apps', 'packages', 'services'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 32 * 1024 * 1024,
+    })
+      .split('\n')
+      .filter(
+        (file) =>
+          /\.(ts|tsx|mts|cts|mjs|cjs|js|rs)$/.test(file) &&
+          !file.includes('__tests__/') &&
+          !/\.(test|spec)\.[a-z]+$/.test(file) &&
+          file !== 'apps/web/lib/validate-env.ts',
+      );
+  }
+
+  it('demands no key that nothing in the product reads', () => {
+    const declared = declaredEncryptionKeys();
+    expect(declared.length).toBeGreaterThan(0);
+
+    const read = new Set<string>();
+    for (const file of productSources()) {
+      for (const key of readFileSync(path.join(REPO_ROOT, file), 'utf8').match(KEY_PATTERN) ?? []) {
+        read.add(key);
+      }
+    }
+
+    expect(declared.filter((key) => !read.has(key))).toEqual([]);
   });
 });

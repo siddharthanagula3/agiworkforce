@@ -19,10 +19,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 vi.mock('@shared/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    if (key === 'DEVICE_TOKEN_ENCRYPTION_KEY') return 'a'.repeat(64);
-    return 'test-value';
-  }),
+  requireEnv: vi.fn(() => 'test-value'),
 }));
 
 const mockClerkAuth = vi.fn();
