@@ -235,6 +235,10 @@ pub struct ToolExecOptions {
     /// This is carried per invocation for the same reason as `privacy_mode`:
     /// the app-server can host a workspace that is not the process cwd.
     pub workspace_root: Option<std::path::PathBuf>,
+    /// The session's connected MCP tools, for `tool_search` to load a schema
+    /// the initial list deferred. Per invocation, like the two fields above:
+    /// concurrent sessions connect to different servers.
+    pub mcp_tool_definitions: Option<std::sync::Arc<Vec<crate::models::ToolDefinition>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +373,7 @@ pub fn build_read_only_registry() -> registry::ToolRegistry {
 #[allow(dead_code)]
 pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result<ToolResult> {
     let opts = ToolExecOptions {
+        mcp_tool_definitions: None,
         require_confirmation,
         auto_approve_safe: false,
         auto_approve_edits: false,
@@ -570,7 +575,14 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             )
             .await
         }
-        "tool_search" => execute_tool_search(&call.args).await,
+        "tool_search" => {
+            let mcp_tools = opts
+                .mcp_tool_definitions
+                .as_deref()
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            execute_tool_search(&call.args, mcp_tools).await
+        }
         "agent" => {
             let action = call.args.get("action").map(String::as_str).unwrap_or("");
             if action == "list" {
@@ -1652,6 +1664,7 @@ mod tests {
 
     fn byok_options(callback: ApprovalCallback, auto_approve_safe: bool) -> ToolExecOptions {
         ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: true,
             auto_approve_safe,
             auto_approve_edits: false,
@@ -1789,6 +1802,7 @@ mod tests {
     #[tokio::test]
     async fn local_mode_blocks_builtin_network_tools_before_dispatch() {
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -1840,6 +1854,7 @@ reason = "regression test"
             args: HashMap::from([("command".to_string(), "printf policy-denied".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -1890,6 +1905,7 @@ decision = "ask"
             )]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -1931,6 +1947,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf unsafe".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -2044,6 +2061,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
@@ -2093,6 +2111,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -2274,6 +2293,7 @@ decision = "deny"
             args,
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,

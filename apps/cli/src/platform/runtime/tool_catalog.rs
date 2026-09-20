@@ -1116,7 +1116,15 @@ pub fn effective_tool_definitions_with_browser(
     }
 
     if let Some(mcp_tool_definitions) = mcp_tool_definitions {
-        tool_definitions.extend(mcp_tool_definitions.iter().cloned());
+        // Same rule as the built-ins: deferred schemas stay out of the initial
+        // list. Their names go on tool_search so the model still knows they exist.
+        announce_deferred_mcp_tools(&mut tool_definitions, mcp_tool_definitions);
+        tool_definitions.extend(
+            mcp_tool_definitions
+                .iter()
+                .filter(|definition| !definition.should_defer)
+                .cloned(),
+        );
     }
 
     if let Some(allowed_tools) = allowed_tools {
@@ -1128,6 +1136,56 @@ pub fn effective_tool_definitions_with_browser(
     }
 
     tool_definitions
+}
+
+/// Name the deferred MCP tools on `tool_search` itself.
+///
+/// The system prompt's deferred-tool line is written in `AgentSession::new`,
+/// before any server has connected, so it can only name built-ins. This
+/// description is rebuilt for every turn and costs a name and a clause each,
+/// not a JSON schema.
+fn announce_deferred_mcp_tools(
+    tool_definitions: &mut [ToolDefinition],
+    mcp_tool_definitions: &[ToolDefinition],
+) {
+    const SUMMARY_MAX_CHARS: usize = 100;
+
+    let deferred: Vec<String> = mcp_tool_definitions
+        .iter()
+        .filter(|definition| definition.should_defer)
+        .map(|definition| {
+            format!(
+                "{}: {}",
+                definition.name,
+                summarize_for_index(&definition.description, SUMMARY_MAX_CHARS)
+            )
+        })
+        .collect();
+    if deferred.is_empty() {
+        return;
+    }
+
+    let Some(search) = tool_definitions
+        .iter_mut()
+        .find(|definition| definition.name == "tool_search")
+    else {
+        return;
+    };
+    search.description.push_str(&format!(
+        "\n\nMCP tools available on demand. Call tool_search with `select:<name>` to load one \
+         before calling it:\n{}",
+        deferred.join("\n")
+    ));
+}
+
+fn summarize_for_index(description: &str, max_chars: usize) -> String {
+    let line = description.lines().next().unwrap_or("").trim();
+    if line.chars().count() <= max_chars {
+        return line.to_string();
+    }
+    let mut summary: String = line.chars().take(max_chars).collect();
+    summary.push_str("...");
+    summary
 }
 
 fn filter_read_only_builtin_tool_definitions() -> Vec<ToolDefinition> {
@@ -1772,5 +1830,53 @@ mod tests {
         assert_eq!(tool_result_size_cap("task"), None);
         assert_eq!(tool_result_size_cap("agent"), Some(20_000));
         assert_eq!(tool_result_size_cap("unknown_tool"), None);
+    }
+
+    fn deferred_test_tool_definition(name: &str) -> ToolDefinition {
+        let mut definition = test_tool_definition(name);
+        definition.should_defer = true;
+        definition
+    }
+
+    #[test]
+    fn deferred_mcp_schemas_leave_the_initial_list_but_keep_their_names_on_tool_search() {
+        let mcp_tool_definitions = vec![
+            test_tool_definition("mcp__files__read_note"),
+            deferred_test_tool_definition("mcp__files__archive_note"),
+        ];
+
+        let tool_definitions =
+            effective_tool_definitions(false, false, None, Some(&mcp_tool_definitions));
+        let names = tool_names(&tool_definitions);
+
+        assert!(names.contains(&"mcp__files__read_note"));
+        assert!(!names.contains(&"mcp__files__archive_note"));
+
+        let search = tool_definitions
+            .iter()
+            .find(|definition| definition.name == "tool_search")
+            .expect("tool_search is always loaded");
+        assert!(
+            search.description.contains("mcp__files__archive_note"),
+            "a deferred MCP tool the model is never told about cannot be searched for"
+        );
+        assert!(!search.description.contains("mcp__files__read_note"));
+    }
+
+    #[test]
+    fn no_deferred_mcp_tool_leaves_tool_search_description_untouched() {
+        let mcp_tool_definitions = vec![test_tool_definition("mcp__files__read_note")];
+
+        let with_mcp = effective_tool_definitions(false, false, None, Some(&mcp_tool_definitions));
+        let without_mcp = effective_tool_definitions(false, false, None, None);
+
+        let description = |definitions: &[ToolDefinition]| {
+            definitions
+                .iter()
+                .find(|definition| definition.name == "tool_search")
+                .map(|definition| definition.description.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(description(&with_mcp), description(&without_mcp));
     }
 }
