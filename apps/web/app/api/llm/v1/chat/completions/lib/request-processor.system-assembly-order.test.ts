@@ -182,7 +182,7 @@ beforeEach(() => {
 });
 
 describe('managed system prompt assembly order', () => {
-  it('keeps MCP context and an explicitly selected skill both ahead of the cache boundary', async () => {
+  it('puts connector-authored MCP context behind the boundary and behind the selected skill', async () => {
     const result = await processRequest(
       chatRequestFor('assembly-order-1', {
         skill_name: 'design-review',
@@ -206,11 +206,11 @@ describe('managed system prompt assembly order', () => {
     expect(boundaryIndex).toBeGreaterThan(-1);
     expect(mcpIndex).toBeGreaterThan(-1);
     expect(skillIndex).toBeGreaterThan(-1);
-    expect(mcpIndex).toBeLessThan(boundaryIndex);
     expect(skillIndex).toBeGreaterThan(boundaryIndex);
+    expect(mcpIndex).toBeGreaterThan(skillIndex);
   });
 
-  it('keeps recalled memory after the boundary even when mcp_context sets the leading message', async () => {
+  it('keeps recalled memory after the boundary and ahead of connector-authored MCP context', async () => {
     mocks.loadPolicy.mockResolvedValue({
       enabled: true,
       generateFromHistory: false,
@@ -248,8 +248,8 @@ describe('managed system prompt assembly order', () => {
     expect(boundaryIndex).toBeGreaterThan(-1);
     expect(mcpIndex).toBeGreaterThan(-1);
     expect(memoryIndex).toBeGreaterThan(-1);
-    expect(mcpIndex).toBeLessThan(boundaryIndex);
     expect(memoryIndex).toBeGreaterThan(boundaryIndex);
+    expect(mcpIndex).toBeGreaterThan(memoryIndex);
   });
   it('keeps recalled past chats after the boundary, behind account memory', async () => {
     mocks.loadPolicy.mockResolvedValue({
