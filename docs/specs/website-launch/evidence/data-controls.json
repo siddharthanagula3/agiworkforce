@@ -1,25 +1,32 @@
 {
-  "recordedAt": "2026-09-19T18:12:19Z",
-  "scope": "Local data export and deletion cancellation",
+  "recordedAt": "2026-09-20T00:36:18Z",
+  "scope": "Local account data controls and responsive settings",
   "browser": [
     "Account export GET /api/user/data returned200 in2.3s; UI recovered from preparation without visible error.",
     "A deterministic download fixture decoded the actual attachment Response bytes as JSON, preserved representative profile/device data, and excluded live credentials and Stripe identifiers.",
     "Bulk chat deletion confirmed real server count1 and described restoration; Cancel selected, no delete submitted.",
     "Project source removal confirmation described impact; Cancel selected, source retained.",
-    "Privacy row now describes recoverable removal; confirmation points to actual Recently deleted label."
+    "Privacy row now describes recoverable removal; confirmation points to actual Recently deleted label.",
+    "Archive-all and delete-all confirmations now name the current-workspace scope. Browser showed the actual count of 2; both dialogs were cancelled without mutation.",
+    "The public Help article now matches the scoped soft-delete behavior and no longer advertises a separate permanent chat deletion control."
   ],
   "validation": [
     "11 tests in export-completeness and PrivacySection.account-deletion passed.",
     "5 source-level export category/credential scoping guards passed; structural assertions do not prove full downloaded contents.",
     "Focused PrivacySection ESLint passed; changed privacy row rendered once in Browser.",
-    "7 focused account-export files passed 57 tests; the download-byte regression checks attachment headers, non-empty bytes, portable data and credential exclusion. Focused test lint passed."
+    "7 focused account-export files passed 57 tests; the download-byte regression checks attachment headers, non-empty bytes, portable data and credential exclusion. Focused test lint passed.",
+    "Destructive-data focused validation passed 19 files and 252 tests across bulk conversation, account scheduling/erasure, Privacy and Help; the canonical support corpus remains 41 documents and 215 chunks.",
+    "A real PostgreSQL transaction soft-deleted 2 disposable active-workspace conversations, preserved the disposable personal conversation, scheduled the disposable profile, and rolled the entire fixture back with zero residue.",
+    "The opt-in live scheduled-erasure regression reproduced the organization_usage_ledger constraint failure before repair and passed afterward against loopback PostgreSQL.",
+    "Account erasure, scheduling, tombstone, deletion-manifest, billing-retention, GDPR and delete-account coverage passed: 12 files and 193 tests; focused ESLint and Prettier passed.",
+    "Post-run residue checks found zero synthetic profiles, beta applications, tombstones, cost rows or organizations."
   ],
   "limitations": [
-    "No account erasure or bulk deletion executed.",
-    "Post-repair mobile Account geometry remains unverified because the authenticated in-app browser connection dropped during three bounded retries."
+    "The real local PostgreSQL erasure path is verified on a disposable account. Identity-provider deletion was replaced with a spy, object-storage tables had no fixture bytes, and the signed-in owner account was untouched.",
+    "The product does not currently offer permanent chat deletion separately from account deletion."
   ],
   "sourceHashes": {
-    "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06",
+    "apps/web/features/settings/sections/PrivacySection.tsx": "c3b73eed5ad923a80a6cc51b14167ec986f276fbbe04d509adc32b6eed900a66",
     "apps/web/app/api/user/export/route.ts": "a0fa34901b8a29dff005d6c1c8e7c6a3871400fbe9b826c0c18e9ed1e763e7da",
     "apps/web/app/api/chat/conversations/bulk/route.ts": "daffccf62a1786f362e5d06753f5d0c6c28a3058e2baec3877555f9cdcde5899"
   },
@@ -42,6 +49,34 @@
     "choice": "align_copy",
     "confidence": 1,
     "requestHash": "48674f409ebf8805e309d23f625bc9c23de444a1c208b5c543b418b3a3710685"
+  },
+  "destructiveConversationControls": {
+    "status": "passed for current-workspace archive and recoverable delete",
+    "repairAttempts": 1,
+    "before": "The Privacy UI and Help copy described the organization-scoped API as account-wide and described recoverable chat deletion as permanent. Four focused regressions failed before repair.",
+    "after": "Archive and delete labels, confirmations, count wording, Archived chats guidance and Help content explicitly name the current workspace and Recently deleted restoration. No unsupported purge schedule or separate permanent-delete control is claimed.",
+    "browser": "Authenticated Enterprise Browser showed the scoped rows and a delete dialog stating ‘All 2 chats in the current workspace’. Archive and delete confirmations were both cancelled. At 390×844 and 320×700 the rows wrap without document overflow or visible clipping; the actual 320px action button ends at x=303.",
+    "database": "A disposable PostgreSQL transaction created personal, active-workspace and archived-workspace conversations. The production SQL shape soft-deleted exactly the 2 workspace rows, preserved the personal row, matched one disposable account-schedule profile, then rolled back; a post-rollback query found zero fixture residue.",
+    "verification": "14 deletion/account/Help files passed 237 tests, five Privacy files passed 15 tests, focused ESLint and Prettier passed, support corpus check passed at 41 documents/215 chunks, and diff validation passed.",
+    "limitations": "The owner account and owner chats were untouched. Permanent chat erasure remains unavailable except through account deletion, so DATA-CONTROLS remains pending for that explicit product gap and external behavior.",
+    "jev": {
+      "priorityChoice": "verify_destructive_data_controls",
+      "priorityConfidence": 0.79,
+      "priorityRequestHash": "53dba9d7a72be7c89764e0e8fdb74db6e458f753d805740368f2e14ca26403e5",
+      "approachChoice": "align_copy_to_active_workspace",
+      "approachConfidence": 1,
+      "approachRequestHash": "8c0720dd70d4304e15dab2bfb11a3ad989db8a418302b4dc3d515f1fad825fbb"
+    },
+    "sourceHashes": {
+      "apps/web/features/settings/sections/PrivacySection.tsx": "c3b73eed5ad923a80a6cc51b14167ec986f276fbbe04d509adc32b6eed900a66",
+      "apps/web/features/settings/sections/ArchivedChatsSection.tsx": "10282de4c1f1c3d959ba9545cc5759784000e1ef7090f70202c30c3280421ad1",
+      "apps/web/features/settings/sections/ConversationDataSections.test.tsx": "336d97df7263944a4a4e7f5c9d37361a38715630480ba44409d11d9f58da2125",
+      "apps/web/app/api/chat/conversations/bulk/route.ts": "daffccf62a1786f362e5d06753f5d0c6c28a3058e2baec3877555f9cdcde5899",
+      "apps/web/app/api/chat/conversations/bulk/route.test.ts": "1a0197cd94135f1408d887245eb93e8e0a0e435c975e09cc138948de452ae71c",
+      "apps/web/content/support/delete-your-account.md": "cdadb9060b924bac5f557f575fea42c8ba8ef219ec8706c854ce4c09790f2a86",
+      "apps/web/content/support/chat-basics.md": "afb9ebb1039fb02dc87f1bc7f0f4134f4da773ffd3ebca347046055edd3fba43",
+      "apps/web/lib/support/agent/corpus.generated.json": "980e635d7d293e55cb5e95f6a2618c37de302d21a40c68e2ba133af35ad6285d"
+    }
   },
   "linkedDevices": {
     "status": "passed",
@@ -140,7 +175,7 @@
         "apps/web/app/help/[slug]/page.tsx": "caaaf5ddf8d83aa412107c3fcaeea6deda8e1067252133d3e56b4d89324b2f5a",
         "apps/web/content/support/voice.md": "92169f0f3f46fafc04ebdc9257576d93273241e6c4b753965bc3c03613334db2",
         "apps/web/content/support/usage-and-credits.md": "e449094dbf1812e954ffa59c2f507afb800306734ff2f3cb3086c8bb0d165820",
-        "apps/web/lib/support/agent/corpus.generated.json": "d36d32a4393e12a6cc87c8ab31b76265d0ede43b4d959f2ccd14a93f6c109d4f",
+        "apps/web/lib/support/agent/corpus.generated.json": "980e635d7d293e55cb5e95f6a2618c37de302d21a40c68e2ba133af35ad6285d",
         "apps/web/content/support/accounts-and-sign-in.md": "9f978c0ec95ae05805b74eecbf2132bce1ac5251b454f7718ebe5dbbfdb3952f",
         "apps/web/content/support/install-desktop-and-mobile.md": "6babe49cf02954e5551d936edbe5b7380625d11c930ce6ac51c172e3d2fcf45c"
       },
@@ -207,7 +242,7 @@
     "limitations": "Actual external telemetry delivery not exercised. Failed account save requires retry for other devices; local opt-out remains enforced.",
     "sourceHashes": {
       "apps/web/lib/sentry-shared.ts": "d022ec9488e3df9ff3927f0a9d2ea165ca2f41b151fc468b12df857e2004ff82",
-      "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06"
+      "apps/web/features/settings/sections/PrivacySection.tsx": "c3b73eed5ad923a80a6cc51b14167ec986f276fbbe04d509adc32b6eed900a66"
     },
     "claimsRepair": {
       "repairAttempts": 1,
@@ -221,10 +256,10 @@
         "requestHash": "68eb7f8459af558bcd0e47b7d23062fbd045531c366592aaa5f128d5c9805758"
       },
       "sourceHashes": {
-        "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06",
-        "apps/web/app/privacy/page.tsx": "3838ff43fa3b14af962b452e964757500f0cc6ab5b306f81fff10b2ccc606b5f",
+        "apps/web/features/settings/sections/PrivacySection.tsx": "c3b73eed5ad923a80a6cc51b14167ec986f276fbbe04d509adc32b6eed900a66",
+        "apps/web/app/privacy/page.tsx": "4e4bfbd86b406c87d107973773badca2666dcc2f405e70ab7c4b65d239c3328e",
         "apps/web/content/support/privacy-controls.md": "d6e834fb617df8ea0284ed2d3945dc765c514bc3416d030f2fe3d7bb1cb3415a",
-        "apps/web/lib/support/agent/corpus.generated.json": "d36d32a4393e12a6cc87c8ab31b76265d0ede43b4d959f2ccd14a93f6c109d4f",
+        "apps/web/lib/support/agent/corpus.generated.json": "980e635d7d293e55cb5e95f6a2618c37de302d21a40c68e2ba133af35ad6285d",
         "apps/web/__tests__/privacy-claims.spec.ts": "bb8e33a5e35e34026cf236d2be1ff5e489991068245cffdab43685f9a751a8b4",
         "apps/web/features/settings/sections/__tests__/PrivacySection.density.test.tsx": "9c2f481644584a8eab7834d26592a987933a75f82341dee61f7fdea44e60ba94"
       }
@@ -302,24 +337,29 @@
     }
   },
   "mobileSettingsLayout": {
-    "status": "partial",
-    "repairAttempts": 1,
+    "status": "passed",
+    "repairAttempts": 2,
     "before": "At 390×844, Privacy and Workspace fit the 388px settings pane without visible horizontal overflow. Account rendered a 597px active-sessions table inside that pane, leaving the action column outside the initial viewport.",
-    "after": "Account keeps Device and the action column visible below the small breakpoint, and moves Location, Created and Last active into an inline mobile detail list. The desktop table retains the full columns at the small breakpoint and above.",
-    "verification": "The new regression failed before repair and now passes. Four Account suites pass 24 tests; focused ESLint and diff validation pass.",
-    "liveBrowser": "The pre-repair 390×844 defect was measured in the authenticated local browser. Three bounded post-repair attempts reached the repaired page but the in-app browser connection dropped while the local development process was under database and filesystem load, so post-repair pixel geometry is not claimed.",
-    "limitations": "Post-repair authenticated browser geometry at 390×844 and 320×700 remains unverified. Other settings sections were not exhaustively remeasured.",
+    "after": "Account keeps Device and the action column visible below the small breakpoint, moves Location, Created and Last active into an inline mobile detail list, and stacks the complete recent-activity sentence, device and timestamp on phones. The desktop table and compact two-column activity row remain at the small breakpoint and above.",
+    "verification": "The session regression failed before repair and the activity regression protects complete narrow-screen text. Four focused Account/activity files pass 17 tests; the earlier four Account suites remain green at 24 tests. Focused ESLint, Prettier and diff validation pass.",
+    "liveBrowser": "Authenticated Browser verification passed at 390×844 and 320×700. At 390px the 356px table exactly matches its wrapper, and both action buttons end at x=373 inside the 390px viewport. At 320px the 295px table exactly matches its wrapper, action buttons end at x=307.42, desktop-only columns are display:none, mobile detail lists are display:block, and document scrollWidth equals 320. The newly observed recent-activity ellipsis was repaired; its 320px row now uses one 286px grid column, shows the complete ‘Viewed account data ×36’ label and full timestamp, and has no horizontal document overflow. Visual inspection confirmed no cutoff.",
+    "limitations": "Other settings sections were not exhaustively remeasured in this pass.",
     "jev": {
       "priorityChoice": "mobile_data_controls",
       "priorityConfidence": 1,
       "priorityRequestHash": "5f72630ebb574a21f3f7eb225525b28aa9ddaa0d9a91e4752ca5d50104b51c4a",
       "approachChoice": "collapse_metadata",
       "approachConfidence": 0.79,
-      "approachRequestHash": "17ab1bec62c00f7723960355d22cf91343b184f612cdad3c89f43273cf17f1ee"
+      "approachRequestHash": "17ab1bec62c00f7723960355d22cf91343b184f612cdad3c89f43273cf17f1ee",
+      "activityLayoutChoice": "stack_on_mobile",
+      "activityLayoutConfidence": 0.53,
+      "activityLayoutRequestHash": "b69a88133482293f17e4093385725052c20125e8f7e0e3936e9aa083f9a10983"
     },
     "sourceHashes": {
       "apps/web/features/settings/sections/AccountSection.tsx": "2172465419fdfa5eb83f1c8bf9444b9859a5388b21ceb948a3354e8495483b5c",
-      "apps/web/features/settings/sections/AccountSection.sessions.test.tsx": "bd24c368abe384ddcbccaece9ac1b82cea6398e72d4121b4c4269c6a3f3f4918"
+      "apps/web/features/settings/sections/AccountSection.sessions.test.tsx": "bd24c368abe384ddcbccaece9ac1b82cea6398e72d4121b4c4269c6a3f3f4918",
+      "apps/web/features/settings/components/RecentActivityPanel.tsx": "af0c5ebaab555b73dc88130052785cd82bc11abb472c2d8c5fc073bf365a0ba9",
+      "apps/web/features/settings/components/__tests__/RecentActivityPanel.test.tsx": "7002717c7c2695c3f5002e11ab47b84375edfd6c41bd09d98d9f3b36eb46ca3b"
     }
   },
   "downloadTargetBytes": {
@@ -353,6 +393,40 @@
       "apps/web/app/api/user/__tests__/export-completeness.test.ts": "4574efee1a14582e989dea3ead3bd18ec3310b2ef66d0acf5f62eb11012548b9",
       "apps/web/app/api/projects/[id]/export/route.ts": "d127d7cfcde6f9ec006e7a7199d8307a9c00a293bcefd0f398c4c7c429205747",
       "apps/web/app/api/projects/[id]/export/route.test.ts": "de086881ca26cdd0c795b07c410f5362153123dfbcc35689449ff536b445e91e"
+    }
+  },
+  "scheduledAccountErasure": {
+    "status": "passed for disposable local account",
+    "repairAttempts": 1,
+    "before": "A personal organization_usage_ledger row has no organization_id. The erasure path attempted to null its user_id, violating the database rule that every ledger row retain an organization or user. Erasure stopped before identity/profile removal, while retry diagnostics named only the intentionally retained profile.",
+    "after": "Personal usage-ledger rows are deleted with the subject; organization-scoped billing history remains with user_id removed. Retry diagnostics now name failed tables, anonymization stores and external object/cache categories while excluding the profile retained only for identity cleanup ordering.",
+    "postgres": {
+      "database": "loopback agiworkforce_dev",
+      "fixture": "Random synthetic due account with identity mapping, settings, conversation, credits, beta application, personal and organization usage records, and provider cost history.",
+      "assertions": [
+        "Scheduled erasure returned purged and invoked the stubbed identity-provider deletion for the synthetic subject.",
+        "Profile, identity mapping, settings, conversation, credits, beta application and personal usage record were deleted.",
+        "Organization usage and provider cost records survived with user_id set to null.",
+        "The erasure tombstone was closed before profile removal.",
+        "Cleanup left zero synthetic profiles, beta applications, tombstones, cost rows or organizations."
+      ]
+    },
+    "validation": "The live regression failed on the real constraint before repair and passed afterward. Twelve related files pass 193 tests; focused ESLint, Prettier and diff validation pass.",
+    "limitations": "The identity provider was spied rather than mutated and no object-storage bytes were seeded. Existing unit contracts cover identity failure/404 ordering and stored-object failure retention.",
+    "jev": {
+      "priorityRequestHash": "126b2b59927f74a0735fa3dfd2c257abb11610f51e5b6585a7ffa367a1352d82",
+      "priorityChoice": "disposable_account_erasure",
+      "priorityConfidence": 1,
+      "repairRequestHash": "4b76b049b807ae180aa8d9dcb2cda4adf8aec89eb6131f3e2af744020672419c",
+      "repairChoice": "partition_usage_rows",
+      "repairConfidence": 1
+    },
+    "sourceHashes": {
+      "apps/web/lib/server/account-erasure.ts": "b84ebf27b45e5b933d49ad8f1cca69489e4d01bce62d7d24a7faadd8313c2233",
+      "apps/web/lib/server/scheduled-account-erasure.ts": "97586db9d9bb80c3713f9d78d7b3c7231f354b59ed7b07c0ff96a401eece3d2d",
+      "apps/web/lib/server/account-erasure.test.ts": "b9fea5b03424d3e0dc5fe2930c20fc76f592901cdb6d92bb343149be942b55c6",
+      "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts": "6ed86ffd5aee443b7e051ff495829d54ccd353241081d8715e22f0f643920496",
+      "apps/web/lib/server/__tests__/scheduled-account-erasure.live.test.ts": "becc1bbcfb1be5586b4826cf5254973b4c9918e845cb66cf12dd621a7ed68756"
     }
   }
 }

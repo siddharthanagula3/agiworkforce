@@ -111,7 +111,6 @@ function isSourceListOnly(rest: string[]): boolean {
 }
 
 const MARKER_TOKEN = /\[\d{1,3}\]/;
-const LINK_TOKEN = /\[[^\]\n]*\]\([^)\n]*\)/;
 const MARKER_TOKEN_G = /\[\d{1,3}\]/g;
 const LINK_TOKEN_G = /\[[^\]\n]*\]\([^)\n]*\)/g;
 const BARE_HOST_TOKEN_G =
@@ -120,7 +119,7 @@ const BARE_HOST_TOKEN_G =
 function isCitationOnlyLine(raw: string): boolean {
   const line = raw.trim();
   if (!line) return false;
-  if (!MARKER_TOKEN.test(line) && !LINK_TOKEN.test(line)) return false;
+  if (!MARKER_TOKEN.test(line)) return false;
   const residue = line
     .replace(MARKER_TOKEN_G, '')
     .replace(LINK_TOKEN_G, '')

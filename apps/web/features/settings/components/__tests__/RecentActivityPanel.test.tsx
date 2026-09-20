@@ -125,6 +125,28 @@ describe('WEB-USE-SETTINGS-QUERIES-ACCOUNT-ACTIVITY-01', () => {
     expect(screen.getByTestId(PANEL).textContent).toContain('newest first');
   });
 
+  it('keeps event details readable instead of ellipsizing them on narrow screens', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ activities: [activity(), activity({ id: 'act-2' })] }),
+      })),
+    );
+
+    renderPanel();
+
+    const sentence = await screen.findByText(/Signed in on a new device/);
+    expect(sentence).not.toHaveStyle({
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    });
+    expect(sentence.closest('li')).toHaveClass('grid-cols-1', 'sm:grid-cols-[minmax(0,1fr)_auto]');
+    expect(screen.getByTestId(PANEL).textContent).toContain('×2');
+  });
+
   it('says the account has no record rather than showing an empty box', async () => {
     vi.stubGlobal(
       'fetch',

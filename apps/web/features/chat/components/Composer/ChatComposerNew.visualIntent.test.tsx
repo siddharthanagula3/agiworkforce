@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { getProviderOfferings } from '@agiworkforce/types';
+import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 
 vi.mock('next/navigation', () => ({
@@ -59,6 +61,7 @@ function renderInImageMode(handlers: { onSend: OnSend; onGenerateImage: OnGenera
 
 beforeEach(() => {
   useChatStore.getState().reset();
+  useModelStore.getState().setSelectedModelId('auto');
   resetSendPendingFlagForTests();
   useBillingStore.setState({
     subscription: {
@@ -107,4 +110,38 @@ describe('image mode routes a structured visual to Artifacts, not to a raster mo
     expect(onSend).not.toHaveBeenCalled();
     expect(onGenerateImage).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('explicit free model media routing', () => {
+  it.each(['image-sync', 'video-async'])(
+    'keeps %s selection out of paid media modes',
+    (protocol) => {
+      const offering = Object.entries(getProviderOfferings()).find(
+        ([, entry]) => entry.quotaProbeProtocol === protocol,
+      )![0];
+      useModelStore.getState().setSelectedModelId(offering);
+      useChatStore
+        .getState()
+        .setComposerToggles(
+          { imageMode: protocol === 'image-sync', videoMode: protocol === 'video-async' },
+          CONVERSATION_ID,
+        );
+      const onSend = vi.fn<OnSend>();
+      const onGenerateImage = vi.fn();
+      const onGenerateVideo = vi.fn();
+      render(
+        <ChatComposerNew
+          onSend={onSend}
+          onGenerateImage={onGenerateImage}
+          onGenerateVideo={onGenerateVideo}
+          conversationId={CONVERSATION_ID}
+        />,
+      );
+      send('Draw a blue boat');
+      expect(onSend).toHaveBeenCalledTimes(1);
+      expect(onGenerateImage).not.toHaveBeenCalled();
+      expect(onGenerateVideo).not.toHaveBeenCalled();
+      expect(useModelStore.getState().selectedModelId).toBe(offering);
+    },
+  );
 });

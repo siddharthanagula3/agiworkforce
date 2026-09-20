@@ -10,6 +10,7 @@ import React, {
   memo,
 } from 'react';
 import { MessageSearch } from './MessageSearch';
+import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   List,
@@ -659,7 +660,13 @@ const MessageRow = memo(function MessageRow({
         attachments,
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
-      onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}
+      onRegenerate={
+        onRegenerate &&
+        displayRole === 'assistant' &&
+        message.metadata?.['errorCode'] !== FREE_QUOTA_EXHAUSTED_CODE
+          ? handleRegenerate
+          : undefined
+      }
       onRetryResearch={
         onRetryResearch && displayRole === 'assistant' && message.metadata?.['research']
           ? onRetryResearch

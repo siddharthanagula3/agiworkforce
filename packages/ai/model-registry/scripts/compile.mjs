@@ -164,6 +164,7 @@ const TOP_LEVEL_ORDER = [
   'providers',
   'developers',
   'models',
+  'providerOfferings',
   'tierAllowedModels',
   'providerDefaults',
   'providersInOrder',
@@ -415,6 +416,49 @@ function resolveSyncedFields(cur, up) {
 const FAMILY_RESOLVED_TOP_LEVEL_KEYS = ['providers', 'tierAllowedModels', 'providerDefaults'];
 
 function buildCatalog(curation, synced, familyCatalog, defaultsCatalog) {
+  for (const [key, offering] of Object.entries(curation.providerOfferings ?? {})) {
+    if (offering.quotaThinkingRequired !== undefined) {
+      assert(
+        offering.quotaProbeProtocol === 'chat' &&
+          typeof offering.quotaThinkingRequired === 'boolean',
+        `${key}: thinking configuration requires a chat protocol`,
+      );
+    }
+    if (offering.quotaImageSize !== undefined) {
+      assert.ok(
+        offering.quotaProbeProtocol === 'image-sync' && /^\d+\*\d+$/.test(offering.quotaImageSize),
+        `${key}: invalid quota image size`,
+      );
+    }
+    if (offering.quotaProbeProtocol !== undefined) {
+      assert.ok(
+        ['chat', 'image-sync', 'video-async'].includes(offering.quotaProbeProtocol) &&
+          offering.identityStatus === 'exact',
+        `${key}: invalid quota probe protocol`,
+      );
+    }
+    assert.ok(curation.providers[offering.provider], `${key}: unknown offering provider`);
+    assert.ok(
+      ['chat', 'image', 'video', 'audio', 'embedding'].includes(offering.category),
+      `${key}: unknown offering category`,
+    );
+    assert.ok(
+      typeof offering.displayName === 'string' && offering.displayName.length > 0,
+      `${key}: missing offering label`,
+    );
+    assert.ok(
+      ['exact', 'unresolved'].includes(offering.identityStatus),
+      `${key}: unknown identity status`,
+    );
+    assert.ok(
+      offering.identityStatus === 'unresolved'
+        ? offering.providerModelId === null
+        : typeof offering.providerModelId === 'string' &&
+            /^[a-zA-Z0-9][a-zA-Z0-9./_-]*$/.test(offering.providerModelId) &&
+            !offering.providerModelId.includes('..'),
+      `${key}: invalid offering identity`,
+    );
+  }
   const developers = loadDeveloperCatalog();
   const developerLabels = {};
   const models = {};

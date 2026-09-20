@@ -154,6 +154,39 @@ describe('tool loop observability', () => {
     expect(emitted.some((entry) => entry['span_name'] === 'browser.command.handoff')).toBe(false);
     expect(outcomes.record).toHaveBeenCalledWith(expect.objectContaining({ status: 'handed_off' }));
   });
+
+  it('logs first-provider-line latency for the serving route and attempt', async () => {
+    const timestamps = [0, 100, 200, 350, 400];
+    provider.stream.mockResolvedValueOnce(
+      stream([
+        { choices: [{ delta: { content: 'Done.' }, index: 0 }], model: 'fixture-model' },
+        { choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'fixture-model' },
+      ]),
+    );
+
+    await drain(
+      runToolLoop(makeProcessed([]), {
+        approvalMode: 'auto',
+        now: () => timestamps.shift() ?? 400,
+      }),
+    );
+
+    expect(emitted).toContainEqual(
+      expect.objectContaining({
+        event: 'llm_ttft_observed',
+        request_id: REQUEST_ID,
+        operation_id: expect.any(String),
+        attempt_id: expect.any(String),
+        attempt: 1,
+        provider: 'openai',
+        model: 'fixture-model',
+        routeId: 'openai:fixture-model',
+        ttftMs: 200,
+        sloTargetMs: expect.any(Number),
+        sloBreachMs: expect.any(Number),
+      }),
+    );
+  });
 });
 
 describe('hosted tool execution span', () => {

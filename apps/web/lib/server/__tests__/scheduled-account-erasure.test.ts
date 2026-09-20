@@ -104,6 +104,30 @@ describe('eraseScheduledAccount', () => {
     expect(mocks.deleteUser).not.toHaveBeenCalled();
   });
 
+  it('names an anonymization failure instead of the deliberately retained profile', async () => {
+    mocks.eraseUserAccountData.mockResolvedValue({
+      complete: false,
+      tables: { profiles: { deleted: false, retainedForRetry: true } },
+      anonymized: {
+        organization_usage_ledger: { updated: false, error: 'constraint rejected update' },
+      },
+      mediaObjectsFailed: 0,
+      backupObjectsFailed: 0,
+      knowledgeObjectsFailed: 0,
+      avatarObjectsFailed: 0,
+      cacheKeysFailed: 0,
+    });
+
+    const result = await eraseScheduledAccount('user-1');
+    expect(result).toMatchObject({
+      status: 'failed',
+      stage: 'erasure',
+      detail: expect.stringContaining('organization_usage_ledger (constraint rejected update)'),
+    });
+    expect(result).not.toMatchObject({ detail: expect.stringContaining('profiles') });
+    expect(mocks.deleteUser).not.toHaveBeenCalled();
+  });
+
   it('keeps the profile row when the identity provider will not delete the account', async () => {
     mocks.deleteUser.mockRejectedValue(new Error('clerk is down'));
 

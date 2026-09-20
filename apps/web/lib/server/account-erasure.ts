@@ -123,6 +123,30 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
 ];
 
 const PROFILE_TABLE = 'profiles';
+const ORGANIZATION_USAGE_LEDGER_TABLE = 'organization_usage_ledger';
+
+async function anonymizeUserReference(
+  db: { execute: (sql: string, params: unknown[]) => Promise<unknown> },
+  table: string,
+  column: string,
+  userId: string,
+): Promise<void> {
+  if (table === ORGANIZATION_USAGE_LEDGER_TABLE) {
+    await db.execute(
+      `delete from public.${ORGANIZATION_USAGE_LEDGER_TABLE}
+        where ${column} = $1 and organization_id is null`,
+      [userId],
+    );
+    await db.execute(
+      `update public.${ORGANIZATION_USAGE_LEDGER_TABLE}
+          set ${column} = null
+        where ${column} = $1 and organization_id is not null`,
+      [userId],
+    );
+    return;
+  }
+  await db.execute(`update public.${table} set ${column} = null where ${column} = $1`, [userId]);
+}
 
 async function deleteBetaApplicationsByEmail(
   db: { execute: (sql: string, params: unknown[]) => Promise<unknown> },
@@ -835,9 +859,7 @@ export async function eraseUserAccountData(
 
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
       try {
-        await db.execute(`update public.${table} set ${column} = null where ${column} = $1`, [
-          userId,
-        ]);
+        await anonymizeUserReference(db, table, column, userId);
         anonymized[table] = { updated: true };
       } catch (error) {
         if (isSchemaAbsent(error)) {

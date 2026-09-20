@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   killSession: vi.fn(async (..._args: unknown[]) => undefined),
   scope: vi.fn((userId: string, conversationId: string) => ({ userId, conversationId })),
   unpublishForConversations: vi.fn(async (..._args: unknown[]) => [] as string[]),
+  organizationId: null as string | null,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -21,7 +22,7 @@ vi.mock('@/lib/server/rls-db', () => ({
       },
     },
     userId: await mocks.requireUser(...args),
-    organizationId: null,
+    organizationId: mocks.organizationId,
   }),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -73,6 +74,7 @@ describe('POST /api/chat/conversations/bulk', () => {
     vi.clearAllMocks();
     mocks.requireUser.mockResolvedValue('user-1');
     mocks.unpublishForConversations.mockResolvedValue([]);
+    mocks.organizationId = null;
   });
 
   it('archives only the authenticated owners live, unarchived conversations', async () => {
@@ -114,6 +116,17 @@ describe('POST /api/chat/conversations/bulk', () => {
     const [sql] = mocks.query.mock.calls[0]!;
     expect(sql).toContain('set deleted_at = now()');
     expect(sql).not.toContain('archived = true');
+  });
+
+  it('limits a bulk delete to the active workspace', async () => {
+    mocks.organizationId = '11111111-1111-4111-8111-111111111111';
+    mocks.query.mockResolvedValue([]);
+
+    await post('delete_all');
+
+    const [sql, params] = mocks.query.mock.calls[0]!;
+    expect(sql).toContain('organization_id is not distinct from $2');
+    expect(params).toEqual(['user-1', mocks.organizationId]);
   });
 
   it('revokes published artifacts for every conversation a bulk delete removes', async () => {

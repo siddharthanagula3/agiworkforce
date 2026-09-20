@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-19T18:08:24Z",
+  "recordedAt": "2026-09-20T00:25:44Z",
   "kind": "targeted-verification",
   "log": "\n> @agiworkforce/web@0.1.1 test /Users/siddhartha/Desktop/agiworkforce/apps/web\n> vitest run \"lib/workflows/cloud-agent-workflow.device-clearance.test.ts\" \"lib/workflows/cloud-agent-workflow-input.test.ts\" \"lib/workflows/cloud-agent-workflow.unread-stream.test.ts\" \"lib/workflows/cloud-agent-workflow.tool-permission.test.ts\" \"lib/workflows/cloud-agent-workflow.settle.test.ts\"\n\n\n RUN  v5.0.1 /Users/siddhartha/Desktop/agiworkforce/apps/web\n\n\n Test Files  5 passed (5)\n      Tests  59 passed (59)\n   Start at  03:43:05\n   Duration  4.57s (transform 43%, import 34%, environment 15%, setup 6%, tests 3%)\n\n     Import  809 modules were evaluated 2260 times · 2.77s total, 34% of tracked time\n             ~427ms faster with isolate: false; shared modules are evaluated once per worker instead of once per file\n             learn more: https://vitest.dev/guide/improving-performance#test-isolation\n\n",
   "sourceHashes": {
@@ -62,5 +62,26 @@
       "repairConfidence": 0.99
     },
     "startupEnvironment": "The project-local TOTP key is valid 64-character hex, but this Codex host inherits a separate 48-byte TOTP_ENCRYPTION_KEY that overrides dotenv. Global configuration was not changed; future owned local starts must remove only that inherited value so the project-local key loads."
+  },
+  "toolLoopTtftObservability": {
+    "status": "validated-locally",
+    "finding": "The tool loop already recorded first-provider-line latency in route health and routing-decision outcomes, but did not emit the llm_ttft_observed diagnostic event available on the direct streaming path.",
+    "change": "Each successful provider step now logs the measured first-provider-line latency with the actual serving route, provider, model, request, logical operation and retry attempt. Breaches emit llm_ttft_slo_breach using the existing environment-configured thresholds.",
+    "measurementSemantics": "The tool-loop value is first provider line, which may be text, thinking or a tool call. The log marks observationPoint=first_provider_line and does not claim first visible text or lower response latency.",
+    "validation": [
+      "The focused observability regression failed before the change and now verifies an exact 200 ms measurement from a deterministic clock.",
+      "Tool-loop observability, route-outcome and same-model failover suites passed: 3 files and 19 tests.",
+      "Focused ESLint and Prettier checks passed."
+    ],
+    "jev": {
+      "requestHash": "215a88533a2e3e1e7dcf177e39a4f6f425988da9236518604f2dcb01fd9fe1b3",
+      "choice": "per_provider_step_log",
+      "confidence": 1
+    },
+    "sourceHashes": {
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts": "f383dbfc048a4f6583e2d3835f034cf46b5b115216e4f20e74aa389ef4c3abc6",
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.observability.test.ts": "056ac420a56152fbea32d6ae87e9070fb0c77c75df87190313528bcda73ed3d6"
+    },
+    "limitation": "Provider credit exhaustion still blocks a fresh successful live-model comparison. This repair makes the next run attributable; it does not by itself reduce provider response time."
   }
 }

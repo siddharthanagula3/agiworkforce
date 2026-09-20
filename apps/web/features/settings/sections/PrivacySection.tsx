@@ -137,10 +137,8 @@ export function PrivacySection() {
    * Destructive-action confirmation (shell-nav-ia-gap-01 remainder).
    *
    * Archive-all and delete-all-chats used native `window.confirm()`, an OS
-   * alert with browser chrome, not the product's own dialog, for the two
-   * highest-stakes bulk actions on this page (delete-all is the single
-   * highest-stakes action in the app: every active AND archived conversation,
-   * irreversibly). `useConfirm` is the shared promise-based wrapper around
+   * alert with browser chrome, not the product's own dialog. `useConfirm` is
+   * the shared promise-based wrapper around
    * the styled AlertDialog primitive (packages/ui/ui/src/primitives/
    * ConfirmDialog.tsx) already wired into WebChatPage/WebAppShell/
    * MessageBubble for the same class of action. Same await-a-boolean shape as
@@ -273,9 +271,9 @@ export function PrivacySection() {
 
   async function handleArchiveAllChats() {
     const confirmed = await confirmDestructive({
-      title: 'Archive every chat?',
+      title: 'Archive all chats in this workspace?',
       description:
-        'Every chat will move out of the sidebar. You can restore them from Archived chats at any time, this does not delete anything.',
+        'Every chat in the current workspace will move out of the sidebar. You can restore them from Archived chats at any time; this does not delete anything.',
       confirmText: 'Archive all',
       variant: 'default',
     });
@@ -317,11 +315,11 @@ export function PrivacySection() {
     }
     const scope =
       chatCount === null
-        ? 'Every chat in your account, active and archived, will be removed from your history'
-        : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in your account, active and archived, will be removed from your history`;
+        ? 'Every chat in the current workspace, active and archived, will be removed from your history'
+        : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in the current workspace, active and archived, will be removed from your history`;
     const confirmed = await confirmDestructive({
-      title: 'Delete all chats?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted until they are purged.`,
+      title: 'Delete all chats in this workspace?',
+      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
@@ -565,7 +563,7 @@ export function PrivacySection() {
               Archived chats
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              Restore archived chats or permanently delete them.
+              Restore archived chats or move them to Recently deleted.
             </div>
           </div>
           <SettingsSectionLink
@@ -628,7 +626,7 @@ export function PrivacySection() {
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-              Archive all chats
+              Archive all chats in this workspace
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
               Move every chat out of the sidebar. You can restore them later.
@@ -665,11 +663,11 @@ export function PrivacySection() {
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-              Delete all chats
+              Delete all chats in this workspace
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              Remove every active and archived conversation from history. Restore them from Recently
-              deleted until they are purged.
+              Remove every active and archived conversation in this workspace from history. Restore
+              them from Recently deleted.
             </div>
           </div>
           <button

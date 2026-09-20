@@ -2,6 +2,7 @@ import 'server-only';
 
 import { isFreeEligibilityValid, type FreeEligibility } from '@agiworkforce/routing';
 import { z } from 'zod';
+import { getProviderOffering } from '@agiworkforce/types';
 
 import freePoolsDocument from '@/config/free-pools.json';
 
@@ -38,11 +39,66 @@ const FreePoolEntrySchema = z
     path: ['expiresAtMs'],
   });
 
+const FreeQuotaObservationSchema = z.object({
+  offeringKey: z
+    .string()
+    .refine((key) => getProviderOffering(key) !== null, 'Unknown provider offering'),
+  sourcePage: z.number().int().positive(),
+  sourceRow: z.number().int().positive(),
+  limit: z.number().int().positive().nullable(),
+  unit: z.enum(['tokens', 'images', 'seconds', 'chars', 'calls']).nullable(),
+  consumedApproximate: z.number().nonnegative().nullable(),
+  expiresOn: z.string().date().nullable(),
+  providerStatus: z.enum(['active', 'expired', 'unknown']),
+  quotaOnlyObserved: z.boolean(),
+});
+
+export const FreeQuotaInventorySchema = z
+  .object({
+    observedOn: z.string().date(),
+    source: z.string().min(1),
+    evidenceUrl: z.string().url(),
+    reportedEligible: z.number().int().nonnegative(),
+    reportedUnavailable: z.number().int().nonnegative(),
+    sources: z.array(z.string().min(1)).min(1),
+    entries: z.array(FreeQuotaObservationSchema),
+  })
+  .superRefine((inventory, context) => {
+    const seen = new Set<string>();
+    inventory.entries.forEach((entry, index) => {
+      if (seen.has(entry.offeringKey)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['entries', index],
+          message: 'Duplicate quota observation',
+        });
+      }
+      seen.add(entry.offeringKey);
+      if (entry.sourcePage > inventory.sources.length) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['entries', index],
+          message: 'Unknown screenshot page',
+        });
+      }
+    });
+    if (inventory.entries.length !== inventory.reportedEligible + inventory.reportedUnavailable) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Quota inventory does not account for the source total',
+      });
+    }
+  });
+
+export type FreeQuotaInventory = z.infer<typeof FreeQuotaInventorySchema>;
+export type FreeQuotaObservation = z.infer<typeof FreeQuotaObservationSchema>;
+
 export const FreePoolsDocumentSchema = z.object({
   schemaVersion: z.number().int().min(MIN_SCHEMA_VERSION),
   workbook: z.string().min(MIN_IDENTIFIER_LENGTH),
   notes: z.string().optional(),
   entries: z.array(FreePoolEntrySchema),
+  inventory: FreeQuotaInventorySchema.optional(),
 });
 
 export type FreePoolTerms = z.infer<typeof FreePoolTermsSchema>;
@@ -50,10 +106,7 @@ export type FreePoolEntry = z.infer<typeof FreePoolEntrySchema>;
 export type FreePoolsDocument = z.infer<typeof FreePoolsDocumentSchema>;
 
 export type FreePoolIneligibilityReason =
-  | 'not_verified_free'
-  | 'verification_expired'
-  | 'terms_incompatible'
-  | 'no_hard_stop_before_paid';
+  'not_verified_free' | 'verification_expired' | 'terms_incompatible' | 'no_hard_stop_before_paid';
 
 export type FreePoolDecision =
   | { eligible: true; entry: FreePoolEntry; eligibility: FreeEligibility }

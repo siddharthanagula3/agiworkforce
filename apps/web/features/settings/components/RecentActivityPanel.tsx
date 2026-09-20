@@ -109,11 +109,8 @@ export function RecentActivityPanel() {
           {groups.map((group) => (
             <li
               key={group.id}
+              className="grid grid-cols-1 items-start gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-baseline sm:gap-4"
               style={{
-                display: 'flex',
-                alignItems: 'baseline',
-                justifyContent: 'space-between',
-                gap: 16,
                 padding: '10px 0',
                 borderTop: '1px solid var(--settings-border)',
               }}
@@ -124,9 +121,7 @@ export function RecentActivityPanel() {
                     display: 'block',
                     fontSize: 13,
                     color: 'var(--text-1)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    overflowWrap: 'anywhere',
                   }}
                 >
                   {group.sentence}
@@ -140,7 +135,7 @@ export function RecentActivityPanel() {
                   </span>
                 ) : null}
               </div>
-              <span style={{ flexShrink: 0, fontSize: 12, color: 'var(--text-3)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>
                 {formatWhen(group.createdAt)}
               </span>
             </li>

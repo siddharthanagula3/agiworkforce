@@ -127,7 +127,7 @@ export function ArchivedChatsSection() {
     const label = conversation.title ? `“${conversation.title}”` : 'this archived chat';
     const confirmed = await confirmDestructive({
       title: 'Delete archived chat?',
-      description: `${label.charAt(0).toUpperCase()}${label.slice(1)} moves to Deleted chats and leaves your history. You can restore it from Settings > Deleted chats until it is purged.`,
+      description: `${label.charAt(0).toUpperCase()}${label.slice(1)} moves to Deleted chats and leaves your history. You can restore it from Settings > Deleted chats.`,
       confirmText: 'Delete chat',
       variant: 'destructive',
     });
@@ -153,8 +153,8 @@ export function ArchivedChatsSection() {
       ? 'Every archived chat'
       : `All ${conversations.length} archived chat${conversations.length === 1 ? '' : 's'}`;
     const confirmed = await confirmDestructive({
-      title: 'Delete all archived chats?',
-      description: `${scope} will be removed from your history. Chats that are not archived are not affected. You can restore them from Settings > Deleted chats until they are purged.`,
+      title: 'Delete all archived chats in this workspace?',
+      description: `${scope} in the current workspace will be removed from your history. Chats that are not archived are not affected. You can restore them from Settings > Deleted chats.`,
       confirmText: 'Delete all archived',
       variant: 'destructive',
     });
@@ -215,7 +215,7 @@ export function ArchivedChatsSection() {
           Archived chats
         </h1>
         <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Restore chats to the sidebar or permanently delete them.
+          Restore chats to the sidebar or move them to Recently deleted.
         </p>
       </div>
 

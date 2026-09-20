@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-19T18:31:39Z",
+  "recordedAt": "2026-09-20T00:25:44Z",
   "scope": "Current public website, support, runtime, localization, README, and canonical product and architecture claims",
   "status": "passed",
   "observations": [
@@ -10,7 +10,8 @@
     "Support copy does not promise unimplemented human-support guarantees, and Help search copy matches the generated 41-article, 215-chunk corpus.",
     "README and current canonical documents distinguish public Electron from retained internal Tauri code and historical decisions.",
     "Rendered pricing caps and canonical billing limits remain aligned; execution capacity and provider-generated artifacts are separate functional-verification concerns.",
-    "Telemetry copy distinguishes consent-gated browser reporting from configured server and edge operational reporting, and accurately describes sensitive-field removal, secret masking, stable browser identifiers, and the remaining free-text diagnostic boundary."
+    "Telemetry copy distinguishes consent-gated browser reporting from configured server and edge operational reporting, and accurately describes sensitive-field removal, secret masking, stable browser identifiers, and the remaining free-text diagnostic boundary.",
+    "Settings and Help describe bulk archive/delete as current-workspace actions and recoverable deletion through Recently deleted; they do not promise a separate permanent chat-delete control or purge schedule."
   ],
   "independentVerification": {
     "report": "/tmp/agi-public-claims-audit-final-refresh-5.json",
@@ -30,7 +31,8 @@
       "After correcting the sole stale non-rendered test comment, its 21-test suite passed; all other 40 audited source fingerprints remained unchanged",
       "No rendered or non-rendered audited source retains the retired local-Mac-model phrase",
       "Canonical support-corpus verification passed at 41 documents and 215 chunks; 116 focused privacy and support tests passed",
-      "The recovered pre-hook privacy-page blob formats byte-for-byte to the final page, proving the hook delta was formatting-only"
+      "The recovered pre-hook privacy-page blob formats byte-for-byte to the final page, proving the hook delta was formatting-only",
+      "After the workspace-scoped destructive-control copy repair, 15 current public-claim files passed 273 tests; canonical support-corpus verification remained 41 documents and 215 chunks."
     ]
   },
   "sourceHashes": {
@@ -47,11 +49,11 @@
     "apps/web/__tests__/surface-page-claims.test.ts": "9a4cabeedd4d08393cd6abb4b4e39d9cace482c7927ac825f55048866fcd32d4",
     "apps/web/app/privacy/page.tsx": "4e4bfbd86b406c87d107973773badca2666dcc2f405e70ab7c4b65d239c3328e",
     "apps/web/lib/sentry-shared.ts": "d022ec9488e3df9ff3927f0a9d2ea165ca2f41b151fc468b12df857e2004ff82",
-    "apps/web/features/settings/sections/PrivacySection.tsx": "12a678329fb2b0b9ed4ea3ddacb39cbd82e5c0fe2449f1dd1e3f599ffc937d06",
+    "apps/web/features/settings/sections/PrivacySection.tsx": "c3b73eed5ad923a80a6cc51b14167ec986f276fbbe04d509adc32b6eed900a66",
     "apps/web/content/support/privacy-controls.md": "d6e834fb617df8ea0284ed2d3945dc765c514bc3416d030f2fe3d7bb1cb3415a",
     "apps/web/__tests__/privacy-claims.spec.ts": "bb8e33a5e35e34026cf236d2be1ff5e489991068245cffdab43685f9a751a8b4",
     "apps/web/features/settings/sections/__tests__/PrivacySection.density.test.tsx": "9c2f481644584a8eab7834d26592a987933a75f82341dee61f7fdea44e60ba94",
-    "apps/web/lib/support/agent/corpus.generated.json": "d36d32a4393e12a6cc87c8ab31b76265d0ede43b4d959f2ccd14a93f6c109d4f",
+    "apps/web/lib/support/agent/corpus.generated.json": "980e635d7d293e55cb5e95f6a2618c37de302d21a40c68e2ba133af35ad6285d",
     "packages/ui/i18n/locales/en/pricing.json": "42eb6213b7aecf4e405982ac06f969220a22c10925cedd9b6a787497ced5335a",
     "apps/web/lib/changelog-entries.ts": "233393251b364ed2c626356903e72a9493db3884168f0b9ea36471a62a0ae377",
     "apps/web/__tests__/feature-page-claims.test.ts": "cecafe1f736dd2441891a60233b85590369e8f26f6a1a59fc474559ed92bff35"

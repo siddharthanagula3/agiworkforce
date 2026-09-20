@@ -44,6 +44,14 @@ import {
 import { QWEN_MODEL_CATALOG } from './catalog';
 import { QWEN_DEFAULT_BASE_URL } from './base-url';
 
+export {
+  runQwenQuotaProbe,
+  streamQwenQuotaChat,
+  type QwenQuotaInput,
+  type QwenQuotaProbePolicy,
+  type QwenQuotaProbeResult,
+} from './quota-probe';
+
 const QWEN_ALLOWED_BASE_HOSTS: readonly string[] = [
   'dashscope.aliyuncs.com',
   'dashscope-intl.aliyuncs.com',

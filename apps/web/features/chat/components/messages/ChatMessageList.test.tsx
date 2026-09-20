@@ -591,6 +591,19 @@ describe('ChatMessageList actions', () => {
     expect(onDelete).toHaveBeenCalledWith('msg-1');
   });
 
+  it('does not offer same-model regeneration for an exhausted free allocation', () => {
+    const messages = [
+      makeMessage({
+        id: 'quota-error',
+        role: 'assistant',
+        content: 'Choose another model in Free to continue.',
+        metadata: { errorCode: 'free_quota_exhausted' },
+      }),
+    ];
+    render(<ChatMessageList messages={messages} onRegenerate={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'regenerate' })).not.toBeInTheDocument();
+  });
+
   it('calls onRegenerate with correct messageId for assistant messages', () => {
     const onRegenerate = vi.fn();
     const messages = [makeMessage({ id: 'msg-2', role: 'assistant', content: 'reply' })];

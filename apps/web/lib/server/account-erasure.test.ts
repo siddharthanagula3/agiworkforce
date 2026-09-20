@@ -208,7 +208,7 @@ function primeDb(fixture: ErasureFixture = {}): void {
 }
 
 function executedStatements(): string[] {
-  return mocks.execute.mock.calls.map((call) => String(call[0]));
+  return mocks.execute.mock.calls.map((call) => String(call[0]).replace(/\s+/gu, ' ').trim());
 }
 
 describe('account erasure inventory', () => {
@@ -371,6 +371,15 @@ describe('eraseUserAccountData', () => {
     expect(statements).toContain(
       'update public.cogs_adjustments set user_id = null where user_id = $1',
     );
+    expect(statements).toContain(
+      'delete from public.organization_usage_ledger where user_id = $1 and organization_id is null',
+    );
+    expect(statements).toContain(
+      'update public.organization_usage_ledger set user_id = null where user_id = $1 and organization_id is not null',
+    );
+    expect(statements).not.toContain(
+      'update public.organization_usage_ledger set user_id = null where user_id = $1',
+    );
   });
 
   it('removes the backup copy of every object it erased from the primary', async () => {
@@ -457,6 +466,16 @@ describe('eraseUserAccountData', () => {
       statements.some((sql) => sql.includes('delete from public.user_skills where user_id = $1')),
     ).toBe(true);
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
+      if (table === 'organization_usage_ledger') {
+        expect(
+          statements.some((sql) =>
+            sql.includes(
+              'update public.organization_usage_ledger set user_id = null where user_id = $1 and organization_id is not null',
+            ),
+          ),
+        ).toBe(true);
+        continue;
+      }
       expect(
         statements.some((sql) => sql.includes(`update public.${table} set ${column} = null`)),
       ).toBe(true);

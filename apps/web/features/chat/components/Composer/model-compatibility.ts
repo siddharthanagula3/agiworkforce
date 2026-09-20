@@ -1,5 +1,5 @@
 import { estimateTokens } from '@agiworkforce/routing';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, getProviderOffering } from '@agiworkforce/types';
 
 export const CONTEXT_RESERVE_TOKENS = 2_048;
 export const MIN_CONTEXT_BUDGET_TOKENS = 1_024;
@@ -88,6 +88,34 @@ export function evaluateModelCompatibility(
   modelId: string | null | undefined,
   request: ModelCompatibilityRequest,
 ): ModelCompatibilityResult {
+  const offering = modelId ? getProviderOffering(modelId) : undefined;
+  if (offering?.quotaProbeProtocol) {
+    return {
+      modelId: modelId!,
+      modelName: offering.displayName,
+      findings: [
+        ...(request.hasImages
+          ? [
+              {
+                code: 'no_vision' as const,
+                message:
+                  'Free-quota testing accepts text prompts only. Remove attached images before sending.',
+              },
+            ]
+          : []),
+        ...(request.needsTools
+          ? [
+              {
+                code: 'no_tools' as const,
+                message: 'Turn off tools for this free-quota experiment.',
+              },
+            ]
+          : []),
+      ],
+      estimatedTokens: 0,
+      budgetTokens: null,
+    };
+  }
   const metadata = getModelMetadataById(modelId);
   const resolvedId = metadata?.id ?? modelId ?? '';
   if (!metadata) {

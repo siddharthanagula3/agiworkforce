@@ -131,6 +131,30 @@ describe('useChatStream', () => {
     vi.restoreAllMocks();
   });
 
+  it('shows quota exhaustion without generic retry guidance', async () => {
+    const message =
+      'This model’s free quota has been exhausted. Choose another model in Free to continue.';
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: { code: 'free_quota_exhausted', message },
+        }),
+        { status: 409 },
+      ),
+    );
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Hello', { conversationId: TEMP_CONVERSATION.id });
+    });
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.content).toBe(message);
+    expect(assistant?.metadata?.errorCode).toBe('free_quota_exhausted');
+    expect(assistant?.content).not.toMatch(/try again|start a new chat/i);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   describe('auth failure at send time', () => {
     it('surfaces an error but keeps the optimistically painted message when the token is unavailable', async () => {
       authMocks.getToken.mockResolvedValueOnce(null);

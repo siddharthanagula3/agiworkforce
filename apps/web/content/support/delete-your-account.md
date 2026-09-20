@@ -4,7 +4,7 @@ title: Delete your account, or cancel a scheduled deletion
 path: /privacy
 category: account
 tags: delete account, close account, erase, deletion, cancel deletion, undo deletion, permanently delete, account erasure, remove my data
-updated: 2026-09-17
+updated: 2026-09-19
 scope: public
 ---
 
@@ -38,7 +38,8 @@ is handled in the billing portal, not by the deletion flow.
 
 ## Deleting conversations without deleting the account
 
-Settings, Privacy has narrower options: **Archive all chats**, which moves every
-chat out of the sidebar and can be undone from Archived chats, and **Delete all
-chats**, which permanently deletes every active and archived conversation. Both
-ask first and name what they do.
+Settings, Privacy has narrower controls for the workspace you are currently
+using. **Archive all chats** moves that workspace's chats out of the sidebar and
+can be undone from Archived chats. **Delete all chats** moves that workspace's
+active and archived conversations to Recently deleted, where you can restore
+them. Both ask first and name the current-workspace scope.

@@ -4,7 +4,7 @@
     "url": "http://localhost:3100",
     "mode": "next dev / Turbopack",
     "source": "source-baseline.json",
-    "database": "Isolated agiworkforce_dev at127.0.0.1:5432; native postgres provider via process-only override;272canonical migrations zero pending/drift. Loopback Neon proxy remains available but web runtime no longer uses it.",
+    "database": "Isolated agiworkforce_dev at127.0.0.1:5432; native postgres provider. Current ledger:272 applied,1 pending (0273_ediscovery_cascade_delete.sql),1 drift (0268_conversation_activation.sql checksum differs from the applied ledger). Prior zero-pending/zero-drift evidence is stale.",
     "remoteCacheAndTelemetry": "disabled by process-only empty overrides",
     "auth": "existing Clerk test instance",
     "cache": "Local Redis on loopback6379; shared remote cache disabled with process-only overrides",
@@ -126,7 +126,8 @@
       "boundary": "local",
       "actionable": false,
       "dependencies": ["apps/web/lib/workflows/cloud-agent-workflow.ts"],
-      "dependency": "Provider API reports no credits remaining; no paid retry. Local transport mismatch is repaired in ignored env: native loopback PostgreSQL and loopback Redis pass direct adapter/factory validation, while the full app stayed stopped to preserve RAM. Successful provider-response latency verification remains open."
+      "dependency": "Provider API reports no credits remaining; no paid retry. Local transport mismatch is repaired in ignored env: native loopback PostgreSQL and loopback Redis pass direct adapter/factory validation. Tool-loop first-provider-line latency now emits route/provider/model/operation/attempt diagnostics and a threshold-breach event; 3 files/19 tests pass. A fresh successful provider-response comparison remains open, so this is observability evidence rather than a latency-improvement claim.",
+      "evidence": "evidence/workflow-latency.json"
     },
     {
       "id": "PROJECT-PERSISTENCE",
@@ -194,17 +195,108 @@
       "boundary": "local",
       "actionable": true,
       "dependencies": [],
-      "evidence": "Temporary default/explicit override/fresh-chat reset Browser verified; plan UI and resource/credit boundary checks recorded in evidence/plan-limits.json. Workspace switching clears prior effective-policy and pending MCP context caches. Account-export attachment bytes, project-source bytes, project export JSON, authenticated media links and exact media target bytes pass deterministic verification. The 390px Account session-table overflow is repaired with a 24-test Account regression set, while post-repair authenticated pixel geometry remains open after three browser-connection failures. Broader data controls remain pending. Export endpoint200 and destructive-action cancellation Browser verified; deletion copy aligned with existing restoration semantics. See evidence/data-controls.json.",
-      "progress": "partially verified; export/download byte paths and mobile Account structure repaired, post-repair browser geometry and broader controls remain open"
+      "evidence": "Temporary defaults, project/resource boundaries, export/download bytes, responsive Account controls and current-workspace recoverable deletion are verified in evidence/data-controls.json. A live disposable scheduled-account erasure reproduced and repaired a personal usage-ledger constraint failure: subject rows are deleted, organization billing history is anonymized, the tombstone closes and zero fixture residue remains. Twelve related files/193 tests plus the opt-in PostgreSQL regression pass.",
+      "progress": "partially verified; local scheduled account erasure, export/download bytes, mobile Account layout and current-workspace recoverable bulk deletion pass. External identity-provider deletion, object-storage erasure with real fixture bytes, separate permanent chat deletion and broader production behavior remain open"
     },
     {
       "id": "PUBLIC-CLAIMS",
       "behavior": "Reconcile advertised website capabilities with functional evidence",
-      "status": "passed",
+      "status": "pending",
       "boundary": "local",
-      "actionable": false,
+      "actionable": true,
       "dependencies": [],
-      "evidence": "Independent source/runtime/doc re-audit is clean with 41 source fingerprints; 32 Desktop dispatcher tests, 281 public-claim tests, 305 privacy/legal/support tests, i18n parity, docs:check, diff validation and retired-phrase scans passed. The sole stale non-rendered test comment was corrected and its 21-test suite plus fingerprint delta refresh passed. Exact final-byte verification also proves the privacy delta formatter-only and passes canonical corpus drift plus 116 privacy/support tests. See evidence/public-claims.json. Production behavior and provider-generated outputs remain separate QA cases."
+      "evidence": "Earlier public-claim evidence is retained. Planning review withdrew the stale changelog and deprovisioning-unavailable allegations: current source does not support them. Supporting SSO is distinct from mandatory SSO. Review remaining status, model availability and applicable Enterprise claims against current runtime evidence; the local audit authentication failure is tracked separately.",
+      "progress": "partial claim review; prior blanket overclaim conclusion corrected; not a proven global claim failure"
+    },
+    {
+      "id": "BROWSER-QA-RUNTIME-STABILITY",
+      "behavior": "Keep the local website runtime available through ordinary read-only route navigation",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Two Browser navigation runs terminated Next dev with esbuild fatal deadlock and produced ERR_CONNECTION_REFUSED; exact stack and reproduction are recorded in QA_ISSUES.md.",
+      "progress": "confirmed twice; no repair attempted"
+    },
+    {
+      "id": "ENTERPRISE-AUDIT-AUTH",
+      "behavior": "Authorized Enterprise owner can read the workspace audit trail",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Signed-in owner receives The audit trail could not be loaded; Browser console records Authentication required while adjacent protected workspace pages load.",
+      "progress": "confirmed once after fresh runtime restart; no repair attempted"
+    },
+    {
+      "id": "ENTERPRISE-POLICY-CONSISTENCY",
+      "behavior": "Enterprise overview, policy and identity surfaces report one effective enforcement state",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Overview labels restrictive defaults ENFORCED while Policy says no saved policy means nothing is restricted. Effective runtime behavior needs tracing. The earlier deprovisioning contradiction was a misreading of separate Identity headings and is withdrawn.",
+      "progress": "policy presentation contradiction observed; runtime cause not yet confirmed"
+    },
+    {
+      "id": "CHAT-RECOVERY-PRESENTATION",
+      "behavior": "Recovered chat and Work outcomes present one coherent user-facing state",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Saved Luna chat shows a failed activity block immediately above its successful answer; failed Work dock exposes provider_billing_exhausted beside the friendly main-pane message.",
+      "progress": "confirmed from saved data without a new provider request"
+    },
+    {
+      "id": "STATUS-EXECUTION-SIGNAL",
+      "behavior": "Hosted status accurately distinguishes route availability from usable inference",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Status reports Operational from routing/configuration probes and explicitly does not send a model request. Historical saved provider failure does not establish current outage. Review signal scope and current health before selecting a correction.",
+      "progress": "signal-coverage gap confirmed; no repair attempted"
+    },
+    {
+      "id": "RESPONSIVE-CHAT-NAV-WORK",
+      "behavior": "Primary navigation, composer and Work split view remain legible and reachable at phone and tablet widths",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "At390px primary drawer actions have negative x positions; at360px model/reasoning labels overlap; at768px the Work dock clips/overlaps composer content and leaves truncated text after closing.",
+      "progress": "confirmed by Browser screenshots and geometry; no repair attempted"
+    },
+    {
+      "id": "ENTERPRISE-USAGE-BILLING-PRESENTATION",
+      "behavior": "Workspace usage and billing present complete, product-facing, internally consistent records",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Usage shows spend/turns with zero tokens and raw identities; provenance requires investigation. Active manual Enterprise subscription and no recorded contract may coexist, so billing integrity failure is not established. See planning qualifications in LAUNCH_PLAN.md.",
+      "progress": "confirmed against current local records; no billing mutation"
+    },
+    {
+      "id": "DIRECTORY-MODEL-PRESENTATION",
+      "behavior": "Connector and model policy availability labels agree with actual indexed/live state",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Connectors reports zero indexed while rendering Top Connectors; model policy labels explicit not-live entries AVAILABLE despite saying the badge reflects what members actually get.",
+      "progress": "confirmed in settled Browser views; no repair attempted"
+    },
+    {
+      "id": "PROJECTS-SEARCH-ACCESSIBILITY",
+      "behavior": "Projects search exposes a stable accessible name",
+      "status": "pending",
+      "boundary": "local",
+      "actionable": true,
+      "dependencies": [],
+      "evidence": "Projects search input has no label, aria-label, name or id and is an unnamed search text field in the accessibility tree.",
+      "progress": "confirmed by DOM and Browser accessibility tree"
     },
     {
       "id": "JEV-PILOT-ELIGIBILITY",
@@ -222,8 +314,277 @@
       "boundary": "local",
       "actionable": true,
       "dependencies": [],
-      "evidence": "Current dependency-focused validation passes: 191 web files/1780 tests and 69 shared-UI files/500 tests. Four release-full failures were isolated to two legacy activation assertions and a stale generated support corpus; the canonical repairs pass in a 4-file/48-test rerun. Repository-wide, CI, migration and exact-main gates remain pending.",
-      "progress": "affected source evidence refreshed; aggregate release status remains pending"
+      "evidence": "Current dependency-focused validation passes: 191 web files/1780 tests and 69 shared-UI files/500 tests. Four release-full failures were isolated to two legacy activation assertions and a stale generated support corpus; the canonical repairs pass in a 4-file/48-test rerun. Current migration status is272 applied,1 pending and1 drift. Repository-wide, CI, migration and exact-main gates remain pending.",
+      "progress": "affected source evidence refreshed; aggregate release and migration status remain pending"
+    },
+    {
+      "id": "QWEN-FREE-QUOTA-INVENTORY",
+      "behavior": "Free section in the actual composer model selector accounts for all 272 exact provider offerings, with modality filters and unavailable reasons.",
+      "status": "passed",
+      "evidence": "evidence/qwen-free-quota.json",
+      "limitations": "94 connected and currently quota-protected offerings (79 chat,14 image,1 video);172 require integration,4 active have quota-only off,2 expired. Exact identity and quota are not per-model functional passes."
+    },
+    {
+      "id": "QWEN-FREE-QUOTA-GENERATION",
+      "behavior": "Representative free chat, one image and two-second video generated through the composer selector; quota consumption and persistence checked.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "local test using remote provider free allocations",
+      "evidence": "evidence/qwen-free-quota.json",
+      "limitations": "Four provider requests, not a sweep of all offerings. Image rendered; video generated and link persisted, but browser blocked external video playback. Account verification expires after one hour."
+    },
+    {
+      "id": "QWEN-FREE-QUOTA-REMAINING",
+      "behavior": "Connect the remaining eligible provider protocols and their required inputs to the Free selector",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "local test using remote provider free allocations",
+      "evidence": "evidence/qwen-free-quota.json",
+      "limitations": "172 offerings still disabled pending verified protocol/input integration. Quota-only-off and expired offerings must remain unavailable unless their account prerequisites change."
+    },
+    {
+      "id": "QWEN-FREE-QUOTA-CAPABILITIES",
+      "behavior": "Bounded direct-provider experiments across13 capability areas, with semantic checks and independent speech input.",
+      "status": "pending",
+      "actionable": false,
+      "boundary": "local synthetic tests using remote provider free allocations",
+      "evidence": "evidence/qwen-free-quota.json#capabilityExperiments",
+      "limitations": "16 requests:12 passed, one initial reasoning answer truncated (concise follow-up passed), speech generated with quality unverified, two speech round-trip accuracy mismatches. Independent local speech transcription passed. This is API evidence, not new selector integration.",
+      "progress": "Representative matrix complete; speech quality qualification remains pending. No paid fallback;128-token answer/thinking caps;4740 reported tokens,70 synthesized characters,14 reported ASR seconds. Original passing image/video generations not replayed."
+    },
+    {
+      "id": "QWEN-FREE-QUOTA-BROWSER-WORKFLOWS",
+      "behavior": "Actual Free selector chat: JSON, multi-turn Spanish correction, code rendering/copy, reasoning model switch and saved-history reload.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost browser with remote free-quota inference",
+      "evidence": "evidence/qwen-free-quota.json#browserCapabilityExperiments",
+      "limitations": "Four browser submissions. Speech/embedding/ranking remain disabled. Two separate rendering findings tracked in ACTIVE_ISSUES.md."
+    },
+    {
+      "id": "CHAT-PACK-MD01",
+      "behavior": "Compact sampler displayed semantic H1\u2013H6, strong/emphasis, inline code, link, list, quote and divider. Desktop screenshot inspected. Reload retained response.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-MD04",
+      "behavior": "Two-paragraph quote and nested quote ended correctly; AFTER was a separate ordinary paragraph. Verified DOM, screenshot and reload.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-MD18",
+      "behavior": "Paragraph, table, Python block, list, quote and closing paragraph rendered in order. Whole-response clipboard retained Markdown delimiters. Reopening history retained content.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-TB02",
+      "behavior": "All numeric values correct. Copied source specified right alignment with |-------------:|, but numeric cells displayed left-aligned. Shared th/td components discard alignment props.",
+      "status": "failed",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "FAIL"
+    },
+    {
+      "id": "CHAT-PACK-CD01",
+      "behavior": "Six separate code blocks labeled python/typescript/sql/bash/rust/go. Second Copy code returned only const x = 1;. Snippets displayed, not executed.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-MT01",
+      "behavior": "Inline quadratic equation and complete display formula rendered correctly in screenshot. No claim of screen-reader math quality.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-MT07",
+      "behavior": "Actual six-node Mermaid diagram rendered. Source/Preview, exact artifact clipboard copy, fullscreen and close controls worked. Split panel reproduced existing cramped composer behavior.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-SA01",
+      "behavior": "Requested inert fenced HTML was promoted into an artifact preview. Script-disabled warning appeared; no JS dialog observed. Source tab retained the script text. Script execution safety is not proven solely by absence of a dialog. User prompt markup also disappeared visually, matching existing angle-text defect.",
+      "status": "failed",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "FAIL"
+    },
+    {
+      "id": "CHAT-PACK-VI12",
+      "behavior": "With no attachment, response was: There is no attached image. Please upload it.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-SA09",
+      "behavior": "Table correctly rendered Hello, \u0c28\u0c2e\u0c38\u0c4d\u0c15\u0c3e\u0c30\u0c02, \u0928\u092e\u0938\u094d\u0924\u0947, \u3053\u3093\u306b\u3061\u306f, \u0645\u0631\u062d\u0628\u0627. Desktop screenshot inspected; no broad RTL/IME claim.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-CH06",
+      "behavior": "Original ocean poem completed after an unusually long wait. Cancel retained it; Save & Retry changed prompt and answer to mountains. Previous/Next paired correct prompt and answer. Isolated reload retained selected version2/2.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-IG04",
+      "behavior": "One actual square blue poster rendered white HELLO QA accurately. DOM natural dimensions1024x1024, complete=true. Full reload retained image and Free selection. Provider quota increased from1 to2 images consumed.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-MD09",
+      "behavior": "Requested ABCDEFGHIJ24 times (240 characters); clipboard first line measured200 characters. This is a model-content failure. Actual200-character string wrapped at1112px and390px without document overflow; full240-character case is not passed.",
+      "status": "failed",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "FAIL"
+    },
+    {
+      "id": "CHAT-PACK-PL06",
+      "behavior": "After generation and reload, Library > Images settled to Your library is empty. Free-generated poster persists in chat but is not indexed as a Library image.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "GAP"
+    },
+    {
+      "id": "CHAT-PACK-U001",
+      "behavior": "Enter on empty and whitespace-only composer did not add a message; no Send control.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-U002",
+      "behavior": "Shift+Enter produced exact clipboard text FIRST\\nSECOND without sending. Other configured shortcuts not tested.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "NOT RUN"
+    },
+    {
+      "id": "CHAT-PACK-U011",
+      "behavior": "Whole mixed-format MD18 response copied exact Markdown including table, code fence and quote.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-U012",
+      "behavior": "Only second TypeScript code block was copied from CD01.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-U013",
+      "behavior": "Edit Cancel and Save & Retry both verified in CH06.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
+    },
+    {
+      "id": "CHAT-PACK-U014",
+      "behavior": "Edited prompt version navigation and reload passed; separate Regenerate response versions not exercised this batch.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "NOT RUN"
+    },
+    {
+      "id": "CHAT-PACK-U041",
+      "behavior": "Mermaid fullscreen, exit and close worked. Full resize/reopen matrix not run; cramped split composer matches prior finding.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "NOT RUN"
+    },
+    {
+      "id": "CHAT-PACK-U042",
+      "behavior": "Mermaid Source/Preview worked after completion; toggling during streaming not verified.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "NOT RUN"
+    },
+    {
+      "id": "CHAT-PACK-U064",
+      "behavior": "Immediate Stop on a bounded garden-tip request produced Response stopped/Try again; reload preserved cancellation. Request.signal is forwarded by Free route; provider-side compute termination not independently observed.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "NOT RUN"
+    },
+    {
+      "id": "CHAT-PACK-U081",
+      "behavior": "390x844 and default1112x748 wrapping observed; document scrollWidth equaled clientWidth390 and1112. Remaining widths/devices not tested.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "NOT RUN"
+    },
+    {
+      "id": "CHAT-PACK-U099",
+      "behavior": "Actual Free selector used for all15 UI submissions. Live two-offering quota-only verification refreshed first. Separate paid tool budgets not exercised.",
+      "status": "pending",
+      "actionable": true,
+      "boundary": "localhost in-app Browser; protected remote provider quota",
+      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "NOT RUN"
     }
   ],
   "reuse": [
@@ -371,6 +732,15 @@
     "PERMISSION-RECOVERY",
     "DATA-CONTROLS",
     "PUBLIC-CLAIMS",
+    "BROWSER-QA-RUNTIME-STABILITY",
+    "ENTERPRISE-AUDIT-AUTH",
+    "ENTERPRISE-POLICY-CONSISTENCY",
+    "CHAT-RECOVERY-PRESENTATION",
+    "STATUS-EXECUTION-SIGNAL",
+    "RESPONSIVE-CHAT-NAV-WORK",
+    "ENTERPRISE-USAGE-BILLING-PRESENTATION",
+    "DIRECTORY-MODEL-PRESENTATION",
+    "PROJECTS-SEARCH-ACCESSIBILITY",
     "JEV-PILOT-ELIGIBILITY",
     "AFFECTED-VALIDATION",
     "DEMO-HISTORY"
@@ -381,6 +751,13 @@
     "enterprise": "Local existing-demo login, contract UI, domain rejection and inactive membership authorization verified; see evidence/plan-limits.json. New signup, live SSO and metered contract remain unverified.",
     "repairAttemptsPerIssue": 3,
     "generation": "cheap Luna only; no image/video generation",
-    "hookScope": "Existing bound scope and continuation limits unchanged; expansion is explicit owner authorization, not completion evidence."
+    "hookScope": "Existing bound scope and continuation limits unchanged; expansion is explicit owner authorization, not completion evidence.",
+    "planningCheckpoint": {
+      "date": "2026-09-19",
+      "plan": "LAUNCH_PLAN.md",
+      "mode": "planning only; no application repairs this turn",
+      "coverage": "Broad partial discovery; exhaustive website requirement mapping and explicit missing-workflow dispositions remain required.",
+      "corrections": "Withdrawn stale changelog and deprovisioning-unavailable allegations; qualified billing, usage, status and Enterprise claim conclusions."
+    }
   }
 }

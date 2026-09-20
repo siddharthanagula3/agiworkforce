@@ -19,6 +19,27 @@
  */
 
 import modelsCatalogJson from './models.json';
+
+export type ProviderOfferingCategory = 'chat' | 'image' | 'video' | 'audio' | 'embedding';
+
+export interface ProviderOffering {
+  provider: string;
+  providerModelId: string | null;
+  displayName: string;
+  category: ProviderOfferingCategory;
+  identityStatus: 'exact' | 'unresolved';
+  quotaProbeProtocol?: 'chat' | 'image-sync' | 'video-async';
+  quotaImageSize?: string;
+  quotaThinkingRequired?: boolean;
+}
+
+export function getProviderOfferings(): Readonly<Record<string, ProviderOffering>> {
+  return modelsCatalogJson.providerOfferings as Readonly<Record<string, ProviderOffering>>;
+}
+
+export function getProviderOffering(key: string): ProviderOffering | null {
+  return getProviderOfferings()[key] ?? null;
+}
 import type { SourceSurface } from './suite-contracts';
 import {
   PROVIDER_DISPLAY,

@@ -108,7 +108,9 @@ export function RecordTermsAcceptance({
   return (
     <div className="flex flex-col items-center gap-4" role="status" aria-live="polite">
       <Spinner size="lg" className="text-primary" aria-hidden="true" />
-      <p className="text-sm text-muted-foreground">Finishing setting up your account…</p>
+      <p className="text-sm text-muted-foreground">
+        {surface === 'web-login' ? 'Finishing signing in…' : 'Finishing setting up your account…'}
+      </p>
     </div>
   );
 }
