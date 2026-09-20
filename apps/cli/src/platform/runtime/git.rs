@@ -9,7 +9,10 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use agiworkforce_protocol::code_domain::{CodeCapability, RepositoryId, RepositorySnapshot};
+use agiworkforce_protocol::code_domain::{
+    CodeCapability, CodePermissionProfile, PermissionDecision, RepositoryId, RepositoryPolicy,
+    RepositorySnapshot,
+};
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use tokio::process::Command;
@@ -22,6 +25,9 @@ const GIT_NETWORK_TIMEOUT: Duration = Duration::from_secs(300);
 /// NUL-separated fields, body last and terminated, so a multi-line commit
 /// message cannot be mistaken for the file list that follows it.
 const COMMIT_FORMAT: &str = "--pretty=format:%H%x00%an%x00%aI%x00%s%x00%b%x00";
+
+/// One line per commit for a listing: the sha, then the subject.
+const COMMIT_SUMMARY_FORMAT: &str = "--pretty=format:%H%x00%s";
 
 /// Whether an operation runs the repository's hooks. Bypassing them is its own
 /// decision with its own name, never a side effect of some other flag.
@@ -66,6 +72,8 @@ pub enum GitOperation {
         include_remote: bool,
     },
     WorktreeList,
+    /// The branch HEAD points at, which fails when HEAD is detached.
+    HeadBranch,
     RevParse {
         spec: String,
     },
@@ -103,6 +111,27 @@ pub enum GitOperation {
         remote: String,
         branch: Option<String>,
     },
+    Push {
+        remote: String,
+        branch: String,
+        set_upstream: bool,
+        force: PushForce,
+    },
+    /// Commits reachable from `branch` that `exclude` does not already hold.
+    RevList {
+        branch: String,
+        exclude: Vec<String>,
+    },
+}
+
+/// Whether a push may move a remote branch to a commit that is not a
+/// descendant of what is there. A plain `--force` overwrites whatever arrived
+/// since the last fetch, so it is not offered.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PushForce {
+    #[default]
+    Never,
+    WithLease,
 }
 
 impl GitOperation {
@@ -112,6 +141,7 @@ impl GitOperation {
             Self::ShowStage { .. } => "show stage",
             Self::BranchList { .. } => "branch list",
             Self::WorktreeList => "worktree list",
+            Self::HeadBranch => "head branch",
             Self::RevParse { .. } => "rev-parse",
             Self::Status => "status",
             Self::Stage { .. } => "stage",
@@ -124,6 +154,8 @@ impl GitOperation {
             Self::Stash(_) => "stash",
             Self::Fetch { .. } => "fetch",
             Self::Pull { .. } => "pull",
+            Self::Push { .. } => "push",
+            Self::RevList { .. } => "rev-list",
         }
     }
 
@@ -134,8 +166,10 @@ impl GitOperation {
                 | Self::ShowStage { .. }
                 | Self::BranchList { .. }
                 | Self::WorktreeList
+                | Self::HeadBranch
                 | Self::RevParse { .. }
                 | Self::Status
+                | Self::RevList { .. }
                 | Self::Stash(StashOperation::List)
         )
     }
@@ -148,7 +182,10 @@ impl GitOperation {
     }
 
     fn reaches_network(&self) -> bool {
-        matches!(self, Self::Fetch { .. } | Self::Pull { .. })
+        matches!(
+            self,
+            Self::Fetch { .. } | Self::Pull { .. } | Self::Push { .. }
+        )
     }
 
     /// The permission capabilities this operation spends. A caller asks the
@@ -168,6 +205,12 @@ impl GitOperation {
                 capabilities.push(CodeCapability::GitHistoryRewrite);
             }
             Self::Pull { .. } => capabilities.push(CodeCapability::FileWrite),
+            Self::Push { force, .. } => {
+                capabilities.push(CodeCapability::GitPush);
+                if *force == PushForce::WithLease {
+                    capabilities.push(CodeCapability::GitHistoryRewrite);
+                }
+            }
             _ => {}
         }
         if self.reaches_network() {
@@ -218,6 +261,12 @@ impl GitOperation {
                 argv
             }
             Self::WorktreeList => vec!["worktree".into(), "list".into(), "--porcelain".into()],
+            Self::HeadBranch => vec![
+                "symbolic-ref".into(),
+                "--quiet".into(),
+                "--short".into(),
+                "HEAD".into(),
+            ],
             Self::RevParse { spec } => vec![
                 "rev-parse".into(),
                 "--verify".into(),
@@ -294,6 +343,36 @@ impl GitOperation {
                 let mut argv = vec!["pull".into(), "--no-edit".into(), checked_remote(remote)?];
                 if let Some(branch) = branch {
                     argv.push(checked_ref(branch, "branch")?);
+                }
+                argv
+            }
+            Self::Push {
+                remote,
+                branch,
+                set_upstream,
+                force,
+            } => {
+                let mut argv = vec!["push".into()];
+                if *force == PushForce::WithLease {
+                    argv.push("--force-with-lease".into());
+                }
+                if *set_upstream {
+                    argv.push("--set-upstream".into());
+                }
+                argv.push(checked_remote(remote)?);
+                let branch = checked_ref(branch, "branch")?;
+                argv.push(format!("refs/heads/{branch}:refs/heads/{branch}"));
+                argv
+            }
+            Self::RevList { branch, exclude } => {
+                let mut argv = vec![
+                    "log".into(),
+                    "--no-color".into(),
+                    COMMIT_SUMMARY_FORMAT.into(),
+                    checked_ref(branch, "branch")?,
+                ];
+                for spec in exclude {
+                    argv.push(format!("^{}", checked_ref(spec, "exclude")?));
                 }
                 argv
             }
@@ -522,6 +601,156 @@ pub fn parse_conflicts(text: &str) -> Vec<ConflictedPath> {
             })
         })
         .collect()
+}
+
+/// A commit as a listing shows it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitSummary {
+    pub commit: String,
+    pub subject: String,
+}
+
+pub fn parse_commit_summaries(text: &str) -> Vec<CommitSummary> {
+    text.lines()
+        .filter_map(|line| {
+            let (commit, subject) = line.split_once('\0')?;
+            let commit = commit.trim();
+            (!commit.is_empty()).then(|| CommitSummary {
+                commit: commit.to_string(),
+                subject: subject.trim().to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Why a push needs a decision before it runs. A reason is either something
+/// the user must approve or something that stops the push outright.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PushReason {
+    NoUpstream,
+    ProtectedBranch,
+    DefaultBranch,
+    ForcePush,
+    DetachedHead,
+    NotOnPlannedBranch { head: String },
+    BranchMoved { planned: String, head: String },
+    NothingToPush,
+}
+
+impl PushReason {
+    pub fn label(&self) -> String {
+        match self {
+            Self::NoUpstream => {
+                "this branch has no upstream, so the push would create one".to_string()
+            }
+            Self::ProtectedBranch => "the repository marks this branch protected".to_string(),
+            Self::DefaultBranch => {
+                "the repository does not allow a direct push to its default branch".to_string()
+            }
+            Self::ForcePush => {
+                "a force push moves the remote branch off the commits it holds".to_string()
+            }
+            Self::DetachedHead => "HEAD is detached, so there is no branch to push".to_string(),
+            Self::NotOnPlannedBranch { head } => {
+                format!("the checkout is on {head}, not the branch this push was planned for")
+            }
+            Self::BranchMoved { planned, head } => {
+                format!("the branch moved from {planned} to {head} after the push was planned")
+            }
+            Self::NothingToPush => "the remote already holds every commit here".to_string(),
+        }
+    }
+
+    /// A reason that stops the push, as opposed to one the user can approve.
+    pub fn blocks(&self) -> bool {
+        matches!(
+            self,
+            Self::DetachedHead
+                | Self::NotOnPlannedBranch { .. }
+                | Self::BranchMoved { .. }
+                | Self::NothingToPush
+        )
+    }
+}
+
+/// Exactly what a push would send, where, and what has to be decided first.
+/// Building this reaches the repository only for reads; nothing leaves the
+/// machine until [`GitApi::push`] runs the plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushPlan {
+    pub remote: String,
+    pub branch: String,
+    pub head: String,
+    pub upstream: Option<String>,
+    pub force: PushForce,
+    pub commits: Vec<CommitSummary>,
+    pub reasons: Vec<PushReason>,
+    approved: bool,
+}
+
+impl PushPlan {
+    pub fn sets_upstream(&self) -> bool {
+        self.upstream.is_none()
+    }
+
+    pub fn operation(&self) -> GitOperation {
+        GitOperation::Push {
+            remote: self.remote.clone(),
+            branch: self.branch.clone(),
+            set_upstream: self.sets_upstream(),
+            force: self.force,
+        }
+    }
+
+    pub fn capabilities(&self) -> Vec<CodeCapability> {
+        self.operation().capabilities()
+    }
+
+    pub fn blocked_by(&self) -> Option<&PushReason> {
+        self.reasons.iter().find(|reason| reason.blocks())
+    }
+
+    /// Reasons the user is asked about, in the order they are shown.
+    pub fn approvals(&self) -> Vec<&PushReason> {
+        self.reasons
+            .iter()
+            .filter(|reason| !reason.blocks())
+            .collect()
+    }
+
+    pub fn needs_approval(&self) -> bool {
+        !self.approvals().is_empty()
+    }
+
+    /// Record that the user saw this plan and agreed to it. The consent is
+    /// attached to the plan, so it cannot outlive the commits it was given for.
+    pub fn approved(mut self) -> Self {
+        self.approved = true;
+        self
+    }
+
+    pub fn is_approved(&self) -> bool {
+        self.approved
+    }
+
+    /// One line naming the remote, the branch and how many commits go with it.
+    pub fn summary(&self) -> String {
+        format!(
+            "push {} commit(s) from {} to {}/{}",
+            self.commits.len(),
+            self.branch,
+            self.remote,
+            self.branch
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushOutcome {
+    pub remote: String,
+    pub branch: String,
+    pub head: String,
+    pub commits: Vec<CommitSummary>,
 }
 
 /// Submodule paths declared in a `.gitmodules` file.
@@ -802,6 +1031,173 @@ impl GitApi {
             branch: branch.map(str::to_string),
         })
         .await
+    }
+
+    /// The branch HEAD is on, or `None` when HEAD is detached.
+    pub async fn current_branch(&self) -> Result<Option<String>> {
+        let output = self.run(&GitOperation::HeadBranch).await?;
+        if !output.success {
+            return Ok(None);
+        }
+        let branch = output.stdout.trim().to_string();
+        Ok((!branch.is_empty()).then_some(branch))
+    }
+
+    /// The commits on `branch` that none of `exclude` already holds.
+    pub async fn commits_not_in(
+        &self,
+        branch: &str,
+        exclude: &[String],
+    ) -> Result<Vec<CommitSummary>> {
+        let stdout = self
+            .run_checked(GitOperation::RevList {
+                branch: branch.to_string(),
+                exclude: exclude.to_vec(),
+            })
+            .await?;
+        Ok(parse_commit_summaries(&stdout))
+    }
+
+    /// Decide a push without running one: which branch, which remote, which
+    /// commits go with it, and what the repository's policy says about it.
+    pub async fn push_plan(
+        &self,
+        remote: &str,
+        force: PushForce,
+        policy: &RepositoryPolicy,
+    ) -> Result<PushPlan> {
+        let Some(branch) = self.current_branch().await? else {
+            return Ok(PushPlan {
+                remote: remote.to_string(),
+                branch: String::new(),
+                head: String::new(),
+                upstream: None,
+                force,
+                commits: Vec::new(),
+                reasons: vec![PushReason::DetachedHead],
+                approved: false,
+            });
+        };
+        let head = self.rev_parse(&branch).await?.commit;
+        let upstream = self
+            .branches(false)
+            .await?
+            .into_iter()
+            .find(|entry| entry.name == branch)
+            .and_then(|entry| entry.upstream);
+        let exclude = match &upstream {
+            Some(upstream) => vec![upstream.clone()],
+            None => self
+                .branches(true)
+                .await?
+                .into_iter()
+                .filter(|entry| entry.is_remote && entry.name.starts_with(&format!("{remote}/")))
+                .map(|entry| entry.name)
+                .collect(),
+        };
+        let commits = self.commits_not_in(&branch, &exclude).await?;
+
+        let mut reasons = Vec::new();
+        if upstream.is_none() {
+            reasons.push(PushReason::NoUpstream);
+        }
+        if policy.is_protected(&branch) {
+            reasons.push(PushReason::ProtectedBranch);
+        }
+        if !policy.allow_direct_push_to_default
+            && policy.default_branch.as_deref() == Some(branch.as_str())
+        {
+            reasons.push(PushReason::DefaultBranch);
+        }
+        if force == PushForce::WithLease {
+            reasons.push(PushReason::ForcePush);
+        }
+        if commits.is_empty() {
+            reasons.push(PushReason::NothingToPush);
+        }
+        Ok(PushPlan {
+            remote: remote.to_string(),
+            branch,
+            head,
+            upstream,
+            force,
+            commits,
+            reasons,
+            approved: false,
+        })
+    }
+
+    /// Run a plan. The checkout is re-read first: a plan is consent for the
+    /// commits it enumerated, so a branch that moved or a checkout that
+    /// switched branches invalidates it rather than pushing something else.
+    pub async fn push(
+        &self,
+        plan: &PushPlan,
+        profile: &CodePermissionProfile,
+    ) -> Result<PushOutcome> {
+        if let Some(reason) = plan.blocked_by() {
+            bail!("refusing to push: {}", reason.label());
+        }
+        let mut denied = Vec::new();
+        let mut ungranted = Vec::new();
+        for capability in plan.capabilities() {
+            match profile.decision(capability) {
+                PermissionDecision::Deny => denied.push(capability.label()),
+                PermissionDecision::Ask => ungranted.push(capability.label()),
+                PermissionDecision::Allow => {}
+            }
+        }
+        if !denied.is_empty() {
+            bail!(
+                "refusing to push: this session may not {}",
+                denied.join(", ")
+            );
+        }
+        if !plan.is_approved() {
+            let mut pending: Vec<String> = plan
+                .approvals()
+                .iter()
+                .map(|reason| reason.label())
+                .collect();
+            pending.extend(
+                ungranted
+                    .iter()
+                    .map(|label| format!("permission to {label} has not been granted")),
+            );
+            if !pending.is_empty() {
+                bail!("refusing to push: {}", pending.join("; "));
+            }
+        }
+
+        match self.current_branch().await? {
+            None => bail!("refusing to push: {}", PushReason::DetachedHead.label()),
+            Some(branch) if branch != plan.branch => {
+                bail!(
+                    "refusing to push: {}",
+                    PushReason::NotOnPlannedBranch { head: branch }.label()
+                );
+            }
+            Some(_) => {}
+        }
+        let head = self.rev_parse(&plan.branch).await?.commit;
+        if head != plan.head {
+            bail!(
+                "refusing to push: {}",
+                PushReason::BranchMoved {
+                    planned: plan.head.clone(),
+                    head,
+                }
+                .label()
+            );
+        }
+
+        self.run_checked(plan.operation()).await?;
+        Ok(PushOutcome {
+            remote: plan.remote.clone(),
+            branch: plan.branch.clone(),
+            head: plan.head.clone(),
+            commits: plan.commits.clone(),
+        })
     }
 
     pub async fn fetch(&self, remote: &str, prune: bool) -> Result<()> {
@@ -1283,6 +1679,280 @@ mod tests {
         assert_eq!(
             git.stash(StashOperation::Pop).await.expect("stash pop"),
             StashOutcome::Restored
+        );
+    }
+
+    fn git_run(dir: &Path, args: &[&str]) {
+        let output = SyncCommand::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .expect("git available");
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// A checkout with a real remote it can push to, and one commit waiting.
+    fn repo_with_remote() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let remote = dir.path().join("remote.git");
+        std::fs::create_dir_all(&remote).expect("remote dir");
+        git_run(&remote, &["init", "-q", "--bare", "-b", "main"]);
+        let work = dir.path().join("work");
+        std::fs::create_dir_all(&work).expect("work dir");
+        init_repo(&work);
+        git_run(
+            &work,
+            &["remote", "add", "origin", &remote.display().to_string()],
+        );
+        git_run(&work, &["push", "-q", "--set-upstream", "origin", "main"]);
+        git_run(&work, &["checkout", "-q", "-b", "feature"]);
+        std::fs::write(work.join("feature.txt"), "work\n").unwrap();
+        git_run(&work, &["add", "feature.txt"]);
+        git_run(&work, &["commit", "-q", "-m", "add the feature"]);
+        (dir, work)
+    }
+
+    fn policy() -> RepositoryPolicy {
+        RepositoryPolicy {
+            default_branch: Some("main".to_string()),
+            protected_branches: vec!["release".to_string()],
+            allow_force_push: false,
+            allow_direct_push_to_default: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_push_plan_names_the_branch_the_upstream_and_every_commit_it_would_send() {
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+
+        let plan = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+
+        assert_eq!(plan.branch, "feature");
+        assert_eq!(plan.remote, "origin");
+        assert!(plan.upstream.is_none());
+        assert!(plan.sets_upstream());
+        assert_eq!(plan.commits.len(), 1, "{:?}", plan.commits);
+        assert_eq!(plan.commits[0].subject, "add the feature");
+        assert_eq!(plan.head, plan.commits[0].commit);
+        assert!(plan.reasons.contains(&PushReason::NoUpstream));
+        assert!(plan.summary().contains("1 commit(s)"));
+    }
+
+    #[tokio::test]
+    async fn a_push_sends_only_the_named_branch_and_only_its_own_commits() {
+        let (_dir, work) = repo_with_remote();
+        git_run(&work, &["checkout", "-q", "-b", "unrelated"]);
+        std::fs::write(work.join("unrelated.txt"), "other\n").unwrap();
+        git_run(&work, &["add", "unrelated.txt"]);
+        git_run(&work, &["commit", "-q", "-m", "an unrelated commit"]);
+        git_run(&work, &["checkout", "-q", "feature"]);
+        let git = GitApi::at(&work);
+
+        let plan = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        let subjects: Vec<&str> = plan
+            .commits
+            .iter()
+            .map(|commit| commit.subject.as_str())
+            .collect();
+        assert_eq!(subjects, vec!["add the feature"]);
+
+        let argv = plan.operation().argv().expect("argv");
+        assert_eq!(
+            argv.last().map(String::as_str),
+            Some("refs/heads/feature:refs/heads/feature"),
+            "a push names the ref it sends: {argv:?}"
+        );
+
+        git.push(
+            &plan.clone().approved(),
+            &CodePermissionProfile::full_access(),
+        )
+        .await
+        .expect("push");
+
+        let remote = GitApi::at(work.parent().expect("parent").join("remote.git"));
+        let branches = remote.branches(false).await.expect("remote branches");
+        let names: Vec<&str> = branches.iter().map(|b| b.name.as_str()).collect();
+        assert!(names.contains(&"feature"), "{names:?}");
+        assert!(!names.contains(&"unrelated"), "{names:?}");
+    }
+
+    #[tokio::test]
+    async fn a_push_is_refused_when_the_profile_does_not_grant_it() {
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+        let plan = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+
+        assert!(plan.capabilities().contains(&CodeCapability::GitPush));
+
+        let denied = git
+            .push(
+                &plan.clone().approved(),
+                &CodePermissionProfile::read_only(),
+            )
+            .await
+            .expect_err("a read-only session may not push");
+        assert!(denied.to_string().contains("may not push"), "{denied}");
+
+        let unapproved = git
+            .push(&plan, &CodePermissionProfile::standard())
+            .await
+            .expect_err("an unapproved plan does not run");
+        assert!(
+            unapproved.to_string().contains("refusing to push"),
+            "{unapproved}"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_repository_policy_decides_a_push_to_a_protected_or_default_branch() {
+        let (_dir, work) = repo_with_remote();
+        git_run(&work, &["checkout", "-q", "main"]);
+        std::fs::write(work.join("README.md"), "second\n").unwrap();
+        git_run(&work, &["add", "README.md"]);
+        git_run(&work, &["commit", "-q", "-m", "second"]);
+        let git = GitApi::at(&work);
+
+        let plan = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        assert_eq!(plan.branch, "main");
+        assert!(plan.upstream.is_some(), "main tracks its remote");
+        assert!(plan.reasons.contains(&PushReason::DefaultBranch));
+        assert!(plan.needs_approval());
+
+        let refused = git
+            .push(&plan, &CodePermissionProfile::full_access())
+            .await
+            .expect_err("the default branch is not pushed without a decision");
+        assert!(refused.to_string().contains("default branch"), "{refused}");
+
+        git_run(&work, &["checkout", "-q", "-b", "release"]);
+        let protected = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        assert!(protected.reasons.contains(&PushReason::ProtectedBranch));
+    }
+
+    #[tokio::test]
+    async fn a_plan_stops_being_consent_once_the_branch_moves_under_it() {
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+        let plan = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan")
+            .approved();
+
+        std::fs::write(work.join("feature.txt"), "more\n").unwrap();
+        git_run(&work, &["add", "feature.txt"]);
+        git_run(
+            &work,
+            &["commit", "-q", "-m", "a commit the user never saw"],
+        );
+
+        let refused = git
+            .push(&plan, &CodePermissionProfile::full_access())
+            .await
+            .expect_err("the plan no longer describes the branch");
+        assert!(refused.to_string().contains("moved"), "{refused}");
+
+        git_run(&work, &["checkout", "-q", "main"]);
+        let elsewhere = git
+            .push(&plan, &CodePermissionProfile::full_access())
+            .await
+            .expect_err("the checkout is on another branch");
+        assert!(
+            elsewhere.to_string().contains("not the branch"),
+            "{elsewhere}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_detached_head_and_an_up_to_date_branch_both_stop_a_push() {
+        let (_dir, work) = repo_with_remote();
+        let git = GitApi::at(&work);
+        git_run(&work, &["checkout", "-q", "main"]);
+
+        let nothing = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        assert!(nothing.commits.is_empty());
+        assert!(nothing.reasons.contains(&PushReason::NothingToPush));
+        assert_eq!(nothing.blocked_by(), Some(&PushReason::NothingToPush));
+
+        let head = git.rev_parse("HEAD").await.expect("head").commit;
+        git_run(&work, &["checkout", "-q", &head]);
+        let detached = git
+            .push_plan("origin", PushForce::Never, &policy())
+            .await
+            .expect("plan");
+        assert_eq!(detached.blocked_by(), Some(&PushReason::DetachedHead));
+        let refused = git
+            .push(&detached.approved(), &CodePermissionProfile::full_access())
+            .await
+            .expect_err("a detached HEAD has no branch to push");
+        assert!(refused.to_string().contains("detached"), "{refused}");
+    }
+
+    #[test]
+    fn a_force_push_spends_the_history_rewrite_capability_and_never_overwrites_blind() {
+        let plan = GitOperation::Push {
+            remote: "origin".into(),
+            branch: "feature".into(),
+            set_upstream: false,
+            force: PushForce::WithLease,
+        };
+        let argv = plan.argv().expect("argv");
+        assert!(argv.contains(&"--force-with-lease".to_string()), "{argv:?}");
+        assert!(!argv.iter().any(|arg| arg == "--force"), "{argv:?}");
+        let capabilities = plan.capabilities();
+        assert!(capabilities.contains(&CodeCapability::GitPush));
+        assert!(capabilities.contains(&CodeCapability::GitHistoryRewrite));
+        assert!(capabilities.contains(&CodeCapability::NetworkAccess));
+    }
+
+    #[test]
+    fn every_push_reason_says_what_it_is_and_whether_it_stops_the_push() {
+        let reasons = [
+            PushReason::NoUpstream,
+            PushReason::ProtectedBranch,
+            PushReason::DefaultBranch,
+            PushReason::ForcePush,
+            PushReason::DetachedHead,
+            PushReason::NotOnPlannedBranch {
+                head: "main".into(),
+            },
+            PushReason::BranchMoved {
+                planned: "abc".into(),
+                head: "def".into(),
+            },
+            PushReason::NothingToPush,
+        ];
+        for reason in &reasons {
+            assert!(!reason.label().is_empty(), "{reason:?} has no label");
+        }
+        let blocking: Vec<bool> = reasons.iter().map(PushReason::blocks).collect();
+        assert_eq!(
+            blocking,
+            vec![false, false, false, false, true, true, true, true]
         );
     }
 }

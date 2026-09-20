@@ -30,20 +30,6 @@ pub const MAX_MENTION_BYTES: u64 = 256 * 1024;
 /// Depth limit for the non-git fallback walk.
 const MAX_WALK_DEPTH: usize = 12;
 
-/// Directories the fallback walk never descends into. A git work tree gets
-/// `.gitignore` instead; this list only has to keep the fallback from walking
-/// into build output in a directory that is not a repository.
-const SKIPPED_DIRS: [&str; 8] = [
-    "node_modules",
-    "target",
-    "dist",
-    "build",
-    ".next",
-    ".turbo",
-    ".venv",
-    "vendor",
-];
-
 /// One rankable mention candidate: the workspace-relative path, plus the file
 /// name so a query can be scored against the name alone.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -109,6 +95,7 @@ fn git_tracked_and_untracked(root: &Path) -> Option<Vec<String>> {
 }
 
 fn bounded_walk(root: &Path) -> Vec<String> {
+    let skipped = crate::repo::index_policy::excluded_directory_names();
     let mut out = Vec::new();
     let mut queue: Vec<(PathBuf, usize)> = vec![(root.to_path_buf(), 0)];
     while let Some((dir, depth)) = queue.pop() {
@@ -120,7 +107,7 @@ fn bounded_walk(root: &Path) -> Vec<String> {
         };
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name.starts_with('.') || SKIPPED_DIRS.contains(&name.as_str()) {
+            if name.starts_with('.') || skipped.contains(&name.as_str()) {
                 continue;
             }
             let Ok(kind) = entry.file_type() else {
