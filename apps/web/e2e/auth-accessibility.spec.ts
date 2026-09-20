@@ -73,6 +73,15 @@ test.describe('auth accessibility', () => {
     });
   }
 
+  test('fast provider readiness enables sign-in after hydration', async ({ page }) => {
+    await mockAuthProvider(page, { loadDelayMs: 0 });
+    await page.goto('/login', { waitUntil: 'load' });
+    await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+    await page.getByLabel('Email address').fill('password-user@example.invalid');
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Show password' })).toBeVisible();
+  });
+
   test('the password reveal control reports its own pressed state', async ({ page }) => {
     await openAuth(page, '/login');
 

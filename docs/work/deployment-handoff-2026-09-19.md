@@ -1217,3 +1217,48 @@ Evidence: `/tmp/agi-signaling-cleanup-failure.log`. CLI package enumeration is
 unavailable because its credential lacks `read:packages`; the workflow uses its
 own package-enabled token. Actual cleanup success remains a remote requirement.
 Railway and Fly deployments were skipped; no production service URL is configured.
+
+### Follow-up: auth readiness and animation-aware accessibility checks
+
+Run `35501315844` fails the login field-error accessibility case on both attempts:
+Continue remains disabled after provider loading. Pricing also reports transient
+contrast failures on its first attempt and passes its retry. These results
+supersede the earlier observation that the signed-out suite was stable.
+
+A browser reproduction using the captured CI login document and corresponding
+locally built client chunks isolates a missed readiness event. With the existing
+signed-out provider fixture completing immediately, its status is `ready` before
+the installed Clerk React adapter registers its effect listener. The provider is
+loaded but the product's render-only `clerk.loaded` read remains stale. With the
+original 100 ms fixture delay, the same instrument passes. The replay maps two
+chunk URLs through the local build's client reference manifest; it is a controlled
+client reproduction, not a fresh end-to-end server run.
+
+`identityAuthAdapter.tsx` now subscribes to the provider's status and reads its
+loaded snapshot with `useSyncExternalStore`. Its server snapshot stays false;
+loading still disables sign-in, and unmount removes the listener. Two regression
+cases fail before this repair and pass afterward. All 89 auth tests across ten
+files pass, targeted ESLint passes, and the production build including TypeScript
+passes. Chromium replay passes six cases alternating immediate and delayed
+readiness, plus both timing cases through the password step. The committed
+browser regression uses an immediate-load option in the existing fixture.
+
+The enterprise accessibility helper now waits for Reveal initialization and
+finite document animations to finish before running the unchanged axe assertions.
+A Chromium instrument using the actual reveal CSS verifies final opacity, ignores
+infinite decoration, accepts readable text, and still rejects a permanent contrast
+defect. This validates the measurement guard; the pricing page still needs its
+next full remote E2E result. Jev selected the readiness subscription at confidence
+0.98 and the animation wait at 0.44 (request
+`12b60d33100e370ddeeb03744469d8c5c98b99e5ea23b87661bc10e8180332f0`).
+
+Three isolated local production-server attempts stalled before rendering login;
+the user's localhost:3100 server was untouched. The isolated server was stopped,
+and no product server authentication changes were made to bypass that problem.
+Remote verification remains required before marking this web lane green.
+Evidence: `/tmp/agi-auth-zero-delay.log`,
+`/tmp/agi-auth-readiness-regression-before.log`,
+`/tmp/agi-auth-readiness-regression-after.log`,
+`/tmp/agi-auth-readiness-suite.log`, `/tmp/agi-auth-readiness-build.log`,
+`/tmp/agi-auth-readiness-browser-after.log`,
+`/tmp/agi-auth-readiness-browser-flow.log`, `/tmp/agi-animation-settle-test.log`.
