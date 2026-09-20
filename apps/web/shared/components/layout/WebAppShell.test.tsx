@@ -38,9 +38,12 @@ const shellState = vi.hoisted(() => ({
     error: null as string | null,
     unauthenticated: false,
   },
+  conversations: [] as Array<{ id: string; title: string; updatedAt: string }>,
   conversationsLoading: false,
   conversationsListError: null as string | null,
   fetchConversations: vi.fn(),
+  projects: [] as Array<{ id: string; name: string }>,
+  usage: null as { percent: number } | null,
 }));
 
 const providerState = vi.hoisted(() => ({
@@ -141,10 +144,14 @@ vi.mock('@agiworkforce/ui', async () => {
       isLoading?: boolean;
       error?: string | null;
       onRetryLoad?: () => void;
+      onNewChat?: () => void;
       onOpenCode?: () => void;
       onOpenSearch?: () => void;
       showUsageWidget?: boolean;
       budgetPercent?: number;
+      sessions?: unknown[];
+      projects?: unknown[];
+      navItems?: Array<{ id: string }>;
       footerSlot?: React.ReactNode;
     }) => (
       <div
@@ -152,7 +159,13 @@ vi.mock('@agiworkforce/ui', async () => {
         data-collapsed={String(props.collapsed ?? false)}
         data-loading={String(props.isLoading ?? false)}
         data-list-error={props.error ?? ''}
+        data-sessions={String(props.sessions?.length ?? 0)}
+        data-projects={String(props.projects?.length ?? 0)}
+        data-nav-items={(props.navItems ?? []).map((item) => item.id).join(',')}
       >
+        <button type="button" onClick={props.onNewChat}>
+          New chat
+        </button>
         {props.onRetryLoad && (
           <button type="button" onClick={props.onRetryLoad}>
             Retry
@@ -302,7 +315,7 @@ vi.mock('@agiworkforce/ui', async () => {
 
 vi.mock('@/lib/hooks/useConversations', () => ({
   useConversations: () => ({
-    conversations: [],
+    conversations: shellState.conversations,
     deleteConversation: vi.fn(),
     updateConversation: vi.fn(),
     isLoading: shellState.conversationsLoading,
@@ -337,7 +350,7 @@ vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
 }));
 
 vi.mock('@/features/projects', () => ({
-  useManagedCloudProjects: () => ({ projects: [] }),
+  useManagedCloudProjects: () => ({ projects: shellState.projects }),
   useProjectStore: (selector: (state: Record<string, () => void>) => unknown) =>
     selector({ toggleStar: vi.fn(), removeProject: vi.fn() }),
 }));
@@ -383,9 +396,11 @@ beforeEach(() => {
   shellState.billing.error = null;
   shellState.billing.unauthenticated = false;
   providerState.user = null;
+  shellState.conversations = [];
   shellState.conversationsLoading = false;
   shellState.conversationsListError = null;
   shellState.fetchConversations = vi.fn();
+  shellState.projects = [];
   settingsModalState.openSettings = vi.fn();
   upgradeFlowState.openUpgradeDialog = vi.fn();
   menuEscape.keepOpenForMenuEscape.mockReset();
@@ -871,5 +886,98 @@ describe('WebAppShell responsive navigation', () => {
     );
 
     expect(screen.getByTestId('app-sidebar-usage')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Bootstrap independence: the shell is chrome plus several independent
+ * fetches, and the account, recents, projects and usage calls all resolve at
+ * different times. Each of them failing or staying in flight must cost the
+ * user only that region.
+ */
+describe('WebAppShell bootstrap independence', () => {
+  const renderShell = () =>
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+  it('paints the shell and its route before any secondary call has answered', () => {
+    shellState.auth.initialized = false;
+    shellState.auth.isLoading = true;
+    shellState.billing.initialized = false;
+    shellState.billing.isLoading = true;
+    shellState.conversationsLoading = true;
+
+    renderShell();
+
+    expect(screen.getByText('content')).toBeInTheDocument();
+    expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New chat' })).toBeInTheDocument();
+  });
+
+  it('keeps New chat working while the recents list is still loading', () => {
+    shellState.conversationsLoading = true;
+
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+
+    expect(routerState.push).toHaveBeenCalledWith('/chat');
+  });
+
+  it('keeps New chat working when the recents list failed outright', () => {
+    shellState.conversationsListError = LIST_FAILURE;
+
+    renderShell();
+
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-list-error', LIST_FAILURE);
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+    expect(routerState.push).toHaveBeenCalledWith('/chat');
+  });
+
+  it('renders the rail and the route before the project list arrives', () => {
+    renderShell();
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-projects', '0');
+    expect(screen.getByText('content')).toBeInTheDocument();
+    cleanup();
+
+    shellState.projects = [{ id: 'p1', name: 'Atlas' }];
+    renderShell();
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-projects', '1');
+  });
+
+  it('holds the usage meter back until its summary arrives, and shows the shell anyway', () => {
+    renderShell();
+
+    expect(screen.getByTestId('app-sidebar-usage')).toHaveAttribute('data-shown', 'false');
+    expect(screen.getByText('content')).toBeInTheDocument();
+  });
+
+  it('keeps the account footer when the profile carries neither name nor email', () => {
+    shellState.auth.user = { id: 'user-1', name: '', email: '' };
+    shellState.billing.user = null;
+    providerState.user = null;
+
+    renderShell();
+
+    expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Account menu for/ })).toBeInTheDocument();
+    expect(screen.getByText('content')).toBeInTheDocument();
+  });
+
+  it('carries the rail across a route change rather than rebuilding it', () => {
+    const { rerender } = renderShell();
+    const railBefore = screen.getByTestId('app-sidebar').getAttribute('data-nav-items');
+
+    routerState.pathname = '/chat/library';
+    rerender(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('app-sidebar').getAttribute('data-nav-items')).toBe(railBefore);
   });
 });
