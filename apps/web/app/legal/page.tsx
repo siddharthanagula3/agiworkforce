@@ -52,7 +52,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/agent-permissions',
     label: 'Approvals',
-    body: 'What the agent may do without asking, what always requires approval, and how to revoke access.',
+    body: 'What the agent asks before doing, which settings let a tool run without asking, and how to revoke access.',
   },
   {
     href: '/dpa',

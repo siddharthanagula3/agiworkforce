@@ -6,7 +6,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { callArguments, ungatedCalls } from './check-connector-tool-gate.mjs';
+import { callArguments, unboundLoopCalls, ungatedCalls } from './check-connector-tool-gate.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -116,4 +116,24 @@ test('the checker names the file and line of an ungated call', () => {
   assert.deepEqual(ungatedCalls('r.ts', 'loadUserConnectorToolCatalog(userId, { planTier })'), [
     'r.ts:1 loadUserConnectorToolCatalog() offers tools without isToolDenied',
   ]);
+});
+
+test('a turn started without the saved verdicts fails', () => {
+  assert.deepEqual(
+    unboundLoopCalls(
+      'r.ts',
+      "runToolLoop(processed, { approvalMode: 'manual', connectorPermissions });",
+    ),
+    [],
+  );
+  const problems = unboundLoopCalls('r.ts', "runToolLoop(processed, { approvalMode: 'manual' });");
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /runs a turn without connectorPermissions/u);
+});
+
+test('the module that declares a loop entry point is not read as a caller', () => {
+  assert.deepEqual(
+    unboundLoopCalls('tool-loop.ts', 'export async function* runToolLoop(processed, options) {}'),
+    [],
+  );
 });
