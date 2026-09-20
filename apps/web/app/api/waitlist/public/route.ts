@@ -70,8 +70,13 @@ function parseConsentDecisions(value: unknown): ConsentDecision[] {
   return decisions;
 }
 
+// A sign-up is never lost to an identity problem: any failure here captures the address anonymously.
 async function getOptionalUserId(request: NextRequest): Promise<string | null> {
-  return (await getOptionalAuthUser(request))?.userId ?? null;
+  try {
+    return (await getOptionalAuthUser(request))?.userId ?? null;
+  } catch {
+    return null;
+  }
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {

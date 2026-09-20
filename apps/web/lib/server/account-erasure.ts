@@ -144,11 +144,6 @@ export const EMAIL_SCOPED_USER_TABLES: ReadonlyArray<{
     reason: 'Applying does not require an account, so most rows carry a null user_id.',
   },
   {
-    table: 'cloud_waitlist',
-    column: 'email',
-    reason: 'The waitlist is keyed by address alone and has no subject column.',
-  },
-  {
     table: 'referrals',
     column: 'referred_email',
     reason: 'An invitation records the address it was sent to before an account exists.',
@@ -359,6 +354,8 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'Legal preservation scope (0261). Active custodians block erasure; released-hold rows remain matter history, and added_by_user_id is legal provenance.',
   plugin_registry_lifecycle_events:
     'Global extension audit history (0259). actor_user_id identifies the operator behind a lifecycle change affecting other accounts.',
+  cloud_waitlist:
+    'Founder decision 2026-09-20: waitlist rows are the record of demand and are left as they are. Keyed by address, no subject column.',
   copyright_notices:
     'A rights-holder claim made ABOUT content by a third party. Erasing the accused account must not erase the record of the claim against it, so target_owner_id is plain text rather than a reference.',
   release_events:
