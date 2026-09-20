@@ -5743,6 +5743,7 @@ mod tests {
                 args: std::collections::HashMap::new(),
             },
             &crate::tools::ToolExecOptions {
+                mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -5789,6 +5790,7 @@ mod tests {
                 )]),
             },
             &crate::tools::ToolExecOptions {
+                mcp_tool_definitions: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
