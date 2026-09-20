@@ -390,6 +390,23 @@ async function handleTranscriptions(request: NextRequest) {
   const audioBytes = new Uint8Array(await file.arrayBuffer());
   const headBytes = audioBytes.subarray(0, 12);
   const uploadName = 'name' in file && typeof file.name === 'string' ? file.name : undefined;
+  if (!isLikelyAudio(headBytes)) {
+    return NextResponse.json(
+      {
+        error: {
+          message: 'Audio file content does not match a supported audio format',
+          type: 'invalid_request_error',
+        },
+      },
+      {
+        status: 415,
+        headers: {
+          ...getCorsHeaders(request),
+          ...getSecurityHeaders(),
+        },
+      },
+    );
+  }
   // The bytes go to the transcription provider and are dropped: nothing stores
   // or serves them, so an AV round trip would only cost dictation latency.
   const scan = await scanUploadBytes(audioBytes, mimeEssence, {
@@ -411,23 +428,6 @@ async function handleTranscriptions(request: NextRequest) {
       },
       {
         status: 400,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
-  }
-  if (!isLikelyAudio(headBytes)) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Audio file content does not match a supported audio format',
-          type: 'invalid_request_error',
-        },
-      },
-      {
-        status: 415,
         headers: {
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),

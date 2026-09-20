@@ -314,7 +314,7 @@ describe('accepted audio containers', () => {
 
     const response = await POST(transcriptionRequest({}, RECORDER_WEBM_TYPE, executable));
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(415);
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
