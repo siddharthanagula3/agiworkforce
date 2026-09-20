@@ -490,6 +490,16 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
   { key: 'GITHUB_TOKEN_ENCRYPTION_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
   { key: 'EMAIL_HASH_PEPPER', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
   { key: 'LOG_SALT', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  // The decision transport's credential, plus which version it asks, where,
+  // and what an input token costs. Only the key is confidential.
+  { key: 'TYPESAFE_API_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'TYPESAFE_BASE_URL', secrecy: 'public', allowedEnvironments: EVERY_ENVIRONMENT },
+  { key: 'TYPESAFE_MODEL', secrecy: 'public', allowedEnvironments: EVERY_ENVIRONMENT },
+  {
+    key: 'TYPESAFE_INPUT_MICROUSD_PER_MTOK',
+    secrecy: 'public',
+    allowedEnvironments: EVERY_ENVIRONMENT,
+  },
   {
     key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
     secrecy: 'public',

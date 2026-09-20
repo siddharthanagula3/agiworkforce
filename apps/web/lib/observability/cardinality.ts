@@ -1,4 +1,12 @@
+import { DECISION_FALLBACK_REASONS, DECISION_STATUSES } from '@agiworkforce/agent-core';
 import { ErrorCode } from '@agiworkforce/types';
+
+import {
+  DECISION_COMPARISON_KEYS,
+  DECISION_CONFIDENCE_BINS,
+  DECISION_KIND_IDS,
+  DECISION_SKIP_REASONS,
+} from '@/lib/services/semantic-decisions/kinds';
 
 import { OBSERVABILITY_ATTRIBUTE } from './attributes';
 
@@ -99,6 +107,18 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.completionKind]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.completionStatus]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.completionReportedStatus]: bounded(),
+
+  // Closed, not bounded: these vocabularies are exhaustive, so a value outside
+  // them is a defect worth seeing as `unclassified`, not a new series.
+  [OBSERVABILITY_ATTRIBUTE.decisionKind]: enumerated(...DECISION_KIND_IDS),
+  [OBSERVABILITY_ATTRIBUTE.decisionMode]: enumerated('disabled', 'shadow', 'enabled'),
+  [OBSERVABILITY_ATTRIBUTE.decisionOutcome]: enumerated(...DECISION_STATUSES, 'skipped'),
+  [OBSERVABILITY_ATTRIBUTE.decisionQuestion]: enumerated(...DECISION_COMPARISON_KEYS),
+  [OBSERVABILITY_ATTRIBUTE.decisionFallbackReason]: enumerated(
+    ...DECISION_FALLBACK_REASONS,
+    ...DECISION_SKIP_REASONS,
+  ),
+  [OBSERVABILITY_ATTRIBUTE.decisionConfidenceBin]: enumerated(...DECISION_CONFIDENCE_BINS),
 
   [LOCAL_METRIC_LABEL.spanName]: bounded(200),
   [LOCAL_METRIC_LABEL.spanDomain]: bounded(),

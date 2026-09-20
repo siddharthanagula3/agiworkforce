@@ -1,0 +1,500 @@
+{
+  "description": "Reproducible lexical discovery index, not proof of reachability or an exhaustive dynamic call graph. Semantic classifications and omissions are in audit.md. Rust inline test modules excluded; IPC send_message false positives excluded.",
+  "entries": [
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "line": 133,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "line": 1092,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "line": 1161,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "line": 1200,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "line": 1292,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "line": 1332,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/agent/chat.rs",
+      "line": 1355,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/memory_pipeline.rs",
+      "line": 225,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/memory_pipeline.rs",
+      "line": 370,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/cli/src/models/streaming.rs",
+      "line": 357,
+      "invocation": "stream_chat("
+    },
+    {
+      "path": "apps/cli/src/platform/runtime/advisor.rs",
+      "line": 152,
+      "invocation": "stream_completion("
+    },
+    {
+      "path": "apps/desktop/electron/runtime/localInferenceService.ts",
+      "line": 168,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs",
+      "line": 470,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/automation/computer_use/observe_plan_act.rs",
+      "line": 1093,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agent/autonomous.rs",
+      "line": 1295,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agent/autonomous.rs",
+      "line": 1365,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agent/code_generator.rs",
+      "line": 213,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agent/code_generator.rs",
+      "line": 630,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agent/intelligent_file_access.rs",
+      "line": 283,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agent/planner.rs",
+      "line": 100,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs",
+      "line": 853,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/executors/git_executor.rs",
+      "line": 811,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/executors/llm_executor.rs",
+      "line": 279,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/executors/llm_executor.rs",
+      "line": 335,
+      "invocation": "send_message_streaming("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/planner.rs",
+      "line": 206,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/planner.rs",
+      "line": 614,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/process_reasoning.rs",
+      "line": 375,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/reflection.rs",
+      "line": 381,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/agi/reflection.rs",
+      "line": 814,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/intent/detector.rs",
+      "line": 290,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/llm/council.rs",
+      "line": 328,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/llm/llm_router.rs",
+      "line": 1508,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/llm/llm_router.rs",
+      "line": 1615,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/llm/tool_executor/llm_tools.rs",
+      "line": 61,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/research/orchestrator.rs",
+      "line": 440,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/research/orchestrator.rs",
+      "line": 729,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/core/swarm/task_decomposer.rs",
+      "line": 628,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/features/terminal/ai_assistant.rs",
+      "line": 54,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/features/terminal/ai_assistant.rs",
+      "line": 106,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/features/terminal/ai_assistant.rs",
+      "line": 171,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/features/terminal/ai_assistant.rs",
+      "line": 230,
+      "invocation": ".send_message("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/chat/local_turn_host.rs",
+      "line": 290,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs",
+      "line": 506,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs",
+      "line": 674,
+      "invocation": "send_message_streaming("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs",
+      "line": 1034,
+      "invocation": "send_message_streaming("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs",
+      "line": 1626,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs",
+      "line": 1738,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/chat/send_message_execution.rs",
+      "line": 1779,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/code_editing.rs",
+      "line": 133,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/code_editing.rs",
+      "line": 281,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/completion.rs",
+      "line": 94,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/completion.rs",
+      "line": 200,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/completion.rs",
+      "line": 495,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/continuous_job_runner.rs",
+      "line": 1981,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
+      "line": 105,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
+      "line": 225,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
+      "line": 299,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/design.rs",
+      "line": 516,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/llm.rs",
+      "line": 341,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/llm.rs",
+      "line": 385,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/desktop/src-tauri/src/sys/commands/vision.rs",
+      "line": 182,
+      "invocation": "invoke_candidate("
+    },
+    {
+      "path": "apps/web/app/api-docs/page.tsx",
+      "line": 41,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "apps/web/app/api-docs/page.tsx",
+      "line": 57,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "apps/web/app/api/chat/conversations/[id]/messages/lib/generate-follow-ups.ts",
+      "line": 167,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts",
+      "line": 238,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts",
+      "line": 239,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/adapter-factory.ts",
+      "line": 108,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
+      "line": 190,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
+      "line": 191,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+      "line": 1216,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+      "line": 1217,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/lib/code-review/pipeline.ts",
+      "line": 118,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/lib/code-review/pipeline.ts",
+      "line": 119,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/lib/moderation/output-moderation.ts",
+      "line": 173,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/lib/server/scanned-document-text.ts",
+      "line": 138,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/lib/services/cloud-code-agent-loop.ts",
+      "line": 380,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/lib/services/model-memory-extraction.ts",
+      "line": 174,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/lib/services/model-memory-extraction.ts",
+      "line": 175,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/lib/services/model-rollout/shadow-dispatch-service.ts",
+      "line": 155,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/lib/services/scheduled-agent-executor.ts",
+      "line": 465,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/lib/services/scheduled-agent-executor.ts",
+      "line": 466,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "apps/web/lib/support/agent/answer/model-route.ts",
+      "line": 133,
+      "invocation": "drainToLlmResponse("
+    },
+    {
+      "path": "apps/web/lib/support/agent/answer/model-route.ts",
+      "line": 201,
+      "invocation": "adapter.stream("
+    },
+    {
+      "path": "packages/ai/provider-runtime/src/typesafe-decisions.ts",
+      "line": 48,
+      "invocation": ".systemOne("
+    },
+    {
+      "path": "packages/ai/providers/anthropic/src/index.ts",
+      "line": 122,
+      "invocation": ".messages.stream("
+    },
+    {
+      "path": "packages/ai/providers/deepseek/src/index.ts",
+      "line": 106,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/groq/src/index.ts",
+      "line": 106,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/lmstudio/src/index.ts",
+      "line": 97,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/minimax/src/index.ts",
+      "line": 110,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/moonshot/src/index.ts",
+      "line": 126,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/openai/src/compat-adapter.ts",
+      "line": 145,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/openai/src/index.ts",
+      "line": 276,
+      "invocation": ".responses.create("
+    },
+    {
+      "path": "packages/ai/providers/openai/src/index.ts",
+      "line": 347,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/openrouter/src/index.ts",
+      "line": 172,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/perplexity/src/index.ts",
+      "line": 142,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/qwen/src/index.ts",
+      "line": 151,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/vercel-gateway/src/index.ts",
+      "line": 134,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/xai/src/index.ts",
+      "line": 108,
+      "invocation": ".chat.completions.create("
+    },
+    {
+      "path": "packages/ai/providers/zhipu/src/index.ts",
+      "line": 144,
+      "invocation": ".chat.completions.create("
+    }
+  ]
+}

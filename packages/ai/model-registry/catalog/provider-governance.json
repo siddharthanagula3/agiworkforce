@@ -12,6 +12,16 @@
       "note": "AGI Managed Cloud's own retention: conversations are kept until the user deletes them or the account, with no automatic expiry enforced today; temporary chats expire in about 30 days by a daily job (https://agiworkforce.com/privacy). There is no mode where AGI itself stores nothing: the workspace zero-data-retention setting controls which upstream model providers a request may route to, not AGI's own storage of the conversation. Training commitment is at https://agiworkforce.com/terms section 05: AGI does not train AGI-owned models on submitted content, explicitly not a promise about a third-party model provider's handling. Data is hosted in the United States only; AGI does not offer EU or UK data residency (https://agiworkforce.com/privacy#s-08).",
       "cacheTokenBillingClass": "unknown"
     },
+    "typesafe": {
+      "dataRetentionClass": "provider_default",
+      "zeroDataRetentionAvailability": "on_request",
+      "trainsOnInputs": "never",
+      "residencyRegions": null,
+      "source": "https://docs.typesafe.ai/legal",
+      "verifiedOn": "2026-09-20",
+      "note": "Internal semantic decision transport, not a chat model provider and not a member of the Provider union. The legal index states \"We also offer zero data retention (ZDR) for enterprise customers. Contact privacy@typesafe.ai to learn more.\", so zero retention is a separate negotiated agreement rather than the default, and this deployment holds no such agreement: a zero-data-retention workspace is therefore excluded from decision evaluation. The index defers retention duration to a Data Processing Agreement it does not publish, so no period is recorded and the default is read as provider_default rather than a guessed window. Training: https://docs.typesafe.ai/models states \"Jev is not trained on customer requests or responses.\" and the legal index describes \"our commitment not to train models on user data\". No processing region or subprocessor list is published on either page, so residency is null and every region-excluded workspace is refused. Retrieved 2026-09-20.",
+      "cacheTokenBillingClass": "unknown"
+    },
     "openai": {
       "dataRetentionClass": "provider_default",
       "zeroDataRetentionAvailability": "on_request",
