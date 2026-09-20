@@ -35,6 +35,11 @@ import type {
   SlashCommandListResponse,
   SlashCommandRunResponse,
 } from '@agiworkforce/types/protocol';
+import type {
+  DeveloperSessionHandoff,
+  HandoffAdmission,
+  HandoffEnvironment,
+} from '@agiworkforce/types/protocol';
 import {
   AGENT_EVENT_SCHEMA_VERSION,
   DEVELOPER_SESSION_PROTOCOL_VERSION as SUPPORTED_PROTOCOL_VERSION,
@@ -195,6 +200,16 @@ const threadSummarySchema = z.object({
 });
 
 const threadStartResponseSchema = z.object({ thread: threadSummarySchema });
+// The record is the contract's, so the wire is checked for presence and shape
+// here and read as the generated type rather than described a second time.
+const handoffResponseSchema = z.object({
+  handoff: z.object({ protocolVersion: z.number().int().positive() }).passthrough(),
+});
+const handoffAdmissionSchema = z.object({
+  admission: z
+    .object({ start: z.object({ kind: z.enum(['resume', 'seed']) }).passthrough() })
+    .passthrough(),
+});
 const threadListResponseSchema = z.object({
   threads: z.array(threadSummarySchema),
   nextCursor: z.string().optional(),
@@ -870,6 +885,21 @@ export class LocalRuntimeClient {
       ...(title !== undefined ? { title } : {}),
     });
     return threadStartResponseSchema.parse(result).thread as ThreadSummary;
+  }
+
+  async handOffThread(
+    threadId: string,
+    toEnvironment: HandoffEnvironment,
+  ): Promise<DeveloperSessionHandoff> {
+    const connection = await this.readyConnection();
+    const result = await connection.request('thread/handoff', { threadId, toEnvironment });
+    return handoffResponseSchema.parse(result).handoff as DeveloperSessionHandoff;
+  }
+
+  async acceptHandoff(handoff: DeveloperSessionHandoff): Promise<HandoffAdmission> {
+    const connection = await this.readyConnection();
+    const result = await connection.request('thread/handoff/accept', { handoff });
+    return handoffAdmissionSchema.parse(result).admission as HandoffAdmission;
   }
 
   async archiveThread(threadId: string): Promise<void> {

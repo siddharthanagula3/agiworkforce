@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from './garnishCore';
 
 export interface WorkArea {
   x: number;
@@ -25,19 +27,32 @@ export interface ShellWindowState {
   /** One frame per display arrangement, so two monitors do not overwrite each other. */
   frames: Record<string, WindowFrameState>;
   lastRoute: string | null;
+  /** The account that was signed in when `lastRoute` was recorded. */
+  lastRouteAccount: string | null;
+  /** The account this shell last saw signed in, null while signed out. */
+  lastAccount: string | null;
   lastWorkspace: string | null;
   secondaryPanelWidth: number | null;
+  sidebarCollapsed: boolean | null;
 }
+
+/** Where a window goes when the route it held no longer resolves. */
+export const NEW_CHAT_ROUTE = '/chat';
 
 export const MIN_SECONDARY_PANEL_WIDTH = 220;
 export const MAX_SECONDARY_PANEL_WIDTH = 720;
+export const DEFAULT_WINDOW_WIDTH = 1280;
+export const DEFAULT_WINDOW_HEIGHT = 800;
 const MIN_VISIBLE_EDGE = 80;
 
 export const EMPTY_WINDOW_STATE: ShellWindowState = {
   frames: {},
   lastRoute: null,
+  lastRouteAccount: null,
+  lastAccount: null,
   lastWorkspace: null,
   secondaryPanelWidth: null,
+  sidebarCollapsed: null,
 };
 
 /**
@@ -112,6 +127,24 @@ function normalizeWorkspace(value: unknown): string | null {
   return trimmed.length > 0 && trimmed.length <= 128 ? trimmed : null;
 }
 
+function normalizeAccountKey(value: unknown): string | null {
+  return typeof value === 'string' && /^[0-9a-f]{32}$/.test(value) ? value : null;
+}
+
+/**
+ * A stable, non-reversible name for an account. `window-state.json` sits beside
+ * the app in plain text, so the address itself is never written down.
+ */
+export function accountFingerprint(identity: {
+  signedIn: boolean;
+  email: string | null;
+}): string | null {
+  if (!identity.signedIn) return null;
+  const email = identity.email?.trim().toLowerCase() ?? '';
+  if (email === '') return null;
+  return createHash('sha256').update(`agi-cloud-window-state:${email}`).digest('hex').slice(0, 32);
+}
+
 export function normalizeWindowState(raw: unknown): ShellWindowState {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...EMPTY_WINDOW_STATE };
   const source = raw as Record<string, unknown>;
@@ -127,8 +160,12 @@ export function normalizeWindowState(raw: unknown): ShellWindowState {
   return {
     frames,
     lastRoute: isRestorableRoute(source['lastRoute']) ? source['lastRoute'].trim() : null,
+    lastRouteAccount: normalizeAccountKey(source['lastRouteAccount']),
+    lastAccount: normalizeAccountKey(source['lastAccount']),
     lastWorkspace: normalizeWorkspace(source['lastWorkspace']),
     secondaryPanelWidth: normalizeSecondaryPanelWidth(source['secondaryPanelWidth']),
+    sidebarCollapsed:
+      typeof source['sidebarCollapsed'] === 'boolean' ? source['sidebarCollapsed'] : null,
   };
 }
 
@@ -148,8 +185,8 @@ export function clampFrameToWorkArea(
   frame: WindowFrameState,
   workArea: WorkArea,
 ): WindowFrameState {
-  const width = Math.min(frame.width, workArea.width);
-  const height = Math.min(frame.height, workArea.height);
+  const width = Math.min(Math.max(frame.width, MIN_WINDOW_WIDTH), workArea.width);
+  const height = Math.min(Math.max(frame.height, MIN_WINDOW_HEIGHT), workArea.height);
   const maxX = workArea.x + workArea.width - MIN_VISIBLE_EDGE;
   const maxY = workArea.y + workArea.height - MIN_VISIBLE_EDGE;
   return {
@@ -174,18 +211,109 @@ export function restoreFrame(
   const primary = displays[0];
   if (!primary) return null;
 
-  let best: WindowFrameState | null = null;
+  let best: { frame: WindowFrameState; workArea: WorkArea } | null = null;
   for (const display of displays) {
     const frame = state.frames[displayKey(display)];
-    if (frame && (!best || frame.updatedAt > best.updatedAt)) best = frame;
+    if (frame && (!best || frame.updatedAt > best.frame.updatedAt)) {
+      best = { frame, workArea: display.workArea };
+    }
   }
-  if (best) return best;
+  if (best) return clampFrameToWorkArea(best.frame, best.workArea);
 
   let newest: WindowFrameState | null = null;
   for (const frame of Object.values(state.frames)) {
     if (!newest || frame.updatedAt > newest.updatedAt) newest = frame;
   }
   return newest ? clampFrameToWorkArea(newest, primary.workArea) : null;
+}
+
+/**
+ * Whether the account that recorded the route is still the account this shell
+ * last saw. Anything else is another account's private content.
+ */
+export function routeBelongsToCurrentAccount(state: ShellWindowState): boolean {
+  return state.lastRouteAccount === state.lastAccount;
+}
+
+export interface WindowRestore {
+  bounds: { x: number; y: number; width: number; height: number };
+  maximized: boolean;
+  route: string | null;
+  workspace: string | null;
+  secondaryPanelWidth: number | null;
+  sidebarCollapsed: boolean | null;
+}
+
+function centeredDefaultBounds(workArea: WorkArea): WindowRestore['bounds'] {
+  const width = Math.min(DEFAULT_WINDOW_WIDTH, workArea.width);
+  const height = Math.min(DEFAULT_WINDOW_HEIGHT, workArea.height);
+  return {
+    width,
+    height,
+    x: Math.round(workArea.x + (workArea.width - width) / 2),
+    y: Math.round(workArea.y + (workArea.height - height) / 2),
+  };
+}
+
+/**
+ * Everything a launch needs, decided from the saved state and the displays that
+ * are actually attached. No Electron object is read, so a monitor that has been
+ * unplugged and an account that has changed are both reachable from a test.
+ */
+export function resolveWindowRestore(
+  state: ShellWindowState,
+  displays: readonly DisplaySummary[],
+): WindowRestore {
+  const primary = displays[0];
+  const frame = restoreFrame(state, displays);
+  const bounds = frame
+    ? { x: frame.x, y: frame.y, width: frame.width, height: frame.height }
+    : centeredDefaultBounds(
+        primary?.workArea ?? {
+          x: 0,
+          y: 0,
+          width: DEFAULT_WINDOW_WIDTH,
+          height: DEFAULT_WINDOW_HEIGHT,
+        },
+      );
+  const ownsRoute = routeBelongsToCurrentAccount(state);
+  return {
+    bounds,
+    maximized: frame?.maximized ?? false,
+    route: ownsRoute ? state.lastRoute : null,
+    workspace: ownsRoute ? state.lastWorkspace : null,
+    secondaryPanelWidth: state.secondaryPanelWidth,
+    sidebarCollapsed: state.sidebarCollapsed,
+  };
+}
+
+/**
+ * Records who is signed in. An account this shell has not seen before drops the
+ * route and workspace the previous one left behind.
+ */
+export function adoptAccount(state: ShellWindowState, account: string | null): ShellWindowState {
+  if (account !== null && account === state.lastRouteAccount) {
+    return { ...state, lastAccount: account };
+  }
+  return {
+    ...state,
+    lastAccount: account,
+    lastRoute: null,
+    lastRouteAccount: null,
+    lastWorkspace: null,
+  };
+}
+
+/** A route is only written down against the account that is looking at it. */
+export function rememberRoute(
+  state: ShellWindowState,
+  route: string | null,
+  account: string | null,
+): ShellWindowState {
+  if (account === null || route === null) {
+    return { ...state, lastRoute: null, lastRouteAccount: null };
+  }
+  return { ...state, lastRoute: route, lastRouteAccount: account };
 }
 
 /**
