@@ -38,7 +38,8 @@ vi.mock('stripe', () => ({
 }));
 
 const mockNeonQuery = vi.fn().mockResolvedValue([{ '?column?': 1 }]);
-vi.mock('@agiworkforce/types', () => ({
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
   getDefaultModelFor: () => 'model-under-test',
   getModelMetadataById: () => ({ id: 'model-under-test' }),
   isModelLive: () => true,
