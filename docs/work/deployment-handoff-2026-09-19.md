@@ -1383,3 +1383,23 @@ ESLint, the pinned-action guard, and frozen lockfile validation. The next main
 run must verify actual Codecov account acceptance; configuration alone is not
 a successful upload. Evidence: `/tmp/agi-signup-readiness-followup.log`,
 `/tmp/agi-coverage-floor-check.log`, `/tmp/agi-coverage-frozen-lock.log`.
+
+### Complete coverage measurement and package-floor repairs
+
+The 23-project local run finished with 33,710 tests passed, three failed and
+35 skipped. All three test failures are the signup fixture cases fixed above.
+The merged report measures 116,969 of 146,585 lines, **79.79%**, exceeding the
+unchanged 75% repository floor. The runner correctly returned failure, including
+two additional package-floor failures even though all their tests passed:
+routing 94.68% versus 95%, and sync 90.64% versus 92%.
+
+Existing test suites now cover rejected release/evaluation provenance, exact
+prompt-version lookup, restrictive memory retention across newer-device merges,
+and changed consent categories with unchanged list length. No production path,
+threshold or skip changed. Full affected-package coverage passes: routing
+**908 tests, 95.17% lines** and sync **138 tests, 92.39% lines**. The next remote
+full run remains authoritative for the final combined state. Jev selected these
+boundary tests at confidence 1.0, request
+`ccd60d0fe9fce8df115bc4b6173d0220f5762bf04eba2b1b590dff8642cafdd2`.
+Evidence: `/tmp/agi-package-coverage-full.log`,
+`/tmp/agi-routing-coverage-followup.log`, `/tmp/agi-sync-coverage-followup.log`.
