@@ -68,7 +68,11 @@ export {
   SHADOW_ENV,
 } from './auto';
 export { routingStageEnabled } from './routing-stages';
-export { buildRoutingDecisionTrace, ROUTING_TRACE_SCHEMA_VERSION } from './routing-trace';
+export {
+  buildRoutingDecisionTrace,
+  ROUTING_TRACE_SCHEMA_VERSION,
+  type RoutingResponseAssessmentTrace,
+} from './routing-trace';
 export type { RoutingCohort, RoutingDecisionTrace, RoutingTraceRoute } from './routing-trace';
 export type {
   AutoRoutePreview,

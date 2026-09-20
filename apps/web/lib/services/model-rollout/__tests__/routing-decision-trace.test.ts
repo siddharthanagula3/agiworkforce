@@ -22,7 +22,7 @@ import {
 } from '../routing-decision-trace-service';
 
 const TRACE = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   requestId: 'request-1',
   selection: 'auto',
   taskType: 'simple_chat',
@@ -59,6 +59,7 @@ const TRACE = {
     canaryCohorts: {},
   },
   observed: { failureRate: null, latencyP50Ms: null },
+  responseAssessment: null,
 } as unknown as RoutingDecisionTrace;
 
 function record(requestId: string) {

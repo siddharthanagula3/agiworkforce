@@ -1,12 +1,18 @@
 # Jev Auto routing architecture
 
-Status: Proposed architecture; interfaces and configuration below are not implemented
+Status: Response-budget control-plane slice implemented; model-selection interfaces below remain proposed
 Owner: Provider/platform owner, with Managed inference and billing owners
 Last updated: 2026-09-19
 
 This implements the proposed behavior in [spec.md](spec.md). The first serving
 path is Managed web Auto through Vercel AI Gateway. All type and module names
 introduced below are proposed; existing owners are linked explicitly.
+
+The shipped first slice deliberately stops before semantic model selection. Its
+native Gateway evaluation transport, immutable four-question response rubric,
+Auto-only coordinator, two-stage flags, response-budget application, trace and
+microUSD accounting are implemented. Sections that change task type, quality
+floor or selected model remain design work and must pass the gates in the spec.
 
 ## 1. Components and ownership
 
