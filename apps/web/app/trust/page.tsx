@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 172 of 267 database-backed hosted API route files. Counted against the 267 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 95 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
+      'Partial: 173 of 268 database-backed hosted API route files. Counted against the 268 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 95 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
   },
   {
     label: 'Authentication and CSRF',
@@ -382,9 +382,9 @@ export default function TrustPage() {
                     caption="Change record"
                     rows={[
                       {
-                        label: '2026-09-19',
+                        label: '2026-09-20',
                         value:
-                          'Re-measured for the production release after the current route and authorization changes. The row-level-isolation count moved from 164 to 171 of 266 database-backed routes and the owner-connection remainder from 103 to 95. The number of hosted routes that touch no database moved from 108 to 114. Each figure is derived from the deciding route source by a test, not maintained independently from the implementation.',
+                          'Re-measured after the billing waitlist access route moved onto the caller-scoped connection. The row-level-isolation count is 173 of 268 database-backed routes and the owner-connection remainder is 95. The number of hosted routes that touch no database is 115. Each figure is derived from the deciding route source by a test, not maintained independently from the implementation.',
                       },
                       {
                         label: '2026-09-18',

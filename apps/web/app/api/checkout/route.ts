@@ -23,7 +23,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { buildCheckoutTrialParams, resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
-import { getPlanTrialDays } from '@agiworkforce/types';
+import { getPlanTrialDays, isFreeOfChargePlanTier } from '@agiworkforce/types';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -32,6 +32,7 @@ import {
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
 import { getIdentityUser } from '@/lib/server/identity';
+import { hasBillingWaitlistAccess } from '@/lib/server/billing-waitlist-access';
 
 const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
 
@@ -211,6 +212,30 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   }
   const existingSubscription = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(existingSubscription);
+
+  if (!existingSubscription || isFreeOfChargePlanTier(existingSubscription.plan_tier)) {
+    let accessGranted = false;
+    try {
+      accessGranted = await hasBillingWaitlistAccess(db, user.id);
+    } catch (error) {
+      logger.error({ error, userId: user.id }, 'Failed to verify paid upgrade access');
+      throw createError
+        .serviceUnavailable('Upgrade access could not be verified. No checkout was created.')
+        .asUserSafe();
+    }
+    if (!accessGranted) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'waitlist_access_required',
+            message:
+              'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.',
+          },
+        },
+        { status: 403 },
+      );
+    }
+  }
 
   if (!ownerPolicy.canStartStripeCheckout) {
     throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'checkout'));

@@ -24,6 +24,10 @@ const loggerMock = vi.hoisted(() => ({
   debug: vi.fn(),
 }));
 
+const waitlistAccessMocks = vi.hoisted(() => ({
+  hasAccess: vi.fn(async () => true),
+}));
+
 const stripeErrors = vi.hoisted(() => {
   class StripeError extends Error {
     type: string;
@@ -88,6 +92,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: null,
   })),
 }));
+vi.mock('@/lib/server/billing-waitlist-access', () => ({
+  hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
+}));
 vi.mock('stripe', () => {
   class StripeMock {
     static errors = stripeErrors;
@@ -122,6 +129,7 @@ describe('POST /api/checkout when Stripe rejects the tax configuration', () => {
     dbMocks.execute.mockResolvedValue(1);
     stripeMocks.createCustomer.mockResolvedValue({ id: 'cus_123' });
     stripeMocks.listSubscriptions.mockResolvedValue({ data: [] });
+    waitlistAccessMocks.hasAccess.mockResolvedValue(true);
   });
 
   it('records why Stripe refused the session instead of only the sanitised buyer message', async () => {

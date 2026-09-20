@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   getAllowedModelsForTier,
@@ -97,16 +97,11 @@ const ANTHROPIC_PLATFORM_FETCH_MODEL = (() => {
   if (!model) throw new Error('Canonical Anthropic platform-fetch fixture is missing');
   return model.id;
 })();
-const FREE_NATIVE_SEARCH_MODEL = (() => {
+const FREE_CHAT_MODEL = (() => {
   const model = getAllowedModelsForTier('economy')
     .map((modelId) => getModelMetadataById(modelId))
-    .find(
-      (candidate) =>
-        candidate?.provider === 'google' &&
-        candidate.tierPolicy?.minTier === 'free' &&
-        candidate.capabilities.search === true,
-    );
-  if (!model) throw new Error('Canonical Free native-search fixture is missing');
+    .find((candidate) => candidate?.tierPolicy?.minTier === 'free');
+  if (!model) throw new Error('Canonical Free chat fixture is missing');
   return model.id;
 })();
 
@@ -260,7 +255,18 @@ describe('getWorkModeEntitlementError', () => {
   });
 });
 
-describe('free-trial capability gate, model-agnostic web search', () => {
+describe('Free capability gate, model-agnostic web search', () => {
+  const originalPerplexityApiKey = process.env['PERPLEXITY_API_KEY'];
+
+  beforeAll(() => {
+    process.env['PERPLEXITY_API_KEY'] = 'test-key';
+  });
+
+  afterAll(() => {
+    if (originalPerplexityApiKey === undefined) delete process.env['PERPLEXITY_API_KEY'];
+    else process.env['PERPLEXITY_API_KEY'] = originalPerplexityApiKey;
+  });
+
   const freeSubscription = {
     id: 'sub-free',
     user_id: 'user-free',
@@ -271,7 +277,6 @@ describe('free-trial capability gate, model-agnostic web search', () => {
     stripe_subscription_id: 'stripe-sub-free',
     stripe_price_id: 'stripe-price-free',
   };
-
   const freeTrialRequest = (body: Record<string, unknown>, key: string) =>
     new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
       method: 'POST',
@@ -283,14 +288,14 @@ describe('free-trial capability gate, model-agnostic web search', () => {
       body: JSON.stringify(body),
     });
 
-  it('admits provider-native web search on a Free/Basic model', async () => {
+  it('admits platform web search on the Free chat router', async () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: FREE_NATIVE_SEARCH_MODEL,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: 'What is the latest news today?' }],
           web_search: true,
-          stream: false,
+          stream: true,
         },
         'free-ws-1',
       ),
@@ -304,9 +309,9 @@ describe('free-trial capability gate, model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: FREE_NATIVE_SEARCH_MODEL,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
-          stream: false,
+          stream: true,
         },
         'free-ws-auto-1',
       ),
@@ -317,7 +322,12 @@ describe('free-trial capability gate, model-agnostic web search', () => {
     if (result.ok) {
       expect(result.resolvedTaskType).toBe('research');
       expect(result.chatRequest.web_search).toBe(true);
-      expect(result.llmRequest.tools).toContainEqual({ google_search: {} });
+      expect(result.llmRequest.tools).toContainEqual(
+        expect.objectContaining({
+          type: 'function',
+          function: expect.objectContaining({ name: 'web_search' }),
+        }),
+      );
     }
   });
 
@@ -325,10 +335,10 @@ describe('free-trial capability gate, model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: FREE_NATIVE_SEARCH_MODEL,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
           web_search: false,
-          stream: false,
+          stream: true,
         },
         'free-ws-auto-opt-out-1',
       ),
@@ -347,9 +357,9 @@ describe('free-trial capability gate, model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: FREE_NATIVE_SEARCH_MODEL,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: 'Explain how a binary search works.' }],
-          stream: false,
+          stream: true,
         },
         'free-ws-auto-chat-1',
       ),
@@ -376,7 +386,7 @@ describe('free-trial capability gate, model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: unsupportedModel!,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: 'Run this snippet and show the output.' }],
           code_execution: true,
           stream: false,
@@ -398,24 +408,15 @@ describe('free-trial capability gate, model-agnostic web search', () => {
     }
   });
 
-  it('keeps the other Free models able to satisfy every gated capability', async () => {
-    const GATED = ['search', 'codeExecution', 'thinking', 'vision'] as const;
+  it('keeps the Free catalog limited to the explicit zero-cost chat router', () => {
     const freeModels = getAllowedModelsForTier('economy').filter(
       (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
     );
-
-    for (const cap of GATED) {
-      const supported = freeModels.filter(
-        (modelId) =>
-          (getModelMetadataById(modelId)?.capabilities as Record<string, boolean> | undefined)?.[
-            cap
-          ] === true,
-      );
-      expect(
-        supported.length,
-        `no Free model supports ${cap}, the composer offers a dead end`,
-      ).toBeGreaterThan(0);
-    }
+    expect(freeModels).toEqual([FREE_CHAT_MODEL]);
+    expect(getModelMetadataById(FREE_CHAT_MODEL)).toMatchObject({
+      provider: 'open_router',
+      capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: true },
+    });
   });
 });
 
@@ -688,7 +689,7 @@ describe('processRequest CPST route identity', () => {
           'x-agi-surface': 'web',
         },
         body: JSON.stringify({
-          model: FREE_NATIVE_SEARCH_MODEL,
+          model: FREE_CHAT_MODEL,
           messages: [{ role: 'user', content: 'Say hello.' }],
           stream: false,
         }),

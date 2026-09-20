@@ -8,14 +8,15 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { isSelfServePaidPlanTier, type SelfServePaidPlanTier } from '@agiworkforce/types';
 
 import { pseudonymizeEmail as hashEmail } from '@/lib/server/email-pseudonym';
 
-type WaitlistPlan = 'pro' | 'max';
+type WaitlistPlan = SelfServePaidPlanTier;
 type BillingInterval = 'monthly' | 'yearly';
 
 function isWaitlistPlan(value: unknown): value is WaitlistPlan {
-  return value === 'pro' || value === 'max';
+  return typeof value === 'string' && isSelfServePaidPlanTier(value);
 }
 
 function isBillingInterval(value: unknown): value is BillingInterval {
@@ -64,7 +65,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   };
 
   if (!isWaitlistPlan(payload.plan)) {
-    throw createError.validation('plan must be pro or max');
+    throw createError.validation('Choose a paid plan to join its waitlist.');
   }
 
   const billingInterval = isBillingInterval(payload.billingInterval)
