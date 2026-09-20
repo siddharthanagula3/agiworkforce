@@ -24,7 +24,13 @@ import {
   liveSessionProviderCostCents,
 } from '@/lib/voice/live-voice-billing';
 import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
-import { closeVoiceSession, isVoiceSessionStoreReady } from '../../lib/voice-session-store';
+import {
+  closeVoiceSession,
+  getVoiceSessionByProviderId,
+  isVoiceSessionStoreReady,
+  meteredVoiceSessionSeconds,
+  type VoiceSessionRecord,
+} from '../../lib/voice-session-store';
 
 const CloseLiveSessionSchema = z.object({
   seconds: z
@@ -91,7 +97,30 @@ async function handleCloseLiveSession(
   }
 
   const liveModel = getModelMetadataById(getRoutingSlotModel('voice_live'));
-  const billedSeconds = Math.min(Math.ceil(body.seconds), body.settlement.ceilingSeconds);
+  // The canonical record is read before anything settles: a tab that dropped
+  // its connection reports the last usage event it saw, which is none at all
+  // when the drop came first, and that report alone billed the session at zero
+  // and left the plan's voice allowance untouched for the minutes it ran.
+  let storeReady = false;
+  try {
+    storeReady = await isVoiceSessionStoreReady(scoped.db);
+  } catch (error) {
+    logger.warn({ error, userId, sessionId }, 'Voice session store readiness could not be read');
+  }
+  let record: VoiceSessionRecord | null = null;
+  if (storeReady) {
+    try {
+      record = await getVoiceSessionByProviderId(scoped.db, userId, sessionId);
+    } catch (error) {
+      logger.warn({ error, userId, sessionId }, 'Voice session record could not be read');
+    }
+  }
+
+  const reportedSeconds = Math.max(0, Math.ceil(body.seconds));
+  const meteredSeconds = record
+    ? meteredVoiceSessionSeconds(record, reportedSeconds, Date.now())
+    : reportedSeconds;
+  const billedSeconds = Math.min(meteredSeconds, body.settlement.ceilingSeconds);
   const actualCostCents = Math.min(
     liveSessionCostCents(billedSeconds),
     body.settlement.estimatedCostCents,
@@ -132,6 +161,7 @@ async function handleCloseLiveSession(
       providerSku: liveModel?.apiModelId ?? reservation.model,
       sessionId,
       sessionSeconds: body.seconds,
+      reportedSeconds,
       billedSeconds,
       reason: body.reason ?? 'close_requested',
       ...(providerCostCents === null
@@ -160,7 +190,7 @@ async function handleCloseLiveSession(
   // The record closes after settlement: a row that still says active is a
   // session that was never billed, which is the state worth noticing.
   try {
-    if (await isVoiceSessionStoreReady(scoped.db)) {
+    if (storeReady) {
       await closeVoiceSession({
         db: scoped.db,
         userId,

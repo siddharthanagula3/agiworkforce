@@ -11,16 +11,15 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  closeCancelledImageGenerationJob,
   getImageGenerationJob,
   isImageJobStoreReady,
   requestImageGenerationCancellation,
 } from '@/lib/server/image-generation-jobs';
-import { finalizeManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 import {
   imageJobDeliveredImages,
+  isImageJobCancellationPending,
   publicImageJobSnapshot,
-  reservationForImageJob,
+  reconcileCancelledImageGenerationJob,
 } from '../lib/image-job-executor';
 
 /**
@@ -93,10 +92,9 @@ async function handleImageCancel(request: NextRequest): Promise<NextResponse> {
   // Setting cancel_requested_at already stops any further attempt from being
   // claimed. An attempt still holding a live claim is inside a provider call it
   // has paid for, so the reservation stays with that attempt and this request
-  // only records the intent.
-  const claimIsLive =
-    requested.claimExpiresAt !== null && Date.parse(requested.claimExpiresAt) > Date.now();
-  if (claimIsLive) {
+  // only records the intent; the status poll and the queued drive finish the
+  // job if that attempt never comes back.
+  if (!isImageJobCancellationPending(requested, Date.now())) {
     const images = await imageJobDeliveredImages(scoped.db, requested);
     return NextResponse.json(publicImageJobSnapshot(requested, images), {
       status: 202,
@@ -104,39 +102,7 @@ async function handleImageCancel(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  let billingSettlementStatus: 'succeeded' | 'pending' | 'terminal' | null = null;
-  let billingOutcome: 'released' | null = null;
-  try {
-    const settlement = await finalizeManagedUsageRequest({
-      ...reservationForImageJob(scoped.db, requested),
-      outcome: 'failed',
-      actualCostMicrousd: 0,
-      usage: {
-        operation: 'image',
-        sourceSurface: requested.sourceSurface,
-        provider: requested.provider,
-        model: requested.model,
-        jobId: requested.id,
-        reason: 'canceled_by_user',
-      },
-    });
-    billingSettlementStatus = settlement.settlementStatus;
-    billingOutcome = settlement.requestStatus === 'released' ? 'released' : null;
-  } catch (error) {
-    logger.error(
-      { event: 'image_cancel_settlement_unrecorded', error, jobId: requested.id },
-      'Image cancellation settlement could not be persisted',
-    );
-  }
-
-  const closed = await closeCancelledImageGenerationJob({
-    db: scoped.db,
-    jobId: requested.id,
-    userId,
-    billingOutcome,
-    billingSettlementStatus,
-  });
-
+  const closed = await reconcileCancelledImageGenerationJob({ db: scoped.db, job: requested });
   const job = closed ?? requested;
   const images = await imageJobDeliveredImages(scoped.db, job);
   return NextResponse.json(publicImageJobSnapshot(job, images), {
