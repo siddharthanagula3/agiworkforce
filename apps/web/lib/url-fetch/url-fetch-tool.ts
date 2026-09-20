@@ -1,10 +1,11 @@
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
-  assertResolvedPublicHostname,
-  EgressPolicyError,
-  pinnedPublicFetch,
-} from '@/lib/egress-policy';
+  createDeadline,
+  guardedFetch,
+  readBodyCapped,
+  type GuardedFetchRefusal,
+} from '@/lib/url-fetch/guarded-fetch';
 
 export const URL_FETCH_TOOL = 'url_fetch';
 
@@ -470,42 +471,22 @@ function err(errorCode: UrlFetchErrorCode, error: string): UrlFetchOutcome {
   return { ok: false, errorCode, error };
 }
 
-async function readBodyCapped(response: Response, maxBytes: number): Promise<Uint8Array | null> {
-  const body = response.body;
-  if (!body) return new Uint8Array(0);
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        total += value.byteLength;
-        if (total > maxBytes) {
-          await reader.cancel().catch(() => undefined);
-          return null;
-        }
-        chunks.push(value);
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
-}
+const REFUSAL_CODES: Readonly<Record<GuardedFetchRefusal, UrlFetchErrorCode>> = {
+  malformed_url: 'url_not_accessible',
+  unsupported_scheme: 'invalid_tool_input',
+  embedded_credentials: 'url_not_allowed',
+  blocked_host: 'url_not_allowed',
+  missing_location: 'url_not_accessible',
+  too_many_redirects: 'too_many_redirects',
+  unreachable: 'url_not_accessible',
+  timeout: 'timeout',
+  cancelled: 'cancelled',
+};
 
 export async function executeUrlFetch(
   args: Record<string, unknown>,
   overrides: UrlFetchOverrides = {},
 ): Promise<UrlFetchOutcome> {
-  const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
   const timeoutMs = overrides.timeoutMs ?? URL_FETCH_TIMEOUT_MS;
   const maxResponseBytes = overrides.maxResponseBytes ?? URL_FETCH_MAX_RESPONSE_BYTES;
   const maxContentChars = overrides.maxContentChars ?? URL_FETCH_MAX_CONTENT_CHARS;
@@ -525,95 +506,39 @@ export async function executeUrlFetch(
     );
   }
 
-  let current: URL;
+  let target: URL;
   try {
-    current = new URL(rawUrl.trim());
+    target = new URL(rawUrl.trim());
   } catch {
     return err('invalid_tool_input', `Malformed URL: ${rawUrl}`);
   }
 
-  const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), timeoutMs);
-  const cancel = () => controller.abort();
-  callerSignal?.addEventListener('abort', cancel, { once: true });
-
+  const deadline = createDeadline(timeoutMs, callerSignal);
   try {
-    let response: Response | null = null;
+    const hop = await guardedFetch(target, {
+      deadline,
+      maxRedirects,
+      headers: {
+        Accept: 'text/html, text/plain, text/markdown, application/json;q=0.9, */*;q=0.1',
+        'User-Agent': 'AGIWorkforce-URLFetch/1.0 (+https://agiworkforce.com)',
+      },
+      ...(overrides.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {}),
+    });
 
-    for (let hop = 0; hop <= maxRedirects; hop++) {
-      if (current.protocol !== 'http:' && current.protocol !== 'https:') {
-        return err(
-          'invalid_tool_input',
-          `Unsupported URL scheme "${current.protocol}", only http/https.`,
-        );
+    if (!hop.ok) {
+      if (hop.refusal === 'cancelled') return err('cancelled', CANCELLED_MESSAGE);
+      if (hop.refusal === 'timeout') {
+        return err('timeout', `Fetch timed out after ${timeoutMs}ms: ${hop.url?.href ?? rawUrl}`);
       }
-      if (current.username !== '' || current.password !== '') {
-        return err('url_not_allowed', 'URLs with embedded credentials are not allowed.');
-      }
-
-      try {
-        await assertResolvedPublicHostname(current.href);
-      } catch (guardErr) {
-        if (guardErr instanceof EgressPolicyError) {
-          return err(
-            'url_not_allowed',
-            `URL blocked: ${current.hostname} is not a resolvable public host.`,
-          );
-        }
-        throw guardErr;
-      }
-
-      try {
-        response = await fetchImpl(current.href, {
-          method: 'GET',
-          redirect: 'manual',
-          signal: controller.signal,
-          headers: {
-            Accept: 'text/html, text/plain, text/markdown, application/json;q=0.9, */*;q=0.1',
-            'User-Agent': 'AGIWorkforce-URLFetch/1.0 (+https://agiworkforce.com)',
-          },
-        });
-      } catch (fetchErr) {
-        if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
-        if (controller.signal.aborted) {
-          return err('timeout', `Fetch timed out after ${timeoutMs}ms: ${current.href}`);
-        }
-        const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
-        return err('url_not_accessible', `Failed to fetch ${current.href}: ${msg}`);
-      }
-
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
-        await response.body?.cancel().catch(() => undefined);
-        if (!location) {
-          return err(
-            'url_not_accessible',
-            `Redirect (${response.status}) without a Location header.`,
-          );
-        }
-        let next: URL;
-        try {
-          next = new URL(location, current);
-        } catch {
-          return err('url_not_accessible', `Redirect to a malformed URL: ${location}`);
-        }
-        if (hop === maxRedirects) {
-          return err(
-            'too_many_redirects',
-            `Exceeded ${maxRedirects} redirects fetching ${rawUrl}.`,
-          );
-        }
-        current = next;
-        response = null;
-        continue;
-      }
-      break;
+      return err(REFUSAL_CODES[hop.refusal], hop.detail);
+    }
+    if (hop.kind !== 'response') {
+      return err('url_not_accessible', `Redirect was not followed to a page: ${hop.url.href}`);
     }
 
-    if (!response) {
-      return err('too_many_redirects', `Exceeded ${maxRedirects} redirects fetching ${rawUrl}.`);
-    }
+    const { response, url: current } = hop;
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
       return err('url_not_accessible', `HTTP ${response.status} fetching ${current.href}.`);
     }
 
@@ -641,8 +566,9 @@ export async function executeUrlFetch(
     try {
       bytes = await readBodyCapped(response, maxResponseBytes);
     } catch (readErr) {
-      if (callerSignal?.aborted) return err('cancelled', CANCELLED_MESSAGE);
-      if (controller.signal.aborted) {
+      const stopped = deadline.reason();
+      if (stopped === 'cancelled') return err('cancelled', CANCELLED_MESSAGE);
+      if (stopped === 'timeout') {
         return err('timeout', `Fetch timed out after ${timeoutMs}ms: ${current.href}`);
       }
       const msg = readErr instanceof Error ? readErr.message : String(readErr);
@@ -675,8 +601,7 @@ export async function executeUrlFetch(
     }
 
     // The bytes are already in hand, so a fetched source costs nothing extra to
-    // describe and date. Without this its card was a bare title while a searched
-    // source beside it carried a snippet and a date.
+    // describe and date.
     const snippet = isHtml ? extractPageDescription(raw) : undefined;
     const date = isHtml ? extractPagePublishedDate(raw) : undefined;
     return {
@@ -689,8 +614,7 @@ export async function executeUrlFetch(
       ...(date ? { date } : {}),
     };
   } finally {
-    clearTimeout(deadline);
-    callerSignal?.removeEventListener('abort', cancel);
+    deadline.release();
   }
 }
 

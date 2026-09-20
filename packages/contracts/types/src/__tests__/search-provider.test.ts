@@ -194,3 +194,103 @@ describe('delivery vocabulary', () => {
     expect(sourceDeliveryLabel('cached')).not.toBe(sourceDeliveryLabel('live'));
   });
 });
+
+describe('every source shape a result can take', () => {
+  const BASE = {
+    url: 'https://example.com/a',
+    title: 'A',
+    snippet: 'S',
+    retrievedAt: RETRIEVED_AT,
+  };
+
+  it('carries the same identity and timestamps whichever way it was delivered', () => {
+    const ids = new Set<string>();
+    for (const delivery of SOURCE_DELIVERIES) {
+      const source = createSearchSource({ ...BASE, providerId: `p-${delivery}`, delivery });
+      ids.add(source.id);
+      expect(source.provenance.delivery, delivery).toBe(delivery);
+      expect(source.provenance.retrievedAt, delivery).toBe(RETRIEVED_AT);
+      expect(source.provenance.providerId, delivery).toBe(`p-${delivery}`);
+      expect(source.canonicalUrl, delivery).toBe(canonicalSourceUrl(BASE.url));
+      expect(source.contentVersion, delivery).toBe(sourceContentVersion(BASE));
+      expect(Object.keys(source.provenance).sort(), delivery).toEqual([
+        'delivery',
+        'freshness',
+        'indexedAt',
+        'providerId',
+        'retrievedAt',
+      ]);
+    }
+    expect(ids.size, 'the same page changed identity with its delivery').toBe(1);
+  });
+
+  it('gives every delivery a sentence that does not claim more than it did', () => {
+    for (const delivery of SOURCE_DELIVERIES) {
+      const label = sourceDeliveryLabel(delivery);
+      expect(label.length, delivery).toBeGreaterThan(0);
+      if (delivery !== 'live') expect(label, delivery).not.toContain('live');
+    }
+    expect(new Set(SOURCE_DELIVERIES.map(sourceDeliveryLabel)).size).toBe(SOURCE_DELIVERIES.length);
+    expect(SOURCE_DELIVERIES.every(isSourceDelivery)).toBe(true);
+  });
+
+  it('classes freshness for every age, and never calls an undated page fresh', () => {
+    const now = new Date('2026-09-18T12:00:00.000Z');
+    const cases: ReadonlyArray<readonly [number | null, string]> = [
+      [0, 'fresh'],
+      [7, 'fresh'],
+      [8, 'recent'],
+      [90, 'recent'],
+      [91, 'stale'],
+      [4000, 'stale'],
+      [null, 'unknown'],
+    ];
+    for (const [ageDays, expected] of cases) {
+      const publishedAt =
+        ageDays === null ? null : new Date(now.getTime() - ageDays * 86_400_000).toISOString();
+      const freshness = classifySourceFreshness(publishedAt, now);
+      expect(freshness.class, `${ageDays} days old`).toBe(expected);
+      expect(freshness.ageDays, `${ageDays} days old`).toBe(ageDays);
+    }
+    for (const bad of ['', 'not a date', 'yesterday']) {
+      expect(classifySourceFreshness(bad, now).class, bad).toBe('unknown');
+    }
+  });
+
+  it('tracks a source version that moves with the text and not with the delivery', () => {
+    const first = createSearchSource({ ...BASE, providerId: 'p', delivery: 'indexed' });
+    const sameTextLater = createSearchSource({
+      ...BASE,
+      providerId: 'q',
+      delivery: 'live',
+      retrievedAt: '2026-09-19T12:00:00.000Z',
+    });
+    const rewritten = createSearchSource({
+      ...BASE,
+      snippet: 'S rewritten',
+      providerId: 'p',
+      delivery: 'indexed',
+    });
+    expect(sameTextLater.contentVersion).toBe(first.contentVersion);
+    expect(rewritten.contentVersion).not.toBe(first.contentVersion);
+    expect(rewritten.id).toBe(first.id);
+  });
+
+  it('gives a citation id to a source with no usable url rather than dropping it', () => {
+    for (const url of ['', '   ', 'not a url']) {
+      const source = createSearchSource({ ...BASE, url, providerId: 'p', delivery: 'external' });
+      expect(source.id, url).toMatch(/^src_[0-9a-f]{16}$/);
+      expect(source.id, url).toBe(searchCitationId({ ...BASE, url }));
+    }
+    expect(sourceFingerprint('a')).not.toBe(sourceFingerprint('b'));
+  });
+
+  it('collapses one page delivered every way into one citation, at the weakest claim', () => {
+    const sources = SOURCE_DELIVERIES.map((delivery) =>
+      createSearchSource({ ...BASE, providerId: `p-${delivery}`, delivery }),
+    );
+    const deduped = dedupeSearchSources(sources);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]!.provenance.delivery).toBe('external');
+  });
+});
