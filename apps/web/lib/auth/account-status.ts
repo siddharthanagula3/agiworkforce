@@ -1,6 +1,7 @@
 export const ACCOUNT_STATUSES = [
   'active',
   'locked',
+  'recovery_pending',
   'suspended',
   'banned',
   'deletion_scheduled',
@@ -9,7 +10,7 @@ export const ACCOUNT_STATUSES = [
 
 export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
 
-export type AccountDenialReason = 'locked' | 'suspended' | 'deleted';
+export type AccountDenialReason = 'locked' | 'recovery' | 'suspended' | 'deleted';
 
 export interface AccountAccessAllowed {
   allowed: true;
@@ -25,6 +26,19 @@ export interface AccountAccessDenied {
 /** The page each denial is actually resolved on; an erasure has none by design. */
 export const LOCKOUT_RECOVERY_PATH = '/auth/reset-password';
 export const SUSPENSION_APPEAL_PATH = '/support';
+
+/** A denial needs a heading and a control, not only the sentence a 403 carries. */
+export interface AccountDenialNotice {
+  title: string;
+  action: string;
+}
+
+export const ACCOUNT_DENIAL_NOTICE: Readonly<Record<AccountDenialReason, AccountDenialNotice>> = {
+  locked: { title: 'This account is locked', action: 'Reset your password' },
+  recovery: { title: 'Finish recovering this account', action: 'Continue recovery' },
+  suspended: { title: 'This account is suspended', action: 'Contact support' },
+  deleted: { title: 'This account has been deleted', action: 'Back to sign-in' },
+};
 
 export type AccountAccessDecision = AccountAccessAllowed | AccountAccessDenied;
 
@@ -63,6 +77,13 @@ export function accountAccessDecision(status: string | null): AccountAccessDecis
         reason: 'locked',
         recoveryPath: LOCKOUT_RECOVERY_PATH,
         message: `Your account is locked. Reset your password at ${LOCKOUT_RECOVERY_PATH} to unlock it.`,
+      };
+    case 'recovery_pending':
+      return {
+        allowed: false,
+        reason: 'recovery',
+        recoveryPath: LOCKOUT_RECOVERY_PATH,
+        message: `Account recovery is not finished. Complete it at ${LOCKOUT_RECOVERY_PATH} before signing in.`,
       };
     case 'suspended':
     case 'banned':
