@@ -63,6 +63,7 @@ export type {
 
 export {
   createDecisionEvaluator,
+  decisionSampledIn,
   isDecisionResult,
   DECISION_FALLBACK_REASONS,
   DECISION_STATUSES,

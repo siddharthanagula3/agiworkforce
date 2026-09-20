@@ -2,25 +2,20 @@
 // a bounded row. It changes no route, no latency and nothing a user sees.
 import 'server-only';
 
-import { after } from 'next/server';
-
 import type { DecisionAnswer } from '@agiworkforce/agent-core';
 import { modelRegistry } from '@agiworkforce/model-registry';
 import type { TaskFamily } from '@agiworkforce/routing';
-import type { PrivacyMode } from '@agiworkforce/types';
-
-import { DECISION_FLAG_PREFIX } from '@/lib/feature-flags/decision-flags';
-import {
-  buildFlagSubject,
-  evaluateFlagsForSubject,
-} from '@/lib/feature-flags/flag-evaluation-service';
-import { getActiveFlagDefinitions } from '@/lib/feature-flags/flag-store';
-import { logger } from '@/lib/logger';
 import { recordSemanticDecisionComparison } from '@/lib/observability/metrics';
 
-import { evaluateSemanticDecision } from './host';
 import { confidenceBin, type DecisionSkipReason } from './kinds';
-import { buildTurnSignalsRequest } from './questions';
+import { buildTurnSignalsRequest } from './questions/turn-signals';
+import {
+  decisionGate,
+  decisionIdFor,
+  runShadowDecision,
+  scheduleShadow,
+  type SemanticDecisionScope,
+} from './shadow';
 import {
   persistSemanticDecisionTraces,
   type SemanticDecisionTrace,
@@ -31,13 +26,7 @@ const KIND = 'turn_signals' as const;
 
 const AMBIGUOUS_BASELINE = 'ambiguous';
 
-export interface TurnSignalsShadowInput {
-  request: Request;
-  requestId: string;
-  userId: string;
-  organizationId: string | null;
-  plan: string | null;
-  surface: string;
+export interface TurnSignalsTurn {
   /** The selection the user made, so an explicitly named model is left alone. */
   modelSelection: string;
   latestUserMessage: string;
@@ -45,13 +34,12 @@ export interface TurnSignalsShadowInput {
   hasAttachments: boolean;
   /** What `classifyTaskFamily` answered for this turn, null when it abstained. */
   baselineTaskFamily: TaskFamily | null;
-  privacyMode: PrivacyMode;
-  zeroDataRetentionOnly: boolean;
-  workspaceModelPolicy: {
-    allowedProviders?: readonly string[];
-    blockedProviders?: readonly string[];
-  } | null;
-  residencyRegion: string | null;
+}
+
+export interface TurnSignalsShadowInput {
+  scope: SemanticDecisionScope;
+  /** Called past the response and only once the gate opens. */
+  derive: () => TurnSignalsTurn;
 }
 
 function isAutoSelection(selection: string): boolean {
@@ -60,15 +48,11 @@ function isAutoSelection(selection: string): boolean {
 
 // Turns the deterministic guards own outright, where a second opinion has
 // nothing to compare against or no request to classify.
-function precondition(input: TurnSignalsShadowInput): DecisionSkipReason | undefined {
-  if (input.hasAttachments) return 'attachments_present';
-  if (!isAutoSelection(input.modelSelection)) return 'explicit_model';
-  if (input.latestUserMessage.trim().length === 0) return 'no_text';
+function precondition(turn: TurnSignalsTurn): DecisionSkipReason | undefined {
+  if (turn.hasAttachments) return 'attachments_present';
+  if (!isAutoSelection(turn.modelSelection)) return 'explicit_model';
+  if (turn.latestUserMessage.trim().length === 0) return 'no_text';
   return undefined;
-}
-
-function decisionId(requestId: string): string {
-  return `${KIND}:${requestId}`;
 }
 
 function booleanTrace(
@@ -88,53 +72,29 @@ function booleanTrace(
 }
 
 export async function runTurnSignalsShadow(input: TurnSignalsShadowInput): Promise<void> {
-  const subject = buildFlagSubject(input.request, {
-    userId: input.userId,
-    workspaceId: input.organizationId,
-    role: null,
-    plan: input.plan,
-    surface: input.surface,
-  });
-  const nowMs = Date.now();
-  const [evaluations, definitions] = await Promise.all([
-    evaluateFlagsForSubject(subject, { keyPrefix: DECISION_FLAG_PREFIX }, nowMs),
-    getActiveFlagDefinitions(nowMs),
-  ]);
+  const gate = await decisionGate(input.scope, KIND);
+  if (!gate.asks) return;
 
-  const result = await evaluateSemanticDecision({
+  const turn = input.derive();
+  const skip = precondition(turn);
+  const result = await runShadowDecision({
     kind: KIND,
+    scope: input.scope,
+    gate,
     request: buildTurnSignalsRequest({
-      latestUserMessage: input.latestUserMessage,
-      previousUserMessage: input.previousUserMessage,
+      latestUserMessage: turn.latestUserMessage,
+      previousUserMessage: turn.previousUserMessage,
     }),
-    context: {
-      requestId: input.requestId,
-      decisionId: decisionId(input.requestId),
-      userId: input.userId,
-      organizationId: input.organizationId,
-      surface: input.surface,
-      bucketId: input.userId,
-      flagEvaluations: evaluations,
-      flagDefinitions: definitions,
-      nowMs,
-      precondition: precondition(input),
-      eligibility: {
-        privacyMode: input.privacyMode,
-        workspaceId: input.organizationId,
-        zeroDataRetentionOnly: input.zeroDataRetentionOnly,
-        workspaceModelPolicy: input.workspaceModelPolicy,
-        residencyRegion: input.residencyRegion,
-      },
-    },
+    precondition: skip,
   });
 
-  if (result.mode === 'disabled' || result.skipReason) return;
+  if (result.skipReason) return;
 
   const mode: DecisionTraceMode = result.mode === 'enabled' ? 'served' : 'shadow';
-  const baseline = input.baselineTaskFamily ?? AMBIGUOUS_BASELINE;
+  const baseline = turn.baselineTaskFamily ?? AMBIGUOUS_BASELINE;
   const base = {
-    decisionId: decisionId(input.requestId),
-    requestId: input.requestId,
+    decisionId: decisionIdFor(KIND, input.scope.requestId),
+    requestId: input.scope.requestId,
     kind: KIND,
     mode,
     baselineValue: null,
@@ -208,22 +168,6 @@ export async function runTurnSignalsShadow(input: TurnSignalsShadowInput): Promi
   persistSemanticDecisionTraces(traces);
 }
 
-function swallow(requestId: string): (error: unknown) => void {
-  return (error: unknown) => {
-    try {
-      logger.warn({ error, requestId }, '[semantic-decisions] shadow failed');
-    } catch {
-      /* A failed log must not turn a dropped shadow into an unhandled rejection. */
-    }
-  };
-}
-
-// `after` holds the invocation open past the response flush, which a detached
-// promise does not. A callback, so nothing starts where `after` itself throws.
 export function scheduleTurnSignalsShadow(input: TurnSignalsShadowInput): void {
-  try {
-    after(() => runTurnSignalsShadow(input).catch(swallow(input.requestId)));
-  } catch (error) {
-    swallow(input.requestId)(error);
-  }
+  scheduleShadow(KIND, input.scope.requestId, () => runTurnSignalsShadow(input));
 }

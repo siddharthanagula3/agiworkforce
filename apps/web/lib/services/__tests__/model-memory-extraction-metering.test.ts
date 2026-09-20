@@ -27,31 +27,35 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
 });
 
 const runnerResult = vi.fn();
-vi.mock('@agiworkforce/agent-core', () => ({
-  isMemoryExtractionWorthwhile: () => true,
-  extractCandidateMemoryFacts: () => ['pattern fact'],
-  extractMemoryFactsWithModel: async (
-    message: string,
-    options: {
-      runner: (
-        input: { systemPrompt: string; message: string },
-        signal: AbortSignal,
-      ) => Promise<string>;
-      onFallback?: (reason: string) => void;
+vi.mock('@agiworkforce/agent-core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/agent-core')>();
+  return {
+    ...actual,
+    isMemoryExtractionWorthwhile: () => true,
+    extractCandidateMemoryFacts: () => ['pattern fact'],
+    extractMemoryFactsWithModel: async (
+      message: string,
+      options: {
+        runner: (
+          input: { systemPrompt: string; message: string },
+          signal: AbortSignal,
+        ) => Promise<string>;
+        onFallback?: (reason: string) => void;
+      },
+    ) => {
+      try {
+        const content = await options.runner(
+          { systemPrompt: 'extract', message },
+          new AbortController().signal,
+        );
+        return { facts: [content] };
+      } catch {
+        options.onFallback?.('provider_error');
+        return { facts: ['pattern fact'] };
+      }
     },
-  ) => {
-    try {
-      const content = await options.runner(
-        { systemPrompt: 'extract', message },
-        new AbortController().signal,
-      );
-      return { facts: [content] };
-    } catch {
-      options.onFallback?.('provider_error');
-      return { facts: ['pattern fact'] };
-    }
-  },
-}));
+  };
+});
 
 const drainToLlmResponseMock = vi.fn();
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({

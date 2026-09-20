@@ -149,6 +149,12 @@ export function isDecisionResult(
   });
 }
 
+// One predicate, so a caller that pre-filters a subject to avoid building a
+// request it cannot send filters on exactly what the evaluator would apply.
+export function decisionSampledIn(cohort: number, sampleRate: number): boolean {
+  return probability(cohort) && cohort < sampleRate;
+}
+
 function validRequest(request: DecisionRequest, policy: DecisionPolicy): boolean {
   const questions = Object.values(request.questions);
   return (
@@ -219,8 +225,7 @@ export function createDecisionEvaluator(options: {
     }
     if (policy.mode === 'disabled') return fallback('disabled');
     if (scope.trustMode !== 'managed' || scope.providerAllowed !== true) return fallback('policy');
-    if (!probability(scope.cohort) || scope.cohort >= policy.sampleRate)
-      return fallback('sampled_out');
+    if (!decisionSampledIn(scope.cohort, policy.sampleRate)) return fallback('sampled_out');
     if (scope.signal?.aborted) return fallback('aborted');
     try {
       if (!validRequest(request, policy)) return fallback('invalid_request');

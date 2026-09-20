@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -66,30 +66,48 @@ vi.mock('@/lib/observability/metrics', async () => {
   };
 });
 
+import { decisionFlagKey } from '@/lib/feature-flags/decision-flags';
+
 import {
   runTurnSignalsShadow,
   scheduleTurnSignalsShadow,
   type TurnSignalsShadowInput,
+  type TurnSignalsTurn,
 } from '../turn-signals';
 
-function input(overrides: Partial<TurnSignalsShadowInput> = {}): TurnSignalsShadowInput {
+const SHADOW_FLAGS = {
+  [decisionFlagKey('turn_signals')]: {
+    key: decisionFlagKey('turn_signals'),
+    variant: 'shadow',
+    enabled: true,
+    reason: 'default',
+    ruleId: null,
+    version: 1,
+  },
+};
+
+function input(overrides: Partial<TurnSignalsTurn> = {}): TurnSignalsShadowInput {
   return {
-    request: new Request('https://app.example/api/llm/v1/chat/completions'),
-    requestId: 'request-1',
-    userId: 'user-1',
-    organizationId: 'workspace-1',
-    plan: 'pro',
-    surface: 'web',
-    modelSelection: 'auto',
-    latestUserMessage: 'write me a script that renames these files',
-    previousUserMessage: null,
-    hasAttachments: false,
-    baselineTaskFamily: 'general_chat',
-    privacyMode: 'managed',
-    zeroDataRetentionOnly: false,
-    workspaceModelPolicy: null,
-    residencyRegion: null,
-    ...overrides,
+    scope: {
+      request: new Request('https://app.example/api/llm/v1/chat/completions'),
+      requestId: 'request-1',
+      userId: 'user-1',
+      plan: 'pro',
+      surface: 'web',
+      privacyMode: 'managed',
+      workspaceId: 'workspace-1',
+      zeroDataRetentionOnly: false,
+      workspaceModelPolicy: null,
+      residencyRegion: null,
+    },
+    derive: () => ({
+      modelSelection: 'auto',
+      latestUserMessage: 'write me a script that renames these files',
+      previousUserMessage: null,
+      hasAttachments: false,
+      baselineTaskFamily: 'general_chat',
+      ...overrides,
+    }),
   };
 }
 
@@ -128,8 +146,16 @@ function shadowAnswers() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.evaluateFlagsForSubject.mockResolvedValue({});
+  vi.stubEnv('TYPESAFE_API_KEY', 'synthetic-test-key');
+  vi.stubEnv('TYPESAFE_BASE_URL', 'https://api.typesafe.ai');
+  vi.stubEnv('TYPESAFE_MODEL', 'pinned-version');
+  vi.stubEnv('TYPESAFE_INPUT_MICROUSD_PER_MTOK', '42000');
+  mocks.evaluateFlagsForSubject.mockResolvedValue(SHADOW_FLAGS);
   mocks.getActiveFlagDefinitions.mockResolvedValue([]);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('scheduling the shadow', () => {
@@ -167,7 +193,7 @@ describe('turns the deterministic path keeps for itself', () => {
     ['a named model', { modelSelection: 'some-specific-model' }, 'explicit_model'],
     ['no text', { latestUserMessage: '   ' }, 'no_text'],
   ])('names %s as the reason rather than asking', async (_label, overrides, reason) => {
-    await runTurnSignalsShadow(input(overrides as Partial<TurnSignalsShadowInput>));
+    await runTurnSignalsShadow(input(overrides as Partial<TurnSignalsTurn>));
 
     const [call] = mocks.evaluateSemanticDecision.mock.calls[0] as [
       { context: { precondition?: string } },
@@ -186,9 +212,20 @@ describe('turns the deterministic path keeps for itself', () => {
 });
 
 describe('what the shadow records', () => {
-  it('records nothing when the kind is disabled', async () => {
-    await runTurnSignalsShadow(input());
+  it('records nothing, and derives nothing, when the kind is disabled', async () => {
+    mocks.evaluateFlagsForSubject.mockResolvedValue({});
+    const derive = vi.fn(() => ({
+      modelSelection: 'auto',
+      latestUserMessage: 'write me a script that renames these files',
+      previousUserMessage: null,
+      hasAttachments: false,
+      baselineTaskFamily: 'general_chat' as const,
+    }));
 
+    await runTurnSignalsShadow({ ...input(), derive });
+
+    expect(derive).not.toHaveBeenCalled();
+    expect(mocks.evaluateSemanticDecision).not.toHaveBeenCalled();
     expect(mocks.persistSemanticDecisionTraces).not.toHaveBeenCalled();
     expect(mocks.recordSemanticDecisionComparison).not.toHaveBeenCalled();
   });

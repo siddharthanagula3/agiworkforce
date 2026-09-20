@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { TASK_FAMILIES } from '@agiworkforce/routing';
 
-import { buildTurnSignalsRequest, TURN_SIGNALS_QUESTION_KEYS } from '../questions';
+import { buildTurnSignalsRequest, TURN_SIGNALS_QUESTION_KEYS } from '../questions/turn-signals';
 
 const MAX_STATE_CHARS = 4_000;
 
