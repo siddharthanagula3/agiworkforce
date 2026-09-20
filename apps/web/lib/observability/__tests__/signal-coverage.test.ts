@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { metrics } from '@opentelemetry/api';
@@ -180,17 +180,22 @@ describe('the span domain vocabulary describes something', () => {
         }
         continue;
       }
-      if (!existsSync(path.join(REPO_ROOT, evidence.provenBy))) {
+      const cited = path.join(REPO_ROOT, evidence.provenBy);
+      if (!existsSync(cited)) {
         broken.push(`${evidence.domain} cites ${evidence.provenBy}, which is not a file`);
+        continue;
+      }
+      if (!readFileSync(cited, 'utf8').includes(`'${evidence.domain}'`)) {
+        broken.push(`${evidence.domain} cites ${evidence.provenBy}, which never names it`);
       }
     }
     expect(broken).toEqual([]);
   });
 
-  it('holds the unproven domains to the four the repository has today', () => {
+  it('holds the unproven domains to the two the repository has today', () => {
     const unproven = SPAN_DOMAIN_EVIDENCE.filter((evidence) => evidence.provenBy === null).map(
       (evidence) => evidence.domain,
     );
-    expect(unproven.sort()).toEqual(['billing', 'external', 'model', 'queue', 'sandbox', 'tool']);
+    expect(unproven.sort()).toEqual(['billing', 'external']);
   });
 });

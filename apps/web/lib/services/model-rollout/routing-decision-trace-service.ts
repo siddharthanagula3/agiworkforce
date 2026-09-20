@@ -115,7 +115,28 @@ interface ServedTurnFacts {
   mode: string;
   trustMode: string;
   workspaceKind: WorkspaceKind;
+  cohort: string | null;
   fallbacks: number;
+}
+
+const COHORT_VARIANT_LIMIT = 4;
+
+/**
+ * The arm a turn was served under, as one label. The rollout cohort alone says
+ * control or canary; the flag variants say which build of the product the
+ * account actually saw, and release health is the join of the two. Sorted and
+ * capped so the same set of variants is always the same series.
+ */
+function servedCohort(
+  cohort: string | null,
+  flagVariants: Readonly<Record<string, string>>,
+): string | null {
+  const variants = Object.entries(flagVariants)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .slice(0, COHORT_VARIANT_LIMIT)
+    .map(([flag, variant]) => `${flag}=${variant}`);
+  const parts = [...(cohort ? [cohort] : []), ...variants];
+  return parts.length > 0 ? parts.join(',') : null;
 }
 
 const pendingTraces = new Map<string, ServedTurnFacts | null>();
@@ -134,6 +155,7 @@ function servedTurnFacts(record: RoutingDecisionRecord): ServedTurnFacts {
     mode: trace.taskType,
     trustMode: trace.trustMode,
     workspaceKind: record.organizationId ? 'organization' : 'personal',
+    cohort: servedCohort(trace.cohort, record.flagVariants),
     fallbacks: trace.fallbacks.length,
   };
 }
@@ -189,6 +211,7 @@ export function persistRoutingDecisionOutcome(outcome: RoutingDecisionOutcome): 
       mode: facts.mode,
       trustMode: facts.trustMode,
       workspaceKind: facts.workspaceKind,
+      cohort: facts.cohort,
       timeToFirstTokenMs: outcome.ttftMs,
       durationMs: outcome.durationMs,
       costMicroUsd: outcome.providerCostMicrousd,

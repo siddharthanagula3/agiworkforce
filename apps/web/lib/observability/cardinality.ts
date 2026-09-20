@@ -65,6 +65,10 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.browserTaskId]: IDENTIFIER,
   [OBSERVABILITY_ATTRIBUTE.remoteSessionId]: IDENTIFIER,
   [OBSERVABILITY_ATTRIBUTE.remoteDeviceId]: IDENTIFIER,
+  // Stable per fault rather than per occurrence, but one series per distinct
+  // exception site is still more than a metric should carry; it belongs on the
+  // error record, which is where it is set.
+  [OBSERVABILITY_ATTRIBUTE.errorFingerprint]: IDENTIFIER,
   [LOCAL_METRIC_LABEL.mediaJobId]: IDENTIFIER,
 
   [OBSERVABILITY_ATTRIBUTE.errorType]: classified(),
@@ -143,9 +147,24 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
 const ERROR_CODE_TOKEN = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
 const HTTP_ERROR_CLASS = /^[45]xx$/;
 
-const CANONICAL_ERROR_CODES: ReadonlySet<string> = new Set(
-  Object.values(ErrorCode).map((code) => code.toLowerCase()),
-);
+// Built on first use rather than at import: this module is pulled in by every
+// recorder, and reading the catalogue at module scope makes loading an
+// instrument depend on the whole contracts package being resolved first.
+let canonicalErrorCodes: ReadonlySet<string> | null = null;
+
+function isCanonicalErrorCode(value: string): boolean {
+  if (canonicalErrorCodes === null) {
+    // Bounding a label must never be the reason a recorder throws into the code
+    // it is measuring. A catalogue this process cannot read costs the canonical
+    // spelling, not the caller, and the token rule below still bounds the label.
+    try {
+      canonicalErrorCodes = new Set(Object.values(ErrorCode).map((code) => code.toLowerCase()));
+    } catch {
+      canonicalErrorCodes = new Set<string>();
+    }
+  }
+  return canonicalErrorCodes.has(value);
+}
 
 /**
  * A metric label built from an error. Anything that is not a code the repo
@@ -157,7 +176,7 @@ export function classifyErrorType(value: string): string {
   if (trimmed.length === 0) return UNCLASSIFIED_LABEL;
   if (HTTP_ERROR_CLASS.test(trimmed)) return trimmed;
   const lower = trimmed.toLowerCase();
-  if (CANONICAL_ERROR_CODES.has(lower)) return lower;
+  if (isCanonicalErrorCode(lower)) return lower;
   return ERROR_CODE_TOKEN.test(trimmed) ? trimmed : UNCLASSIFIED_LABEL;
 }
 
