@@ -17,7 +17,8 @@ and [PRODUCTION_REMAINING.md](PRODUCTION_REMAINING.md) before continuing.
 Source identity and preexisting dirty file hashes: [source-baseline.json](source-baseline.json).
 No existing changes discarded. Production migrations 0249–0273 applied on 2026-09-20
 with snapshot, local database archive and production-clone rehearsal; 273 applied,
-zero pending and zero drift. Main push is being resumed; no deployment is claimed.
+zero pending and zero drift. Application changes and migration evidence pushed to main at833c6d336 with all
+pre-push hooks passing; no deployment is claimed.
 Audit decisions independently counted: 7,803 done; 9,597 partial; 5,076 missing; 6,639 unverified.
 All 29,115 reviewed. Historical GLOBAL NO-GO preserved.
 Seven historical drift entries affect Jev tooling/workflow/dependencies and a routing-document date;
