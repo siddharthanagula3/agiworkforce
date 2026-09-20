@@ -43,47 +43,77 @@ change. Do not add a row you cannot cite.
 ### 1.1 Managed Cloud, default tool authority
 
 The gate is `resolveToolCallGate()` in
-`apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts` (~L1466-1486).
-Precedence, highest first:
+`apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts`. Precedence, highest
+first:
 
-| Rank | Condition                                         | Verdict | Machine reason               |
-| ---- | ------------------------------------------------- | ------- | ---------------------------- |
-| 1    | User saved `deny` for the tool                    | deny    | `blocked_by_user_permission` |
-| 2    | User saved `allow`, and the trifecta triple holds | ask     | `lethal_trifecta`            |
-| 3    | User saved `allow`                                | allow   | `always_allow`               |
-| 4    | User saved `ask`                                  | ask     | `user_requires_approval`     |
-| 5    | `approvalMode === 'manual'`                       | ask     | `manual_approval_mode`       |
-| 6    | Trifecta triple holds                             | ask     | `lethal_trifecta`            |
-| 7    | otherwise                                         | allow   | `auto_approval_mode`         |
+| Rank | Condition                                                                               | Verdict                   | Machine reason               |
+| ---- | --------------------------------------------------------------------------------------- | ------------------------- | ---------------------------- |
+| 1    | User saved `deny` for the tool                                                          | deny                      | `blocked_by_user_permission` |
+| 2    | A device-step tool on a turn that carries a device host                                 | allow                     | `auto_approval_mode`         |
+| 3    | User saved `allow`, and the trifecta triple holds                                       | ask, deny when unattended | `lethal_trifecta`            |
+| 4    | User saved `allow`                                                                      | allow                     | `always_allow`               |
+| 5    | User saved `ask`                                                                        | ask                       | `user_requires_approval`     |
+| 6    | `approvalMode` is `manual`, no trifecta, and the account policy auto-approves this tool | allow                     | `account_default_read_only`  |
+| 7    | `approvalMode` is `manual`                                                              | ask                       | `manual_approval_mode`       |
+| 8    | Trifecta triple holds                                                                   | ask, deny when unattended | `lethal_trifecta`            |
+| 9    | otherwise                                                                               | allow                     | `auto_approval_mode`         |
 
-`approvalMode` is set in `tool-loop-routing.ts` (L63):
-`approvalMode: hasMcpTools ? 'manual' : 'auto'`.
+An escalation on an unattended run has nobody to ask, so `escalatedGate` denies
+rather than falling through to an allow.
+
+`approvalMode` comes from `classifyToolLoopInputs` in `tool-loop-routing.ts`. It
+is `manual` when the turn offers an MCP or connector tool, and also whenever any
+offered tool is one the account's `ToolApprovalPolicy` does not auto-approve.
 
 **Consequence, and the single most important honest statement on the public
-pages:** a turn that carries no connector/MCP tool runs in `auto` mode. In `auto`
-mode, with no saved verdict, the built-in tools execute with no approval prompt.
+pages:** the default policy is `ask_every_time` (`DEFAULT_TOOL_APPROVAL_POLICY`
+in `packages/contracts/types/src/tool-approval-policy.ts`) and
+`policyAutoApprovesTool` auto-approves nothing under it, so on a default account
+every tool call asks, built-in tools included. A built-in tool runs with no
+prompt only once the account has chosen `auto_approve_read_only` or
+`autonomous`, or has saved `allow` for that one tool.
 
-| Tool                     | Runs without approval by default?       | Declared metadata (`tool-metadata.ts`)                           |
-| ------------------------ | --------------------------------------- | ---------------------------------------------------------------- |
-| `web_search`             | yes                                     | read, reversible, acceptsUntrustedContent, createsEgressPath     |
-| `url_fetch`              | yes                                     | read, reversible, acceptsUntrustedContent, createsEgressPath     |
-| `execute_code`           | yes                                     | execute, **not** reversible, createsEgressPath                   |
-| `write_file`             | yes                                     | write, **not** reversible, no egress                             |
-| `create_folder`          | yes                                     | write, reversible, no egress                                     |
-| `create_office_file`     | yes                                     | write, reversible, no egress                                     |
-| skill tool               | yes                                     | ,                                                                |
-| any connector / MCP tool | **no**, forces `approvalMode: 'manual'` | per-tool; undeclared defaults to the conservative classification |
+Until 2026-09-20 this section said the reverse, that the built-in tools execute
+with no approval prompt whenever a turn carries no connector tool. That held
+while `approvalMode` was `hasMcpTools ? 'manual' : 'auto'` and stopped holding
+when the mode began following the account policy. `/agent-permissions` still
+renders the older statement and has to be corrected against this table.
+
+Every declared platform tool, and what each policy does with it. The rows are
+`PLATFORM_TOOL_METADATA` in `tool-metadata.ts` and the answers are
+`policyAutoApprovesTool`:
+
+| Tool                 | Default account (`ask_every_time`) | Under `auto_approve_read_only` | Declared metadata (`tool-metadata.ts`)                                           |
+| -------------------- | ---------------------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| `web_search`         | asks                               | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
+| `search_maps`        | asks                               | runs                           | read, reversible                                                                 |
+| `url_fetch`          | asks                               | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
+| `execute_code`       | asks                               | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
+| `write_file`         | asks                               | asks                           | write, not reversible                                                            |
+| `create_folder`      | asks                               | asks                           | write, reversible                                                                |
+| `list_files`         | asks                               | runs                           | read, reversible                                                                 |
+| `read_file`          | asks                               | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `edit_file`          | asks                               | asks                           | write, not reversible                                                            |
+| `create_office_file` | asks                               | asks                           | write, reversible                                                                |
+| `skill`              | asks                               | runs                           | read, reversible                                                                 |
+
+A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
+undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
+egress, which no policy auto-approves, so it asks under every policy. The three
+GitHub built-ins are declared, so `get_pull_request_diff` runs under
+`auto_approve_read_only` while `post_issue_comment` and
+`post_pull_request_review` ask under every policy.
 
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
 the conversation's own E2B sandbox workspace, not on the user's device. Public
-copy must say so in the same breath as "no approval", or the sentence reads worse
-than the reality.
+copy must say so in the same breath as any claim about approval, or the sentence
+reads worse than the reality.
 
 #### 1.1a Lethal-trifecta escalation and its published limits
 
 Escalates auto-approval to a human ask when all three hold at once: untrusted
 content in context (U) + a sensitive source reachable (S) + the pending call
-creates an egress path (E). Documented in-file (`tool-loop.ts` ~L1418-1441) as a
+creates an egress path (E). Documented in-file (`tool-loop.ts`) as a
 mitigation, not a proof. The limits are published verbatim on `/agent-permissions`
 because a security reviewer will find them anyway:
 
@@ -97,10 +127,10 @@ because a security reviewer will find them anyway:
 
 #### 1.1b A Block is absolute, with the accurate scope of "absolute"
 
-A saved `deny` is enforced server-side before any side effect, on the tool loop
-(`tool-loop.ts` L2444) and on the approve/resume path
-(`approve/route.ts` L267, `tool-loop.ts` L2078), so an approving client, or a
-hand-rolled POST, cannot execute a blocked tool.
+A saved `deny` is enforced server-side before any side effect: every execution
+site calls `connectorPermissions.isDenied`, on the tool loop in `tool-loop.ts`
+and again on the approve/resume path in `approve/route.ts`, so an approving
+client, or a hand-rolled POST, cannot execute a blocked tool.
 
 **Do NOT claim** blocked tools are withheld from the model's offered catalog. No
 code filters the catalog by verdict; enforcement is at execution. Verified
@@ -111,7 +141,7 @@ catalog-assembly path.
 
 ### 1.2 What Managed Cloud can actually connect
 
-`apps/web/lib/user-connector-tools.ts` (module header L1-51). Exactly four sources:
+`apps/web/lib/user-connector-tools.ts` (module header). Exactly four sources:
 
 | Source                               | Gate                                                            | Credential location                                                                 |
 | ------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
@@ -134,9 +164,9 @@ contributes no connectors and every directory entry still reports unavailable.
 
 `user_connectors` holds only `connector_id + auth_type + is_active`. **No tokens,
 no endpoint URLs.** `POST /api/connectors` returns 501 for every branded catalog
-connector and for device-local ids (`route.ts` L289, L306, L332).
+connector and for device-local ids (`app/api/connectors/route.ts`).
 
-GitHub built-in tools, complete list (`user-connector-tools.ts` L180-240):
+GitHub built-in tools, complete list (`user-connector-tools.ts`):
 `get_pull_request_diff`, `post_issue_comment`, `post_pull_request_review`.
 
 The GitHub App's **installation permission set is configured on GitHub and is not
@@ -160,11 +190,11 @@ code; it must not be used as evidence of a shipped Desktop feature.
 The retained implementation uses the user's **own** OAuth client id/secret,
 PKCE, and tokens encrypted with a machine-derived key into local SQLite.
 
-| Provider         | File                                                                                 | Scopes requested                                                     |
-| ---------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` L46-49, L122-126 | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
-| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs` L15-17, L34-36     | `calendar.readonly`, `calendar.events`                               |
-| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs` L15-17, L34-37    | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
+| Provider         | File                                                                | Scopes requested                                                     |
+| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
+| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs`   | `calendar.readonly`, `calendar.events`                               |
+| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs`  | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
 
 As of 2026-09-03 Gmail and Google Calendar no longer request scopes broader
 than the advertised capability. The Gmail client previously also requested
@@ -180,29 +210,29 @@ API calls each scope covers.
 
 ### 1.4 Chrome extension, computer use
 
-| Fact                                                                                                      | Citation                                                                                 |
-| --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Ask-before-acting defaults ON; autopilot is an explicit opt-out (only a stored `false` disables the gate) | `apps/extension/src/background.ts` L3905-3919                                            |
-| Unanswered approval denies after 30 s (fail-closed)                                                       | `background.ts` L3943, L3964, L3990                                                      |
-| Navigation destinations gated by the user's `agi_site_allowlist`                                          | `cdpDriver.ts`; `background.ts` L2542-2563                                               |
-| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                   | `agentLoop.ts` L20-22                                                                    |
-| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                | `agentLoop.ts` L24-35, "Do not claim screenshots are redacted anywhere in this codebase" |
-| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                | `background.ts` L3889-3902; `cloudAgentClient.ts`                                        |
+| Fact                                                                                                      | Citation                                                                          |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Ask-before-acting defaults ON; autopilot is an explicit opt-out (only a stored `false` disables the gate) | `apps/extension/src/background.ts`, `askBeforeActing`                             |
+| Unanswered approval denies after 30 s (fail-closed)                                                       | `background.ts`, the approval timeout                                             |
+| Navigation destinations gated by the user's `agi_site_allowlist`                                          | `cdpDriver.ts`; `background.ts`                                                   |
+| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                   | `agentLoop.ts`                                                                    |
+| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                | `agentLoop.ts`, "Do not claim screenshots are redacted anywhere in this codebase" |
+| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                | `background.ts`; `cloudAgentClient.ts`                                            |
 
 ---
 
 ### 1.5 Enforcement machinery a "what happens on violation" section may cite
 
-| Control                                                                            | Value                                                     | Citation                                                    |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
-| Suspend / ban enforced on every authenticated request, fail-CLOSED after one retry | `profiles.account_status` in (`suspended`,`banned`) → 403 | `apps/web/lib/api-auth.ts` L45-93                           |
-| Admin actions that write that column                                               | suspend / ban / reinstate                                 | `apps/web/app/api/admin/security/route.ts` L240, L299, L367 |
-| LLM requests per user                                                              | 30 / min, failClosed                                      | `apps/web/lib/rate-limit.ts` L233-236                       |
-| LLM requests per IP (pre-auth abuse ceiling)                                       | 1500 / min, failClosed                                    | `rate-limit.ts` L228-231                                    |
-| Conversation operations                                                            | 60 / min                                                  | `rate-limit.ts` L207-210                                    |
-| Public API scopes, the complete set                                                | `models:read`, `inference:write`, `usage:read`            | `apps/web/lib/api-key-scopes.ts` L1                         |
-| Crawler policy; Common Crawl blocked                                               | `CCBot: disallow /`                                       | `apps/web/app/robots.ts` L47                                |
-| Connector add/remove audited                                                       | `connector_added` / `connector_removed`                   | `lib/security-audit.ts`, `api/connectors/route.ts` L437     |
+| Control                                                                            | Value                                                     | Citation                                           |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------- |
+| Suspend / ban enforced on every authenticated request, fail-CLOSED after one retry | `profiles.account_status` in (`suspended`,`banned`) → 403 | `apps/web/lib/api-auth.ts`, `assertAccountActive`  |
+| Admin actions that write that column                                               | suspend / ban / reinstate                                 | `apps/web/app/api/admin/security/route.ts`         |
+| LLM requests per user                                                              | 30 / min, failClosed                                      | `apps/web/lib/rate-limit.ts`                       |
+| LLM requests per IP (pre-auth abuse ceiling)                                       | 1500 / min, failClosed                                    | `rate-limit.ts`                                    |
+| Conversation operations                                                            | 60 / min                                                  | `rate-limit.ts`                                    |
+| Public API scopes, the complete set                                                | `models:read`, `inference:write`, `usage:read`            | `apps/web/lib/api-key-scopes.ts`                   |
+| Crawler policy; Common Crawl blocked                                               | `CCBot: disallow /`                                       | `apps/web/app/robots.ts`                           |
+| Connector add/remove audited                                                       | `connector_added` / `connector_removed`                   | `lib/security-audit.ts`, `api/connectors/route.ts` |
 
 ---
 
@@ -213,10 +243,10 @@ API calls each scope covers.
 
 `apps/web/lib/e2b/runtime.ts`:
 
-- ephemeral sandbox timeout 60 s (`E2B_SANDBOX_TIMEOUT_MS` L56); conversation
-  sandbox 10 min (`E2B_CONVERSATION_TIMEOUT_MS` L65); per-command 60 s (L66).
-- per-plan concurrent sandbox allowance (`getPlanMaxSandboxes`, L97).
-- network: none, or an allowlist of `TRUSTED_CODE_HOSTS` (L68-76).
+- ephemeral sandbox timeout 60 s (`E2B_SANDBOX_TIMEOUT_MS`); conversation
+  sandbox 10 min (`E2B_CONVERSATION_TIMEOUT_MS`); per-command 60 s.
+- per-plan concurrent sandbox allowance (`getPlanMaxSandboxes`).
+- network: none, or an allowlist of `TRUSTED_CODE_HOSTS`.
   `github.com`, `api.github.com`, `raw.githubusercontent.com`,
   `objects.githubusercontent.com`, `registry.npmjs.org`, `npmjs.com`,
   `pypi.org`, `files.pythonhosted.org`.
@@ -248,17 +278,17 @@ API calls each scope covers.
 
 ### 1.7 Revocation paths, the complete set
 
-| Path                                             | Mechanism                                                                                                        | Also clears saved per-tool verdicts?                         |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Disconnect a connector                           | `DELETE /api/connectors?connectorId=`                                                                            | yes, `clearConnectorToolPermissions` (`route.ts` L436, L466) |
-| Reset one tool's verdict, or a whole connector's | `DELETE /api/connectors/permissions`                                                                             | n/a, this _is_ the verdict store                             |
-| Set a tool back to "ask"                         | `PUT /api/connectors/permissions` with `level: "ask"`                                                            | ,                                                            |
-| Unlink GitHub                                    | `DELETE /api/connectors?connectorId=github` deletes the user's `github_installations` rows                       | yes                                                          |
-| Fully uninstall the GitHub App                   | github.com/settings/installations, **the app stays installed on GitHub until you do this** (`route.ts` L428-430) | ,                                                            |
-| Remove a custom MCP connector                    | `DELETE /api/connectors/custom?id=`                                                                              | ,                                                            |
-| Extension: remove a site                         | `agi_site_allowlist` in extension options                                                                        | ,                                                            |
-| Extension: re-enable the gate                    | turn ask-before-acting back on                                                                                   | ,                                                            |
-| Desktop: per-tool policy                         | Always allow / Needs approval / Blocked in `ConnectorDetailView.tsx`                                             | ,                                                            |
+| Path                                             | Mechanism                                                                                                                  | Also clears saved per-tool verdicts?                                 |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Disconnect a connector                           | `DELETE /api/connectors?connectorId=`                                                                                      | yes, `clearConnectorToolPermissions` (`app/api/connectors/route.ts`) |
+| Reset one tool's verdict, or a whole connector's | `DELETE /api/connectors/permissions`                                                                                       | n/a, this _is_ the verdict store                                     |
+| Set a tool back to "ask"                         | `PUT /api/connectors/permissions` with `level: "ask"`                                                                      | ,                                                                    |
+| Unlink GitHub                                    | `DELETE /api/connectors?connectorId=github` deletes the user's `github_installations` rows                                 | yes                                                                  |
+| Fully uninstall the GitHub App                   | github.com/settings/installations, **the app stays installed on GitHub until you do this** (`app/api/connectors/route.ts`) | ,                                                                    |
+| Remove a custom MCP connector                    | `DELETE /api/connectors/custom?id=`                                                                                        | ,                                                                    |
+| Extension: remove a site                         | `agi_site_allowlist` in extension options                                                                                  | ,                                                                    |
+| Extension: re-enable the gate                    | turn ask-before-acting back on                                                                                             | ,                                                                    |
+| Desktop: per-tool policy                         | Always allow / Needs approval / Blocked in `ConnectorDetailView.tsx`                                                       | ,                                                                    |
 
 ---
 
@@ -281,17 +311,19 @@ API calls each scope covers.
    client actually calls. See section 1.3 above and section 2.
 3. **The GitHub App installation permission set is not declared in this repo**, so
    it cannot be documented from code.
-4. **The standing per-tool permission UI on web is GitHub-only.**
-   `ToolPermissionsPanel.tsx` is imported and rendered by
-   `features/connectors/pages/ConnectorsPage.tsx`, but its "Tool permissions"
-   button is gated on `hasWireToolNames(connector.id)`, true only for `github`,
-   because only that catalog entry holds real wire tool names (see gap 5). For
-   every other connector the sole web control remains the in-chat approval card
-   (`ToolTimeline.tsx`), reachable only while a tool is asking. Marketing copy
-   claiming a standing per-tool web UI across connectors is still unsupported.
-5. **`CONNECTOR_TOOLS` in `features/connectors/config/connector-logos.ts`** lists
-   tool names for connectors with no runtime implementation. Only the `github`
-   entry (L564) mirrors real wire names.
+4. **The standing per-tool permission UI is no longer GitHub-only, and this
+   entry used to say it was.** `ToolPermissionsPanel.tsx` is rendered by
+   `features/settings/components/WebSettingsModal.tsx` for whichever connector
+   the settings adapter selects, and it lists tools from live discovery
+   (`useConnectorCapabilities`). The older gating symbol `hasWireToolNames` and
+   the `CONNECTOR_TOOLS` table it read no longer exist. The in-chat approval
+   card (`ToolTimeline.tsx`) remains the only control reachable while a tool is
+   actually asking.
+5. **A connector whose tools this repository does not implement still falls back
+   to nothing.** When discovery fails the panel shows
+   `getDeclaredConnectorActions` from `apps/web/lib/connectors/catalog.ts`, and
+   only the `github` entry declares any actions, so every other connector shows
+   the discovery failure rather than a tool list.
 6. **Production requires an external malware scanner.**
    `apps/web/lib/security/upload-scan.ts` runs structural checks on every chat
    attachment and project source, and calls the external scanner at
@@ -436,6 +468,20 @@ the vendor's server decides, and the column says so.
 | `mailchimp`        | Mailchimp                     | none                                                                                                                                                                               | Mailchimp OAuth2 issues a single full-access token with no scope parameter. Treat the connector itself as the grant.                                                      |
 | `basecamp`         | Basecamp                      | none                                                                                                                                                                               | Basecamp has no named scopes; the token inherits the user's own permissions.                                                                                              |
 | `evernote`         | Evernote                      | none                                                                                                                                                                               | Permission level is fixed on the API key, not requested per authorization.                                                                                                |
+| `airtable`         | Airtable                      | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `clickup`          | ClickUp                       | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `cloudflare`       | Cloudflare                    | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `datadog`          | Datadog                       | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `huggingface`      | Hugging Face                  | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `monday`           | monday.com                    | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `pagerduty`        | PagerDuty                     | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `plaid`            | Plaid                         | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `posthog`          | PostHog                       | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `sentry`           | Sentry                        | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `square`           | Square                        | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `stripe`           | Stripe                        | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `todoist`          | Todoist                       | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
+| `vercel`           | Vercel                        | needs vendor-specific review                                                                                                                                                       | Unreviewed. Requested scopes pass through unchanged until a minimum is established.                                                                                       |
 | `linear`           | Linear                        | `read`, `write`, `issues:create`, `comments:create`, `app:assignable`, `app:mentionable`                                                                                           | Read and edit issues and comments. Excludes `admin`.                                                                                                                      |
 | `jira`             | Atlassian                     | `read:me`, `read:jira-user`, `read:jira-work`, `write:jira-work`, `offline_access`                                                                                                 | Read and edit issues. Excludes every `manage:` and `admin:` configuration scope.                                                                                          |
 | `confluence`       | Atlassian                     | `read:me`, `read:confluence-space.summary`, `read:confluence-content.all`, `write:confluence-content`, `offline_access`                                                            | Read spaces and pages, write page content. Excludes configuration management.                                                                                             |
@@ -475,11 +521,11 @@ and Microsoft, using the user's own OAuth client. The ceilings above are the
 web enforcement point and have no effect on the desktop client, so this table
 is a second, separate record of what the desktop app actually requests.
 
-| Connector        | File                                                                                 | Scopes requested                                                     |
-| ---------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` L46-49, L122-127 | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
-| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs` L15-17, L34-37     | `calendar.readonly`, `calendar.events`                               |
-| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs` L15-17, L34-37    | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
+| Connector        | File                                                                | Scopes requested                                                     |
+| ---------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Gmail            | `apps/desktop/src-tauri/src/features/communications/gmail_oauth.rs` | `gmail.readonly`, `gmail.send`, `userinfo.email`, `userinfo.profile` |
+| Google Calendar  | `apps/desktop/src-tauri/src/features/calendar/google_calendar.rs`   | `calendar.readonly`, `calendar.events`                               |
+| Outlook Calendar | `apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs`  | `User.Read`, `Calendars.Read`, `Calendars.ReadWrite`                 |
 
 As of 2026-09-03 the Gmail and Google Calendar rows replaced a wider request.
 The Gmail client had also requested `gmail.modify`, which permits deleting and
@@ -524,12 +570,19 @@ revoking every connector grant and re-enrolling every 2FA user.
 | `github_installations.access_token_enc`            | `GITHUB_TOKEN_ENCRYPTION_KEY`           | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `access_token_key_version` |
 | `user_two_factor.totp_secret_enc`                  | `TOTP_ENCRYPTION_KEY`                   | ≥32 raw chars | base64(IV ‖ ciphertext ‖ tag) | `totp_secret_key_version`  |
 | `connector_oauth_authorizations.code_verifier_enc` | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
-| `device_authorization_codes.access_token`          | `DEVICE_TOKEN_ENCRYPTION_KEY`           | 64 hex chars  | base64(IV ‖ ciphertext ‖ tag) | none, expires in minutes   |
 
-The last two rows hold minutes-lived values. Rotating their key strands
-in-flight flows only: a user retries the connect or the device pairing and it
-works. They get no bookkeeping column and the rotation sweep does not touch
-them.
+The last row holds a minutes-lived value. Rotating its key strands in-flight
+flows only: a user retries the connect and it works. It gets no bookkeeping
+column and the rotation sweep does not touch it.
+
+`DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing and this table used to say it
+sealed `device_authorization_codes.access_token`. That column was never
+encrypted, it held plain text that every writer set to NULL, and the
+`device_authorization_bearer_columns` migration drops it and its sibling
+`refresh_token`. A device's real credential is a hashed renewable pair in
+`device_refresh_tokens`. The variable is still required by
+`apps/web/lib/validate-env.ts`, so it keeps a cadence row below, but no reader
+consults it and no sweep targets it.
 
 `TOTP_ENCRYPTION_KEY` is not hex. `lib/crypto/totp-envelope.ts` takes the first
 32 characters of the env value as raw bytes through
@@ -757,7 +810,7 @@ the baseline and the guard refuses their return.
 
 ### Rehearsing a rotation before the scheduled date
 
-`apps/web/db/neon/0104_key_version.sql:12` records that no key on the cadence
+The `0104_key_version` migration header records that no key on the cadence
 table above has ever actually been rotated. `scripts/key-rotation-drill.mjs`
 is the rehearsal: it creates a disposable Neon branch from the current head
 (the same branch-creation path `docs/runbooks/database-backup-restore.md`
@@ -814,10 +867,10 @@ half of that itself; the "fully deployed" half is yours to confirm.
 
 ### Not yet done
 
-`lib/device-token-crypto.ts` and `app/api/auth/desktop-token/route.ts` are not
-on this list: neither writes a durable column. Rotating `DEVICE_TOKEN_ENCRYPTION_KEY`
-invalidates minutes-lived pairing codes, and the desktop token is handed to the
-client and never stored.
+`app/api/auth/desktop-token/route.ts` is not on this list: it writes no durable
+column, and the desktop token is handed to the client and never stored. The
+`lib/device-token-crypto.ts` module this section used to name alongside it no
+longer exists.
 
 ---
 
