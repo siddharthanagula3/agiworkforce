@@ -762,6 +762,7 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
         args: std::collections::HashMap::from([("command".to_string(), cmd.to_string())]),
     };
     let opts = crate::tools::ToolExecOptions {
+        mcp_tool_definitions: None,
         require_confirmation: !session.skip_permissions,
         auto_approve_safe: session.auto_approve_safe,
         auto_approve_edits: session.permission_mode.auto_approves_edits(),
@@ -817,6 +818,7 @@ async fn run_advisor_question(
         args: std::collections::HashMap::from([("question".to_string(), question.to_string())]),
     };
     let opts = crate::tools::ToolExecOptions {
+        mcp_tool_definitions: None,
         require_confirmation: false,
         auto_approve_safe: true,
         auto_approve_edits: false,

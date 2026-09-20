@@ -854,6 +854,13 @@ impl McpConnection {
 // MCP Manager
 // ---------------------------------------------------------------------------
 
+/// MCP tool schemas carried in the initial tool list before deferral starts.
+///
+/// One small server publishes fewer tools than this, so a single-server setup
+/// sends exactly what it sent before. Past it the schemas are the largest thing
+/// a turn carries, and `tool_search` loads them by name on demand.
+pub const MCP_ALWAYS_LOADED_TOOL_BUDGET: usize = 16;
+
 /// Manages multiple MCP server connections.
 pub struct McpManager {
     connections: HashMap<String, McpConnection>,
@@ -1117,6 +1124,22 @@ impl McpManager {
     }
 
     #[cfg(test)]
+    pub(crate) fn with_discovered_stdio_tools_for_test(server_name: &str, count: usize) -> Self {
+        let mut manager = Self::new();
+        for index in 0..count {
+            let tool_name = format!("tool_{index}");
+            manager.tools.push(McpTool {
+                namespaced_name: mcp_tool_name(server_name, &tool_name),
+                original_name: tool_name,
+                server_name: server_name.to_string(),
+                description: format!("Test MCP tool {index}"),
+                input_schema: serde_json::json!({"type": "object"}),
+            });
+        }
+        manager
+    }
+
+    #[cfg(test)]
     pub(crate) fn with_discovered_stdio_tool_for_test(server_name: &str, tool_name: &str) -> Self {
         let mut manager = Self::new();
         manager.tools.push(McpTool {
@@ -1337,6 +1360,12 @@ impl McpManager {
     /// Concurrency flags default to false (safe, sequential) for MCP tools.
     /// the MCP protocol exposes `annotations.readOnlyHint` and similar but we
     /// don't plumb those through yet.
+    ///
+    /// Tools past [`MCP_ALWAYS_LOADED_TOOL_BUDGET`] are marked deferred: their
+    /// schemas leave the initial list and `tool_search` hands them over on
+    /// demand, exactly as for the CLI's own niche built-ins. Deferral never
+    /// touches executability, `tool_identity` resolves against the full
+    /// registered set, so a deferred tool the model calls still runs.
     pub fn tool_definitions(
         &self,
         privacy_mode: crate::agent::PrivacyMode,
@@ -1344,16 +1373,15 @@ impl McpManager {
         self.tools
             .iter()
             .filter(|tool| self.server_allowed(&tool.server_name, privacy_mode))
-            .map(|t| crate::models::ToolDefinition {
+            .enumerate()
+            .map(|(position, t)| crate::models::ToolDefinition {
                 name: t.namespaced_name.clone(),
                 description: format!("[MCP:{}] {}", t.server_name, t.description),
                 input_schema: t.input_schema.clone(),
                 is_read_only: false,
                 is_concurrency_safe: false,
                 max_result_size_chars: None,
-                // MCP tools are never deferred, they come from external servers
-                // and are only registered when the server is connected.
-                should_defer: false,
+                should_defer: position >= MCP_ALWAYS_LOADED_TOOL_BUDGET,
                 aliases: Vec::new(),
                 owner: format!("mcp:{}", t.server_name),
                 permission_class: "external".to_string(),
@@ -2195,5 +2223,46 @@ while True:
         assert_eq!(out, "hello facade");
 
         let _ = conn.shutdown().await;
+    }
+
+    /// A single small server publishes fewer tools than the budget, so nothing
+    /// about its turn changes. This is the case the budget exists to protect.
+    #[test]
+    fn one_small_server_keeps_every_schema_in_the_initial_list() {
+        let manager = McpManager::with_discovered_stdio_tools_for_test(
+            "files",
+            MCP_ALWAYS_LOADED_TOOL_BUDGET,
+        );
+        let definitions = manager.tool_definitions(crate::agent::PrivacyMode::Byok);
+
+        assert_eq!(definitions.len(), MCP_ALWAYS_LOADED_TOOL_BUDGET);
+        assert!(definitions
+            .iter()
+            .all(|definition| !definition.should_defer));
+    }
+
+    #[test]
+    fn tools_past_the_budget_defer_and_stay_callable() {
+        let manager = McpManager::with_discovered_stdio_tools_for_test(
+            "files",
+            MCP_ALWAYS_LOADED_TOOL_BUDGET + 9,
+        );
+        let definitions = manager.tool_definitions(crate::agent::PrivacyMode::Byok);
+
+        let deferred: Vec<&crate::models::ToolDefinition> = definitions
+            .iter()
+            .filter(|definition| definition.should_defer)
+            .collect();
+        assert_eq!(deferred.len(), 9);
+        assert!(definitions[..MCP_ALWAYS_LOADED_TOOL_BUDGET]
+            .iter()
+            .all(|definition| !definition.should_defer));
+
+        // Deferral decides what the schema list carries, never what can run.
+        let (server_name, tool_name) = manager
+            .tool_identity(&deferred[0].name, crate::agent::PrivacyMode::Byok)
+            .expect("a deferred MCP tool still resolves to its server");
+        assert_eq!(server_name, "files");
+        assert_eq!(tool_name, "tool_16");
     }
 }
