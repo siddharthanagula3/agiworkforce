@@ -1595,3 +1595,37 @@ Owning desktop library lint passed: `cargo clippy -p agiworkforce-desktop --lib
 --offline -- -D warnings -D unsafe-code` (2m33s), evidence
 `/tmp/agi-windows-local-clippy.log`. The staged secret guard passed all 54 harness
 checks and scanned 13,352 files with its existing reviewed exemptions unchanged.
+
+Continuation checkpoint: all three pending commits reached main at
+`31ecfa8252a607bf35dc7bdffe18066ed8f7a256` through the complete clean-checkout
+pre-push chain (`/tmp/agi-windows-runtime-push.log`). The worktree is
+`/Users/siddhartha/.codex/worktrees/ci-security-continuation/agiworkforce`.
+Native runtime repair CI: `35509236785` (Windows job `106074185871`);
+coverage: `35509236745`; CodeQL: `35509236121`; Rust Security: `35509236799`.
+These runs are still executing. Next action is to inspect their actual results,
+repair only newly evidenced failures, and verify fresh alert counts after CodeQL
+finishes. Preserve the 114 local passes and completed prior unchanged-surface
+checks; do not replay them without a new relevant change. Codecov browser tab 10
+remains at GitHub sign-in, and production review is still owner-controlled.
+
+Linux follow-up on `31ecfa825`: job `106074185782` executed 5,355 passing desktop
+tests, one failure and 31 existing ignores. The failure was the Git fixture's
+expected error text: `../outside.txt` now fails at the shared traversal guard
+before the later repository-containment guard. It reproduced locally. Jev
+selected separate boundary cases (confidence 0.77, request
+`88962ac9eab90bb7dd8d0cc99133360d64a3a00e2876da4e1c90b679d63183d0`).
+The test now asserts the traversal rejection and separately verifies an absolute
+outside-repository path and a resolved external symlink still fail containment;
+existing allowed relative and absolute paths remain controls. Production code
+and security policy are unchanged. All eight focused Git/shared-path cases pass.
+Evidence: `/tmp/agi-linux-31ecfa-clean.log`, `/tmp/agi-git-path-before.log`,
+`/tmp/agi-git-path-after.log`. Hold this follow-up until the current Windows run
+finishes so its runtime evidence is not canceled.
+
+Completed on the pushed commit: main security scans, repository guards, database/
+RLS, contracts, macOS Rust, all-feature Clippy, desktop E2E, web E2E/accessibility,
+Rust Security, Repo Operability, pinned actions, cross-version and Guardian.
+JavaScript/TypeScript, Actions and Ruby CodeQL analyses passed; Rust analysis,
+coverage, Windows and the JavaScript test/build lane remain pending. The Rust
+audit reports zero vulnerabilities under the existing policy; maintenance and
+unsoundness warning-policy debt is unchanged and was not represented as absent.

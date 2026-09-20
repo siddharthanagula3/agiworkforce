@@ -2050,7 +2050,27 @@ mod security_tests {
             "tracked.txt"
         );
 
-        let escaped = validate_git_relative_path(&repo, "../outside.txt").unwrap_err();
+        let traversal = validate_git_relative_path(&repo, "../outside.txt").unwrap_err();
+        assert!(traversal.contains("directory traversal"));
+    }
+
+    #[test]
+    fn absolute_git_paths_must_stay_inside_repo() {
+        let repo_dir = tempdir().unwrap();
+        let outside_dir = tempdir().unwrap();
+        let repo = validate_git_path(repo_dir.path().to_str().unwrap()).unwrap();
+        let outside_file = outside_dir.path().join("outside.txt");
+        fs::write(&outside_file, "outside").unwrap();
+        let escaped =
+            validate_git_relative_path(&repo, outside_file.to_str().unwrap()).unwrap_err();
         assert!(escaped.contains("escapes repository"));
+
+        #[cfg(unix)]
+        {
+            let link = repo_dir.path().join("linked.txt");
+            std::os::unix::fs::symlink(&outside_file, &link).unwrap();
+            let escaped = validate_git_relative_path(&repo, "linked.txt").unwrap_err();
+            assert!(escaped.contains("escapes repository"));
+        }
     }
 }

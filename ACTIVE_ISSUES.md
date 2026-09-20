@@ -24,7 +24,10 @@ failures use Unix-only paths, shell syntax, unsupported sandbox/archive assumpti
 process-global HOME mutation, or plaintext fixture connections held open during
 encrypted migration. Correct these fixtures without weakening production guards.
 Windows module/test cross-compilation and 114 local affected tests pass; native
-Windows runtime revalidation is still required. Linux, macOS, all-feature Clippy, JavaScript tests/builds, iOS, browser
+Windows runtime revalidation is still required. The next Linux run exposed one
+Git error-message assertion after 5,355 passes; its traversal and repository-escape
+cases are now separated, with eight focused cases passing. That follow-up awaits
+the current Windows result before another push. Linux, macOS, all-feature Clippy, JavaScript tests/builds, iOS, browser
 E2E/accessibility and security jobs passed on the same remote commit. CodeQL
 completed with zero open code-scanning alerts; Dependabot also reports zero open
 alerts. Codecov connection and deployment review remain separate blockers.
