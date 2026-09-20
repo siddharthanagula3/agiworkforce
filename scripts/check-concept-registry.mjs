@@ -18,6 +18,10 @@ export const MUTATOR_ROOTS = Object.freeze(['apps/web/app', 'apps/web/lib', 'app
 export const AUDIT_VOCABULARY_PATH = 'apps/web/lib/security-audit.ts';
 export const RETENTION_VOCABULARY_PATH = 'packages/contracts/types/src/audit.ts';
 export const DEEP_LINK_PATH = 'packages/contracts/types/src/product-links.ts';
+export const ORGANIZATION_PERMISSIONS_PATH =
+  'packages/contracts/types/src/enterprise/permissions.ts';
+export const WORKSPACE_POLICY_PATH =
+  'packages/contracts/types/src/enterprise/workspace-controls.ts';
 export const SHARED_SCHEMA_ROOT = 'packages/contracts/';
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
@@ -136,11 +140,49 @@ const NON_COLUMN_LEADERS = new Set([
   'check',
   'exclude',
   'like',
+  'references',
 ]);
+
+const CREATE_TABLE =
+  /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)\s*\(([\s\S]*?)\n\s*\)\s*;/g;
+const ALTER_TABLE =
+  /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g;
+const DROP_TABLE = /drop\s+table\s+(?:if\s+exists\s+)?(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)/g;
+const CREATE_FUNCTION =
+  /create\s+(?:or\s+replace\s+)?function\s+(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)\s*\(/g;
+const ADD_COLUMN = /add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/g;
+const DROP_COLUMN = /drop\s+column\s+(?:if\s+exists\s+)?([a-z_][a-z0-9_]*)/g;
+const RENAME_TABLE_TO = /^rename\s+to\s+([a-z_][a-z0-9_]*)/;
+const RENAME_COLUMN = /rename\s+column\s+([a-z_][a-z0-9_]*)\s+to\s+([a-z_][a-z0-9_]*)/g;
+
+function columnsDeclaredIn(body) {
+  const columns = [];
+  let depth = 0;
+  for (const line of body.split('\n')) {
+    const trimmed = line.trim();
+    const column = COLUMN_LINE.exec(trimmed);
+    if (depth === 0 && column && !NON_COLUMN_LEADERS.has(column[1])) columns.push(column[1]);
+    depth += (line.match(/\(/g) ?? []).length - (line.match(/\)/g) ?? []).length;
+  }
+  return columns;
+}
+
+/** Every statement that changes the shape of a table, in the order it is written. */
+function schemaStatements(sql) {
+  const statements = [];
+  const collect = (pattern, kind) => {
+    for (const match of sql.matchAll(pattern)) statements.push({ at: match.index, kind, match });
+  };
+  collect(CREATE_TABLE, 'create');
+  collect(ALTER_TABLE, 'alter');
+  collect(DROP_TABLE, 'drop');
+  return statements.sort((a, b) => a.at - b.at);
+}
 
 /**
  * Table -> { columns, createdIn }, read from the migration history rather than a
- * declared list, so a table renamed or a column added elsewhere cannot go stale.
+ * declared list. Statements apply in source order, so what comes back is the
+ * final schema: a dropped table is gone and a dropped column is not a column.
  */
 export function readSchemaInventory(migrations) {
   const tables = new Map();
@@ -151,41 +193,86 @@ export function readSchemaInventory(migrations) {
   };
 
   for (const migration of migrations) {
-    for (const match of migration.sql.matchAll(
-      /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)\s*\(([\s\S]*?)\n\s*\)\s*;/g,
-    )) {
-      const entry = ensure(match[1]);
-      if (entry.createdIn === null) entry.createdIn = migration.ordinal;
-      let depth = 0;
-      for (const line of match[2].split('\n')) {
-        const trimmed = line.trim();
-        const column = COLUMN_LINE.exec(trimmed);
-        if (depth === 0 && column && !NON_COLUMN_LEADERS.has(column[1])) {
-          entry.columns.add(column[1]);
-        }
-        depth += (line.match(/\(/g) ?? []).length - (line.match(/\)/g) ?? []).length;
+    for (const statement of schemaStatements(migration.sql)) {
+      const [, name, body] = statement.match;
+      if (statement.kind === 'drop') {
+        tables.delete(name);
+        continue;
+      }
+      if (statement.kind === 'create') {
+        const entry = ensure(name);
+        if (entry.createdIn === null) entry.createdIn = migration.ordinal;
+        for (const column of columnsDeclaredIn(body)) entry.columns.add(column);
+        continue;
+      }
+
+      const entry = ensure(name);
+      for (const column of body.matchAll(ADD_COLUMN)) entry.columns.add(column[1]);
+      for (const column of body.matchAll(DROP_COLUMN)) entry.columns.delete(column[1]);
+      for (const renamed of body.matchAll(RENAME_COLUMN)) {
+        entry.columns.delete(renamed[1]);
+        entry.columns.add(renamed[2]);
+      }
+      const renamedTable = RENAME_TABLE_TO.exec(body.trim());
+      if (renamedTable !== null) {
+        tables.delete(name);
+        tables.set(renamedTable[1], entry);
       }
     }
 
-    for (const match of migration.sql.matchAll(
-      /alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)\s+([\s\S]*?);/g,
-    )) {
-      const entry = ensure(match[1]);
-      for (const column of match[2].matchAll(
-        /add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/g,
-      )) {
-        entry.columns.add(column[1]);
-      }
-    }
-
-    for (const match of migration.sql.matchAll(
-      /create\s+(?:or\s+replace\s+)?function\s+(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)\s*\(/g,
-    )) {
-      functions.add(match[1]);
-    }
+    for (const match of migration.sql.matchAll(CREATE_FUNCTION)) functions.add(match[1]);
   }
 
   return { tables, functions };
+}
+
+const INLINE_REFERENCE =
+  /^([a-z_][a-z0-9_]*)\s+[^,]*?\breferences\s+(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)/;
+const CONSTRAINT_REFERENCE =
+  /foreign\s+key\s*\(\s*([a-z_][a-z0-9_]*)[^)]*\)\s*references\s+(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)/g;
+const ADDED_COLUMN_REFERENCE =
+  /add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)\s+[^,;]*?\breferences\s+(?:public\s*\.\s*)?([a-z_][a-z0-9_]*)/g;
+
+/**
+ * Child table -> column -> parent table, over inline, constraint and added-column
+ * references. A dropped column takes its foreign key with it.
+ */
+export function readForeignKeys(migrations) {
+  const keys = new Map();
+  const ensure = (table) => {
+    if (!keys.has(table)) keys.set(table, new Map());
+    return keys.get(table);
+  };
+
+  for (const migration of migrations) {
+    for (const statement of schemaStatements(migration.sql)) {
+      const [, name, body] = statement.match;
+      if (statement.kind === 'drop') {
+        keys.delete(name);
+        continue;
+      }
+      const entry = ensure(name);
+      if (statement.kind === 'create') {
+        let depth = 0;
+        for (const line of body.split('\n')) {
+          const trimmed = line.trim();
+          const inline = depth === 0 ? INLINE_REFERENCE.exec(trimmed) : null;
+          if (inline !== null && !NON_COLUMN_LEADERS.has(inline[1]))
+            entry.set(inline[1], inline[2]);
+          depth += (line.match(/\(/g) ?? []).length - (line.match(/\)/g) ?? []).length;
+        }
+        for (const constraint of body.matchAll(CONSTRAINT_REFERENCE))
+          entry.set(constraint[1], constraint[2]);
+        continue;
+      }
+      for (const added of body.matchAll(ADDED_COLUMN_REFERENCE)) entry.set(added[1], added[2]);
+      for (const constraint of body.matchAll(CONSTRAINT_REFERENCE))
+        entry.set(constraint[1], constraint[2]);
+      for (const column of body.matchAll(DROP_COLUMN)) entry.delete(column[1]);
+    }
+  }
+
+  return keys;
 }
 
 function repositoryFiles(repoRoot) {
@@ -938,6 +1025,278 @@ export function checkUiState({ registry, inventory, claimedTables, errors }) {
   }
 }
 
+const FACET_KINDS = new Set([
+  'column',
+  'table',
+  'contract',
+  'permission',
+  'policy-key',
+  'route',
+  'absent',
+]);
+const FACET_ID = /^[a-z][a-z0-9-]*$/;
+const ROUTE_ROOT = 'apps/web/app/';
+
+function exportsSymbol(source, symbol) {
+  return new RegExp(`export\\s+(?:[a-z ]*\\s)?\\b${symbol}\\b`).test(source);
+}
+
+function interfaceFields(source, name) {
+  const match = new RegExp(`export interface ${name} \\{([\\s\\S]*?)\\n\\}`).exec(source ?? '');
+  if (match === null) return null;
+  return new Set([...match[1].matchAll(/^ {2}([a-zA-Z][a-zA-Z0-9]*)\??:/gm)].map((f) => f[1]));
+}
+
+/** Every permission and role key the grid defines, expanded the way the source expands it. */
+export function readPermissionKeys(source) {
+  if (source === null) return null;
+  const areas = arrayMembers(source, 'ADMIN_PERMISSION_AREAS');
+  const features = arrayMembers(source, 'FEATURE_ORGANIZATION_PERMISSIONS');
+  const roles = arrayMembers(source, 'BUILT_IN_ORGANIZATION_ROLE_KEYS');
+  const legacy = unionMembers(source, 'LegacyOrganizationPermission');
+  if (areas === null || features === null || roles === null || legacy === null) return null;
+  const keys = new Set([...features, ...roles, ...legacy]);
+  for (const area of areas) {
+    keys.add(`admin.${area}.view`);
+    keys.add(`admin.${area}.manage`);
+  }
+  return keys;
+}
+
+/** Every key the workspace policy contract resolves, including its two nested layers. */
+export function readPolicyKeys(source) {
+  if (source === null) return null;
+  const controls = interfaceFields(source, 'WorkspaceControls');
+  const features = arrayMembers(source, 'WORKSPACE_FEATURES');
+  const code = arrayMembers(source, 'WORKSPACE_CODE_CONTROL_KEYS');
+  if (controls === null || features === null || code === null) return null;
+  const keys = new Set(controls);
+  for (const feature of features) keys.add(`featureAccess.${feature}`);
+  for (const control of code) keys.add(`code.${control}`);
+  return keys;
+}
+
+function checkFacetSubjects({ concept, inventory, errors }) {
+  const where = `${REGISTRY_PATH}#${concept.name}`;
+  const subjects = new Map();
+  for (const subject of concept.facetSubjects ?? []) {
+    if (subjects.has(subject.name)) {
+      errors.push(`${where}: facet subject "${subject.name}" is declared twice.`);
+    }
+    if (!concept.tables.includes(subject.table)) {
+      errors.push(
+        `${where}: facet subject "${subject.name}" names ${subject.table}, a table this concept ` +
+          'does not own, so its facets would describe an object nothing here is responsible for.',
+      );
+    } else if (!inventory.tables.has(subject.table)) {
+      errors.push(
+        `${where}: facet subject "${subject.name}" names table ${subject.table}, which the final schema does not have.`,
+      );
+    }
+    if (typeof subject.why !== 'string' || subject.why.trim().length === 0) {
+      errors.push(`${where}: facet subject "${subject.name}" carries no reason.`);
+    }
+    subjects.set(subject.name, subject);
+  }
+  return subjects;
+}
+
+function checkFacetCitation({
+  facet,
+  concept,
+  subjects,
+  inventory,
+  foreignKeys,
+  keys,
+  repoRoot,
+  errors,
+}) {
+  const where = `${REGISTRY_PATH}#${concept.name}/${facet.id}`;
+  const source = facet.source ?? {};
+  const subjectTable = subjects.get(facet.subject)?.table;
+
+  if (facet.kind === 'column') {
+    if (!concept.tables.includes(source.table)) {
+      errors.push(`${where}: cites ${source.table}, which this concept does not own.`);
+      return;
+    }
+    const entry = inventory.tables.get(source.table);
+    if (entry === undefined) {
+      errors.push(`${where}: cites ${source.table}, which the final schema does not have.`);
+    } else if (!entry.columns.has(source.column)) {
+      errors.push(
+        `${where}: claims ${source.table}.${source.column}, which no migration leaves in the final ` +
+          'schema. Either the column went, or this facet was never true.',
+      );
+    }
+    return;
+  }
+
+  if (facet.kind === 'table') {
+    if (!concept.tables.includes(source.references)) {
+      errors.push(`${where}: names parent ${source.references}, which this concept does not own.`);
+      return;
+    }
+    if (!inventory.tables.has(source.table)) {
+      errors.push(
+        `${where}: names child table ${source.table}, which the final schema does not have.`,
+      );
+      return;
+    }
+    const parents = foreignKeys.get(source.table);
+    const bound = parents !== undefined && [...parents.values()].includes(source.references);
+    if (!bound) {
+      errors.push(
+        `${where}: holds ${source.table} to be a child of ${source.references} and no foreign key of ` +
+          `${source.table} points at it, so nothing keeps the child with its parent.`,
+      );
+    }
+    return;
+  }
+
+  if (facet.kind === 'contract') {
+    const file = readSource(repoRoot, source.file);
+    if (file === null) errors.push(`${where}: names ${source.file}, which does not exist.`);
+    else if (!exportsSymbol(file, source.symbol)) {
+      errors.push(`${where}: ${source.file} no longer exports ${source.symbol}.`);
+    }
+    return;
+  }
+
+  if (facet.kind === 'permission') {
+    if (keys.permissions !== null && !keys.permissions.has(source.key)) {
+      errors.push(
+        `${where}: names permission or role key "${source.key}", which ${ORGANIZATION_PERMISSIONS_PATH} ` +
+          'no longer defines.',
+      );
+    }
+    return;
+  }
+
+  if (facet.kind === 'policy-key') {
+    if (keys.policy !== null && !keys.policy.has(source.key)) {
+      errors.push(
+        `${where}: names policy key "${source.key}", which ${WORKSPACE_POLICY_PATH} no longer resolves.`,
+      );
+    }
+    return;
+  }
+
+  if (facet.kind === 'route') {
+    if (!concept.tables.includes(source.table)) {
+      errors.push(`${where}: names ${source.table}, which this concept does not own.`);
+    }
+    if (!source.file?.startsWith(ROUTE_ROOT)) {
+      errors.push(`${where}: names ${source.file}, which is not a route under ${ROUTE_ROOT}.`);
+      return;
+    }
+    const file = readSource(repoRoot, source.file);
+    if (file === null) errors.push(`${where}: names route ${source.file}, which does not exist.`);
+    else if (!new RegExp(`\\b${source.table}\\b`).test(file)) {
+      errors.push(
+        `${where}: route ${source.file} no longer names ${source.table}, so the facet has no reader.`,
+      );
+    }
+    return;
+  }
+
+  if (typeof source.instead !== 'string' || source.instead.trim().length === 0) {
+    errors.push(
+      `${where}: is recorded absent and names nothing that stands in for it. An absent facet without ` +
+        'a substitute is a gap nobody can act on.',
+    );
+  }
+  const absentTable = source.absentTable ?? subjectTable;
+  const entry = inventory.tables.get(absentTable);
+  if (source.absentColumn !== undefined && entry?.columns.has(source.absentColumn)) {
+    errors.push(
+      `${where}: is recorded absent and ${absentTable}.${source.absentColumn} now exists. Record it ` +
+        'as a column facet and close the row it was opened for.',
+    );
+  }
+  if (
+    source.absentColumn === undefined &&
+    source.absentTable !== undefined &&
+    entry !== undefined
+  ) {
+    errors.push(
+      `${where}: is recorded absent and table ${source.absentTable} now exists. Record it as a table ` +
+        'facet and close the row it was opened for.',
+    );
+  }
+}
+
+export function checkFacets({ registry, inventory, foreignKeys, repoRoot, errors }) {
+  const permissions = readPermissionKeys(readSource(repoRoot, ORGANIZATION_PERMISSIONS_PATH));
+  const policy = readPolicyKeys(readSource(repoRoot, WORKSPACE_POLICY_PATH));
+  if (permissions === null) {
+    errors.push(
+      `${ORGANIZATION_PERMISSIONS_PATH}: no permission vocabulary to resolve facets against.`,
+    );
+  }
+  if (policy === null) {
+    errors.push(
+      `${WORKSPACE_POLICY_PATH}: no workspace policy contract to resolve facets against.`,
+    );
+  }
+
+  const seen = new Map();
+  let counted = 0;
+  for (const concept of registry.concepts) {
+    const facets = concept.facets ?? [];
+    const subjects = checkFacetSubjects({ concept, inventory, errors });
+    const where = `${REGISTRY_PATH}#${concept.name}`;
+    if (facets.length === 0 && subjects.size > 0) {
+      errors.push(`${where}: declares facet subjects and no facets.`);
+    }
+
+    for (const facet of facets) {
+      counted += 1;
+      const at = `${where}/${facet.id}`;
+      if (!FACET_ID.test(facet.id ?? '')) {
+        errors.push(`${where}: facet id "${facet.id}" is not a lower case slug.`);
+      }
+      const owner = seen.get(facet.id);
+      if (owner !== undefined) {
+        errors.push(`${at}: facet id is already used by concept "${owner}".`);
+      }
+      seen.set(facet.id, concept.name);
+      if (typeof facet.claim !== 'string' || facet.claim.trim().length < 10) {
+        errors.push(`${at}: carries no claim a reader could check.`);
+      }
+      if (!FACET_KINDS.has(facet.kind)) {
+        errors.push(`${at}: unknown facet kind "${facet.kind}".`);
+        continue;
+      }
+      if (!subjects.has(facet.subject)) {
+        errors.push(
+          `${at}: names subject "${facet.subject}", which this concept does not declare.`,
+        );
+        continue;
+      }
+      checkFacetCitation({
+        facet,
+        concept,
+        subjects,
+        inventory,
+        foreignKeys,
+        keys: { permissions, policy },
+        repoRoot,
+        errors,
+      });
+    }
+
+    for (const name of subjects.keys()) {
+      if (facets.some((facet) => facet.subject === name)) continue;
+      errors.push(
+        `${where}: facet subject "${name}" has no facets. Delete it, or inventory the object.`,
+      );
+    }
+  }
+
+  return counted;
+}
+
 function checkVocabularyBinding(registry, repoRoot, errors) {
   const source = readSource(repoRoot, REGISTRY_TYPES_PATH);
   if (source === null) {
@@ -994,6 +1353,8 @@ export function checkConceptRegistry(repoRoot = REPO_ROOT) {
   checkSchemaHomes({ registry, repoRoot, errors });
   checkTableDispositions({ registry, claimedTables, userOwnedTables: USER_OWNED_TABLES, errors });
   checkUiState({ registry, inventory, claimedTables, errors });
+  const foreignKeys = readForeignKeys(migrations);
+  const facets = checkFacets({ registry, inventory, foreignKeys, repoRoot, errors });
 
   return {
     errors,
@@ -1003,6 +1364,7 @@ export function checkConceptRegistry(repoRoot = REPO_ROOT) {
         tables: inventory.tables.size,
         vocabularies: vocabularies.size,
         userOwnedTables: USER_OWNED_TABLES.size,
+        facets,
       },
       columnContract: registry.columnContract,
       concepts: computed,
@@ -1032,6 +1394,7 @@ function main() {
   console.log(
     `check-concept-registry: OK (${report.concepts.length} concepts, ` +
       `${report.concepts.reduce((total, concept) => total + concept.tables.length, 0)} tables, ` +
+      `${report.generatedFrom.facets} facets re-derived, ` +
       `${report.generatedFrom.userOwnedTables} user-owned tables accounted for, ` +
       `${report.canonicalGaps.length} recorded canonical gap(s), ` +
       `${report.duplicateVocabularies.length} registered duplicate vocabular(ies))`,

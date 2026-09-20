@@ -126,6 +126,41 @@ export type ConceptRetention =
   | { kind: 'audit-class'; class: string }
   | { kind: 'tenant-policy'; policy: string };
 
+/**
+ * One object a concept covers. The hierarchy is three objects under one concept
+ * because `organizations`, `workspaces` and `organization_members` are one family.
+ */
+export interface ConceptFacetSubject {
+  name: string;
+  table: string;
+  why: string;
+}
+
+export type ConceptFacetKind =
+  'column' | 'table' | 'contract' | 'permission' | 'policy-key' | 'route' | 'absent';
+
+interface ConceptFacetClaim {
+  id: string;
+  subject: string;
+  claim: string;
+}
+
+/**
+ * One checklist line as a citation the guard re-derives. `absent` is the only
+ * kind that records something the product does not have, and it names what does.
+ */
+export type ConceptFacet =
+  | (ConceptFacetClaim & { kind: 'column'; source: { table: string; column: string } })
+  | (ConceptFacetClaim & { kind: 'table'; source: { table: string; references: string } })
+  | (ConceptFacetClaim & { kind: 'contract'; source: { file: string; symbol: string } })
+  | (ConceptFacetClaim & { kind: 'permission'; source: { key: string } })
+  | (ConceptFacetClaim & { kind: 'policy-key'; source: { key: string } })
+  | (ConceptFacetClaim & { kind: 'route'; source: { file: string; table: string } })
+  | (ConceptFacetClaim & {
+      kind: 'absent';
+      source: { instead: string; absentTable?: string; absentColumn?: string };
+    });
+
 export interface ConceptRecord {
   name: ConceptName;
   label: string;
@@ -156,6 +191,8 @@ export interface ConceptRecord {
   /** The product link target that addresses it, or null when it has no URL. */
   deepLink: string | null;
   columns: Readonly<Partial<Record<ResourceColumnRole, string>>>;
+  facetSubjects?: readonly ConceptFacetSubject[];
+  facets?: readonly ConceptFacet[];
 }
 
 export type TableDisposition =
@@ -239,6 +276,15 @@ export function conceptByAlias(name: string): ConceptRecord | null {
       (concept) => concept.name === lowered || concept.aliases.includes(lowered),
     ) ?? null
   );
+}
+
+export function conceptFacets(name: ConceptName): readonly ConceptFacet[] {
+  return getConcept(name).facets ?? [];
+}
+
+/** The facets the product deliberately does not have, each naming what stands in for it. */
+export function absentConceptFacets(name: ConceptName): readonly ConceptFacet[] {
+  return conceptFacets(name).filter((facet) => facet.kind === 'absent');
 }
 
 export function tableDisposition(table: string): TableDispositionRecord | null {

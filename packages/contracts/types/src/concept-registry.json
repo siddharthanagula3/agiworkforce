@@ -395,7 +395,612 @@
         "organization_deletion_completed"
       ],
       "storage": "cloud",
-      "deepLink": null
+      "deepLink": null,
+      "facetSubjects": [
+        {
+          "name": "organization",
+          "table": "organizations",
+          "why": "the billed tenant and the administrative boundary: the row every permission, policy and contract hangs off"
+        },
+        {
+          "name": "workspace",
+          "table": "workspaces",
+          "why": "the container content lives in. Exactly one primary workspace per organization, which is what every organization_id column already meant, plus one personal workspace per account"
+        },
+        {
+          "name": "membership",
+          "table": "organization_members",
+          "why": "one account bound to one organization, carrying the role, the status and the seat. There is no second membership table, so a workspace membership is this row"
+        }
+      ],
+      "facets": [
+        {
+          "id": "organization-administrative-boundary",
+          "subject": "organization",
+          "claim": "the organization is the administrative boundary: the one surface that administers a tenant reads public.organizations and resolves who may act from it",
+          "kind": "route",
+          "source": {
+            "file": "apps/web/app/api/settings/organization/route.ts",
+            "table": "organizations"
+          }
+        },
+        {
+          "id": "organization-stable-id",
+          "subject": "organization",
+          "claim": "an organization has a stable surrogate id that every scoped table references",
+          "kind": "column",
+          "source": {
+            "table": "organizations",
+            "column": "id"
+          }
+        },
+        {
+          "id": "organization-primary-owner",
+          "subject": "organization",
+          "claim": "an organization names one Primary Owner, derived from the membership rows by trigger rather than maintained beside them",
+          "kind": "column",
+          "source": {
+            "table": "organizations",
+            "column": "owner_user_id"
+          }
+        },
+        {
+          "id": "organization-owner-role",
+          "subject": "organization",
+          "claim": "Owner is a built-in role key the permission grid resolves",
+          "kind": "permission",
+          "source": {
+            "key": "owner"
+          }
+        },
+        {
+          "id": "organization-admin-role",
+          "subject": "organization",
+          "claim": "Admin is a built-in role key the permission grid resolves",
+          "kind": "permission",
+          "source": {
+            "key": "admin"
+          }
+        },
+        {
+          "id": "organization-member-role",
+          "subject": "organization",
+          "claim": "Member is a built-in role key the permission grid resolves",
+          "kind": "permission",
+          "source": {
+            "key": "member"
+          }
+        },
+        {
+          "id": "organization-custom-roles",
+          "subject": "organization",
+          "claim": "an organization may define roles of its own, each a named set of permissions scoped to it",
+          "kind": "table",
+          "source": {
+            "table": "organization_roles",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-groups",
+          "subject": "organization",
+          "claim": "an organization has groups, which arrive from the directory connection only: there is no table a group can be created in by hand",
+          "kind": "table",
+          "source": {
+            "table": "scim_groups",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-billing-owner",
+          "subject": "organization",
+          "claim": "an organization carries its own billing identity, so the subscription is owned by the tenant and not by the account that created it",
+          "kind": "column",
+          "source": {
+            "table": "organizations",
+            "column": "stripe_customer_id"
+          }
+        },
+        {
+          "id": "organization-policies",
+          "subject": "organization",
+          "claim": "an organization has policy layers, one row per subject scope, which resolve in a fixed order and may only narrow",
+          "kind": "table",
+          "source": {
+            "table": "organization_policy_overrides",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-identity-provider",
+          "subject": "organization",
+          "claim": "an organization configures its own identity provider, with the domain it claims and the role a just-in-time account receives",
+          "kind": "table",
+          "source": {
+            "table": "sso_connections",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-retention",
+          "subject": "organization",
+          "claim": "an organization sets retention per domain, with a sweep that enforces it",
+          "kind": "table",
+          "source": {
+            "table": "organization_domain_retention_policies",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-residency",
+          "subject": "organization",
+          "claim": "an organization pins the region its rows are processed in",
+          "kind": "column",
+          "source": {
+            "table": "organizations",
+            "column": "data_region"
+          }
+        },
+        {
+          "id": "organization-residency-move",
+          "subject": "organization",
+          "claim": "a residency change is a requested move rather than a column set in place, so the old region stays readable until somebody completes it",
+          "kind": "column",
+          "source": {
+            "table": "organizations",
+            "column": "data_region_requested"
+          }
+        },
+        {
+          "id": "organization-model-access",
+          "subject": "organization",
+          "claim": "an organization allows and blocks models and providers for everyone in it",
+          "kind": "table",
+          "source": {
+            "table": "organization_model_policies",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-connector-policies",
+          "subject": "organization",
+          "claim": "an organization allows and blocks connectors, plugins and MCP hosts",
+          "kind": "table",
+          "source": {
+            "table": "organization_connector_policies",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-sharing-policy",
+          "subject": "organization",
+          "claim": "sharing outside the tenant is a permission the grid grants rather than a free action",
+          "kind": "permission",
+          "source": {
+            "key": "feature.sharing.manage"
+          }
+        },
+        {
+          "id": "organization-mcp-policy",
+          "subject": "organization",
+          "claim": "an organization publishes and retires the MCP servers its members may reach, versioned in the tenant",
+          "kind": "table",
+          "source": {
+            "table": "organization_mcp_servers",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-trust-mode",
+          "subject": "organization",
+          "claim": "the trust modes a tenant may permit are a contract, so local, BYOK and managed mean the same thing to every surface that offers them",
+          "kind": "contract",
+          "source": {
+            "file": "packages/contracts/types/src/trust-mode-contract.ts",
+            "symbol": "TRUST_MODE_CONTRACTS"
+          }
+        },
+        {
+          "id": "organization-audit-scope",
+          "subject": "organization",
+          "claim": "an organization names where its audit trail is delivered, which is what makes the scope of the trail the tenant and not the platform",
+          "kind": "table",
+          "source": {
+            "table": "organization_audit_destinations",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-compliance-keys",
+          "subject": "organization",
+          "claim": "an organization holds its own encryption key, region and rotation state, which is the compliance configuration the tenant controls",
+          "kind": "table",
+          "source": {
+            "table": "organization_encryption_keys",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "organization-team-vocabulary-absent",
+          "subject": "organization",
+          "claim": "there is no third word for the tenant: the legacy team family was dropped, so Organization and Workspace are the only two names and neither is Team",
+          "kind": "absent",
+          "source": {
+            "instead": "public.organizations is the tenant and public.workspaces is its container; the teams and team_members tables of the early dual system were dropped by the migration that retired them",
+            "absentTable": "teams"
+          }
+        },
+        {
+          "id": "workspace-stable-id",
+          "subject": "workspace",
+          "claim": "a workspace has a stable surrogate id of its own, distinct from its organization id",
+          "kind": "column",
+          "source": {
+            "table": "workspaces",
+            "column": "id"
+          }
+        },
+        {
+          "id": "workspace-organization-scope",
+          "subject": "workspace",
+          "claim": "a workspace belongs to one organization or to none, and a constraint makes the two scopes exclusive",
+          "kind": "column",
+          "source": {
+            "table": "workspaces",
+            "column": "organization_id"
+          }
+        },
+        {
+          "id": "workspace-personal-account",
+          "subject": "workspace",
+          "claim": "a personal workspace is keyed to exactly one account, which is what gives it a stable id across sessions",
+          "kind": "column",
+          "source": {
+            "table": "workspaces",
+            "column": "owner_account_id"
+          }
+        },
+        {
+          "id": "workspace-kind",
+          "subject": "workspace",
+          "claim": "a personal workspace is a row of its own with a kind, not the account: the account is public.profiles and the workspace is not",
+          "kind": "column",
+          "source": {
+            "table": "workspaces",
+            "column": "kind"
+          }
+        },
+        {
+          "id": "workspace-contract",
+          "subject": "workspace",
+          "claim": "the workspace object every surface reads is one exported shape",
+          "kind": "contract",
+          "source": {
+            "file": "packages/contracts/types/src/workspace.ts",
+            "symbol": "Workspace"
+          }
+        },
+        {
+          "id": "workspace-switcher-contract",
+          "subject": "workspace",
+          "claim": "the workspace list all six surfaces switch between is one exported shape, so a switcher shows the same rows everywhere",
+          "kind": "contract",
+          "source": {
+            "file": "packages/contracts/types/src/workspace.ts",
+            "symbol": "WorkspaceSummary"
+          }
+        },
+        {
+          "id": "workspace-region",
+          "subject": "workspace",
+          "claim": "a workspace may pin the region it is processed in when a contract asks for one",
+          "kind": "column",
+          "source": {
+            "table": "workspaces",
+            "column": "region"
+          }
+        },
+        {
+          "id": "workspace-billing-attribution",
+          "subject": "workspace",
+          "claim": "a cost row names the workspace the usage was incurred in, which is the one dimension attributed to the container rather than to the funder",
+          "kind": "table",
+          "source": {
+            "table": "provider_cost_events",
+            "references": "workspaces"
+          }
+        },
+        {
+          "id": "workspace-default-model",
+          "subject": "workspace",
+          "claim": "a workspace sets the model its members get by default",
+          "kind": "policy-key",
+          "source": {
+            "key": "defaultModelId"
+          }
+        },
+        {
+          "id": "workspace-members-absent",
+          "subject": "workspace",
+          "claim": "a workspace has no membership of its own: who may open it is decided by membership of its organization",
+          "kind": "absent",
+          "source": {
+            "instead": "public.organization_members keyed by organization_id; a personal workspace has exactly one reachable account, its owner_account_id",
+            "absentTable": "workspace_members"
+          }
+        },
+        {
+          "id": "workspace-resources-absent",
+          "subject": "workspace",
+          "claim": "content is not scoped to a workspace: every content table carries organization_id and none carries workspace_id",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_id on every content table, which resolves to the primary workspace one to one; provider_cost_events.workspace_id is the only column in the schema that names a workspace"
+          }
+        },
+        {
+          "id": "workspace-policies-absent",
+          "subject": "workspace",
+          "claim": "policy layers are keyed to the organization, so a second workspace in one tenant could not be governed differently from the first",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_policy_overrides.organization_id with subject_type role, group, project, device or user"
+          }
+        },
+        {
+          "id": "workspace-entitlements-absent",
+          "subject": "workspace",
+          "claim": "entitlement is a property of the tenant, not of the container",
+          "kind": "absent",
+          "source": {
+            "instead": "organizations.billing_plan_tier, resolved for every workspace of that organization"
+          }
+        },
+        {
+          "id": "workspace-usage-absent",
+          "subject": "workspace",
+          "claim": "the usage ledger is keyed to the organization, so what one workspace of a tenant spent cannot be read back from it",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_usage_ledger.organization_id for the funding dimension; provider_cost_events.workspace_id carries the container dimension and is not backfilled"
+          }
+        },
+        {
+          "id": "workspace-retention-scope-absent",
+          "subject": "workspace",
+          "claim": "retention is set per organization and per domain, never per workspace",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_domain_retention_policies keyed by organization_id and domain"
+          }
+        },
+        {
+          "id": "workspace-storage-scope-absent",
+          "subject": "workspace",
+          "claim": "no storage quota or bucket is scoped to a workspace",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_encryption_keys.key_region pins where a tenant key lives; file rows are scoped by organization_id"
+          }
+        },
+        {
+          "id": "workspace-default-settings-absent",
+          "subject": "workspace",
+          "claim": "the defaults a container hands its members are stored against the organization, so two workspaces of one tenant share them",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_admin_policies keyed by organization_id"
+          }
+        },
+        {
+          "id": "workspace-instructions-absent",
+          "subject": "workspace",
+          "claim": "there are no workspace-wide instructions: the narrowest instruction scope is a project",
+          "kind": "absent",
+          "source": {
+            "instead": "user_projects.instructions, which is per project and per account"
+          }
+        },
+        {
+          "id": "workspace-disabled-absent",
+          "subject": "workspace",
+          "claim": "a workspace cannot be disabled: nothing on the row says it is closed and no policy reads such a state",
+          "kind": "absent",
+          "source": {
+            "instead": "suspending every membership of the organization one row at a time, or organizations.deletion_requested_at, which schedules removal rather than pausing use",
+            "absentColumn": "disabled_at"
+          }
+        },
+        {
+          "id": "workspace-archived-absent",
+          "subject": "workspace",
+          "claim": "a workspace cannot be archived; only content inside one can",
+          "kind": "absent",
+          "source": {
+            "instead": "user_projects.is_archived and web_conversations.archived, which archive the content and not the container",
+            "absentColumn": "archived_at"
+          }
+        },
+        {
+          "id": "workspace-migration-absent",
+          "subject": "workspace",
+          "claim": "a workspace cannot be moved between organizations, and the primary one cannot be removed while its organization exists",
+          "kind": "absent",
+          "source": {
+            "instead": "organizations.data_region_requested moves a whole tenant between regions; there is no path that reparents a workspace"
+          }
+        },
+        {
+          "id": "membership-account-id",
+          "subject": "membership",
+          "claim": "a membership names the account it binds",
+          "kind": "column",
+          "source": {
+            "table": "organization_members",
+            "column": "user_id"
+          }
+        },
+        {
+          "id": "membership-organization-id",
+          "subject": "membership",
+          "claim": "a membership names the organization it binds, and cascades with it, so no membership outlives its tenant",
+          "kind": "column",
+          "source": {
+            "table": "organization_members",
+            "column": "organization_id"
+          }
+        },
+        {
+          "id": "membership-status",
+          "subject": "membership",
+          "claim": "a membership carries a status, and only an active one confers permissions; deprovisioned is terminal",
+          "kind": "column",
+          "source": {
+            "table": "organization_members",
+            "column": "status"
+          }
+        },
+        {
+          "id": "membership-role",
+          "subject": "membership",
+          "claim": "a membership carries exactly one built-in role",
+          "kind": "column",
+          "source": {
+            "table": "organization_members",
+            "column": "role"
+          }
+        },
+        {
+          "id": "membership-primary-owner",
+          "subject": "membership",
+          "claim": "the Primary Owner is a generated fact of the membership row, so it cannot disagree with the role it is derived from",
+          "kind": "column",
+          "source": {
+            "table": "organization_members",
+            "column": "is_primary_owner"
+          }
+        },
+        {
+          "id": "membership-seat-type",
+          "subject": "membership",
+          "claim": "a membership carries the kind of seat it occupies",
+          "kind": "column",
+          "source": {
+            "table": "organization_members",
+            "column": "seat_type"
+          }
+        },
+        {
+          "id": "membership-joined-at",
+          "subject": "membership",
+          "claim": "a membership records when the account joined",
+          "kind": "column",
+          "source": {
+            "table": "organization_members",
+            "column": "joined_at"
+          }
+        },
+        {
+          "id": "membership-groups",
+          "subject": "membership",
+          "claim": "a member belongs to groups only through the directory: the join runs account to provisioned SCIM user to group, so a member who never came from the directory has none",
+          "kind": "table",
+          "source": {
+            "table": "scim_group_members",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "membership-invitation",
+          "subject": "membership",
+          "claim": "an invitation is a row of its own with its own timestamps, so when somebody was asked is kept apart from when they joined",
+          "kind": "table",
+          "source": {
+            "table": "organization_invitations",
+            "references": "organizations"
+          }
+        },
+        {
+          "id": "membership-ownership-surface",
+          "subject": "membership",
+          "claim": "membership is the one ownership fact the settings surface resolves: it reads public.organization_members against public.organizations and no third table claims a seat",
+          "kind": "route",
+          "source": {
+            "file": "apps/web/app/api/settings/organization/route.ts",
+            "table": "organization_members"
+          }
+        },
+        {
+          "id": "membership-id-absent",
+          "subject": "membership",
+          "claim": "a membership has no surrogate id: it is identified by the pair of organization and account, so nothing can reference one membership by a single value",
+          "kind": "absent",
+          "source": {
+            "instead": "the composite primary key (organization_id, user_id); every route addresses a member by the account id within the caller organization",
+            "absentColumn": "id"
+          }
+        },
+        {
+          "id": "membership-suspension-time-absent",
+          "subject": "membership",
+          "claim": "there is no suspension timestamp: one column records the last transition whatever it was, so the time a member was suspended is lost the moment the row moves on",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_members.status_changed_at, overwritten by the transition trigger on every status change",
+            "absentColumn": "suspended_at"
+          }
+        },
+        {
+          "id": "membership-deprovision-time-absent",
+          "subject": "membership",
+          "claim": "there is no deprovision timestamp: the same status_changed_at carries it, and offboarding evidence therefore cannot distinguish a suspension from a removal after the fact",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_members.status_changed_at together with status = deprovisioned, which is terminal",
+            "absentColumn": "deprovisioned_at"
+          }
+        },
+        {
+          "id": "membership-last-activity-absent",
+          "subject": "membership",
+          "claim": "a membership records no last activity, so an inactive seat cannot be found from the membership row",
+          "kind": "absent",
+          "source": {
+            "instead": "device_installations.last_seen_at and account_sessions, which are per device and per session rather than per membership",
+            "absentColumn": "last_active_at"
+          }
+        },
+        {
+          "id": "membership-license-absent",
+          "subject": "membership",
+          "claim": "no licence is assigned to a membership: seats are counted at the organization and the row carries only the kind of seat",
+          "kind": "absent",
+          "source": {
+            "instead": "organizations.licensed_seats and seats_consumed for the count, organization_members.seat_type for the kind",
+            "absentColumn": "license_id"
+          }
+        },
+        {
+          "id": "membership-entitlement-snapshot-absent",
+          "subject": "membership",
+          "claim": "a membership stores no entitlement snapshot or version, so what a member was entitled to at a past moment cannot be reconstructed",
+          "kind": "absent",
+          "source": {
+            "instead": "organizations.billing_plan_tier resolved live at each request, with no per-membership record of what it was",
+            "absentColumn": "entitlement_version"
+          }
+        },
+        {
+          "id": "membership-policy-version-absent",
+          "subject": "membership",
+          "claim": "a membership stores no effective policy version: revisions are counted for the whole organization, so which revision governed one member is not recorded",
+          "kind": "absent",
+          "source": {
+            "instead": "organization_policy_revisions.revision, which is per organization and per change rather than per member",
+            "absentColumn": "policy_version"
+          }
+        }
+      ]
     },
     {
       "name": "subscription",
