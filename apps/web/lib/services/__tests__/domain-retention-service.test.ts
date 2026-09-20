@@ -18,7 +18,7 @@ vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
   objectKeyFromStorageUri: (uri: string) => (uri.startsWith('s3://') ? uri.slice(5) : null),
 }));
 
-import { RETENTION_DOMAINS, type RetentionDomain } from '@agiworkforce/types';
+import { RETENTION_DAYS_MIN, RETENTION_DOMAINS, type RetentionDomain } from '@agiworkforce/types';
 import {
   DOMAIN_RETENTION_BATCH,
   createDomainSweepers,
@@ -272,5 +272,145 @@ describe('per-domain retention sweep', () => {
 
     expect(batches).toBe(2);
     expect(result.recordsDeleted).toBe(DOMAIN_RETENTION_BATCH + 1);
+  });
+});
+
+function codeSessionDb(options: {
+  codeRetentionDays?: number | null;
+  policyReadFails?: boolean;
+  sessions?: Array<{ id: string; ageDays: number }>;
+  heldIds?: readonly string[];
+}) {
+  const sessions = options.sessions ?? [];
+  const heldIds = new Set(options.heldIds ?? []);
+  return fakeDb((sql, params) => {
+    if (/from public\.organization_admin_policies/.test(sql)) {
+      if (options.policyReadFails) throw new Error('connection reset');
+      return [
+        {
+          organization_id: ORG,
+          default_privacy_mode: 'byok',
+          allowed_privacy_modes: ['byok'],
+          allow_managed_compute: true,
+          chat_sync_surfaces: [],
+          audit_export_enabled: true,
+          retention_days: 365,
+          metadata:
+            options.codeRetentionDays === undefined
+              ? {}
+              : { codeControls: { sessionRetentionDays: options.codeRetentionDays } },
+          updated_at: NOW.toISOString(),
+        },
+      ];
+    }
+    if (/count\(\*\)/.test(sql)) {
+      return [{ count: sessions.filter((s) => heldIds.has(s.id)).length }];
+    }
+    if (/delete from public\.cloud_code_sessions/.test(sql)) {
+      const cutoff = Date.parse(String(params[1]));
+      return sessions
+        .filter((s) => !heldIds.has(s.id))
+        .filter((s) => NOW.getTime() - s.ageDays * 86_400_000 < cutoff)
+        .map((s) => ({ id: s.id }));
+    }
+    return [];
+  });
+}
+
+async function sweepCodeSessions(
+  db: never,
+  domainRetentionDays = 90,
+): Promise<Awaited<ReturnType<typeof sweepOrganizationDomain>>> {
+  return sweepOrganizationDomain(
+    db,
+    { organizationId: ORG, domain: 'code_sessions', retentionDays: domainRetentionDays },
+    { now: NOW, readHolds: async () => [] },
+  );
+}
+
+describe('the Code session window a workspace administrator set', () => {
+  it('sweeps sessions older than the shorter workspace window and keeps the newer ones', async () => {
+    const { db } = codeSessionDb({
+      codeRetentionDays: 7,
+      sessions: [
+        { id: 'old', ageDays: 30 },
+        { id: 'fresh', ageDays: 3 },
+      ],
+    });
+
+    const result = await sweepCodeSessions(db);
+
+    expect(result.retentionDays).toBe(7);
+    expect(result.retentionSource).toBe('workspace_code_control');
+    expect(result.recordsDeleted).toBe(1);
+  });
+
+  it('leaves a workspace that set no Code window on the domain window', async () => {
+    const { db } = codeSessionDb({ sessions: [{ id: 'old', ageDays: 30 }] });
+
+    const result = await sweepCodeSessions(db);
+
+    expect(result.retentionDays).toBe(90);
+    expect(result.retentionSource).toBe('domain_policy');
+    expect(result.recordsDeleted).toBe(0);
+  });
+
+  it('treats zero and a longer value as no opinion, never as a shorter window', async () => {
+    for (const value of [0, null, 365]) {
+      const { db } = codeSessionDb({ codeRetentionDays: value });
+      const result = await sweepCodeSessions(db);
+      expect(result.retentionDays).toBe(90);
+      expect(result.retentionSource).toBe('domain_policy');
+    }
+  });
+
+  it('keeps the longer domain window when the workspace policy cannot be read', async () => {
+    const { db } = codeSessionDb({
+      policyReadFails: true,
+      sessions: [{ id: 'old', ageDays: 30 }],
+    });
+
+    const result = await sweepCodeSessions(db);
+
+    expect(result.retentionDays).toBe(90);
+    expect(result.retentionSource).toBe('domain_policy_after_unreadable_workspace_policy');
+    expect(result.recordsDeleted).toBe(0);
+  });
+
+  it('never goes below the configured minimum, whatever the workspace typed', async () => {
+    const { db } = codeSessionDb({ codeRetentionDays: -5 });
+    expect((await sweepCodeSessions(db)).retentionDays).toBe(90);
+
+    const { db: tiny } = codeSessionDb({ codeRetentionDays: 1 });
+    const result = await sweepCodeSessions(tiny);
+    expect(result.retentionDays).toBeGreaterThanOrEqual(RETENTION_DAYS_MIN);
+  });
+
+  it('withholds a held session under the shorter window as under any other', async () => {
+    const { db } = codeSessionDb({
+      codeRetentionDays: 7,
+      sessions: [
+        { id: 'held', ageDays: 30 },
+        { id: 'sweepable', ageDays: 30 },
+      ],
+      heldIds: ['held'],
+    });
+
+    const result = await sweepCodeSessions(db);
+
+    expect(result.recordsHeld).toBe(1);
+    expect(result.recordsDeleted).toBe(1);
+  });
+
+  it('asks nothing of the workspace policy for any other domain', async () => {
+    const { db, calls } = codeSessionDb({ codeRetentionDays: 7 });
+
+    await sweepOrganizationDomain(
+      db,
+      { organizationId: ORG, domain: 'files', retentionDays: 90 },
+      { now: NOW, readHolds: async () => [] },
+    );
+
+    expect(calls.some((c) => /organization_admin_policies/.test(c.sql))).toBe(false);
   });
 });

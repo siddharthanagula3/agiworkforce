@@ -233,3 +233,25 @@ test('an act nothing maps to leaves its control unenforced', () => {
   assert.deepEqual([...invokedCodeActs("{ act: 'connect_github' }")], ['connect_github']);
   assert.equal(codeActsByControl('export function somethingElse() {}').size, 0);
 });
+
+test('a Code control the decision maps to no act is enforced where a decision reads it', () => {
+  const contract = `${CONTRACT}\n${CODE_DECISION}`.replace(
+    "export const WORKSPACE_CODE_CONTROL_KEYS = ['allowGithubConnection'] as const;",
+    "export const WORKSPACE_CODE_CONTROL_KEYS = ['sessionRetentionDays'] as const;",
+  );
+  const base = {
+    [CONTRACT_FILE]: contract,
+    'apps/web/lib/x.ts': "features.push('browser'); const maxReasoningEffort = 1;",
+    'apps/web/app/api/projects/route.ts': "features.push('projects');",
+  };
+
+  assert.deepEqual(findUnenforcedKeys(tree(base)).unenforced, ['code:sessionRetentionDays']);
+
+  const wired = tree({
+    ...base,
+    'apps/web/lib/services/domain-retention-service.ts':
+      'const days = controls.sessionRetentionDays;',
+  });
+
+  assert.deepEqual(findUnenforcedKeys(wired).unenforced, []);
+});
