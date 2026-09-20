@@ -38,8 +38,19 @@ function calendarSeries(year: number): readonly string[] {
   return labels;
 }
 
+/**
+ * A build that sends no version, or one no release series admits, is counted
+ * under this rather than dropped: a surface missing from the release-health
+ * split reads as a surface with no traffic.
+ */
+export const UNKNOWN_CLIENT_VERSION_LABEL = 'unknown';
+
 export function clientVersionLabels(now = new Date()): readonly string[] {
-  return [...runtimeSeries(), ...calendarSeries(now.getUTCFullYear())];
+  return [
+    ...runtimeSeries(),
+    ...calendarSeries(now.getUTCFullYear()),
+    UNKNOWN_CLIENT_VERSION_LABEL,
+  ];
 }
 
 export const CLIENT_VERSION_LABELS: readonly string[] = clientVersionLabels();

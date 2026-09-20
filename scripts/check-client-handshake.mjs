@@ -1,10 +1,8 @@
 #!/usr/bin/env node
 
 // A client that never says which build it is gets served as though it were the
-// newest one. This guard enumerates every product surface from the surface
-// vocabulary, finds the modules on each one that build an outbound API request,
-// and fails on a surface that omits a header the handshake needs or on a
-// recorded omission that has quietly been fixed.
+// newest one. This enumerates every surface and fails on one that omits a
+// header the handshake needs, or on an omission that has quietly been fixed.
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -59,25 +57,41 @@ function isTestPath(relativePath) {
   );
 }
 
+/** Importing a header name is not sending it, so the import block is not evidence. */
+function withoutImports(source) {
+  return source.replace(/(^|\n)import\b[\s\S]*?from\s+['"][^'"]+['"];/g, '$1');
+}
+
 function mentions(source, header) {
   const pattern = new RegExp(`${header.value.replace(/-/g, '[-]')}|\\b${header.symbol}\\b`, 'i');
   return pattern.test(source);
 }
 
 /**
- * Every module on a surface that builds a request carrying the surface header.
- * Discovered rather than listed, so a new client that forgets the rest of the
- * handshake is measured the day it is written.
+ * Calling the builder, not importing it: an import a refactor left behind is
+ * how a hand-rolled header block hides behind a dead line at the top of a file.
+ */
+function namesSymbol(source, symbol) {
+  return new RegExp(`(^|[^\\w$])${symbol.replace(/[:]/g, '[:]')}\\s*(\\(|[:][:])`).test(source);
+}
+
+/**
+ * Every module on a surface that touches the handshake, discovered rather than
+ * listed, so a client that forgets half of it is measured the day it is written.
  */
 export function findRequestBuilders({ repoRoot, files, client, headers }) {
   const found = [];
+  const builderSymbol = client.builder?.symbol;
   for (const relativePath of files) {
     if (!client.roots.some((root) => relativePath.startsWith(`${root}/`))) continue;
     if (!CLIENT_EXTENSIONS.has(path.extname(relativePath))) continue;
     if (isTestPath(relativePath)) continue;
     const source = readSource(repoRoot, relativePath);
     if (source === null) continue;
-    if (mentions(source, headers.surface)) found.push({ file: relativePath, source });
+    const touches =
+      HEADER_NAMES.some((name) => mentions(source, headers[name])) ||
+      (builderSymbol !== undefined && namesSymbol(source, builderSymbol));
+    if (touches) found.push({ file: relativePath, source });
   }
   return found;
 }
@@ -116,6 +130,104 @@ function checkHeaderConstants({ contract, repoRoot, errors }) {
   }
 }
 
+/**
+ * The one module a surface routes every platform request through: it spells a
+ * header or delegates to the shared helper, and a caller inherits both.
+ */
+function checkBuilder({ contract, repoRoot, client, where, errors }) {
+  const builder = client.builder;
+  if (builder === undefined) {
+    errors.push(`${where}: names no shared header builder, so each request site invents one.`);
+    return null;
+  }
+  const source = readSource(repoRoot, builder.file);
+  if (source === null) {
+    errors.push(`${where}: the header builder ${builder.file} does not exist.`);
+    return null;
+  }
+  const helper = readSource(repoRoot, contract.helper.module);
+  const body = withoutImports(source);
+  const delegates = namesSymbol(body, contract.helper.symbol);
+  for (const name of builder.sets ?? []) {
+    if (mentions(body, contract.headers[name])) continue;
+    if (delegates && helper !== null && mentions(withoutImports(helper), contract.headers[name])) {
+      continue;
+    }
+    errors.push(
+      `${builder.file}: is this surface's header builder and sets no ${name} header, so every ` +
+        `request from it arrives without one. ${contract.headers[name].answers} is then unanswerable.`,
+    );
+  }
+  return builder;
+}
+
+function checkHelper({ contract, repoRoot, errors }) {
+  const helper = contract.helper;
+  const source = readSource(repoRoot, helper.module);
+  if (source === null) {
+    errors.push(`${CONTRACT_PATH}: the shared header helper ${helper.module} does not exist.`);
+    return;
+  }
+  const declaration = new RegExp(`export function ${helper.symbol}\\b`).exec(source);
+  if (declaration === null) {
+    errors.push(
+      `${helper.module}: no longer exports ${helper.symbol}, so each surface would settle the ` +
+        'header names for itself.',
+    );
+    return;
+  }
+  // Only what the function attaches counts: declaring a name above it and
+  // never putting it on a request is the defect this whole contract is about.
+  const attached = source.slice(declaration.index);
+  for (const name of HEADER_NAMES) {
+    if (!mentions(attached, contract.headers[name])) {
+      errors.push(
+        `${helper.module}: ${helper.symbol} attaches no ${name} header, so every surface that ` +
+          'goes through it sends a request without one.',
+      );
+    }
+  }
+}
+
+/** A surface that cannot import the contract keeps a copy, compared here rather than trusted. */
+function checkMirror({ contract, repoRoot, errors }) {
+  const mirror = contract.mirror;
+  if (mirror === undefined) return;
+  const source = readSource(repoRoot, mirror.file);
+  if (source === null) {
+    errors.push(`${CONTRACT_PATH}: the mirror ${mirror.file} does not exist.`);
+    return;
+  }
+  for (const [name, symbol] of Object.entries(mirror.headerConstants)) {
+    const declared = new RegExp(`const ${symbol}: &str = "([^"]+)"`).exec(source);
+    if (declared === null) {
+      errors.push(`${mirror.file}: no longer declares ${symbol}.`);
+      continue;
+    }
+    if (declared[1].toLowerCase() !== contract.headers[name].value) {
+      errors.push(
+        `${mirror.file}: ${symbol} is "${declared[1]}" and the handshake spells the ${name} header ` +
+          `"${contract.headers[name].value}", so this surface labels itself with a name nothing reads.`,
+      );
+    }
+  }
+
+  const latest = readSource(repoRoot, contract.server.latest.file);
+  const canonical =
+    latest === null
+      ? null
+      : new RegExp(`export const ${contract.server.latest.symbol} = '([^']+)'`).exec(latest);
+  const mirrored = new RegExp(`const ${mirror.versionConstant}: &str = "([^"]+)"`).exec(source);
+  if (mirrored === null) {
+    errors.push(`${mirror.file}: no longer declares ${mirror.versionConstant}.`);
+  } else if (canonical !== null && mirrored[1] !== canonical[1]) {
+    errors.push(
+      `${mirror.file}: claims contract ${mirrored[1]} and the server serves ${canonical[1]}, so this ` +
+        'surface would be refused by a floor it is actually current for.',
+    );
+  }
+}
+
 function checkClients({ contract, repoRoot, files, surfaces, errors, report }) {
   const declared = new Map(contract.clients.map((client) => [client.surface, client]));
 
@@ -139,18 +251,36 @@ function checkClients({ contract, repoRoot, files, surfaces, errors, report }) {
     const builders = findRequestBuilders({ repoRoot, files, client, headers: contract.headers });
     report.builders += builders.length;
 
+    const builder = checkBuilder({ contract, repoRoot, client, where, errors });
+
     if (builders.length === 0) {
       errors.push(
-        `${where}: no module under ${client.roots.join(', ')} sets the surface header, so nothing ` +
-          'tells the server which surface this is.',
+        `${where}: no module under ${client.roots.join(', ')} takes part in the handshake, so ` +
+          'nothing tells the server which surface this is.',
       );
       continue;
     }
 
+    const routed = new Set(
+      builder === null
+        ? []
+        : builders.filter(
+            (entry) => entry.file === builder.file || namesSymbol(entry.source, builder.symbol),
+          ),
+    );
+
+    // A header the builder does not set is owed only by the modules that spell
+    // one themselves; a module that merely calls the builder is not a request.
+    const inherited = new Set(builder?.sets ?? []);
     const carriers = new Map(
       HEADER_NAMES.map((name) => [
         name,
-        builders.filter((builder) => mentions(builder.source, contract.headers[name])),
+        builders.filter((entry) => {
+          if (mentions(entry.source, contract.headers[name])) return true;
+          if (inherited.has(name)) return routed.has(entry);
+          if (entry.file === builder?.file) return true;
+          return !HEADER_NAMES.some((other) => mentions(entry.source, contract.headers[other]));
+        }),
       ]),
     );
 
@@ -161,12 +291,12 @@ function checkClients({ contract, repoRoot, files, surfaces, errors, report }) {
       const sending = carriers.get(name);
 
       if (sends) {
-        const missing = builders.filter((builder) => !sending.includes(builder));
+        const missing = builders.filter((entry) => !sending.includes(entry));
         if (missing.length > 0) {
           errors.push(
             `${where}: claims to send the ${name} header and ` +
-              `${missing.map((builder) => builder.file).join(', ')} does not, so a request from there ` +
-              'arrives unlabelled.',
+              `${missing.map((entry) => entry.file).join(', ')} neither sets it nor goes through ` +
+              `${builder?.file ?? 'the shared builder'}, so a request from there arrives unlabelled.`,
           );
         }
         if (defects.has(name)) {
@@ -203,6 +333,48 @@ function checkClients({ contract, repoRoot, files, surfaces, errors, report }) {
           `${where}: records a defect for "${name}", which is not part of the handshake.`,
         );
       }
+    }
+  }
+}
+
+/** A floor nothing advertises and nothing refuses below leaves an old client guessing. */
+function checkFloor({ contract, repoRoot, latest, advertised, errors }) {
+  const floor = contract.server.minimumSupported;
+  const source = readSource(repoRoot, floor.file);
+
+  const declared =
+    source === null ? null : new RegExp(`export const ${floor.symbol} = '([^']+)'`).exec(source);
+  const newest =
+    latest === null
+      ? null
+      : new RegExp(`export const ${contract.server.latest.symbol} = '([^']+)'`).exec(latest);
+  if (declared !== null && newest !== null && declared[1] > newest[1]) {
+    errors.push(
+      `${floor.file}: the floor ${declared[1]} is newer than the contract ${newest[1]} this server ` +
+        'serves, so every client is refused including the current one.',
+    );
+  }
+
+  if (advertised !== null && !new RegExp(`\\b${floor.advertisedOn}\\b`).test(advertised)) {
+    errors.push(
+      `${contract.server.advertisedOn.file}: does not send ${floor.advertisedOn}, so a client is told ` +
+        'the newest contract and never the oldest one still answered.',
+    );
+  }
+
+  const refusal = readSource(repoRoot, contract.server.refusal.file);
+  if (refusal === null) {
+    errors.push(
+      `${CONTRACT_PATH}: the refusal points at ${contract.server.refusal.file}, which does not exist.`,
+    );
+    return;
+  }
+  for (const symbol of [contract.server.refusal.symbol, floor.symbol]) {
+    if (!new RegExp(`\\b${symbol}\\b`).test(refusal)) {
+      errors.push(
+        `${contract.server.refusal.file}: does not name ${symbol}, so nothing compares a caller ` +
+          'against the floor and a build too old is served anyway.',
+      );
     }
   }
 }
@@ -250,6 +422,7 @@ function checkServer({ contract, repoRoot, errors }) {
       errors.push(`${CONTRACT_PATH}: the minimumSupported defect names no fix.`);
     }
   } else {
+    checkFloor({ contract, repoRoot, latest, advertised, errors });
     const floor = readSource(repoRoot, server.minimumSupported.file);
     if (
       floor === null ||
@@ -315,7 +488,9 @@ export function checkClientHandshake(repoRoot = REPO_ROOT) {
   }
 
   checkHeaderConstants({ contract, repoRoot, errors });
+  checkHelper({ contract, repoRoot, errors });
   checkClients({ contract, repoRoot, files, surfaces, errors, report });
+  checkMirror({ contract, repoRoot, errors });
   checkServer({ contract, repoRoot, errors });
   checkNegotiation({ contract, repoRoot, errors });
 
@@ -332,8 +507,8 @@ function main() {
   }
 
   console.log(
-    `check-client-handshake: OK (${report.surfaces} surfaces, ${report.builders} request builders, ` +
-      `${report.defects} recorded omission(s))`,
+    `check-client-handshake: OK (${report.surfaces} surfaces, ${report.builders} modules in the ` +
+      `handshake, ${report.defects} recorded omission(s))`,
   );
 }
 

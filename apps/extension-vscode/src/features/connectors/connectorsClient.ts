@@ -5,8 +5,7 @@ import {
   type ListConnectorsResponse,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { getExtensionUserAgent } from '../../platform/version';
-import { SOURCE_SURFACE } from '../../platform/surface';
+import { platformRequestHeaders } from '../../platform/platformHeaders';
 
 export class ConnectorsHttpError extends Error {
   constructor(
@@ -23,8 +22,7 @@ export interface ConnectorsClient {
 }
 
 export type ConnectorsClientResolution =
-  | { status: 'ready'; client: ConnectorsClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: ConnectorsClient } | { status: 'signed-out' };
 
 export function createExtensionConnectorsClient(token: string): ConnectorsClient {
   const baseUrl = getCloudWebOrigin();
@@ -34,9 +32,7 @@ export function createExtensionConnectorsClient(token: string): ConnectorsClient
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
-          'User-Agent': getExtensionUserAgent(),
-          'X-Client': 'vscode-extension',
-          'X-AGI-Surface': SOURCE_SURFACE,
+          ...platformRequestHeaders(),
         },
       });
       if (!response.ok) {

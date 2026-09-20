@@ -1,3 +1,4 @@
+import { platformRequestHeaders } from '../../src/lib/platformHeaders';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fetchMock = vi.fn<(url: string, init: RequestInit) => Promise<Response>>();
@@ -14,7 +15,10 @@ vi.mock('../config', () => ({
   REMOTE_SESSION_PARTITION: 'persist:agi-cloud',
   RENDERER_MODE: 'remote',
 }));
-vi.mock('../accountBridge', () => ({ resolveApiBase: async () => 'http://localhost:3100' }));
+vi.mock('../accountBridge', () => ({
+  resolveApiBase: async () => 'http://localhost:3100',
+  shellRequestHeaders: () => platformRequestHeaders('1.2.3'),
+}));
 vi.mock('../secretStore', () => ({ getSecret }));
 
 function json(body: unknown, status = 200): Response {

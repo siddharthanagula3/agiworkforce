@@ -32,6 +32,7 @@ import {
   CLIENT_FAILURE_MAX_BATCH,
   CLIENT_FAILURE_MAX_BODY_BYTES,
 } from '@/lib/observability/client-failures';
+import { UNKNOWN_CLIENT_VERSION_LABEL } from '@/lib/observability/client-versions';
 import { SURFACE_REQUEST_HEADER } from '@/lib/observability/request-labels';
 
 import { POST } from './route';
@@ -118,7 +119,7 @@ describe('POST /api/telemetry/client', () => {
       failure: 'attachment',
       detail: 'too_large',
       surface: undefined,
-      clientVersion: undefined,
+      clientVersion: UNKNOWN_CLIENT_VERSION_LABEL,
     });
   });
 

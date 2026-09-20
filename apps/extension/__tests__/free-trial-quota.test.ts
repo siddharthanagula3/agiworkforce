@@ -11,6 +11,7 @@
  * @vitest-environment jsdom
  */
 
+import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRoutingSlotModel,
@@ -833,7 +834,7 @@ describe('streamFreeChat, SSE happy path', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = fetchOpts.headers as Record<string, string>;
     expect(headers['X-Requested-With']).toBe('XMLHttpRequest');
-    expect(headers['X-AGI-Surface']).toBe('chrome');
+    expect(headers[SURFACE_REQUEST_HEADER]).toBe('chrome');
   });
 
   it('posts to FREE_TRIAL_ENDPOINT', async () => {

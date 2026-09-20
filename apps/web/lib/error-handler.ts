@@ -9,6 +9,8 @@ import { AppError, createError } from './errors';
 import {
   API_CONTRACT_VERSION,
   API_VERSION_RESPONSE_HEADER,
+  MINIMUM_API_VERSION_RESPONSE_HEADER,
+  MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
   InboundCircuitOpenError,
   assertInboundContract,
   runUnderGatewayPolicy,
@@ -334,6 +336,10 @@ export function withErrorHandler<T extends unknown[]>(
           response.headers.set('x-request-id', requestId);
           response.headers.set('traceparent', formatTraceparent(context));
           response.headers.set(API_VERSION_RESPONSE_HEADER, API_CONTRACT_VERSION);
+          response.headers.set(
+            MINIMUM_API_VERSION_RESPONSE_HEADER,
+            MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
+          );
         } catch (err) {
           void err;
         }

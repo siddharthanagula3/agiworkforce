@@ -4,6 +4,7 @@ import {
   type ManagedCloudChatClient,
 } from '@agiworkforce/cloud-contracts';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 export const ARTIFACT_INDEX_PATH = '/api/artifacts/index';
 export const CHROME_ARTIFACT_PAGE_SIZE = 50;
@@ -35,12 +36,10 @@ export interface ChromeArtifactsError {
 }
 
 export type ChromeArtifactListResult =
-  | { status: 'success'; artifacts: ChromeArtifact[] }
-  | ChromeArtifactsError;
+  { status: 'success'; artifacts: ChromeArtifact[] } | ChromeArtifactsError;
 
 export type ChromeArtifactSourceResult =
-  | { status: 'success'; content: string }
-  | ChromeArtifactsError;
+  { status: 'success'; content: string } | ChromeArtifactsError;
 
 export class ChromeArtifactsHttpError extends Error {
   constructor(
@@ -59,7 +58,7 @@ function createDefaultChatClient(token: string): ManagedCloudChatClient {
     decorateMutationHeaders: (headers) => ({
       ...headers,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
     }),
   });
 }
@@ -162,7 +161,7 @@ export async function listChromeArtifacts(
         headers: {
           Authorization: `Bearer ${token}`,
           'X-Requested-With': 'XMLHttpRequest',
-          'X-AGI-Surface': 'chrome',
+          ...platformRequestHeaders(),
         },
         ...(options.signal ? { signal: options.signal } : {}),
       },

@@ -1,4 +1,11 @@
 import {
+  API_CONTRACT_VERSION,
+  API_VERSION_REQUEST_HEADER,
+  MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
+  SUPPORTED_API_CONTRACT_VERSIONS,
+} from '@agiworkforce/cloud-contracts';
+import { resolveClientUpgrade, type ServerVersionAdvertisement } from '@agiworkforce/types';
+import {
   CircuitOpenError,
   DependencyOverloadedError,
   DependencyTimeoutError,
@@ -8,10 +15,15 @@ import {
 
 import { AppError, createError } from './errors';
 
-export const API_CONTRACT_VERSION = '2026-09-17';
-export const SUPPORTED_API_CONTRACT_VERSIONS: ReadonlySet<string> = new Set([API_CONTRACT_VERSION]);
-export const API_VERSION_REQUEST_HEADER = 'x-agi-api-version';
-export const API_VERSION_RESPONSE_HEADER = 'x-agi-api-version';
+export {
+  API_CONTRACT_VERSION,
+  API_VERSION_REQUEST_HEADER,
+  API_VERSION_RESPONSE_HEADER,
+  MINIMUM_API_VERSION_RESPONSE_HEADER,
+  MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
+  SUPPORTED_API_CONTRACT_VERSIONS,
+} from '@agiworkforce/cloud-contracts';
+
 export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/u;
@@ -30,15 +42,34 @@ export interface InboundRequestFacts {
   header: (name: string) => string | null;
 }
 
+/**
+ * What this deployment tells a client about itself. The floor ships equal to
+ * the newest contract because every shipped build speaks that one; a client
+ * that names no version at all is not refused, because the builds in the field
+ * predate the header.
+ */
+export const SERVER_VERSION_ADVERTISEMENT: ServerVersionAdvertisement = Object.freeze({
+  latest: API_CONTRACT_VERSION,
+  minimumSupported: MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
+  unsupportedBelow: MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
+});
+
 export function assertInboundContract(
   request: InboundRequestFacts,
   policy: ApiGatewayPolicy,
 ): void {
   const requestedVersion = request.header(API_VERSION_REQUEST_HEADER)?.trim();
-  if (requestedVersion && !SUPPORTED_API_CONTRACT_VERSIONS.has(requestedVersion)) {
-    throw createError.validation(
-      `API version ${requestedVersion} is not supported. Send ${API_CONTRACT_VERSION} or omit the ${API_VERSION_REQUEST_HEADER} header.`,
-    );
+  if (requestedVersion) {
+    if (!resolveClientUpgrade(SERVER_VERSION_ADVERTISEMENT, requestedVersion).usable) {
+      throw createError.clientUpdateRequired(
+        `This version speaks API contract ${requestedVersion}, and AGI Workforce now needs ${MINIMUM_SUPPORTED_API_CONTRACT_VERSION} or newer. Update to continue.`,
+      );
+    }
+    if (!SUPPORTED_API_CONTRACT_VERSIONS.has(requestedVersion)) {
+      throw createError.validation(
+        `API version ${requestedVersion} is not supported. Send ${API_CONTRACT_VERSION} or omit the ${API_VERSION_REQUEST_HEADER} header.`,
+      );
+    }
   }
 
   if (!policy.idempotencyKey) return;

@@ -1,3 +1,4 @@
+import { platformRequestHeaders } from '../../platform/platformHeaders';
 /**
  * Shape of apps/web/lib/support/diagnostics/types.ts. The server validates and
  * redacts it, so the command never writes a file the server has not cleaned.
@@ -98,7 +99,7 @@ export async function exportVsCodeDiagnostics(request: {
     headers: {
       Authorization: `Bearer ${request.token}`,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'vscode',
+      ...platformRequestHeaders(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ diagnostics }),

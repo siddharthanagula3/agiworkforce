@@ -4,12 +4,10 @@ import {
   type ManagedCloudSchedulesClient,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { getExtensionUserAgent } from '../../platform/version';
-import { SOURCE_SURFACE } from '../../platform/surface';
+import { platformRequestHeaders } from '../../platform/platformHeaders';
 
 export type ScheduleClientResolution =
-  | { status: 'ready'; client: ManagedCloudSchedulesClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: ManagedCloudSchedulesClient } | { status: 'signed-out' };
 
 export function createExtensionSchedulesClient(token: string): ManagedCloudSchedulesClient {
   return createManagedCloudSchedulesClient({
@@ -17,9 +15,7 @@ export function createExtensionSchedulesClient(token: string): ManagedCloudSched
     getHeaders: () => ({
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
-      'User-Agent': getExtensionUserAgent(),
-      'X-Client': 'vscode-extension',
-      'X-AGI-Surface': SOURCE_SURFACE,
+      ...platformRequestHeaders(),
     }),
   });
 }

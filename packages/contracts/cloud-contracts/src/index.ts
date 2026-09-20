@@ -13,6 +13,7 @@ export * from './artifact-index';
 export * from './library';
 export * from './managed-media';
 export * from './me';
+export * from './client-handshake';
 export * from './sync';
 export * from './managed-cloud-settings-client';
 export * from './projects';

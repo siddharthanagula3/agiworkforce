@@ -18,11 +18,12 @@ import { MINIMUM_SUPPORTED_RUNTIME_VERSION, PRODUCT_ANALYTICS_SURFACES } from '@
 
 import { API_VERSION_REQUEST_HEADER } from '@/lib/api-gateway-policy';
 
-import { CLIENT_VERSION_LABELS } from '../client-versions';
+import { CLIENT_VERSION_LABELS, UNKNOWN_CLIENT_VERSION_LABEL } from '../client-versions';
 import { attributeKey, dashboardPanels } from '../dashboards';
 import { MEDIA_ATTRIBUTE } from '../media-telemetry';
 import {
   SURFACE_REQUEST_HEADER,
+  UNKNOWN_PROTOCOL_LABEL,
   UNSUPPORTED_PROTOCOL_LABEL,
   httpRequestLabels,
   type HttpRequestLabels,
@@ -168,7 +169,7 @@ describe('a label a caller writes names the closed set it is checked against', (
         invented.map((n) => `${n + 4000}.${n}.${n}`),
         'clientVersion',
       ),
-    ]).toEqual([]);
+    ]).toEqual([UNKNOWN_CLIENT_VERSION_LABEL]);
     const protocols = produced(
       API_VERSION_REQUEST_HEADER,
       invented.map((n) => `v${n}`),
@@ -183,14 +184,24 @@ describe('a label a caller writes names the closed set it is checked against', (
     }
     for (const series of CLIENT_VERSION_LABELS) {
       const admitted = labelsFor(CLIENT_VERSION_HEADER, `${series}.9`).clientVersion;
-      expect(admitted === undefined || admitted === series, series).toBe(true);
+      expect(admitted === UNKNOWN_CLIENT_VERSION_LABEL || admitted === series, series).toBe(true);
     }
   });
 
-  it('drops a well-formed client version no release series admits', () => {
+  it('counts a well-formed client version no release series admits, without opening one', () => {
     for (const invented of ['999.4.1', '0.1.0', '1.0.0', '4000.0.0', '2026.44.1']) {
-      expect(labelsFor(CLIENT_VERSION_HEADER, invented).clientVersion, invented).toBeUndefined();
+      expect(labelsFor(CLIENT_VERSION_HEADER, invented).clientVersion, invented).toBe(
+        UNKNOWN_CLIENT_VERSION_LABEL,
+      );
     }
+  });
+
+  it('counts a build that names no version rather than leaving it out of the split', () => {
+    const labels = httpRequestLabels(() => null);
+
+    expect(labels.clientVersion).toBe(UNKNOWN_CLIENT_VERSION_LABEL);
+    expect(labels.protocolVersion).toBe(UNKNOWN_PROTOCOL_LABEL);
+    expect(CLIENT_VERSION_LABELS).toContain(UNKNOWN_CLIENT_VERSION_LABEL);
   });
 
   it('admits the runtime line from the registry floor and the calendar line the apps ship', () => {
@@ -203,7 +214,9 @@ describe('a label a caller writes names the closed set it is checked against', (
   });
 
   it('holds a runtime-line version to the floor and lets the calendar line through', () => {
-    expect(labelsFor(CLIENT_VERSION_HEADER, '1.0.0').clientVersion).toBeUndefined();
+    expect(labelsFor(CLIENT_VERSION_HEADER, '1.0.0').clientVersion).toBe(
+      UNKNOWN_CLIENT_VERSION_LABEL,
+    );
     expect(
       labelsFor(CLIENT_VERSION_HEADER, `${new Date().getUTCFullYear()}.9.1`).clientVersion,
     ).toBe(`${new Date().getUTCFullYear()}.9`);

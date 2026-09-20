@@ -1,4 +1,5 @@
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 /**
  * Shape of apps/web/lib/support/diagnostics/types.ts. The server validates and
@@ -87,7 +88,7 @@ export async function exportExtensionDiagnostics(
     headers: {
       Authorization: `Bearer ${token}`,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ diagnostics: collectExtensionDiagnostics(input) }),
