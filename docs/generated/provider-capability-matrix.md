@@ -5,7 +5,7 @@
 
 # Provider capability matrix
 
-Rendered from `packages/ai/model-registry/catalog/harnesses.json`, 37 harnesses in 4 groups.
+Rendered from `packages/ai/model-registry/catalog/harnesses.json`, 38 harnesses in 4 groups.
 
 Each row is one provider route. The feature columns report what the catalog
 says is **implemented** on that route, not what the provider is capable of.
@@ -50,6 +50,7 @@ Legend: ✅ implemented · ◐ partial · - unwired · · planned
 | `together/chat-completions` | together | chat_completions | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `vercel_gateway/chat-completions` | vercel_gateway | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ✅ |
 | `vercel_gateway/embeddings` | vercel_gateway | embeddings | managed_cloud | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
+| `vercel_gateway/evaluation` | vercel_gateway | evaluation | managed_cloud | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `workers-ai/chat-completions` | workers_ai | chat_completions | managed_cloud | managed-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `xai/chat-completions` | xai | chat_completions | managed_cloud, byok | byok-text | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
 | `zhipu-anthropic/messages` | zhipu_anthropic | messages | managed_cloud, byok | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  | ,  |
