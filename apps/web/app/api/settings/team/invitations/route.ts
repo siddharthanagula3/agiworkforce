@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { OrganizationPermission } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -21,6 +22,7 @@ import {
 } from '@/lib/services/organization-invitation-service';
 import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
 import { requireTeamAdminAccess } from '../team-admin-access';
+import { assertMembershipRoleWithinActor } from '../membership-role-ceiling';
 import { readOrganizationName, sendInvitationEmail } from './invitation-email';
 
 const ListQuerySchema = z.object({
@@ -37,7 +39,7 @@ async function requireOrgAdmin(
   db: ReturnType<typeof getNeonDb>,
   organizationId: string,
   userId: string,
-): Promise<OrganizationMemberRow> {
+): Promise<ReadonlySet<OrganizationPermission>> {
   const [membership] = await db.query<OrganizationMemberRow>(
     `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
@@ -49,13 +51,12 @@ async function requireOrgAdmin(
   if (!membership) {
     throw createError.forbidden('You are not a member of this organization');
   }
-  await requireMemberPermission(
+  return requireMemberPermission(
     organizationId,
     userId,
     'members.manage',
     'Your workspace role does not allow managing invitations.',
   );
-  return membership;
 }
 
 async function handleList(request: NextRequest) {
@@ -104,7 +105,16 @@ async function handleCreate(request: NextRequest) {
   const { organizationId, email, role } = parsed.data;
 
   await requireTeamAdminAccess(db, userId, organizationId);
-  await requireOrgAdmin(db, organizationId, userId);
+  const permissions = await requireOrgAdmin(db, organizationId, userId);
+
+  await assertMembershipRoleWithinActor({
+    organizationId,
+    actorUserId: userId,
+    subject: email,
+    actorPermissions: permissions,
+    role,
+    request,
+  });
 
   const { invitation, token } = await createInvitation(db, {
     organizationId,

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { OrganizationPermission } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -17,6 +18,7 @@ import { deprovisionMember } from '@/lib/services/deprovision-service';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { requireTeamAdminAccess } from '../team-admin-access';
+import { assertMembershipRoleWithinActor } from '../membership-role-ceiling';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { assertOwnerProtection, type OwnerAction } from '@/lib/services/organization-delegation';
 
@@ -34,11 +36,16 @@ function parseMemberId(raw: string): { organizationId: string; userId: string } 
   return { organizationId: match[1]!, userId: match[2]! };
 }
 
+interface RequesterAccess {
+  member: OrganizationMemberRow;
+  permissions: ReadonlySet<OrganizationPermission>;
+}
+
 async function requireAdminAccess(
   db: ReturnType<typeof getNeonDb>,
   organizationId: string,
   requesterId: string,
-): Promise<OrganizationMemberRow> {
+): Promise<RequesterAccess> {
   const [row] = await db.query<OrganizationMemberRow>(
     `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
      from public.organization_members
@@ -50,13 +57,13 @@ async function requireAdminAccess(
   if (!row) {
     throw createError.forbidden('You are not a member of this organization');
   }
-  await requireMemberPermission(
+  const permissions = await requireMemberPermission(
     organizationId,
     requesterId,
     'members.manage',
     'Your workspace role does not allow managing team members.',
   );
-  return row;
+  return { member: row, permissions };
 }
 
 /**
@@ -114,7 +121,7 @@ async function handleRemove(
         [organizationId],
       );
 
-      const requester = await requireAdminAccess(tx, organizationId, requesterId);
+      const { member: requester } = await requireAdminAccess(tx, organizationId, requesterId);
 
       if (targetUserId === requesterId) {
         throw createError.validation(
@@ -222,13 +229,26 @@ async function handleUpdateRole(
         [organizationId],
       );
 
-      const requester = await requireAdminAccess(tx, organizationId, requesterId);
+      const { member: requester, permissions } = await requireAdminAccess(
+        tx,
+        organizationId,
+        requesterId,
+      );
 
       if (newRole === 'owner') {
         throw createError.conflict(
           'An organization has exactly one owner. Use POST /api/settings/organization/transfer-ownership to move ownership.',
         );
       }
+
+      await assertMembershipRoleWithinActor({
+        organizationId,
+        actorUserId: requesterId,
+        subject: targetUserId,
+        actorPermissions: permissions,
+        role: newRole,
+        request,
+      });
 
       const [targetRow] = await tx.query<OrganizationMemberRow>(
         `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at

@@ -2,10 +2,14 @@
 // stages, and a later stage may only narrow what an earlier stage allowed.
 
 import {
+  BUILT_IN_ORGANIZATION_ROLES,
+  builtInRoleKeyForMembershipRole,
+  expandOrganizationPermissions,
   ORGANIZATION_PERMISSIONS,
   PRIMARY_OWNER_ONLY_PERMISSIONS,
   type OrganizationPermission,
 } from './permissions';
+import type { OrganizationRole } from './index';
 import type { SourceSurface } from '../suite-contracts';
 import type {
   WorkspaceControls,
@@ -180,6 +184,20 @@ export function permissionsBeyondGranter(
 ): OrganizationPermission[] {
   const held = new Set(granterPermissions);
   return [...new Set(requestedPermissions)].filter((permission) => !held.has(permission)).sort();
+}
+
+// Joining a workspace confers the member bundle, so handing it out is what members.manage means.
+// Everything above it answers to the ceiling: what the granter does not hold, nobody receives.
+export function membershipRolePermissionsBeyondGranter(
+  granterPermissions: Iterable<string>,
+  role: OrganizationRole,
+): OrganizationPermission[] {
+  const held = expandOrganizationPermissions(granterPermissions);
+  const baseline = new Set<OrganizationPermission>(BUILT_IN_ORGANIZATION_ROLES.member.permissions);
+  const conferred = BUILT_IN_ORGANIZATION_ROLES[builtInRoleKeyForMembershipRole(role)].permissions;
+  return [...new Set(conferred)]
+    .filter((permission) => !held.has(permission) && !baseline.has(permission))
+    .sort();
 }
 
 export interface SelfEscalationAttempt {
