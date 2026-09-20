@@ -24,13 +24,18 @@ failures use Unix-only paths, shell syntax, unsupported sandbox/archive assumpti
 process-global HOME mutation, or plaintext fixture connections held open during
 encrypted migration. Correct these fixtures without weakening production guards.
 Windows module/test cross-compilation and 114 local affected tests pass; native
-Windows runtime revalidation is still required. The next Linux run exposed one
-Git error-message assertion after 5,355 passes; its traversal and repository-escape
-cases are now separated, with eight focused cases passing. That follow-up awaits
-the current Windows result before another push. Linux, macOS, all-feature Clippy, JavaScript tests/builds, iOS, browser
-E2E/accessibility and security jobs passed on the same remote commit. CodeQL
-completed with zero open code-scanning alerts; Dependabot also reports zero open
-alerts. Codecov connection and deployment review remain separate blockers.
+Windows runtime revalidation is still required. Run `35509236785` compiled the
+candidate, but a Windows-only Piper test used a string method directly on an
+`anyhow::Error`, so the desktop test executable did not finish compiling and no
+native desktop tests ran. The corrected assertion compiles for the Windows target,
+and all seven Piper bundle tests pass locally. The same run exposed one Linux Git
+error-message assertion after 5,355 passes; its traversal and repository-escape
+cases are now separated, with eight focused cases passing. macOS, all-feature
+Clippy, JavaScript tests/builds, browser E2E/accessibility and security jobs passed
+on the same remote commit. CodeQL completed with zero open code-scanning alerts;
+Dependabot also reports zero open alerts. A fresh push must verify the complete
+Linux and native Windows jobs. Codecov connection and deployment review remain
+separate blockers.
 Evidence: `/tmp/agi-windows-d6def-clean.log`, `/tmp/agi-windows-uia-check.log`, and
 [deployment handoff](docs/work/deployment-handoff-2026-09-19.md).
 
@@ -59,11 +64,20 @@ The package-owned runner repair preserves all 23 projects and existing package
 floors, propagates failures, and merges fresh reports. The full run measured
 79.79% aggregate coverage with 33,710 passing tests and three stale signup-fixture
 failures. Those three now pass in a targeted rerun. Routing and sync package-floor
-gaps also pass after meaningful boundary tests. The next remote run `35505437305`
-measured 79.79% and exposed two web failures: missing Chromium and 64 MiB fixture
-compression exceeding the test timeout under instrumentation. The follow-up installs
-Chromium and uses a measured 256 KiB fixture above the same ratio ceiling; all 12
-focused browser/security cases and 20 harness checks pass. Remote revalidation remains pending.
+gaps also pass after meaningful boundary tests. Remote run `35505437305` measured
+79.79% and exposed two web failures: missing Chromium and 64 MiB fixture compression
+exceeding the test timeout under instrumentation. The follow-up installs Chromium
+and uses a measured 256 KiB fixture above the same ratio ceiling; all 12 focused
+browser/security cases and 20 harness checks pass. Run `35509236745` verified
+Chromium and measured 79.8% repository line coverage with every package floor
+intact. Its only test failure was a second archive fixture that spent the 5-second
+budget DEFLATE-compressing eleven 2 MB members before checking their declared
+expanded size. That fixture now uses ZIP STORE while preserving the same
+eleven-member, 22 MB declared expansion and the unchanged production limit; its
+focused rejection completes in 0.7 seconds. Jev selected this fixture-only repair
+at confidence 0.98, request
+`855208cf0b37b707aaa016f53037c7edae63d5c959262bb49d5bc565032f1965`.
+Fresh remote coverage revalidation is required.
 Codecov accepted GitHub OIDC issuance but rejected repository lookup with HTTP 404
 `Repository not found`; its browser setup is blocked at GitHub sign-in. Activate or
 repair the existing Codecov repository connection, then rerun the failed uploader.
