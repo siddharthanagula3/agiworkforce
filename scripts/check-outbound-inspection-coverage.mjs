@@ -19,16 +19,7 @@ const SCAN_ROOTS = ['apps/web/app', 'apps/web/lib', 'apps/web/features'];
  * owes the call and why; the guard refuses a new one, so the list can only
  * shrink.
  */
-const UNWIRED = [
-  {
-    channel: 'artifact_publish',
-    owed:
-      'apps/web/app/api/artifacts/publish/[token]/route.ts must call inspectOutboundContent ' +
-      "with channel 'artifact_publish' before it writes the published row.",
-    reason:
-      'Publishing an artifact puts its bytes behind a link that leaves the workspace, which is why secretPatternScanner already lists this channel. The route predates the inspection and is owned by the surface lane; until it calls in, a published artifact carrying a key is not scanned.',
-  },
-];
+const UNWIRED = [];
 
 const failures = [];
 const modulePath = path.join(scanRoot, MODULE);

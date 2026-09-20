@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { SecretHandlingMode } from '@agiworkforce/types';
+import { strictestSecretHandlingMode, type SecretHandlingMode } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
@@ -49,6 +49,12 @@ export const secretPatternScanner: OutboundContentScanner = {
   redact<T>(value: T): T {
     return redactSecretsFromValue(value).value;
   },
+};
+
+// A published artifact sits behind a link anyone can open, so warning the
+// publisher and shipping the credential anyway is not an available answer.
+const CHANNEL_MINIMUM_MODE: Partial<Record<OutboundChannel, SecretHandlingMode>> = {
+  artifact_publish: 'redact',
 };
 
 const scanners: OutboundContentScanner[] = [secretPatternScanner];
@@ -120,8 +126,9 @@ export async function inspectOutboundContent<T>(
   const redactable = findings.every((finding) =>
     applicable.some((scanner) => scanner.id === finding.scanner && scanner.redact),
   );
-  const requested: SecretHandlingMode =
-    policy.mode === 'redact' && !redactable ? 'block' : policy.mode;
+  const floor = CHANNEL_MINIMUM_MODE[input.channel];
+  const declared = floor ? strictestSecretHandlingMode(policy.mode, floor) : policy.mode;
+  const requested: SecretHandlingMode = declared === 'redact' && !redactable ? 'block' : declared;
   const mode: SecretHandlingMode = scannerFailed && requested !== 'warn' ? 'block' : requested;
   let verdict: OutboundVerdict<T>;
   if (mode === 'block') {

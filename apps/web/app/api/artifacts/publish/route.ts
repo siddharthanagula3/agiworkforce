@@ -10,9 +10,8 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
-import { recordAuditEvent } from '@/lib/security-audit';
-import { redactSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
-import { logger } from '@/lib/logger';
+import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
+import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import {
   MAX_CONTENT_CHARS,
   PUBLISHABLE_KINDS,
@@ -204,9 +203,18 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
   if (sharingGateResponse) return sharingGateResponse;
 
-  const secretDetections = scanForSecrets(parsed.data.content);
-  const publishContent =
-    secretDetections.length > 0 ? redactSecrets(parsed.data.content) : parsed.data.content;
+  const outbound = await inspectOutboundContent({
+    channel: 'artifact_publish',
+    value: parsed.data.content,
+    userId,
+    organizationId,
+    resourceId: parsed.data.artifactId,
+    resolveMode: () => resolveSecretHandlingPolicy(db, userId),
+  });
+  if (outbound.action === 'blocked') {
+    throw createError.validation(outbound.message);
+  }
+  const publishContent = outbound.value;
 
   let published;
   try {
@@ -246,27 +254,6 @@ async function handlePublish(request: NextRequest): Promise<Response> {
   } catch (error) {
     if (isPublishedArtifactSchemaUnavailable(error)) return publishingUnavailableResponse();
     throw error;
-  }
-
-  if (secretDetections.length > 0) {
-    const patternNames = [...new Set(secretDetections.map((detection) => detection.name))];
-    await recordAuditEvent({
-      userId,
-      organizationId,
-      eventType: 'secret_detected',
-      request,
-      outcome: 'success',
-      severity: 'info',
-      detail: {
-        resourceType: 'artifact_publish',
-        resourceId: published.token,
-        source: patternNames.join(','),
-        count: secretDetections.length,
-        status: 'redacted',
-      },
-    }).catch((error) => {
-      logger.error({ error, userId }, 'Failed to record secret-redaction audit event');
-    });
   }
 
   return NextResponse.json(
@@ -347,7 +334,7 @@ async function handleRestore(request: NextRequest): Promise<Response> {
     throw createError.validation('Invalid restore request', parsed.error.flatten());
   }
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   let restored: number;
   let publication: Awaited<ReturnType<typeof loadOwnedPublication>>;
@@ -366,6 +353,18 @@ async function handleRestore(request: NextRequest): Promise<Response> {
       throw createError.notFound(`Version ${parsed.data.version} is not in this artifact history.`);
     }
 
+    const outbound = await inspectOutboundContent({
+      channel: 'artifact_publish',
+      value: target.content,
+      userId,
+      organizationId,
+      resourceId: publication.artifactId,
+      resolveMode: () => resolveSecretHandlingPolicy(db, userId),
+    });
+    if (outbound.action === 'blocked') {
+      throw createError.validation(outbound.message);
+    }
+
     await publishArtifactRecord(db, {
       userId,
       artifactId: publication.artifactId,
@@ -373,7 +372,7 @@ async function handleRestore(request: NextRequest): Promise<Response> {
       kind: target.kind,
       conversationId: publication.conversationId,
       ...(target.language ? { language: target.language } : {}),
-      content: target.content,
+      content: outbound.value,
     });
 
     restored = await recordPublishedVersion(db, {
@@ -382,7 +381,7 @@ async function handleRestore(request: NextRequest): Promise<Response> {
       title: target.title,
       kind: target.kind,
       language: target.language,
-      content: target.content,
+      content: outbound.value,
     });
   } catch (error) {
     if (error instanceof PublishedArtifactValidationError) {
