@@ -23,6 +23,6 @@ alter table public.context_manifests
 
 -- destructive: removes this migration's ledger row so the runner can apply it again.
 delete from public.schema_migrations
- where filename = '0285_context_manifest_accounting.sql';
+ where filename = '0284_context_manifest_accounting.sql';
 
 commit;

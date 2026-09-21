@@ -999,7 +999,7 @@
       "kind": "prose",
       "sentence": "That column was never encrypted, it held plain text that every writer set to NULL, and the `device_authorization_bearer_columns` migration drops it and its sibling `refresh_token`.",
       "implementation": [
-        "apps/web/db/neon/0284_device_authorization_bearer_columns.sql",
+        "apps/web/db/neon/0292_device_authorization_bearer_columns.sql",
         "apps/web/lib/validate-env.ts"
       ],
       "proof": [
