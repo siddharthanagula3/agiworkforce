@@ -202,7 +202,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 }));
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
-vi.mock('../../components/ConversationTitleMenu', () => ({
+vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/ConversationTitleMenu')>()),
   ConversationTitleMenu: ({ onExport }: { onExport?: () => void }) =>
     onExport ? (
       <button type="button" data-testid="conversation-export" onClick={onExport}>

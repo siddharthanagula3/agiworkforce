@@ -1,4 +1,3 @@
-
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import type { DocumentFormat } from '../types/message-metadata';
@@ -151,17 +150,25 @@ export async function downloadAsDOCX(
   downloadBlob(blob, filename);
 }
 
-function parseMarkdownForPDF(content: string): Array<{
+export interface PdfExportLine {
   type: 'h1' | 'h2' | 'h3' | 'text' | 'bold' | 'code' | 'quote' | 'list';
   text: string;
   indent?: number;
-}> {
+}
+
+// A heading, a quote and a list item carry the same inline markers a paragraph
+// does. Only a code block keeps them, because there they are the content.
+function stripInlineMarkers(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '$1');
+}
+
+export function parseMarkdownForPDF(content: string): PdfExportLine[] {
   const lines = content.split('\n');
-  const parsed: Array<{
-    type: 'h1' | 'h2' | 'h3' | 'text' | 'bold' | 'code' | 'quote' | 'list';
-    text: string;
-    indent?: number;
-  }> = [];
+  const parsed: PdfExportLine[] = [];
 
   let inCodeBlock = false;
 
@@ -182,25 +189,19 @@ function parseMarkdownForPDF(content: string): Array<{
     }
 
     if (line.startsWith('# ')) {
-      parsed.push({ type: 'h1', text: line.substring(2) });
+      parsed.push({ type: 'h1', text: stripInlineMarkers(line.substring(2)) });
     } else if (line.startsWith('## ')) {
-      parsed.push({ type: 'h2', text: line.substring(3) });
+      parsed.push({ type: 'h2', text: stripInlineMarkers(line.substring(3)) });
     } else if (line.startsWith('### ')) {
-      parsed.push({ type: 'h3', text: line.substring(4) });
+      parsed.push({ type: 'h3', text: stripInlineMarkers(line.substring(4)) });
     } else if (line.startsWith('> ')) {
-      parsed.push({ type: 'quote', text: line.substring(2), indent: 5 });
+      parsed.push({ type: 'quote', text: stripInlineMarkers(line.substring(2)), indent: 5 });
     } else if (line.match(/^[*\-+]\s/)) {
-      parsed.push({ type: 'list', text: `• ${line.substring(2)}`, indent: 5 });
+      parsed.push({ type: 'list', text: `• ${stripInlineMarkers(line.substring(2))}`, indent: 5 });
     } else if (line.match(/^\d+\.\s/)) {
-      parsed.push({ type: 'list', text: line, indent: 5 });
+      parsed.push({ type: 'list', text: stripInlineMarkers(line), indent: 5 });
     } else {
-      const cleanText = line
-        .replace(/\*\*(.+?)\*\*/g, '$1')
-        .replace(/\*(.+?)\*/g, '$1')
-        .replace(/`(.+?)`/g, '$1')
-        .replace(/\[(.+?)\]\(.+?\)/g, '$1');
-
-      parsed.push({ type: 'text', text: cleanText });
+      parsed.push({ type: 'text', text: stripInlineMarkers(line) });
     }
   }
 

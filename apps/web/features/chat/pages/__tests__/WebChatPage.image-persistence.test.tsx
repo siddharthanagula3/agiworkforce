@@ -309,7 +309,10 @@ vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
   UpgradeConfirmDialog: () => null,
 }));
 vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
-vi.mock('../../components/ConversationTitleMenu', () => ({ ConversationTitleMenu: () => null }));
+vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/ConversationTitleMenu')>()),
+  ConversationTitleMenu: () => null,
+}));
 vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
 vi.mock('../../components/work-session/WorkSessionPanel', () => ({
   hasWorkSession: () => false,

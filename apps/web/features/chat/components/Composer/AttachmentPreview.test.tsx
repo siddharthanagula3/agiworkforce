@@ -44,3 +44,40 @@ describe('AttachmentPreview · the same file attached twice', () => {
     expect(onRemove).toHaveBeenCalledWith(1);
   });
 });
+
+describe('AttachmentPreview · where the files are going', () => {
+  const DESTINATION = 'AGI Cloud';
+
+  function onePreviewOfEachKind(): AttachmentPreviewData[] {
+    return [
+      {
+        file: new File(['png'], 'diagram.png', { type: 'image/png' }),
+        url: 'blob:image-1',
+        type: 'image',
+      },
+      {
+        file: new File(['pdf'], 'contract.pdf', { type: 'application/pdf' }),
+        url: 'blob:doc-1',
+        type: 'document',
+      },
+    ];
+  }
+
+  it('names the outbound destination on every staged attachment, whatever its kind', () => {
+    const previews = onePreviewOfEachKind();
+    render(
+      <AttachmentPreview previews={previews} onRemove={vi.fn()} privacyShortLabel={DESTINATION} />,
+    );
+
+    const labelled = screen.getAllByLabelText(`Outbound destination: ${DESTINATION}`);
+    expect(labelled).toHaveLength(previews.length);
+    for (const chip of labelled) expect(chip.textContent).toContain(DESTINATION);
+  });
+
+  it('says nothing about a destination when the surface has none to name', () => {
+    render(<AttachmentPreview previews={onePreviewOfEachKind()} onRemove={vi.fn()} />);
+
+    expect(screen.queryByLabelText(/outbound destination/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Remove diagram.png' })).toBeTruthy();
+  });
+});

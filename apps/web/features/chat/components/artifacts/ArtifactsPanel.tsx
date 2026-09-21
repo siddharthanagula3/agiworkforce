@@ -498,6 +498,7 @@ export function ArtifactsPanel() {
       {/* Panel */}
       <div
         ref={panelRef}
+        data-testid="artifacts-panel"
         role={isModalOverlay ? 'dialog' : undefined}
         aria-modal={isModalOverlay ? true : undefined}
         aria-label={isModalOverlay ? 'Artifacts' : undefined}
