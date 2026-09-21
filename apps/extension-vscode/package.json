@@ -54,7 +54,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "API endpoint, CLI path, model boundary, auto-apply, telemetry endpoint, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
+      "description": "API endpoint, CLI path, model boundary, auto-apply, telemetry endpoint, startup connection, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
       "restrictedConfigurations": [
         "agiWorkforce.apiEndpoint",
         "agiWorkforce.cliPath",
@@ -62,7 +62,8 @@
         "agiWorkforce.autoApplyFixes",
         "agiWorkforce.memory.enabled",
         "agiWorkforce.telemetryEnabled",
-        "agiWorkforce.telemetryEndpoint"
+        "agiWorkforce.telemetryEndpoint",
+        "agiWorkforce.activateOnStartup"
       ]
     },
     "virtualWorkspaces": {

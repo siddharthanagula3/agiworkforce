@@ -107,6 +107,7 @@ interface TestSession {
   templateId?: string;
   extraHosts?: readonly string[];
   computeMicrousdPerSecond?: number;
+  computeReservation?: typeof COMPUTE_RESERVATION;
 }
 
 const sessions = new Map<string, TestSession>();
@@ -1366,5 +1367,83 @@ describe('stopping a Code session without taking its workspace away', () => {
     await revokeE2BSessionCredentials(CODE_SCOPE as never);
 
     expect(sessions.get(scopeKey(CODE_SCOPE))?.sandboxId).toBe('sbx-stop');
+  });
+});
+
+describe('getE2BExecutor, one hold per admitted sandbox lifetime', () => {
+  beforeEach(() => {
+    sessions.clear();
+    listedSandboxes = [];
+    vi.clearAllMocks();
+  });
+
+  it('holds the lifetime once for a sandbox every later turn resumes', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-resume', 'user-resume');
+
+    await getE2BExecutor(conversation);
+    await getE2BExecutor(conversation);
+    await getE2BExecutor(conversation);
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(sessions.get(scopeKey(conversation))?.computeReservation).toEqual(COMPUTE_RESERVATION);
+  });
+
+  it('settles the one hold the sandbox was admitted under when it is torn down', async () => {
+    const { getE2BExecutor, killE2BSession } = await import('../runtime');
+    const conversation = scope('conv-settle', 'user-settle');
+
+    await getE2BExecutor(conversation);
+    await getE2BExecutor(conversation);
+    await killE2BSession(conversation as never);
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(meterSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ reservation: COMPUTE_RESERVATION }),
+    );
+  });
+
+  it('admits a replacement sandbox on its own hold when the old one is gone', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-replace', 'user-replace');
+
+    await getE2BExecutor(conversation);
+    connect.mockRejectedValueOnce(new Error('sandbox is gone'));
+    await getE2BExecutor(conversation);
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
+    expect(meterSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a replacement sandbox the account cannot pay for', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-replace-broke', 'user-replace-broke');
+    const causes: string[] = [];
+
+    await getE2BExecutor(conversation);
+    connect.mockRejectedValueOnce(new Error('sandbox is gone'));
+    reserveSandboxComputeInterval.mockResolvedValueOnce({
+      outcome: 'refused',
+      error: { status: 402, code: 'insufficient_credits' },
+    } as never);
+
+    await expect(getE2BExecutor(conversation, (cause) => causes.push(cause))).resolves.toBeNull();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(causes).toEqual(['over-quota']);
+  });
+
+  it('gives two conversations two holds', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor(scope('conv-first', 'user-both'));
+    await getE2BExecutor(scope('conv-second', 'user-both'));
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 });

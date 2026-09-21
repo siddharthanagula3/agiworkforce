@@ -190,6 +190,7 @@ mod tests {
     use super::*;
     use crate::features::plan::plan_mode::{Plan, PlanStep};
     use crate::models::Message;
+    use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
     use agiworkforce_protocol::code_domain::{
         ChangeKind, CodeSession, RepositoryChange, RepositorySnapshot,
     };
@@ -398,6 +399,8 @@ mod tests {
             kind: "exec".to_string(),
             summary: "run the deploy".to_string(),
             detail: "./deploy.sh".to_string(),
+            risk_level: Some(AgentEventApprovalRiskLevel::High),
+            reversible: Some(false),
         }];
 
         let admitted = developer_session_handoff(&session, context)

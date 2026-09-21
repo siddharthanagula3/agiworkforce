@@ -761,12 +761,18 @@ export const getE2BExecutor = tracedCodeAction(
 
     // The account holds the sandbox's whole admitted lifetime before the sandbox
     // exists, so an account over its quota is refused here rather than after it
-    // has already burned seconds it cannot pay for.
-    let computeReservation: SandboxComputeReservationRecord | undefined;
-    if (scope && planTier !== null) {
+    // has already burned seconds it cannot pay for. A resumed sandbox is that
+    // same admitted lifetime: it keeps the hold it was admitted under instead of
+    // opening another one for every turn that reconnects to it, and teardown
+    // settles the one hold whichever turn provisioned it.
+    let computeReservation: SandboxComputeReservationRecord | undefined =
+      existingSession?.computeReservation;
+    const holdSandboxLifetime = async (): Promise<E2BUnavailableCause | null> => {
+      const tier = planTier;
+      if (!scope || tier === null || computeReservation) return null;
       const reserved = await reserveSandboxComputeInterval({
         userId: scope.userId,
-        planTier,
+        planTier: tier,
         templateId: template,
         ...(conversationId ? { conversationId } : {}),
         ...(codeSessionId ? { codeSessionId } : {}),
@@ -778,14 +784,15 @@ export const getE2BExecutor = tracedCodeAction(
           { ...scopeLog(scope), code: reserved.error.code, status: reserved.error.status },
           '[e2b] refusing to provision: sandbox compute could not be reserved (fail-closed)',
         );
-        return unavailable(
-          reserved.error.status === 402 || reserved.error.status === 429
-            ? 'over-quota'
-            : 'no-capacity',
-        );
+        return reserved.error.status === 402 || reserved.error.status === 429
+          ? 'over-quota'
+          : 'no-capacity';
       }
       computeReservation = reserved.reservation;
-    }
+      return null;
+    };
+    const provisioningRefusal = await holdSandboxLifetime();
+    if (provisioningRefusal) return unavailable(provisioningRefusal);
     const abandonReservation = async (reason: string): Promise<null> => {
       if (scope && computeReservation) {
         await releaseSandboxComputeReservation({
@@ -888,7 +895,13 @@ export const getE2BExecutor = tracedCodeAction(
           { err, sandboxId: existingSession.sandboxId, ...scopeLog(scope) },
           '[e2b] resume failed; releasing the unreachable sandbox before creating a fresh one',
         );
+        // The unreachable sandbox's seconds were just settled against the hold
+        // it was admitted under, so the replacement needs an admission of its
+        // own rather than inheriting a reservation that is already closed.
         await releaseUnreachableSandbox(scope, existingSession);
+        computeReservation = undefined;
+        const replacementRefusal = await holdSandboxLifetime();
+        if (replacementRefusal) return unavailable(replacementRefusal);
         for (const key of Object.keys(contexts)) delete contexts[key];
         const fresh = await createFresh();
         if (!fresh) return abandonReservation('sandbox_create_failed');

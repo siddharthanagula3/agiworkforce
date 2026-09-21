@@ -2,7 +2,9 @@ use agiworkforce_app_server::{
     DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
     DeveloperSessionProcessor,
 };
-use agiworkforce_protocol::agent_events::AGENT_EVENT_SCHEMA_VERSION;
+use agiworkforce_protocol::agent_events::{
+    AgentEventApprovalRiskLevel, AGENT_EVENT_SCHEMA_VERSION,
+};
 use agiworkforce_protocol::developer_session::{
     method, AccountLoginOutcome, AccountLoginResponse, AccountLoginWaitParams,
     AccountLoginWaitResponse, AccountSource, AccountStatusParams, AccountStatusResponse,
@@ -215,6 +217,8 @@ impl DeveloperSessionHost for FakeHost {
                     kind: "Exec".to_string(),
                     summary: "Run tests".to_string(),
                     detail: "cargo test".to_string(),
+                    risk_level: Some(AgentEventApprovalRiskLevel::Medium),
+                    reversible: Some(true),
                 }],
             }),
         })
@@ -1754,6 +1758,8 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             kind: "Exec".to_string(),
             summary: "Run tests".to_string(),
             detail: "cargo test".to_string(),
+            risk_level: Some(AgentEventApprovalRiskLevel::Medium),
+            reversible: Some(true),
         }],
         last_turn: Some(HandoffLastTurn {
             turn_id: "turn-9".to_string(),

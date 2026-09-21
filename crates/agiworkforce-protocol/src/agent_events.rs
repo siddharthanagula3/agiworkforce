@@ -350,6 +350,15 @@ pub struct AgentEventError {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub retry_after_seconds: Option<u32>,
+    /// Mirrors `StreamChunkError.requestId`: the id the server logged this
+    /// failure under. A failure that happens after streaming has started never
+    /// reaches a status code or a JSON error body, so without this field it is
+    /// the one class of failure a reader can quote nothing about. The surfaces
+    /// that read this envelope, rather than the web wire, had no id at all
+    /// until it existed here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub request_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
@@ -868,10 +877,41 @@ mod tests {
             code: Some("stream_disconnected".to_string()),
             retryable: Some(true),
             retry_after_seconds: Some(2),
+            request_id: Some("req_7f3a".to_string()),
         })));
         assert_round_trips(&sample_envelope(AgentEvent::Stop(AgentEventStop {
             reason: AgentEventStopReason::Error,
         })));
+    }
+
+    /// The id a reader quotes to support travels on this envelope, which is
+    /// the only path the terminal and the editor read; a surface that has it
+    /// nowhere can only tell a reader that something went wrong.
+    #[test]
+    fn a_failure_carries_the_id_the_server_logged_it_under() {
+        let carried = sample_envelope(AgentEvent::Error(AgentEventError {
+            message: "upstream disconnected".to_string(),
+            code: None,
+            retryable: None,
+            retry_after_seconds: None,
+            request_id: Some("req_7f3a".to_string()),
+        }));
+        let wire = serde_json::to_value(&carried).expect("serialize");
+        assert_eq!(wire["event"]["requestId"], "req_7f3a");
+
+        let absent = sample_envelope(AgentEvent::Error(AgentEventError {
+            message: "upstream disconnected".to_string(),
+            code: None,
+            retryable: None,
+            retry_after_seconds: None,
+            request_id: None,
+        }));
+        let wire = serde_json::to_value(&absent).expect("serialize");
+        assert!(
+            wire["event"].get("requestId").is_none(),
+            "a host with no id sends no field rather than a placeholder: {wire}"
+        );
+        assert_round_trips(&absent);
     }
 
     #[test]

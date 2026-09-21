@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 
-use crate::agent_events::{AGENT_EVENT_SCHEMA_VERSION, AgentEvent, AgentEventEnvelope};
+use crate::agent_events::{
+    AGENT_EVENT_SCHEMA_VERSION, AgentEvent, AgentEventApprovalRiskLevel, AgentEventEnvelope,
+};
 use crate::protocol::ReviewDecision;
 use crate::task_state::{AgentTaskState, AgentTaskStateChanged};
 use crate::user_input::UserInput;
@@ -672,6 +674,18 @@ pub struct PendingApprovalSnapshot {
     pub kind: String,
     pub summary: String,
     pub detail: String,
+    /// How hard the host wants the user to think before allowing this. The
+    /// host classifies the call it is about to make; a client that renders an
+    /// approval without this is asking the user to classify it themselves.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub risk_level: Option<AgentEventApprovalRiskLevel>,
+    /// Whether allowing this leaves the user able to put things back. Absent
+    /// when the host did not decide, which a client must read as "not stated",
+    /// never as "yes".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reversible: Option<bool>,
 }
 
 /// Everything a client needs to render a turn it joined mid-flight.
@@ -1091,23 +1105,69 @@ pub enum TurnFailureCode {
     AccountSignedOut,
     /// Signed in, but the account's plan does not include the model.
     PlanExcludesModel,
+    /// The account reached a usage limit its own plan sets. The model and the
+    /// credential are both fine; the reader has spent what this billing window
+    /// gives them.
+    UsageLimitReached,
     /// A credential exists and the provider rejected it.
     ProviderAuthInvalid,
+    /// The provider is refusing new requests for a moment. A caller that waits
+    /// and sends the same turn again can expect it to run.
     ProviderRateLimited,
+    /// The allowance every reader on the free plan shares is spent. This is
+    /// not a limit on the reader's own account and not a momentary rate limit:
+    /// it reopens on the provider's schedule, not on a retry.
+    FreeAllowanceExhausted,
     /// The provider answered without a usable response.
     ProviderUnavailable,
+    /// The provider had begun answering and the connection ended before the
+    /// answer did. Nobody asked for it to stop, which is what separates this
+    /// from [`TurnFailureCode::Interrupted`].
+    StreamInterrupted,
     ContextWindowExceeded,
+    /// The answer reached the model's maximum output length and stopped there.
+    /// The turn ran; it is the length of the reply that was cut, so sending
+    /// the identical turn again produces the identical truncation.
+    OutputLimitReached,
+    /// The provider's safety layer stopped the response. Named separately from
+    /// every other refusal because the remedy is to rephrase the request, not
+    /// to change a model, a key or a plan.
+    RefusedBySafety,
     /// The request never reached the provider.
     Network,
     /// A tool call was refused, at the approval prompt or by policy.
     ToolDenied,
-    /// The user or the client stopped the turn.
+    /// The user or the client cancelled the turn. A turn nobody cancelled that
+    /// stopped part way through is [`TurnFailureCode::StreamInterrupted`].
     Interrupted,
     Timeout,
     /// The turn was rejected before any provider call.
     InvalidRequest,
     Unknown,
 }
+
+/// Every failure code on the wire, so a surface that renders failures can be
+/// held to the whole set rather than to the members someone remembered.
+pub const TURN_FAILURE_CODES: &[TurnFailureCode] = &[
+    TurnFailureCode::ProviderAuthMissing,
+    TurnFailureCode::AccountSignedOut,
+    TurnFailureCode::PlanExcludesModel,
+    TurnFailureCode::UsageLimitReached,
+    TurnFailureCode::ProviderAuthInvalid,
+    TurnFailureCode::ProviderRateLimited,
+    TurnFailureCode::FreeAllowanceExhausted,
+    TurnFailureCode::ProviderUnavailable,
+    TurnFailureCode::StreamInterrupted,
+    TurnFailureCode::ContextWindowExceeded,
+    TurnFailureCode::OutputLimitReached,
+    TurnFailureCode::RefusedBySafety,
+    TurnFailureCode::Network,
+    TurnFailureCode::ToolDenied,
+    TurnFailureCode::Interrupted,
+    TurnFailureCode::Timeout,
+    TurnFailureCode::InvalidRequest,
+    TurnFailureCode::Unknown,
+];
 
 /// What a client should offer the user next.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1142,7 +1202,25 @@ pub struct TurnFailure {
     pub provider: Option<String>,
     pub retryable: bool,
     pub action: TurnFailureAction,
+    /// How long to wait before sending the turn again, in seconds, and only
+    /// ever the figure a provider itself supplied. A surface states a wait
+    /// when this is present and states none when it is not: a reader who waits
+    /// out a number nobody sent, and fails again, stops believing the next one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub retry_after_seconds: Option<u32>,
+    /// The id the host recorded this failure under, so a reader has one string
+    /// to quote that finds the turn. Absent when the host recorded none, never
+    /// a placeholder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub request_id: Option<String>,
 }
+
+/// A day is the longest wait worth stating. Past it the figure is a provider's
+/// clock skew or a header read wrong, and a sentence built on it is worse than
+/// no sentence at all.
+pub const MAX_STATED_RETRY_AFTER_SECONDS: u32 = 86_400;
 
 impl TurnFailure {
     pub fn new(code: TurnFailureCode, message: impl Into<String>) -> Self {
@@ -1152,6 +1230,8 @@ impl TurnFailure {
             provider: None,
             retryable: code.is_retryable(),
             action: code.default_action(),
+            retry_after_seconds: None,
+            request_id: None,
         }
     }
 
@@ -1160,22 +1240,52 @@ impl TurnFailure {
         self
     }
 
+    /// Carry a wait a provider stated. A figure outside the statable range is
+    /// dropped here rather than in each surface, so no client can decide on
+    /// its own to show a reader a wait of eleven days.
+    pub fn with_retry_after_seconds(mut self, seconds: impl Into<Option<u64>>) -> Self {
+        self.retry_after_seconds = seconds
+            .into()
+            .filter(|value| (1..=u64::from(MAX_STATED_RETRY_AFTER_SECONDS)).contains(value))
+            .map(|value| value as u32);
+        self
+    }
+
+    pub fn with_request_id(mut self, request_id: impl Into<Option<String>>) -> Self {
+        self.request_id = request_id.into().filter(|value| !value.trim().is_empty());
+        self
+    }
+
     /// Fallback for the shared engine's errors, so a host with its own richer
     /// taxonomy cannot drift into a separate code set.
     pub fn from_agiworkforce_err(error: &crate::error::AgiworkforceErr) -> Self {
+        Self::from_agiworkforce_err_at(error, Utc::now())
+    }
+
+    /// The clock is a parameter so the wait a reset instant becomes is decided
+    /// by one rule that a test can hold still, rather than by whatever moment
+    /// the conversion happened to run in.
+    pub fn from_agiworkforce_err_at(
+        error: &crate::error::AgiworkforceErr,
+        now: DateTime<Utc>,
+    ) -> Self {
         use crate::error::AgiworkforceErr as E;
         let code = match error {
             E::ContextWindowExceeded => TurnFailureCode::ContextWindowExceeded,
             E::Interrupted | E::TurnAborted => TurnFailureCode::Interrupted,
             E::Timeout => TurnFailureCode::Timeout,
             E::ConnectionFailed(_) => TurnFailureCode::Network,
-            E::UsageLimitReached(_) | E::QuotaExceeded => TurnFailureCode::ProviderRateLimited,
+            // The account has spent what its own plan gives it. Reported as a
+            // provider rate limit, this sent readers to wait out a moment that
+            // was never going to pass and to blame a provider that was fine.
+            E::UsageLimitReached(_) | E::QuotaExceeded => TurnFailureCode::UsageLimitReached,
             E::RefreshTokenFailed(_) => TurnFailureCode::ProviderAuthInvalid,
             E::UsageNotIncluded => TurnFailureCode::ProviderAuthMissing,
-            E::Stream(..)
-            | E::ServerOverloaded
+            // The provider was answering and the connection ended first, which
+            // a reader treats differently from a provider that never answered.
+            E::Stream(..) | E::ResponseStreamFailed(_) => TurnFailureCode::StreamInterrupted,
+            E::ServerOverloaded
             | E::InternalServerError
-            | E::ResponseStreamFailed(_)
             | E::RetryLimit(_)
             | E::UnexpectedStatus(_) => TurnFailureCode::ProviderUnavailable,
             E::InvalidRequest(_)
@@ -1189,7 +1299,17 @@ impl TurnFailure {
             }
             _ => TurnFailureCode::Unknown,
         };
-        Self::new(code, error.to_string())
+        let failure = Self::new(code, error.to_string())
+            .with_request_id(error.request_id().map(str::to_owned));
+        match error {
+            E::UsageLimitReached(limit) => {
+                failure.with_retry_after_seconds(limit.seconds_until_reset(now))
+            }
+            E::Stream(_, delay) => {
+                failure.with_retry_after_seconds(delay.map(|delay| delay.as_secs()))
+            }
+            _ => failure,
+        }
     }
 }
 
@@ -1199,6 +1319,7 @@ impl TurnFailureCode {
             self,
             TurnFailureCode::ProviderRateLimited
                 | TurnFailureCode::ProviderUnavailable
+                | TurnFailureCode::StreamInterrupted
                 | TurnFailureCode::Network
                 | TurnFailureCode::Timeout
         )
@@ -1216,9 +1337,19 @@ impl TurnFailureCode {
             }
             TurnFailureCode::ProviderRateLimited
             | TurnFailureCode::ProviderUnavailable
+            | TurnFailureCode::StreamInterrupted
             | TurnFailureCode::Network
             | TurnFailureCode::Timeout => TurnFailureAction::Retry,
-            TurnFailureCode::ToolDenied
+            // Sending the identical turn again reproduces every one of these:
+            // a spent allowance reopens on a clock, a truncated answer
+            // truncates again, a refusal refuses again, and a usage limit is
+            // the account's own. Offering Retry would be offering the same
+            // failure, so the surface offers another model or nothing.
+            TurnFailureCode::FreeAllowanceExhausted
+            | TurnFailureCode::UsageLimitReached
+            | TurnFailureCode::OutputLimitReached
+            | TurnFailureCode::RefusedBySafety
+            | TurnFailureCode::ToolDenied
             | TurnFailureCode::Interrupted
             | TurnFailureCode::Unknown => TurnFailureAction::None,
         }
@@ -2573,6 +2704,8 @@ mod tests {
                 kind: "exec".to_string(),
                 summary: "run the migration".to_string(),
                 detail: "psql -f migrate.sql".to_string(),
+                risk_level: Some(AgentEventApprovalRiskLevel::High),
+                reversible: Some(false),
             }],
             last_turn: Some(HandoffLastTurn {
                 turn_id: "turn-9".to_string(),

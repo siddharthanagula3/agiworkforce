@@ -2989,11 +2989,14 @@ fn approval_callback(
         let notifications = notifications.clone();
         Box::pin(async move {
             let request_id = request.id.to_string();
+            let risk = request.kind.risk();
             let snapshot = PendingApprovalSnapshot {
                 request_id: request_id.clone(),
                 kind: format!("{:?}", request.kind),
                 summary: request.summary.clone(),
                 detail: request.detail.join("\n"),
+                risk_level: Some(risk.level),
+                reversible: Some(risk.reversible),
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -3022,6 +3025,8 @@ fn approval_callback(
                     "kind": snapshot.kind,
                     "summary": snapshot.summary,
                     "detail": snapshot.detail,
+                    "riskLevel": snapshot.risk_level,
+                    "reversible": snapshot.reversible,
                 }),
             ) {
                 let _ = notifications.send(notification);
@@ -3659,6 +3664,7 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 mod tests {
     use super::*;
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
+    use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
     use agiworkforce_protocol::agent_events::AgentEventToolCategory;
     use agiworkforce_protocol::developer_session::TurnFailureAction;
     use tempfile::tempdir;
@@ -5410,6 +5416,11 @@ mod tests {
             notification.params["detail"], "cargo test\nworkspace: project",
             "the typed JSONL client requires one display string"
         );
+        // The CLI classifies the call before it asks. Sending the four display
+        // fields alone left an editor's approval card asking the user to judge
+        // `rm -rf build` and `ls` by eye.
+        assert_eq!(notification.params["riskLevel"], "medium");
+        assert_eq!(notification.params["reversible"], false);
 
         let approval = pending
             .lock()
@@ -6762,6 +6773,8 @@ mod tests {
                     kind: "Exec".to_string(),
                     summary: "Run the test suite".to_string(),
                     detail: "cargo test".to_string(),
+                    risk_level: Some(AgentEventApprovalRiskLevel::Medium),
+                    reversible: Some(false),
                 },
                 responder,
             },

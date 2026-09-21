@@ -1,7 +1,11 @@
 import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { type Readable, type Writable } from 'node:stream';
 import { z } from 'zod';
-import type { TurnFailureAction, TurnFailureCode } from '@agiworkforce/types/protocol';
+import type {
+  AgentEventApprovalRiskLevel,
+  TurnFailureAction,
+  TurnFailureCode,
+} from '@agiworkforce/types/protocol';
 import type {
   AppServerCapabilities,
   AppServerNotification,
@@ -407,10 +411,15 @@ const TURN_FAILURE_CODE_KNOWN: Record<TurnFailureCode, true> = {
   provider_auth_missing: true,
   account_signed_out: true,
   plan_excludes_model: true,
+  usage_limit_reached: true,
   provider_auth_invalid: true,
   provider_rate_limited: true,
+  free_allowance_exhausted: true,
   provider_unavailable: true,
+  stream_interrupted: true,
   context_window_exceeded: true,
+  output_limit_reached: true,
+  refused_by_safety: true,
   network: true,
   tool_denied: true,
   interrupted: true,
@@ -418,6 +427,15 @@ const TURN_FAILURE_CODE_KNOWN: Record<TurnFailureCode, true> = {
   invalid_request: true,
   unknown: true,
 };
+const APPROVAL_RISK_LEVEL_KNOWN: Record<AgentEventApprovalRiskLevel, true> = {
+  low: true,
+  medium: true,
+  high: true,
+};
+const APPROVAL_RISK_LEVELS = Object.keys(APPROVAL_RISK_LEVEL_KNOWN) as [
+  AgentEventApprovalRiskLevel,
+  ...AgentEventApprovalRiskLevel[],
+];
 const TURN_FAILURE_ACTION_KNOWN: Record<TurnFailureAction, true> = {
   sign_in_provider: true,
   sign_in_account: true,
@@ -440,6 +458,10 @@ const turnFailureSchema = z.object({
   provider: z.string().min(1).max(200).optional(),
   retryable: z.boolean(),
   action: z.enum(TURN_FAILURE_ACTIONS).catch('none'),
+  // Carried as the host sent it. Which figures are worth saying out loud is
+  // decided once, where the failure becomes words, not twice.
+  retryAfterSeconds: z.number().int().positive().optional().catch(undefined),
+  requestId: z.string().min(1).max(200).optional().catch(undefined),
 });
 const turnTerminalEventSchema = z.object({
   threadId: z.string().min(1),
@@ -458,6 +480,11 @@ const approvalRequestedEventSchema = z.object({
   kind: z.string(),
   summary: z.string(),
   detail: z.string(),
+  // The host classified the call before it asked. A runtime that sends
+  // neither leaves both absent, and the card says so rather than assuming the
+  // gentler answer.
+  riskLevel: z.enum(APPROVAL_RISK_LEVELS).optional().catch(undefined),
+  reversible: z.boolean().optional().catch(undefined),
 });
 const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),

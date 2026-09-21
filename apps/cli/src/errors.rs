@@ -1,4 +1,5 @@
 use agiworkforce_protocol::developer_session::{TurnFailure, TurnFailureCode};
+use agiworkforce_protocol::error::AgiworkforceErr;
 use regex::Regex;
 use std::fmt;
 use std::sync::LazyLock;
@@ -319,12 +320,19 @@ pub fn terminal_text(error: &anyhow::Error) -> String {
 /// beside the text so a script reads them without parsing prose.
 pub fn result_error_json(error: &anyhow::Error) -> serde_json::Value {
     let cli = cli_cause(error);
+    let failure = cli.map(CliError::turn_failure);
     serde_json::json!({
         "type": "result",
         "is_error": true,
         "error": format!("{error:#}"),
         "kind": cli.map(CliError::kind),
         "hint": cli.map(CliError::hint),
+        // The same two facts every other surface shows, where a script reads
+        // them instead of parsing them back out of the sentence.
+        "retry_after_seconds": failure.as_ref().and_then(|failure| failure.retry_after_seconds),
+        "reference": engine_cause(error)
+            .and_then(AgiworkforceErr::request_id)
+            .or_else(|| failure.as_ref().and_then(|failure| failure.request_id.as_deref())),
     })
 }
 
@@ -332,6 +340,14 @@ fn cli_cause(error: &anyhow::Error) -> Option<&CliError> {
     error
         .chain()
         .find_map(|cause| cause.downcast_ref::<CliError>())
+}
+
+/// The shared engine's own error, when one is in the chain. It carries the
+/// reference the CLI's own error type never had.
+fn engine_cause(error: &anyhow::Error) -> Option<&AgiworkforceErr> {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<AgiworkforceErr>())
 }
 
 // ---------------------------------------------------------------------------
@@ -637,12 +653,13 @@ impl CliError {
                 (TurnFailureCode::ProviderRateLimited, Some(provider))
             }
             // A paywall is a quota the account has spent, not a broken
-            // credential: the same shape as a rate limit, and the remedy is
-            // the plan rather than a sign-in.
+            // credential and not the provider refusing traffic: the remedy is
+            // the plan, and a reader told to retry in a moment waits out a
+            // window that only the billing period reopens.
             CliError::AccountSignedOut { .. } => (TurnFailureCode::AccountSignedOut, None),
             CliError::PlanExcludesModel { .. } => (TurnFailureCode::PlanExcludesModel, None),
             CliError::ModelUnavailable { .. } => (TurnFailureCode::ProviderUnavailable, None),
-            CliError::Paywall { .. } => (TurnFailureCode::ProviderRateLimited, None),
+            CliError::Paywall { .. } => (TurnFailureCode::UsageLimitReached, None),
             CliError::Api {
                 provider, status, ..
             } => (
@@ -655,8 +672,11 @@ impl CliError {
                 },
                 Some(provider),
             ),
+            // The provider had begun answering and the connection ended, which
+            // is not the same failure as a provider that never answered: the
+            // reply the reader can see is real and only the rest is missing.
             CliError::StreamError { provider, .. } => {
-                (TurnFailureCode::ProviderUnavailable, Some(provider))
+                (TurnFailureCode::StreamInterrupted, Some(provider))
             }
             CliError::Network { .. } => (TurnFailureCode::Network, None),
             CliError::ContextOverflow { .. } => (TurnFailureCode::ContextWindowExceeded, None),
@@ -665,6 +685,14 @@ impl CliError {
             CliError::ClientUpdateRequired { .. } => (TurnFailureCode::InvalidRequest, None),
         };
         let failure = TurnFailure::new(code, self.detail());
+        // Only a figure the provider itself sent in `Retry-After` ever becomes
+        // a wait a surface states.
+        let failure = match self {
+            CliError::RateLimited { retry_after, .. } => {
+                failure.with_retry_after_seconds(*retry_after)
+            }
+            _ => failure,
+        };
         match (provider, self) {
             (Some(provider), _) => failure.with_provider(provider.clone()),
             (None, CliError::ModelUnavailable { .. }) => failure.with_provider(
@@ -913,6 +941,77 @@ mod tests {
         assert!(json["hint"].as_str().unwrap().contains("agi login"));
         let plain = result_error_json(&anyhow::anyhow!("plain"));
         assert!(plain["kind"].is_null() && plain["hint"].is_null());
+    }
+
+    /// A script reads the wait and the reference as fields. Before they were
+    /// carried, the only way to get either was to parse them back out of the
+    /// English sentence, which changes whenever the copy does.
+    #[test]
+    fn the_json_result_carries_the_wait_and_the_reference_as_fields() {
+        let timed = result_error_json(&anyhow::Error::new(CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: Some(45),
+        }));
+        assert_eq!(timed["retry_after_seconds"], 45);
+
+        let untimed = result_error_json(&anyhow::Error::new(CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: None,
+        }));
+        assert!(
+            untimed["retry_after_seconds"].is_null(),
+            "no header, no figure: {untimed}"
+        );
+        assert!(untimed["reference"].is_null());
+
+        let referenced = result_error_json(&anyhow::Error::new(
+            agiworkforce_protocol::error::AgiworkforceErr::RetryLimit(
+                agiworkforce_protocol::error::RetryLimitReachedError {
+                    status: reqwest::StatusCode::SERVICE_UNAVAILABLE,
+                    request_id: Some("req_7f3a".to_string()),
+                },
+            ),
+        ));
+        assert_eq!(referenced["reference"], "req_7f3a");
+    }
+
+    /// The wait a provider asked for reaches the clients that render it, and
+    /// nothing else does. A figure the CLI made up is worse than no figure.
+    #[test]
+    fn the_typed_failure_carries_only_a_wait_the_provider_sent() {
+        let timed = CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: Some(45),
+        }
+        .turn_failure();
+        assert_eq!(timed.code, TurnFailureCode::ProviderRateLimited);
+        assert_eq!(timed.retry_after_seconds, Some(45));
+
+        let untimed = CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: None,
+        }
+        .turn_failure();
+        assert_eq!(untimed.retry_after_seconds, None);
+
+        // A spent account quota is the reader's own limit, and a connection
+        // that ended part way through is not a provider that never answered.
+        assert_eq!(
+            CliError::paywall("chat", "pro", "quota")
+                .turn_failure()
+                .code,
+            TurnFailureCode::UsageLimitReached
+        );
+        assert_eq!(
+            CliError::StreamError {
+                provider: "deepseek".to_string(),
+                message: "dropped".to_string(),
+                is_retryable: true,
+            }
+            .turn_failure()
+            .code,
+            TurnFailureCode::StreamInterrupted
+        );
     }
 
     #[test]

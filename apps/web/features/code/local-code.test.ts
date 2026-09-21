@@ -200,6 +200,96 @@ describe('local code surface', () => {
     );
   });
 
+  it('says a spent free allowance is shared by the plan, not a limit on this account', () => {
+    const sentence = localTurnFailureSentence({
+      code: 'free_allowance_exhausted',
+      message: '[open_router] Rate limit exceeded: free-models-per-day',
+      provider: 'open_router',
+      action: 'none',
+      retryable: false,
+    });
+
+    expect(sentence).toBe(
+      "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on this account. It reopens on the provider's own schedule, so send it again later.",
+    );
+    // A Free account has no other model to move to, so an offer to choose one
+    // is an instruction the reader cannot follow.
+    expect(sentence).not.toMatch(/auto|another model|choose a model/iu);
+    expect(sentence).not.toContain('free-models-per-day');
+  });
+
+  it('separates the reader’s own usage limit from a limit their plan shares', () => {
+    const own = localTurnFailureSentence({
+      code: 'usage_limit_reached',
+      message: 'Quota exceeded.',
+      provider: null,
+      action: 'none',
+      retryable: false,
+    });
+
+    expect(own).toBe(
+      'This account has reached a usage limit its plan sets. Open Usage to see when it resets, then send it again.',
+    );
+    expect(own).not.toBe(
+      localTurnFailureSentence({
+        code: 'free_allowance_exhausted',
+        message: 'Quota exceeded.',
+        provider: null,
+        action: 'none',
+        retryable: false,
+      }),
+    );
+  });
+
+  it('says a response stopped part way through rather than that nothing answered', () => {
+    const interrupted = localTurnFailureSentence({
+      code: 'stream_interrupted',
+      message: '[deepseek] Stream error: connection reset',
+      provider: 'deepseek',
+      action: 'retry',
+      retryable: true,
+    });
+
+    expect(interrupted).toBe(
+      'DeepSeek stopped part way through the response. Send it again to get the rest.',
+    );
+    expect(interrupted).not.toMatch(/could not be reached/iu);
+    // A failure the CLI reported without naming a route still gets a sentence.
+    expect(
+      localTurnFailureSentence({
+        code: 'stream_interrupted',
+        message: '[deepseek] Stream error: connection reset',
+        provider: null,
+        action: 'retry',
+        retryable: true,
+      }),
+    ).toBe('The response stopped part way through. Send it again to get the rest.');
+  });
+
+  it('names a truncated answer and a refusal as themselves, never as the CLI line', () => {
+    const cliLine = 'x';
+    expect(
+      localTurnFailureSentence({
+        code: 'output_limit_reached',
+        message: cliLine,
+        provider: 'deepseek',
+        action: 'none',
+        retryable: false,
+      }),
+    ).toBe(
+      "The answer reached this model's maximum length and stopped there. Ask for a shorter answer, or split the request.",
+    );
+    expect(
+      localTurnFailureSentence({
+        code: 'refused_by_safety',
+        message: cliLine,
+        provider: 'deepseek',
+        action: 'none',
+        retryable: false,
+      }),
+    ).toBe('The safety system stopped this response. Rephrase the request and send it again.');
+  });
+
   it('keeps the CLI line for a failure it has nothing better to say about', () => {
     expect(
       localTurnFailureSentence({
