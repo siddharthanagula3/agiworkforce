@@ -143,10 +143,10 @@ describe('the whole-surface boundary', () => {
   it('never paints the raw failure into the page', () => {
     render(
       <ErrorBoundary>
-        <Exploding shouldThrow message="postgres://user:hunter2@db/app timed out" />
+        <Exploding shouldThrow message="postgres://user:PLACEHOLDER@db.example.com/app timed out" />
       </ErrorBoundary>,
     );
 
-    expect(document.body.textContent).not.toContain('hunter2');
+    expect(document.body.textContent).not.toContain('PLACEHOLDER');
   });
 });

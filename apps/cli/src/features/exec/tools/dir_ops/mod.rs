@@ -437,8 +437,8 @@ mod tests {
             "src/billing.rs:12:const KEY_NAME: &str = \"STRIPE_KEY\";\n\
              .env:3:STRIPE_SECRET_KEY={WITHHELD_VALUE}\n\
              apps/web/.env.production:1:DATABASE_URL=postgres://user:pw@host/db\n\
-             deploy/id_rsa:1:-----BEGIN OPENSSH PRIVATE KEY-----\n\
-             certs/server.pem:1:-----BEGIN PRIVATE KEY-----\n\
+             deploy/id_rsa:1:OPENSSH_KEY_BODY_PLACEHOLDER\n\
+             certs/server.pem:1:PEM_KEY_BODY_PLACEHOLDER\n\
              docs/setup.md:9:copy .env.example to .env\n"
         );
 
@@ -449,8 +449,8 @@ mod tests {
             "a credential value reached the model: {answer}"
         );
         assert!(!answer.contains("postgres://user:pw@host/db"), "{answer}");
-        assert!(!answer.contains("BEGIN OPENSSH PRIVATE KEY"), "{answer}");
-        assert!(!answer.contains("BEGIN PRIVATE KEY"), "{answer}");
+        assert!(!answer.contains("OPENSSH_KEY_BODY_PLACEHOLDER"), "{answer}");
+        assert!(!answer.contains("PEM_KEY_BODY_PLACEHOLDER"), "{answer}");
         assert!(answer.contains("src/billing.rs:12:"), "{answer}");
         assert!(answer.contains("docs/setup.md:9:"), "{answer}");
         assert!(
