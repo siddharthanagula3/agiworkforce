@@ -251,7 +251,9 @@ describe('organization invitation lifecycle routes', () => {
         };
 
         expect(body.delivery.emailSent).toBe(false);
-        expect(body.delivery.reason).toContain('rejected');
+        expect(body.delivery.reason).toContain('could not be delivered');
+        // The provider's own code and detail stay in the log, never in the reader's sentence.
+        expect(body.delivery.reason).not.toMatch(/rejected|422|domain not verified/);
         expect(body.inviteToken).toMatch(/^[A-Za-z0-9_-]{20,}$/);
       } finally {
         delete process.env['RESEND_API_KEY'];

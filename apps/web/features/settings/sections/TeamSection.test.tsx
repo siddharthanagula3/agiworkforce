@@ -387,7 +387,47 @@ describe('TeamSection', () => {
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
-    expect(screen.getByText(/No email is sent yet/i)).toBeVisible();
+    expect(screen.queryByText(/No email is sent yet/i)).toBeNull();
+  });
+
+  it.each([
+    [
+      { emailSent: true as const },
+      'An invitation email was sent to member@example.com. This link does the same thing if it does not arrive.',
+    ],
+    [
+      {
+        emailSent: false as const,
+        reason: 'No transactional email provider is configured. Send the link yourself.',
+      },
+      'No transactional email provider is configured. Send the link yourself.',
+    ],
+  ])('says whether the invitation email went out: %o', (delivery, sentence) => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Demo Team',
+      slug: 'demo-team',
+      plan: 'team',
+      memberCount: 1,
+      maxMembers: null,
+      currentUserRole: 'owner',
+    };
+    state.createInvitation.mockImplementation(
+      (_input: unknown, options: { onSuccess: (result: unknown) => void }) =>
+        options.onSuccess({
+          invitation: { id: 'inv-1' },
+          inviteToken: 'x'.repeat(32),
+          delivery,
+        }),
+    );
+
+    render(<TeamSection />);
+    fireEvent.change(screen.getByLabelText('Invitee email'), {
+      target: { value: 'member@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create invitation' }));
+
+    expect(screen.getByText(sentence)).toBeVisible();
   });
 
   it('surfaces an invitation error inline', () => {
