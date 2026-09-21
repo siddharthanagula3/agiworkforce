@@ -12,6 +12,10 @@
  * or built inside the function out of such identifiers is this repository's own
  * choice of host. Anything else arrived as a parameter, a request body or a
  * stored row, and the host has to be resolved before it is dialled.
+ *
+ * On the url_fetch and web_search surfaces the target is never this
+ * repository's, so vetting it in the calling function is not enough there and
+ * the call itself belongs to the shared transport.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,8 +34,33 @@ const scanRoot = rootIndex >= 0 ? path.resolve(process.argv[rootIndex + 1]) : re
 
 const SCAN_ROOTS = ['apps/web/app', 'apps/web/lib'];
 
+/** Feature trees keep their server half in one directory; find every one of them. */
+function featureServerRoots(root) {
+  const features = path.join(root, 'apps/web/features');
+  if (!fs.existsSync(features)) return [];
+  return fs
+    .readdirSync(features, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(features, entry.name, 'server'))
+    .filter((dir) => fs.existsSync(dir));
+}
+
 /** The modules that implement the vetting, and so handle an unvetted URL by trade. */
 const TRANSPORT = ['apps/web/lib/egress-policy.ts', 'apps/web/lib/url-fetch/guarded-fetch.ts'];
+
+/** The one module allowed to open the socket itself, once it has vetted the hop. */
+const SHARED = 'apps/web/lib/url-fetch/guarded-fetch.ts';
+
+/**
+ * The surfaces where the URL is never this repository's: `url_fetch` takes the
+ * model's word for it and `web_search` takes a search vendor's, so vetting the
+ * host in the calling function is not enough, the call itself belongs to the
+ * shared transport.
+ */
+const TOOL_SURFACES = ['apps/web/lib/url-fetch', 'apps/web/lib/web-search'];
+
+const SHARED_CALLS = ['guardedFetch(', 'credentialedFetch('];
+const MCP_POLICY_MARKER = 'McpEgressPolicy';
 
 /** Any one of these resolves the host and refuses an address inside the network. */
 const VETTING = [
@@ -60,16 +89,58 @@ function relative(file) {
 export function expressionRoots(expression) {
   const text = expression.trim().replace(/^(?:await|new|typeof|void)\s+/, '');
   if (/^['"]/.test(text)) return [];
-  if (text.startsWith('`')) {
-    // A literal scheme and host before the first hole fixes the host; what
-    // follows it is a path, and a path reaches no other machine.
-    if (/^`https?:\/\/[^/`$]+\//.test(text)) return [];
-    return [...text.matchAll(/\$\{([^}]*)\}/g)]
-      .map(([, inner]) => IDENTIFIER.exec(inner.trim())?.[0])
-      .filter(Boolean);
-  }
+  if (text.startsWith('`')) return templateRoots(text);
   const root = IDENTIFIER.exec(text);
   return root ? [root[0]] : [];
+}
+
+const HOLE = '';
+const PATH_START = /[/?#]/;
+
+/** Where the authority ends in a reference whose holes stand for unknown text. */
+function authorityEnd(reference) {
+  const scheme = reference.indexOf('://');
+  let start;
+  if (scheme !== -1 && !PATH_START.test(reference.slice(0, scheme))) start = scheme + 3;
+  else if (reference.startsWith('//')) start = 2;
+  else if (reference.startsWith('/')) return 0;
+  else start = 0;
+  const end = reference.slice(start).search(PATH_START);
+  return end === -1 ? reference.length : start + end;
+}
+
+/**
+ * Only the holes that can still name a machine count. Once the path begins,
+ * every later hole writes a path, a query or a fragment, and none of those
+ * reaches anywhere the earlier text did not already point.
+ */
+function templateRoots(text) {
+  const body = text.slice(1, text.lastIndexOf('`'));
+  const holes = [];
+  let reference = '';
+  let at = 0;
+  while (at < body.length) {
+    const hole = body.indexOf('${', at);
+    if (hole === -1) {
+      reference += body.slice(at);
+      break;
+    }
+    reference += body.slice(at, hole);
+    let depth = 1;
+    let end = hole + 2;
+    for (; end < body.length && depth > 0; end += 1) {
+      if (body[end] === '{') depth += 1;
+      else if (body[end] === '}') depth -= 1;
+    }
+    holes.push({ at: reference.length, inner: body.slice(hole + 2, end - 1).trim() });
+    reference += HOLE;
+    at = end;
+  }
+  const limit = authorityEnd(reference);
+  return holes
+    .filter((hole) => hole.at < limit)
+    .map((hole) => IDENTIFIER.exec(hole.inner)?.[0])
+    .filter(Boolean);
 }
 
 const MODULE_DECLARATION =
@@ -197,12 +268,19 @@ export function targetIsRepoChosen(expression, context, depth = 0) {
   });
 }
 
+function inToolSurface(rel) {
+  return TOOL_SURFACES.some((surface) => rel === surface || rel.startsWith(`${surface}/`));
+}
+
 function main() {
   const failures = [];
   let callCount = 0;
   let outsideCount = 0;
 
-  const files = SCAN_ROOTS.map((root) => path.join(scanRoot, root))
+  const files = [
+    ...SCAN_ROOTS.map((root) => path.join(scanRoot, root)),
+    ...featureServerRoots(scanRoot),
+  ]
     .filter((dir) => fs.existsSync(dir))
     .flatMap((dir) => sourceFilesUnder(dir));
 
@@ -213,11 +291,40 @@ function main() {
     process.exit(1);
   }
 
+  if (!fs.existsSync(path.join(scanRoot, SHARED))) {
+    failures.push(`${SHARED} is missing, so there is no one place that vets a hop`);
+  }
+  for (const surface of TOOL_SURFACES) {
+    const dir = path.join(scanRoot, surface);
+    if (!fs.existsSync(dir)) {
+      failures.push(`${surface} is missing, so nothing proves its outbound calls are bounded`);
+      continue;
+    }
+    const reaches = sourceFilesUnder(dir).some((file) =>
+      SHARED_CALLS.some((call) => fs.readFileSync(file, 'utf8').includes(call)),
+    );
+    if (!reaches) {
+      failures.push(
+        `${surface} never calls guardedFetch, so the shared vetting is not in its path`,
+      );
+    }
+  }
+
   for (const file of files) {
     const rel = relative(file);
     if (TRANSPORT.includes(rel)) continue;
     const source = fs.readFileSync(file, 'utf8');
     if (CLIENT_MODULE.test(source)) continue;
+
+    // An MCP dial carries the user's credential to a server the user named, so
+    // the hops are this process's to follow and never the SDK's.
+    if (source.includes(MCP_POLICY_MARKER) && !SHARED_CALLS.some((call) => source.includes(call))) {
+      failures.push(
+        `${rel} hands the MCP client a fetch of its own, so the client follows redirects this ` +
+          `process never vets and carries the credential wherever they lead. Route it through ` +
+          `credentialedFetch with redirects: 'same-origin'.`,
+      );
+    }
 
     const calls = outboundFetchCalls(source);
     if (calls.length === 0) continue;
@@ -243,6 +350,15 @@ function main() {
       outsideCount += 1;
       const site = `${rel}::${holder ? holder.name : '<module scope>'}`;
       const target = call.target.trim().split('\n')[0];
+
+      if (inToolSurface(rel)) {
+        failures.push(
+          `${site} calls ${call.callee}() directly. On this surface the target URL is chosen by a ` +
+            `model or a search vendor, so every fetch goes through guardedFetch in ${SHARED}, ` +
+            `which vets scheme, credentials and resolved host at the top of every hop.`,
+        );
+        continue;
+      }
 
       // The allowlist is often applied where the URL is selected rather than
       // where it is dialled, so the module is the scope that answers for it.
