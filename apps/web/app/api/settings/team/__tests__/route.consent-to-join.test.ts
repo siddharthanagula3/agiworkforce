@@ -180,6 +180,25 @@ describe('POST /api/settings/team requires the target account to be the organiza
     expect(body.error.message).toMatch(/POST \/api\/settings\/team\/invitations/);
   });
 
+  it('answers an address off its verified domains the same whether or not an account uses it', async () => {
+    stubRls({ verifiedDomains: ['owned.example'] });
+
+    const registered = await POST(
+      request({ organizationId: ORGANIZATION_ID, email: VICTIM.email, role: 'member' }),
+    );
+    const unregistered = await POST(
+      request({ organizationId: ORGANIZATION_ID, email: 'nobody@corp.example', role: 'member' }),
+    );
+
+    const errorOf = async (response: Response) =>
+      ((await response.json()) as { error: unknown }).error;
+    expect(registered.status).toBe(unregistered.status);
+    expect(await errorOf(registered)).toEqual(await errorOf(unregistered));
+    expect(
+      mockNeonQuery.mock.calls.filter(([sql]) => /from\s+public\.profiles/i.test(String(sql))),
+    ).toEqual([]);
+  });
+
   it('refuses every direct add when the organization has verified no domain at all', async () => {
     stubRls();
 
