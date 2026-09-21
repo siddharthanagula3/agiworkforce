@@ -572,12 +572,29 @@ pub fn declared_submodules(root: &Path) -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
+/// Windows canonicalizes to `\\?\C:\..` while git names `C:/..`, and the two
+/// never compare equal, so both go through this one form before they meet.
+pub(crate) fn comparable_path(path: &Path) -> PathBuf {
+    let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    #[cfg(windows)]
+    {
+        let text = canonical.to_string_lossy();
+        let plain = text
+            .strip_prefix(r"\\?\")
+            .filter(|plain| !plain.starts_with(r"UNC\"));
+        if let Some(plain) = plain {
+            return PathBuf::from(plain);
+        }
+    }
+    canonical
+}
+
 /// The single repository detector the app server, `agi doctor` and the prompt
 /// context all read. Returns `None` when `cwd` is not inside a repository.
 pub fn detect_repository_layout(cwd: &Path) -> Option<RepositoryLayout> {
     let git_dir = git(cwd, &["rev-parse", "--absolute-git-dir"])?;
     let git_dir = PathBuf::from(git_dir);
-    let opened_at = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let opened_at = comparable_path(cwd);
     let common_dir = git(
         cwd,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -590,6 +607,7 @@ pub fn detect_repository_layout(cwd: &Path) -> Option<RepositoryLayout> {
     } else {
         git(cwd, &["rev-parse", "--show-toplevel"]).map_or_else(|| cwd.to_path_buf(), PathBuf::from)
     };
+    let root = comparable_path(&root);
 
     let config = git_config(cwd);
     let remotes = git_raw(cwd, &["remote", "-v"])
@@ -1104,13 +1122,10 @@ mod tests {
         std::fs::write(member.join("package.json"), r#"{"name":"alpha"}"#).unwrap();
 
         let layout = detect_repository_layout(&member).expect("layout");
-        let root = std::fs::canonicalize(dir.path()).unwrap();
+        let root = comparable_path(dir.path());
         assert_eq!(layout.root, root, "the repository root is still the root");
         assert!(layout.opened_below_root());
-        assert_eq!(
-            layout.task_scope(),
-            std::fs::canonicalize(&member).unwrap().as_path()
-        );
+        assert_eq!(layout.task_scope(), comparable_path(&member).as_path());
         assert_eq!(
             layout.opened_member().map(|member| member.name.as_str()),
             Some("alpha")
