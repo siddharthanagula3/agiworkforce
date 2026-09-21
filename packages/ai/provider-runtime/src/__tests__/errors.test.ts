@@ -98,6 +98,19 @@ describe('classifyError', () => {
     expect(c.retryable).toBe(true);
   });
 
+  it("classifies fetch's own transport failures as connection/retryable", () => {
+    for (const message of ['fetch failed', 'terminated']) {
+      const c = classifyError(new TypeError(message));
+      expect(c.category).toBe('connection');
+      expect(c.retryable).toBe(true);
+    }
+  });
+
+  it('does not read a provider sentence that contains the word as a transport failure', () => {
+    const c = classifyError(new Error('The job was terminated by the provider.'));
+    expect(c.category).not.toBe('connection');
+  });
+
   it('classifies a 529 overload as server_overload + fallbackable', () => {
     const err = { status: 529, message: '{"type":"overloaded_error"}' };
     const c = classifyError(err);
