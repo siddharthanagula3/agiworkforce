@@ -124,6 +124,8 @@ describe('approval card', () => {
     ).click();
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'respondToApproval',
       payload: { requestId: 'req-1', decision: 'session' },
     });
@@ -247,6 +249,8 @@ describe('tool rows', () => {
     postMessage.mockClear();
     (document.querySelector('.tool-call__open-diff') as HTMLElement).click();
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openToolDiff',
       payload: { path: 'src/app.ts' },
     });

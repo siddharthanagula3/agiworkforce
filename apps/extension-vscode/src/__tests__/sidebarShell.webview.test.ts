@@ -66,6 +66,8 @@ describe('the sidebar overflow menu', () => {
     click('[data-surface="projects"]');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openSurface',
       payload: { surfaceId: 'projects' },
     });
@@ -80,6 +82,8 @@ describe('the sidebar overflow menu', () => {
 
     expect(document.getElementById('sessionsSheet')?.hidden).toBe(false);
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'requestSessions',
       payload: { source: 'local' },
     });
@@ -116,6 +120,8 @@ describe('the sidebar overflow menu', () => {
     click('#composerStatusSignIn');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openSurface',
       payload: { surfaceId: 'signIn' },
     });
@@ -172,6 +178,8 @@ describe('the sessions sheet', () => {
     click('#sessionsTabCloud');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'requestSessions',
       payload: { source: 'cloud' },
     });
@@ -231,6 +239,8 @@ describe('the sessions sheet', () => {
     click('.sessions-sheet-row');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openSessionRow',
       payload: { id: 'thread-a', source: 'local' },
     });
@@ -254,7 +264,11 @@ describe('the composer command list', () => {
 
     click('#slashBtn');
 
-    expect(postMessage).toHaveBeenCalledWith({ type: 'requestSlashCommands' });
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'requestSlashCommands',
+    });
     expect(document.querySelector('.slash-menu-empty')?.textContent).toBe('Loading commands…');
 
     deliver({
@@ -301,6 +315,8 @@ describe('the composer command list', () => {
     click('.slash-menu-item');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'runSlashCommand',
       payload: { name: '/clear' },
     });
@@ -330,6 +346,8 @@ describe('the composer command list', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'runSlashCommand',
       payload: { name: '/model' },
     });
@@ -361,6 +379,8 @@ describe('the composer command list', () => {
     postMessage.mockClear();
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'runSlashCommand',
       payload: { name: '/models' },
     });

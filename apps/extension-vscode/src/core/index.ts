@@ -5,6 +5,14 @@ export { setupCommands, type CommandDeps } from './commandSetup';
 export { setupProviders, type ProviderState } from './providerSetup';
 export { runInlineCommand, commandLabel, type InlineCommand } from './runInlineCommand';
 export {
+  IN_USE_REASONS,
+  whenInUse,
+  markInUse,
+  inUseReason,
+  __resetStartupWorkForTests,
+  type InUseReason,
+} from './startupWork';
+export {
   initSubsystemHealth,
   runBoot,
   runBootAsync,

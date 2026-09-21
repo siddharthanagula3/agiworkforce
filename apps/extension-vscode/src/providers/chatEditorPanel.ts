@@ -6,24 +6,33 @@ import {
   type ExtToWebviewMessage,
 } from '../features/sidebar-webview/ChatStateManager';
 import { getNonce, getWebviewContent } from '../features/sidebar-webview/webviewContent';
-import { parseWebviewMessage } from '../protocol/webviewMessages';
+import { parseBoundWebviewMessage } from '../protocol/webviewMessages';
 import { type ConversationTreeProvider } from '../features/trees';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { resolveTierSync } from '../integrations/tierResolver';
 import { type DiffDecorationProvider } from './diffDecorationProvider';
+
+function panelNumberFromTitle(title: string): number {
+  const match = /^AGI Chat(?: (\d+))?$/u.exec(title.trim());
+  if (match === null) return 0;
+  return match[1] === undefined ? 1 : Number(match[1]);
+}
 
 export class ChatEditorPanel {
   public static readonly viewType = 'agi-workforce.chatPanel';
   private static readonly instances = new Set<ChatEditorPanel>();
   private static mostRecent: ChatEditorPanel | undefined;
   private static nextPanelNumber = 1;
+  private static nextOriginNumber = 1;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly stateManager: ChatStateManager;
+  private readonly origin = `chatPanel-${ChatEditorPanel.nextOriginNumber++}`;
 
   static __resetForTests(): void {
     ChatEditorPanel.instances.clear();
     ChatEditorPanel.mostRecent = undefined;
     ChatEditorPanel.nextPanelNumber = 1;
+    ChatEditorPanel.nextOriginNumber = 1;
   }
 
   static createNew(
@@ -54,6 +63,38 @@ export class ChatEditorPanel {
     ChatEditorPanel.instances.add(instance);
     ChatEditorPanel.mostRecent = instance;
     return instance;
+  }
+
+  static registerSerializer(
+    extensionUri: vscode.Uri,
+    secrets: vscode.SecretStorage,
+    context: vscode.ExtensionContext,
+    localRuntimes: LocalRuntimePool,
+    conversationTreeProvider: ConversationTreeProvider,
+    diffDecorationProvider: DiffDecorationProvider,
+    onRestored?: () => void,
+  ): vscode.Disposable {
+    return vscode.window.registerWebviewPanelSerializer(ChatEditorPanel.viewType, {
+      deserializeWebviewPanel: (panel: vscode.WebviewPanel): Promise<void> => {
+        onRestored?.();
+        const restored = new ChatEditorPanel(
+          panel,
+          extensionUri,
+          secrets,
+          context,
+          localRuntimes,
+          conversationTreeProvider,
+          diffDecorationProvider,
+        );
+        ChatEditorPanel.instances.add(restored);
+        ChatEditorPanel.mostRecent = restored;
+        ChatEditorPanel.nextPanelNumber = Math.max(
+          ChatEditorPanel.nextPanelNumber,
+          panelNumberFromTitle(panel.title) + 1,
+        );
+        return Promise.resolve();
+      },
+    });
   }
 
   static revealMostRecentOrCreate(
@@ -110,12 +151,19 @@ export class ChatEditorPanel {
       resolveTierSync(context),
       false,
       Config.composerFollowUpBehavior(),
+      { origin: this.origin, epoch: this.stateManager.conversationEpoch() },
     );
     this.disposables.push(
       this.panel.webview.onDidReceiveMessage(async (message) => {
-        const parsed = parseWebviewMessage(message);
+        const parsed = parseBoundWebviewMessage(message, {
+          origin: this.origin,
+          epoch: this.stateManager.conversationEpoch(),
+        });
         if (parsed === undefined) {
-          console.warn('[AGI Workforce] dropping malformed editor-chat webview message', message);
+          console.warn(
+            '[AGI Workforce] dropping an editor-chat webview message that is malformed or belongs to a replaced conversation',
+            message,
+          );
           return;
         }
         await this.stateManager.handleMessage(

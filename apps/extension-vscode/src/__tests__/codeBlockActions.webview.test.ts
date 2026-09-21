@@ -135,6 +135,8 @@ describe('rendered Markdown code-block actions', () => {
 
     applyButton?.click();
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'proposeDiff',
       payload: {
         code: 'const answer = 42;\n',

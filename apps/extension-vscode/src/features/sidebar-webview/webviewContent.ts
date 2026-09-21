@@ -11,6 +11,7 @@ import {
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
 import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
+import type { SessionBinding } from '../../protocol/webviewMessages';
 
 export function escapeHtml(value: string): string {
   return value
@@ -51,7 +52,10 @@ export function getWebviewContent(
   tier?: string,
   showOnboarding = false,
   initialFollowUpBehavior: ComposerFollowUpBehavior = 'queue',
+  binding: SessionBinding = { origin: 'chat', epoch: 0 },
 ): string {
+  const bindingOrigin = escapeHtml(binding.origin);
+  const bindingEpoch = Math.max(0, Math.trunc(binding.epoch));
   const cspSource = webview.cspSource;
   const modelOptionsHtml = getModelPickerOptionsForTier(tier)
     .map((option) => {
@@ -2466,7 +2470,7 @@ export function getWebviewContent(
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -2506,7 +2510,18 @@ export function getWebviewContent(
   <script nonce="${nonce}" src="${renderJsUri}"></script>
 
   <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: '${bindingOrigin}', epoch: ${bindingEpoch} };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -4919,6 +4934,11 @@ export function getWebviewContent(
     // ── Messages from extension ───────────────────────────────────────────────
     window.addEventListener('message', (event) => {
       const msg = event.data;
+
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
 
       if (msg.type === 'turnStarted') {
         removeTyping();

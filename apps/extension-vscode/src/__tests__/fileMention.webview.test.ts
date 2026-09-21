@@ -52,6 +52,8 @@ describe('VS Code sidebar file mentions', () => {
     input.setSelectionRange(input.value.length, input.value.length);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'fileSearch',
       payload: { query: 'app' },
     });
@@ -80,6 +82,8 @@ describe('VS Code sidebar file mentions', () => {
     (document.getElementById('sendBtn') as HTMLButtonElement).click();
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'sendMessage',
       payload: {
         text: 'Review @src/app.ts#L5-L7',
@@ -115,6 +119,8 @@ describe('VS Code sidebar file mentions', () => {
     (document.getElementById('sendBtn') as HTMLButtonElement).click();
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'sendMessage',
       payload: {
         text: '@src/fallback.ts#L3-L5',
