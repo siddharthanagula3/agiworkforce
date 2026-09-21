@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parseShellTokens, readShellTokens } from '../shellTokens.mjs';
 import {
   pageBackgroundColor,
+  paintWindows,
   titleBarChrome,
   titleStripHeight,
   trafficLightPosition,
@@ -97,5 +98,43 @@ describe('the native frame each platform keeps', () => {
     expect(pageBackgroundColor(true)).toMatch(/^#[0-9a-f]{6}$/u);
     expect(pageBackgroundColor(false)).toMatch(/^#[0-9a-f]{6}$/u);
     expect(pageBackgroundColor(true)).not.toBe(pageBackgroundColor(false));
+  });
+});
+
+describe('the appearance every open window follows', () => {
+  function fakeWindow(destroyed = false) {
+    const painted: string[] = [];
+    return {
+      painted,
+      isDestroyed: () => destroyed,
+      setBackgroundColor: (color: string) => painted.push(color),
+    };
+  }
+
+  it('repaints every window, not only the one in front', () => {
+    const windows = [fakeWindow(), fakeWindow(), fakeWindow()];
+
+    expect(paintWindows(windows, true)).toBe(3);
+    for (const win of windows) {
+      expect(win.painted).toEqual([pageBackgroundColor(true)]);
+    }
+  });
+
+  it('follows the appearance it is given rather than a fixed colour', () => {
+    const win = fakeWindow();
+
+    paintWindows([win], true);
+    paintWindows([win], false);
+
+    expect(win.painted).toEqual([pageBackgroundColor(true), pageBackgroundColor(false)]);
+  });
+
+  it('steps over a window that has been torn down', () => {
+    const open = fakeWindow();
+    const gone = fakeWindow(true);
+
+    expect(paintWindows([gone, open], false)).toBe(1);
+    expect(gone.painted).toEqual([]);
+    expect(open.painted).toEqual([pageBackgroundColor(false)]);
   });
 });

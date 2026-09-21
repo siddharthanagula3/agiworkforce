@@ -221,6 +221,16 @@ function requireRegionFields(region: Args): DeviceStepRegion {
 
 class InvalidArguments extends Error {}
 
+/**
+ * Opening a window belongs to the process that owns them. It is injected so
+ * the dispatcher does not import the shell's entry point, which imports it.
+ */
+let windowOpener: ((route: string) => boolean) | null = null;
+
+export function configureWindowOpening(open: (route: string) => boolean): void {
+  windowOpener = open;
+}
+
 function requireLocalMessages(args: Args): LocalChatMessage[] {
   const value = args['messages'];
   if (!Array.isArray(value) || value.length === 0) {
@@ -700,6 +710,16 @@ async function execute(
       return readShellLayout();
     case 'window_layout_write':
       return writeShellLayout(args ?? {});
+    case 'window_open': {
+      if (windowOpener === null) {
+        throw new InvalidArguments('This build cannot open a second window.');
+      }
+      const route = requireString(args, 'route');
+      if (!windowOpener(route)) {
+        throw new InvalidArguments('That page cannot be opened in a window of its own.');
+      }
+      return true;
+    }
     case 'app_open_path':
       return openWithDefaultApplication(resolveRoot(args), requireString(args, 'path'));
     case 'app_reveal_path':
