@@ -6,10 +6,14 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  BACKUP_SECTION,
   DOCUMENT,
   NO_DRILL,
   REGISTRY,
+  SYNC_REGISTRY,
   declaredDependencyIds,
+  declaredSyncSemantics,
+  runBackupBehaviourCheck,
   runRecoveryTableCheck,
   tableRows,
 } from './check-dr-recovery-table.mjs';
@@ -160,4 +164,143 @@ test('the real repository passes, and the registry it reads is not empty', () =>
     `expected the registry to declare dependencies, got ${declared.length}`,
   );
   assert.deepEqual(runRecoveryTableCheck(repoRoot), []);
+});
+
+const SYNC_SOURCE = `export const SYNC_OBJECT_SEMANTICS: Readonly<Record<SyncObjectType, SyncObjectSemantics>> = {
+  conversation: {
+    type: 'conversation',
+    conflict: 'server-version-cas',
+    deletion: 'tombstone',
+    payload: 'cloud',
+    clientMayWrite: true,
+    surfaces: ALL_SURFACES,
+  },
+  skill: {
+    type: 'skill',
+    conflict: 'server-authoritative',
+    deletion: 'tombstone',
+    payload: 'cloud-or-device',
+    clientMayWrite: false,
+    surfaces: ALL_SURFACES,
+  },
+};
+`;
+
+function backupDocumentWith(rows) {
+  return [
+    '# Business continuity',
+    '',
+    BACKUP_SECTION,
+    '',
+    '| type | Bytes | Deletion | What a restore cannot reach | A later deletion |',
+    '| ---- | ----- | -------- | --------------------------- | ---------------- |',
+    ...rows,
+    '',
+    '## Known gaps',
+    '',
+  ].join('\n');
+}
+
+const GOOD_BACKUP_ROWS = [
+  '| `conversation` | `cloud` | `tombstone` | Nothing beyond the database | Comes back live |',
+  '| `skill` | `cloud-or-device` | `tombstone` | A copy held only on a device | Comes back live |',
+];
+
+function backupRoot(document, registry = SYNC_SOURCE) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dr-backup-'));
+  fs.mkdirSync(path.join(root, path.dirname(DOCUMENT)), { recursive: true });
+  fs.mkdirSync(path.join(root, path.dirname(SYNC_REGISTRY)), { recursive: true });
+  fs.writeFileSync(path.join(root, DOCUMENT), document);
+  fs.writeFileSync(path.join(root, SYNC_REGISTRY), registry);
+  return root;
+}
+
+test('declaredSyncSemantics reads each type with its payload and deletion', () => {
+  assert.deepEqual(
+    [...declaredSyncSemantics(SYNC_SOURCE).entries()],
+    [
+      ['conversation', { deletion: 'tombstone', payload: 'cloud' }],
+      ['skill', { deletion: 'tombstone', payload: 'cloud-or-device' }],
+    ],
+  );
+});
+
+test('a backup table with one faithful row per synced type passes', () => {
+  assert.deepEqual(runBackupBehaviourCheck(backupRoot(backupDocumentWith(GOOD_BACKUP_ROWS))), []);
+});
+
+test('a synced type with no backup row fails', () => {
+  const failures = runBackupBehaviourCheck(
+    backupRoot(backupDocumentWith(GOOD_BACKUP_ROWS.slice(0, 1))),
+  );
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /declares "skill" and the backup table has no row/);
+});
+
+test('a backup row that disagrees with where the registry keeps the bytes fails', () => {
+  const failures = runBackupBehaviourCheck(
+    backupRoot(
+      backupDocumentWith([
+        GOOD_BACKUP_ROWS[0],
+        '| `skill` | `cloud` | `tombstone` | Nothing beyond the database | Comes back live |',
+      ]),
+    ),
+  );
+  assert.equal(failures.length, 1);
+  assert.match(
+    failures[0],
+    /"skill" says its bytes are "cloud" and the registry says "cloud-or-device"/,
+  );
+});
+
+test('a backup row that disagrees with how the registry deletes fails', () => {
+  const failures = runBackupBehaviourCheck(
+    backupRoot(
+      backupDocumentWith([
+        '| `conversation` | `cloud` | `hard-delete` | Nothing beyond the database | Gone |',
+        GOOD_BACKUP_ROWS[1],
+      ]),
+    ),
+  );
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /deletion is "hard-delete" and the registry says "tombstone"/);
+});
+
+test('a backup row for a type the registry does not declare fails', () => {
+  const failures = runBackupBehaviourCheck(
+    backupRoot(
+      backupDocumentWith([...GOOD_BACKUP_ROWS, '| `widget` | `cloud` | `tombstone` | x | y |']),
+    ),
+  );
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /"widget" is not a type/);
+});
+
+test('a blank backup cell fails', () => {
+  const failures = runBackupBehaviourCheck(
+    backupRoot(
+      backupDocumentWith([
+        GOOD_BACKUP_ROWS[0],
+        '| `skill` | `cloud-or-device` | `tombstone` |  | y |',
+      ]),
+    ),
+  );
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /leaves column 4 blank/);
+});
+
+test('an unreadable sync registry fails rather than passing vacuously', () => {
+  const failures = runBackupBehaviourCheck(
+    backupRoot(backupDocumentWith(GOOD_BACKUP_ROWS), 'export const NOTHING = {};\n'),
+  );
+  assert.equal(failures.length, 1);
+  assert.match(failures[0], /SYNC_OBJECT_SEMANTICS could not be read/);
+});
+
+test('the real backup table covers every synced type the registry declares', () => {
+  const declared = declaredSyncSemantics(
+    fs.readFileSync(path.join(repoRoot, SYNC_REGISTRY), 'utf8'),
+  );
+  assert.ok(declared.size >= 10, `expected the registry to declare types, got ${declared.size}`);
+  assert.deepEqual(runBackupBehaviourCheck(repoRoot), []);
 });

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + desktop lead
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 The public AGI Desktop product is the Electron application under
 `apps/desktop/electron`. The Rust/Tauri implementation in
@@ -69,6 +69,37 @@ approved roots, permission decisions, pairing state, and device identity.
 Account credentials are stored only when Electron `safeStorage` reports that
 operating-system encryption is available; otherwise persistence is refused.
 Provider API keys are not part of the public Desktop contract.
+
+### Local database: backup, recovery and corruption
+
+The Electron application holds no database of conversations, messages or
+artifacts. They live in the managed cloud and are recovered with it
+(`docs/runbooks/business-continuity.md`); what Electron stores is the shell
+state above, which a reinstall and a fresh sign-in rebuild.
+
+The retained Tauri build does keep a local store, a SQLCipher database, and its
+recovery properties are these:
+
+- **Key.** A new installation uses a random 256-bit key held by the operating
+  system's credential service (`apps/desktop/src-tauri/src/data/db/key_management.rs`).
+  A legacy machine-derived key is proven read-only and then retired by
+  rekeying, because it is recomputable by any local process.
+- **Corruption.** A file that neither the key nor a plaintext read can open
+  fails closed with its bytes untouched, and is never reported as a migration
+  (`corrupt_file_is_not_reported_as_a_completed_legacy_migration_and_preserves_bytes`
+  in `apps/desktop/src-tauri/src/data/db/encryption.rs`). Corruption and a wrong
+  key cannot be told apart, so neither is repaired automatically.
+- **Rekey and migration.** The database file and its `-wal` and `-shm`
+  sidecars are copied before a rekey, restored together if it fails, and
+  deleted once it succeeds; these copies are transient and are not a backup.
+- **Cloud-mode rows.** Conversations, messages and artifacts created in
+  managed-cloud mode sync through `/api/chat/sync`
+  (`apps/desktop/src-tauri/src/data/cloud_sync.rs`). An empty store starts its
+  pull cursor at `0`, so a lost or unreadable database is rebuilt from the
+  cloud on the next signed-in sync.
+- **Local-mode rows.** Nothing copies them anywhere. A lost file, or a lost
+  credential-service key, loses them; the product has no scheduled local
+  backup, and says so rather than implying one.
 
 ## Release state
 
