@@ -6,7 +6,12 @@
     "opacity-diluted-text": 19,
     "hover-only-affordance": 14,
     "tiny-type-css": 71,
-    "arbitrary-color": 1
+    "arbitrary-color": 1,
+    "clickable-div-without-semantics": 17,
+    "arbitrary-z-index": 10,
+    "outline-none-without-focus-ring": 23,
+    "unsafe-blank-target": 7,
+    "arbitrary-z-index-css": 23
   },
   "violations": [
     {
@@ -7454,6 +7459,499 @@
       "line": 91,
       "rule": "raw-palette",
       "literal": "text-red-400"
+    },
+    {
+      "file": "apps/web/app/gallery/GalleryClient.tsx",
+      "line": 573,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/app/gallery/GalleryClient.tsx",
+      "line": 744,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/app/gallery/GalleryClient.tsx",
+      "line": 931,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
+      "line": 17,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[9999]"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/ComposerInput.tsx",
+      "line": 57,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+      "line": 1386,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/DictationStrip.tsx",
+      "line": 88,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 274,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[200]"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 535,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[90]"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 549,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[95]"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 534,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 771,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 101,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[100]"
+    },
+    {
+      "file": "apps/web/features/chat/components/Voice/VoiceComposer.tsx",
+      "line": 115,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1683,
+      "rule": "unsafe-blank-target",
+      "literal": "<a"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+      "line": 492,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx",
+      "line": 507,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/research/ResearchPanel.tsx",
+      "line": 314,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+      "line": 718,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
+      "line": 606,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/features/chat/components/work-session/WorkSessionPanel.tsx",
+      "line": 617,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/code/components/CodeChangesPanel.tsx",
+      "line": 308,
+      "rule": "unsafe-blank-target",
+      "literal": "<a"
+    },
+    {
+      "file": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+      "line": 214,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/features/desktop-host/components/LocalCommandDialog.tsx",
+      "line": 216,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/features/desktop-host/components/LocalFolderAttachDialog.tsx",
+      "line": 193,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-landing.css",
+      "line": 187,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-landing.css",
+      "line": 620,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 39,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 70"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 209,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 90"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 356,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 365,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -2"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 374,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 466,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 802,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 813,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 856,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 2530,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 2825,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 2"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 3307,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 4733,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 60"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 4949,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 6326,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 40"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 676,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 20"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 2094,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 2105,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 2430,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 40"
+    },
+    {
+      "file": "apps/web/features/models/components/ModelCatalogueBrowser.tsx",
+      "line": 159,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/settings/sections/PublishedArtifactsSection.tsx",
+      "line": 209,
+      "rule": "unsafe-blank-target",
+      "literal": "<a"
+    },
+    {
+      "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+      "line": 212,
+      "rule": "unsafe-blank-target",
+      "literal": "<a"
+    },
+    {
+      "file": "apps/web/features/support/components/SupportWidget.module.css",
+      "line": 51,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 40"
+    },
+    {
+      "file": "apps/web/features/support/components/SupportWidget.module.css",
+      "line": 143,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 45"
+    },
+    {
+      "file": "packages/ui/ui/src/directory/ConnectorDetailView.tsx",
+      "line": 444,
+      "rule": "unsafe-blank-target",
+      "literal": "<a"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/Command.tsx",
+      "line": 58,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/Command.tsx",
+      "line": 136,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/Menubar.tsx",
+      "line": 51,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/Menubar.tsx",
+      "line": 72,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/Menubar.tsx",
+      "line": 147,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/Menubar.tsx",
+      "line": 174,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/Menubar.tsx",
+      "line": 202,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/ui/src/primitives/NavigationMenu.tsx",
+      "line": 130,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[1]"
+    },
+    {
+      "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
+      "line": 544,
+      "rule": "unsafe-blank-target",
+      "literal": "<a"
+    },
+    {
+      "file": "packages/ui/ui/src/sidebar/Menu.tsx",
+      "line": 295,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[9999]"
+    },
+    {
+      "file": "packages/ui/ui/src/sidebar/Menu.tsx",
+      "line": 467,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[9999]"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
+      "line": 268,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
+      "line": 728,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
+      "line": 631,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+      "line": 264,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[60]"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+      "line": 442,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[60]"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
+      "line": 1474,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInterface.tsx",
+      "line": 158,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInterface.tsx",
+      "line": 163,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/CommandPalette.tsx",
+      "line": 164,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/CommandPalette.tsx",
+      "line": 171,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<div"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+      "line": 731,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 406,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
+      "line": 111,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+      "line": 197,
+      "rule": "clickable-div-without-semantics",
+      "literal": "<td"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+      "line": 130,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+      "line": 1152,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+      "line": 260,
+      "rule": "unsafe-blank-target",
+      "literal": "<a"
     }
-  ]
+  ],
+  "_reasons": {
+    "raw-palette": "Seeded at the start of the frontend redesign: a literal Tailwind palette class where a semantic token belongs. Each one is owed a token; the count only falls.",
+    "raw-bw": "Seeded at the start of the frontend redesign: bg-white or text-black assumes light mode is the only theme. Owed a background/foreground token.",
+    "arbitrary-color": "Seeded at the start of the frontend redesign: a literal colour in an arbitrary-value class. Owed a token in the theme layer.",
+    "opacity-diluted-text": "Seeded at the start of the frontend redesign: a foreground token diluted with an opacity modifier, which drops it under 4.5:1. Owed a size or weight change instead.",
+    "tiny-type-css": "Seeded at the start of the frontend redesign: a stylesheet declaration below the 12px legibility floor, mostly in the legacy marketing CSS. Owed a role token.",
+    "hover-only-affordance": "Seeded at the start of the frontend redesign: an affordance revealed only on hover, unreachable on touch. Owed a permanent low-emphasis state.",
+    "arbitrary-z-index": "Rung measured on 2026-09-20 when the rule was added: a bare Tailwind z-[n] outside the overlay/modal/popover ladder, so two layers can outrank each other by accident. Owed a token rung.",
+    "arbitrary-z-index-css": "Rung measured on 2026-09-20 when the rule was added: a bare z-index in a stylesheet, almost all of it the legacy marketing CSS. Owed a token rung.",
+    "outline-none-without-focus-ring": "Measured on 2026-09-20 when the rule was added: outline-none with no focus-visible replacement within the element, so a keyboard user loses the caret. Owed a focus ring, tracked as an accessibility defect not a style preference.",
+    "unsafe-blank-target": "Measured on 2026-09-20 when the rule was added: target=_blank with no rel=noopener, which hands window.opener to the destination. Owed rel=\"noopener noreferrer\" on each anchor.",
+    "clickable-div-without-semantics": "Measured on 2026-09-20 when the rule was added: onClick on a div, span, li or td with no role and no tabIndex, so the control does not exist for the keyboard. Owed a button or a role plus key handler."
+  }
 }

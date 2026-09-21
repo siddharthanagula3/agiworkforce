@@ -1,0 +1,17 @@
+{
+  "_description": "Retry policies that run a failing test again. Each entry names what makes the retry necessary and what removes it; an undeclared retry fails the guard and a declared one that no longer matches fails it too, so the list only shrinks. A focused test is never declarable and always fails.",
+  "retries": [
+    {
+      "id": "apps/web/e2e/chat-run-recovery.spec.ts:170",
+      "reason": "One retry for the shared QA account per-minute limiter, which refuses a conversation create that is not this spec subject. It is removed when the E2E account stops being shared, at which point the limiter no longer fires during a run."
+    },
+    {
+      "id": "apps/web/playwright.config.ts:33",
+      "reason": "Two retries on CI for the web E2E project, and zero locally and zero for the live media run. The retries cover hosted-environment refusals such as rate limits and cold starts, not product flake: a test that only passes on retry is a defect and is meant to be read in the run report."
+    },
+    {
+      "id": "apps/desktop/playwright.config.ts:13",
+      "reason": "Two retries on CI for the desktop shell project, and zero locally. The shell boots an Electron window and a bridge whose first connection is timing sensitive on a cold runner; retries cover that boot, not an assertion that disagrees with the product."
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "_description": "Per-surface ceiling on whole-module mock factories that drop an export. The number only falls.",
+  "surfaces": {
+    "apps/web": {
+      "count": 4319,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added."
+    },
+    "apps/desktop": {
+      "count": 271,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added."
+    },
+    "apps/extension": {
+      "count": 15,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added."
+    },
+    "apps/extension-vscode": {
+      "count": 8,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added."
+    },
+    "packages/ui": {
+      "count": 6,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added."
+    },
+    "packages/client": {
+      "count": 1,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added."
+    },
+    "packages/contracts": {
+      "count": 0,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added. This surface is already at zero and must stay there."
+    }
+  }
+}
