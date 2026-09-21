@@ -7,10 +7,14 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  PERMISSIONS_NO_DECISION_ASKS,
   PRIMARY_OWNER_ROLE_READS,
   RLS_ENFORCED_ROUTES,
   SELF_SERVICE_ROUTES,
+  readCanonicalPermissions,
 } from './check-org-permissions.mjs';
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -60,6 +64,9 @@ function fixture() {
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 async function handle(request) {
   await requireMemberPermission('org', 'user', 'policy.manage', 'no');
+  await requireMemberPermission('org', 'user', 'members.manage', 'no');
+  await requireMemberPermission('org', 'user', 'roles.manage', 'no');
+  await requireMemberPermission('org', 'user', 'admin.roles.view', 'no');
 }
 export const PUT = handle;
 `,
@@ -226,4 +233,77 @@ test('fails when a declared Primary Owner read stops comparing a role', () => {
   const { status, output } = run(root);
   assert.equal(status, 1);
   assert.match(output, /no longer compare a role/);
+});
+
+test('fails on a permission the role editor offers that no decision asks', () => {
+  const root = fixture();
+  const route = 'apps/web/app/api/settings/organization/retention/route.ts';
+  writeFile(
+    root,
+    route,
+    fs.readFileSync(path.join(root, route), 'utf8').replace(/'roles\.manage'/, "'policy.manage'"),
+  );
+  const { status, output } = run(root);
+  assert.equal(status, 1);
+  assert.match(output, /no server decision asks/);
+  assert.match(output, /admin\.roles\.manage/);
+});
+
+test('a legacy key counts as asking for the permission it is an alias of', () => {
+  const root = fixture();
+  const { status, output } = run(root);
+  assert.equal(status, 0, output);
+  assert.doesNotMatch(output, /admin\.members\.manage/);
+});
+
+test('a declaration goes stale as soon as a decision does ask for it', () => {
+  const root = fixture();
+  const route = 'apps/web/app/api/settings/organization/retention/route.ts';
+  writeFile(
+    root,
+    route,
+    `${fs.readFileSync(path.join(root, route), 'utf8')}
+export const PATCH = async () => {
+  await requireMemberPermission('org', 'user', 'admin.members.view', 'no');
+};
+`,
+  );
+  const { status, output } = run(root);
+  assert.equal(status, 1);
+  assert.match(output, /declared as consulted by nothing now are/);
+  assert.match(output, /admin\.members\.view/);
+});
+
+test('the canonical list is re-derived from the contract, not held here', () => {
+  const { canonical, alias } = readCanonicalPermissions(
+    path.join(REPO_ROOT, 'packages/contracts/types/src/enterprise/permissions.ts'),
+  );
+  assert.equal(canonical.length, 30);
+  assert.equal(alias.get('workspace.delete'), 'admin.lifecycle.manage');
+  for (const permission of PERMISSIONS_NO_DECISION_ASKS.keys()) {
+    assert.ok(canonical.includes(permission), `${permission} is not a canonical id`);
+  }
+});
+
+test('every declaration says what governs the act instead', () => {
+  for (const [permission, reason] of PERMISSIONS_NO_DECISION_ASKS) {
+    assert.ok(reason.length > 60, `${permission}: the reason has to be stated in full`);
+  }
+});
+
+test('asking an area for its level consults both halves of that area', () => {
+  const root = fixture();
+  const route = 'apps/web/app/api/settings/organization/retention/route.ts';
+  writeFile(
+    root,
+    route,
+    fs
+      .readFileSync(path.join(root, route), 'utf8')
+      .replace(
+        /await requireMemberPermission\('org', 'user', 'admin\.roles\.view', 'no'\);/,
+        "const level = adminPermissionLevel(new Set(), 'roles');",
+      ),
+  );
+  const { status, output } = run(root);
+  assert.equal(status, 0, output);
 });
