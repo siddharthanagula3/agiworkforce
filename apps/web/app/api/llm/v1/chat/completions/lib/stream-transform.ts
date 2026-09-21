@@ -803,6 +803,7 @@ type StreamErrorChunk = Extract<StreamChunk, { type: 'error' }>;
 function presentStreamError(
   chunk: StreamErrorChunk,
   processed: ProcessedRequest,
+  answerStarted: boolean,
 ): StreamErrorChunk {
   const classification = chunk.classification;
   const classified: ClassifiedError =
@@ -816,6 +817,7 @@ function presentStreamError(
         );
   const mapped = mapClassifiedUpstreamError(classified, processed.provider, {
     requestedModel: processed.requestedModel,
+    answerStarted,
   });
   logger.warn(
     {
@@ -918,7 +920,9 @@ export async function buildAdapterStreamResponse(
       try {
         for await (const received of chunks) {
           const chunk =
-            received.type === 'error' ? presentStreamError(received, processed) : received;
+            received.type === 'error'
+              ? presentStreamError(received, processed, assembler.canonicalText().trim().length > 0)
+              : received;
           ingestUsageChunk(usage, chunk);
           if (chunk.type === 'response-meta' && typeof chunk.provider === 'string') {
             upstreamProvider = chunk.provider;

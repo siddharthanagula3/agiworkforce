@@ -467,6 +467,19 @@ describe('renaming a device', () => {
     );
   });
 
+  it('takes a chosen name back, so the device shows its generated name again', async () => {
+    mockExecute.mockResolvedValueOnce(1);
+
+    const response = await PATCH(patch({ name: null }), params(REGISTERED_ID));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ id: REGISTERED_ID, name: null });
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('update device_registrations set name = $3'),
+      [REGISTERED_ID, 'user-1', null],
+    );
+  });
+
   it('falls back to the legacy tables and 404s a device the caller does not own', async () => {
     mockExecute.mockResolvedValue(0);
 

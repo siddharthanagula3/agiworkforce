@@ -10,6 +10,8 @@ import { modelRegistry } from '@agiworkforce/model-registry';
 import { getProviderDisplayLabel } from '@agiworkforce/types';
 import { degradationFor } from '@/lib/server/slo/degradation';
 import {
+  STREAM_INTERRUPTED_CODE,
+  STREAM_INTERRUPTED_MESSAGE,
   FREE_ALLOWANCE_EXHAUSTED_CODE,
   mapClassifiedUpstreamError,
   streamErrorFrame,
@@ -509,5 +511,39 @@ describe('a provider the catalogue must stop offering', () => {
     upstreamFailureCopy(error, PROVIDER);
 
     expect(markProviderDegraded).toHaveBeenCalledWith(PROVIDER, category);
+  });
+});
+
+describe('a connection that drops after part of the answer arrived', () => {
+  const dropped = () => Object.assign(new TypeError('terminated'), {});
+
+  it('says the model could not be reached only when nothing had arrived yet', () => {
+    const before = upstreamFailureCopy(dropped(), PROVIDER, {
+      requestedModel: 'some-pinned-model',
+    });
+
+    expect(before.code).toBe('provider_unreachable');
+    expect(before.message).toMatch(/could not be reached/);
+  });
+
+  it('says the answer stopped part way and that the part that arrived is kept', () => {
+    const after = upstreamFailureCopy(dropped(), PROVIDER, {
+      requestedModel: 'some-pinned-model',
+      answerStarted: true,
+    });
+
+    expect(after.code).toBe(STREAM_INTERRUPTED_CODE);
+    expect(after.message).toBe(STREAM_INTERRUPTED_MESSAGE);
+    expect(after.message).not.toMatch(/could not be reached/);
+  });
+
+  it('keeps every other failure its own sentence even after text arrived', () => {
+    const limited = Object.assign(new Error('rate limit exceeded'), { status: 429 });
+    const copy = upstreamFailureCopy(limited, PROVIDER, {
+      requestedModel: 'some-pinned-model',
+      answerStarted: true,
+    });
+
+    expect(copy.code).toBe('provider_rate_limited');
   });
 });

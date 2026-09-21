@@ -73,7 +73,24 @@ export function streamErrorFrame(shape: UpstreamErrorShape, retryable: boolean):
  */
 export interface UpstreamErrorContext {
   requestedModel?: string | undefined;
+  /** Part of the answer already reached the reader before this failure. */
+  answerStarted?: boolean | undefined;
 }
+
+/**
+ * Failures that end a stream from the transport or provider side. Once text
+ * has arrived, "could not be reached" is false: the model answered and stopped.
+ */
+const INTERRUPTING_CATEGORIES: ReadonlySet<string> = new Set([
+  'connection',
+  'api_timeout',
+  'server_error',
+  'unknown',
+]);
+
+export const STREAM_INTERRUPTED_CODE = 'stream_interrupted';
+export const STREAM_INTERRUPTED_MESSAGE =
+  'The response stopped part way through. The part that arrived is kept above. Retry to get a complete answer.';
 
 const PICK_A_MODEL = 'pick a specific model from the model picker';
 
@@ -236,8 +253,12 @@ export function mapClassifiedUpstreamError(
   logProviderRejection(classified, provider);
   const retryAfterSeconds = statableRetryAfterSeconds(classified.retryAfterSeconds);
   const requestId = correlationId();
+  const copy = upstreamCopy(classified, provider, context, retryAfterSeconds);
+  const interrupted =
+    context?.answerStarted === true && INTERRUPTING_CATEGORIES.has(classified.category);
   return {
-    ...upstreamCopy(classified, provider, context, retryAfterSeconds),
+    ...copy,
+    ...(interrupted ? { code: STREAM_INTERRUPTED_CODE, message: STREAM_INTERRUPTED_MESSAGE } : {}),
     ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     ...(requestId !== undefined ? { requestId } : {}),
   };
