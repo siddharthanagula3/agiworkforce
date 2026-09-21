@@ -17,7 +17,7 @@ export const METADATA = 'apps/web/lib/support/doc-metadata.ts';
 // An article whose sentences are not yet indexed is pinned by its hash: the
 // first edit to it fails this guard until its claims are indexed. The set may
 // shrink and never grow.
-export const UNINDEXED_CEILING = 29;
+export const UNINDEXED_CEILING = 26;
 
 // A claim with no executable proof is allowed only while it names why.
 export const UNPROVEN_CEILING = 6;

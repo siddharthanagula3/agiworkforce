@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-09-20
+updated: 2026-09-21
 scope: public
 ---
 
@@ -32,6 +32,21 @@ authenticator code or one of your backup codes.
 The same page changes your password. A password that fails the common-password
 check is refused with "That password is too common." A forgotten password is
 reset from the sign-in screen with **Forgot password?**.
+
+## If you cannot sign in
+
+- **Forgotten password.** Reset it from the sign-in screen with **Forgot
+  password?**.
+- **Lost the phone with your authenticator.** Enter one of your backup codes at
+  the second-factor screen, then set the authenticator up again in Settings,
+  Security. Each backup code works once.
+- **Running low on backup codes.** Settings, Security generates a new set after
+  you confirm your second factor again, and the new set replaces the old one, so
+  codes you printed earlier stop working.
+- **Lost the authenticator and every backup code.** There is no self-serve way
+  back in, and there is no screen from which support can remove a second factor.
+  Email contact@agiworkforce.com from the address on the account, with your
+  **User ID** if you have it.
 
 ## Active sessions
 
