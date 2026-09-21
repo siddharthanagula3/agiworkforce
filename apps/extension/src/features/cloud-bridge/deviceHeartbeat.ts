@@ -42,7 +42,8 @@ export function buildChromeHeartbeat(facts: ChromeHostFacts): DeviceHeartbeatReq
   return parsed.success ? parsed.data : null;
 }
 
-async function installId(): Promise<string> {
+/** The id this install is known by, shared with every report that names a device. */
+export async function deviceInstallId(): Promise<string> {
   const stored = await chrome.storage.local.get([INSTALL_ID_KEY]);
   const existing = stored[INSTALL_ID_KEY];
   if (typeof existing === 'string' && existing.length > 0) return existing;
@@ -57,7 +58,7 @@ async function sendHeartbeat(fetchImpl: typeof fetch): Promise<boolean> {
   const platform = await chrome.runtime.getPlatformInfo();
   const browserVersion = /Chrome\/([\d.]+)/.exec(navigator.userAgent)?.[1] ?? null;
   const heartbeat = buildChromeHeartbeat({
-    installId: await installId(),
+    installId: await deviceInstallId(),
     os: platform.os,
     arch: platform.arch,
     extensionVersion: chrome.runtime.getManifest().version,
