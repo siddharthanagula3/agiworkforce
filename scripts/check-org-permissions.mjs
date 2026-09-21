@@ -129,6 +129,7 @@ export const PRIMARY_OWNER_ROLE_READS = new Map([
 ]);
 
 const ROLE_COMPARISON = /\brole\s*(?:===|!==)\s*'(?:owner|admin|member|viewer)'/;
+const AREA_LEVEL_CALL = /\badminPermissionLevel\s*\([\s\S]{0,200}?,\s*['"`]([a-z]+)['"`]\s*\)/g;
 const PERMISSION_LITERAL = /'([a-z][a-z]*(?:\.[a-z]+)+)'/g;
 
 const resolveSpecifier = createResolver({ '@/*': WEB });
@@ -162,6 +163,99 @@ function readPermissionRegistry() {
   for (const [, legacy] of aliases[1].matchAll(/'([^']+)':/g)) registry.add(legacy);
   return registry;
 }
+
+/** The 30 ids a custom role is built out of, and the legacy key each answers to. */
+export function readCanonicalPermissions(contractPath = PERMISSIONS_CONTRACT) {
+  const source = fs.readFileSync(contractPath, 'utf8');
+  const areas = /export const ADMIN_PERMISSION_AREAS = \[([\s\S]*?)\] as const;/.exec(source);
+  const features = /export const FEATURE_ORGANIZATION_PERMISSIONS = \[([\s\S]*?)\] as const;/.exec(
+    source,
+  );
+  const aliases =
+    /export const LEGACY_ORGANIZATION_PERMISSION_ALIASES[\s\S]*?Object\.freeze\(\{([\s\S]*?)\n\}\);/.exec(
+      source,
+    );
+  if (!areas || !features || !aliases) {
+    throw new Error(
+      'check:org-permissions cannot read the permission registry; its shape in ' +
+        'enterprise/permissions.ts changed and this reader has to follow it.',
+    );
+  }
+  const canonical = [...features[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+  for (const [, area] of areas[1].matchAll(/'([^']+)'/g)) {
+    canonical.push(`admin.${area}.view`, `admin.${area}.manage`);
+  }
+  const alias = new Map();
+  for (const match of aliases[1].matchAll(/'([^']+)':\s*'([^']+)'/g)) {
+    alias.set(match[1], match[2]);
+  }
+  return { canonical, alias };
+}
+
+/**
+ * Permissions the console offers and no server decision consults, each naming
+ * what governs that act instead. A custom role built out of one of these grants
+ * nothing, so the set may only shrink: either a decision asks for it, or the
+ * editor stops offering it.
+ */
+export const PERMISSIONS_NO_DECISION_ASKS = new Map([
+  [
+    'feature.content.view',
+    'reading workspace content is bounded by the active-workspace scope, which binds every read to the organization the member resolved; no route asks the grid for it',
+  ],
+  [
+    'admin.members.view',
+    'apps/web/app/api/settings/team/route.ts serves the roster and asks members.manage, so a role holding only the view half sees nothing',
+  ],
+  [
+    'admin.owners.view',
+    'who owns a workspace is read off the membership row wherever it is needed, never through the grid',
+  ],
+  [
+    'admin.owners.manage',
+    'apps/web/lib/services/organization-membership-service.ts refuses a non-owner directly, so changing another owner is the Primary Owner’s alone',
+  ],
+  [
+    'admin.directory.view',
+    'directory sync and its log are served by the SCIM and admin surfaces, which gate on the platform admin check rather than on a workspace permission',
+  ],
+  [
+    'admin.directory.manage',
+    'directory sync is configured through the admin surfaces, which gate on the platform admin check rather than on a workspace permission',
+  ],
+  [
+    'admin.audit.manage',
+    'apps/web/app/api/settings/organization/audit/destination/route.ts asks policy.manage, and the export asks audit.read',
+  ],
+  [
+    'admin.billing.manage',
+    'apps/web/app/api/settings/organization/spend-limit/route.ts asks policy.manage; seats and plan are changed through the billing surfaces',
+  ],
+  [
+    'admin.workspace.view',
+    'workspace settings are read by any member through the organization route; only the write half asks workspace.settings',
+  ],
+  [
+    'admin.ownership.view',
+    'who the Primary Owner is comes off the membership row, not from the grid',
+  ],
+  [
+    'admin.ownership.manage',
+    'apps/web/app/api/settings/organization/transfer-ownership/route.ts decides through the resource ACL inside its advisory-lock transaction',
+  ],
+  [
+    'admin.lifecycle.view',
+    'the deletion state is returned to any member who may read the organization',
+  ],
+  [
+    'admin.lifecycle.manage',
+    'apps/web/app/api/settings/organization/route.ts and deletion/cancel/route.ts both require the Primary Owner, so deletion cannot be delegated through a role',
+  ],
+  [
+    'admin.contracts.view',
+    'apps/web/app/api/settings/organization/billing-contract/route.ts asks billing.read for the read and billing.contracts.manage for the write',
+  ],
+]);
 
 const modules = new Map();
 
@@ -320,6 +414,38 @@ function permissionsAsked(source) {
   return asked;
 }
 
+/** Canonical ids some server file names, with a legacy key counting as its canonical. */
+export function consultedPermissions(roots, alias) {
+  const consulted = new Set();
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__' && entry.name !== 'node_modules') walk(full);
+        continue;
+      }
+      if (!/\.tsx?$/.test(entry.name) || entry.name.includes('.test.')) continue;
+      const source = stripComments(fs.readFileSync(full, 'utf8'));
+      for (const literal of permissionsAsked(source)) {
+        consulted.add(alias.get(literal) ?? literal);
+      }
+      // Asking an area for its level consults both halves of it at once.
+      for (const [, area] of source.matchAll(AREA_LEVEL_CALL)) {
+        consulted.add(`admin.${area}.view`);
+        consulted.add(`admin.${area}.manage`);
+      }
+    }
+  };
+  for (const root of roots) walk(root);
+  return consulted;
+}
+
 /**
  * True when some migration defines a write policy on the table whose body asks
  * the permission grid. Read from the SQL, so deleting the policy fails here.
@@ -440,6 +566,15 @@ function main() {
     (entry) => !seenRoleReads.has(entry),
   );
 
+  const { canonical, alias } = readCanonicalPermissions();
+  const consulted = consultedPermissions([path.join(WEB, 'app'), path.join(WEB, 'lib')], alias);
+  const unconsulted = canonical.filter(
+    (permission) => !consulted.has(permission) && !PERMISSIONS_NO_DECISION_ASKS.has(permission),
+  );
+  const staleUnconsulted = [...PERMISSIONS_NO_DECISION_ASKS.keys()].filter((permission) =>
+    consulted.has(permission),
+  );
+
   const failures = [];
   if (uncovered.length > 0) {
     failures.push(
@@ -490,6 +625,21 @@ function main() {
         staleRoleReads.map((entry) => `  ${entry}`).join('\n'),
     );
   }
+  if (unconsulted.length > 0) {
+    failures.push(
+      `${unconsulted.length} permission(s) the role editor offers that no server decision asks.\n` +
+        '  A custom role built out of one of these grants nothing and refuses nothing.\n' +
+        '  Ask for it where the act happens, or declare what governs that act instead.\n' +
+        unconsulted.map((entry) => `  ${entry}`).join('\n'),
+    );
+  }
+  if (staleUnconsulted.length > 0) {
+    failures.push(
+      `${staleUnconsulted.length} permission(s) declared as consulted by nothing now are.\n` +
+        '  The set may only shrink; delete the entry.\n' +
+        staleUnconsulted.map((entry) => `  ${entry}`).join('\n'),
+    );
+  }
 
   if (failures.length > 0) {
     console.error(`check:org-permissions failed.\n\n${failures.join('\n\n')}\n`);
@@ -500,7 +650,9 @@ function main() {
     `check:org-permissions, ${mutatingRoutes} organization-scoped mutating route(s) each ask the ` +
       `permission grid, ${seenSelfService.size} self-service route(s) declared, ${registry.size} ` +
       `permission ids in the registry, ${seenRlsEnforced.size} row-policy enforced, ` +
-      `${seenRoleReads.size} declared Primary Owner role read(s).`,
+      `${seenRoleReads.size} declared Primary Owner role read(s), ` +
+      `${canonical.length - PERMISSIONS_NO_DECISION_ASKS.size} of ${canonical.length} canonical ` +
+      `permissions consulted by a server decision.`,
   );
 }
 
