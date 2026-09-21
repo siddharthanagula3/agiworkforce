@@ -21,7 +21,6 @@
 
 import {
   BookOpen,
-  Brain,
   CalendarClock,
   FolderOpen,
   LibraryBig,
@@ -122,15 +121,6 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     href: '/chat/library',
     isActive: (pathname) =>
       isUnder(pathname, '/chat/library') || isUnder(pathname, '/chat/artifacts'),
-    hideable: true,
-  },
-  {
-    id: 'models',
-    label: 'Models',
-    labelKey: 'navModels',
-    icon: Brain,
-    href: '/models',
-    isActive: (pathname) => isUnder(pathname, '/models'),
     hideable: true,
   },
   {
