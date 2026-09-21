@@ -6,11 +6,24 @@ import { VOICE_SESSION_STATUS, INITIAL_VOICE_SESSION_STATE } from '@agiworkforce
 import { LIVE_SESSION_MESSAGE } from '@features/chat/lib/live-voice-session';
 
 const controller = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+const visual = vi.hoisted(() => ({
+  current: null as ReturnType<
+    typeof import('@/lib/visual/use-visual-session').useVisualSession
+  > | null,
+}));
 
 vi.mock('@features/chat/hooks/use-voice-session', () => ({
   liveVoiceOutputRef: { current: null },
   useVoiceSession: () => controller.current,
 }));
+vi.mock('@/lib/visual/use-visual-session', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/visual/use-visual-session')>();
+  return {
+    ...actual,
+    useVisualSession: (options: Parameters<typeof actual.useVisualSession>[0]) =>
+      visual.current ?? actual.useVisualSession(options),
+  };
+});
 vi.mock('./VoiceOrb', () => ({
   VoiceOrbPreview: () => null,
   VoiceOrb: () => <div data-testid="voice-orb" />,
@@ -60,12 +73,70 @@ function renderSurface(overrides: Partial<Record<string, unknown>> = {}) {
   );
 }
 
+function sharingCamera(overrides: { stop: () => void }) {
+  return {
+    status: {
+      source: 'camera' as const,
+      state: 'active' as const,
+      sampledFrames: 3,
+      droppedFrames: 0,
+      startedAtMs: 0,
+      lastFrameAtMs: 0,
+      error: null,
+    },
+    capturing: true,
+    frames: [],
+    latestFrame: null,
+    mediaStream: null,
+    start: vi.fn(async () => undefined),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   controller.current = session();
+  visual.current = null;
 });
 
 afterEach(() => {
   cleanup();
+});
+
+describe('VoiceModeSurface utterance in flight', () => {
+  it('shows what is about to be sent and lets the speaker take it back', async () => {
+    const cancelPending = vi.fn();
+    controller.current = session({
+      state: {
+        ...INITIAL_VOICE_SESSION_STATE,
+        status: VOICE_SESSION_STATUS.listening,
+        pendingUtterance: 'Book the flight for Tuesday',
+      },
+      cancelPending,
+    });
+
+    renderSurface();
+
+    expect(screen.getByTestId('voice-sending-chip').textContent).toContain(
+      'Book the flight for Tuesday',
+    );
+    await act(async () => {
+      screen.getByRole('button', { name: /do not send that/i }).click();
+    });
+    expect(cancelPending).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no cancel control when nothing is waiting to be sent', () => {
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening },
+    });
+
+    renderSurface();
+
+    expect(screen.queryByTestId('voice-sending-chip')).toBeNull();
+    expect(screen.queryByRole('button', { name: /do not send that/i })).toBeNull();
+  });
 });
 
 describe('VoiceModeSurface reconnect state', () => {
@@ -130,5 +201,25 @@ describe('VoiceModeSurface live camera', () => {
 
     expect(screen.getByRole('alert').textContent).toBe(VISUAL_SOURCE_MESSAGE.unavailable);
     expect(screen.queryByTestId('voice-camera-preview')).toBeNull();
+  });
+
+  it('says the camera is live, shows what it is sending, and stops on the same control', async () => {
+    const stop = vi.fn();
+    visual.current = sharingCamera({ stop });
+
+    renderSurface({ onVisualFrame: () => undefined });
+
+    const toggle = screen.getByTestId('voice-camera-toggle');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.textContent).toContain('Stop sharing your camera');
+    expect(screen.getByText('Your camera is being shared with this call.')).toBeTruthy();
+    expect(screen.getByTestId('voice-camera-preview')).toBeTruthy();
+
+    await act(async () => {
+      toggle.click();
+    });
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(visual.current?.start).not.toHaveBeenCalled();
   });
 });

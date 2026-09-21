@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload } from '@agiworkforce/icons';
+import { MAX_CHAT_ATTACHMENT_COUNT } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
 
 interface DragDropOverlayProps {
@@ -15,7 +16,7 @@ interface DragDropOverlayProps {
 export function DragDropOverlay({
   onDrop,
   accept,
-  maxFiles = 10,
+  maxFiles = MAX_CHAT_ATTACHMENT_COUNT,
   className,
 }: DragDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -62,8 +63,10 @@ export function DragDropOverlay({
           )
         : files;
 
+      // Every dropped file goes to the attachment hook, which owns the limit
+      // and names what it refused; truncating here dropped the extras silently.
       if (filtered.length > 0) {
-        onDrop(filtered.slice(0, maxFiles));
+        onDrop(filtered);
       }
     };
 
@@ -78,7 +81,7 @@ export function DragDropOverlay({
       window.removeEventListener('dragover', handleDragOver);
       window.removeEventListener('drop', handleDrop);
     };
-  }, [accept, maxFiles, onDrop]);
+  }, [accept, onDrop]);
 
   void dragCounter;
 
