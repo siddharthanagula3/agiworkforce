@@ -14,13 +14,13 @@ use agiworkforce_protocol::developer_session::{
     DeveloperFileChangeKind, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
     DeveloperSessionApproval, DeveloperSessionFileChange, DeveloperSessionHandoff,
     DeveloperSessionSource, DeveloperSessionTrustMode, DeveloperSessionWriter,
-    DeveloperSessionWriterChange, HandoffAdmission, HandoffEnvironment, HandoffLastTurn,
-    HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookListResponse, HostModelSummary,
-    LocalModelListResponse, LocalModelProvider, LocalModelSummary, McpLoginParams,
-    McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse, ModelListParams,
-    PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams, SettingsReadResponse,
-    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillListResponse,
-    SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    DeveloperSessionWriterChange, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
+    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookListResponse,
+    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
+    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
+    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
     SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
     ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
     ThreadReconnectResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
@@ -300,6 +300,7 @@ pub struct CliDeveloperSessionHost {
     host_models: Arc<RwLock<Option<Vec<HostModelSummary>>>>,
     writer: &'static WriterIdentity,
     client_turns: ClientTurns,
+    taken_handoffs: Arc<Mutex<Vec<String>>>,
 }
 
 /// A device grant this host started and has not yet resolved.
@@ -347,6 +348,7 @@ impl CliDeveloperSessionHost {
             host_models: Arc::new(RwLock::new(None)),
             writer: writer_lease::process_writer(WRITER_LABEL),
             client_turns: Arc::new(StdMutex::new(HashMap::new())),
+            taken_handoffs: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -1210,6 +1212,18 @@ fn handoff_refusal_message(refusal: &HandoffRefusal) -> String {
         HandoffRefusal::TrustModeUnknown => {
             "This handoff does not say what trust mode the session ran under".to_string()
         }
+        HandoffRefusal::Expired {
+            issued_at,
+            max_age_seconds,
+        } => format!(
+            "This handoff was issued at {issued_at} and a record is good for {max_age_seconds} seconds; ask the origin surface for a new one"
+        ),
+        HandoffRefusal::Replayed { receipt } => {
+            format!("This handoff ({receipt}) was already taken here")
+        }
+        HandoffRefusal::WrongAccount => {
+            "This handoff belongs to a different account than the one signed in here".to_string()
+        }
     }
 }
 
@@ -1614,12 +1628,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadHandoffAcceptParams,
     ) -> Result<HandoffAdmission, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        params
+        let mut taken = self.taken_handoffs.lock().await;
+        let account = crate::app_server::account::account_fingerprint();
+        let admission = params
             .handoff
-            .accept(HandoffEnvironment::Local)
+            .accept_with(
+                &HandoffAdmissionContext::here(HandoffEnvironment::Local)
+                    .for_account(account.as_deref())
+                    .already_taken(&taken),
+            )
             .map_err(|refusal| {
                 DeveloperSessionHostError::invalid_request(handoff_refusal_message(&refusal))
-            })
+            })?;
+        taken.push(params.handoff.receipt());
+        Ok(admission)
     }
 
     async fn archive_thread(
@@ -4280,6 +4302,115 @@ mod tests {
         );
         assert!(admission.interrupted_turn.is_none());
         assert!(admission.reask.is_empty());
+    }
+
+    /// A record is a bearer of session state, so one that has already been
+    /// spent here opens nothing a second time and the caller is told why.
+    #[tokio::test]
+    async fn a_handoff_this_host_already_took_is_not_taken_again() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace.path().canonicalize().expect("canonical");
+        let mut session = ManagedSession::with_messages(
+            "replay-thread",
+            chrono::Utc::now(),
+            vec![crate::models::Message::text("user", "port the parser")],
+        );
+        session.workspace_root = Some(workspace_root.clone());
+        session.code = Some(Box::new(
+            agiworkforce_protocol::code_domain::CodeSession::new(
+                "replay-thread",
+                DeveloperSessionSource::Cli,
+                DeveloperSessionTrustMode::Byok,
+                chrono::Utc::now(),
+            ),
+        ));
+        store.save(&session).expect("save");
+
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+        let inbound = host
+            .hand_off_thread(ThreadHandoffParams {
+                thread_id: "replay-thread".to_string(),
+                to_environment: HandoffEnvironment::Local,
+            })
+            .await
+            .expect("handoff addressed here");
+
+        host.accept_handoff(ThreadHandoffAcceptParams {
+            handoff: inbound.clone(),
+        })
+        .await
+        .expect("the first admission");
+
+        let replayed = host
+            .accept_handoff(ThreadHandoffAcceptParams { handoff: inbound })
+            .await
+            .expect_err("the same record is not admitted twice");
+        assert!(
+            replayed.to_string().contains("already taken here"),
+            "the refusal does not say the record was spent: {replayed}"
+        );
+    }
+
+    /// The record travels whole, so a receiver that took it long after it was
+    /// written would resume work against a tree that has moved on.
+    #[tokio::test]
+    async fn a_handoff_that_sat_somewhere_is_refused_on_its_age() {
+        let workspace = tempdir().expect("workspace");
+        let store_dir = tempdir().expect("store");
+        let store = ManagedSessionStore::new(store_dir.path().to_path_buf());
+        let workspace_root = workspace.path().canonicalize().expect("canonical");
+        let mut session = ManagedSession::with_messages(
+            "stale-thread",
+            chrono::Utc::now(),
+            vec![crate::models::Message::text("user", "port the parser")],
+        );
+        session.workspace_root = Some(workspace_root.clone());
+        session.code = Some(Box::new(
+            agiworkforce_protocol::code_domain::CodeSession::new(
+                "stale-thread",
+                DeveloperSessionSource::Cli,
+                DeveloperSessionTrustMode::Byok,
+                chrono::Utc::now(),
+            ),
+        ));
+        store.save(&session).expect("save");
+
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace_root,
+            store,
+            false,
+        )
+        .expect("host");
+        let mut inbound = host
+            .hand_off_thread(ThreadHandoffParams {
+                thread_id: "stale-thread".to_string(),
+                to_environment: HandoffEnvironment::Local,
+            })
+            .await
+            .expect("handoff addressed here");
+        inbound.issued_at = (chrono::Utc::now()
+            - chrono::Duration::seconds(
+                agiworkforce_protocol::developer_session::HANDOFF_MAX_AGE_SECONDS + 60,
+            ))
+        .to_rfc3339();
+
+        let refused = host
+            .accept_handoff(ThreadHandoffAcceptParams { handoff: inbound })
+            .await
+            .expect_err("a stale record is not admitted");
+        assert!(
+            refused.to_string().contains("ask the origin surface"),
+            "the refusal does not tell the caller what to do: {refused}"
+        );
     }
 
     #[tokio::test]

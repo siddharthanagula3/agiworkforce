@@ -7,7 +7,6 @@ use agiworkforce_protocol::developer_session::{
     HandoffPlanStepState, HandoffPosture, HandoffValidation, HandoffValidationOutcome,
     HandoffWorkspace, PendingApprovalSnapshot, DEVELOPER_SESSION_PROTOCOL_VERSION,
 };
-use chrono::Utc;
 use clap::ValueEnum;
 
 use super::session::{
@@ -121,7 +120,7 @@ pub fn developer_session_handoff(
         thread_id: session.session_id.clone(),
         origin: context.origin,
         issued_by: DeveloperSessionSource::Cli,
-        issued_at: Utc::now().to_rfc3339(),
+        issued_at: DeveloperSessionHandoff::issued_now(),
         from_environment: context.from,
         to_environment: context.to,
         workspace: HandoffWorkspace {
@@ -167,6 +166,7 @@ pub fn developer_session_handoff(
         pending_approvals: context.pending_approvals,
         last_turn: context.last_turn,
         local_resources: context.local_resources,
+        issued_for_account: crate::app_server::account::account_fingerprint(),
     }
 }
 
@@ -179,6 +179,7 @@ mod tests {
         ChangeKind, CodeSession, RepositoryChange, RepositorySnapshot,
     };
     use agiworkforce_protocol::developer_session::{HandoffStart, HandoffTurnState};
+    use chrono::Utc;
 
     fn session_with_work() -> ManagedSession {
         let now = Utc::now();

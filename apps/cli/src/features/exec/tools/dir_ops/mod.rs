@@ -10,6 +10,59 @@ use super::ToolResult;
 
 const MAX_GLOB_RESULTS: usize = 1_000;
 
+/// The file a `path:line:text` match came from, for a path that may itself
+/// carry a Windows drive prefix.
+fn matched_file(line: &str) -> Option<&str> {
+    let mut from = 0;
+    while let Some(offset) = line[from..].find(':') {
+        let at = from + offset;
+        let rest = &line[at + 1..];
+        let digits = rest.chars().take_while(|c| c.is_ascii_digit()).count();
+        if digits > 0 && rest[digits..].starts_with(':') {
+            return Some(&line[..at]);
+        }
+        from = at + 1;
+    }
+    line.split_once(':').map(|(path, _)| path)
+}
+
+/// Matched lines that came out of a file the credential policy covers. A
+/// search reads the tree a line at a time, so the refusal `read_file` makes
+/// has to be made again on what a match would carry back.
+fn withhold_credential_matches(output: &str) -> (String, usize) {
+    let mut kept: Vec<&str> = Vec::new();
+    let mut withheld = 0usize;
+    for line in output.lines() {
+        match matched_file(line) {
+            Some(path) if crate::sensitive_files::is_sensitive_file(path) => withheld += 1,
+            _ => kept.push(line),
+        }
+    }
+    (kept.join("\n"), withheld)
+}
+
+fn withholding_note(withheld: usize) -> String {
+    format!(
+        "\n[{withheld} match(es) withheld: they are in files the credential-file policy covers, so \
+         their contents would reach the model and the session transcript. Open those files \
+         yourself, or pass the one value the task needs.]"
+    )
+}
+
+/// A search answer with the credential files taken out of it.
+fn searched(tool_name: &str, output: String) -> ToolResult {
+    let (kept, withheld) = withhold_credential_matches(&output);
+    let mut text = truncate_output_with_save(tool_name, kept);
+    if withheld > 0 {
+        text.push_str(&withholding_note(withheld));
+    }
+    ToolResult {
+        tool_name: tool_name.to_string(),
+        success: true,
+        output: text,
+    }
+}
+
 pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Result<ToolResult> {
     let pattern = match args.get("pattern") {
         Some(p) => p,
@@ -38,14 +91,11 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
     print_tool_status("search_files", &format!("Search({}, {})", pattern, path));
 
     let mut command = Command::new("grep");
-    command
-        .arg("-rn")
-        .arg("--include=*")
-        .arg("-m")
-        .arg("200")
-        .arg("--")
-        .arg(pattern)
-        .arg(&validated_path);
+    command.arg("-rn").arg("--include=*").arg("-m").arg("200");
+    for directory in crate::repo::index_policy::excluded_directory_names() {
+        command.arg(format!("--exclude-dir={directory}"));
+    }
+    command.arg("--").arg(pattern).arg(&validated_path);
     let result = crate::process_tree::output(command, None, Some(COMMAND_TIMEOUT)).await;
 
     match result {
@@ -61,19 +111,12 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
                 });
             }
 
-            let mut result_text = stdout;
+            let mut result = searched("search_files", stdout);
             if !stderr.is_empty() {
-                result_text.push_str("\n[stderr]\n");
-                result_text.push_str(&stderr);
+                result.output.push_str("\n[stderr]\n");
+                result.output.push_str(&stderr);
             }
-
-            let result_text = truncate_output_with_save("search_files", result_text);
-
-            Ok(ToolResult {
-                tool_name: "search_files".to_string(),
-                success: true,
-                output: result_text,
-            })
+            Ok(result)
         }
         Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
             tool_name: "search_files".to_string(),
@@ -239,33 +282,27 @@ pub(super) async fn execute_grep_files(
     match crate::process_tree::output(cmd, None, Some(COMMAND_TIMEOUT)).await {
         Ok(o) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-            let output = if stdout.is_empty() {
-                format!("No matches for: {}", pattern)
-            } else {
-                truncate_output_with_save("grep_files", stdout)
-            };
-            Ok(ToolResult {
-                tool_name: "grep_files".into(),
-                success: true,
-                output,
-            })
+            if stdout.is_empty() {
+                return Ok(ToolResult {
+                    tool_name: "grep_files".into(),
+                    success: true,
+                    output: format!("No matches for: {}", pattern),
+                });
+            }
+            Ok(searched("grep_files", stdout))
         }
         Err(error) if error.kind() != std::io::ErrorKind::TimedOut => {
             let mut fb = Command::new("grep");
-            fb.arg("-rn")
-                .arg("--max-count=100")
-                .arg("--")
-                .arg(pattern)
-                .arg(&validated_path);
+            fb.arg("-rn").arg("--max-count=100");
+            for directory in crate::repo::index_policy::excluded_directory_names() {
+                fb.arg(format!("--exclude-dir={directory}"));
+            }
+            fb.arg("--").arg(pattern).arg(&validated_path);
             match crate::process_tree::output(fb, None, Some(COMMAND_TIMEOUT)).await {
-                Ok(o) => Ok(ToolResult {
-                    tool_name: "grep_files".into(),
-                    success: true,
-                    output: truncate_output_with_save(
-                        "grep_files",
-                        String::from_utf8_lossy(&o.stdout).to_string(),
-                    ),
-                }),
+                Ok(o) => Ok(searched(
+                    "grep_files",
+                    String::from_utf8_lossy(&o.stdout).to_string(),
+                )),
                 Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
                     tool_name: "grep_files".into(),
                     success: false,
@@ -385,5 +422,120 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
                 output
             },
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const WITHHELD_VALUE: &str = "EXAMPLE-NOT-A-REAL-BILLING-KEY";
+
+    #[test]
+    fn a_match_inside_a_credential_file_never_reaches_the_answer() {
+        let raw = format!(
+            "src/billing.rs:12:const KEY_NAME: &str = \"STRIPE_KEY\";\n\
+             .env:3:STRIPE_SECRET_KEY={WITHHELD_VALUE}\n\
+             apps/web/.env.production:1:DATABASE_URL=postgres://user:pw@host/db\n\
+             deploy/id_rsa:1:-----BEGIN OPENSSH PRIVATE KEY-----\n\
+             certs/server.pem:1:-----BEGIN PRIVATE KEY-----\n\
+             docs/setup.md:9:copy .env.example to .env\n"
+        );
+
+        let answer = searched("search_files", raw).output;
+
+        assert!(
+            !answer.contains(WITHHELD_VALUE),
+            "a credential value reached the model: {answer}"
+        );
+        assert!(!answer.contains("postgres://user:pw@host/db"), "{answer}");
+        assert!(!answer.contains("BEGIN OPENSSH PRIVATE KEY"), "{answer}");
+        assert!(!answer.contains("BEGIN PRIVATE KEY"), "{answer}");
+        assert!(answer.contains("src/billing.rs:12:"), "{answer}");
+        assert!(answer.contains("docs/setup.md:9:"), "{answer}");
+        assert!(
+            answer.contains("4 match(es) withheld"),
+            "the answer does not say what it held back: {answer}"
+        );
+    }
+
+    #[test]
+    fn nothing_is_withheld_and_nothing_is_said_when_no_credential_file_matched() {
+        let raw = "src/a.rs:1:fn main() {}\nsrc/b.rs:2:let key = 1;\n".to_string();
+
+        let answer = searched("grep_files", raw).output;
+
+        assert_eq!(answer, "src/a.rs:1:fn main() {}\nsrc/b.rs:2:let key = 1;");
+        assert!(!answer.contains("withheld"), "{answer}");
+    }
+
+    /// The filter keeps no list of its own: for any path, it withholds exactly
+    /// when `sensitive_files` says the file holds credentials, so a pattern
+    /// added there is covered here the moment it exists.
+    #[test]
+    fn the_credential_policy_is_the_only_thing_that_decides_what_is_withheld() {
+        for path in [
+            ".env",
+            ".env.local",
+            "apps/web/.env.production",
+            ".envrc",
+            "config/secrets.json",
+            "aws_credentials",
+            ".netrc",
+            ".npmrc",
+            "home/.ssh/id_ed25519",
+            "certs/client.p12",
+            "private.key",
+            ".aws/credentials",
+            ".kube/config",
+            "infra/terraform.tfstate",
+            "infra/terraform.tfvars",
+            "src/main.rs",
+            "README.md",
+            "environment.ts",
+            "docs/credentials-guide.md",
+            "package.json",
+        ] {
+            let line = format!("{path}:7:value");
+            let (kept, withheld) = withhold_credential_matches(&line);
+            let sensitive = crate::sensitive_files::is_sensitive_file(path);
+            assert_eq!(
+                withheld == 1,
+                sensitive,
+                "{path}: the filter and the credential policy disagree"
+            );
+            assert_eq!(kept.is_empty(), sensitive, "{path}");
+        }
+    }
+
+    #[test]
+    fn a_path_that_carries_a_colon_is_still_attributed_to_its_file() {
+        assert_eq!(
+            matched_file(r"C:\repo\apps\.env:4:TOKEN=x"),
+            Some(r"C:\repo\apps\.env")
+        );
+        assert_eq!(matched_file("src/a.rs:12:let x = 1;"), Some("src/a.rs"));
+        assert_eq!(matched_file("Binary file .env matches"), None);
+
+        let (kept, withheld) = withhold_credential_matches(r"C:\repo\apps\.env:4:TOKEN=x");
+        assert_eq!(withheld, 1, "a Windows path was not attributed: {kept}");
+    }
+
+    #[test]
+    fn a_line_with_no_line_number_is_attributed_by_its_leading_path() {
+        let (kept, withheld) = withhold_credential_matches(".env:TOKEN=x\nsrc/a.rs:fn main()");
+        assert_eq!(withheld, 1);
+        assert_eq!(kept, "src/a.rs:fn main()");
+    }
+
+    #[test]
+    fn the_directories_the_index_leaves_out_are_the_ones_a_search_skips() {
+        let skipped = crate::repo::index_policy::excluded_directory_names();
+        for directory in ["node_modules", "target", ".git", ".venv", "dist"] {
+            assert!(
+                skipped.contains(&directory),
+                "{directory} is searched on every query"
+            );
+        }
     }
 }
