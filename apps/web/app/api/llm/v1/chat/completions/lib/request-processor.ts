@@ -157,6 +157,7 @@ import type {
   RoutingRuntimeState,
   RoutingTaskType,
   ResponseBudgetPlan,
+  SelectedAutoRoute,
   TaskFamily,
   TaskFamilySignals,
 } from '@agiworkforce/routing';
@@ -1862,6 +1863,39 @@ export function resolveResidencyRegion(
   return workspaceRegion === deploymentRegion ? null : workspaceRegion;
 }
 
+/**
+ * Checked against the model this turn resolved to, so an image attached before
+ * a switch to a text-only model is refused rather than dropped.
+ */
+export function turnCarriesImagesTheModelCannotRead(
+  messages: ChatCompletionRequest['messages'],
+  caps: Partial<ModelCapabilities> | undefined,
+): boolean {
+  if (!caps || caps.vision) return false;
+  return messages.some((message) =>
+    Array.isArray(message.content)
+      ? message.content.some((part) => part.type === 'image_url' && Boolean(part.image_url))
+      : false,
+  );
+}
+
+/**
+ * Whether Auto moved this conversation to another model. Only the model is
+ * compared: a new route for the same model is not a model change to the reader.
+ */
+export function autoModelMove(
+  requestedModel: string,
+  routeAffinity: Pick<ServedRouteAffinity, 'modelKey'> | null | undefined,
+  routeDecision: Pick<SelectedAutoRoute, 'modelKey' | 'reason'>,
+): { movedFromModel: string | null; movedReason: string | null } {
+  const priorModelKey = routeAffinity?.modelKey;
+  if (!isAutoModeModelId(requestedModel) || !priorModelKey) {
+    return { movedFromModel: null, movedReason: null };
+  }
+  if (priorModelKey === routeDecision.modelKey) return { movedFromModel: null, movedReason: null };
+  return { movedFromModel: priorModelKey, movedReason: routeDecision.reason ?? null };
+}
+
 export function resolveWebCloudModelRoute(
   model: string,
   subscriptionTier: string | undefined,
@@ -3308,15 +3342,14 @@ export async function processRequest(
     };
   }
 
-  let movedFromModel: string | null = null;
-  let movedReason: string | null = null;
+  const { movedFromModel, movedReason } = autoModelMove(
+    requestedModel,
+    routeAffinity,
+    routeDecision,
+  );
 
   if (isAutoModeModelId(requestedModel) && routeAffinity?.modelKey) {
-    const switchedModel = routeAffinity.modelKey !== routeDecision.modelKey;
-    if (switchedModel) {
-      movedFromModel = routeAffinity.modelKey;
-      movedReason = routeDecision.reason ?? null;
-    }
+    const switchedModel = movedFromModel !== null;
     logger.info(
       {
         userId,
@@ -3426,27 +3459,20 @@ export async function processRequest(
   }
 
   const resolvedModelCaps = getModelMetadataById(chatRequest.model)?.capabilities;
-  if (resolvedModelCaps && !resolvedModelCaps.vision) {
-    const hasImagePart = chatRequest.messages.some((msg) =>
-      Array.isArray(msg.content)
-        ? msg.content.some((part) => part.type === 'image_url' && part.image_url)
-        : false,
-    );
-    if (hasImagePart) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          {
-            error: {
-              message: 'The selected model cannot read images. Choose a vision-capable model.',
-              type: 'invalid_request_error',
-              code: 'model_no_vision',
-            },
+  if (turnCarriesImagesTheModelCannotRead(chatRequest.messages, resolvedModelCaps)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: 'The selected model cannot read images. Choose a vision-capable model.',
+            type: 'invalid_request_error',
+            code: 'model_no_vision',
           },
-          { status: 400 },
-        ),
-      };
-    }
+        },
+        { status: 400 },
+      ),
+    };
   }
 
   if (wantsJsonObject(chatRequest.response_format)) {
