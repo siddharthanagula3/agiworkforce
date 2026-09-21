@@ -57,6 +57,7 @@ export type IncompleteTurnCause =
   | 'workspacePolicy'
   | 'sessionExpired'
   | 'accountLimit'
+  | 'sharedFreeAllowance'
   | 'emptyResponse';
 
 /**
@@ -69,6 +70,7 @@ export type IncompleteTurnCause =
 export const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, IncompleteTurnCause>> = {
   provider_rate_limited: 'rateLimit',
   provider_quota_exhausted: 'rateLimit',
+  free_allowance_exhausted: 'sharedFreeAllowance',
   provider_overloaded: 'providerOutage',
   provider_unreachable: 'providerOutage',
   provider_error: 'providerOutage',
@@ -120,6 +122,8 @@ const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, str
   sessionExpired: 'Your session ended before this turn finished. Sign in again, then retry.',
   accountLimit:
     'You have reached a usage limit on your account. Open Usage to see when it resets, then retry.',
+  sharedFreeAllowance:
+    "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. It resets on the provider's schedule. Try again later, or use your own provider key.",
   emptyResponse: 'The model returned no response for this turn. Retry, or rephrase your message.',
 };
 

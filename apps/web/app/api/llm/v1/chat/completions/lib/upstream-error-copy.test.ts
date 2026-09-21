@@ -10,6 +10,7 @@ import { modelRegistry } from '@agiworkforce/model-registry';
 import { getProviderDisplayLabel } from '@agiworkforce/types';
 import { degradationFor } from '@/lib/server/slo/degradation';
 import {
+  FREE_ALLOWANCE_EXHAUSTED_CODE,
   mapClassifiedUpstreamError,
   streamErrorFrame,
   toolFailureMessage,
@@ -213,8 +214,18 @@ describe('a spent free pool', () => {
     vi.mocked(markProviderDegraded).mockClear();
     const copy = upstreamFailureCopy(spentDay(), PROVIDER, { requestedModel: 'some-pinned-model' });
 
-    expect(copy.code).toBe('provider_quota_exhausted');
+    expect(copy.code).toBe(FREE_ALLOWANCE_EXHAUSTED_CODE);
     expect(markProviderDegraded).not.toHaveBeenCalled();
+  });
+
+  it('has a code of its own, so a client never reads it as a provider quota or a rate limit', () => {
+    const shared = upstreamFailureCopy(spentDay(), PROVIDER, FREE_PLAN);
+    const paidQuota = upstreamFailureCopy(windowSpent(), PROVIDER, {
+      requestedModel: 'some-pinned-model',
+    });
+
+    expect(shared.code).toBe('free_allowance_exhausted');
+    expect(paidQuota.code).toBe('provider_quota_exhausted');
   });
 
   it('says whose allowance it is, whoever asked', () => {

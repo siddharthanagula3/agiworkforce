@@ -86,6 +86,8 @@ const STREAM_ERROR_REASON_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>
   workspacePolicy: 'your workspace administrator has turned this off for your account.',
   sessionExpired: 'your session ended before this turn finished.',
   accountLimit: 'you have reached a usage limit on your account.',
+  sharedFreeAllowance:
+    'the free model has used up the allowance everyone on the Free plan shares, which is not a limit on your account.',
   emptyResponse: 'no response was returned.',
 };
 

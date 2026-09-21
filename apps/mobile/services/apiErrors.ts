@@ -85,6 +85,8 @@ const NO_MODEL_SWITCH_CODES = new Set([
   'max_output_tokens_exceeded',
   'tool_call_invalid',
   FREE_CAPACITY_UNAVAILABLE_CODE,
+  // The Free plan has one model, so another model is not a way out of its spent pool.
+  'free_allowance_exhausted',
 ]);
 
 export function offersModelSwitch(code: string | null | undefined): boolean {
