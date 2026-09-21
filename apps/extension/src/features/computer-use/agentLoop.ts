@@ -29,7 +29,13 @@ import {
 } from './approvalPolicy';
 import { planSiteToolCall, type SiteToolDescriptor } from '../tools/siteToolRegistry';
 import { evaluateSiteAccess } from '../site-policy/store';
-import { sitePolicyDenialMessage } from '@agiworkforce/types';
+import {
+  sitePolicyDenialMessage,
+  startAutomationAttempt,
+  type AutomationSettlement,
+  type AutomationVerification,
+} from '@agiworkforce/types';
+import { recordAutomationAction } from '../observability/automationAudit';
 
 export interface AgentLoopOptions {
   maxSteps?: number;
@@ -58,6 +64,11 @@ export interface AgentLoopOptions {
    */
   onDebuggerDetachedByUser?: (tabId: number) => void;
   model?: string;
+  /**
+   * The lease this run holds. Every action's receipt is grouped under it, so a
+   * run the host cannot name leaves a trail nobody can tie back to it.
+   */
+  runId?: string;
 }
 
 export interface AgentLoopUsage {
@@ -159,19 +170,37 @@ async function readGuardedPageContent(tabId: number, options: AgentLoopOptions):
   return content;
 }
 
+/**
+ * What the action produced, and the check that settles it. `verification` is
+ * the post-action observation the trail records, so it names structure (a URL,
+ * an offset, whether a field took the text) and never page content.
+ */
+interface ToolExecution {
+  readonly result: string;
+  readonly verification: AutomationVerification;
+  readonly target: string | null;
+}
+
 async function executeTool(
   tabId: number,
   toolName: string,
   args: Record<string, unknown>,
   options: AgentLoopOptions,
-): Promise<string> {
+): Promise<ToolExecution> {
   switch (toolName) {
     case 'screenshot': {
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 2_000, signal: options.signal }),
       );
       const base64 = await runOwnedOperation(options, () => cdp.screenshot(tabId, options.signal));
-      return JSON.stringify({ type: 'screenshot', base64, note: 'See image in next turn.' });
+      return {
+        result: JSON.stringify({ type: 'screenshot', base64, note: 'See image in next turn.' }),
+        verification: {
+          check: 'the tab returned a screenshot',
+          passed: base64.length > 0,
+        },
+        target: await runOwnedOperation(options, () => getTabUrl(tabId)),
+      };
     }
 
     case 'click': {
@@ -207,20 +236,47 @@ async function executeTool(
           );
         }
       }
-      return `${clickResult}\nverified: page URL after click = ${urlAfter ?? 'unknown'}`;
+      return {
+        result: `${clickResult}\nverified: page URL after click = ${urlAfter ?? 'unknown'}`,
+        verification: {
+          check: 'the tab url was read after the click and stayed on an approved site',
+          passed: urlAfter !== null,
+          ...(urlAfter ? { observed: urlAfter } : {}),
+        },
+        target: urlAfter,
+      };
     }
 
     case 'scroll': {
       const dy = args['dy'];
       const toSelector = args['toSelector'];
-      if (typeof toSelector === 'string') {
-        await runOwnedOperation(options, () => cdp.scroll(tabId, { toSelector }, options.signal));
-        return `Scrolled selector into view: ${toSelector}`;
-      } else if (typeof dy === 'number') {
-        await runOwnedOperation(options, () => cdp.scroll(tabId, { dy }, options.signal));
-        return `Scrolled by ${dy}px`;
+      if (typeof toSelector !== 'string' && typeof dy !== 'number') {
+        throw new Error('scroll requires either dy or toSelector');
       }
-      throw new Error('scroll requires either dy or toSelector');
+
+      const before = await runOwnedOperation(options, () =>
+        cdp.readScrollPosition(tabId, options.signal),
+      );
+      const scrolled = typeof toSelector === 'string' ? { toSelector } : { dy: dy as number };
+      await runOwnedOperation(options, () => cdp.scroll(tabId, scrolled, options.signal));
+      const after = await runOwnedOperation(options, () =>
+        cdp.readScrollPosition(tabId, options.signal),
+      );
+      const moved =
+        before !== null && after !== null && (before.x !== after.x || before.y !== after.y);
+
+      return {
+        result:
+          typeof toSelector === 'string'
+            ? `Scrolled selector into view: ${toSelector}`
+            : `Scrolled by ${String(dy)}px`,
+        verification: {
+          check: 'the page offset was read before and after the scroll',
+          passed: moved,
+          ...(after ? { observed: `page offset y=${after.y}` } : {}),
+        },
+        target: await runOwnedOperation(options, () => getTabUrl(tabId)),
+      };
     }
 
     case 'type': {
@@ -232,6 +288,7 @@ async function executeTool(
       await runOwnedOperation(options, () => cdp.type(tabId, text, targetIndex, options.signal));
 
       let verifyMsg = `Typed: ${JSON.stringify(text)}`;
+      let accepted = false;
       if (targetIndex !== undefined) {
         const selector = cdp.getElementIndexMap(tabId).get(targetIndex);
         if (selector) {
@@ -241,6 +298,7 @@ async function executeTool(
             );
             if (fieldValue !== null) {
               if (fieldValue.includes(text) || text.includes(fieldValue)) {
+                accepted = true;
                 verifyMsg += `\nverified: field [${targetIndex}] now contains "${fieldValue.slice(0, 60)}"`;
               } else {
                 verifyMsg += `\nWARNING: no observable change after type, field [${targetIndex}] value is "${fieldValue.slice(0, 60)}", expected to contain typed text. Element may not have accepted input.`;
@@ -251,14 +309,29 @@ async function executeTool(
           }
         }
       }
-      return verifyMsg;
+      return {
+        result: verifyMsg,
+        verification: {
+          check: 'the field was read back after typing and held the text',
+          passed: accepted,
+        },
+        target: await runOwnedOperation(options, () => getTabUrl(tabId)),
+      };
     }
 
     case 'read_dom': {
       await runOwnedOperation(options, () =>
         waitForStable(tabId, { timeoutMs: 2_000, signal: options.signal }),
       );
-      return readGuardedPageContent(tabId, options);
+      const content = await readGuardedPageContent(tabId, options);
+      return {
+        result: content,
+        verification: {
+          check: 'the page returned a dom summary',
+          passed: content.length > 0,
+        },
+        target: await runOwnedOperation(options, () => getTabUrl(tabId)),
+      };
     }
 
     case 'navigate': {
@@ -279,14 +352,30 @@ async function executeTool(
           );
         }
       }
-      return `Navigated to: ${url}\nverified: actual URL = ${actualUrl ?? 'unknown'}`;
+      return {
+        result: `Navigated to: ${url}\nverified: actual URL = ${actualUrl ?? 'unknown'}`,
+        verification: {
+          check: 'the tab url was read after the navigation and is on the site allowlist',
+          passed: actualUrl !== null,
+          ...(actualUrl ? { observed: actualUrl } : {}),
+        },
+        target: actualUrl ?? url,
+      };
     }
 
     case 'download_file': {
       const url = args['url'];
       if (typeof url !== 'string') throw new Error('download_file requires url:string');
       const record = await runOwnedOperation(options, () => startBrowserToolDownload(tabId, url));
-      return formatDownloadRecord(record);
+      return {
+        result: formatDownloadRecord(record),
+        verification: {
+          check: 'chrome reported the download state for this file',
+          passed: record.state !== 'interrupted',
+          observed: `download ${record.state}`,
+        },
+        target: url,
+      };
     }
 
     case 'read_console': {
@@ -299,7 +388,15 @@ async function executeTool(
         ...(typeof level === 'string' ? { level: level as ConsoleLevel } : {}),
         ...(typeof limit === 'number' ? { limit } : {}),
       });
-      return formatConsoleEntries(entries);
+      return {
+        result: formatConsoleEntries(entries),
+        verification: {
+          check: "the run's console capture answered for this tab",
+          passed: true,
+          observed: `${entries.length} console entries`,
+        },
+        target: await runOwnedOperation(options, () => getTabUrl(tabId)),
+      };
     }
 
     case 'read_network': {
@@ -314,7 +411,15 @@ async function executeTool(
         ...(failedOnly === true || failedOnly === 'true' ? { failedOnly: true } : {}),
         ...(typeof limit === 'number' ? { limit } : {}),
       });
-      return formatNetworkEntries(entries);
+      return {
+        result: formatNetworkEntries(entries),
+        verification: {
+          check: "the run's network capture answered for this tab",
+          passed: true,
+          observed: `${entries.length} network entries`,
+        },
+        target: await runOwnedOperation(options, () => getTabUrl(tabId)),
+      };
     }
 
     case 'find': {
@@ -323,14 +428,24 @@ async function executeTool(
         waitForStable(tabId, { timeoutMs: 1_500, signal: options.signal }),
       );
       const domContent = await readGuardedPageContent(tabId, options);
-      return (
-        `Searching for: ${String(description)}\n\n` +
-        `Current page DOM summary (use this to find the element):\n${domContent}`
-      );
+      return {
+        result:
+          `Searching for: ${String(description)}\n\n` +
+          `Current page DOM summary (use this to find the element):\n${domContent}`,
+        verification: {
+          check: 'the page returned a dom summary to search',
+          passed: domContent.length > 0,
+        },
+        target: await runOwnedOperation(options, () => getTabUrl(tabId)),
+      };
     }
 
     default:
-      return `Unknown tool: ${toolName}`;
+      return {
+        result: `Unknown tool: ${toolName}`,
+        verification: { check: 'the tool name is one this driver implements', passed: false },
+        target: null,
+      };
   }
 }
 
@@ -340,6 +455,7 @@ export async function runAgentLoop(
   options: AgentLoopOptions = {},
 ): Promise<AgentLoopResult> {
   const maxSteps = options.maxSteps ?? 20;
+  const runId = options.runId ?? crypto.randomUUID();
 
   ensureOnDetachListener();
   registerActiveTab(tabId, options.onDebuggerDetachedByUser ?? null);
@@ -435,7 +551,7 @@ export async function runAgentLoop(
       const toolResults: AgentMessage[] = [];
 
       for (const toolCall of message.tool_calls) {
-        const result = await dispatchToolCall(tabId, toolCall, stepNumber, options);
+        const result = await dispatchToolCall(tabId, toolCall, stepNumber, options, runId);
         await assertRunOwnership(options);
         toolResults.push(result);
 
@@ -504,6 +620,31 @@ export async function runAgentLoop(
  */
 export const APPROVAL_TIMEOUT_MS = 30_000;
 
+/**
+ * A `type` without an index lands on whatever holds focus, so the signature the
+ * gate reads is the focused element's. A read that fails leaves the target
+ * unknown, and an unknown target is the case the gate exists for.
+ */
+async function targetSignatureFor(
+  tabId: number,
+  toolName: string,
+  args: Record<string, unknown>,
+  options: AgentLoopOptions,
+): Promise<string | null> {
+  const index = args['index'];
+  if (typeof index === 'number') {
+    return cdp.resolveIndexedElement(tabId, index)?.signature ?? null;
+  }
+  if (toolName !== 'type') return null;
+  try {
+    return await runOwnedOperation(options, () =>
+      cdp.getFocusedFieldSignature(tabId, options.signal),
+    );
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveApprovalRequirement(
   tabId: number,
   toolName: string,
@@ -513,9 +654,7 @@ export async function resolveApprovalRequirement(
   const pageUrl = await runOwnedOperation(options, () => getTabUrl(tabId));
   const siteTool = siteToolNamed(options, toolName);
   if (siteTool) return planSiteToolCall(siteTool, args, pageUrl).requirement;
-  const index = args['index'];
-  const targetSignature =
-    typeof index === 'number' ? (cdp.resolveIndexedElement(tabId, index)?.signature ?? null) : null;
+  const targetSignature = await targetSignatureFor(tabId, toolName, args, options);
   return approvalRequirement({ toolName, args, pageUrl, targetSignature });
 }
 
@@ -551,6 +690,7 @@ async function dispatchToolCall(
   toolCall: ToolCall,
   stepNumber: number,
   options: AgentLoopOptions,
+  runId: string,
 ): Promise<AgentMessage> {
   const toolName = toolCall.function.name;
   let args: Record<string, unknown> = {};
@@ -559,6 +699,16 @@ async function dispatchToolCall(
   } catch {
     /* noop */
   }
+
+  const attempt = startAutomationAttempt({
+    runId,
+    action: toolName,
+    surface: 'extension',
+    sessionKind: 'user-chrome',
+  });
+  const settle = async (settlement: AutomationSettlement, target: string | null): Promise<void> => {
+    await recordAutomationAction(attempt, settlement, target).catch(() => undefined);
+  };
 
   await assertRunOwnership(options);
   options.onProgress?.({
@@ -573,6 +723,7 @@ async function dispatchToolCall(
   const uploadRefusal =
     requirement.reason === 'upload' ? await uploadPolicyRefusal(tabId, options) : null;
   if (uploadRefusal) {
+    await settle({ claim: 'refused', reason: uploadRefusal }, null);
     await assertRunOwnership(options);
     options.onProgress?.({ kind: 'tool_result', stepNumber, toolName, toolResult: uploadRefusal });
     return { role: 'tool', content: uploadRefusal, tool_call_id: toolCall.id, name: toolName };
@@ -582,6 +733,7 @@ async function dispatchToolCall(
     options.onBeforeAction === undefined &&
     siteToolNamed(options, toolName)?.effect === 'write'
   ) {
+    await settle({ claim: 'refused', reason: SITE_TOOL_WRITE_UNATTENDED_REFUSAL }, null);
     await assertRunOwnership(options);
     options.onProgress?.({
       kind: 'tool_result',
@@ -599,6 +751,7 @@ async function dispatchToolCall(
 
   if (requirement.alwaysAsk && options.onBeforeAction === undefined) {
     const refusal = alwaysAskRefusal(requirement);
+    await settle({ claim: 'refused', reason: refusal }, null);
     await assertRunOwnership(options);
     options.onProgress?.({ kind: 'tool_result', stepNumber, toolName, toolResult: refusal });
     return { role: 'tool', content: refusal, tool_call_id: toolCall.id, name: toolName };
@@ -647,6 +800,7 @@ async function dispatchToolCall(
     }
     if (!allowed) {
       const skippedResult = 'Action skipped, no approval received (timeout or user denied).';
+      await settle({ claim: 'refused', reason: skippedResult }, null);
       await assertRunOwnership(options);
       options.onProgress?.({
         kind: 'tool_result',
@@ -663,17 +817,19 @@ async function dispatchToolCall(
     }
   }
 
-  let resultContent: string;
+  let execution: ToolExecution;
   await assertRunOwnership(options);
   await options.onActionStateChange?.(true);
   try {
-    resultContent = await executeTool(tabId, toolName, args, options);
+    execution = await executeTool(tabId, toolName, args, options);
   } catch (err) {
     throwIfCancelled(options.signal);
     if (err instanceof NavigationOffAllowlistError) {
+      await settle({ claim: 'refused', reason: err.message }, null);
       throw err;
     }
     if (err instanceof InjectionDetectedError) {
+      await settle({ claim: 'refused', reason: err.message }, null);
       options.onProgress?.({
         kind: 'injection_blocked',
         stepNumber,
@@ -682,16 +838,17 @@ async function dispatchToolCall(
       });
       throw err;
     }
-    resultContent = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
+    const failure = `Tool error: ${err instanceof Error ? err.message : String(err)}`;
+    await settle({ claim: 'failed', reason: failure }, null);
     options.onProgress?.({
       kind: 'error',
       stepNumber,
       toolName,
-      errorMessage: resultContent,
+      errorMessage: failure,
     });
     return {
       role: 'tool',
-      content: resultContent,
+      content: failure,
       tool_call_id: toolCall.id,
       name: toolName,
     };
@@ -699,17 +856,18 @@ async function dispatchToolCall(
     await options.onActionStateChange?.(false);
   }
 
+  await settle({ claim: 'succeeded', verification: execution.verification }, execution.target);
   await assertRunOwnership(options);
   options.onProgress?.({
     kind: 'tool_result',
     stepNumber,
     toolName,
-    toolResult: resultContent,
+    toolResult: execution.result,
   });
 
   return {
     role: 'tool',
-    content: resultContent,
+    content: execution.result,
     tool_call_id: toolCall.id,
     name: toolName,
   };
