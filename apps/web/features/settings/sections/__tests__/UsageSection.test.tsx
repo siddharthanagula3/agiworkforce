@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getModelMetadataById, managedUsageBucketLabel } from '@agiworkforce/types';
+import { managedUsageBucketLabel } from '@agiworkforce/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 
@@ -13,12 +13,10 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 import { __resetManagedUsageSummaryForTest } from '@/lib/hooks/useManagedUsageSummary';
-import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { UsageSection } from '../UsageSection';
 import { SettingsSectionNavigationProvider } from '../../components/SettingsSectionLink';
 
 const originalFetch = global.fetch;
-const freeTrialModelName = getModelMetadataById(FREE_TRIAL_MODEL)?.name;
 
 afterEach(() => {
   global.fetch = originalFetch;
@@ -68,7 +66,8 @@ describe('UsageSection', () => {
   it('replaces free-plan meters with a paid-plan waitlist prompt', async () => {
     render(React.createElement(UsageSection));
     expect(await screen.findByText('Upgrade for higher capacity')).toBeTruthy();
-    expect(screen.getByText(new RegExp(freeTrialModelName ?? 'included free router'))).toBeTruthy();
+    // The founder removed the sentence naming the free models here (2026-09-21).
+    expect(screen.queryByText(/Free accounts can use/)).toBeNull();
     expect(screen.getByRole('link', { name: /join the upgrade waitlist/i })).toHaveAttribute(
       'href',
       '/pricing',

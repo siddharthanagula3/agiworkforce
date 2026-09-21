@@ -23,11 +23,8 @@ import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
 import { normalizeUsagePercentage } from '@agiworkforce/types';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
-import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 
 const MINUTE_MS = 60 * 1000;
-const FREE_TRIAL_MODEL_NAME =
-  getModelMetadataById(FREE_TRIAL_MODEL)?.name ?? 'the included free router';
 
 function formatAbsolute(value: string): string {
   return new Date(value).toLocaleString(undefined, {
@@ -496,10 +493,6 @@ export function UsageSection() {
           */}
           {isFreePlan ? (
             <div className="space-y-3 text-sm text-[var(--text-2)]">
-              <p>
-                Free accounts can use {FREE_TRIAL_MODEL_NAME} and available QwenCloud promotional
-                quota. Paid plans add higher capacity and more model choices.
-              </p>
               <SettingsPageLink
                 href="/pricing"
                 className="text-primary underline underline-offset-4"
