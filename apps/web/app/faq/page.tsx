@@ -41,7 +41,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'What does AGI Cloud cost?',
-    body: 'AGI managed cloud is open by default: sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Enterprise is contract-scoped and sales-assisted, with a contact list for access and additional governance requirements.',
+    body: 'The Free plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid upgrades are opening in stages: without an access code you join the upgrade waitlist rather than reaching checkout. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Enterprise is contract-scoped and sales-assisted, with a contact list for access and additional governance requirements.',
   },
   {
     title: 'How do I upgrade, downgrade, cancel, or get an invoice?',

@@ -23,16 +23,20 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { buildCheckoutTrialParams, resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
-import { getPlanTrialDays, isFreeOfChargePlanTier } from '@agiworkforce/types';
+import { getPlanTrialDays } from '@agiworkforce/types';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
-import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
+import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
 import { getIdentityUser } from '@/lib/server/identity';
-import { hasBillingWaitlistAccess } from '@/lib/server/billing-waitlist-access';
+import {
+  hasBillingWaitlistAccess,
+  holdsLivePaidSubscription,
+  waitlistAccessRequiredResponse,
+} from '@/lib/server/billing-waitlist-access';
 
 const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
 
@@ -41,18 +45,6 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== '0' &&
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
-
-// Stripe answers `resource_missing` when the id names nothing in this account.
-// For a stored customer that is a definite answer, not an outage: the customer
-// is gone, so it cannot be carrying a subscription.
-function isResourceMissing(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 'resource_missing'
-  );
-}
 
 async function findLiveStripeSubscription(
   stripe: Stripe,
@@ -213,7 +205,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const existingSubscription = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(existingSubscription);
 
-  if (!existingSubscription || isFreeOfChargePlanTier(existingSubscription.plan_tier)) {
+  if (!holdsLivePaidSubscription(existingSubscription)) {
     let accessGranted = false;
     try {
       accessGranted = await hasBillingWaitlistAccess(db, user.id);
@@ -224,16 +216,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         .asUserSafe();
     }
     if (!accessGranted) {
-      return NextResponse.json(
-        {
-          error: {
-            code: 'waitlist_access_required',
-            message:
-              'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.',
-          },
-        },
-        { status: 403 },
-      );
+      return waitlistAccessRequiredResponse();
     }
   }
 
@@ -321,7 +304,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     try {
       liveSubscription = await findLiveStripeSubscription(stripe, stripeCustomerId);
     } catch (error) {
-      if (!isResourceMissing(error)) {
+      if (!isStripeResourceMissing(error)) {
         logger.error(
           { error, userId: user.id, customerId: stripeCustomerId },
           'Failed to verify existing Stripe subscriptions before checkout',

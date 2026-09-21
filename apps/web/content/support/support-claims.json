@@ -59,7 +59,7 @@
     },
     {
       "doc": "getting-started",
-      "sha256": "b0d41c5d9aa011620978737ab6da0eabd361665c2ebe8254f5256067f81d0b20"
+      "sha256": "3e362cf7da6b69e67077b95bfdb056186a6cf439ec4fcf99ba3ac3aeb838adb2"
     },
     {
       "doc": "glossary",
@@ -87,7 +87,7 @@
     },
     {
       "doc": "managed-cloud",
-      "sha256": "c177d1fc3065b7c954051dd50d8238d54dbe51b880d85ff7fef7117340da236f"
+      "sha256": "c012f2e38f659c3b85d5589691d6716303eb275cc610dd1153ba90ff99b7202c"
     },
     {
       "doc": "mcp-connections",
@@ -127,7 +127,7 @@
     },
     {
       "doc": "signing-up",
-      "sha256": "2aea0ca46bef2d1498cfd07a7a034f259e890b2e304c3019f5ae4c8980645e31"
+      "sha256": "2d593218b37eb74eed810da6c6018d59f7cd0278b03e5694757ba1b95361b4d0"
     },
     {
       "doc": "temporary-chats",
