@@ -99,6 +99,43 @@ export const DEPENDENCY_SIGNALS: readonly DependencySignal[] = [
     metric: METRIC_NAME.notificationDeliveries,
     dashboardId: 'notification-delivery',
   },
+  {
+    dependency: 'web_search',
+    failureKind: 'tool',
+    metric: METRIC_NAME.toolDuration,
+    dashboardId: 'completion-truth',
+  },
+  {
+    dependency: 'push_delivery',
+    failureKind: 'notification',
+    metric: METRIC_NAME.notificationDeliveries,
+    dashboardId: 'notification-delivery',
+  },
+  {
+    dependency: 'signaling',
+    failureKind: 'remote',
+    metric: METRIC_NAME.failures,
+    dashboardId: 'failures',
+  },
+  {
+    dependency: 'paired_browser',
+    failureKind: 'browser',
+    metric: METRIC_NAME.browserTasks,
+    dashboardId: 'browser-health',
+  },
+  {
+    dependency: 'connector_providers',
+    failureKind: 'connector',
+    metric: METRIC_NAME.toolCalls,
+    dashboardId: 'connector-health',
+  },
+  {
+    dependency: 'marketing_analytics',
+    failureKind: null,
+    metric: METRIC_NAME.httpRequests,
+    dashboardId: 'http-traffic',
+    why: 'a script the browser loads on the public pages; the server never calls it, so no server-side fault class exists',
+  },
 ];
 
 export function dependencySignal(id: string): DependencySignal | null {
