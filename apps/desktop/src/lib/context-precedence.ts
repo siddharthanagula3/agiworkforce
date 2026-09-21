@@ -3,9 +3,10 @@
  * route, so they had no share in the ordering the server applies. This is that
  * ordering.
  *
- * apps/web/lib/context/precedence.ts is canonical and
- * apps/web/lib/context/__tests__/precedence.test.ts fails if the two lists
- * diverge, so a class added there cannot be forgotten here.
+ * apps/web/lib/context/precedence.ts derives this order from the context
+ * contract, and apps/web/lib/context/__tests__/precedence.test.ts fails if the
+ * two lists diverge. This package does not depend on @agiworkforce/context, so
+ * the list is written out and that test is what keeps it honest.
  */
 
 export const CURRENT_REQUEST = 'current_request';
@@ -15,17 +16,17 @@ export const CONTEXT_PRECEDENCE = [
   'security_policy',
   CURRENT_REQUEST,
   'agent_instruction',
-  'current_task_state',
-  'local_repository_instruction',
-  'project_instruction',
   'template_instruction',
+  'current_task_state',
+  'project_instruction',
+  'local_repository_instruction',
   ACCOUNT_INSTRUCTION,
   'account_memory',
   'project_sibling_chat',
   'past_chat',
-  'project_knowledge_file',
   'library_file',
   'user_upload',
+  'project_knowledge_file',
   'connector_result',
   'web_result',
 ] as const;

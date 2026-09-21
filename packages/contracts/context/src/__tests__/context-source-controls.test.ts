@@ -112,7 +112,7 @@ describe('context precedence', () => {
     const lowestInternal = Math.max(
       ...externalRanks.filter((rank) => !rank.isExternal).map((rank) => rank.index),
     );
-    expect(externalRanks.at(-1)?.isExternal).toBe(true);
+    expect(externalRanks[externalRanks.length - 1]?.isExternal).toBe(true);
     expect(lowestInternal).toBeLessThan(CONTEXT_SOURCE_PRECEDENCE.length - 1);
   });
 });

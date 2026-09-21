@@ -11,7 +11,6 @@
     "apps/web/lib/server/scanned-document-text.ts": "an optical character recognition call with a fixed prompt and no user instruction layer",
     "apps/web/lib/services/managed-memory-context-service.ts": "renders the recalled memory block; the request processor tags its layer at the call site",
     "apps/web/lib/services/model-memory-extraction.ts": "a fact extraction call whose prompt comes from the manifest and carries no user instruction layer",
-    "apps/web/lib/services/project-context-service.ts": "renders the project block; where that block lands is the request processor's decision, not this module's",
     "apps/web/lib/services/scheduled-agent-executor.ts": "runs a saved agent whose system prompt is the agent definition the account stored",
     "apps/web/lib/support/agent/answer/model-route.ts": "the support agent answers from its own manifest prompt and reads no account instruction layer",
     "packages/ai/providers/ollama/src/translate.ts": "a provider adapter putting an already assembled request onto the wire",

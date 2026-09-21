@@ -67,7 +67,10 @@ describe('the canonical provenance model', () => {
     for (const objectKind of PROVENANCE_OBJECT_KINDS) {
       const record = provenanceRecord(objectKind, COMPLETE);
       for (const field of PROVENANCE_FIELDS) {
-        expect(Object.hasOwn(record, field), `${objectKind} has no ${field}`).toBe(true);
+        expect(
+          Object.prototype.hasOwnProperty.call(record, field),
+          `${objectKind} has no ${field}`,
+        ).toBe(true);
       }
       expect(record.objectKind).toBe(objectKind);
     }

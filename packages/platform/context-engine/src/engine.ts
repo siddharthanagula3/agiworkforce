@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  CONTEXT_BUDGET_PRIORITY,
   CONTEXT_SOURCE_PRECEDENCE,
   contextSourceClassPolicy,
   contextTrustLevel,
@@ -63,6 +64,18 @@ export function contextPrecedenceRank(sourceClass: ContextSourceClass): number {
   return CONTEXT_SOURCE_PRECEDENCE.indexOf(sourceClass);
 }
 
+/** Who keeps the budget when the turn does not fit, which is not who is read first. */
+export function contextBudgetRank(sourceClass: ContextSourceClass): number {
+  return CONTEXT_BUDGET_PRIORITY.indexOf(sourceClass);
+}
+
+function stableSortBy<T>(values: readonly T[], rank: (value: T) => number): T[] {
+  return values
+    .map((value, index) => ({ value, index }))
+    .sort((left, right) => rank(left.value) - rank(right.value) || left.index - right.index)
+    .map((entry) => entry.value);
+}
+
 /**
  * One order on every surface and for every model, so the same sources assembled
  * for the same turn produce the same prompt wherever the turn was started.
@@ -70,14 +83,17 @@ export function contextPrecedenceRank(sourceClass: ContextSourceClass): number {
 export function orderContextLoaders(
   loaders: readonly ContextSourceLoader[],
 ): readonly ContextSourceLoader[] {
-  return [...loaders]
-    .map((loader, index) => ({ loader, index }))
-    .sort(
-      (left, right) =>
-        contextPrecedenceRank(left.loader.sourceClass) -
-          contextPrecedenceRank(right.loader.sourceClass) || left.index - right.index,
-    )
-    .map((entry) => entry.loader);
+  return stableSortBy(loaders, (loader) => contextPrecedenceRank(loader.sourceClass));
+}
+
+/**
+ * The order the budget is spent in. A source read last can still be the one the
+ * question is about, so it is not enough to walk the assembly order backwards.
+ */
+export function orderLoadersByBudgetPriority(
+  loaders: readonly ContextSourceLoader[],
+): readonly ContextSourceLoader[] {
+  return stableSortBy(loaders, (loader) => contextBudgetRank(loader.sourceClass));
 }
 
 export function contextClassesInvalidatedBy(
@@ -188,7 +204,9 @@ export async function resolveContext(input: ResolveContextInput): Promise<Contex
   let tokensSpent = 0;
   let overBudget = false;
 
-  for (const loader of orderContextLoaders(input.loaders)) {
+  // Spend in budget priority, then assemble in authority order: what survives
+  // a tight turn and what the model reads first are different questions.
+  for (const loader of orderLoadersByBudgetPriority(input.loaders)) {
     const { candidates, failed } = await loadCandidates(loader, input);
     const classPolicy = contextSourceClassPolicy(loader.sourceClass);
     const refusedClass = classAdmission(loader.sourceClass, input);
@@ -298,7 +316,12 @@ export async function resolveContext(input: ResolveContextInput): Promise<Contex
     });
   }
 
-  const contentDigest = contextContentDigest(items);
+  const orderedEntries = stableSortBy(entries, (entry) => contextPrecedenceRank(entry.sourceClass));
+  const orderedItems = stableSortBy(items, (item) =>
+    contextPrecedenceRank(item.source.sourceClass),
+  );
+
+  const contentDigest = contextContentDigest(orderedItems);
   const createdAt = new Date(nowMs).toISOString();
   const manifest: ContextManifest = {
     manifestId: contextManifestId({
@@ -313,10 +336,10 @@ export async function resolveContext(input: ResolveContextInput): Promise<Contex
     actor: input.actor,
     versions: input.versions ?? UNVERSIONED_CONTEXT,
     temporaryChat: input.temporaryChat === true,
-    entries,
-    includedCount: items.length,
-    budgetUsedChars: entries.reduce((total, entry) => total + entry.budgetUsedChars, 0),
-    tokenEstimate: entries.reduce((total, entry) => total + entry.tokenEstimate, 0),
+    entries: orderedEntries,
+    includedCount: orderedItems.length,
+    budgetUsedChars: orderedEntries.reduce((total, entry) => total + entry.budgetUsedChars, 0),
+    tokenEstimate: orderedEntries.reduce((total, entry) => total + entry.tokenEstimate, 0),
     actualTokenCount: null,
     budgetTokens: ceiling,
     reservedOutputTokens: input.budget ? Math.floor(input.budget.reservedOutputTokens) : null,
@@ -327,8 +350,9 @@ export async function resolveContext(input: ResolveContextInput): Promise<Contex
 
   return {
     manifest,
-    items,
-    itemsOf: (sourceClass) => items.filter((item) => item.source.sourceClass === sourceClass),
+    items: orderedItems,
+    itemsOf: (sourceClass) =>
+      orderedItems.filter((item) => item.source.sourceClass === sourceClass),
   };
 }
 

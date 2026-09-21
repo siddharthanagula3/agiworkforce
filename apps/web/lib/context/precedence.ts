@@ -1,6 +1,9 @@
 import {
   CONTEXT_SOURCE_CLASSES,
+  CONTEXT_SOURCE_PRECEDENCE,
   contextSourceClassPolicy,
+  instructionLayerForContextClass,
+  instructionLayerRank,
   type ContextSourceClass,
 } from '@agiworkforce/context';
 
@@ -22,32 +25,38 @@ export const ACCOUNT_INSTRUCTION = 'account_instruction';
 export type PrecedenceEntry =
   ContextSourceClass | typeof CURRENT_REQUEST | typeof ACCOUNT_INSTRUCTION;
 
+const PERSONALIZED_RANK = instructionLayerRank('personalized');
+
 /**
- * The one order every surface reads, highest authority first.
+ * The one order every surface reads, highest authority first. The classes come
+ * from the contract in the contract's order, so there is nothing here to keep
+ * in step with it; only the two entries the taxonomy has no class for are
+ * placed, and each is placed by rule rather than by hand.
  *
  * Security policy is above the current request because a user cannot instruct
- * their way out of it. Everything the user or the operator states as an
- * instruction sits above everything that is merely material, and third-party
- * material sits last because it is the only category an attacker can write.
+ * their way out of it, and the current request is above everything else
+ * because everything else is something the model was told earlier. The account
+ * instruction sits where its layer does: below every instruction that outranks
+ * a personal preference, above everything that is merely material.
  */
-export const CONTEXT_PRECEDENCE: readonly PrecedenceEntry[] = [
-  'security_policy',
-  CURRENT_REQUEST,
-  'agent_instruction',
-  'current_task_state',
-  'local_repository_instruction',
-  'project_instruction',
-  'template_instruction',
-  ACCOUNT_INSTRUCTION,
-  'account_memory',
-  'project_sibling_chat',
-  'past_chat',
-  'project_knowledge_file',
-  'library_file',
-  'user_upload',
-  'connector_result',
-  'web_result',
-];
+function deriveContextPrecedence(): readonly PrecedenceEntry[] {
+  const order: PrecedenceEntry[] = [];
+  let accountInstructionPlaced = false;
+  for (const sourceClass of CONTEXT_SOURCE_PRECEDENCE) {
+    const outranksAPreference =
+      instructionLayerRank(instructionLayerForContextClass(sourceClass)) > PERSONALIZED_RANK;
+    if (outranksAPreference && !accountInstructionPlaced) {
+      order.push(ACCOUNT_INSTRUCTION);
+      accountInstructionPlaced = true;
+    }
+    order.push(sourceClass);
+    if (sourceClass === 'security_policy') order.push(CURRENT_REQUEST);
+  }
+  if (!accountInstructionPlaced) order.push(ACCOUNT_INSTRUCTION);
+  return order;
+}
+
+export const CONTEXT_PRECEDENCE: readonly PrecedenceEntry[] = deriveContextPrecedence();
 
 export function precedenceRank(entry: PrecedenceEntry): number {
   const rank = CONTEXT_PRECEDENCE.indexOf(entry);

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CONTEXT_BUDGET_PRIORITY,
   CONTEXT_SOURCE_CLASSES,
+  CONTEXT_SOURCE_PRECEDENCE,
   contextSourceClassPolicy,
   contextTrustLevel,
+  type ContextSourceClass,
 } from '../context-source';
 import {
   CONTEXT_ONLY_INSTRUCTION_LAYERS,
@@ -182,5 +185,133 @@ describe('two declared orders', () => {
       { first: 'a', second: 'c' },
       { first: 'b', second: 'c' },
     ]);
+  });
+});
+
+describe('the source order and the layer ranks are one hierarchy', () => {
+  const observed = CONTEXT_SOURCE_PRECEDENCE.map((sourceClass) =>
+    instructionLayerForContextClass(sourceClass),
+  );
+
+  it('assembles the classes in this order', () => {
+    expect([...CONTEXT_SOURCE_PRECEDENCE]).toEqual([
+      'security_policy',
+      'agent_instruction',
+      'template_instruction',
+      'current_task_state',
+      'project_instruction',
+      'local_repository_instruction',
+      'account_memory',
+      'project_sibling_chat',
+      'past_chat',
+      'library_file',
+      'user_upload',
+      'project_knowledge_file',
+      'connector_result',
+      'web_result',
+    ]);
+  });
+
+  it('never reads a lower layer before a higher one', () => {
+    expect(instructionOrderProblems(observed)).toEqual([]);
+  });
+
+  it('gives up the least trusted material first when the budget runs out', () => {
+    const dropOrder = [...CONTEXT_SOURCE_PRECEDENCE].reverse();
+    const firstInstruction = dropOrder.findIndex(
+      (sourceClass) => contextSourceClassPolicy(sourceClass).isInstruction,
+    );
+    const lastData = dropOrder.reduce(
+      (last, sourceClass, index) =>
+        contextSourceClassPolicy(sourceClass).isInstruction ? last : index,
+      -1,
+    );
+    expect(lastData).toBeLessThan(firstInstruction);
+  });
+});
+
+describe('what is kept when the turn does not fit', () => {
+  it('keeps them in this order', () => {
+    expect([...CONTEXT_BUDGET_PRIORITY]).toEqual([
+      'security_policy',
+      'agent_instruction',
+      'template_instruction',
+      'project_instruction',
+      'local_repository_instruction',
+      'current_task_state',
+      'user_upload',
+      'account_memory',
+      'project_knowledge_file',
+      'project_sibling_chat',
+      'past_chat',
+      'library_file',
+      'connector_result',
+      'web_result',
+    ]);
+  });
+
+  it('gives up nothing the account or the workspace wrote while material is still there', () => {
+    const lastInstruction = CONTEXT_BUDGET_PRIORITY.reduce(
+      (last, sourceClass, index) =>
+        contextSourceClassPolicy(sourceClass).isInstruction ? index : last,
+      -1,
+    );
+    const firstMaterial = CONTEXT_BUDGET_PRIORITY.findIndex(
+      (sourceClass) => !contextSourceClassPolicy(sourceClass).isInstruction,
+    );
+    expect(lastInstruction).toBeLessThan(firstMaterial);
+  });
+});
+
+describe('the two orders are tied to each other', () => {
+  // Every pair the two orders are allowed to rank differently, and why. A pair
+  // that is not here means one list was edited and the other was dragged along.
+  const MAY_DIFFER: ReadonlyArray<readonly [ContextSourceClass, ContextSourceClass]> = [
+    // Material supplied for this turn is read last because nobody vouches for
+    // it, and given up last because it is what the question is about.
+    ['account_memory', 'user_upload'],
+    ['project_sibling_chat', 'user_upload'],
+    ['past_chat', 'user_upload'],
+    ['library_file', 'user_upload'],
+    ['project_sibling_chat', 'project_knowledge_file'],
+    ['past_chat', 'project_knowledge_file'],
+    ['library_file', 'project_knowledge_file'],
+    // What the running task says about this step wins a conflict with the
+    // standing project instructions, and is the first of the three to go.
+    ['current_task_state', 'project_instruction'],
+    ['current_task_state', 'local_repository_instruction'],
+  ];
+
+  const asKey = (first: string, second: string) => `${first} vs ${second}`;
+
+  it('ranks the same classes', () => {
+    expect([...CONTEXT_BUDGET_PRIORITY].sort()).toEqual([...CONTEXT_SOURCE_PRECEDENCE].sort());
+  });
+
+  it('puts instruction ahead of material in both', () => {
+    for (const order of [CONTEXT_SOURCE_PRECEDENCE, CONTEXT_BUDGET_PRIORITY]) {
+      const lastInstruction = order.reduce(
+        (last, sourceClass, index) =>
+          contextSourceClassPolicy(sourceClass).isInstruction ? index : last,
+        -1,
+      );
+      const firstMaterial = order.findIndex(
+        (sourceClass) => !contextSourceClassPolicy(sourceClass).isInstruction,
+      );
+      expect(lastInstruction).toBeLessThan(firstMaterial);
+    }
+  });
+
+  it('differs on exactly the pairs named above and on no other', () => {
+    const observed = precedenceDisagreements(CONTEXT_SOURCE_PRECEDENCE, CONTEXT_BUDGET_PRIORITY)
+      .map((pair) => asKey(pair.first, pair.second))
+      .sort();
+    expect(observed).toEqual(MAY_DIFFER.map(([first, second]) => asKey(first, second)).sort());
+  });
+
+  it('starts both lists with the same class and ends both with the same class', () => {
+    expect(CONTEXT_BUDGET_PRIORITY[0]).toBe(CONTEXT_SOURCE_PRECEDENCE[0]);
+    const last = CONTEXT_SOURCE_PRECEDENCE.length - 1;
+    expect(CONTEXT_BUDGET_PRIORITY[last]).toBe(CONTEXT_SOURCE_PRECEDENCE[last]);
   });
 });
