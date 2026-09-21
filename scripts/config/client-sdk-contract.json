@@ -1,0 +1,100 @@
+{
+  "why": "A client SDK concern is shared only if one module owns it and every client goes through that module. The import graph alone cannot say so: a file may import the module and still write the header itself two lines later, which is how one spelling becomes six. Each concern below names its owner, answers for every client the handshake contract declares, and enumerates the call sites that still spell the header themselves. A permitted call site that stops spelling it fails, so this list cannot become an allowlist.",
+  "concerns": {
+    "handshake-headers": {
+      "owner": {
+        "module": "packages/contracts/cloud-contracts/src/client-handshake.ts",
+        "package": "@agiworkforce/cloud-contracts",
+        "symbol": "clientHandshakeHeaders"
+      },
+      "headerLiterals": ["x-agi-surface", "x-agi-api-version", "x-agi-client-version"],
+      "roots": [
+        "apps/web/lib/hooks",
+        "apps/web/lib/client",
+        "apps/web/features",
+        "apps/web/shared",
+        "apps/desktop/src",
+        "apps/desktop/electron",
+        "apps/mobile/services",
+        "apps/mobile/lib",
+        "apps/mobile/app",
+        "apps/extension-vscode/src",
+        "apps/extension/src"
+      ],
+      "permittedCallSites": ["apps/web/lib/hooks/useChatStream.ts"],
+      "clients": {
+        "web": {
+          "consumes": "apps/web/lib/client/csrf.ts",
+          "symbol": "API_VERSION_REQUEST_HEADER"
+        },
+        "desktop": {
+          "consumes": "apps/desktop/src/lib/platformHeaders.ts"
+        },
+        "mobile": {
+          "consumes": "apps/mobile/lib/platformHeaders.ts"
+        },
+        "vscode": {
+          "consumes": "apps/extension-vscode/src/platform/platformHeaders.ts"
+        },
+        "chrome": {
+          "consumes": "apps/extension/src/platformHeaders.ts"
+        },
+        "cli": {
+          "gap": "The CLI is Rust and cannot import a TypeScript module. apps/cli/src/cloud/handshake.rs is its own builder, and check-client-handshake.mjs holds it to the same three headers."
+        }
+      }
+    },
+    "idempotency-key": {
+      "owner": {
+        "module": "packages/platform/utils/src/managedChatIdempotency.ts",
+        "package": "@agiworkforce/utils",
+        "symbol": "createManagedChatIdempotencyKey"
+      },
+      "headerLiterals": ["idempotency-key"],
+      "roots": [
+        "apps/web/lib/hooks",
+        "apps/web/lib/client",
+        "apps/web/features",
+        "apps/web/shared",
+        "apps/desktop/src",
+        "apps/desktop/electron",
+        "apps/mobile/services",
+        "apps/mobile/lib",
+        "apps/mobile/app",
+        "apps/extension-vscode/src",
+        "apps/extension/src"
+      ],
+      "permittedCallSites": [
+        "apps/web/lib/hooks/useMediaGeneration.ts",
+        "apps/web/features/code/services/cloud-code-api.ts",
+        "apps/web/features/schedules/services/schedule-api.ts",
+        "apps/web/features/billing/services/stripe-payments.ts",
+        "apps/web/features/media/services/media-api-service.ts",
+        "apps/desktop/src/lib/stripeCheckout.ts",
+        "apps/extension-vscode/src/utils/api.ts",
+        "apps/extension/src/features/cloud-bridge/freeTrialClient.ts",
+        "apps/extension/src/features/computer-use/cloudAgentClient.ts"
+      ],
+      "clients": {
+        "web": {
+          "consumes": "apps/web/lib/hooks/useChatStream.ts"
+        },
+        "desktop": {
+          "consumes": "apps/desktop/src/lib/cloudChatStream.ts"
+        },
+        "mobile": {
+          "consumes": "apps/mobile/services/streaming.ts"
+        },
+        "vscode": {
+          "gap": "apps/extension-vscode/src/utils/api.ts takes a key from its caller rather than minting one the way the shared producer does, so two editor call sites can disagree on what a key means."
+        },
+        "chrome": {
+          "gap": "apps/extension/src/features/computer-use/cloudAgentClient.ts mints cu: plus a uuid and freeTrialClient.ts takes one from its caller; neither uses the shared producer, so the extension's keys share no shape with the other clients'."
+        },
+        "cli": {
+          "gap": "The CLI is Rust and cannot import a TypeScript module; a shared key shape would have to be a protocol constant."
+        }
+      }
+    }
+  }
+}
