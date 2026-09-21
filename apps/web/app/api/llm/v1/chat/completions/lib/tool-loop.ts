@@ -2902,8 +2902,13 @@ export async function* runToolLoop(
     }
   }
 
+  // Whether answer text has reached the reader, which decides whether a later
+  // transport failure is an interruption or a model that was never reached.
+  let publicTextEmitted = false;
+
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
     yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
+    if (entry.publicTextDelta) publicTextEmitted = true;
     if (entry.reasoningDelta) {
       yield encoder.encode(
         eventStream.emit({ type: 'reasoning-delta', delta: entry.reasoningDelta }),
@@ -4542,6 +4547,7 @@ export async function* runToolLoop(
             : classifyError(err);
         const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
           requestedModel: processed.requestedModel,
+          answerStarted: publicTextEmitted,
         });
         const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
         logger.error(
