@@ -123,9 +123,9 @@
         "version": 14,
         "artifact": "prompt",
         "id": "routing.response_assessment@1",
-        "channel": "stable",
+        "channel": "internal",
         "effectiveOn": "2026-09-20",
-        "reason": "pins the bounded response-shape rubric; the separate runtime flags keep semantic assessment off until a measured canary carries a quality signal"
+        "reason": "pins the bounded response-shape rubric for internal evaluation; runtime flags keep semantic assessment off until a measured canary carries a quality signal"
       }
     ]
   },
