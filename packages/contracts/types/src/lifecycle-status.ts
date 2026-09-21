@@ -206,9 +206,11 @@ export const SURFACE_STATES = [
   'empty',
   'partial',
   'stale',
+  'degraded',
   'error',
   'retrying',
   'rate_limited',
+  'reconnecting',
   'offline',
   'permission_denied',
   'policy_blocked',
@@ -229,7 +231,9 @@ export const SURFACE_STATE_ALIASES = {
   loaded: 'success',
   ready: 'success',
   done: 'success',
+  online: 'success',
   fetching: 'loading',
+  syncing: 'loading',
   reloading: 'refreshing',
   throttled: 'rate_limited',
 } as const satisfies Readonly<Record<string, SurfaceState>>;
@@ -335,6 +339,16 @@ export const SURFACE_STATE_RULES: Readonly<Record<SurfaceState, SurfaceStateRule
     meansStaleData: true,
     needsExplanation: true,
   },
+  // The answer arrived and the service is answering worse than it should.
+  // Retrying makes it worse, so the reader is told to wait, not to act.
+  degraded: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: 'wait',
+    meansNoData: false,
+    meansStaleData: false,
+    needsExplanation: true,
+  },
   error: {
     permanentFailure: false,
     retryable: true,
@@ -357,6 +371,17 @@ export const SURFACE_STATE_RULES: Readonly<Record<SurfaceState, SurfaceStateRule
     remedy: 'wait',
     meansNoData: false,
     meansStaleData: false,
+    needsExplanation: true,
+  },
+  // The connection dropped and the client is already re-establishing it, which
+  // is why nothing is asked of the reader. `retrying` is one request going out
+  // again; this is the transport underneath it coming back.
+  reconnecting: {
+    permanentFailure: false,
+    retryable: false,
+    remedy: 'wait',
+    meansNoData: false,
+    meansStaleData: true,
     needsExplanation: true,
   },
   offline: {
@@ -517,17 +542,19 @@ export function surfaceStateForResourceLifecycle(state: ResourceLifecycleState):
   return 'deleted';
 }
 
+/**
+ * The offline client's own spelling of the same idea, read through the one
+ * vocabulary. Total on purpose: a sixth `SyncState` fails the build here rather
+ * than falling through to `success`, which is what a default case used to do.
+ */
+const SYNC_STATE_SURFACE_STATES: Readonly<Record<SyncState, SurfaceState>> = {
+  [SyncState.IDLE]: 'idle',
+  [SyncState.SYNCING]: 'loading',
+  [SyncState.ONLINE]: 'success',
+  [SyncState.OFFLINE]: 'offline',
+  [SyncState.ERROR]: 'error',
+};
+
 export function surfaceStateForSyncState(state: SyncState): SurfaceState {
-  switch (state) {
-    case SyncState.OFFLINE:
-      return 'offline';
-    case SyncState.SYNCING:
-      return 'loading';
-    case SyncState.ERROR:
-      return 'error';
-    case SyncState.IDLE:
-      return 'idle';
-    default:
-      return 'success';
-  }
+  return SYNC_STATE_SURFACE_STATES[state];
 }

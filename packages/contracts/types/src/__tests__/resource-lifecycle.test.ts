@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   RESOURCE_LIFECYCLE_STATES,
   RESOURCE_PERMISSIONS,
+  RESOURCE_ROLES,
   RESOURCE_VISIBILITIES,
   isAiRetrievableLifecycleState,
   isSearchableLifecycleState,
   lifecycleSemantics,
   parseResourceVisibility,
   resourcePermissionsForRole,
+  roleCanPerform,
   visibilityGrantsView,
 } from '../resource-lifecycle';
 
@@ -65,5 +67,18 @@ describe('resource lifecycle semantics', () => {
     for (const permission of RESOURCE_PERMISSIONS) {
       expect(reachable.has(permission), permission).toBe(true);
     }
+  });
+
+  it('keeps changing who may share separate from sharing, and gives it to the owner alone', () => {
+    expect(RESOURCE_PERMISSIONS).toContain('administer');
+    expect(roleCanPerform('owner', 'administer')).toBe(true);
+    for (const role of RESOURCE_ROLES) {
+      if (role === 'owner') continue;
+      expect(roleCanPerform(role, 'administer'), role).toBe(false);
+    }
+    const shareOnly = RESOURCE_ROLES.filter(
+      (role) => roleCanPerform(role, 'share') && !roleCanPerform(role, 'administer'),
+    );
+    expect(shareOnly).toEqual([]);
   });
 });

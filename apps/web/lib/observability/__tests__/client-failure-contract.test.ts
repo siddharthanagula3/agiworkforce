@@ -11,6 +11,10 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  CLIENT_FAILURE_CLASSES as CONTRACT_CLASSES,
+  CLIENT_FAILURE_DETAILS as CONTRACT_DETAILS,
+} from '@agiworkforce/types';
+import {
   CLIENT_FAILURE_CLASSES as EMITTED_CLASSES,
   CLIENT_FAILURE_DETAILS as EMITTED_DETAILS,
 } from '@agiworkforce/unified-chat';
@@ -38,11 +42,13 @@ const EMITTER_SOURCES = [
 ];
 
 describe('the two ends of a client failure report agree on what may be said', () => {
-  // Declared twice because no module crosses this package boundary; a class one
-  // side names and the other does not is silently dropped.
-  it('emits exactly the classes and reasons the ingest accepts', () => {
-    expect([...EMITTED_CLASSES]).toEqual([...CLIENT_FAILURE_CLASSES]);
-    expect([...EMITTED_DETAILS]).toEqual([...CLIENT_FAILURE_DETAILS]);
+  // Identity, not equality: a surface that restated the vocabulary instead of
+  // re-exporting it would pass a value comparison and then drift.
+  it('emits and ingests the one declaration of the vocabulary', () => {
+    expect(EMITTED_CLASSES).toBe(CONTRACT_CLASSES);
+    expect(EMITTED_DETAILS).toBe(CONTRACT_DETAILS);
+    expect(CLIENT_FAILURE_CLASSES).toBe(CONTRACT_CLASSES);
+    expect(CLIENT_FAILURE_DETAILS).toBe(CONTRACT_DETAILS);
   });
 
   it('has a product call site for every class the vocabulary names', () => {

@@ -1,36 +1,16 @@
 // Surface-neutral, so it holds no transport: a host installs one, and a host
 // that installs none emits nothing rather than guessing at a network.
-// Restated from apps/web/lib/observability/client-failures.ts, which no module
-// here can import; client-failure-contract.test.ts fails when the two disagree.
-export const CLIENT_FAILURE_CLASSES = [
-  'artifact_load',
-  'attachment',
-  'code_copy',
-  'markdown_render',
-  'mermaid_render',
-  'stream_stall',
-] as const;
+import type { ClientFailureReport } from '@agiworkforce/types';
 
-export type ClientFailureClass = (typeof CLIENT_FAILURE_CLASSES)[number];
-
-export const CLIENT_FAILURE_DETAILS = [
-  'network',
-  'parse',
-  'permission_denied',
-  'rejected',
-  'render',
-  'timeout',
-  'too_large',
-  'too_many',
-  'unknown',
-] as const;
-
-export type ClientFailureDetail = (typeof CLIENT_FAILURE_DETAILS)[number];
-
-export interface ClientFailureReport {
-  readonly failure: ClientFailureClass;
-  readonly detail?: ClientFailureDetail;
-}
+export {
+  CLIENT_FAILURE_CLASSES,
+  CLIENT_FAILURE_DETAILS,
+  isClientFailureClass,
+  isClientFailureDetail,
+  type ClientFailureClass,
+  type ClientFailureDetail,
+  type ClientFailureReport,
+} from '@agiworkforce/types';
 
 export type ClientFailureSink = (report: ClientFailureReport) => void;
 

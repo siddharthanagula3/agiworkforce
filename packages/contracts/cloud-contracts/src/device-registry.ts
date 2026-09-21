@@ -121,9 +121,66 @@ export const DeviceHeartbeatResponseSchema = z.object({
 });
 export type DeviceHeartbeatResponse = z.infer<typeof DeviceHeartbeatResponseSchema>;
 
+/**
+ * `null` is the way back. A schema that only accepted one to a hundred and
+ * twenty characters left a user who had renamed a device with no way to undo
+ * it, because there was no string that meant "the name you gave it yourself"
+ * and an empty one was refused.
+ */
 export const DeviceRenameRequestSchema = z
-  .object({ name: z.string().trim().min(1).max(DEVICE_NAME_MAX_LENGTH) })
+  .object({ name: z.string().trim().min(1).max(DEVICE_NAME_MAX_LENGTH).nullable() })
   .strict();
+
+export type DeviceRenameRequest = z.infer<typeof DeviceRenameRequestSchema>;
+
+export function isDeviceNameReset(request: DeviceRenameRequest): boolean {
+  return request.name === null;
+}
+
+const DEVICE_OPERATING_SYSTEM_LABELS: Readonly<Record<DeviceOperatingSystem, string>> = {
+  macos: 'Mac',
+  windows: 'Windows',
+  linux: 'Linux',
+  ios: 'iPhone',
+  android: 'Android',
+  chromeos: 'ChromeOS',
+  other: 'Device',
+};
+
+// `null` where the operating system already names the device: a phone called
+// "iPhone Mobile" has been named twice and read once.
+const DEVICE_SURFACE_LABELS: Readonly<Record<DeviceSurface, string | null>> = {
+  desktop: 'Desktop',
+  cli: 'CLI',
+  vscode: 'VS Code',
+  chrome: 'Chrome',
+  mobile: null,
+};
+
+export interface GeneratedDeviceNameInput {
+  surface: DeviceSurface;
+  os: DeviceOperatingSystem;
+}
+
+/**
+ * The name a device carries when nobody has given it one. Derived rather than
+ * stored, so a reset is a null in one column and every surface renders the
+ * same words for the same device instead of each inventing its own.
+ */
+export function generatedDeviceName(input: GeneratedDeviceNameInput): string {
+  const os = DEVICE_OPERATING_SYSTEM_LABELS[input.os];
+  const surface = DEVICE_SURFACE_LABELS[input.surface];
+  return surface === null ? os : `${os} ${surface}`;
+}
+
+/** What a reader is shown: the chosen name, or the generated one in its place. */
+export function deviceDisplayName(
+  name: string | null | undefined,
+  input: GeneratedDeviceNameInput,
+): string {
+  const chosen = name?.trim() ?? '';
+  return chosen.length === 0 ? generatedDeviceName(input) : chosen;
+}
 
 export function devicePresence(lastSeenAt: string | null, now = Date.now()): DevicePresence {
   if (!lastSeenAt) return 'offline';
