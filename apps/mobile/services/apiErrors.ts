@@ -84,6 +84,7 @@ const NO_MODEL_SWITCH_CODES = new Set([
   'request_cancelled',
   'max_output_tokens_exceeded',
   'tool_call_invalid',
+  'client_update_required',
   FREE_CAPACITY_UNAVAILABLE_CODE,
   // The Free plan has one model, so another model is not a way out of its spent pool.
   'free_allowance_exhausted',
@@ -92,6 +93,12 @@ const NO_MODEL_SWITCH_CODES = new Set([
 export function offersModelSwitch(code: string | null | undefined): boolean {
   return typeof code === 'string' && code.length > 0 && !NO_MODEL_SWITCH_CODES.has(code);
 }
+
+const CLIENT_UPDATE_REQUIRED_STATUS = 426;
+export const CLIENT_UPDATE_REQUIRED_CODE = 'client_update_required';
+// Retrying cannot help a build the service no longer answers, so the sentence says what can.
+export const CLIENT_UPDATE_REQUIRED_MESSAGE =
+  'This version of the app is too old for the service. Update AGI Workforce from your app store, then try again.';
 
 export function httpErrorFrom(status: number, body: string): ApiHttpError {
   if (status === 401) return new ApiHttpError(CLOUD_SIGN_IN_MESSAGE, status, 'auth_required');
@@ -113,6 +120,7 @@ export function httpErrorFrom(status: number, body: string): ApiHttpError {
     retryAfterSeconds = statableRetryAfterSeconds(nested.retry_after_seconds);
   }
   const requestId = parsed?.['requestId'];
+  if (status === CLIENT_UPDATE_REQUIRED_STATUS) code ??= CLIENT_UPDATE_REQUIRED_CODE;
   return new ApiHttpError(message ?? fallbackHttpMessage(status, retryAfterSeconds), status, code, {
     ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
@@ -126,6 +134,7 @@ function fallbackHttpMessage(status: number, retryAfterSeconds?: number): string
       ? `Too many requests right now. Try again in ${wait}.`
       : 'Too many requests right now. Please wait a moment and try again.';
   }
+  if (status === CLIENT_UPDATE_REQUIRED_STATUS) return CLIENT_UPDATE_REQUIRED_MESSAGE;
   if (status >= 500) return 'The server hit a problem handling this request. Please try again.';
   return `Request failed (HTTP ${status}). Please try again.`;
 }
