@@ -1,8 +1,3 @@
 {
-  "unscreened": {
-    "apps/web/lib/services/video-job-reconciliation-service.ts": {
-      "reason": "Video output is stored and inserted as a library asset with no call to moderateGeneratedMedia, so the hash denylist never sees a generated video and the only safety control on the video path is the prompt classifier at submit. The image path screens every resolved candidate before it is stored; this one does not.",
-      "fixIn": "apps/web/lib/services/video-job-reconciliation-service.ts"
-    }
-  }
+  "unscreened": {}
 }
