@@ -9,7 +9,7 @@
 //!    only tools that are actually callable from this context. Until agent exec
 //!    is wired for stdio MCP, the tool list is intentionally empty.
 
-mod account;
+pub(crate) mod account;
 mod developer_host;
 mod surfaces;
 

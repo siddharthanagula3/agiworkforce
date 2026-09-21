@@ -8,6 +8,7 @@ pub const MAX_INDEXED_FILE_BYTES: u64 = 2 * 1024 * 1024;
 /// so one answer explains a whole directory rather than a name at a time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ExclusionClass {
+    Credential,
     DependencyStore,
     VendorCache,
     BinaryArtifact,
@@ -17,6 +18,7 @@ pub enum ExclusionClass {
 
 impl ExclusionClass {
     pub const ALL: &'static [ExclusionClass] = &[
+        Self::Credential,
         Self::DependencyStore,
         Self::VendorCache,
         Self::BinaryArtifact,
@@ -26,12 +28,21 @@ impl ExclusionClass {
 
     pub fn label(self) -> &'static str {
         match self {
+            Self::Credential => "holds credentials",
             Self::DependencyStore => "dependency store",
             Self::VendorCache => "vendor cache",
             Self::BinaryArtifact => "binary artifact",
             Self::LargeLog => "large log",
             Self::Ignored => "ignored by .gitignore",
         }
+    }
+
+    /// Whether naming the file overrules the exclusion. Every other class is
+    /// a judgement about usefulness that the user may overrule; this one is
+    /// about what would leave the machine, and it is not theirs to waive by
+    /// typing a path.
+    pub fn survives_request(self) -> bool {
+        matches!(self, Self::Credential)
     }
 
     /// Directory names that are this class wherever they appear.
@@ -251,6 +262,9 @@ pub fn scan_skipped_directory_names() -> Vec<&'static str> {
 /// `size` is the file's length when it is known; a path is judged on its name
 /// alone when it is not.
 pub fn classify(relative: &Path, size: Option<u64>) -> Option<ExclusionClass> {
+    if crate::sensitive_files::is_sensitive_file(&relative.to_string_lossy()) {
+        return Some(ExclusionClass::Credential);
+    }
     for component in relative.components() {
         let name = component.as_os_str().to_string_lossy();
         for class in ExclusionClass::ALL.iter().copied() {
@@ -319,10 +333,11 @@ pub fn index_decision(
     size: Option<u64>,
     requested: bool,
 ) -> Option<ExclusionClass> {
+    let class = classify(relative, size);
     if requested {
-        return None;
+        return class.filter(|class| class.survives_request());
     }
-    if let Some(class) = classify(relative, size) {
+    if let Some(class) = class {
         return Some(class);
     }
     let absolute = root.join(relative);
@@ -432,14 +447,89 @@ mod tests {
     fn every_exclusion_class_names_itself_and_keeps_something_out() {
         for class in ExclusionClass::ALL.iter().copied() {
             assert!(!class.label().is_empty(), "{class:?} has no label");
-            if class == ExclusionClass::Ignored {
-                continue;
+            match class {
+                ExclusionClass::Ignored => {}
+                ExclusionClass::Credential => assert_eq!(
+                    classify(Path::new(".env"), Some(64)),
+                    Some(ExclusionClass::Credential)
+                ),
+                _ => assert!(
+                    !class.directories().is_empty() || !class.extensions().is_empty(),
+                    "{class:?} excludes nothing"
+                ),
             }
+        }
+    }
+
+    /// The index keeps no credential list of its own: it asks the same policy
+    /// `read_file` and the mention expander ask, so a pattern added there is
+    /// kept out of the index the moment it exists.
+    #[test]
+    fn a_file_the_credential_policy_covers_is_never_indexed_however_it_is_reached() {
+        for path in [
+            ".env",
+            ".env.local",
+            "apps/web/.env.production",
+            ".envrc",
+            "config/secrets.json",
+            "infra/id_rsa",
+            "keys/id_ed25519",
+            "certs/server.pem",
+            "certs/client.p12",
+            "private.key",
+            ".aws/credentials",
+            ".npmrc",
+            ".netrc",
+            "infra/terraform.tfstate",
+        ] {
             assert!(
-                !class.directories().is_empty() || !class.extensions().is_empty(),
-                "{class:?} excludes nothing"
+                crate::sensitive_files::is_sensitive_file(path),
+                "{path} is not covered by the credential policy at all"
+            );
+            assert_eq!(
+                classify(Path::new(path), Some(64)),
+                Some(ExclusionClass::Credential),
+                "{path} reached the index"
             );
         }
+        for path in ["src/main.rs", "README.md", "environment.ts", "package.json"] {
+            assert_eq!(
+                classify(Path::new(path), Some(64)),
+                None,
+                "{path} was excluded as a credential file"
+            );
+        }
+    }
+
+    #[test]
+    fn naming_a_credential_file_does_not_index_it_and_naming_any_other_exclusion_does() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let root = dir.path();
+        for (path, requested_class) in [
+            (".env", Some(ExclusionClass::Credential)),
+            ("apps/web/.env.local", Some(ExclusionClass::Credential)),
+            ("deploy/id_rsa", Some(ExclusionClass::Credential)),
+            ("node_modules/react/index.js", None),
+            ("target/debug/agi", None),
+            ("assets/logo.png", None),
+        ] {
+            assert_eq!(
+                index_decision(root, Path::new(path), Some(64), true),
+                requested_class,
+                "{path} was decided wrongly for a path the user named"
+            );
+            assert!(
+                index_decision(root, Path::new(path), Some(64), false).is_some(),
+                "{path} reached the index unasked"
+            );
+        }
+        assert!(
+            ExclusionClass::ALL
+                .iter()
+                .filter(|class| class.survives_request())
+                .eq([ExclusionClass::Credential].iter()),
+            "a class other than a credential file now overrules the user"
+        );
     }
 
     #[test]
@@ -554,11 +644,12 @@ mod tests {
                 .expect("git runs");
         };
         run(&["init", "-q", "-b", "main"]);
-        std::fs::write(root.join(".gitignore"), "secrets.env\n").unwrap();
-        std::fs::write(root.join("secrets.env"), "TOKEN=x\n").unwrap();
+        std::fs::write(root.join(".gitignore"), "scratch.txt\n.env\n").unwrap();
+        std::fs::write(root.join("scratch.txt"), "notes\n").unwrap();
+        std::fs::write(root.join(".env"), "TOKEN=x\n").unwrap();
         std::fs::write(root.join("src.rs"), "fn main() {}\n").unwrap();
 
-        let ignored = Path::new("secrets.env");
+        let ignored = Path::new("scratch.txt");
         assert_eq!(
             index_decision(root, ignored, Some(8), false),
             Some(ExclusionClass::Ignored),
@@ -572,6 +663,13 @@ mod tests {
         assert_eq!(
             index_decision(root, Path::new("src.rs"), Some(16), false),
             None
+        );
+
+        let credential = Path::new(".env");
+        assert_eq!(
+            index_decision(root, credential, Some(8), true),
+            Some(ExclusionClass::Credential),
+            "naming a credential file indexed it"
         );
     }
 

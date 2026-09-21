@@ -11,4 +11,7 @@ export type HandoffRefusal =
       supportedProtocolVersions: Array<number>;
     }
   | { reason: 'wrongDestination'; expected: HandoffEnvironment; received: HandoffEnvironment }
-  | { reason: 'trustModeUnknown' };
+  | { reason: 'trustModeUnknown' }
+  | { reason: 'expired'; issuedAt: string; maxAgeSeconds: number }
+  | { reason: 'replayed'; receipt: string }
+  | { reason: 'wrongAccount' };

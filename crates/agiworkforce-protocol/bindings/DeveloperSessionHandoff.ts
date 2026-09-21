@@ -54,4 +54,10 @@ export type DeveloperSessionHandoff = {
    * Local resources the origin was running. Each one is restarted here.
    */
   localResources?: Array<HandoffLocalResource>;
+  /**
+   * Opaque fingerprint of the account the origin was signed into, never an
+   * address. A receiver signed into a different account refuses the record
+   * rather than opening one person's session under another's credential.
+   */
+  issuedForAccount?: string;
 };

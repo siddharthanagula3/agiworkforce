@@ -127,7 +127,71 @@ pub enum CliError {
         required_tier: String,
         reason: String,
     },
+    /// The deployment no longer answers the contract version this build sends.
+    /// Nothing about the request is wrong, so it is not an API failure: the
+    /// binary is the thing that is out of date.
+    ClientUpdateRequired {
+        message: Option<String>,
+        minimum_api_version: Option<String>,
+    },
 }
+
+/// What a non-zero exit tells a script. The values are `sysexits.h`, so a
+/// shell that already reads those reads these, and every class is distinct:
+/// an expired credential and an unreachable host are not the same failure and
+/// a caller must be able to branch on which it got.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExitClass {
+    Failure,
+    DataError,
+    Unavailable,
+    TemporaryFailure,
+    ProtocolTooOld,
+    NoPermission,
+    Configuration,
+}
+
+impl ExitClass {
+    pub const ALL: &'static [ExitClass] = &[
+        Self::Failure,
+        Self::DataError,
+        Self::Unavailable,
+        Self::TemporaryFailure,
+        Self::ProtocolTooOld,
+        Self::NoPermission,
+        Self::Configuration,
+    ];
+
+    /// Exit status of the process. `2` is never used: it is what the argument
+    /// parser exits with, and a usage mistake must stay distinguishable from
+    /// anything the command itself decided.
+    pub fn code(self) -> i32 {
+        match self {
+            Self::Failure => 1,
+            Self::DataError => 65,
+            Self::Unavailable => 69,
+            Self::TemporaryFailure => 75,
+            Self::ProtocolTooOld => 76,
+            Self::NoPermission => 77,
+            Self::Configuration => 78,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Failure => "the command failed",
+            Self::DataError => "the input the command was given cannot be used",
+            Self::Unavailable => "a service the command needs did not answer",
+            Self::TemporaryFailure => "the same command may succeed later",
+            Self::ProtocolTooOld => "this build is older than the deployment answers",
+            Self::NoPermission => "the account is not signed in or not permitted",
+            Self::Configuration => "something the user configured has to change",
+        }
+    }
+}
+
+/// The status the argument parser exits with. Reserved, never a class of ours.
+pub const USAGE_EXIT_CODE: i32 = 2;
 
 // ---------------------------------------------------------------------------
 // Display, user-facing messages
@@ -148,6 +212,21 @@ impl fmt::Display for CliError {
                 write!(f, "[{}] Authentication failed: {}", provider, message)
             }
             CliError::Config { message } => write!(f, "Configuration error: {}", message),
+            CliError::ClientUpdateRequired {
+                message,
+                minimum_api_version,
+            } => {
+                f.write_str("Update the AGI CLI to continue: this build speaks API contract ")?;
+                f.write_str(crate::cloud::handshake::API_CONTRACT_VERSION)?;
+                match minimum_api_version {
+                    Some(minimum) => write!(f, " and the deployment answers {minimum} or newer.")?,
+                    None => f.write_str(" and the deployment no longer answers it.")?,
+                }
+                match message {
+                    Some(message) => write!(f, " {message}"),
+                    None => Ok(()),
+                }
+            }
             CliError::Tool { tool_name, message } => {
                 write!(f, "Tool '{}' failed: {}", tool_name, message)
             }
@@ -276,6 +355,7 @@ impl CliError {
             CliError::Auth { .. } => "auth_expired",
             CliError::AuthMissing { .. } => "auth_missing",
             CliError::Config { .. } => "config_invalid",
+            CliError::ClientUpdateRequired { .. } => "client_update_required",
             CliError::Tool { .. } => "tool_failed",
             CliError::Network { .. } => "network",
             CliError::ContextOverflow { .. } => "context_overflow",
@@ -337,6 +417,9 @@ impl CliError {
                 "Run `agi init` to regenerate the default config, or fix the indicated \
                  file path manually."
                     .to_string()
+            }
+            CliError::ClientUpdateRequired { .. } => {
+                "Run `agi update` to install a build this deployment still answers.".to_string()
             }
             CliError::Tool { tool_name, .. } => format!(
                 "Tool `{tool_name}` failed. Run `agi execpolicy` to see allowed commands \
@@ -503,14 +586,37 @@ impl CliError {
         matches!(self, CliError::Paywall { .. })
     }
 
-    /// Exit code for this error. Uses sysexits.h values where applicable.
-    /// - 78 (EX_CONFIG) for paywall, the user's configuration (tier) needs updating.
-    /// - 1 for all other errors.
-    pub fn exit_code(&self) -> i32 {
+    /// Which class of failure a caller is looking at. Every variant answers,
+    /// so a new one cannot quietly join the undifferentiated pile.
+    pub fn exit_class(&self) -> ExitClass {
         match self {
-            CliError::Paywall { .. } => 78,
-            _ => 1,
+            CliError::Api { status, .. } if (500..600).contains(status) => ExitClass::Unavailable,
+            CliError::Api { .. } => ExitClass::Failure,
+            CliError::Auth { .. } | CliError::AuthMissing { .. } => ExitClass::NoPermission,
+            CliError::AccountSignedOut { .. } => ExitClass::NoPermission,
+            CliError::Config { .. } => ExitClass::Configuration,
+            CliError::Tool { .. } => ExitClass::Failure,
+            CliError::Network { .. } => ExitClass::Unavailable,
+            CliError::ContextOverflow { .. } => ExitClass::DataError,
+            CliError::RateLimited { .. } => ExitClass::TemporaryFailure,
+            CliError::StreamError { is_retryable, .. } => {
+                if *is_retryable {
+                    ExitClass::TemporaryFailure
+                } else {
+                    ExitClass::Failure
+                }
+            }
+            CliError::PlanExcludesModel { .. } | CliError::Paywall { .. } => {
+                ExitClass::Configuration
+            }
+            CliError::ModelUnavailable { .. } => ExitClass::Unavailable,
+            CliError::ClientUpdateRequired { .. } => ExitClass::ProtocolTooOld,
         }
+    }
+
+    /// Exit code for this error, from its class.
+    pub fn exit_code(&self) -> i32 {
+        self.exit_class().code()
     }
 
     /// Project this error onto the protocol's closed turn-failure set.
@@ -556,6 +662,7 @@ impl CliError {
             CliError::ContextOverflow { .. } => (TurnFailureCode::ContextWindowExceeded, None),
             CliError::Tool { .. } => (TurnFailureCode::ToolDenied, None),
             CliError::Config { .. } => (TurnFailureCode::InvalidRequest, None),
+            CliError::ClientUpdateRequired { .. } => (TurnFailureCode::InvalidRequest, None),
         };
         let failure = TurnFailure::new(code, self.detail());
         match (provider, self) {
@@ -1235,5 +1342,117 @@ mod tests {
         let err = CliError::config("bad config");
         let anyhow_err: anyhow::Error = err.into();
         assert!(anyhow_err.to_string().contains("Configuration error"));
+    }
+
+    /// Every failure a caller can be handed, so a class added to `CliError`
+    /// without a place in the contract shows up here rather than silently
+    /// joining the pile that exits 1.
+    fn every_failure() -> Vec<CliError> {
+        vec![
+            CliError::api("anthropic", 400, "bad request"),
+            CliError::api("anthropic", 503, "upstream down"),
+            CliError::auth("openai", "expired"),
+            CliError::auth_missing("openai", "no key"),
+            CliError::config("unreadable"),
+            CliError::tool("bash", "exit 1"),
+            CliError::network("https://example.invalid", "refused"),
+            CliError::context_overflow("m", 10, 5),
+            CliError::rate_limited("anthropic", None),
+            CliError::stream_error("anthropic", "cut", true),
+            CliError::stream_error("anthropic", "malformed", false),
+            CliError::AccountSignedOut { model: "m".into() },
+            CliError::PlanExcludesModel {
+                model: "m".into(),
+                tier: "free".into(),
+            },
+            CliError::ModelUnavailable { model: "m".into() },
+            CliError::paywall("chat", "pro", "quota"),
+            CliError::ClientUpdateRequired {
+                message: None,
+                minimum_api_version: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn each_kind_of_failure_exits_on_its_own_class_and_never_on_the_parser_status() {
+        let expected: Vec<(&str, ExitClass)> = vec![
+            ("api_http_error", ExitClass::Failure),
+            ("api_server_error", ExitClass::Unavailable),
+            ("auth_expired", ExitClass::NoPermission),
+            ("auth_missing", ExitClass::NoPermission),
+            ("config_invalid", ExitClass::Configuration),
+            ("tool_failed", ExitClass::Failure),
+            ("network", ExitClass::Unavailable),
+            ("context_overflow", ExitClass::DataError),
+            ("api_rate_limit", ExitClass::TemporaryFailure),
+            ("stream_disconnect", ExitClass::TemporaryFailure),
+            ("stream_disconnect", ExitClass::Failure),
+            ("account_signed_out", ExitClass::NoPermission),
+            ("plan_excludes_model", ExitClass::Configuration),
+            ("model_unavailable", ExitClass::Unavailable),
+            ("paywall", ExitClass::Configuration),
+            ("client_update_required", ExitClass::ProtocolTooOld),
+        ];
+        let actual: Vec<(&str, ExitClass)> = every_failure()
+            .iter()
+            .map(|error| (error.kind(), error.exit_class()))
+            .collect();
+        assert_eq!(actual, expected);
+
+        for error in every_failure() {
+            let code = error.exit_code();
+            assert_ne!(code, 0, "{} exits as a success", error.kind());
+            assert_ne!(
+                code,
+                USAGE_EXIT_CODE,
+                "{} is indistinguishable from a usage mistake",
+                error.kind()
+            );
+        }
+    }
+
+    #[test]
+    fn a_signed_out_account_an_unreachable_host_and_a_stale_build_are_three_different_statuses() {
+        let codes = [
+            CliError::auth_missing("agiworkforce", "no session").exit_code(),
+            CliError::network("https://example.invalid", "refused").exit_code(),
+            CliError::ClientUpdateRequired {
+                message: None,
+                minimum_api_version: None,
+            }
+            .exit_code(),
+            CliError::tool("bash", "exit 1").exit_code(),
+        ];
+        let mut distinct = codes;
+        distinct.sort_unstable();
+        distinct_check(&distinct, codes.len());
+    }
+
+    fn distinct_check(sorted: &[i32], expected: usize) {
+        let mut unique = sorted.to_vec();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            expected,
+            "two failures a script must tell apart share an exit status: {sorted:?}"
+        );
+    }
+
+    #[test]
+    fn every_exit_class_has_a_distinct_status_and_a_sentence_of_its_own() {
+        let mut codes: Vec<i32> = ExitClass::ALL.iter().map(|class| class.code()).collect();
+        let count = codes.len();
+        codes.sort_unstable();
+        distinct_check(&codes, count);
+        for class in ExitClass::ALL.iter().copied() {
+            assert!(class.code() > 0, "{class:?} exits as a success");
+            assert_ne!(
+                class.code(),
+                USAGE_EXIT_CODE,
+                "{class:?} took the parser's status"
+            );
+            assert!(class.label().len() > 10, "{class:?} has no sentence");
+        }
     }
 }

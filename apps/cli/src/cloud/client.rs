@@ -22,8 +22,15 @@ pub enum CloudError {
     NotManaged(PrivacyMode),
     ApiBase(String),
     Transport(String),
-    Api { status: u16, message: String },
+    Api {
+        status: u16,
+        message: String,
+    },
     Decode(String),
+    /// The deployment refused this build's contract version. Held as the CLI
+    /// error itself so the process exits on its class rather than on the
+    /// undifferentiated failure every other HTTP status shares.
+    UpgradeRequired(Box<crate::errors::CliError>),
 }
 
 impl std::fmt::Display for CloudError {
@@ -52,12 +59,24 @@ impl std::fmt::Display for CloudError {
                 write!(f, "could not reach your AGI Workforce account: {message}")
             }
             CloudError::Api { status, message } => write!(f, "{message} (HTTP {status})"),
+            CloudError::UpgradeRequired(error) => error.fmt(f),
             CloudError::Decode(message) => {
                 write!(
                     f,
                     "your AGI Workforce account returned an unreadable response: {message}"
                 )
             }
+        }
+    }
+}
+
+/// Carries the upgrade refusal as a cause, so a caller that turns this into
+/// `anyhow::Error` still exits on the refusal's class rather than on 1.
+impl std::error::Error for CloudError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            CloudError::UpgradeRequired(error) => Some(error.as_ref()),
+            _ => None,
         }
     }
 }
@@ -206,10 +225,16 @@ impl CloudClient {
             .await
             .map_err(|error| CloudError::Transport(error.to_string()))?;
         let status = response.status().as_u16();
+        let minimum_api_version = crate::cloud::handshake::minimum_api_version(response.headers());
         let body = response
             .text()
             .await
             .map_err(|error| CloudError::Transport(error.to_string()))?;
+        if let Some(error) =
+            crate::cloud::handshake::upgrade_required(status, minimum_api_version, &body)
+        {
+            return Err(CloudError::UpgradeRequired(Box::new(error)));
+        }
         if status == 401 {
             tier_cache::invalidate_tier_cache();
             return Err(CloudError::SessionExpired);
@@ -349,6 +374,33 @@ mod tests {
 
         let local = CloudError::NotManaged(PrivacyMode::Local).to_string();
         assert!(local.starts_with("Local:"));
+    }
+
+    /// A 426 is not an API failure to report as one: the build is what is out
+    /// of date, and the exit status has to say so on its own.
+    #[test]
+    fn an_upgrade_refusal_survives_the_walk_up_an_anyhow_chain() {
+        let refusal = crate::cloud::handshake::upgrade_required(
+            crate::cloud::handshake::CLIENT_UPDATE_REQUIRED_STATUS,
+            Some("2026-10-01".to_string()),
+            r#"{"error":{"message":"Contract 2026-09-17 was retired."}}"#,
+        )
+        .expect("a 426 answer is an upgrade refusal");
+        let error = CloudError::UpgradeRequired(Box::new(refusal));
+
+        assert!(!error.is_boundary());
+        assert!(error.to_string().contains("Update the AGI CLI"), "{error}");
+
+        let wrapped = anyhow::Error::new(error).context("reading your account");
+        let found = wrapped
+            .chain()
+            .find_map(|cause| cause.downcast_ref::<crate::errors::CliError>())
+            .expect("the refusal is reachable as the cause");
+        assert_eq!(found.kind(), "client_update_required");
+        assert_eq!(
+            found.exit_code(),
+            crate::errors::ExitClass::ProtocolTooOld.code()
+        );
     }
 
     #[test]

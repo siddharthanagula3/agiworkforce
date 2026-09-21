@@ -1727,7 +1727,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
         thread_id: "thread-1".to_string(),
         origin: HandoffOrigin::DeveloperSession,
         issued_by: DeveloperSessionSource::Cli,
-        issued_at: "2026-09-20T09:00:00Z".to_string(),
+        issued_at: DeveloperSessionHandoff::issued_now(),
         from_environment: HandoffEnvironment::Local,
         to_environment: to,
         workspace: HandoffWorkspace {
@@ -1761,6 +1761,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
             ended_at: "2026-09-20T08:59:00Z".to_string(),
         }),
         local_resources: vec![HandoffLocalResource::McpServer],
+        issued_for_account: None,
     }
 }
 

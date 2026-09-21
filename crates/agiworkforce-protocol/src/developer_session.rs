@@ -6,6 +6,7 @@
 //! thread/turn/item vocabulary used by modern coding-agent app servers while
 //! all payloads and trust decisions remain AGI-owned.
 
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -1887,6 +1888,51 @@ pub struct DeveloperSessionHandoff {
     /// Local resources the origin was running. Each one is restarted here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub local_resources: Vec<HandoffLocalResource>,
+    /// Opaque fingerprint of the account the origin was signed into, never an
+    /// address. A receiver signed into a different account refuses the record
+    /// rather than opening one person's session under another's credential.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub issued_for_account: Option<String>,
+}
+
+/// How long a handoff stays admissible. The record is the whole of what
+/// travels, so one that sat in a log, a paste buffer or a file is a bearer of
+/// somebody's session state and is refused on age alone.
+pub const HANDOFF_MAX_AGE_SECONDS: i64 = 15 * 60;
+
+/// What the receiving surface knows about itself when it is offered a record.
+#[derive(Debug, Clone, Copy)]
+pub struct HandoffAdmissionContext<'a> {
+    pub environment: HandoffEnvironment,
+    pub now: DateTime<Utc>,
+    /// Fingerprint of the account this surface is signed into, when it knows.
+    pub account: Option<&'a str>,
+    /// Receipts of records already taken here, so one cannot be taken twice.
+    pub taken_receipts: &'a [String],
+}
+
+impl<'a> HandoffAdmissionContext<'a> {
+    /// A surface that knows only where it is. Age is still checked, because a
+    /// clock is always available and a stale record is stale everywhere.
+    pub fn here(environment: HandoffEnvironment) -> Self {
+        Self {
+            environment,
+            now: Utc::now(),
+            account: None,
+            taken_receipts: &[],
+        }
+    }
+
+    pub fn for_account(mut self, account: Option<&'a str>) -> Self {
+        self.account = account;
+        self
+    }
+
+    pub fn already_taken(mut self, taken_receipts: &'a [String]) -> Self {
+        self.taken_receipts = taken_receipts;
+        self
+    }
 }
 
 /// Why a receiving surface will not take a handoff.
@@ -1909,6 +1955,21 @@ pub enum HandoffRefusal {
     /// The posture on record predates persisted routing authority, so resuming
     /// it would run turns under a boundary nobody chose.
     TrustModeUnknown,
+    /// The record is older than [`HANDOFF_MAX_AGE_SECONDS`], is dated in the
+    /// future, or carries an `issuedAt` no clock can read.
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Expired {
+        issued_at: String,
+        max_age_seconds: u32,
+    },
+    /// A record with this receipt was already taken here. Taking it again
+    /// would open the same session twice from one authorisation.
+    #[serde(rename_all = "camelCase")]
+    #[ts(rename_all = "camelCase")]
+    Replayed { receipt: String },
+    /// This surface is signed into a different account than the origin was.
+    WrongAccount,
 }
 
 impl HandoffRefusal {
@@ -1923,6 +1984,19 @@ impl HandoffRefusal {
             }
             Self::TrustModeUnknown => {
                 "the session's trust boundary is unknown, so choose one before resuming".to_string()
+            }
+            Self::Expired {
+                issued_at,
+                max_age_seconds,
+            } => format!(
+                "this handoff was issued at {issued_at} and a record stays good for {max_age_seconds} seconds; ask the origin for a new one"
+            ),
+            Self::Replayed { receipt } => {
+                format!("this handoff ({receipt}) was already taken on this surface")
+            }
+            Self::WrongAccount => {
+                "this handoff belongs to a different account than the one signed in here"
+                    .to_string()
             }
         }
     }
@@ -1962,22 +2036,67 @@ pub struct HandoffAdmission {
 }
 
 impl DeveloperSessionHandoff {
+    /// The stamp a producer puts on a record it is issuing now, in the one
+    /// format [`Self::accept_with`] reads it back in.
+    pub fn issued_now() -> String {
+        Utc::now().to_rfc3339()
+    }
+
+    /// What a receiver records once it has taken this handoff, so the same
+    /// record cannot be taken twice. Derived from the record, never chosen by
+    /// it, so a forged one cannot pick a receipt that is already spent.
+    pub fn receipt(&self) -> String {
+        format!("{}@{}", self.thread_id, self.issued_at)
+    }
+
     /// Take the handoff on a surface running in `here`, or say why not.
+    /// Age is checked against the current clock; a caller that knows which
+    /// account it is signed into, or which records it has already taken, uses
+    /// [`Self::accept_with`] so those are checked too.
     pub fn accept(&self, here: HandoffEnvironment) -> Result<HandoffAdmission, HandoffRefusal> {
+        self.accept_with(&HandoffAdmissionContext::here(here))
+    }
+
+    /// Take the handoff on a surface that knows where it is, what time it is,
+    /// which account it holds and which records it has already taken.
+    pub fn accept_with(
+        &self,
+        context: &HandoffAdmissionContext<'_>,
+    ) -> Result<HandoffAdmission, HandoffRefusal> {
         if !SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.contains(&self.protocol_version) {
             return Err(HandoffRefusal::ProtocolVersionUnsupported {
                 requested_protocol_version: self.protocol_version,
                 supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
             });
         }
-        if self.to_environment != here {
+        if self.to_environment != context.environment {
             return Err(HandoffRefusal::WrongDestination {
-                expected: here,
+                expected: context.environment,
                 received: self.to_environment,
             });
         }
         if self.posture.trust_mode == DeveloperSessionTrustMode::Unknown {
             return Err(HandoffRefusal::TrustModeUnknown);
+        }
+        let expired = || HandoffRefusal::Expired {
+            issued_at: self.issued_at.clone(),
+            max_age_seconds: HANDOFF_MAX_AGE_SECONDS as u32,
+        };
+        let issued_at = DateTime::parse_from_rfc3339(&self.issued_at)
+            .map(|issued| issued.with_timezone(&Utc))
+            .map_err(|_| expired())?;
+        let age = context.now.signed_duration_since(issued_at).num_seconds();
+        if !(0..=HANDOFF_MAX_AGE_SECONDS).contains(&age) {
+            return Err(expired());
+        }
+        if let Some(account) = context.account
+            && self.issued_for_account.as_deref() != Some(account)
+        {
+            return Err(HandoffRefusal::WrongAccount);
+        }
+        let receipt = self.receipt();
+        if context.taken_receipts.contains(&receipt) {
+            return Err(HandoffRefusal::Replayed { receipt });
         }
         let start = match self.origin {
             HandoffOrigin::DeveloperSession => HandoffStart::Resume {
@@ -2257,7 +2376,7 @@ mod tests {
             thread_id: "thread-1".to_string(),
             origin: HandoffOrigin::DeveloperSession,
             issued_by: DeveloperSessionSource::Cli,
-            issued_at: "2026-09-20T10:00:00Z".to_string(),
+            issued_at: DeveloperSessionHandoff::issued_now(),
             from_environment: HandoffEnvironment::Local,
             to_environment: HandoffEnvironment::Cloud,
             workspace: HandoffWorkspace {
@@ -2315,6 +2434,7 @@ mod tests {
                 ended_at: "2026-09-20T09:59:00Z".to_string(),
             }),
             local_resources: HANDOFF_LOCAL_RESOURCES.to_vec(),
+            issued_for_account: None,
         }
     }
 
@@ -2387,6 +2507,154 @@ mod tests {
                 thread_id: "thread-1".to_string()
             }
         );
+    }
+
+    fn addressed_here() -> DeveloperSessionHandoff {
+        DeveloperSessionHandoff {
+            to_environment: HandoffEnvironment::Local,
+            ..populated_handoff()
+        }
+    }
+
+    /// A handoff is the whole of what travels, so it is a bearer of somebody's
+    /// session state. Age, reuse and the account it belongs to are refusals in
+    /// their own right, not prose a receiving surface has to invent.
+    #[test]
+    fn a_record_that_sat_somewhere_is_refused_on_its_age_alone() {
+        let handoff = addressed_here();
+        let issued_at = DateTime::parse_from_rfc3339(&handoff.issued_at)
+            .expect("the fixture is dated")
+            .with_timezone(&Utc);
+        let at = |offset_seconds: i64| HandoffAdmissionContext {
+            environment: HandoffEnvironment::Local,
+            now: issued_at + chrono::Duration::seconds(offset_seconds),
+            account: None,
+            taken_receipts: &[],
+        };
+
+        assert!(handoff.accept_with(&at(0)).is_ok());
+        assert!(handoff.accept_with(&at(HANDOFF_MAX_AGE_SECONDS)).is_ok());
+
+        let expired = HandoffRefusal::Expired {
+            issued_at: handoff.issued_at.clone(),
+            max_age_seconds: HANDOFF_MAX_AGE_SECONDS as u32,
+        };
+        assert_eq!(
+            handoff
+                .accept_with(&at(HANDOFF_MAX_AGE_SECONDS + 1))
+                .expect_err("a stale record is refused"),
+            expired
+        );
+        assert_eq!(
+            handoff
+                .accept_with(&at(-1))
+                .expect_err("a record dated in the future is refused"),
+            expired
+        );
+
+        let unreadable = DeveloperSessionHandoff {
+            issued_at: "sometime yesterday".to_string(),
+            ..addressed_here()
+        };
+        assert!(matches!(
+            unreadable
+                .accept_with(&at(0))
+                .expect_err("an unreadable date is not a fresh record"),
+            HandoffRefusal::Expired { .. }
+        ));
+        assert!(expired.label().contains("ask the origin for a new one"));
+    }
+
+    #[test]
+    fn a_record_already_taken_here_is_not_taken_twice() {
+        let handoff = addressed_here();
+        let receipt = handoff.receipt();
+        assert_eq!(receipt, format!("thread-1@{}", handoff.issued_at));
+
+        let taken = vec![receipt.clone()];
+        let refusal = handoff
+            .accept_with(
+                &HandoffAdmissionContext::here(HandoffEnvironment::Local).already_taken(&taken),
+            )
+            .expect_err("a spent record is refused");
+        assert_eq!(refusal, HandoffRefusal::Replayed { receipt });
+        assert!(
+            handoff
+                .accept_with(&HandoffAdmissionContext::here(HandoffEnvironment::Local))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_surface_signed_into_another_account_does_not_open_this_session() {
+        let mine = DeveloperSessionHandoff {
+            issued_for_account: Some("fingerprint-a".to_string()),
+            ..addressed_here()
+        };
+        let here = |account| {
+            HandoffAdmissionContext::here(HandoffEnvironment::Local).for_account(Some(account))
+        };
+
+        assert!(mine.accept_with(&here("fingerprint-a")).is_ok());
+        assert_eq!(
+            mine.accept_with(&here("fingerprint-b"))
+                .expect_err("another account does not take it"),
+            HandoffRefusal::WrongAccount
+        );
+
+        let anonymous = addressed_here();
+        assert_eq!(
+            anonymous
+                .accept_with(&here("fingerprint-a"))
+                .expect_err("a record that names no account is not admitted by one that does"),
+            HandoffRefusal::WrongAccount,
+        );
+        assert!(
+            anonymous
+                .accept_with(&HandoffAdmissionContext::here(HandoffEnvironment::Local))
+                .is_ok(),
+            "a surface that knows no account still takes a record that names none"
+        );
+    }
+
+    #[test]
+    fn every_refusal_says_something_a_person_can_act_on() {
+        let refusals = [
+            HandoffRefusal::ProtocolVersionUnsupported {
+                requested_protocol_version: 1,
+                supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+            },
+            HandoffRefusal::WrongDestination {
+                expected: HandoffEnvironment::Local,
+                received: HandoffEnvironment::Cloud,
+            },
+            HandoffRefusal::TrustModeUnknown,
+            HandoffRefusal::Expired {
+                issued_at: "2026-09-20T10:00:00Z".to_string(),
+                max_age_seconds: HANDOFF_MAX_AGE_SECONDS as u32,
+            },
+            HandoffRefusal::Replayed {
+                receipt: "thread-1@2026-09-20T10:00:00Z".to_string(),
+            },
+            HandoffRefusal::WrongAccount,
+        ];
+        let mut reasons = Vec::new();
+        for refusal in &refusals {
+            assert!(refusal.label().len() > 25, "{refusal:?} says nothing");
+            let wire = serde_json::to_value(refusal).expect("serialize");
+            let reason = wire
+                .get("reason")
+                .and_then(|reason| reason.as_str())
+                .unwrap_or_else(|| panic!("{refusal:?} has no reason on the wire"))
+                .to_string();
+            reasons.push(reason);
+        }
+        for reason in ["expired", "replayed", "wrongAccount"] {
+            assert!(
+                reasons.contains(&reason.to_string()),
+                "{reason} is not a refusal a client can switch on: {reasons:?}"
+            );
+        }
     }
 
     #[test]

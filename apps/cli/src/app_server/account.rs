@@ -116,6 +116,18 @@ pub fn managed_credential() -> Option<(String, Option<i64>)> {
     None
 }
 
+/// Fingerprint of the account this machine holds, for records that travel to
+/// another surface. Never the token and never the subject itself: a receiver
+/// only has to answer "is this the same account", and a record in a log then
+/// names nobody.
+pub fn account_fingerprint() -> Option<String> {
+    use sha2::{Digest, Sha256};
+    let (token, _) = managed_credential()?;
+    let subject = crate::auth::jwt_subject(&token)?;
+    let digest = Sha256::digest(subject.as_bytes());
+    Some(crate::hex::encode(&digest)[..32].to_string())
+}
+
 pub fn epoch_millis_to_rfc3339(millis: i64) -> Option<String> {
     chrono::DateTime::from_timestamp_millis(millis).map(|instant| instant.to_rfc3339())
 }
@@ -230,16 +242,73 @@ pub fn save_device_grant(entry: AuthEntry) -> Result<()> {
     Ok(())
 }
 
-/// Forget the managed credential on this machine.
-pub fn logout() -> Result<()> {
-    let mut store = AuthStore::load().context("Failed to read the credential store")?;
+/// Every key a managed credential is held under, dropped from the store.
+fn forget_managed(store: &mut AuthStore) {
     for key in MANAGED_AUTH_KEYS {
         store.entries.remove(key);
     }
+}
+
+/// Forget the managed credential on this machine.
+pub fn logout() -> Result<()> {
+    let mut store = AuthStore::load().context("Failed to read the credential store")?;
+    forget_managed(&mut store);
     store
         .save()
         .context("Failed to update the credential store")?;
     tier_cache::invalidate_tier_cache();
     clear_account_cache();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Signing out has to reach every key a sign-in wrote, and the caches the
+    /// signed-in answer was kept in, or the next run reports the account of
+    /// somebody who is no longer here.
+    #[test]
+    fn signing_out_drops_every_key_a_managed_credential_is_written_under() {
+        let mut store = AuthStore::default();
+        for key in MANAGED_AUTH_KEYS {
+            store.entries.insert(
+                (*key).to_string(),
+                AuthEntry::ApiKey {
+                    key: "held".to_string(),
+                },
+            );
+        }
+        store.entries.insert(
+            "anthropic".to_string(),
+            AuthEntry::ApiKey {
+                key: "the user's own key".to_string(),
+            },
+        );
+
+        forget_managed(&mut store);
+
+        assert_eq!(
+            store.entries.keys().collect::<Vec<_>>(),
+            vec!["anthropic"],
+            "sign-out left a managed credential behind, or took a key the user set themselves"
+        );
+    }
+
+    /// The key a device grant is saved under is the key sign-out removes.
+    #[test]
+    fn the_key_a_sign_in_writes_is_one_sign_out_forgets() {
+        let mut store = AuthStore::default();
+        store.entries.insert(
+            "agiworkforce".to_string(),
+            AuthEntry::ApiKey {
+                key: "granted".to_string(),
+            },
+        );
+        forget_managed(&mut store);
+        assert!(
+            store.entries.is_empty(),
+            "a device grant survives sign-out: save_device_grant writes a key MANAGED_AUTH_KEYS does not name"
+        );
+    }
 }
