@@ -549,6 +549,15 @@ const DRAFT_NOT_SAVED_NOTICE =
  */
 export const SEND_GUARD_BLOCKED = 'guard-blocked' as const;
 
+// The send control looks the same while shut, so the reason goes to assistive technology.
+const SEND_REASON = {
+  usageBlocked: 'You have reached your usage limit, so this message cannot be sent.',
+  trialExhausted: 'Your trial has run out, so this message cannot be sent.',
+  unavailable: 'Sending is unavailable right now.',
+  modelUnavailable: 'The selected model is unavailable, so this message cannot be sent.',
+  attachmentConflict: 'This attachment cannot be sent with the mode that is on.',
+} as const;
+
 /**
  * The legacy textarea's resting height is pinned in JS, so the `sm:` step its
  * classes carry can never reach it; this is the one density value that cannot
@@ -1682,6 +1691,11 @@ const ChatComposerNewComponent = ({
     }
   }, [addChatAttachments]);
 
+  // A capture or clipboard read lands its file after an await; an Enter pressed meanwhile
+  // used to send without it and leak the file into the next draft. The send waits instead.
+  const attachmentPreparing = isCapturingScreenshot || readingClipboard;
+  const deferredSendRef = useRef(false);
+
   const attachmentNames = useMemo(() => attachments.map((file) => file.name), [attachments]);
 
   /**
@@ -2421,6 +2435,10 @@ const ChatComposerNewComponent = ({
     if (disabled) return;
     if (hasAttachmentConflict) return;
     if (localAttachmentConflict) return;
+    if (attachmentPreparing) {
+      deferredSendRef.current = true;
+      return;
+    }
     if (trialExhausted) {
       onUpgradeRequest?.();
       return;
@@ -2707,6 +2725,7 @@ const ChatComposerNewComponent = ({
     disabled,
     hasAttachmentConflict,
     localAttachmentConflict,
+    attachmentPreparing,
     trialExhausted,
     freeQuotaSelected,
     onUpgradeRequest,
@@ -2758,6 +2777,12 @@ const ChatComposerNewComponent = ({
     if (!message.trim() && attachments.length === 0) return;
     handleSubmit();
   }, [message, attachments.length, handleSubmit]);
+
+  useEffect(() => {
+    if (attachmentPreparing || !deferredSendRef.current) return;
+    deferredSendRef.current = false;
+    handleSubmit();
+  }, [attachmentPreparing, handleSubmit]);
 
   /**
    * A refresh and a crash both end the document before any cleanup runs, so
@@ -3185,6 +3210,25 @@ const ChatComposerNewComponent = ({
   const charCounterExceeded = messageLength >= COMPOSER_MAX_CHARS;
 
   const sendButtonMode = isTurnActive ? 'stop' : 'send';
+
+  const sendDisabledReason = useMemo(() => {
+    if (usageBlock) return usageBlock.reason || SEND_REASON.usageBlocked;
+    if (trialExhausted) return SEND_REASON.trialExhausted;
+    if (disabled) return SEND_REASON.unavailable;
+    if (selectedMediaModelUnavailable) return SEND_REASON.modelUnavailable;
+    if (mediaAttachmentConflict || hasAttachmentConflict || localAttachmentConflict) {
+      return SEND_REASON.attachmentConflict;
+    }
+    return undefined;
+  }, [
+    usageBlock,
+    trialExhausted,
+    disabled,
+    selectedMediaModelUnavailable,
+    mediaAttachmentConflict,
+    hasAttachmentConflict,
+    localAttachmentConflict,
+  ]);
 
   /**
    * + button indicator.
@@ -4606,6 +4650,7 @@ const ChatComposerNewComponent = ({
                         localAttachmentConflict ||
                         selectedMediaModelUnavailable))
                   }
+                  disabledReason={sendDisabledReason}
                   onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
                   className="shrink-0"
                 />
