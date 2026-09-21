@@ -504,6 +504,7 @@ const DEPLOYED_ONLY: readonly ConfigEnvironment[] = ['preview', 'production'];
 const LOCAL_ONLY: readonly ConfigEnvironment[] = ['development', 'test'];
 
 const DEPLOYED_ONLY_ENVS: readonly ConfigEnvironment[] = DEPLOYED_ONLY;
+const NOT_PRODUCTION: readonly ConfigEnvironment[] = ['development', 'test', 'preview'];
 
 function isUrl(value: string): string | null {
   try {
@@ -533,6 +534,14 @@ function isPositiveNumber(value: string): string | null {
 function oneOf(...allowed: readonly string[]): (value: string) => string | null {
   return (value) =>
     allowed.includes(value.trim().toLowerCase()) ? null : `it is not one of ${allowed.join(', ')}`;
+}
+
+const BOOLEAN_SPELLINGS = ['1', '0', 'true', 'false', 'yes', 'no', 'on', 'off'];
+
+function isBooleanish(value: string): string | null {
+  return BOOLEAN_SPELLINGS.includes(value.trim().toLowerCase())
+    ? null
+    : `it is not one of ${BOOLEAN_SPELLINGS.join(', ')}`;
 }
 
 function minimumLength(bytes: number): (value: string) => string | null {
@@ -912,6 +921,615 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     description: 'the bucket private uploads live in, which must differ from the public one',
   }),
+
+  published('GITHUB_APP_ID', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'the GitHub App this deployment installs as, without which repository ' + 'linking is off',
+  }),
+  published('GITHUB_APP_SLUG', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the App handle the install link is built from',
+  }),
+  published('GITHUB_APP_CLIENT_ID', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the OAuth client a repository owner authorises the install with',
+  }),
+  secret('GITHUB_APP_CLIENT_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the OAuth client secret the install callback exchanges a code with',
+  }),
+  secret('GITHUB_APP_PRIVATE_KEY_BASE64', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the App signing key, base64 encoded, that mints an installation token',
+  }),
+  published('GITHUB_BOT_LOGIN', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: 'agi-workforce[bot]',
+    requiredIn: [],
+    description:
+      'the login a webhook treats as this product, so it never reviews its own ' + 'comment',
+  }),
+  published('GITHUB_PR_REVIEW_MONTHLY_CAP', {
+    type: 'integer',
+    owner: 'apps/web/lib',
+    defaultValue: '100',
+    requiredIn: [],
+    validate: isPositiveNumber,
+    description: 'how many pull request reviews one installation may draw in a month',
+  }),
+  secret('ANTHROPIC_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential a container file download authenticates to Anthropic with',
+  }),
+  secret('OPENAI_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential a container file download authenticates to OpenAI with',
+  }),
+  secret('GEMINI_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'a Google generative credential, tried after GOOGLE_AI_API_KEY and ' + 'GOOGLE_API_KEY',
+  }),
+  secret('GOOGLE_AI_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the first Google generative credential embeddings and video status read',
+  }),
+  secret('GOOGLE_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'a Google credential, tried after GOOGLE_AI_API_KEY',
+  }),
+  secret('GOOGLE_PLACES_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential the place search tool calls Google Places with',
+  }),
+  secret('OPENROUTER_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the aggregator credential the free lane and video generation route through',
+  }),
+  secret('OPENROUTER_WEBHOOK_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'what an OpenRouter video callback body is verified against before a job ' + 'moves',
+  }),
+  secret('QWEN_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/app/api/models',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential the free quota completions lane authenticates with',
+  }),
+  secret('RUNWAY_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential video generation and status authenticate to Runway with',
+  }),
+  published('STRIPE_CHECKOUT_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether the server accepts a checkout or top-up request at all',
+  }),
+  published('NEXT_PUBLIC_CHECKOUT_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether the pricing page offers checkout; kept equal to the server switch',
+  }),
+  published('PRICE_ID_OVERRIDES', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'a json map that redirects a plan to another price without a deploy',
+  }),
+  published('STRIPE_PRODUCT_ENTERPRISE', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe product an enterprise contract is billed against',
+  }),
+  published('BILLING_ALERT_EMAIL', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'where the collection sweep escalates internally when an owner does not ' + 'answer',
+  }),
+  published('STRIPE_PRICE_BASIC_MONTHLY_USD', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price the basic monthly plan is charged at in USD',
+  }),
+  published('STRIPE_PRICE_BASIC_MONTHLY_INR', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price the basic monthly plan is charged at in INR',
+  }),
+  published('STRIPE_PRICE_PRO_MONTHLY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price the pro monthly plan is charged at',
+  }),
+  published('STRIPE_PRICE_PRO_YEARLY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price the pro yearly plan is charged at',
+  }),
+  published('STRIPE_PRICE_MAX_MONTHLY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price the max monthly plan is charged at',
+  }),
+  published('STRIPE_PRICE_MAX_15X_MONTHLY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price the higher max monthly tier is charged at',
+  }),
+  published('STRIPE_PRICE_TEAM_MONTHLY_USD', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price a team seat is charged monthly at in USD',
+  }),
+  published('STRIPE_PRICE_TEAM_MONTHLY_INR', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price a team seat is charged monthly at in INR',
+  }),
+  published('STRIPE_PRICE_TEAM_YEARLY_USD', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price a team seat is charged yearly at in USD',
+  }),
+  published('STRIPE_PRICE_ENTERPRISE_MONTHLY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price an enterprise contract is charged monthly at',
+  }),
+  published('STRIPE_PRICE_ENTERPRISE_YEARLY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Stripe price an enterprise contract is charged yearly at',
+  }),
+  published('MOBILE_IAP_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether the mobile store catalogue is offered at all',
+  }),
+  published('APPLE_APP_STORE_APP_ID', {
+    type: 'integer',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isPositiveNumber,
+    description: 'the numeric App Store id a receipt must name',
+  }),
+  published('APPLE_APP_STORE_BUNDLE_ID', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the bundle id a store notification must carry to be accepted',
+  }),
+  published('APPLE_APP_STORE_ENVIRONMENT', {
+    type: 'enum',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('production', 'sandbox'),
+    description: 'which store environment a signed receipt is verified against',
+  }),
+  published('APPLE_APP_STORE_ROOT_CA_CERTS_BASE64_JSON', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'the trusted store root certificates, base64 in a json array, a receipt ' +
+      'chain is verified to',
+  }),
+  published(
+    'APPLE_APP_STORE_SANDBOX_NOTIFICATIONS_ENABLED',
+    {
+      type: 'boolean',
+      owner: 'apps/web/lib/server',
+      defaultValue: null,
+      requiredIn: [],
+      validate: isBooleanish,
+      description:
+        'accepts store notifications signed for the sandbox environment, which ' +
+        'production must not',
+    },
+    NOT_PRODUCTION,
+  ),
+  published('GOOGLE_PLAY_PACKAGE_NAME', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the Play package a purchase notification must name to be accepted',
+  }),
+  published('GOOGLE_PLAY_PUBSUB_AUDIENCE', {
+    type: 'string',
+    owner: 'apps/web/app/api/mobile',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the audience a Play Pub/Sub push token must be issued for',
+  }),
+  published('GOOGLE_PLAY_PUBSUB_SERVICE_ACCOUNT_EMAIL', {
+    type: 'string',
+    owner: 'apps/web/app/api/mobile',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the service account a Play Pub/Sub push token must be signed by',
+  }),
+  secret('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the service account credential a Play purchase is verified with',
+  }),
+  published('ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'the Play signing certificate fingerprints the app links association file ' + 'publishes',
+  }),
+  published('DOCUSIGN_ACCOUNT_ID', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the e-signature account an enterprise contract envelope is created under',
+  }),
+  published('DOCUSIGN_INTEGRATION_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the integration this deployment authenticates to the e-signature vendor as',
+  }),
+  published('DOCUSIGN_USER_ID', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the user an envelope is sent on behalf of',
+  }),
+  secret('DOCUSIGN_PRIVATE_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the key a JWT grant to the e-signature vendor is signed with',
+  }),
+  published('DOCUSIGN_API_BASE_URL', {
+    type: 'url',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description:
+      'the e-signature api origin, which differs between the demo and live ' + 'accounts',
+  }),
+  published('DOCUSIGN_OAUTH_BASE_URL', {
+    type: 'url',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the e-signature token origin, which must match the api origin account',
+  }),
+  published('AGI_SUPPORT_LIVE_HANDOFF_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/lib/support',
+    defaultValue: '0',
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether a support conversation may be handed to a person',
+  }),
+  published('AGI_SUPPORT_EXPECTED_REPLY_COPY', {
+    type: 'string',
+    owner: 'apps/web/lib/support',
+    defaultValue: 'within one business day',
+    requiredIn: [],
+    description:
+      'what the handoff tells a customer to expect, which is a promise somebody ' + 'keeps',
+  }),
+  published('NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/features/support',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether the in-product support widget mounts',
+  }),
+  published(
+    'ACCOUNT_STATUS_FAIL_OPEN',
+    {
+      type: 'boolean',
+      owner: 'apps/web/lib',
+      defaultValue: null,
+      requiredIn: [],
+      validate: isBooleanish,
+      description:
+        'lets a request through when the account status lookup fails, which is an ' +
+        'availability choice over an authorization one',
+    },
+    LOCAL_ONLY,
+  ),
+  published(
+    'CRON_DEV_BYPASS',
+    {
+      type: 'boolean',
+      owner: 'apps/web/lib/server',
+      defaultValue: null,
+      requiredIn: [],
+      validate: isBooleanish,
+      description:
+        'accepts an unauthenticated scheduled request from a loopback host while ' +
+        'CRON_SECRET is unset',
+    },
+    LOCAL_ONLY,
+  ),
+  published('UPLOAD_SCAN_REQUIRED', {
+    type: 'boolean',
+    owner: 'apps/web/lib/security',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether an upload is refused when no external scanner answers',
+  }),
+  published('UPLOAD_SCAN_WEBHOOK_URL', {
+    type: 'url',
+    owner: 'apps/web/lib/security',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the external malware scanner an upload is submitted to',
+  }),
+  secret('UPLOAD_SCAN_WEBHOOK_TOKEN', {
+    type: 'string',
+    owner: 'apps/web/lib/security',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the bearer credential the scanner submission carries',
+  }),
+  published('MODERATION_HASH_DENYLIST', {
+    type: 'string',
+    owner: 'apps/web/lib/moderation',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'sha-256 digests of content this deployment refuses, comma separated',
+  }),
+  published('NEXT_PUBLIC_AGI_BOT_PROTECTION', {
+    type: 'enum',
+    owner: 'apps/web/lib/security',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('platform', 'off'),
+    description: 'which bot protection mode the sign-up and sign-in forms mount',
+  }),
+  published('SENTRY_RELEASE', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the release name error reports and spans are attributed to',
+  }),
+  published('NEXT_PUBLIC_SENTRY_RELEASE', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the release name the browser attributes an error to',
+  }),
+  published('NEXT_PUBLIC_APP_VERSION', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: 'unknown',
+    requiredIn: [],
+    description: 'the build the client reports in a feedback report and on a csrf refresh',
+  }),
+  published('NEXT_PUBLIC_GA_TRACKING_ID', {
+    type: 'string',
+    owner: 'apps/web/app',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'the analytics property the marketing pages report to; absent means no ' + 'analytics script',
+  }),
+  published('LLM_TTFT_SLO_TARGET_MS', {
+    type: 'integer',
+    owner: 'apps/web/app/api/llm',
+    defaultValue: '2500',
+    requiredIn: [],
+    validate: isPositiveNumber,
+    description: 'the time to first token a completion is expected to meet',
+  }),
+  published('LLM_TTFT_SLO_BREACH_MS', {
+    type: 'integer',
+    owner: 'apps/web/app/api/llm',
+    defaultValue: '5000',
+    requiredIn: [],
+    validate: isPositiveNumber,
+    description: 'the time to first token past which a completion is recorded as a breach',
+  }),
+  published('WEB_MCP_SERVERS_JSON', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the tool servers this deployment offers, as json; absent means no MCP ' + 'tools',
+  }),
+  published('CONNECTOR_MCP_SERVERS_JSON', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description:
+      'inline connector tool servers, as json, for a deployment with no connector ' + 'registry',
+  }),
+  published('NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN', {
+    type: 'url',
+    owner: 'apps/web/features/chat',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description:
+      'the origin a tool-authored app is framed from, separate from the artifact ' + 'origin',
+  }),
+  published('SKILLS_LAYERS', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'which skill layers this deployment loads, over the catalogue default',
+  }),
+  published('AGI_DATABASE_PROVIDER', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: 'neon',
+    requiredIn: [],
+    description: 'which database adapter the pool tuning applies to',
+  }),
+  published('AGI_PLATFORM_KEY_PROVIDER', {
+    type: 'string',
+    owner: 'apps/web/lib/crypto',
+    defaultValue: 'env',
+    requiredIn: [],
+    description: 'where platform key material is unsealed from',
+  }),
+  published('AGI_PROVIDER_PROXY_ORIGIN', {
+    type: 'url',
+    owner: 'apps/web/lib/e2b',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the origin a sandbox reaches the provider proxy on',
+  }),
+  published('SOFT_DELETED_RESOURCE_PURGE_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/app/api/cron',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'whether the purge sweep deletes soft-deleted rows or only reports them',
+  }),
+  published('AGI_MAP_GEOCODER_CONTACT', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the contact address the geocoder is told to reach, which its terms require',
+  }),
+  published('AGI_NOTIFICATIONS_FROM_EMAIL', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the address product notifications and team invitations are sent from',
+  }),
+  published('NEXT_PUBLIC_COMPOSER_EDITOR', {
+    type: 'enum',
+    owner: 'apps/web/features/chat',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('editor', 'textarea'),
+    description: 'which composer editor the browser mounts',
+  }),
+  published('NEXT_PUBLIC_FREE_LANE_UI', {
+    type: 'enum',
+    owner: 'apps/web/features/chat',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('on', 'off'),
+    description: 'whether the free lane affordances are offered in the browser',
+  }),
+  published('NEXT_PUBLIC_MESSAGE_VARIANTS', {
+    type: 'enum',
+    owner: 'apps/web/features/chat',
+    defaultValue: null,
+    requiredIn: [],
+    validate: oneOf('on', 'off'),
+    description: 'whether a message keeps its earlier variants after an edit or regenerate',
+  }),
 ];
 
 const CONFIG_KEY_REGISTRY = defineConfigKeys(CONFIG_KEY_DESCRIPTORS);
@@ -920,28 +1538,51 @@ export function configKeyRegistry() {
   return CONFIG_KEY_REGISTRY;
 }
 
+/**
+ * A descriptor that contradicts itself is a property of this repository and
+ * always refuses the boot. A value this runtime does not recognise is a
+ * property of an environment nobody on a branch can read, so in a deployed one
+ * it travels with the production findings and the same switch.
+ */
 export function validateConfigKeyRegistry(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const fatal = new Set(['secret_exposed_to_client', 'descriptor_incomplete', 'invalid_value']);
+  const environmentFindings: string[] = [];
+  const sourceFatal = new Set(['secret_exposed_to_client', 'descriptor_incomplete']);
+  const environment = resolveRuntimeEnvironment();
+  const deployed = environment === 'preview' || environment === 'production';
+
   for (const violation of checkConfigKeys(CONFIG_KEY_REGISTRY)) {
-    const deployed = isProductionRuntime() && violation.reason === 'required_and_unset';
-    (fatal.has(violation.reason) || deployed ? errors : warnings).push(violation.message);
+    if (sourceFatal.has(violation.reason)) {
+      errors.push(violation.message);
+      continue;
+    }
+    if (violation.reason === 'invalid_value') {
+      (deployed ? environmentFindings : errors).push(violation.message);
+      continue;
+    }
+    const required = environment === 'production' && violation.reason === 'required_and_unset';
+    (required ? errors : warnings).push(violation.message);
   }
-  return { valid: errors.length === 0, errors, warnings };
+
+  const reported = reportProductionFindings(environmentFindings);
+  return {
+    valid: errors.length === 0 && reported.valid,
+    errors: [...errors, ...reported.errors],
+    warnings: [...warnings, ...reported.warnings],
+  };
 }
 
 /**
- * A deployed runtime refuses a value that belongs to another environment. This
- * is an error rather than a warning because a boot that continues on a test
- * credential looks healthy while every paid action silently does nothing.
+ * A deployed runtime refuses a value that belongs to another environment. It
+ * enumerates the registry, so it measures every key any deployment holds and
+ * nobody on a branch can see what that is: the finding is always loud, and the
+ * same switch decides whether it also stops the boot.
  */
 export function validateDeployedValues(): ValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  for (const violation of deployedValueViolations(CONFIG_KEY_REGISTRY))
-    errors.push(violation.message);
-  return { valid: errors.length === 0, errors, warnings };
+  return reportProductionFindings(
+    deployedValueViolations(CONFIG_KEY_REGISTRY).map((violation) => violation.message),
+  );
 }
 
 /**

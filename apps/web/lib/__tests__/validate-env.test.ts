@@ -199,6 +199,30 @@ describe('a deployed runtime refuses a value that belongs to another environment
     expect(validateDeployedValues()).toEqual({ valid: true, errors: [], warnings: [] });
   });
 
+  it('warns and boots when the switch is unset, so no branch can take production down', () => {
+    delete process.env['AGI_ENFORCE_PRODUCTION_CONFIG'];
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_FAKEFAKEFAKE0001';
+
+    const result = validateDeployedValues();
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.join(' ')).toContain('STRIPE_SECRET_KEY');
+  });
+
+  it('is loud about a deployed value finding in both positions of the switch', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    delete process.env['AGI_ENFORCE_PRODUCTION_CONFIG'];
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_FAKEFAKEFAKE0001';
+
+    validateDeployedValues();
+
+    expect(consoleError.mock.calls.flat().join(' ')).toContain('[production-config]');
+    consoleError.mockRestore();
+  });
+
   it('leaves a development runtime alone, which is where a test key belongs', () => {
     vi.stubEnv('NODE_ENV', 'development');
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_FAKEFAKEFAKE0001';
@@ -631,6 +655,66 @@ describe('OAuth callback isolation and the config key registry', () => {
   it('registers no secret under a name the bundler ships to the browser', () => {
     vi.stubEnv('NODE_ENV', 'development');
     expect(validateConfigKeyRegistry().errors).toEqual([]);
+  });
+
+  it('refuses a local boot on a value this runtime does not recognise', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    process.env['AGI_DEPLOY_ENV'] = 'development';
+    process.env['LLM_TTFT_SLO_TARGET_MS'] = 'soon';
+
+    const result = validateConfigKeyRegistry();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toContain('LLM_TTFT_SLO_TARGET_MS');
+  });
+
+  it('warns rather than refusing the same value in a deployed runtime', () => {
+    delete process.env['AGI_ENFORCE_PRODUCTION_CONFIG'];
+    process.env['AGI_DEPLOY_ENV'] = 'production';
+    process.env['LLM_TTFT_SLO_TARGET_MS'] = 'soon';
+
+    const result = validateConfigKeyRegistry();
+
+    expect(result.errors.join(' ')).not.toContain('LLM_TTFT_SLO_TARGET_MS');
+    expect(result.warnings.join(' ')).toContain('LLM_TTFT_SLO_TARGET_MS');
+  });
+
+  it('refuses the deployed boot on that value once the switch is on', () => {
+    process.env['AGI_ENFORCE_PRODUCTION_CONFIG'] = '1';
+    process.env['AGI_DEPLOY_ENV'] = 'production';
+    process.env['LLM_TTFT_SLO_TARGET_MS'] = 'soon';
+
+    const result = validateConfigKeyRegistry();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toContain('LLM_TTFT_SLO_TARGET_MS');
+  });
+
+  // Registering a key adds it to the boot check. A key a deployment must set is
+  // a key whose absence refuses the boot, so the set of them is a ratchet.
+  it('demands a value from a deployment for these keys and no others', () => {
+    const required = Object.values(configKeyRegistry())
+      .filter((descriptor) => descriptor.requiredIn.length > 0)
+      .map((descriptor) => descriptor.key)
+      .sort();
+
+    expect(required).toEqual(
+      [
+        'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
+        'CLERK_SECRET_KEY',
+        'CRON_SECRET',
+        'CSRF_SECRET',
+        'EMAIL_HASH_PEPPER',
+        'IP_HASH_PEPPER',
+        'LOG_SALT',
+        'NEXT_PUBLIC_APP_URL',
+        'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+        'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+        'STRIPE_SECRET_KEY',
+        'STRIPE_WEBHOOK_SECRET',
+        'TOTP_ENCRYPTION_KEY',
+      ].sort(),
+    );
   });
 });
 
