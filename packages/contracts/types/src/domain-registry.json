@@ -148,6 +148,7 @@
         "credit_idempotency_keys",
         "credit_settlement_jobs",
         "credit_transactions",
+        "enterprise_offline_payment_records",
         "mobile_iap_accounts",
         "mobile_iap_notification_receipts",
         "mobile_iap_transactions",

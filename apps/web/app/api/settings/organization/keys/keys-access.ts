@@ -66,6 +66,21 @@ export async function requireKeyOwner(request: NextRequest): Promise<KeyManageme
   return { ...resolved, plan: await requireKeyEntitlement(resolved.organizationId) };
 }
 
+// The same decision the revoke handler makes, asked without refusing, so the two cannot disagree.
+export async function mayRevokeKey(access: KeyManagementAccess): Promise<boolean> {
+  try {
+    await requireOrganizationOwner(
+      access.db,
+      access.userId,
+      access.organizationId,
+      'revoke this workspace encryption key',
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function requireProviderClient(descriptor: CmekKeyDescriptor) {
   const client = buildCmekProviderRegistry()[descriptor.provider];
   if (!client) throw new CmekProviderUnconfiguredError(descriptor.provider);

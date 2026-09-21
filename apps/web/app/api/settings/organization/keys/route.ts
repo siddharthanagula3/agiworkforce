@@ -30,6 +30,7 @@ import {
 import {
   KEYS_ENDPOINT,
   nextKeyVersion,
+  mayRevokeKey,
   requireKeyManagement,
   requireKeyOwner,
   requireProviderClient,
@@ -131,7 +132,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     activeVersion: record?.active.version ?? null,
     retiredVersions,
     rewrapRuns,
-    canRevoke: access.role === 'owner',
+    canRevoke: await mayRevokeKey(access),
   };
   return NextResponse.json(payload);
 }
