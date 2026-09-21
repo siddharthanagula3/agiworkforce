@@ -9,6 +9,7 @@ use agiworkforce_protocol::developer_session::{
 };
 use clap::ValueEnum;
 
+use super::change_reason::ChangeReason;
 use super::session::{
     ManagedSession, ManagedSessionApproval, ManagedSessionApprovalOutcome,
     ManagedSessionFileChange, ManagedSessionFileChangeKind, ManagedSessionValidation,
@@ -64,7 +65,9 @@ fn plan_step_state(status: StepStatus) -> HandoffPlanStepState {
     }
 }
 
-fn file_change(change: &ManagedSessionFileChange) -> DeveloperSessionFileChange {
+/// One recorded write as every surface reads it. The only mapping: a second
+/// one is how the handoff and the thread listing would come to disagree.
+pub fn file_change_record(change: &ManagedSessionFileChange) -> DeveloperSessionFileChange {
     DeveloperSessionFileChange {
         path: change.path.display().to_string(),
         kind: match change.kind {
@@ -74,6 +77,13 @@ fn file_change(change: &ManagedSessionFileChange) -> DeveloperSessionFileChange 
         tool: change.tool.clone(),
         tool_call_id: change.tool_call_id.clone(),
         changed_at: change.changed_at.to_rfc3339(),
+        reason: change.reason.as_ref().map(ChangeReason::describe),
+        subject: change.reason.as_ref().map(|reason| reason.subject),
+        notices: change
+            .reason
+            .as_ref()
+            .map(|reason| reason.notices.clone())
+            .unwrap_or_default(),
     }
 }
 
@@ -152,6 +162,7 @@ pub fn developer_session_handoff(
         },
         objective: session.working_state().objective.map(str::to_string),
         decisions: session.approvals.iter().map(decision).collect(),
+        architecture: session.architecture.clone(),
         plan: session
             .current_plan
             .iter()
@@ -161,7 +172,11 @@ pub fn developer_session_handoff(
                 state: plan_step_state(step.status),
             })
             .collect(),
-        modified_files: session.file_changes.iter().map(file_change).collect(),
+        modified_files: session
+            .file_changes
+            .iter()
+            .map(file_change_record)
+            .collect(),
         validations: session.validations.iter().map(validation).collect(),
         pending_approvals: context.pending_approvals,
         last_turn: context.last_turn,
@@ -221,7 +236,24 @@ mod tests {
             tool: "edit_file".to_string(),
             tool_call_id: "call-1".to_string(),
             changed_at: now,
+            reason: Some(crate::runtime::change_reason::classify_change(
+                std::path::Path::new("src/importer.rs"),
+                "fn run() {}\n",
+                "fn run() {\n    dbg!(1);\n}\n",
+            )),
         });
+        session.architecture = Some(
+            agiworkforce_protocol::developer_session::HandoffArchitecture {
+                project_type: Some("Next.js".to_string()),
+                language: Some("TypeScript".to_string()),
+                package_manager: Some("pnpm".to_string()),
+                monorepo: Some("pnpm workspaces".to_string()),
+                ci_providers: vec!["GitHub Actions".to_string()],
+                containers: Vec::new(),
+                instruction_files: vec!["/work/repo/AGENTS.md".to_string()],
+                commands: vec!["pnpm run test".to_string()],
+            },
+        );
         session.validations.push(ManagedSessionValidation {
             command: "cargo test -p importer".to_string(),
             kind: crate::platform::runtime::validation_run::ValidationKind::Test,
@@ -267,6 +299,27 @@ mod tests {
         assert_eq!(handoff.decisions[0].summary, "run the migration");
         assert_eq!(handoff.modified_files.len(), 1);
         assert_eq!(handoff.modified_files[0].path, "src/importer.rs");
+        assert_eq!(
+            handoff.modified_files[0].subject,
+            Some(agiworkforce_protocol::developer_session::FileChangeSubject::Source)
+        );
+        assert!(
+            handoff.modified_files[0]
+                .reason
+                .as_deref()
+                .is_some_and(|reason| reason.contains("source edited")),
+            "a receiving surface is not told why the file changed: {:?}",
+            handoff.modified_files[0].reason
+        );
+        assert!(handoff.modified_files[0].notices.contains(
+            &agiworkforce_protocol::developer_session::FileChangeNotice::DebugInstrumentation
+        ));
+        let architecture = handoff
+            .architecture
+            .as_ref()
+            .expect("what the session established about the repository travels");
+        assert_eq!(architecture.package_manager.as_deref(), Some("pnpm"));
+        assert_eq!(architecture.commands, vec!["pnpm run test".to_string()]);
         assert_eq!(handoff.validations.len(), 1);
         assert_eq!(
             handoff.validations[0].outcome,
@@ -375,6 +428,8 @@ mod tests {
         assert_eq!(after.decisions, before.decisions);
         assert_eq!(after.plan, before.plan);
         assert_eq!(after.modified_files, before.modified_files);
+        assert_eq!(after.architecture, before.architecture);
+        assert!(after.modified_files[0].reason.is_some());
         assert_eq!(after.validations, before.validations);
         assert_eq!(after.workspace.branch, before.workspace.branch);
         assert_eq!(
@@ -388,6 +443,10 @@ mod tests {
             Some("make the importer resume after a failed batch")
         );
         assert_eq!(state.modified_files.len(), 1);
+        assert!(state.modified_files[0].reason.is_some());
+        assert!(state
+            .architecture
+            .is_some_and(|architecture| architecture.language.as_deref() == Some("TypeScript")));
         assert_eq!(state.validations.len(), 1);
         assert_eq!(state.branch, Some("feature"));
         assert!(state.worktree_root.is_some());

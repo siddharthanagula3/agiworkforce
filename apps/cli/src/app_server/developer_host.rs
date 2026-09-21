@@ -10,23 +10,22 @@ use agiworkforce_protocol::developer_session::{
     AccountLoginWaitParams, AccountLoginWaitResponse, AccountSource, AccountStatusParams,
     AccountStatusResponse, AccountTokenResponse, ActiveTurnSnapshot, AppServerCapabilities,
     AppServerClientInfo, AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome,
-    DeveloperFileChangeKind, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
-    DeveloperSessionApproval, DeveloperSessionFileChange, DeveloperSessionHandoff,
-    DeveloperSessionSource, DeveloperSessionTrustMode, DeveloperSessionWriter,
-    DeveloperSessionWriterChange, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
-    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookListResponse,
-    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
-    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary,
+    ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome, DeveloperMessage,
+    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionApproval,
+    DeveloperSessionHandoff, DeveloperSessionSource, DeveloperSessionTrustMode,
+    DeveloperSessionWriter, DeveloperSessionWriterChange, HandoffAdmission,
+    HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
+    HandoffRefusal, HandoffTurnState, HookListResponse, HostModelSummary, LocalModelListResponse,
+    LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
+    McpServerConfiguredStatus, McpServerListResponse, ModelListParams, PendingApprovalSnapshot,
+    PluginListResponse, PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillListResponse, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadStartParams,
+    ThreadStatus, ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -48,6 +47,7 @@ use crate::context;
 use crate::models::{self, ContentBlock};
 use crate::models::{OllamaMode, Provider};
 use crate::platform::policy::{PolicyDecision, PolicyEngine};
+use crate::runtime::change_reason::ChangeReason;
 use crate::runtime::session::{
     ManagedSession, ManagedSessionApprovalOutcome, ManagedSessionAutoRouting,
     ManagedSessionFileChangeKind,
@@ -57,7 +57,9 @@ use crate::runtime::session_control::{
     ManagedSessionReference, ManagedSessionStore, ManagedSessionSummary,
     ResolvedManagedSessionReference,
 };
-use crate::runtime::session_handoff::{developer_session_handoff, HandoffContext};
+use crate::runtime::session_handoff::{
+    developer_session_handoff, file_change_record, HandoffContext,
+};
 use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
 
@@ -1350,6 +1352,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         managed.fallback_model_ids = (!resolved_model.fallback_model_ids.is_empty())
             .then_some(resolved_model.fallback_model_ids);
         managed.workspace_root = Some(self.workspace_root.clone());
+        managed.architecture = crate::runtime::architecture::discover(&self.workspace_root);
         managed.created_by = Some(source_to_stored(source).to_string());
         managed.client = Some(client.name.clone());
         let git = workspace_git_state(&self.workspace_root);
@@ -2944,21 +2947,6 @@ fn approval_record(
     }
 }
 
-fn file_change_record(
-    change: &crate::runtime::session::ManagedSessionFileChange,
-) -> DeveloperSessionFileChange {
-    DeveloperSessionFileChange {
-        path: change.path.display().to_string(),
-        kind: match change.kind {
-            ManagedSessionFileChangeKind::Created => DeveloperFileChangeKind::Created,
-            ManagedSessionFileChangeKind::Modified => DeveloperFileChangeKind::Modified,
-        },
-        tool: change.tool.clone(),
-        tool_call_id: change.tool_call_id.clone(),
-        changed_at: change.changed_at.to_rfc3339(),
-    }
-}
-
 fn artifact_mime_type(path: &Path) -> String {
     mime_guess::from_path(path)
         .first_or_octet_stream()
@@ -3236,6 +3224,12 @@ fn changed_files(activity: &SharedSessionActivity, call_id: &str) -> Vec<AgentEv
                 ManagedSessionFileChangeKind::Created => AgentEventFileChangeKind::Created,
                 ManagedSessionFileChangeKind::Modified => AgentEventFileChangeKind::Modified,
             },
+            reason: change.reason.as_ref().map(ChangeReason::describe),
+            notices: change
+                .reason
+                .as_ref()
+                .map(|reason| reason.notices.clone())
+                .unwrap_or_default(),
         })
         .collect()
 }
@@ -6889,6 +6883,11 @@ mod tests {
                 tool: "write_file".to_string(),
                 tool_call_id: "call-1".to_string(),
                 changed_at: now,
+                reason: Some(crate::runtime::change_reason::classify_change(
+                    std::path::Path::new("report.md"),
+                    "",
+                    "# Report\n",
+                )),
             });
         store.save(&session).expect("save session");
         let host = CliDeveloperSessionHost::new_with_store(
@@ -6916,7 +6915,14 @@ mod tests {
             DeveloperApprovalOutcome::AllowSession
         );
         assert_eq!(read.file_changes.len(), 1);
-        assert_eq!(read.file_changes[0].kind, DeveloperFileChangeKind::Created);
+        assert_eq!(
+            read.file_changes[0].kind,
+            agiworkforce_protocol::developer_session::DeveloperFileChangeKind::Created
+        );
+        assert_eq!(
+            read.file_changes[0].subject,
+            Some(agiworkforce_protocol::developer_session::FileChangeSubject::Documentation)
+        );
         assert_eq!(
             read.file_changes[0].path,
             workspace_root.join("report.md").display().to_string()

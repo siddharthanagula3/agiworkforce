@@ -1,4 +1,5 @@
 use agiworkforce_protocol::code_domain::CodeCapability;
+use agiworkforce_protocol::developer_session::FileChangeNotice;
 
 use crate::compaction;
 use crate::context::SystemContext;
@@ -13,23 +14,125 @@ pub enum Enforcement {
     Gate(CodeCapability),
 }
 
+/// The subjects a coding agent's rules have to cover. The list is the
+/// requirement; [`WORKING_PRINCIPLES`] is how each one is met, and a subject
+/// with no principle is a rule the agent was never given.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RuleSubject {
+    ReadBeforeWriting,
+    SearchBeforeDuplicating,
+    PreserveArchitecture,
+    PreservePublicApi,
+    PreserveCompatibility,
+    UseRepositoryTooling,
+    PreferDeterministicTools,
+    TrustDiagnostics,
+    TrustRuntimeOutput,
+    MinimalDiff,
+    NoLeftoverInstrumentation,
+    NoBlindTestChange,
+    NoUnnecessaryDependency,
+    StayInScope,
+    ProtectUserWork,
+    RespectBranchPolicy,
+    RespectAdminPolicy,
+    DeployOnlyWhenAsked,
+    ProtectCredentials,
+    ReportValidationHonestly,
+    NoStandInImplementations,
+    SurviveTheContextWindow,
+}
+
+impl RuleSubject {
+    pub const ALL: &'static [RuleSubject] = &[
+        Self::ReadBeforeWriting,
+        Self::SearchBeforeDuplicating,
+        Self::PreserveArchitecture,
+        Self::PreservePublicApi,
+        Self::PreserveCompatibility,
+        Self::UseRepositoryTooling,
+        Self::PreferDeterministicTools,
+        Self::TrustDiagnostics,
+        Self::TrustRuntimeOutput,
+        Self::MinimalDiff,
+        Self::NoLeftoverInstrumentation,
+        Self::NoBlindTestChange,
+        Self::NoUnnecessaryDependency,
+        Self::StayInScope,
+        Self::ProtectUserWork,
+        Self::RespectBranchPolicy,
+        Self::RespectAdminPolicy,
+        Self::DeployOnlyWhenAsked,
+        Self::ProtectCredentials,
+        Self::ReportValidationHonestly,
+        Self::NoStandInImplementations,
+        Self::SurviveTheContextWindow,
+    ];
+
+    /// The rule in the words a surface shows when it was gone against.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::ReadBeforeWriting => "read a file before changing it",
+            Self::SearchBeforeDuplicating => "search before writing a second implementation",
+            Self::PreserveArchitecture => "extend the architecture already here",
+            Self::PreservePublicApi => "leave a published interface as you found it",
+            Self::PreserveCompatibility => "keep working what already worked",
+            Self::UseRepositoryTooling => "use the repository's own tooling",
+            Self::PreferDeterministicTools => "read rather than recall",
+            Self::TrustDiagnostics => "treat a diagnostic as the authority",
+            Self::TrustRuntimeOutput => "treat what actually ran as the authority",
+            Self::MinimalDiff => "make the targeted fix",
+            Self::NoLeftoverInstrumentation => "take your debugging aids back out",
+            Self::NoBlindTestChange => "never change a test to make it pass",
+            Self::NoUnnecessaryDependency => "add a dependency only as a decision you propose",
+            Self::StayInScope => "stay inside the scope the user opened",
+            Self::ProtectUserWork => "never write over the user's own changes",
+            Self::RespectBranchPolicy => "respect the repository's branch policy",
+            Self::RespectAdminPolicy => "respect workspace and administrator policy",
+            Self::DeployOnlyWhenAsked => "deploy only when that is the request",
+            Self::ProtectCredentials => "use only the credentials you were pointed at",
+            Self::ReportValidationHonestly => "never report validation that did not happen",
+            Self::NoStandInImplementations => "wire the real thing or say you could not",
+            Self::SurviveTheContextWindow => "carry the work past this context window",
+        }
+    }
+
+    /// The notice the host records when it sees this rule broken in the
+    /// agent's own writes. A subject with one is checked, not merely stated.
+    pub fn observed_notice(self) -> Option<FileChangeNotice> {
+        match self {
+            Self::NoLeftoverInstrumentation => Some(FileChangeNotice::DebugInstrumentation),
+            Self::NoBlindTestChange => Some(FileChangeNotice::TestChanged),
+            Self::NoUnnecessaryDependency => Some(FileChangeNotice::DependencyAdded),
+            _ => None,
+        }
+    }
+}
+
 /// One rule the coding agent works under.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WorkingPrinciple {
+    pub subject: RuleSubject,
     pub statement: &'static str,
     pub enforcement: Enforcement,
 }
 
 impl WorkingPrinciple {
-    const fn stated(statement: &'static str) -> Self {
+    const fn stated(subject: RuleSubject, statement: &'static str) -> Self {
         Self {
+            subject,
             statement,
             enforcement: Enforcement::Instruction,
         }
     }
 
-    const fn gated(statement: &'static str, capability: CodeCapability) -> Self {
+    const fn gated(
+        subject: RuleSubject,
+        statement: &'static str,
+        capability: CodeCapability,
+    ) -> Self {
         Self {
+            subject,
             statement,
             enforcement: Enforcement::Gate(capability),
         }
@@ -48,77 +151,159 @@ impl WorkingPrinciple {
 /// added here reaches the model without anyone editing prose.
 pub const WORKING_PRINCIPLES: &[WorkingPrinciple] = &[
     WorkingPrinciple::stated(
+        RuleSubject::PreserveArchitecture,
         "Read the architecture that is already here before adding a parallel one: find the \
          existing client, store, loader or service and extend it rather than standing up a second.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::SearchBeforeDuplicating,
+        "Search the repository for the behaviour before you write it. A second implementation of \
+         something that already exists is a bug with two places to fix it, so find the existing \
+         one and call it.",
+    ),
+    WorkingPrinciple::stated(
+        RuleSubject::ReadBeforeWriting,
+        "Read a file before you change it, and read it again if anything else may have written to \
+         it since. Never propose a change to code you have not opened.",
+    ),
+    WorkingPrinciple::stated(
+        RuleSubject::PreservePublicApi,
+        "Leave a published interface as you found it unless the task is to change it: an exported \
+         function's name, its parameters, its return shape and its errors are a contract other \
+         code depends on. When the task does require the change, say what breaks.",
+    ),
+    WorkingPrinciple::stated(
+        RuleSubject::PreserveCompatibility,
+        "Keep working what already worked: a persisted file, a stored record, a wire message or a \
+         saved configuration written by an older build must still load. Add a field rather than \
+         repurposing one, and read what you cannot yet write.",
+    ),
+    WorkingPrinciple::stated(
+        RuleSubject::UseRepositoryTooling,
         "Use the repository's own tooling: its package manager, its lockfile, its scripts and its \
          task runner, not a command you would have used in a repository of your own.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::NoUnnecessaryDependency,
+        "Do not add a dependency for something the repository, its existing dependencies or the \
+         standard library already do. A new dependency is a decision to propose with its reason, \
+         and it is added by the package manager, never by editing a lockfile.",
+    ),
+    WorkingPrinciple::stated(
+        RuleSubject::PreferDeterministicTools,
         "Prefer a deterministic tool over a guess: read the file, run the search, parse the \
          output. Do not answer from recollection of a codebase you can open.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::TrustDiagnostics,
         "Treat compiler, type checker and linter diagnostics as the authority on the code. When a \
          diagnostic disagrees with your expectation, the diagnostic is right and the expectation \
          is the thing to re-examine.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::TrustRuntimeOutput,
         "Treat what the browser, the test runner and the process actually printed as the \
          authority on runtime behaviour, over any reasoning about what the frontend should do.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::DeployOnlyWhenAsked,
         "Do reversible local work first and keep irreversible remote actions to the end, where \
          the user can still decide against them.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::StayInScope,
         "Stay inside the scope the user opened. Work in the directory and the package the task \
          names; widening it is a thing to propose, not to do.",
     ),
     WorkingPrinciple::gated(
+        RuleSubject::ProtectUserWork,
         "Never write over the user's own uncommitted changes. Name the files at risk and let the \
          user decide before anything touches them.",
         CodeCapability::FileWrite,
     ),
     WorkingPrinciple::gated(
+        RuleSubject::RespectBranchPolicy,
         "Respect the repository's policy on its branches: protected branches, the default branch \
          and force pushes are the repository's decision, not yours.",
         CodeCapability::GitPush,
     ),
     WorkingPrinciple::gated(
+        RuleSubject::RespectAdminPolicy,
         "Respect workspace and administrator policy. It only ever narrows what this session may \
          do, and it is never negotiated around.",
         CodeCapability::ExternalApiWrite,
     ),
     WorkingPrinciple::gated(
+        RuleSubject::DeployOnlyWhenAsked,
         "Never deploy to production as a side effect of another task. A deployment is its own \
          request, named as one.",
         CodeCapability::ExternalApiWrite,
     ),
     WorkingPrinciple::gated(
+        RuleSubject::ProtectCredentials,
         "Never use an account, token or credential the user did not point you at, and never read \
          a secret's value into your output.",
         CodeCapability::NetworkAccess,
     ),
     WorkingPrinciple::stated(
+        RuleSubject::ReportValidationHonestly,
         "Never report validation that did not happen. A check you did not run, or that failed, is \
          reported as that, never as success.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::NoBlindTestChange,
+        "Never change a test to make it pass. Work out whether the test or the code states the \
+         behaviour wrongly before you touch either, and when you do change a test, say what about \
+         it was wrong. The host records every test file this session edits.",
+    ),
+    WorkingPrinciple::stated(
+        RuleSubject::NoStandInImplementations,
         "Never write mock implementations, fixtures or stand-in data unless the task asks for \
          them. Wire the real thing or report that you could not.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::MinimalDiff,
         "Make the targeted fix. Rewriting a file, a module or a component wholesale when a narrow \
          change would do throws away work that was not yours to discard.",
     ),
     WorkingPrinciple::stated(
+        RuleSubject::NoLeftoverInstrumentation,
+        "Take your debugging aids back out before you finish: a log line, a dump, a breakpoint or \
+         a trace you added to find the problem is not part of the fix. The host records each one \
+         it finds in what you wrote.",
+    ),
+    WorkingPrinciple::stated(
+        RuleSubject::SurviveTheContextWindow,
         "A session outlives its surface and its context window. Carry the objective, the \
          decisions, the plan and the modified-file set forward; never assume a process you \
          started is still running.",
     ),
 ];
+
+/// What a surface shows for a recorded notice: what the change did, and the
+/// rule it went against when the agent was told one.
+pub fn notice_advisory(notice: FileChangeNotice) -> String {
+    match principle_for(notice) {
+        Some(principle) => format!(
+            "{}, against the rule to {}",
+            notice.label(),
+            principle.subject.label()
+        ),
+        None => notice.label().to_string(),
+    }
+}
+
+/// The rule a recorded notice says the change went against, so a surface can
+/// name the principle rather than showing a bare flag.
+pub fn principle_for(notice: FileChangeNotice) -> Option<&'static WorkingPrinciple> {
+    let subject = RuleSubject::ALL
+        .iter()
+        .copied()
+        .find(|subject| subject.observed_notice() == Some(notice))?;
+    WORKING_PRINCIPLES
+        .iter()
+        .find(|principle| principle.subject == subject)
+}
 
 /// The principles as the model is given them. A principle the host enforces
 /// says so, so the model knows which rules it cannot talk its way past.
@@ -390,11 +575,13 @@ pub(super) fn build_reviewed_continuation_system_prompt(
 mod tests {
     use super::{
         build_reviewed_continuation_system_prompt, encode_untrusted_context,
-        render_working_principles, Enforcement, UNTRUSTED_MEMORY_CONTEXT_RULES, WORKING_PRINCIPLES,
+        render_working_principles, Enforcement, RuleSubject, UNTRUSTED_MEMORY_CONTEXT_RULES,
+        WORKING_PRINCIPLES,
     };
     use agiworkforce_protocol::code_domain::{
         CodeCapability, CodePermissionProfile, PermissionDecision,
     };
+    use agiworkforce_protocol::developer_session::FileChangeNotice;
     use std::collections::BTreeSet;
 
     #[test]
@@ -408,6 +595,78 @@ mod tests {
                 principle.statement
             );
         }
+    }
+
+    /// Every rule the coding agent is meant to work under has a principle
+    /// that states it, and every principle names a rule it is there for.
+    #[test]
+    fn no_rule_the_agent_works_under_goes_unstated() {
+        let covered: BTreeSet<RuleSubject> = WORKING_PRINCIPLES
+            .iter()
+            .map(|principle| principle.subject)
+            .collect();
+        let missing: Vec<&RuleSubject> = RuleSubject::ALL
+            .iter()
+            .filter(|subject| !covered.contains(subject))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "the agent is never told these rules: {missing:?}"
+        );
+        for principle in WORKING_PRINCIPLES {
+            assert!(
+                RuleSubject::ALL.contains(&principle.subject),
+                "{:?} states a rule the agent's rule set does not have",
+                principle.subject
+            );
+        }
+    }
+
+    /// A rule the host can see broken in the agent's own writes is checked as
+    /// well as stated: the notice it records exists, and the classifier
+    /// produces it.
+    #[test]
+    fn a_rule_the_host_can_observe_is_not_left_to_the_models_cooperation() {
+        use crate::runtime::change_reason::classify_change;
+        use std::path::PathBuf;
+
+        let observed: Vec<FileChangeNotice> = RuleSubject::ALL
+            .iter()
+            .copied()
+            .filter_map(RuleSubject::observed_notice)
+            .collect();
+        assert!(
+            observed.len() >= 3,
+            "no rule is checked against what the agent actually wrote"
+        );
+        for notice in &observed {
+            assert!(FileChangeNotice::ALL.contains(notice));
+        }
+
+        let instrumented = classify_change(
+            &PathBuf::from("src/a.ts"),
+            "export const a = 1;\n",
+            "export const a = 1;\nconsole.log(a);\n",
+        );
+        assert!(instrumented
+            .notices
+            .contains(&FileChangeNotice::DebugInstrumentation));
+
+        let test_edit = classify_change(
+            &PathBuf::from("src/__tests__/a.test.ts"),
+            "it('a', () => expect(a).toBe(1));\n",
+            "it('a', () => expect(a).toBeTruthy());\n",
+        );
+        assert!(test_edit.notices.contains(&FileChangeNotice::TestChanged));
+
+        let dependency = classify_change(
+            &PathBuf::from("Cargo.toml"),
+            "[dependencies]\nserde = \"1\"\n",
+            "[dependencies]\nserde = \"1\"\nreqwest = \"0.12\"\n",
+        );
+        assert!(dependency
+            .notices
+            .contains(&FileChangeNotice::DependencyAdded));
     }
 
     #[test]
