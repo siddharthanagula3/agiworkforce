@@ -15,11 +15,12 @@ import {
   Menu,
   Share2,
   Sparkles,
+  TriangleAlert,
   X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { copyToClipboard } from '@/lib/clipboard';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors } from '@/src/ui/theme';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
@@ -414,16 +415,12 @@ function ArtifactPreviewModal({
 }) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
-  const [copied, setCopied] = useState(false);
+  const { status: copyStatus, copy } = useCopyAction();
 
-  const handleCopy = useCallback(async () => {
+  const handleCopy = useCallback(() => {
     if (!artifact) return;
-    const ok = await copyToClipboard(artifact.content);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    }
-  }, [artifact]);
+    void copy(artifact.content);
+  }, [artifact, copy]);
 
   const handleShare = useCallback(async () => {
     if (!artifact) return;
@@ -477,11 +474,13 @@ function ArtifactPreviewModal({
             onPress={handleCopy}
             className="w-10 h-10 rounded-full items-center justify-center border active:opacity-80"
             style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
-            accessibilityLabel="Copy artifact"
+            accessibilityLabel={copyControlLabel(copyStatus, 'Copy artifact')}
             accessibilityRole="button"
           >
-            {copied ? (
+            {copyStatus === 'copied' ? (
               <Check size={19} color={c.agentSuccess} />
+            ) : copyStatus === 'failed' ? (
+              <TriangleAlert size={19} color={c.agentError} />
             ) : (
               <Copy size={19} color={c.textSecondary} />
             )}

@@ -37,6 +37,8 @@ jest.mock('../GeneratedFileCard', () => ({ GeneratedFileCard: () => null }));
 
 import { ArtifactFullScreen, publishableKindFor } from '../ArtifactFullScreen';
 import type { Artifact } from '@/types/chat';
+import { ApiHttpError } from '@/services/apiErrors';
+import { PUBLISH_FAILED_MESSAGE } from '../../services/artifactPublishing';
 
 const htmlArtifact: Artifact = {
   id: 'artifact-1',
@@ -49,8 +51,7 @@ const htmlArtifact: Artifact = {
 function tapAlertButton(label: string) {
   const spy = Alert.alert as unknown as jest.Mock;
   const buttons = spy.mock.calls.at(-1)?.[2] as
-    | Array<{ text?: string; onPress?: () => void }>
-    | undefined;
+    Array<{ text?: string; onPress?: () => void }> | undefined;
   const button = buttons?.find((candidate) => candidate.text === label);
   if (!button) throw new Error(`No "${label}" button in the last alert`);
   act(() => button.onPress?.());
@@ -110,7 +111,11 @@ describe('ArtifactFullScreen publish-to-link', () => {
   });
 
   it('reports a failed publish instead of showing a link', async () => {
-    mockPost.mockRejectedValue(new Error('Artifact publishing is not configured'));
+    mockPost.mockRejectedValue(
+      new ApiHttpError('Artifact publishing is not configured', 503, null, {
+        requestId: 'req_7f3a',
+      }),
+    );
 
     const view = render(
       <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
@@ -123,10 +128,26 @@ describe('ArtifactFullScreen publish-to-link', () => {
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
         'Publish failed',
-        'Artifact publishing is not configured',
+        'Artifact publishing is not configured Reference: req_7f3a',
       ),
     );
     expect(view.queryByTestId('artifact-published-url')).toBeNull();
+  });
+
+  it('never shows what a dropped connection threw', async () => {
+    mockPost.mockRejectedValue(new TypeError('Network request failed'));
+
+    const view = render(
+      <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
+    );
+
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    tapAlertButton('Publish');
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith('Publish failed', PUBLISH_FAILED_MESSAGE),
+    );
   });
 
   it('does not show one artifact’s link while a different artifact is open', async () => {

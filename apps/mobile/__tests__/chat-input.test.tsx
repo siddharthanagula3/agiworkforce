@@ -122,16 +122,25 @@ jest.mock('../src/features/chat/components/SendButton', () => {
       state,
       onPress,
       disabled,
+      accessibilityLabel,
     }: {
       state: string;
       onPress: () => void;
       disabled?: boolean;
+      accessibilityLabel?: string;
     }) => (
       <Pressable
         onPress={onPress}
         disabled={disabled && state === 'idle'}
         testID="send-button"
-        accessibilityLabel={state === 'streaming' ? 'Stop generating' : 'Send message'}
+        accessibilityLabel={
+          accessibilityLabel ??
+          (state === 'streaming'
+            ? 'Stop generating'
+            : state === 'queued'
+              ? 'Queued'
+              : 'Send message')
+        }
         accessibilityRole="button"
       >
         <Text>{state === 'streaming' ? 'Stop' : 'Send'}</Text>
@@ -265,6 +274,7 @@ jest.mock('../lib/constants', () => ({
 }));
 
 import { ChatInput, type ChatInputHandle } from '../src/features/chat/components/ChatInput';
+import { useUploadLifecycleStore } from '../src/features/chat/upload/uploadLifecycle';
 
 const defaultProps = {
   onSend: jest.fn(),
@@ -1071,6 +1081,153 @@ describe('ChatInput', () => {
       expect(style.maxWidth).toBe(READING_COLUMN_MAX_WIDTH);
       expect(style.alignSelf).toBe('center');
       expect(style.width).toBe('100%');
+    });
+  });
+  describe('a send made while a file is still going up', () => {
+    const uploading = () => useUploadLifecycleStore.getState();
+
+    afterEach(() => {
+      act(() => {
+        uploading().reset();
+      });
+    });
+
+    async function attachOne(attachRef: React.RefObject<ChatInputHandle | null>) {
+      await act(async () => {
+        attachRef.current?.addAttachments([
+          {
+            id: 'up-1',
+            uri: 'file:///doc.pdf',
+            mimeType: 'application/pdf',
+            fileName: 'doc.pdf',
+            fileSize: 1024,
+          },
+        ]);
+      });
+    }
+
+    it('waits for the upload rather than sending the message without it', async () => {
+      const onSend = jest.fn().mockResolvedValue(undefined);
+      const attachRef = React.createRef<ChatInputHandle>();
+      const { getByLabelText, getByTestId } = renderInput({ onSend, attachRef });
+
+      await attachOne(attachRef);
+      act(() => {
+        uploading().begin('up-1');
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'read this');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      expect(onSend).not.toHaveBeenCalled();
+      expect(getByLabelText('Sending when the upload finishes')).toBeTruthy();
+
+      await act(async () => {
+        uploading().settle('up-1', 'done');
+      });
+
+      await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+      expect(onSend.mock.calls[0][0]).toBe('read this');
+      expect((onSend.mock.calls[0][1] as unknown[]) ?? []).toHaveLength(1);
+    });
+
+    it('keeps the message in the composer when the upload ends any other way', async () => {
+      const onSend = jest.fn().mockResolvedValue(undefined);
+      const attachRef = React.createRef<ChatInputHandle>();
+      const { getByLabelText, getByTestId } = renderInput({ onSend, attachRef });
+
+      await attachOne(attachRef);
+      act(() => {
+        uploading().begin('up-1');
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'read this');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      await act(async () => {
+        uploading().settle('up-1', 'failed', 'network');
+      });
+
+      expect(onSend).not.toHaveBeenCalled();
+      expect(getByLabelText('Message input').props.value).toBe('read this');
+    });
+
+    it('does not call a message queued before the reader has pressed send', async () => {
+      const attachRef = React.createRef<ChatInputHandle>();
+      const { getByLabelText, queryByLabelText } = renderInput({ attachRef });
+
+      await attachOne(attachRef);
+      act(() => {
+        uploading().begin('up-1');
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'still writing');
+
+      expect(queryByLabelText('Sending when the upload finishes')).toBeNull();
+      expect(queryByLabelText('Queued')).toBeNull();
+      expect(getByLabelText('Send message')).toBeTruthy();
+    });
+
+    it('takes the message back when the reader edits it while it waits', async () => {
+      const onSend = jest.fn().mockResolvedValue(undefined);
+      const attachRef = React.createRef<ChatInputHandle>();
+      const { getByLabelText, getByTestId, queryByLabelText } = renderInput({ onSend, attachRef });
+
+      await attachOne(attachRef);
+      act(() => {
+        uploading().begin('up-1');
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'read this');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'read this, and also');
+
+      expect(queryByLabelText('Sending when the upload finishes')).toBeNull();
+      await act(async () => {
+        uploading().settle('up-1', 'done');
+      });
+
+      expect(onSend).not.toHaveBeenCalled();
+      expect(getByLabelText('Message input').props.value).toBe('read this, and also');
+    });
+
+    it('sends straight away when nothing is in flight', async () => {
+      const onSend = jest.fn().mockResolvedValue(undefined);
+      const { getByLabelText, getByTestId } = renderInput({ onSend });
+
+      fireEvent.changeText(getByLabelText('Message input'), 'no files here');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      expect(onSend).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('the keys and controls a phone gives the composer', () => {
+    it('leaves the return key as a newline and never as send', () => {
+      const { getByLabelText } = renderInput();
+      const input = getByLabelText('Message input');
+
+      expect(input.props.multiline).toBe(true);
+      expect(input.props.returnKeyType).toBe('default');
+      expect(input.props.blurOnSubmit).toBe(false);
+      expect(input.props.onSubmitEditing).toBeUndefined();
+    });
+
+    it('gives the phone a send control of its own, since the key will not do it', () => {
+      const onSend = jest.fn().mockResolvedValue(undefined);
+      const { getByLabelText, getByTestId } = renderInput({ onSend });
+
+      fireEvent.changeText(getByLabelText('Message input'), 'by button only');
+      expect(getByTestId('chat.composer.send')).toBeTruthy();
+      act(() => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+
+      expect(onSend).toHaveBeenCalledWith('by button only', undefined);
     });
   });
 });

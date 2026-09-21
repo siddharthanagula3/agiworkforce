@@ -1,9 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { Pressable } from 'react-native';
-import { Copy, Check } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
-import { copyToClipboard } from '@/lib/clipboard';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { Copy, Check, TriangleAlert } from 'lucide-react-native';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface CodeBlockCopyButtonProps {
@@ -12,19 +10,19 @@ interface CodeBlockCopyButtonProps {
 
 export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
   const colors = useThemeColors();
-  const [copied, setCopied] = useState(false);
-  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const { status, copy } = useCopyAction();
 
-  const handleCopy = useCallback(async () => {
-    const success = await copyToClipboard(code);
-    if (success && hapticsEnabled) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [code, hapticsEnabled]);
+  const handleCopy = useCallback(() => {
+    void copy(code);
+  }, [code, copy]);
+
+  const Icon = status === 'copied' ? Check : status === 'failed' ? TriangleAlert : Copy;
+  const iconColor =
+    status === 'copied'
+      ? colors.agentSuccess
+      : status === 'failed'
+        ? colors.agentError
+        : colors.textMuted;
 
   return (
     <Pressable
@@ -35,14 +33,10 @@ export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
         borderRadius: 4,
         backgroundColor: colors.neutralSurface,
       }}
-      accessibilityLabel={copied ? 'Copied' : 'Copy code'}
+      accessibilityLabel={copyControlLabel(status, 'Copy code')}
       accessibilityRole="button"
     >
-      {copied ? (
-        <Check size={14} color={colors.agentSuccess} />
-      ) : (
-        <Copy size={14} color={colors.textMuted} />
-      )}
+      <Icon size={14} color={iconColor} />
     </Pressable>
   );
 }
