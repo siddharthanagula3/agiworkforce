@@ -20,6 +20,28 @@ const OPEN_REQUEST = {
   contactEmail: 'subject@example.invalid',
   details: 'delete everything you hold about me',
   userId: null,
+  deadline: {
+    jurisdiction: 'gdpr' as const,
+    dueAt: '2026-10-02T08:30:00.000Z',
+    extendable: true,
+    extendedDueAt: '2026-12-02T08:30:00.000Z',
+    daysRemaining: 11,
+    overdue: false,
+  },
+};
+
+const OVERDUE_REQUEST = {
+  ...OPEN_REQUEST,
+  reference: 'DPDP-0000LATE99',
+  createdAt: '2026-07-01T08:30:00.000Z',
+  deadline: {
+    jurisdiction: 'gdpr' as const,
+    dueAt: '2026-08-01T08:30:00.000Z',
+    extendable: true,
+    extendedDueAt: '2026-10-01T08:30:00.000Z',
+    daysRemaining: -51,
+    overdue: true,
+  },
 };
 
 const COMPLETE_REPORT = {
@@ -181,5 +203,49 @@ describe('PrivacyRequestsPanel', () => {
         ),
       ).toBe(false),
     );
+  });
+});
+
+describe('PrivacyRequestsPanel statutory clock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', mocks.fetch);
+  });
+
+  it('shows each open request its due date and how long is left', async () => {
+    mocks.fetch.mockImplementation(
+      respondWith([OPEN_REQUEST], { body: COMPLETE_REPORT, status: 200 }),
+    );
+    render(<PrivacyRequestsPanel />);
+
+    const row = await screen.findByText(OPEN_REQUEST.reference);
+    const cells = row.closest('tr')!;
+    expect(within(cells).getByText('11 days left')).toBeTruthy();
+    expect(within(cells).queryByText(/overdue/)).toBeNull();
+  });
+
+  it('marks a request whose deadline has passed', async () => {
+    mocks.fetch.mockImplementation(
+      respondWith([OVERDUE_REQUEST], { body: COMPLETE_REPORT, status: 200 }),
+    );
+    render(<PrivacyRequestsPanel />);
+
+    const row = (await screen.findByText(OVERDUE_REQUEST.reference)).closest('tr')!;
+    expect(within(row).getByText('51 days overdue')).toBeTruthy();
+    expect(row.querySelector('[data-overdue="true"]')).toBeTruthy();
+  });
+
+  it('keeps the order the queue was answered in, closest deadline first', async () => {
+    mocks.fetch.mockImplementation(
+      respondWith([OVERDUE_REQUEST, OPEN_REQUEST], { body: COMPLETE_REPORT, status: 200 }),
+    );
+    render(<PrivacyRequestsPanel />);
+
+    await screen.findByText(OPEN_REQUEST.reference);
+    const references = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => row.querySelector('td')?.textContent);
+    expect(references).toEqual([OVERDUE_REQUEST.reference, OPEN_REQUEST.reference]);
   });
 });

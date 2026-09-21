@@ -491,3 +491,63 @@ describe('CookieConsent banner drives the gate', () => {
     }
   });
 });
+
+describe('cookie consent under a browser opt-out signal', () => {
+  function optOut(value: unknown): void {
+    Object.defineProperty(navigator, 'globalPrivacyControl', { configurable: true, value });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'globalPrivacyControl');
+  });
+
+  it('keeps Google Analytics unmounted although an acceptance is stored', async () => {
+    storeDecision(ALL_ACCEPTED_PREFERENCES);
+    optOut(true);
+
+    render(<AnalyticsConsentGate trackingId={TRACKING_ID} />);
+
+    await waitFor(() => expect(collectionDisabled()).toBe(true));
+    expect(gaScripts()).toHaveLength(0);
+  });
+
+  it('does not ask again, because the browser has already answered', async () => {
+    optOut(true);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(screen.queryByRole('button', { name: 'Allow analytics' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows the analytics switch off, locked, and says why', async () => {
+    optOut(true);
+    render(<CookieConsent />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_OPEN_EVENT));
+    });
+
+    const analytics = await screen.findByRole('switch', { name: 'Analytics cookies' });
+    expect(analytics.getAttribute('aria-checked')).toBe('false');
+    expect(analytics).toHaveProperty('disabled', true);
+    expect(screen.getByText(/Global Privacy Control/i)).toBeTruthy();
+  });
+
+  it('leaves the switch usable when the browser sends nothing', async () => {
+    optOut(false);
+    render(<CookieConsent />);
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_OPEN_EVENT));
+    });
+
+    const analytics = await screen.findByRole('switch', { name: 'Analytics cookies' });
+    expect(analytics).toHaveProperty('disabled', false);
+  });
+});

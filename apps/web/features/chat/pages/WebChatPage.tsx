@@ -240,6 +240,7 @@ import {
 import type { Conversation, Message, MessageMetadata } from '@shared/stores/web-chat-store';
 import type { ChatSession } from '@shared/types';
 import { describeModelSubstitution, type ModelSubstitution } from '@shared/stores/model-store';
+import { FreePlanTrainingNotice } from '../components/FreePlanTrainingNotice';
 import { UnavailableModelNotice } from '../components/UnavailableModelNotice';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
@@ -5313,6 +5314,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                   <div className="mx-auto w-full max-w-3xl px-4">
                     {usageBanner}
                     {unavailableModelNotice}
+                    <FreePlanTrainingNotice />
                     <AgiWorkAutonomyNotice
                       active={composerToggles?.workMode === AGI_WORK_MODE}
                       onReviewApprovals={handleReviewApprovals}
@@ -5414,6 +5416,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                   <div className="mx-auto w-full max-w-3xl px-4">
                     {usageBanner}
                     {unavailableModelNotice}
+                    <FreePlanTrainingNotice />
                     <AgiWorkAutonomyNotice
                       active={composerToggles?.workMode === AGI_WORK_MODE}
                       onReviewApprovals={handleReviewApprovals}
