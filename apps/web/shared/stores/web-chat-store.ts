@@ -376,7 +376,15 @@ export interface MessageMetadata {
    * rendering the partial as a normal completion. Persisted so the notice
    * survives reload.
    */
-  streamError?: { message: string; code?: string; retryable?: boolean };
+  streamError?: {
+    message: string;
+    code?: string;
+    retryable?: boolean;
+    /** Present only when the upstream response itself named a wait. */
+    retryAfterSeconds?: number;
+    /** The id the same failure carries in the server log, for the reader to quote. */
+    requestId?: string;
+  };
   errorCode?: string;
   /** Media tool type for inline rendering (e.g. 'image-generation'). */
   toolType?: string;

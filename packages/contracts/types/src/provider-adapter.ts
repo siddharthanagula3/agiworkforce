@@ -331,6 +331,16 @@ export interface StreamChunkError {
   message: string;
   retryable?: boolean;
   retryAfterSeconds?: number;
+  /**
+   * The id this failure carries in the server's own log line and in the
+   * response's request-id header, stamped where the chunk is turned into copy
+   * rather than by the adapter, which cannot see it.
+   *
+   * A failure that happens after streaming has started never reaches a status
+   * code or a JSON error body, so without this field it is the one class of
+   * failure a reader cannot quote anything about. An adapter leaves it unset.
+   */
+  requestId?: string;
   classification?: StreamChunkErrorClassification;
 }
 
