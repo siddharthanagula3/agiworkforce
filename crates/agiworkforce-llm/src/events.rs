@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::stop::GenerationStop;
 use crate::wire::ToolCall;
 
 /// Token usage for a single streamed completion.
@@ -87,7 +88,12 @@ pub struct ChatOutcome {
     /// Fully-assembled tool calls in provider order.
     pub tool_calls: Vec<ToolCall>,
     pub usage: Usage,
-    /// The reason the model stopped generating (e.g. "end_turn", "tool_use",
-    /// "stop", "tool_calls").
+    /// The reason the model stopped generating, exactly as the provider
+    /// spelled it (e.g. "end_turn", "tool_use", "stop", "tool_calls"). Kept
+    /// verbatim for logs and fixtures.
     pub stop_reason: Option<String>,
+    /// The same reason as the closed set, decoded from the dialect's own
+    /// vocabulary. `None` only when the provider reported no reason at all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stop: Option<GenerationStop>,
 }

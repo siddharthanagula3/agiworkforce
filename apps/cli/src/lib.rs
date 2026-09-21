@@ -569,6 +569,7 @@ pub fn oneshot_result_json_value(
     cost: &str,
     duration_ms: u64,
     is_error: bool,
+    incomplete: Option<errors::IncompleteTurnCause>,
 ) -> serde_json::Value {
     serde_json::json!({
         "type": "result",
@@ -580,6 +581,14 @@ pub fn oneshot_result_json_value(
         "cost": cost,
         "duration_ms": duration_ms,
         "is_error": is_error,
+        // Present only when the answer above is real and was cut short, with
+        // the same two sentences every other surface shows, so a script does
+        // not have to read a truncated reply as a whole one.
+        "incomplete": incomplete.map(|cause| serde_json::json!({
+            "kind": cause.kind(),
+            "message": cause.summary(),
+            "hint": cause.next_move(),
+        })),
     })
 }
 
@@ -3317,6 +3326,11 @@ pub async fn run_main() -> Result<()> {
                                 serde_json::to_string_pretty(&serde_json::json!({
                                     "response": turn.response, "input_tokens": turn.input_tokens,
                                     "output_tokens": turn.output_tokens,
+                                    "incomplete": turn.incomplete.map(|cause| serde_json::json!({
+                                        "kind": cause.kind(),
+                                        "message": cause.summary(),
+                                        "hint": cause.next_move(),
+                                    })),
                                 }))?
                             );
                         } else {
@@ -5180,7 +5194,20 @@ pub async fn run_oneshot(
                         message_id: stream_context.message_id,
                         model: model.to_string(),
                         content: serde_json::json!([{ "type": "text", "text": turn.response }]),
-                        stop_reason: Some("end_turn".to_string()),
+                        // This envelope mirrors Anthropic's stop vocabulary. A
+                        // turn cut at the model's output limit is `max_tokens`
+                        // there, and announcing it as `end_turn` is how a
+                        // reader is told a truncated answer finished.
+                        stop_reason: Some(
+                            match turn.incomplete {
+                                Some(errors::IncompleteTurnCause::OutputLimitReached) => {
+                                    "max_tokens"
+                                }
+                                Some(errors::IncompleteTurnCause::RefusedBySafety) => "refusal",
+                                Some(errors::IncompleteTurnCause::NoResponse) | None => "end_turn",
+                            }
+                            .to_string(),
+                        ),
                         input_tokens: turn.input_tokens,
                         output_tokens: turn.output_tokens,
                     }))
@@ -5243,6 +5270,7 @@ pub async fn run_oneshot(
                     &cost_str,
                     duration_ms,
                     false,
+                    turn.incomplete,
                 );
                 println!("{}", serde_json::to_string_pretty(&json_out)?);
             }
@@ -6108,6 +6136,47 @@ mod tests {
         assert!(
             rendered.contains("_agi()"),
             "expected bash completion function for agi, got:\n{rendered}"
+        );
+    }
+
+    /// A script reading `--output-format json` has to be able to tell a whole
+    /// answer from one the provider cut, without parsing the prose.
+    #[test]
+    fn the_oneshot_json_result_states_when_the_answer_was_cut_short() {
+        let whole = oneshot_result_json_value(
+            "fixture-json-model",
+            "Here is the answer.",
+            1,
+            2,
+            false,
+            "$0.00",
+            5,
+            false,
+            None,
+        );
+        assert_eq!(whole["incomplete"], serde_json::Value::Null);
+
+        let cut = oneshot_result_json_value(
+            "fixture-json-model",
+            "Half an ans",
+            1,
+            2,
+            false,
+            "$0.00",
+            5,
+            false,
+            Some(errors::IncompleteTurnCause::OutputLimitReached),
+        );
+        assert_eq!(cut["response"], "Half an ans");
+        assert_eq!(cut["is_error"], false);
+        assert_eq!(cut["incomplete"]["kind"], "output_limit_reached");
+        assert_eq!(
+            cut["incomplete"]["message"],
+            "The answer reached this model's maximum length and stopped there."
+        );
+        assert_eq!(
+            cut["incomplete"]["hint"],
+            "Ask for a shorter answer, or split the request."
         );
     }
 }

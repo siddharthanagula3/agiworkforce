@@ -276,6 +276,9 @@ pub struct TurnResult {
     /// completions are priced independently before they are aggregated here.
     pub cost_usd: f64,
     pub via_subscription: bool,
+    /// Present when the answer is real but the provider cut it short. Every
+    /// surface states it beside the text; nothing about the answer is dropped.
+    pub incomplete: Option<crate::errors::IncompleteTurnCause>,
 }
 
 #[derive(Debug, Clone)]

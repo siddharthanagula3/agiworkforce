@@ -29,6 +29,7 @@ pub mod events;
 pub mod serialize;
 pub mod spec;
 pub mod speech;
+pub mod stop;
 pub mod stream;
 pub mod watchdog;
 pub mod wire;
@@ -42,6 +43,7 @@ pub use events::{ChatOutcome, StreamEvent, Usage};
 pub use serialize::OllamaRequestOpts;
 pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
 pub use speech::{TranscriptionRequest, TranscriptionResponseFormat};
+pub use stop::GenerationStop;
 pub use stream::{
     AnthropicThinking, ChatRequest, ToolChoice, build_anthropic_request_body,
     build_gemini_request_body, build_ollama_request_body, build_openai_compat_request_body,

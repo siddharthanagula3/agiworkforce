@@ -1,9 +1,9 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::agent_events::{
-    AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventFileChangeKind,
-    AgentEventFileChanged, AgentEventProgressStatus, AgentEventProgressUpdate,
-    AgentEventToolExecutionEnd, AgentEventToolExecutionQueued, AgentEventToolExecutionStart,
-    AgentEventTurnDiff,
+    AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventError,
+    AgentEventFileChangeKind, AgentEventFileChanged, AgentEventProgressStatus,
+    AgentEventProgressUpdate, AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
+    AgentEventToolExecutionQueued, AgentEventToolExecutionStart, AgentEventTurnDiff,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
@@ -2054,6 +2054,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut final_status = TurnStatus::Completed;
             let mut final_error: Option<String> = None;
             let mut final_failure: Option<TurnFailure> = None;
+            let mut final_incomplete: Option<crate::errors::IncompleteTurnCause> = None;
             let mut last_response = String::new();
             let mut cumulative_input_tokens = 0u32;
             let mut cumulative_output_tokens = 0u32;
@@ -2149,6 +2150,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 match result {
                     Ok(turn) => {
                         last_response = turn.response;
+                        final_incomplete = turn.incomplete;
                         cumulative_input_tokens =
                             cumulative_input_tokens.saturating_add(turn.input_tokens);
                         cumulative_output_tokens =
@@ -2244,6 +2246,37 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         summary: progress_summary.to_string(),
                         detail: progress_detail,
                         status: progress_status,
+                    }),
+                );
+                // A delivered answer the provider cut short is diagnostic
+                // detail followed by a terminal stop, the two-step shape this
+                // envelope documents, not a failed turn: the text is real.
+                if let Some(cause) = final_incomplete {
+                    emit_agent_event(
+                        &task_thread_id,
+                        &task_turn_id,
+                        &task_event_sequence,
+                        &task_notifications,
+                        AgentEvent::Error(AgentEventError {
+                            message: cause.notice(),
+                            code: Some(cause.kind().to_string()),
+                            retryable: Some(cause.code().is_retryable()),
+                            retry_after_seconds: None,
+                            request_id: None,
+                        }),
+                    );
+                }
+                emit_agent_event(
+                    &task_thread_id,
+                    &task_turn_id,
+                    &task_event_sequence,
+                    &task_notifications,
+                    AgentEvent::Stop(AgentEventStop {
+                        reason: settled_stop_reason(
+                            final_status,
+                            final_failure.as_ref(),
+                            final_incomplete,
+                        ),
                     }),
                 );
             }
@@ -3486,6 +3519,40 @@ fn apply_agent_controls(
 
 /// Classify the error that ended a turn into the protocol's closed set.
 ///.
+/// The terminal stop reason for a turn that has settled.
+///
+/// Nothing in this process produced an [`AgentEventStopReason`] before, so
+/// every client branch for a truncation or a refusal was unreachable and each
+/// one arrived as an ordinary end of turn.
+fn settled_stop_reason(
+    status: TurnStatus,
+    failure: Option<&TurnFailure>,
+    incomplete: Option<crate::errors::IncompleteTurnCause>,
+) -> AgentEventStopReason {
+    match status {
+        TurnStatus::Completed => match incomplete {
+            Some(crate::errors::IncompleteTurnCause::OutputLimitReached) => {
+                AgentEventStopReason::MaxTokens
+            }
+            Some(crate::errors::IncompleteTurnCause::RefusedBySafety) => {
+                AgentEventStopReason::Refusal
+            }
+            Some(crate::errors::IncompleteTurnCause::NoResponse) | None => {
+                AgentEventStopReason::EndTurn
+            }
+        },
+        TurnStatus::Interrupted => AgentEventStopReason::Cancelled,
+        // `Running` is not terminal and never reaches here; a turn that
+        // settles in it is as broken as one that settled `Failed`.
+        TurnStatus::Failed | TurnStatus::Running => match failure.map(|failure| failure.code) {
+            Some(TurnFailureCode::OutputLimitReached) => AgentEventStopReason::MaxTokens,
+            Some(TurnFailureCode::RefusedBySafety) => AgentEventStopReason::Refusal,
+            Some(TurnFailureCode::Interrupted) => AgentEventStopReason::Cancelled,
+            _ => AgentEventStopReason::Error,
+        },
+    }
+}
+
 fn classify_turn_failure(error: &anyhow::Error) -> TurnFailure {
     for cause in error.chain() {
         if let Some(cli) = cause.downcast_ref::<crate::errors::CliError>() {
@@ -6961,5 +7028,74 @@ mod tests {
         );
         assert_eq!(repository_without_credentials("bad\nremote"), None);
         assert_eq!(repository_without_credentials("  "), None);
+    }
+
+    /// Nothing in this process produced a stop reason before, so every client
+    /// branch for a truncation, a refusal or a cancellation was unreachable.
+    #[test]
+    fn a_settled_turn_always_names_why_it_stopped() {
+        assert_eq!(
+            settled_stop_reason(TurnStatus::Completed, None, None),
+            AgentEventStopReason::EndTurn
+        );
+        assert_eq!(
+            settled_stop_reason(
+                TurnStatus::Completed,
+                None,
+                Some(crate::errors::IncompleteTurnCause::OutputLimitReached)
+            ),
+            AgentEventStopReason::MaxTokens,
+            "a delivered answer cut at the model's limit is not an ordinary end of turn"
+        );
+        assert_eq!(
+            settled_stop_reason(TurnStatus::Interrupted, None, None),
+            AgentEventStopReason::Cancelled
+        );
+        for (code, reason) in [
+            (
+                TurnFailureCode::OutputLimitReached,
+                AgentEventStopReason::MaxTokens,
+            ),
+            (
+                TurnFailureCode::RefusedBySafety,
+                AgentEventStopReason::Refusal,
+            ),
+            (
+                TurnFailureCode::Interrupted,
+                AgentEventStopReason::Cancelled,
+            ),
+            (TurnFailureCode::Network, AgentEventStopReason::Error),
+            (
+                TurnFailureCode::ProviderUnavailable,
+                AgentEventStopReason::Error,
+            ),
+        ] {
+            let failure = TurnFailure::new(code, "test");
+            assert_eq!(
+                settled_stop_reason(TurnStatus::Failed, Some(&failure), None),
+                reason,
+                "{code:?} must not be announced as an ordinary end of turn"
+            );
+        }
+    }
+
+    /// Every member of the protocol's closed set answers, so a code added
+    /// later cannot quietly settle a turn with no stop reason at all.
+    #[test]
+    fn every_failure_code_settles_to_a_stop_reason() {
+        for code in agiworkforce_protocol::developer_session::TURN_FAILURE_CODES {
+            let failure = TurnFailure::new(*code, "test");
+            let reason = settled_stop_reason(TurnStatus::Failed, Some(&failure), None);
+            assert!(
+                matches!(
+                    reason,
+                    AgentEventStopReason::MaxTokens
+                        | AgentEventStopReason::Refusal
+                        | AgentEventStopReason::Cancelled
+                        | AgentEventStopReason::Error
+                ),
+                "{code:?} settled as {reason:?}, which is not a failure's stop reason"
+            );
+        }
     }
 }

@@ -39,6 +39,7 @@ use crate::serialize::{
     openai_function_tools_json, openai_responses_function_tools_json, set_openai_max_tokens,
 };
 use crate::spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
+use crate::stop::GenerationStop;
 use crate::watchdog::IdleWatchdog;
 use crate::wire::{Message, ToolCall, ToolDefinition};
 
@@ -700,11 +701,13 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason.as_deref().map(GenerationStop::anthropic);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -975,11 +978,15 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason
+        .as_deref()
+        .map(GenerationStop::openai_finish_reason);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -1393,11 +1400,13 @@ where
             stop_reason: stop_reason.clone(),
         });
     }
+    let stop = stop_reason.as_deref().map(GenerationStop::openai_responses);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls: assembler.finish(),
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -1661,11 +1670,15 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason
+        .as_deref()
+        .map(GenerationStop::gemini_finish_reason);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -1809,7 +1822,17 @@ fn handle_ollama_stream_event(event: &Value, fold: &mut OllamaFold, on_event: On
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0) as u32;
         if fold.stop_reason.is_none() {
-            fold.stop_reason = Some("stop".to_string());
+            // Ollama states why it stopped on `done_reason`; without reading it
+            // an answer cut at `num_predict` is indistinguishable from one that
+            // finished.
+            fold.stop_reason = Some(
+                event
+                    .get("done_reason")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|reason| !reason.is_empty())
+                    .unwrap_or("stop")
+                    .to_string(),
+            );
         }
         on_event(StreamEvent::Usage {
             usage: fold.usage.clone(),
@@ -1890,11 +1913,15 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason
+        .as_deref()
+        .map(GenerationStop::ollama_done_reason);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 

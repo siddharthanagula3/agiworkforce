@@ -67,6 +67,69 @@ pub fn detect_context_overflow(message: &str) -> bool {
 // Error enum
 // ---------------------------------------------------------------------------
 
+/// Why a generation produced no turn worth delivering.
+///
+/// Each member owns its own two sentences: what happened, then the one next
+/// move. They are the sentences the web and the extension already show for the
+/// same three outcomes, so a reader who meets one in the terminal and again in
+/// an editor is told the same thing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IncompleteTurnCause {
+    /// Nothing came back: no text and no tool call.
+    NoResponse,
+    /// The provider's safety layer stopped the response.
+    RefusedBySafety,
+    /// The answer was cut at the model's output limit.
+    OutputLimitReached,
+}
+
+impl IncompleteTurnCause {
+    /// What happened, as one sentence with no provider text in it.
+    pub fn summary(self) -> &'static str {
+        match self {
+            Self::NoResponse => "The model returned no response for this turn.",
+            Self::RefusedBySafety => "The safety system stopped this response.",
+            Self::OutputLimitReached => {
+                "The answer reached this model's maximum length and stopped there."
+            }
+        }
+    }
+
+    /// The one next move.
+    pub fn next_move(self) -> &'static str {
+        match self {
+            Self::NoResponse => "Send it again, or rephrase your message.",
+            Self::RefusedBySafety => "Rephrase the request and send it again.",
+            Self::OutputLimitReached => "Ask for a shorter answer, or split the request.",
+        }
+    }
+
+    /// Both sentences, for a surface that shows one line beside a delivered
+    /// answer rather than an error and a hint on separate lines.
+    pub fn notice(self) -> String {
+        format!("{} {}", self.summary(), self.next_move())
+    }
+
+    /// Stable, machine-readable kind for `--json` and `--json-events`.
+    pub fn kind(self) -> &'static str {
+        match self {
+            Self::NoResponse => "empty_response",
+            Self::RefusedBySafety => "refused_by_safety",
+            Self::OutputLimitReached => "output_limit_reached",
+        }
+    }
+
+    /// The protocol's own member for this outcome. Retryability and the action
+    /// a surface offers are read from there, never decided a second time here.
+    pub fn code(self) -> TurnFailureCode {
+        match self {
+            Self::NoResponse => TurnFailureCode::ProviderUnavailable,
+            Self::RefusedBySafety => TurnFailureCode::RefusedBySafety,
+            Self::OutputLimitReached => TurnFailureCode::OutputLimitReached,
+        }
+    }
+}
+
 /// Structured error types for the CLI.
 ///
 /// Replaces ad-hoc `anyhow::bail!` calls with typed, matchable errors that
@@ -130,6 +193,13 @@ pub enum CliError {
         feature: String,
         required_tier: String,
         reason: String,
+    },
+    /// The provider answered and the turn still has nothing to deliver: no
+    /// text and no tool calls, a response its safety layer stopped, or an
+    /// answer cut at the model's output limit before any of it arrived.
+    IncompleteTurn {
+        provider: String,
+        cause: IncompleteTurnCause,
     },
     /// The deployment no longer answers the contract version this build sends.
     /// Nothing about the request is wrong, so it is not an API failure: the
@@ -216,6 +286,9 @@ impl fmt::Display for CliError {
                 write!(f, "[{}] Authentication failed: {}", provider, message)
             }
             CliError::Config { message } => write!(f, "Configuration error: {}", message),
+            CliError::IncompleteTurn { provider, cause } => {
+                write!(f, "[{}] {}", provider, cause.summary())
+            }
             CliError::ClientUpdateRequired {
                 message,
                 minimum_api_version,
@@ -298,6 +371,7 @@ impl CliError {
             | CliError::Auth { message, .. }
             | CliError::AuthMissing { message, .. }
             | CliError::StreamError { message, .. } => message.clone(),
+            CliError::IncompleteTurn { cause, .. } => cause.summary().to_string(),
             CliError::RateLimited { retry_after, .. } => match retry_after {
                 Some(secs) => format!("Rate limited, retry after {secs}s"),
                 None => "Rate limited, please wait before retrying".to_string(),
@@ -374,6 +448,7 @@ impl CliError {
             CliError::Auth { .. } => "auth_expired",
             CliError::AuthMissing { .. } => "auth_missing",
             CliError::Config { .. } => "config_invalid",
+            CliError::IncompleteTurn { cause, .. } => cause.kind(),
             CliError::ClientUpdateRequired { .. } => "client_update_required",
             CliError::Tool { .. } => "tool_failed",
             CliError::Network { .. } => "network",
@@ -437,6 +512,7 @@ impl CliError {
                  file path manually."
                     .to_string()
             }
+            CliError::IncompleteTurn { cause, .. } => cause.next_move().to_string(),
             CliError::ClientUpdateRequired { .. } => {
                 "Run `agi update` to install a build this deployment still answers.".to_string()
             }
@@ -600,6 +676,14 @@ impl CliError {
         }
     }
 
+    /// A generation that finished without a turn to deliver.
+    pub fn incomplete_turn(provider: impl Into<String>, cause: IncompleteTurnCause) -> Self {
+        CliError::IncompleteTurn {
+            provider: provider.into(),
+            cause,
+        }
+    }
+
     /// Create a paywall error (AGI Workforce managed-cloud tier cap exceeded).
     pub fn paywall(
         feature: impl Into<String>,
@@ -627,6 +711,16 @@ impl CliError {
             CliError::Auth { .. } | CliError::AuthMissing { .. } => ExitClass::NoPermission,
             CliError::AccountSignedOut { .. } => ExitClass::NoPermission,
             CliError::Config { .. } => ExitClass::Configuration,
+            // A turn that came back empty is worth sending again; one the
+            // safety layer stopped, or one already cut at the model's limit,
+            // reproduces itself, so it is not a temporary failure.
+            CliError::IncompleteTurn { cause, .. } => {
+                if cause.code().is_retryable() {
+                    ExitClass::TemporaryFailure
+                } else {
+                    ExitClass::Failure
+                }
+            }
             CliError::Tool { .. } => ExitClass::Failure,
             CliError::Network { .. } => ExitClass::Unavailable,
             CliError::ContextOverflow { .. } => ExitClass::DataError,
@@ -701,6 +795,7 @@ impl CliError {
                     .unwrap_or(TurnFailureCode::StreamInterrupted),
                 Some(provider),
             ),
+            CliError::IncompleteTurn { provider, cause } => (cause.code(), Some(provider)),
             CliError::Network { .. } => (TurnFailureCode::Network, None),
             CliError::ContextOverflow { .. } => (TurnFailureCode::ContextWindowExceeded, None),
             CliError::Tool { .. } => (TurnFailureCode::ToolDenied, None),
@@ -836,6 +931,9 @@ impl CliError {
             | CliError::ModelUnavailable { .. } => true,
             CliError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
             CliError::StreamError { is_retryable, .. } => *is_retryable,
+            // The protocol already decides which of these a caller may send
+            // again; a second table here would let the two drift.
+            CliError::IncompleteTurn { cause, .. } => cause.code().is_retryable(),
             _ => false,
         }
     }
@@ -1745,6 +1843,163 @@ mod tests {
                 "{class:?} took the parser's status"
             );
             assert!(class.label().len() > 10, "{class:?} has no sentence");
+        }
+    }
+
+    // -- A turn that came back with nothing to deliver --
+
+    /// The three sentences, exactly. `output_limit_reached` and
+    /// `refused_by_safety` are word for word what
+    /// `apps/web/features/code/local-code.ts` and the VS Code sidebar already
+    /// show, so a reader who meets one in the terminal and again in the editor
+    /// is told one story.
+    #[test]
+    fn an_incomplete_turn_says_what_happened_then_the_one_next_move() {
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::OutputLimitReached)
+                .to_string(),
+            "[openai] The answer reached this model's maximum length and stopped there."
+        );
+        assert_eq!(
+            IncompleteTurnCause::OutputLimitReached.next_move(),
+            "Ask for a shorter answer, or split the request."
+        );
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::RefusedBySafety).to_string(),
+            "[openai] The safety system stopped this response."
+        );
+        assert_eq!(
+            IncompleteTurnCause::RefusedBySafety.next_move(),
+            "Rephrase the request and send it again."
+        );
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::NoResponse).to_string(),
+            "[openai] The model returned no response for this turn."
+        );
+        assert_eq!(
+            IncompleteTurnCause::NoResponse.next_move(),
+            "Send it again, or rephrase your message."
+        );
+    }
+
+    #[test]
+    fn an_incomplete_turn_notice_is_the_two_sentences_a_reader_sees_beside_the_answer() {
+        assert_eq!(
+            IncompleteTurnCause::OutputLimitReached.notice(),
+            "The answer reached this model's maximum length and stopped there. Ask for a \
+             shorter answer, or split the request."
+        );
+    }
+
+    #[test]
+    fn the_terminal_prints_the_failure_and_its_remedy_for_an_incomplete_turn() {
+        let error = anyhow::Error::new(CliError::incomplete_turn(
+            "google",
+            IncompleteTurnCause::NoResponse,
+        ));
+        assert_eq!(
+            terminal_text(&error),
+            "[google] The model returned no response for this turn.\nSend it again, or rephrase \
+             your message."
+        );
+    }
+
+    /// Each cause maps onto the protocol's own member, and nothing here decides
+    /// retryability a second time: a caller may send an empty turn again
+    /// because `ProviderUnavailable` says so, and may not send a refusal or a
+    /// truncation again because those reproduce themselves.
+    #[test]
+    fn every_incomplete_cause_takes_its_code_and_its_retryability_from_the_protocol() {
+        for (cause, code) in [
+            (
+                IncompleteTurnCause::NoResponse,
+                TurnFailureCode::ProviderUnavailable,
+            ),
+            (
+                IncompleteTurnCause::RefusedBySafety,
+                TurnFailureCode::RefusedBySafety,
+            ),
+            (
+                IncompleteTurnCause::OutputLimitReached,
+                TurnFailureCode::OutputLimitReached,
+            ),
+        ] {
+            assert_eq!(cause.code(), code);
+            let error = CliError::incomplete_turn("anthropic", cause);
+            assert_eq!(error.turn_failure().code, code);
+            assert_eq!(error.turn_failure().provider.as_deref(), Some("anthropic"));
+            assert_eq!(
+                error.is_retryable(),
+                code.is_retryable(),
+                "{cause:?} must not answer retryability differently from the protocol"
+            );
+        }
+        assert!(
+            CliError::incomplete_turn("anthropic", IncompleteTurnCause::NoResponse).is_retryable()
+        );
+        assert!(
+            !CliError::incomplete_turn("anthropic", IncompleteTurnCause::RefusedBySafety)
+                .is_retryable()
+        );
+        assert!(
+            !CliError::incomplete_turn("anthropic", IncompleteTurnCause::OutputLimitReached)
+                .is_retryable()
+        );
+    }
+
+    #[test]
+    fn an_incomplete_turn_exits_on_whether_the_same_command_may_survive() {
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::NoResponse).exit_class(),
+            ExitClass::TemporaryFailure
+        );
+        for reproduces in [
+            IncompleteTurnCause::RefusedBySafety,
+            IncompleteTurnCause::OutputLimitReached,
+        ] {
+            assert_eq!(
+                CliError::incomplete_turn("openai", reproduces).exit_class(),
+                ExitClass::Failure
+            );
+        }
+    }
+
+    #[test]
+    fn the_json_result_of_an_incomplete_turn_carries_its_kind_and_its_hint() {
+        let json = result_error_json(&anyhow::Error::new(CliError::incomplete_turn(
+            "google",
+            IncompleteTurnCause::RefusedBySafety,
+        )));
+        assert_eq!(json["kind"], "refused_by_safety");
+        assert_eq!(json["hint"], "Rephrase the request and send it again.");
+        assert_eq!(
+            json["error"],
+            "[google] The safety system stopped this response."
+        );
+        assert_eq!(json["retry_after_seconds"], serde_json::Value::Null);
+    }
+
+    /// The `--json-events` kind and the protocol code are two spellings of one
+    /// decision; a cause that grew a third would be inventing a vocabulary.
+    #[test]
+    fn every_incomplete_cause_has_a_kind_and_a_code_a_client_can_branch_on() {
+        let mut kinds = std::collections::HashSet::new();
+        let mut codes: Vec<TurnFailureCode> = Vec::new();
+        for cause in [
+            IncompleteTurnCause::NoResponse,
+            IncompleteTurnCause::RefusedBySafety,
+            IncompleteTurnCause::OutputLimitReached,
+        ] {
+            assert!(!cause.summary().is_empty());
+            assert!(!cause.next_move().is_empty());
+            assert!(kinds.insert(cause.kind()), "{cause:?} shares a kind");
+            assert!(!codes.contains(&cause.code()), "{cause:?} shares a code");
+            codes.push(cause.code());
+            assert!(
+                agiworkforce_protocol::developer_session::TURN_FAILURE_CODES
+                    .contains(&cause.code()),
+                "{cause:?} names a code the protocol does not carry"
+            );
         }
     }
 }

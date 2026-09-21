@@ -1347,6 +1347,9 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
             &cost,
             0,
             false,
+            // `/raw json` re-renders a message already in history; the turn
+            // that produced it is gone, so nothing here can claim it was cut.
+            None,
         );
         serde_json::to_string_pretty(&value)
             .unwrap_or_else(|e| format!("Failed to render JSON: {e}"))
