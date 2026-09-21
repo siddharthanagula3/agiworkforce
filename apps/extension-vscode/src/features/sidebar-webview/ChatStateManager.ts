@@ -19,6 +19,7 @@ import {
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
+  type AgentEventApprovalRiskLevel,
   type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
@@ -382,6 +383,8 @@ export type ExtToWebviewMessage =
         summary: string;
         detail: string;
         sessionApproved: boolean;
+        riskLevel?: AgentEventApprovalRiskLevel;
+        reversible?: boolean;
       };
     }
   | {
@@ -2885,6 +2888,8 @@ export class ChatStateManager {
           summary: event.summary,
           detail: event.detail,
           sessionApproved: false,
+          ...(event.riskLevel === undefined ? {} : { riskLevel: event.riskLevel }),
+          ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
         },
       });
       return;

@@ -64,6 +64,7 @@ export function streamChunkToAgentEvent(chunk: StreamChunk): AgentEvent | null {
         code: chunk.code,
         retryable: chunk.retryable,
         retryAfterSeconds: chunk.retryAfterSeconds,
+        requestId: chunk.requestId,
       };
     case 'stop':
       return chunk.reason === 'pause_turn'
@@ -114,6 +115,7 @@ export function agentEventToStreamChunk(event: AgentEvent): StreamChunk | null {
         code: event.code,
         retryable: event.retryable,
         retryAfterSeconds: event.retryAfterSeconds,
+        requestId: event.requestId,
       };
     case 'stop':
       return { type: 'stop', reason: AGENT_EVENT_STOP_REASON_TO_STREAM_CHUNK[event.reason] };

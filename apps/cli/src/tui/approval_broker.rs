@@ -11,8 +11,11 @@ use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
 use tokio::sync::{oneshot, Mutex, Notify};
 use uuid::Uuid;
+
+use crate::safety::{filesystem_effect::FilesystemEffect, CommandSafety};
 
 /// The specific action category that needs user approval.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +80,71 @@ pub enum ApprovalRequestKind {
         branch: String,
         force: bool,
     },
+}
+
+/// How hard the user should think before allowing an action, and whether they
+/// can take it back afterwards.
+///
+/// The CLI works both of these out anyway to decide whether to prompt at all,
+/// through [`crate::safety::classify_command`] and the filesystem effect
+/// taxonomy beside it. Until they were carried they stayed inside the
+/// terminal, so an editor showing the same prompt had to leave the user to
+/// judge `rm -rf build` and `ls` by eye.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ApprovalRisk {
+    pub level: AgentEventApprovalRiskLevel,
+    /// Whether allowing this leaves the user able to put things back with what
+    /// is on this machine. A command that only reads is reversible because it
+    /// changed nothing; anything that leaves the machine is not, because
+    /// nothing here can recall it.
+    pub reversible: bool,
+}
+
+impl ApprovalRequestKind {
+    pub fn risk(&self) -> ApprovalRisk {
+        use AgentEventApprovalRiskLevel as Level;
+        let (level, reversible) = match self {
+            Self::Exec { command } => {
+                let level = match crate::safety::classify_command(command) {
+                    CommandSafety::Safe => Level::Low,
+                    CommandSafety::Unknown => Level::Medium,
+                    CommandSafety::Dangerous => Level::High,
+                };
+                let effect = crate::safety::classify_filesystem_effect(command);
+                (
+                    level,
+                    matches!(effect, FilesystemEffect::None | FilesystemEffect::Read),
+                )
+            }
+            // Nothing outside the conversation moves, so there is nothing to
+            // put back.
+            Self::LoopDetection { .. } | Self::AskUser { .. } | Self::McpElicitation { .. } => {
+                (Level::Low, true)
+            }
+            // A trust grant widens what may run without asking again, and the
+            // user withdraws it the same way they gave it.
+            Self::TrustDirectory { .. } => (Level::Medium, true),
+            // AGI keeps no copy of what a file held before it wrote to it, so
+            // it cannot offer to put the file back.
+            Self::FileWrite { .. } | Self::FileEdit { .. } | Self::Patch { .. } => {
+                (Level::Medium, false)
+            }
+            // Whatever these reach is outside this machine's control: a remote
+            // tool, a hook's own side effects, a branch someone else may
+            // already have pulled.
+            Self::McpTool { .. }
+            | Self::Hook { .. }
+            | Self::Subagent { .. }
+            | Self::WorkspacePolicy { .. }
+            | Self::Network { .. }
+            | Self::Git { .. } => (Level::Medium, false),
+            Self::ComputerUse { .. } => (Level::High, false),
+            Self::GitPush { force, .. } => {
+                (if *force { Level::High } else { Level::Medium }, false)
+            }
+        };
+        ApprovalRisk { level, reversible }
+    }
 }
 
 /// A single approval prompt waiting for the user.
@@ -343,5 +411,90 @@ mod tests {
         broker.deny_all_remaining().await;
         assert_eq!(task.await.expect("join"), ApprovalDecision::Cancel);
         assert_eq!(broker.pending_count().await, 0);
+    }
+
+    fn exec(command: &str) -> ApprovalRisk {
+        ApprovalRequestKind::Exec {
+            command: command.to_string(),
+        }
+        .risk()
+    }
+
+    /// The rating a prompt shows is the CLI's own classification of the
+    /// command, not a fixed value per prompt kind: a reader who is told the
+    /// same thing about `ls` and `rm -rf build` has been told nothing.
+    #[test]
+    fn a_command_is_rated_by_what_it_would_actually_do() {
+        assert_eq!(exec("ls -la").level, AgentEventApprovalRiskLevel::Low);
+        assert_eq!(
+            exec("rm -rf build").level,
+            AgentEventApprovalRiskLevel::High
+        );
+        assert_eq!(
+            exec("some-tool --apply").level,
+            AgentEventApprovalRiskLevel::Medium,
+            "a command nobody modelled is not a safe one"
+        );
+    }
+
+    /// Reversible means this machine can put things back, so it follows the
+    /// filesystem effect rather than the risk rating: reading changes nothing
+    /// to undo, and AGI keeps no copy of a file it overwrote.
+    #[test]
+    fn reversibility_follows_what_the_command_touches() {
+        assert!(exec("cat README.md").reversible);
+        assert!(exec("echo hello").reversible);
+        assert!(!exec("tee out.txt").reversible);
+        assert!(!exec("rm build/app").reversible);
+    }
+
+    /// A push is the one operation that can put work somewhere the user
+    /// cannot take it back from, and a forced one is worse than a plain one.
+    #[test]
+    fn work_that_leaves_this_machine_is_never_reported_as_reversible() {
+        let push = ApprovalRequestKind::GitPush {
+            remote: "origin".to_string(),
+            branch: "main".to_string(),
+            force: false,
+        }
+        .risk();
+        assert_eq!(push.level, AgentEventApprovalRiskLevel::Medium);
+        assert!(!push.reversible);
+
+        let forced = ApprovalRequestKind::GitPush {
+            remote: "origin".to_string(),
+            branch: "main".to_string(),
+            force: true,
+        }
+        .risk();
+        assert_eq!(forced.level, AgentEventApprovalRiskLevel::High);
+        assert!(!forced.reversible);
+
+        let remote_tool = ApprovalRequestKind::McpTool {
+            server_name: "issues".to_string(),
+            tool_name: "close_issue".to_string(),
+        }
+        .risk();
+        assert!(!remote_tool.reversible);
+
+        let driving = ApprovalRequestKind::ComputerUse {
+            action: "click".to_string(),
+            target: "Send".to_string(),
+        }
+        .risk();
+        assert_eq!(driving.level, AgentEventApprovalRiskLevel::High);
+        assert!(!driving.reversible);
+    }
+
+    /// A prompt that only asks the user something moves nothing, so it is the
+    /// one shape that is both low risk and reversible.
+    #[test]
+    fn asking_the_user_something_moves_nothing() {
+        let question = ApprovalRequestKind::AskUser {
+            question: "Which branch?".to_string(),
+        }
+        .risk();
+        assert_eq!(question.level, AgentEventApprovalRiskLevel::Low);
+        assert!(question.reversible);
     }
 }

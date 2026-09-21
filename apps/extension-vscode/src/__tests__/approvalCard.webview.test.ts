@@ -50,7 +50,11 @@ function deliver(data: unknown): void {
   window.dispatchEvent(new MessageEvent('message', { data }));
 }
 
-function requestApproval(requestId = 'req-1', toolLabel = 'shell commands'): void {
+function requestApproval(
+  requestId = 'req-1',
+  toolLabel = 'shell commands',
+  verdict: { riskLevel?: string; reversible?: boolean } = {},
+): void {
   deliver({
     type: 'approvalRequested',
     payload: {
@@ -59,6 +63,7 @@ function requestApproval(requestId = 'req-1', toolLabel = 'shell commands'): voi
       summary: 'Allow this command?',
       detail: 'node -e "import(\'./add.mjs\')"',
       sessionApproved: false,
+      ...verdict,
     },
   });
 }
@@ -102,6 +107,46 @@ describe('approval card', () => {
     deliver({ type: 'approvalResolved', payload: { requestId: 'req-1', outcome: 'deny' } });
     expect(document.querySelector('.approval-card__outcome')?.textContent).toBe(
       `${TOOL_APPROVAL_ACTION_LABELS.denied}.`,
+    );
+  });
+
+  it('says in words how risky the call is and whether it can be taken back', () => {
+    boot();
+    requestApproval('req-1', 'shell commands', { riskLevel: 'high', reversible: false });
+
+    const card = document.querySelector('.approval-card');
+    expect(card?.querySelector('.approval-card__risk')?.textContent).toBe('High risk');
+    expect(card?.querySelector('.approval-card__undo')?.textContent).toBe('Cannot be undone');
+    // Colour alone would leave the answer unreadable to anyone who cannot see
+    // it, so the same verdict is in the name the card announces.
+    expect(card?.getAttribute('aria-label')).toBe(
+      'Approval needed, High risk, Cannot be undone. Allow this command?',
+    );
+  });
+
+  it('says a reversible low-risk call is reversible rather than staying silent', () => {
+    boot();
+    requestApproval('req-1', 'shell commands', { riskLevel: 'low', reversible: true });
+
+    expect(document.querySelector('.approval-card__risk')?.textContent).toBe('Low risk');
+    expect(document.querySelector('.approval-card__undo')?.textContent).toBe('Can be undone');
+  });
+
+  it('admits a runtime that rated nothing instead of assuming the gentler answer', () => {
+    boot();
+    requestApproval('req-1', 'shell commands', { reversible: false });
+
+    expect(document.querySelector('.approval-card__risk')?.textContent).toBe('Risk not rated');
+    expect(document.querySelector('.approval-card__undo')?.textContent).toBe('Cannot be undone');
+  });
+
+  it('shows no verdict row at all for a runtime that sends neither field', () => {
+    boot();
+    requestApproval();
+
+    expect(document.querySelector('.approval-card__verdict')).toBeNull();
+    expect(document.querySelector('.approval-card')?.getAttribute('aria-label')).toBe(
+      'Approval needed, Allow this command?',
     );
   });
 

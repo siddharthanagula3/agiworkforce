@@ -894,6 +894,123 @@ describe('LocalRuntimeClient', () => {
     await client.dispose();
   });
 
+  it('carries a wait and a reference the runtime sent, and leaves both out when it sent neither', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const failures: Array<Record<string, unknown> | null | undefined> = [];
+    client.onEvent((event) => {
+      if (event.type === 'turn_failed')
+        failures.push(event.failure as Record<string, unknown> | null | undefined);
+    });
+    await client.initialize();
+    const terminal = {
+      threadId: 't',
+      turnId: 'r',
+      status: 'failed',
+      response: '',
+      inputTokens: 0,
+      outputTokens: 0,
+    };
+    const failure = {
+      code: 'provider_rate_limited',
+      message: 'Rate limited.',
+      retryable: true,
+      action: 'retry',
+    };
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/failed',
+        params: {
+          ...terminal,
+          error: 'Rate limited.',
+          failure: { ...failure, retryAfterSeconds: 45, requestId: 'req_7f3a' },
+        },
+      })}\n`,
+    );
+    // A runtime built before the fields existed sends the same failure without
+    // them, and must still parse rather than dropping the whole turn.
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/failed',
+        params: { ...terminal, error: 'Rate limited.', failure },
+      })}\n`,
+    );
+    // A figure no sentence should be built on is refused here rather than
+    // reaching the reader as "try again in 11 days".
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/failed',
+        params: {
+          ...terminal,
+          error: 'Rate limited.',
+          failure: { ...failure, retryAfterSeconds: -5, requestId: '' },
+        },
+      })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(failures[0]).toMatchObject({ retryAfterSeconds: 45, requestId: 'req_7f3a' });
+    expect(failures[1]).toMatchObject({ code: 'provider_rate_limited' });
+    expect(failures[1]?.['retryAfterSeconds']).toBeUndefined();
+    expect(failures[1]?.['requestId']).toBeUndefined();
+    expect(failures[2]?.['retryAfterSeconds']).toBeUndefined();
+    expect(failures[2]?.['requestId']).toBeUndefined();
+    await client.dispose();
+  });
+
+  it('carries the risk the runtime classified, and stays silent for one that classified none', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const approvals: Array<Record<string, unknown>> = [];
+    client.onEvent((event) => {
+      if (event.type === 'approval_requested')
+        approvals.push(event as unknown as Record<string, unknown>);
+    });
+    await client.initialize();
+    const request = {
+      threadId: 't',
+      turnId: 'r',
+      requestId: 'approval-1',
+      kind: 'Exec',
+      summary: 'Allow this command?',
+      detail: 'rm -rf build',
+    };
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'approval/requested',
+        params: { ...request, riskLevel: 'high', reversible: false },
+      })}\n`,
+    );
+    // An older runtime sends the four fields it always sent; the card has to
+    // keep working and say the risk was not rated.
+    runtime.stdout.write(`${JSON.stringify({ method: 'approval/requested', params: request })}\n`);
+    // A level this build does not know is not a level it may show.
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'approval/requested',
+        params: { ...request, riskLevel: 'catastrophic', reversible: true },
+      })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(approvals[0]).toMatchObject({ riskLevel: 'high', reversible: false });
+    expect(approvals[1]?.['riskLevel']).toBeUndefined();
+    expect(approvals[1]?.['reversible']).toBeUndefined();
+    expect(approvals[2]?.['riskLevel']).toBeUndefined();
+    expect(approvals[2]?.['reversible']).toBe(true);
+    await client.dispose();
+  });
+
   it('routes steering, cancellation, and approvals through the same runtime', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
