@@ -26,8 +26,6 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
 
-import prettier from 'prettier';
-
 import {
   LIFECYCLE_STAGE,
   isAllowedStageTransition,
@@ -491,6 +489,8 @@ export function advancedStages(curation, probeFile) {
 }
 
 async function writeJson(file, value) {
+  // Loaded here so the self-test, which writes nothing, runs without an install.
+  const { default: prettier } = await import('prettier');
   const config = (await prettier.resolveConfig(file)) ?? {};
   fs.writeFileSync(
     file,

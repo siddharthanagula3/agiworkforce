@@ -82,8 +82,8 @@ function announcesAWait(text: string): boolean {
       `import\\s+\\{[^}]*\\b${name}\\b[^}]*\\}\\s+from\\s+'([^']+)'`,
     ).exec(text)?.[1];
     if (!specifier) return false;
-    const module = resolveModule(specifier);
-    return module !== null && announces(module);
+    const resolved = resolveModule(specifier);
+    return resolved !== null && announces(resolved);
   });
 }
 
