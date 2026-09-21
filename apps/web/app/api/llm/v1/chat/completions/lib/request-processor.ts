@@ -17,6 +17,7 @@ import {
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { AgiWorkGoalSchema } from './agiwork-plan';
+import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
@@ -2122,8 +2123,7 @@ function freeTrialBudgetReachedResponse(subscription?: SubscriptionInfo): Proces
     response: NextResponse.json(
       {
         error: {
-          message:
-            'You have reached the current free usage limit. Upgrade your plan, or switch to Local or BYOK to keep going.',
+          message: FREE_USAGE_LIMIT_REACHED_MESSAGE,
           type: 'insufficient_quota',
           code: 'free_trial_token_budget_reached',
           trial: { model: FREE_TRIAL_MODEL },
