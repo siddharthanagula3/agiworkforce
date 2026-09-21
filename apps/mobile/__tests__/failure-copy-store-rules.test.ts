@@ -8,10 +8,10 @@ describe('what this app is allowed to say about paying us', () => {
   it('keeps the fact that upgrades are staged and drops the errand off the phone', () => {
     expect(
       withoutExternalPurchaseSteering(
-        'Model claude-x is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
+        'Model fixture-model is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
       ),
     ).toBe(
-      'Model claude-x is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages.',
+      'Model fixture-model is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages.',
     );
   });
 
