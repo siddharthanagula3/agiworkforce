@@ -997,15 +997,16 @@
       "id": "device-authorization-bearer-columns-are-dropped",
       "section": "What is encrypted, and with which key",
       "kind": "prose",
-      "sentence": "That column was never encrypted, it held plain text that every writer set to NULL, and the `device_authorization_bearer_columns` migration drops it and its sibling `refresh_token`.",
+      "sentence": "That column was never encrypted, it held plain text that every writer set to NULL, and no route names it or its sibling `refresh_token` any more.",
       "implementation": [
-        "apps/web/db/neon/0292_device_authorization_bearer_columns.sql",
+        "apps/web/app/api/device/approve/route.ts",
         "apps/web/lib/validate-env.ts"
       ],
       "proof": [
         {
-          "kind": "guard",
-          "file": "scripts/check-retention-graph.mjs"
+          "kind": "test",
+          "file": "apps/web/__tests__/api/device-approve.test.ts",
+          "name": "leaves no bearer column on the row it writes"
         }
       ]
     },
