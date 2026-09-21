@@ -106,10 +106,13 @@ function request(body: unknown) {
   }) as never;
 }
 
+const VERIFIED_DOMAIN = [{ domain: 'example.com' }];
+
 function primeHappyPathUntilInsert() {
   mockRlsQuery
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([adminMembership])
+    .mockResolvedValueOnce(VERIFIED_DOMAIN)
     .mockResolvedValueOnce([]);
   mockNeonQuery.mockResolvedValueOnce([targetProfile]);
 }
@@ -185,6 +188,7 @@ describe('POST /api/settings/team seat ceiling', () => {
     mockRlsQuery
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([adminMembership])
+      .mockResolvedValueOnce(VERIFIED_DOMAIN)
       .mockResolvedValueOnce([{ ...adminMembership, user_id: 'target-user', role: 'member' }]);
     mockNeonQuery.mockResolvedValueOnce([targetProfile]);
 
@@ -202,7 +206,7 @@ describe('POST /api/settings/team seat ceiling', () => {
     mockRlsQuery
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([adminMembership])
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(VERIFIED_DOMAIN)
       .mockResolvedValueOnce([{ ...adminMembership, user_id: 'target-user' }]);
     mockNeonQuery.mockResolvedValueOnce([targetProfile]);
 

@@ -443,6 +443,19 @@ async function handlePatch(request: NextRequest) {
 
   logger.info({ userId, orgId: membership.organization_id }, 'Organization settings updated');
 
+  await recordAuditEvent({
+    userId,
+    eventType: 'admin_policy_changed',
+    request,
+    organizationId: membership.organization_id,
+    detail: {
+      resourceType: 'organization',
+      resourceId: membership.organization_id,
+      changedKeys: (['name', 'slug'] as const).filter((key) => updates[key] !== undefined),
+      ...(updates.name !== undefined ? { resourceName: updates.name } : {}),
+    },
+  });
+
   const [updatedOrg] = await db.query<OrgWithCount>(
     `select o.id, o.name, o.slug, o.created_by, o.created_at, o.updated_at, o.owner_user_id,
             count(m.user_id)::text as member_count
