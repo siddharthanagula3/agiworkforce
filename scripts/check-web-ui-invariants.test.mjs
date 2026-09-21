@@ -10,7 +10,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const guard = path.join(repoRoot, 'scripts/check-web-ui-invariants.mjs');
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 
-function seedFixture({ source, stylesheet, baselineViolations = [] }) {
+const REASON =
+  'Grandfathered by the fixture so the ratchet has something to shrink, and owed a token.';
+
+function seedFixture({ source, stylesheet, baselineViolations = [], baselineReasons }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'web-ui-invariants-'));
   fs.mkdirSync(path.join(root, 'apps/web/features'), { recursive: true });
   fs.mkdirSync(path.join(root, 'scripts'), { recursive: true });
@@ -18,9 +21,12 @@ function seedFixture({ source, stylesheet, baselineViolations = [] }) {
   if (stylesheet !== undefined) {
     fs.writeFileSync(path.join(root, 'apps/web/features/fixture.css'), stylesheet);
   }
+  const reasons =
+    baselineReasons ??
+    Object.fromEntries(baselineViolations.map((violation) => [violation.rule, REASON]));
   fs.writeFileSync(
     path.join(root, 'scripts/.web-ui-invariants-baseline.json'),
-    JSON.stringify({ violations: baselineViolations }),
+    JSON.stringify({ _reasons: reasons, violations: baselineViolations }),
   );
   return root;
 }
@@ -143,6 +149,91 @@ test('a baselined violation passes but a second identical one fails', () => {
     }),
   );
   assert.equal(doubled.code, 1, 'a new occurrence beyond the baselined count must fail');
+});
+
+test('flags a bare stacking rung and allows a token rung', () => {
+  const bad = check(`export const A = () => <div className="fixed z-[9999]" />;\n`);
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /arbitrary-z-index/);
+
+  const good = check(`export const A = () => <div className="fixed z-[var(--z-modal,300)]" />;\n`);
+  assert.equal(good.code, 0);
+});
+
+test('flags a bare z-index in a stylesheet', () => {
+  const { code, out } = runGuard(
+    seedFixture({
+      source: 'export const A = () => null;\n',
+      stylesheet: '.overlay { z-index: 70; }\n',
+    }),
+  );
+  assert.equal(code, 1);
+  assert.match(out, /arbitrary-z-index-css/);
+});
+
+test('flags outline-none with no focus replacement and allows one that has it', () => {
+  const bad = check(`export const A = () => <input className="outline-none border" />;\n`);
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /outline-none-without-focus-ring/);
+
+  const good = check(
+    `export const A = () => (\n  <input\n    className="outline-none"\n  />\n);\nexport const B = 'focus-visible:ring-2';\n`,
+  );
+  assert.equal(good.code, 0, 'a replacement within the element is the whole point of the rule');
+});
+
+test('flags a new tab opened without noopener, across the lines of the element', () => {
+  const bad = check(
+    `export const A = () => (\n  <a\n    href="https://example.com"\n    target="_blank"\n  >\n    x\n  </a>\n);\n`,
+  );
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /unsafe-blank-target/);
+
+  const good = check(
+    `export const A = () => (\n  <a\n    href="https://example.com"\n    target="_blank"\n    rel="noopener noreferrer"\n  >\n    x\n  </a>\n);\n`,
+  );
+  assert.equal(good.code, 0);
+});
+
+test('flags a click handler on a non-interactive element unless it carries semantics', () => {
+  const bad = check(`export const A = () => <div onClick={() => undefined}>x</div>;\n`);
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /clickable-div-without-semantics/);
+
+  const good = check(
+    `export const A = () => (\n  <div role="button" tabIndex={0} onClick={() => undefined}>\n    x\n  </div>\n);\n`,
+  );
+  assert.equal(good.code, 0);
+
+  const button = check(`export const A = () => <button onClick={() => undefined}>x</button>;\n`);
+  assert.equal(button.code, 0);
+});
+
+test('a baselined rule with no reason fails, so the list cannot become an allowlist', () => {
+  const { code, out } = runGuard(
+    seedFixture({
+      source: `export const A = () => <p className="bg-amber-500">x</p>;\n`,
+      baselineViolations: [
+        { file: 'apps/web/features/Fixture.tsx', rule: 'raw-palette', literal: 'bg-amber-500' },
+      ],
+      baselineReasons: { 'raw-palette': 'legacy' },
+    }),
+  );
+  assert.equal(code, 1);
+  assert.match(out, /carry no reason/);
+});
+
+test('every rule the shipped baseline grandfathers carries a reason', () => {
+  const baseline = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'scripts/.web-ui-invariants-baseline.json'), 'utf8'),
+  );
+  const rules = new Set(baseline.violations.map((violation) => violation.rule));
+  for (const rule of rules) {
+    assert.ok(
+      (baseline._reasons?.[rule] ?? '').trim().length >= 60,
+      `${rule} is baselined with no reason`,
+    );
+  }
 });
 
 test('the guard is registered as a package script and runs in CI', () => {
