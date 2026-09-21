@@ -54,42 +54,13 @@ describe('GET /api/models token-context semantics', () => {
     ).toBe(true);
   });
 
-  it('labels scalar rates as base and projects every catalog input-length tier', async () => {
-    const catalogModel = listCanonicalModels().find(
-      (model) => (model.inputTokenPricingTiers?.length ?? 0) >= 1,
-    );
-    if (!catalogModel?.inputTokenPricingTiers) {
-      throw new Error('Expected a multi-band catalog pricing fixture');
-    }
-
+  it('publishes no price for any model', async () => {
     const response = await GET(new NextRequest('https://example.com/api/models'));
     const payload = await response.json();
-    const projected = payload.models.find((model: { id: string }) => model.id === catalogModel.id);
 
     expect(response.status).toBe(200);
-    expect(projected.pricing).toMatchObject({
-      basis: 'base',
-      inputPerMillion: catalogModel.inputCost,
-      outputPerMillion: catalogModel.outputCost,
-    });
-    expect(projected.pricing.inputTokenPricingTiers).toEqual(
-      catalogModel.inputTokenPricingTiers.map((tier) => ({
-        thresholdTokens: tier.thresholdTokens,
-        inputPerMillion: tier.inputCost,
-        outputPerMillion: tier.outputCost,
-        ...(tier.cached_input === undefined ? {} : { cachedInputPerMillion: tier.cached_input }),
-        ...(tier.cached_write === undefined ? {} : { cachedWritePerMillion: tier.cached_write }),
-        ...(tier.cached_write_1h === undefined
-          ? {}
-          : { cachedWrite1hPerMillion: tier.cached_write_1h }),
-      })),
-    );
-    expect(
-      payload.models.every(
-        (model: { pricing: { basis: string; inputTokenPricingTiers: unknown[] } }) =>
-          model.pricing.basis === 'base' && Array.isArray(model.pricing.inputTokenPricingTiers),
-      ),
-    ).toBe(true);
+    expect(payload.models.length).toBeGreaterThan(0);
+    expect(JSON.stringify(payload)).not.toMatch(/pricing|PerMillion|inputCost|outputCost/);
   });
 });
 
