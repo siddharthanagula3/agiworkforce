@@ -23,11 +23,58 @@ interface ToolCallBufferEntry {
   argsJson: string;
 }
 
+export interface CloudStreamFailure {
+  message: string;
+  code?: string;
+  retryable?: boolean;
+  retryAfterSeconds?: number;
+  requestId?: string;
+}
+
+/**
+ * A day is the longest wait this shell repeats. Past it the figure is a
+ * provider's clock skew or a header we misread, and a reader who waits out an
+ * invented number and fails again stops believing the next one.
+ */
+const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
+
+function statableRetryAfterSeconds(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  const seconds = Math.round(raw);
+  if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return undefined;
+  return seconds;
+}
+
+/**
+ * The gateway puts the wait a provider asked for and the id it logged on the
+ * same frame as the sentence, so a reader can be told when the window reopens
+ * and support can be handed the one string that finds the turn. Reading only
+ * the message threw both away before either reached the transcript.
+ */
+export function parseCloudStreamFailure(raw: unknown): CloudStreamFailure | undefined {
+  if (typeof raw === 'string') return raw ? { message: raw } : undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const frame = raw as Record<string, unknown>;
+  const message = frame['message'];
+  if (typeof message !== 'string' || !message) return undefined;
+  const code = frame['code'];
+  const retryable = frame['retryable'];
+  const retryAfterSeconds = statableRetryAfterSeconds(frame['retryAfterSeconds']);
+  const requestId = frame['requestId'];
+  return {
+    message,
+    ...(typeof code === 'string' ? { code } : {}),
+    ...(typeof retryable === 'boolean' ? { retryable } : {}),
+    ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+    ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+  };
+}
+
 export interface CloudStreamDeltaSink {
   onChunk: (text: string) => void;
   onEvent: (payload: Record<string, unknown>) => void;
   getFinishReason: () => string | undefined;
-  getStreamError: () => { message: string; code?: string; retryable?: boolean } | undefined;
+  getStreamError: () => CloudStreamFailure | undefined;
   isSuspended: () => boolean;
   getAccumulatedContent: () => string;
   getPendingApprovalCalls: () => {
@@ -41,6 +88,39 @@ export interface CloudStreamDeltaSink {
 }
 
 export type CloudStreamMessageProjection = CloudMessageProjection;
+
+/**
+ * A provider that ends its stream cleanly with nothing in it produced no
+ * answer. Named the same way the web app names it, so the same failure does
+ * not read as one thing in the browser and another in the shell, and the
+ * projection and the emitted event carry one sentence rather than two that
+ * differ by a trailing "Please retry".
+ */
+export const EMPTY_TURN_FAILURE_MESSAGE =
+  'The model finished without returning a response. Try again.';
+export const EMPTY_TURN_FAILURE_CODE = 'empty_response';
+
+export const CLOUD_RUN_FAILURE_MESSAGE =
+  'The Cloud task failed before it returned an answer. Try again.';
+export const CLOUD_RUN_FAILURE_CODE = 'cloud_run_failed';
+
+export function cloudFailureProjection(
+  projection: CloudStreamMessageProjection,
+  message: string,
+  code?: string,
+): CloudStreamMessageProjection {
+  return {
+    ...projection,
+    finishReason: 'error',
+    streamError: { message, ...(code ? { code } : {}) },
+  };
+}
+
+export function emptyTurnFailureProjection(
+  projection: CloudStreamMessageProjection,
+): CloudStreamMessageProjection {
+  return cloudFailureProjection(projection, EMPTY_TURN_FAILURE_MESSAGE, EMPTY_TURN_FAILURE_CODE);
+}
 
 function mergeById<T extends { id: string }>(
   previous: T[] | undefined,
@@ -191,7 +271,7 @@ export function createCloudStreamDeltaSink(
   const toolCallBuffer = new Map<string, ToolCallBufferEntry>();
   let inThinkingBlock = false;
   let finishReason: string | undefined;
-  let streamError: { message: string; code?: string; retryable?: boolean } | undefined;
+  let streamError: CloudStreamFailure | undefined;
   let suspended = false;
   let accumulatedContent = '';
   let agentActivity: AgentActivityState | undefined = initialAgentActivity;
@@ -301,24 +381,7 @@ export function createCloudStreamDeltaSink(
       emit({ type: 'agent_event', envelope: agentEnvelope });
     }
 
-    if (!streamError) {
-      const rawStreamError = delta?.['x_stream_error'];
-      if (
-        rawStreamError &&
-        typeof rawStreamError === 'object' &&
-        typeof (rawStreamError as { message?: unknown }).message === 'string' &&
-        (rawStreamError as { message: string }).message
-      ) {
-        const r = rawStreamError as { message: string; code?: unknown; retryable?: unknown };
-        streamError = {
-          message: r.message,
-          ...(typeof r.code === 'string' ? { code: r.code } : {}),
-          ...(typeof r.retryable === 'boolean' ? { retryable: r.retryable } : {}),
-        };
-      } else if (typeof rawStreamError === 'string' && rawStreamError) {
-        streamError = { message: rawStreamError };
-      }
-    }
+    streamError ??= parseCloudStreamFailure(delta?.['x_stream_error']);
 
     const toolCalls = Array.isArray(delta?.['tool_calls']) ? delta['tool_calls'] : [];
     for (const entry of toolCalls) {

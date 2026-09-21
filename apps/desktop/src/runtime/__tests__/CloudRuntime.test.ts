@@ -530,14 +530,16 @@ describe('CloudRuntime', () => {
             }),
             finishReason: 'error',
             streamError: {
-              message: 'AGI Cloud completed without returning a response.',
+              message: 'The model finished without returning a response. Try again.',
+              code: 'empty_response',
             },
           },
         }),
       );
       expect(events).toContainEqual({
         type: 'error',
-        error: 'AGI Cloud completed without returning a response. Please retry.',
+        error: 'The model finished without returning a response. Try again.',
+        code: 'empty_response',
         conversationId: 'conv_activity',
       });
       expect(events.some((event) => event.type === 'done')).toBe(false);
@@ -577,10 +579,13 @@ describe('CloudRuntime', () => {
 
       expect(events.some((e) => e.type === 'done')).toBe(false);
       await vi.waitFor(() => {
-        expect(events.some((e) => e.type === 'error' && e.error.includes('save failed'))).toBe(
-          true,
-        );
+        expect(
+          events.some(
+            (e) => e.type === 'error' && e.error.includes('could not save the Cloud reply'),
+          ),
+        ).toBe(true);
       });
+      expect(events.some((e) => e.type === 'error' && e.error.includes('save failed'))).toBe(false);
     });
 
     it('forwards onError from the stream as an error event', async () => {
@@ -1728,5 +1733,51 @@ describe('CloudRuntime', () => {
       await expect(resolution).rejects.toMatchObject({ name: 'AbortError' });
       expect(cancelRun).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('what a reader is told when this machine cannot record a failure', () => {
+  it('names the consequence and never repeats the exception the save threw', async () => {
+    const runtime = new CloudRuntime();
+    const events = collectEvents(runtime);
+
+    saveMessage.mockImplementation(async (_conversationId: string, message: { role: string }) => {
+      if (message.role === 'assistant') {
+        throw new Error('SQLITE_CORRUPT: database disk image is malformed at /Users/qa/.agi/db');
+      }
+    });
+    sendCloudMessage.mockImplementation(
+      async (
+        _conversationId: string,
+        _content: string,
+        _model: string,
+        _onChunk: (text: string) => void,
+        _onDone: () => void,
+        onError: (err: Error) => void,
+      ) => {
+        onError(new Error('The model could not be reached.'));
+      },
+    );
+
+    await runtime.sendMessage('conv_save_failure', 'Hi');
+    await vi.waitFor(() =>
+      expect(
+        events.some((event) => event.type === 'error' && /could not save/.test(event.error)),
+      ).toBe(true),
+    );
+
+    const saveFailures = events
+      .filter((event) => event.type === 'error' && /could not save/.test(event.error))
+      .map((event) => (event.type === 'error' ? event.error : ''));
+    expect(saveFailures).toContain(
+      'This device could not save the Cloud reply. The answer above is on screen but will not be here when you reopen this conversation.',
+    );
+    expect(saveFailures).toContain(
+      'The Cloud task failed, and this device could not save that result. Reopening this conversation may not show the failed turn. Try again.',
+    );
+    for (const event of events) {
+      if (event.type !== 'error') continue;
+      expect(event.error).not.toMatch(/SQLITE_CORRUPT|\/Users\//);
+    }
   });
 });

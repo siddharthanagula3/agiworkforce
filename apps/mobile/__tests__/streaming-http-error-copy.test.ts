@@ -105,4 +105,30 @@ describe('a refused stream reaches the banner as a sentence', () => {
     expect(error.message).toBe('The server hit a problem handling this request. Please try again.');
     expect(error.message).not.toMatch(/HTTP|<html>|\{/);
   });
+
+  it('carries the id the server logged, so a reader has something to quote', async () => {
+    const error = await streamAndCatch(
+      503,
+      JSON.stringify({
+        error: { message: 'The model could not be reached.', code: 'provider_unreachable' },
+        requestId: 'req_mobile_503',
+      }),
+    );
+    expect((error as Error & { requestId?: string }).requestId).toBe('req_mobile_503');
+  });
+
+  it('states the wait our own limiter measured instead of a vague moment', async () => {
+    const error = await streamAndCatch(
+      429,
+      JSON.stringify({ error: { code: 'RATE_LIMIT_EXCEEDED', retry_after_seconds: 120 } }),
+    );
+    expect(error.message).toBe('Too many requests right now. Try again in about 2 minutes.');
+    expect((error as Error & { retryAfterSeconds?: number }).retryAfterSeconds).toBe(120);
+  });
+
+  it('says nothing about a wait nobody measured', async () => {
+    const error = await streamAndCatch(429, JSON.stringify({ error: { code: 'x' } }));
+    expect(error.message).toBe('Too many requests right now. Please wait a moment and try again.');
+    expect(error.message).not.toMatch(/\d/);
+  });
 });
