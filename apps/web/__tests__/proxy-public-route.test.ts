@@ -57,6 +57,31 @@ describe('web proxy', () => {
     expect(response?.headers.get('Access-Control-Allow-Credentials')).toBe('true');
   });
 
+  it('runs the identity proxy for every waitlist and download route that needs the signed-in user', async () => {
+    const { proxy } = await import('../proxy');
+
+    for (const pathname of [
+      '/api/waitlist',
+      '/api/waitlist/access',
+      '/api/waitlist/cloud-managed',
+      '/api/download-beta',
+    ]) {
+      clerkState.clerkPaths = [];
+      await proxy(new NextRequest(`http://localhost${pathname}`, { method: 'POST' }), {} as never);
+      expect(clerkState.clerkPaths, pathname).toEqual([pathname]);
+    }
+  });
+
+  it('keeps the anonymous waitlist sign up and the public downloads off the identity proxy', async () => {
+    const { proxy } = await import('../proxy');
+
+    for (const pathname of ['/api/waitlist/public', '/api/download', '/api/download/checksums']) {
+      clerkState.clerkPaths = [];
+      await proxy(new NextRequest(`http://localhost${pathname}`, { method: 'POST' }), {} as never);
+      expect(clerkState.clerkPaths, pathname).toEqual([]);
+    }
+  });
+
   it('keeps Workflow SDK callbacks outside the global proxy matcher', async () => {
     const { config } = await import('../proxy');
     const matchesProxy = (pathname: string) =>
