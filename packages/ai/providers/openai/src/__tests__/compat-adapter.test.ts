@@ -39,15 +39,17 @@ function sseResponse(events: readonly string[]): Response {
   });
 }
 
-function chunkEvent(delta: Record<string, unknown>): string {
+function chunkEvent(delta: Record<string, unknown>, finishReason: string | null = null): string {
   return JSON.stringify({
     id: 'chatcmpl-test',
     object: 'chat.completion.chunk',
     created: 0,
     model: TEST_MODEL_ID,
-    choices: [{ index: 0, delta, finish_reason: null }],
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
   });
 }
+
+const TURN_CLOSED = chunkEvent({}, 'stop');
 
 async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[]> {
   const out: StreamChunk[] = [];
@@ -168,7 +170,7 @@ describe('createOpenAICompatAdapter · stream translation', () => {
     const adapter = createOpenAICompatAdapter(buildSpec(), {
       apiKey: TEST_API_KEY,
       fetch: async () =>
-        sseResponse([chunkEvent({ content: 'po' }), chunkEvent({ content: 'ng' })]),
+        sseResponse([chunkEvent({ content: 'po' }), chunkEvent({ content: 'ng' }), TURN_CLOSED]),
     });
 
     const chunks = await collect(adapter.stream(buildRequest(), new AbortController().signal));
@@ -178,6 +180,24 @@ describe('createOpenAICompatAdapter · stream translation', () => {
       { type: 'text-delta', delta: 'ng' },
     ]);
     expect(chunks.some((c) => c.type === 'error')).toBe(false);
+  });
+
+  it('reports a stream that ends mid-answer as a failure, keeping the text it delivered', async () => {
+    const adapter = createOpenAICompatAdapter(buildSpec(), {
+      apiKey: TEST_API_KEY,
+      fetch: async () => sseResponse([chunkEvent({ content: 'po' })]),
+    });
+
+    const chunks = await collect(adapter.stream(buildRequest(), new AbortController().signal));
+
+    expect(chunks.filter((c) => c.type === 'text-delta')).toEqual([
+      { type: 'text-delta', delta: 'po' },
+    ]);
+    const failure = chunks.find(
+      (c): c is Extract<StreamChunk, { type: 'error' }> => c.type === 'error',
+    );
+    expect(failure?.classification).toMatchObject({ category: 'connection', retryable: true });
+    expect(chunks[chunks.length - 1]).toEqual({ type: 'stop', reason: 'error' });
   });
 
   it('maps reasoning_content deltas to thinking-delta chunks', async () => {

@@ -708,6 +708,39 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
     expect(finishReasons.at(-1)).toBe('error');
   });
 
+  it('carries a provider supplied wait and the request reference on the same frame', () => {
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      wireMode: 'legacy-web',
+      now: NOW,
+    });
+    const wire: Record<string, unknown>[] = [];
+    for (const chunk of [
+      { type: 'text-delta', delta: 'partial answer' },
+      {
+        type: 'error',
+        message: 'At capacity',
+        code: 'provider_rate_limited',
+        retryable: true,
+        retryAfterSeconds: 45,
+        requestId: 'req_reference_1',
+      },
+      { type: 'stop', reason: 'error' },
+    ] as StreamChunk[]) {
+      wire.push(...assembler.sseChunks(chunk));
+    }
+
+    expect(extractErrorMarkers(wire)).toEqual([
+      {
+        message: 'At capacity',
+        code: 'provider_rate_limited',
+        retryable: true,
+        retryAfterSeconds: 45,
+        requestId: 'req_reference_1',
+      },
+    ]);
+  });
+
   it('legacy-web: omits code/retryable from the payload when the provider adapter did not supply them', () => {
     const assembler = new OpenAIWireAssembler({
       model: FIXTURE_MODEL_ID,

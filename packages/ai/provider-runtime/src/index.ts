@@ -33,6 +33,7 @@ export {
   parseContextOverflow,
   DATA_POLICY_NO_ENDPOINT_CODE,
   SPENDING_CAP_PROVIDER_HINT,
+  FREE_POOL_PROVIDER_HINT,
   type ClassifiedError,
   type ErrorCategory,
 } from './errors';
