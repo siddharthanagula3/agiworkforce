@@ -1,5 +1,6 @@
 'use client';
 
+import { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@/lib/compliance/free-plan-training-disclosure';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -195,7 +196,6 @@ const UPGRADE_SETTLE_ATTEMPTS = 6;
 const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
 
 const TRAINING_DATA_DISCLOSURE = 'No';
-const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Not by AGI. Free model providers may.';
 
 function formatLimit(limit: BillingPlanLimit, singular: string, plural: string): string {
   if (limit === 'unlimited') return 'Unlimited';

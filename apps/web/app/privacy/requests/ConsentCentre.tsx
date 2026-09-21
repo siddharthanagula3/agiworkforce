@@ -5,6 +5,10 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ConsentPurpose } from '@/lib/consent-purposes';
 import {
+  isNonEssentialConsentPurpose,
+  readBrowserGlobalPrivacyControl,
+} from '@/lib/consent-signals';
+import {
   ANALYTICS_CONSENT_PURPOSE,
   applyAnalyticsConsentLocally,
 } from '@shared/lib/cookie-consent';
@@ -36,11 +40,23 @@ function formatInstant(iso: string): string {
   return parsed.toISOString().slice(0, 10);
 }
 
-export function ConsentCentre() {
+export interface ConsentCentreProps {
+  optedOutBySignal: boolean;
+}
+
+export function ConsentCentre({ optedOutBySignal: signalledByRequest }: ConsentCentreProps) {
   const headingId = useId();
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [pendingPurpose, setPendingPurpose] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [optedOutBySignal, setOptedOutBySignal] = useState(signalledByRequest);
+
+  // The header answered for this request and the property answers for this
+  // browser. Either one is the visitor opting out, so neither can clear the
+  // other.
+  useEffect(() => {
+    setOptedOutBySignal((signalled) => signalled || readBrowserGlobalPrivacyControl());
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -142,6 +158,7 @@ export function ConsentCentre() {
   const rows: LedgerRow[] = data.purposes.map((purpose) => {
     const record = byPurpose.get(purpose.id);
     const isPending = pendingPurpose === purpose.id;
+    const overriddenBySignal = optedOutBySignal && isNonEssentialConsentPurpose(purpose.id);
     return {
       label: purpose.label,
       value: (
@@ -158,13 +175,22 @@ export function ConsentCentre() {
               , against notice revision {record.noticeVersion}.
             </span>
           )}
+          {overriddenBySignal ? (
+            <>
+              <br />
+              <span className="agi-ds-muted">
+                This browser is sending Global Privacy Control, so this purpose is treated as
+                refused here whatever is on record, and cannot be granted from this browser.
+              </span>
+            </>
+          ) : null}
           <br />
           <button
             type="button"
             className="agi-ds-btn"
             data-variant="secondary"
             style={{ marginTop: 8 }}
-            disabled={isPending}
+            disabled={isPending || (overriddenBySignal && !record?.granted)}
             onClick={() => void decide(purpose.id, !record?.granted, data.noticeVersion)}
           >
             {isPending ? 'Recording…' : record?.granted ? 'Withdraw consent' : 'Give consent'}

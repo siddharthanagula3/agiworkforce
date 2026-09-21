@@ -16,7 +16,10 @@ import {
   COOKIE_NOTICE_VERSION,
   CONSENT_LEDGER_NOTICE_VERSION,
   NECESSARY_ONLY_PREFERENCES,
+  applyAnalyticsConsentLocally,
   buildCookieConsentRecord,
+  isAnalyticsAllowed,
+  isAnalyticsLockedByOptOutSignal,
   parseCookieConsentRecord,
   readCookieConsentRecord,
   readCookiePreferences,
@@ -153,5 +156,63 @@ describe('cookie consent server ledger', () => {
     expect(findConsentPurpose(ANALYTICS_CONSENT_PURPOSE)).toBeDefined();
     expect(isConsentSurface('web-cookie-banner')).toBe(true);
     expect(CONSENT_LEDGER_NOTICE_VERSION).toBe(POLICY_LAST_UPDATED.privacy);
+  });
+});
+
+describe('a browser that sends the opt-out signal', () => {
+  function optOut(value: unknown): void {
+    Object.defineProperty(navigator, 'globalPrivacyControl', { configurable: true, value });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'globalPrivacyControl');
+  });
+
+  it('reads as analytics off even when an acceptance is stored', () => {
+    window.localStorage.setItem(
+      COOKIE_CONSENT_STORAGE_KEY,
+      JSON.stringify(buildCookieConsentRecord(ALL_ACCEPTED_PREFERENCES)),
+    );
+    optOut(true);
+
+    expect(readCookiePreferences()).toEqual(NECESSARY_ONLY_PREFERENCES);
+    expect(isAnalyticsAllowed(readCookiePreferences())).toBe(false);
+  });
+
+  it('keeps the necessary category, so the signal never costs a session', () => {
+    optOut(true);
+    expect(readCookiePreferences()?.necessary).toBe(true);
+  });
+
+  it('cannot be talked out of it by a later acceptance', async () => {
+    optOut(true);
+    writeCookiePreferences(ALL_ACCEPTED_PREFERENCES);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+    expect(storedRecord()['analytics']).toBe(false);
+    expect(readCookiePreferences()).toEqual(NECESSARY_ONLY_PREFERENCES);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).decisions).toEqual([
+      { purpose: ANALYTICS_CONSENT_PURPOSE, granted: false },
+    ]);
+  });
+
+  it('does not force the account-side record off when the browser is silent', () => {
+    optOut(false);
+    applyAnalyticsConsentLocally(true);
+    expect(readCookiePreferences()).toEqual({ necessary: true, analytics: true });
+  });
+
+  it('holds the account-side record to off while the signal is on', () => {
+    optOut(true);
+    applyAnalyticsConsentLocally(true);
+    expect(readCookiePreferences()).toEqual(NECESSARY_ONLY_PREFERENCES);
+  });
+
+  it('is reported to the interface so the switch can explain itself', () => {
+    optOut(true);
+    expect(isAnalyticsLockedByOptOutSignal()).toBe(true);
+    optOut(false);
+    expect(isAnalyticsLockedByOptOutSignal()).toBe(false);
   });
 });
