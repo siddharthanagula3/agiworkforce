@@ -123,10 +123,35 @@ export interface ContextSourceClassPolicy {
 }
 
 /**
- * Highest authority first. This is the one order every surface assembles in and
- * the reverse of the order a source is dropped in when the budget runs out.
+ * Highest authority first: the order every surface assembles in and the order a
+ * conflict is resolved by. The sequence is the layer hierarchy in
+ * `instruction-precedence.ts` applied to the classes, so nothing a caller merely
+ * read can be assembled ahead of something the account or the workspace wrote.
+ * What survives a tight budget is `CONTEXT_BUDGET_PRIORITY`, a separate order.
  */
 export const CONTEXT_SOURCE_PRECEDENCE: readonly ContextSourceClass[] = [
+  'security_policy',
+  'agent_instruction',
+  'template_instruction',
+  'current_task_state',
+  'project_instruction',
+  'local_repository_instruction',
+  'account_memory',
+  'project_sibling_chat',
+  'past_chat',
+  'library_file',
+  'user_upload',
+  'project_knowledge_file',
+  'connector_result',
+  'web_result',
+];
+
+/**
+ * What is kept longest when the turn does not fit. It is not the reverse of the
+ * authority order: freshly supplied material is low in authority and high in
+ * relevance, so an uploaded file is read last and given up last.
+ */
+export const CONTEXT_BUDGET_PRIORITY: readonly ContextSourceClass[] = [
   'security_policy',
   'agent_instruction',
   'template_instruction',

@@ -1,4 +1,5 @@
 import {
+  CONTEXT_BUDGET_PRIORITY,
   CONTEXT_SOURCE_CLASSES,
   CONTEXT_SOURCE_PRECEDENCE,
   contextSource,
@@ -7,9 +8,11 @@ import {
 } from '@agiworkforce/context';
 import { describe, expect, it } from 'vitest';
 import {
+  contextBudgetRank,
   contextClassesInvalidatedBy,
   contextPrecedenceRank,
   orderContextLoaders,
+  orderLoadersByBudgetPriority,
   resolveContext,
   staleManifestClasses,
   withActualTokenCount,
@@ -361,5 +364,66 @@ describe('invalidation', () => {
 
     expect(resolution.manifest.actualTokenCount).toBeNull();
     expect(withActualTokenCount(resolution.manifest, 137).actualTokenCount).toBe(137);
+  });
+});
+
+describe('what is read first and what is kept longest are different questions', () => {
+  const UPLOAD = 'u'.repeat(200);
+  const MEMORY = 'm'.repeat(200);
+
+  function turn(budgetTokens?: number) {
+    return resolveContext({
+      turnId: 'turn-split',
+      actor: ACTOR,
+      policy: OPEN_ORGANIZATION_CONTEXT_POLICY,
+      loaders: [loader('account_memory', [MEMORY]), loader('user_upload', [UPLOAD])],
+      ...(budgetTokens === undefined ? {} : { budget: budget(budgetTokens) }),
+    });
+  }
+
+  it('keeps the file the user just attached and gives up the recalled memory', async () => {
+    const resolution = await turn(60);
+
+    const kept = resolution.items.map((item) => item.source.sourceClass);
+    expect(kept).toContain('user_upload');
+    expect(kept).not.toContain('account_memory');
+  });
+
+  it('still reads the recalled memory before that file when both fit', async () => {
+    const resolution = await turn();
+
+    expect(resolution.items.map((item) => item.source.sourceClass)).toEqual([
+      'account_memory',
+      'user_upload',
+    ]);
+    expect(resolution.manifest.entries.map((entry) => entry.sourceClass)).toEqual([
+      'account_memory',
+      'user_upload',
+    ]);
+  });
+
+  it('spends in one order and assembles in the other', () => {
+    const loaders = [loader('account_memory', [MEMORY]), loader('user_upload', [UPLOAD])];
+
+    expect(orderLoadersByBudgetPriority(loaders).map((entry) => entry.sourceClass)).toEqual([
+      'user_upload',
+      'account_memory',
+    ]);
+    expect(orderContextLoaders(loaders).map((entry) => entry.sourceClass)).toEqual([
+      'account_memory',
+      'user_upload',
+    ]);
+    expect(contextBudgetRank('user_upload')).toBeLessThan(contextBudgetRank('account_memory'));
+    expect(contextPrecedenceRank('account_memory')).toBeLessThan(
+      contextPrecedenceRank('user_upload'),
+    );
+  });
+
+  it('ranks every class in the budget order the contract declares', () => {
+    for (const sourceClass of CONTEXT_SOURCE_CLASSES) {
+      expect(contextBudgetRank(sourceClass), sourceClass).toBe(
+        CONTEXT_BUDGET_PRIORITY.indexOf(sourceClass),
+      );
+    }
   });
 });
