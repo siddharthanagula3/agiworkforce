@@ -24,6 +24,7 @@ import { getRoutePricing } from '@agiworkforce/model-registry';
 import { buildServingRouteId } from './tool-loop-anthropic';
 import { routeOutcomeClassForError } from './tool-loop';
 import { canPersistAssistantTurn, persistAssistantTurn } from './assistant-turn-persistence';
+import { isEmptyTurnOutput, isTurnTruncated } from './turn-completeness';
 import type { ProcessedRequest } from './request-processor';
 import {
   ManagedUsageRequestError,
@@ -266,6 +267,7 @@ export async function buildNonStreamResponse(
   }
 
   if (canPersistAssistantTurn(processed)) {
+    const toolCalls = Array.isArray(llmResponse.tool_calls) ? llmResponse.tool_calls.length : 0;
     await persistAssistantTurn({
       processed,
       userId,
@@ -275,7 +277,17 @@ export async function buildNonStreamResponse(
         provider,
         inputTokens: llmResponse.promptTokens,
         outputTokens: llmResponse.completionTokens,
-        truncated: false,
+        truncated: isTurnTruncated({
+          reportedFailure: false,
+          finishReason: llmResponse.finishReason ?? null,
+          emptyOutput: isEmptyTurnOutput({
+            text: llmResponse.content ?? '',
+            toolCalls,
+            otherVisibleOutput: Boolean(
+              llmResponse.citations?.length || llmResponse.search_results?.length,
+            ),
+          }),
+        }),
       },
     });
   }
