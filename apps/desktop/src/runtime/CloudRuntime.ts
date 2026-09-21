@@ -83,7 +83,13 @@ import {
 import { getDesktopCloudChatPersistenceClient } from '../lib/cloudChatPersistence';
 import { normalizeModelId } from '../constants/llm';
 import {
+  CLOUD_RUN_FAILURE_CODE,
+  CLOUD_RUN_FAILURE_MESSAGE,
+  EMPTY_TURN_FAILURE_CODE,
+  EMPTY_TURN_FAILURE_MESSAGE,
+  cloudFailureProjection,
   createCloudStreamDeltaSink,
+  emptyTurnFailureProjection,
   hasRenderableCloudMessageOutput,
   type CloudStreamMessageProjection,
 } from './cloudStreamDeltas';
@@ -147,16 +153,25 @@ function parsePendingApprovalArgs(preview: string): Record<string, unknown> {
   return preview ? { preview } : {};
 }
 
-function failedMessageProjection(
-  projection: CloudStreamMessageProjection,
-  message: string,
-): CloudStreamMessageProjection {
-  return {
-    ...projection,
-    finishReason: 'error',
-    streamError: { message },
-  };
-}
+/**
+ * A store that refuses a write answers with its driver's words, which name a
+ * file on this disk and a condition a reader cannot act on. Each sentence here
+ * names the consequence instead: which turn will be missing when the
+ * conversation is reopened.
+ */
+const SAVE_REPLY_FAILED_MESSAGE =
+  'This device could not save the Cloud reply. The answer above is on screen but will not be here when you reopen this conversation.';
+
+/**
+ * A save that fails after the turn already failed is a fault of this machine,
+ * not of the request, and the driver's own words about it say nothing a reader
+ * can act on. The sentence names the consequence, which is that reopening the
+ * conversation will not show this turn, and stops there.
+ */
+const SAVE_AFTER_FAILURE_MESSAGE =
+  'The Cloud task failed, and this device could not save that result. Reopening this conversation may not show the failed turn. Try again.';
+const SAVE_AFTER_STOP_MESSAGE =
+  'The Cloud task stopped, and this device could not save that result. Reopening this conversation may not show the stopped turn.';
 
 function cloudErrorEvent(err: Error): {
   type: 'error';
@@ -385,10 +400,9 @@ export class CloudRuntime implements ChatRuntime {
       });
       this.assertBoundary(boundary);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
       this.emitForConversation(conversationId, {
         type: 'error',
-        error: `Could not save the Cloud reply: ${message}`,
+        error: SAVE_REPLY_FAILED_MESSAGE,
       });
       throw err;
     }
@@ -501,7 +515,7 @@ export class CloudRuntime implements ChatRuntime {
           undefined,
           undefined,
           undefined,
-          failedMessageProjection({ toolCalls: [failedToolCall] }, message),
+          cloudFailureProjection({ toolCalls: [failedToolCall] }, message),
         );
       } catch {
         // persistAssistantTurn already emitted the scoped persistence failure.
@@ -612,7 +626,7 @@ export class CloudRuntime implements ChatRuntime {
           undefined,
           undefined,
           undefined,
-          failedMessageProjection({ toolCalls: [failedToolCall] }, message),
+          cloudFailureProjection({ toolCalls: [failedToolCall] }, message),
         );
       } catch {
         // persistAssistantTurn already emitted the scoped persistence failure.
@@ -750,7 +764,6 @@ export class CloudRuntime implements ChatRuntime {
     }
     if (followed.run.state === 'failed') {
       const activity = turn.sink.getAgentActivity();
-      const failureMessage = 'The managed Cloud task failed.';
       await this.persistAssistantTurn(
         conversationId,
         turn.assistantMessageId,
@@ -760,17 +773,18 @@ export class CloudRuntime implements ChatRuntime {
           ? finishAgentActivityLocally(activity, {
               status: 'failed',
               completedAtMs: Date.now(),
-              error: failureMessage,
+              error: CLOUD_RUN_FAILURE_MESSAGE,
               overrideTerminal: true,
             })
           : undefined,
         turn.runReference,
         undefined,
-        failedMessageProjection(projection, failureMessage),
+        cloudFailureProjection(projection, CLOUD_RUN_FAILURE_MESSAGE, CLOUD_RUN_FAILURE_CODE),
       );
       this.emitForConversation(conversationId, {
         type: 'error',
-        error: `${failureMessage} Please retry.`,
+        error: CLOUD_RUN_FAILURE_MESSAGE,
+        code: CLOUD_RUN_FAILURE_CODE,
       });
       return;
     }
@@ -781,7 +795,6 @@ export class CloudRuntime implements ChatRuntime {
       !hasRenderableCloudMessageOutput(content, projection) &&
       !turn.sink.getStreamError()
     ) {
-      const failureMessage = 'AGI Cloud completed without returning a response.';
       const activity = turn.sink.getAgentActivity();
       await this.persistAssistantTurn(
         conversationId,
@@ -792,16 +805,17 @@ export class CloudRuntime implements ChatRuntime {
           ? finishAgentActivityLocally(activity, {
               status: 'failed',
               completedAtMs: Date.now(),
-              error: failureMessage,
+              error: EMPTY_TURN_FAILURE_MESSAGE,
             })
           : undefined,
         turn.runReference,
         undefined,
-        failedMessageProjection(projection, failureMessage),
+        emptyTurnFailureProjection(projection),
       );
       this.emitForConversation(conversationId, {
         type: 'error',
-        error: `${failureMessage} Please retry.`,
+        error: EMPTY_TURN_FAILURE_MESSAGE,
+        code: EMPTY_TURN_FAILURE_CODE,
       });
       return;
     }
@@ -1125,7 +1139,6 @@ export class CloudRuntime implements ChatRuntime {
               projection,
             );
             if (!hasRenderableOutput && !sink.getStreamError()) {
-              const failureMessage = 'AGI Cloud completed without returning a response.';
               const activity = sink.getAgentActivity();
               await this.persistAssistantTurn(
                 conversationId,
@@ -1136,17 +1149,18 @@ export class CloudRuntime implements ChatRuntime {
                   ? finishAgentActivityLocally(activity, {
                       status: 'failed',
                       completedAtMs: Date.now(),
-                      error: failureMessage,
+                      error: EMPTY_TURN_FAILURE_MESSAGE,
                       overrideTerminal: true,
                     })
                   : undefined,
                 activeTurn.runReference,
                 undefined,
-                failedMessageProjection(projection, failureMessage),
+                emptyTurnFailureProjection(projection),
               );
               this.emitForConversation(conversationId, {
                 type: 'error',
-                error: `${failureMessage} Please retry.`,
+                error: EMPTY_TURN_FAILURE_MESSAGE,
+                code: EMPTY_TURN_FAILURE_CODE,
               });
               return;
             }
@@ -1196,15 +1210,11 @@ export class CloudRuntime implements ChatRuntime {
                     : undefined,
                   activeTurn.runReference,
                   undefined,
-                  failedMessageProjection(sink.getMessageProjection(), message),
-                ).catch((persistenceError: unknown) => {
+                  cloudFailureProjection(sink.getMessageProjection(), message),
+                ).catch(() => {
                   this.emitForConversation(conversationId, {
                     type: 'error',
-                    error: `The Cloud task failed and its failure state could not be saved: ${
-                      persistenceError instanceof Error
-                        ? persistenceError.message
-                        : String(persistenceError)
-                    }`,
+                    error: SAVE_AFTER_FAILURE_MESSAGE,
                   });
                 });
                 this.emitForConversation(conversationId, { type: 'error', error: message });
@@ -1229,15 +1239,11 @@ export class CloudRuntime implements ChatRuntime {
               : undefined,
             activeTurn.runReference,
             undefined,
-            failedMessageProjection(sink.getMessageProjection(), err.message),
-          ).catch((persistenceError: unknown) => {
+            cloudFailureProjection(sink.getMessageProjection(), err.message),
+          ).catch(() => {
             this.emitForConversation(conversationId, {
               type: 'error',
-              error: `The Cloud task failed and its failure state could not be saved: ${
-                persistenceError instanceof Error
-                  ? persistenceError.message
-                  : String(persistenceError)
-              }`,
+              error: SAVE_AFTER_FAILURE_MESSAGE,
             });
           });
           this.emitForConversation(conversationId, cloudErrorEvent(err));
@@ -1298,7 +1304,7 @@ export class CloudRuntime implements ChatRuntime {
               : undefined,
             activeTurn.runReference,
             undefined,
-            failedMessageProjection(sink.getMessageProjection(), message),
+            cloudFailureProjection(sink.getMessageProjection(), message),
           );
           this.emitForConversation(conversationId, { type: 'error', error: message });
         }
@@ -1367,7 +1373,6 @@ export class CloudRuntime implements ChatRuntime {
           !outcome.suspended &&
           !hasRenderableCloudMessageOutput(outcome.content, outcome.messageProjection) &&
           !outcome.streamError;
-        const failureMessage = 'AGI Cloud completed without returning a response.';
         await this.persistAssistantTurn(
           conversationId,
           outcome.assistantMessageId,
@@ -1377,7 +1382,7 @@ export class CloudRuntime implements ChatRuntime {
             ? finishAgentActivityLocally(outcome.agentActivity, {
                 status: 'failed',
                 completedAtMs: Date.now(),
-                error: failureMessage,
+                error: EMPTY_TURN_FAILURE_MESSAGE,
                 overrideTerminal: true,
               })
             : outcome.agentActivity,
@@ -1386,13 +1391,14 @@ export class CloudRuntime implements ChatRuntime {
             ? toPersistedCloudApprovalProjection(outcome.pendingProjection)
             : null,
           emptyTerminal
-            ? failedMessageProjection(outcome.messageProjection, failureMessage)
+            ? emptyTurnFailureProjection(outcome.messageProjection)
             : outcome.messageProjection,
         );
         if (emptyTerminal) {
           this.emitForConversation(conversationId, {
             type: 'error',
-            error: `${failureMessage} Please retry.`,
+            error: EMPTY_TURN_FAILURE_MESSAGE,
+            code: EMPTY_TURN_FAILURE_CODE,
           });
           return;
         }
@@ -1459,12 +1465,10 @@ export class CloudRuntime implements ChatRuntime {
           ...activeTurn.sink.getMessageProjection(),
           finishReason: 'stopped',
         },
-      ).catch((persistenceError: unknown) => {
+      ).catch(() => {
         this.emitForConversation(conversationId, {
           type: 'error',
-          error: `The Cloud task stopped, but its stopped state could not be saved: ${
-            persistenceError instanceof Error ? persistenceError.message : String(persistenceError)
-          }`,
+          error: SAVE_AFTER_STOP_MESSAGE,
         });
       });
     }

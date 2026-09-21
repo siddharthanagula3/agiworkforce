@@ -51,6 +51,9 @@ describe('a gateway refusal before the stream opens', () => {
     const chunks = await collect(streamFreeChat([{ role: 'user', content: 'hi' }], 'a-token'));
     const error = chunks.find((c) => c.type === 'error');
     expect(error?.code).toBe('server_error');
-    expect(error?.message).toBe('AGI Cloud is temporarily unavailable (502).');
+    expect(error?.message).toBe(
+      'AGI Cloud is temporarily unavailable. Try again, or choose another model.',
+    );
+    expect(error?.message).not.toMatch(/\d/);
   });
 });
