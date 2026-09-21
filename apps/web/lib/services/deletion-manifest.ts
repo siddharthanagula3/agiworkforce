@@ -122,6 +122,7 @@ const OPERATIONAL_RECORD = [
   'device_registrations',
   'directory_sync_connections',
   'email_preferences',
+  'enterprise_offline_payment_records',
   'erasure_tombstones',
   'event_triggers',
   'feature_flags',
