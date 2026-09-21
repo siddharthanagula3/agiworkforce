@@ -1238,7 +1238,7 @@
     "@vscode/codicons": "^0.0.45",
     "@vscode/test-electron": "^2.4.0",
     "@vscode/vsce": "^3.9.2",
-    "@zip.js/zip.js": "2.14.1",
+    "@zip.js/zip.js": "2.15.0",
     "esbuild": "^0.28.2",
     "eslint": "^9.39.4",
     "glob": "^10.5.0",
