@@ -7,6 +7,8 @@ import { recordCapabilityDenial } from '@/lib/observability/denials';
 
 import type { FlagEvaluation, FlagSubject } from './evaluate-flags';
 import { evaluateFlagsForSubject } from './flag-evaluation-service';
+import { getActiveFlagDefinitions } from './flag-store';
+import { versionDisableReason } from './version-disable';
 import {
   ALL_KILL_SWITCH_CAPABILITIES,
   KILL_SWITCH_PREFIXES,
@@ -76,8 +78,23 @@ export async function assertCapabilityAvailable(
   }
   if (!gate.capabilityAllowed(capability)) {
     denied('temporarily_unavailable');
-    throw createError.serviceUnavailable(
-      `${label} is temporarily switched off while we investigate a problem with it.`,
-    );
+    throw createError.serviceUnavailable(await closedMessage(capability, label, nowMs));
   }
+}
+
+/**
+ * What the caller is told. When an operator closed this capability for a range
+ * of builds they wrote down why and which incident it belongs to, and that is
+ * the sentence to say: a person told only "unavailable" has no next step and
+ * support has nothing to look up.
+ */
+async function closedMessage(
+  capability: KillSwitchCapability,
+  label: string,
+  nowMs: number,
+): Promise<string> {
+  const generic = `${label} is temporarily switched off while we investigate a problem with it.`;
+  const definitions = await getActiveFlagDefinitions(nowMs).catch(() => []);
+  const reason = versionDisableReason(definitions, capability);
+  return reason === null ? generic : `${label} is switched off for this version. ${reason}`;
 }

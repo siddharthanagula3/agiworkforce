@@ -51,10 +51,50 @@ export interface FeatureGates {
   rolloutFlag: string | null;
 }
 
+/**
+ * What a feature that is not finished has to have said about itself before it
+ * is handed to anyone: who answers for it, what would end its unfinished state,
+ * how it is taken back, what happens to the rows it wrote, how it is handed out
+ * and what a user who reports a problem is owed. Every one of these is a
+ * question somebody asks during an incident, and prose in a document is not
+ * where the answer survives.
+ */
+export interface FeatureGovernance {
+  /** A path in this repository, so the owner cannot outlive the code. */
+  owner: string;
+  exitCriteria: string;
+  /** The switch an operator flips to take it back, in the kill-switch vocabulary. */
+  killSwitch: string;
+  dataMigration: string;
+  /** The rollout ring id an operator widens, never a per-surface flag key. */
+  rolloutRing: string;
+  support: string;
+  /** Whether a user meets it, and so whether it must carry its maturity label. */
+  userFacing: boolean;
+}
+
+/**
+ * What a user is shown for a feature at this maturity. Generally available
+ * carries no label: labelling everything is the same as labelling nothing.
+ */
+export const FEATURE_MATURITY_LABELS: Readonly<Record<FeatureMaturity, string | null>> =
+  Object.freeze({
+    experimental: 'Experimental',
+    beta: 'Beta',
+    general_availability: null,
+    deprecated: 'Deprecated',
+  });
+
+export function featureMaturityLabel(maturity: FeatureMaturity): string | null {
+  return FEATURE_MATURITY_LABELS[maturity];
+}
+
 export interface FeatureDefinition {
   label: string;
   domain: ProductDomain;
   maturity: FeatureMaturity;
+  /** Present exactly when the feature is not generally available. */
+  governance?: FeatureGovernance;
   dependsOn: readonly string[];
   incompatibleWith: readonly string[];
   /** The local program a surface needs before this feature can run at all. */
@@ -84,6 +124,18 @@ export function featureDefinition(id: FeatureId): FeatureDefinition | null {
 /** The label is for reading. Nothing resolves a feature by it. */
 export function featureLabel(id: FeatureId): string {
   return FEATURE_DEFINITIONS[id]?.label ?? id;
+}
+
+export function featureGovernance(id: FeatureId): FeatureGovernance | null {
+  return FEATURE_DEFINITIONS[id]?.governance ?? null;
+}
+
+/**
+ * Features still carrying a maturity label, so a caller asking what is
+ * unfinished reads the registry rather than a list somebody kept by hand.
+ */
+export function unfinishedFeatureIds(): readonly FeatureId[] {
+  return FEATURE_IDS.filter((id) => FEATURE_DEFINITIONS[id]?.maturity !== 'general_availability');
 }
 
 export function featureGate(id: FeatureId, layer: ControlLayer): string | null {

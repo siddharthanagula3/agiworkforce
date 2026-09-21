@@ -10,21 +10,6 @@
       "guard": "check-capability-boundaries.mjs",
       "reason": "It FAILS today: apps/mobile/src/features/shell/capabilityShortcuts.ts decides canUseCamera, canUseCloudModels and canUseVoice from string literals without reading the capability handshake. Wiring a red guard would stop the chain at it.",
       "owed": "Fix the mobile file to read the handshake, then add \"pnpm check:capability-boundaries\" to check:llm-operability and delete this entry."
-    },
-    {
-      "guard": "check-experiments.mjs",
-      "reason": "The guard exists and passes, but no chain and no workflow step executes it, so it is a green check that measures nothing. This is an oversight, not a decision.",
-      "owed": "Add \"check:experiments\": \"node --test scripts/check-experiments.test.mjs && node scripts/check-experiments.mjs\" to the root manifest and \"pnpm check:experiments\" to check:llm-operability, then delete this entry."
-    },
-    {
-      "guard": "check-feature-flags.mjs",
-      "reason": "The guard exists and passes, but no chain and no workflow step executes it, so it is a green check that measures nothing. This is an oversight, not a decision.",
-      "owed": "Add \"check:feature-flags\": \"node --test scripts/check-feature-flags.test.mjs && node scripts/check-feature-flags.mjs\" to the root manifest and \"pnpm check:feature-flags\" to check:llm-operability, then delete this entry."
-    },
-    {
-      "guard": "check-feature-maturity.mjs",
-      "reason": "The guard exists and passes, but no chain and no workflow step executes it, so it is a green check that measures nothing. This is an oversight, not a decision.",
-      "owed": "Add \"check:feature-maturity\": \"node --test scripts/check-feature-maturity.test.mjs && node scripts/check-feature-maturity.mjs\" to the root manifest and \"pnpm check:feature-maturity\" to check:llm-operability, then delete this entry."
     }
   ]
 }

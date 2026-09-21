@@ -3,7 +3,11 @@ import { FLAG_OFF_VARIANT, type FlagDefinition } from './flag-definition';
 import { readFeatureFlagConfig, staleAfterMs, type FeatureFlagConfig } from './flag-config';
 
 export type StaleFlagReason =
-  'expired' | 'fully_rolled_out' | 'killed_and_forgotten' | 'no_declared_reader';
+  | 'expired'
+  | 'fully_rolled_out'
+  | 'killed_and_forgotten'
+  | 'no_declared_reader'
+  | 'version_disable_left_in_place';
 
 export interface StaleFlag {
   key: string;
@@ -30,10 +34,19 @@ function reasonFor(
   if (idleMs < thresholdMs) return null;
   if (isUnreadFlagKey(definition.key)) return 'no_declared_reader';
   if (definition.killSwitch) return 'killed_and_forgotten';
+  if (holdsVersionsOff(definition)) return 'version_disable_left_in_place';
   if (definition.rules.length === 0 && definition.defaultVariant !== FLAG_OFF_VARIANT) {
     return 'fully_rolled_out';
   }
   return null;
+}
+
+// A range closed during an incident and never lifted. Those builds are still
+// being refused, months after whoever closed them stopped watching.
+function holdsVersionsOff(definition: FlagDefinition): boolean {
+  return definition.rules.some(
+    (rule) => rule.variant === FLAG_OFF_VARIANT && rule.conditions.clientVersion !== undefined,
+  );
 }
 
 // A flag is stale when it has stopped deciding anything: its window closed, it
@@ -61,11 +74,14 @@ export function findStaleFlags(
   return stale;
 }
 
-// Which stale flags a cleanup run may archive without a human deciding. An
-// engaged kill switch is never in it: archiving one re-enables what it held off.
+// Which stale flags a cleanup run may archive without a human deciding. Nothing
+// that is currently holding something off is in it, whether it holds off
+// everybody or one range of builds: archiving either re-enables what it closed.
 export function archivableStaleFlags(
   stale: readonly StaleFlag[],
   config: FeatureFlagConfig = readFeatureFlagConfig(),
 ): StaleFlag[] {
-  return stale.filter((flag) => !flag.killSwitch).slice(0, config.staleCleanupBatch);
+  return stale
+    .filter((flag) => !flag.killSwitch && flag.reason !== 'version_disable_left_in_place')
+    .slice(0, config.staleCleanupBatch);
 }

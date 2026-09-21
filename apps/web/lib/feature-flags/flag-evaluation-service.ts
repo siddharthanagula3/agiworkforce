@@ -2,6 +2,10 @@ import 'server-only';
 
 import { CLIENT_VERSION_HEADER, ME_CLIENT_VERSION_PARAM } from '@agiworkforce/cloud-contracts';
 
+import {
+  PLATFORM_ADMIN_ENV_VAR,
+  isPlatformAdmin,
+} from '@/features/admin/lib/platform-admin-access';
 import { managedCloudDataRegion } from '@/lib/server/data-region';
 
 import { evaluateFlags, type FlagEvaluation, type FlagSubject } from './evaluate-flags';
@@ -38,6 +42,7 @@ export function buildFlagSubject(request: Request, facts: FlagSubjectFacts): Fla
     region: managedCloudDataRegion(),
     country: headerCountry(request),
     clientVersion: requestClientVersion(request),
+    internalStaff: isPlatformAdmin(facts.userId, process.env[PLATFORM_ADMIN_ENV_VAR]),
   };
 }
 
