@@ -1085,6 +1085,204 @@ export async function summarizeCogs(
   };
 }
 
+export const MANAGED_USAGE_COST_SOURCE_PREFIX = 'managed_usage:';
+
+export const MANAGED_USAGE_RECONCILIATION_FINDINGS = [
+  'cost_without_usage',
+  'usage_without_cost',
+  'negative_margin',
+] as const;
+
+export type ManagedUsageReconciliationFinding =
+  (typeof MANAGED_USAGE_RECONCILIATION_FINDINGS)[number];
+
+export interface SettledCostPosition {
+  sourceRef: string;
+  userId: string | null;
+  provider: string;
+  providerCostMicrousd: number;
+  customerChargedMicrousd: number;
+  occurredAt: string;
+}
+
+export interface DeliveredUsagePosition {
+  sourceRef: string;
+  userId: string;
+  provider: string;
+  customerChargedMicrousd: number;
+  occurredAt: string;
+}
+
+export interface ManagedUsageReconciliationRow {
+  finding: ManagedUsageReconciliationFinding;
+  sourceRef: string;
+  userId: string | null;
+  provider: string;
+  providerCostMicrousd: number;
+  customerChargedMicrousd: number;
+  marginMicrousd: number;
+  occurredAt: string;
+}
+
+export function managedUsageCostSourceRef(request: {
+  userId: string;
+  idempotencyKey: string;
+  requestHash: string;
+}): string {
+  return `${MANAGED_USAGE_COST_SOURCE_PREFIX}${request.userId}:${request.idempotencyKey}:${request.requestHash}`;
+}
+
+const SETTLED_COST_POSITIONS_SQL = `select e.source_ref, e.user_id, e.provider, e.provider_cost_cents,
+          e.billed_cents, e.customer_canonical_microusd, e.created_at
+     from public.provider_cost_events e
+    where e.created_at >= $1::timestamptz
+      and e.created_at < $2::timestamptz
+      and e.source_ref like $3::text
+    order by e.created_at asc`;
+
+const DELIVERED_USAGE_POSITIONS_SQL = `select r.user_id, r.idempotency_key, r.request_hash, r.provider,
+          r.actual_cost_cents, r.finalized_at
+     from public.managed_usage_requests r
+    where r.finalized_at >= $1::timestamptz
+      and r.finalized_at < $2::timestamptz
+      and r.status = 'completed'
+      and coalesce(r.actual_cost_cents, 0) > 0
+    order by r.finalized_at asc`;
+
+interface SettledCostRow {
+  source_ref: string;
+  user_id: string | null;
+  provider: string;
+  provider_cost_cents: number | string | null;
+  billed_cents: number | string | null;
+  customer_canonical_microusd: number | string | null;
+  created_at: string | Date;
+}
+
+interface DeliveredUsageRow {
+  user_id: string;
+  idempotency_key: string;
+  request_hash: string;
+  provider: string;
+  actual_cost_cents: number | string | null;
+  finalized_at: string | Date;
+}
+
+function isoOf(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+export async function readSettledCostPositions(
+  periodStart: Date,
+  periodEnd: Date,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<SettledCostPosition[]> {
+  const rows = await db.query<SettledCostRow>(SETTLED_COST_POSITIONS_SQL, [
+    periodStart.toISOString(),
+    periodEnd.toISOString(),
+    `${MANAGED_USAGE_COST_SOURCE_PREFIX}%`,
+  ]);
+  return rows.map((row) => ({
+    sourceRef: row.source_ref,
+    userId: row.user_id,
+    provider: row.provider,
+    providerCostMicrousd: microusdFromCents(numberFrom(row.provider_cost_cents)),
+    customerChargedMicrousd:
+      row.customer_canonical_microusd === null || row.customer_canonical_microusd === undefined
+        ? microusdFromCents(numberFrom(row.billed_cents))
+        : numberFrom(row.customer_canonical_microusd),
+    occurredAt: isoOf(row.created_at),
+  }));
+}
+
+export async function readDeliveredUsagePositions(
+  periodStart: Date,
+  periodEnd: Date,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<DeliveredUsagePosition[]> {
+  const rows = await db.query<DeliveredUsageRow>(DELIVERED_USAGE_POSITIONS_SQL, [
+    periodStart.toISOString(),
+    periodEnd.toISOString(),
+  ]);
+  return rows.map((row) => ({
+    sourceRef: managedUsageCostSourceRef({
+      userId: row.user_id,
+      idempotencyKey: row.idempotency_key,
+      requestHash: row.request_hash,
+    }),
+    userId: row.user_id,
+    provider: row.provider,
+    customerChargedMicrousd: microusdFromCents(numberFrom(row.actual_cost_cents)),
+    occurredAt: isoOf(row.finalized_at),
+  }));
+}
+
+/**
+ * A settled turn writes two rows: what the customer was charged and what the
+ * provider cost. Either one alone is a hole in the accounts, and a turn whose
+ * charge is below its cost was sold at a loss. Both sides are matched on the
+ * source reference the settlement itself writes, so nothing is paired by
+ * guesswork.
+ */
+export function reconcileManagedUsage(
+  costs: readonly SettledCostPosition[],
+  delivered: readonly DeliveredUsagePosition[],
+): ManagedUsageReconciliationRow[] {
+  const deliveredBySourceRef = new Map(delivered.map((row) => [row.sourceRef, row]));
+  const costBySourceRef = new Map(costs.map((row) => [row.sourceRef, row]));
+  const findings: ManagedUsageReconciliationRow[] = [];
+
+  for (const cost of costs) {
+    const margin = cost.customerChargedMicrousd - cost.providerCostMicrousd;
+    const finding: ManagedUsageReconciliationFinding | null = !deliveredBySourceRef.has(
+      cost.sourceRef,
+    )
+      ? 'cost_without_usage'
+      : margin < 0
+        ? 'negative_margin'
+        : null;
+    if (finding === null) continue;
+    findings.push({
+      finding,
+      sourceRef: cost.sourceRef,
+      userId: cost.userId,
+      provider: cost.provider,
+      providerCostMicrousd: cost.providerCostMicrousd,
+      customerChargedMicrousd: cost.customerChargedMicrousd,
+      marginMicrousd: margin,
+      occurredAt: cost.occurredAt,
+    });
+  }
+
+  for (const usage of delivered) {
+    if (costBySourceRef.has(usage.sourceRef)) continue;
+    findings.push({
+      finding: 'usage_without_cost',
+      sourceRef: usage.sourceRef,
+      userId: usage.userId,
+      provider: usage.provider,
+      providerCostMicrousd: 0,
+      customerChargedMicrousd: usage.customerChargedMicrousd,
+      marginMicrousd: usage.customerChargedMicrousd,
+      occurredAt: usage.occurredAt,
+    });
+  }
+
+  return findings.sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+}
+
+export async function reconcileManagedUsageCosts(
+  periodStart: Date,
+  periodEnd: Date,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<ManagedUsageReconciliationRow[]> {
+  const [costs, delivered] = await Promise.all([
+    readSettledCostPositions(periodStart, periodEnd, db),
+    readDeliveredUsagePositions(periodStart, periodEnd, db),
+  ]);
+  return reconcileManagedUsage(costs, delivered);
+}
+
 export interface TaskEconomics {
   deliveredTasks: number;
   deliveredTaskCostCents: number;
