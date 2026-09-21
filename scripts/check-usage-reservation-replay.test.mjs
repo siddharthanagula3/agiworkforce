@@ -6,6 +6,8 @@ import test from 'node:test';
 
 import {
   checkUsageReservationReplay,
+  exportedFunctionBody,
+  importedModulePath,
   KNOWN_REPLAY_UNSAFE,
   nonDeterministicSourceIn,
   objectPropertyValue,
@@ -147,6 +149,86 @@ test('a brace inside a SQL string does not end the argument early', () => {
   });
   assert.deepEqual(result.offenders, []);
   assert.equal(result.callSites, 1);
+});
+
+test('a random source hidden inside a key helper is still reported', () => {
+  const result = scan({
+    'keys.ts': `
+      import { randomUUID } from 'node:crypto';
+      export function buildKey(input: { purpose: string }) {
+        return \`embed:\${input.purpose}:\${randomUUID()}\`;
+      }
+    `,
+    'caller.ts': `
+      import { buildKey } from '@/lib/keys';
+      export async function run(input: { purpose: string }) {
+        return reserveManagedUsageRequest({ db, idempotencyKey: buildKey(input), estimatedCostCents: 1 });
+      }
+    `,
+  });
+  assert.equal(result.unexpected.length, 1);
+  assert.equal(result.unexpected[0].file, 'apps/web/lib/caller.ts');
+  assert.equal(result.unexpected[0].token, 'randomUUID inside buildKey');
+});
+
+test('a key helper that only reads the request passes', () => {
+  const result = scan({
+    'keys.ts': `
+      export function buildKey(input: { purpose: string }) {
+        return \`embed:\${input.purpose}\`;
+      }
+    `,
+    'caller.ts': `
+      import { buildKey } from '@/lib/keys';
+      reserveManagedUsageRequest({ db, idempotencyKey: buildKey(input), estimatedCostCents: 1 });
+    `,
+  });
+  assert.deepEqual(result.offenders, []);
+});
+
+test('a key helper is not blamed for what the rest of its module does', () => {
+  const result = scan({
+    'keys.ts': `
+      import { randomUUID } from 'node:crypto';
+      export function buildKey(input: { purpose: string }) {
+        return \`embed:\${input.purpose}\`;
+      }
+      export function newLeaseToken() {
+        return randomUUID();
+      }
+    `,
+    'caller.ts': `
+      import { buildKey, newLeaseToken } from '@/lib/keys';
+      reserveManagedUsageRequest({
+        db,
+        idempotencyKey: buildKey(input),
+        leaseToken: newLeaseToken(),
+        estimatedCostCents: 1,
+      });
+    `,
+  });
+  assert.deepEqual(
+    result.offenders,
+    [],
+    'the lease token may be fresh; only the idempotency key must replay',
+  );
+});
+
+test('the import reader and the body reader stand on their own', () => {
+  const source = "import { a, b as c } from '@/lib/keys';\nimport { d } from './near';\n";
+  assert.equal(importedModulePath(source, 'a', 'apps/web/lib/x.ts'), 'apps/web/lib/keys');
+  assert.equal(importedModulePath(source, 'c', 'apps/web/lib/x.ts'), 'apps/web/lib/keys');
+  assert.equal(importedModulePath(source, 'd', 'apps/web/lib/x.ts'), 'apps/web/lib/near');
+  assert.equal(importedModulePath(source, 'missing', 'apps/web/lib/x.ts'), null);
+  assert.equal(
+    exportedFunctionBody('export function f({ a }: T) {\n  return a;\n}\n', 'f'),
+    '{\n  return a;\n}',
+  );
+  assert.equal(
+    exportedFunctionBody('export const g = (a: string) => {\n  return a;\n};\n', 'g'),
+    '{\n  return a;\n}',
+  );
+  assert.equal(exportedFunctionBody('export function h() {}\n', 'missing'), null);
 });
 
 test('a fixed known offender is demanded to leave the list once it is fixed', () => {

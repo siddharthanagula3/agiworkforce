@@ -48,6 +48,18 @@ function operationDigest(operationKey: string): string {
   return createHash('sha256').update(operationKey).digest('hex').slice(0, 32);
 }
 
+/**
+ * What was sent to the provider, not how much of it. A count and a character
+ * total call two different queries of the same length one request, so a key
+ * that arrived twice for genuinely different text would be reused rather than
+ * refused as a conflict.
+ */
+function inputDigest(texts: readonly string[]): string {
+  const hash = createHash('sha256');
+  for (const text of texts) hash.update(String(text.length)).update(':').update(text);
+  return hash.digest('hex');
+}
+
 type EmbeddingHarness = 'vercel_gateway/embeddings' | 'google/embeddings';
 
 const EMBEDDING_HARNESSES: ReadonlySet<string> = new Set<EmbeddingHarness>([
@@ -156,6 +168,13 @@ export interface MeteredEmbeddingInput {
   organizationId: string | null;
   texts: readonly string[];
   purpose: EmbeddingPurpose;
+  /**
+   * What names one embedding operation. The reservation's idempotency key is
+   * derived from it, so a caller that repeats an operation deliberately must
+   * supply a different one, and a caller retrying the same operation must
+   * supply the one it used before. Today's callers name a scope rather than an
+   * operation, which is why the key still carries a per-call suffix.
+   */
   operationKey: string;
   attribution?: UsageAttribution;
 }
@@ -208,7 +227,7 @@ export async function embedTextsMetered(
         purpose: input.purpose,
         operationKey: input.operationKey,
         inputs: texts.length,
-        characters: texts.reduce((total, text) => total + text.length, 0),
+        content: inputDigest(texts),
         route: route.routeId,
       }),
       provider: route.provider,

@@ -45,14 +45,10 @@ export const NON_DETERMINISTIC_SOURCES = [
  * and on any entry here that has been fixed, so the count can only fall.
  */
 export const KNOWN_REPLAY_UNSAFE = Object.freeze({
-  'apps/web/app/api/voice/live/sessions/route.ts':
-    'A retried session create opens a second minute-block hold for one live session; the route accepts no Idempotency-Key from the client.',
   'apps/web/lib/e2b/compute-metering.ts':
-    'A retried sandbox provision holds the whole admitted lifetime twice for one sandbox.',
+    'A sandbox that is resumed now keeps the hold it was admitted under, so only a first provision reserves. That provision has no durable identity distinct from the previous sandbox of the same scope: the session record is deleted at teardown, so a spawn identity has to come from the turn that asked for the sandbox, through getE2BExecutor.',
   'apps/web/lib/services/retrieval-embedding-service.ts':
-    'The key already carries an operation digest and then appends a fresh value, which defeats the deduplication that digest was computed for.',
-  'apps/web/lib/services/model-memory-extraction.ts':
-    'A caller that passes no requestId falls back to a fresh value, so a replayed extraction is billed again.',
+    'The operationKey its only caller passes names a scope, not an operation, so dropping the per-call suffix would make two deliberate searches of the same text collide and the second silently lose semantic ranking. The identity has to come from the chat request id, which reaches the search provider through apps/web/app/api/llm.',
 });
 
 const CODE_EXTENSIONS = new Set(['.ts', '.tsx']);
@@ -186,6 +182,91 @@ export function nonDeterministicSourceIn(expression) {
   return NON_DETERMINISTIC_SOURCES.find((token) => expression.includes(token)) ?? null;
 }
 
+const CALLED_NAME = /\b([A-Za-z_$][\w$]*)\s*\(/g;
+const NAMED_IMPORT = /import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
+
+/**
+ * Where a name used in a key expression comes from, for the local modules a
+ * fix can hide a random source inside. A package import resolves to nothing,
+ * which is the right answer: this walks one level only, because the reservation
+ * service itself mints a lease token and is not what builds the key.
+ */
+export function importedModulePath(source, name, file) {
+  NAMED_IMPORT.lastIndex = 0;
+  let match;
+  while ((match = NAMED_IMPORT.exec(source)) !== null) {
+    const bound = match[1]
+      .split(',')
+      .map((entry) =>
+        entry
+          .trim()
+          .split(/\s+as\s+/)
+          .pop()
+          ?.trim(),
+      )
+      .filter(Boolean);
+    if (!bound.includes(name)) continue;
+    const specifier = match[2];
+    if (specifier.startsWith('@/')) return path.join('apps/web', specifier.slice(2));
+    if (specifier.startsWith('.')) return path.join(path.dirname(file), specifier);
+    return null;
+  }
+  return null;
+}
+
+function readModule(repoRoot, relative) {
+  for (const candidate of [`${relative}.ts`, `${relative}.tsx`, path.join(relative, 'index.ts')]) {
+    try {
+      return readFileSync(path.join(repoRoot, candidate), 'utf8');
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * The body of one exported function, so a helper is judged on what it does
+ * rather than on what else its module contains. The reservation service mints a
+ * lease token a few lines away from the key parser every route calls.
+ */
+export function exportedFunctionBody(source, name) {
+  const declaration = new RegExp(
+    `export\\s+(?:async\\s+)?function\\s+${name}\\s*\\(|export\\s+const\\s+${name}\\s*(?::[^=]+)?=`,
+  ).exec(source);
+  if (!declaration) return null;
+
+  const params = source.indexOf('(', declaration.index + declaration[0].length - 1);
+  const afterParams = params === -1 ? declaration.index : matchingBracket(source, params);
+  if (afterParams === -1) return null;
+
+  const body = source.indexOf('{', afterParams);
+  if (body !== -1) {
+    const end = matchingBracket(source, body);
+    if (end !== -1) return source.slice(body, end + 1);
+  }
+  const statementEnd = source.indexOf(';', afterParams);
+  return source.slice(declaration.index, statementEnd === -1 ? source.length : statementEnd);
+}
+
+/** The local modules a key expression calls into, so their bodies are judged too. */
+export function keyHelperSources(source, expression, file, repoRoot) {
+  const helpers = [];
+  const seen = new Set();
+  for (const match of expression.matchAll(CALLED_NAME)) {
+    const name = match[1];
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const modulePath = importedModulePath(source, name, file);
+    if (!modulePath) continue;
+    const helper = readModule(repoRoot, modulePath);
+    if (helper === null) continue;
+    const body = exportedFunctionBody(helper, name);
+    if (body !== null) helpers.push({ name, source: body });
+  }
+  return helpers;
+}
+
 export function reservationKeys(source) {
   const found = [];
   for (const [call, keyProperty] of Object.entries(RESERVATION_CALLS)) {
@@ -233,12 +314,31 @@ export function checkUsageReservationReplay(repoRoot = REPO_ROOT, dirs = SCANNED
         continue;
       }
       const candidates = [key.expression, ...key.resolved];
+      let flagged = false;
       for (const candidate of candidates) {
         const token = nonDeterministicSourceIn(candidate);
         if (token) {
           offenders.set(file, { file, call: key.call, token, expression: candidate.slice(0, 160) });
+          flagged = true;
           break;
         }
+      }
+      if (flagged) continue;
+
+      for (const candidate of candidates) {
+        for (const helper of keyHelperSources(source, candidate, file, repoRoot)) {
+          const token = nonDeterministicSourceIn(helper.source);
+          if (!token) continue;
+          offenders.set(file, {
+            file,
+            call: key.call,
+            token: `${token} inside ${helper.name}`,
+            expression: candidate.slice(0, 160),
+          });
+          flagged = true;
+          break;
+        }
+        if (flagged) break;
       }
     }
   }
