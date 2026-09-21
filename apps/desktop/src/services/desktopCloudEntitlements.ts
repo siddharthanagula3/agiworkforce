@@ -33,7 +33,7 @@ export function resolveDesktopCloudPickerModels(
 
   if (admitted.length === 0) return [];
 
-  const auto = getAutoRoutingProfiles()[0];
+  const auto = getAutoRoutingProfiles(plan)[0];
   if (!auto) return admitted;
 
   return [

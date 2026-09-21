@@ -15,7 +15,12 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
-import { EFFORT_LABEL, getAutoRoutingProfileTiers, getModelReasoning } from '@agiworkforce/types';
+import {
+  EFFORT_LABEL,
+  canAccessAutoRoutingProfileForTier,
+  getAutoRoutingProfileTiers,
+  getModelReasoning,
+} from '@agiworkforce/types';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
@@ -200,6 +205,13 @@ export function ModelPickerSheet({
   const completeModelList = useMemo(
     () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier),
     [cloudUnlocked, subscriptionTier],
+  );
+  // Auto carries its own plan floor in the registry. A plan that cannot select
+  // it is not offered a row the server would refuse.
+  const selectableAutoModes = useMemo(
+    () =>
+      AUTO_MODES.filter((mode) => canAccessAutoRoutingProfileForTier(mode.id, subscriptionTier)),
+    [subscriptionTier],
   );
 
   const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
@@ -651,7 +663,7 @@ export function ModelPickerSheet({
         >
           {!query ? (
             <View style={{ marginBottom: 8 }}>
-              {AUTO_MODES.map((mode) => (
+              {selectableAutoModes.map((mode) => (
                 <AutoModeRow
                   key={mode.id}
                   mode={mode}

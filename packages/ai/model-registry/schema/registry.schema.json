@@ -1524,6 +1524,16 @@
               },
               "computeProfile": {
                 "type": "boolean"
+              },
+              "tierPolicy": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["minTier"],
+                "properties": {
+                  "minTier": {
+                    "enum": ["free", "basic", "pro", "max", "enterprise"]
+                  }
+                }
               }
             }
           }

@@ -135,8 +135,9 @@ describe('image-input routing', () => {
 
 describe('audio-input routing', () => {
   it('never lands an audio request on a model that cannot hear one', () => {
-    let selections = 0;
-    for (const taskType of ['general', 'multimodal'] as const) {
+    const tasks = ['general', 'multimodal'] as const;
+    const selectionsByTier = new Map<string, number>();
+    for (const taskType of tasks) {
       for (const tier of TIERS) {
         const decision = autoRouteFor({
           taskType,
@@ -144,14 +145,20 @@ describe('audio-input routing', () => {
           requiredCapabilities: ['audioInput'],
         });
         if (decision.status !== 'selected') continue;
-        selections += 1;
+        selectionsByTier.set(tier, (selectionsByTier.get(tier) ?? 0) + 1);
         expect(
           supports(decision.modelKey, 'audioInput'),
           `${taskType}/${tier} -> ${decision.modelKey}`,
         ).toBe(true);
       }
     }
-    expect(selections).toBe(TIERS.length * 2);
+    // The free tier is granted only zero-priced slots and no model behind one
+    // accepts audio, so it refuses rather than answering with a model that
+    // cannot hear the attachment. Every paid tier still answers both tasks.
+    expect(selectionsByTier.get('free') ?? 0).toBe(0);
+    for (const tier of TIERS.filter((candidate) => candidate !== 'free')) {
+      expect(selectionsByTier.get(tier), tier).toBe(tasks.length);
+    }
   });
 
   it('refuses a pinned model with no audio input, naming the capability', () => {
