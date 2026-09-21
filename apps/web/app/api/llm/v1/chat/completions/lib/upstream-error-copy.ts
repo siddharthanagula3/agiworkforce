@@ -82,6 +82,9 @@ const PICK_A_MODEL = 'pick a specific model from the model picker';
 export const FREE_USAGE_LIMIT_REACHED_MESSAGE =
   'You have reached the free usage limit on your account. Open Usage to see when it resets, or use your own provider key to keep going. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
 
+/** The wire code for the spent allowance every Free account shares; the protocol's name for it. */
+export const FREE_ALLOWANCE_EXHAUSTED_CODE = 'free_allowance_exhausted';
+
 // The free plan has one model and no Auto, so its copy names the only move left.
 const FREE_ROUTER_SHARED_CAPACITY =
   'Free models share upstream capacity, so this happens at busy times.';
@@ -455,10 +458,16 @@ function upstreamCopy(
       if (classified.providerHint !== FREE_POOL_PROVIDER_HINT) {
         markProviderDegraded(provider, classified.category);
       }
+      // The shared free pool has its own code: the remedy is not another model
+      // and not the reader's account, and a client cannot tell from prose.
+      const sharedFreePool = onFreeRouter || classified.providerHint === FREE_POOL_PROVIDER_HINT;
       return {
         status: 429,
         type: 'rate_limit_error',
-        code: 'provider_quota_exhausted',
+        code:
+          classified.providerHint !== SPENDING_CAP_PROVIDER_HINT && sharedFreePool
+            ? FREE_ALLOWANCE_EXHAUSTED_CODE
+            : 'provider_quota_exhausted',
         message,
       };
     }
