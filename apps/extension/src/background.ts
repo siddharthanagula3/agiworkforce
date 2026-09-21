@@ -191,6 +191,7 @@ import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
 import { readNetworkEntries } from './features/browser-tools/networkCapture';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import { sendChromeHeartbeatIfDue } from './features/cloud-bridge/deviceHeartbeat';
+import { flushAutomationAuditOutbox } from './features/observability/automationAudit';
 import {
   isCurrentManagedCloudOperation,
   managedCloudOwnerKey,
@@ -4146,6 +4147,7 @@ async function handleMessageAsync(
 
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
+        runId: lease.runId,
         signal: lease.controller.signal,
         assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
         resolveOwnedCredential: () => assertComputerUseOwnership(lease),
@@ -4163,6 +4165,7 @@ async function handleMessageAsync(
         },
       });
       computerUseRuns.trackCompletion(lease, completion);
+      void completion.finally(() => flushAutomationAuditOutbox().catch(() => false));
       void completion.then(
         () => {
           if (!computerUseRuns.finish(lease)) return;
@@ -5442,6 +5445,7 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 
 initialize();
 installBackgroundErrorReporting();
+void flushAutomationAuditOutbox();
 
 // chrome.debugger.onDetach has to be attached in the worker's first turn: a
 // user pressing Cancel on Chrome's debugging bar wakes a worker that would
