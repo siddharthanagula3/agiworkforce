@@ -285,10 +285,32 @@ export function evaluatePromotionGate({
  * committed baseline instead, and fails closed: a malformed, replayed or
  * orphaned baseline is a gate that would have waved a promotion through.
  */
-export function auditBaselines({ measurementsDir = MEASUREMENTS_DIR, families }) {
+export function autoReleaseFamilyIds(registry) {
+  const auto = registry?.policies?.auto;
+  if (auto === undefined) return new Set();
+  const reachableSlots = new Set([
+    ...Object.values(auto.tasks ?? {}).flatMap((task) =>
+      Object.values(task.preferredSlots ?? {}).flat(),
+    ),
+    ...Object.values(auto.tierAllowedSlots ?? {}).flat(),
+  ]);
+  const reachableModels = new Set(
+    [...reachableSlots]
+      .map((slotId) => auto.slots?.[slotId]?.modelKey)
+      .filter((modelKey) => typeof modelKey === 'string'),
+  );
+  return new Set(
+    Object.entries(registry?.families ?? {})
+      .filter(([, family]) => reachableModels.has(family.activeModelKey))
+      .map(([familyId]) => familyId),
+  );
+}
+
+export function auditBaselines({ measurementsDir = MEASUREMENTS_DIR, families, releaseFamilies }) {
   const dir = path.join(measurementsDir, 'baselines');
   const problems = [];
   const unmet = [];
+  const releaseUnmet = [];
   const audited = [];
   const entries = fs.existsSync(dir)
     ? fs.readdirSync(dir).filter((name) => name.endsWith('.json'))
@@ -326,13 +348,15 @@ export function auditBaselines({ measurementsDir = MEASUREMENTS_DIR, families })
         continue;
       }
       if (summary.met !== true) {
-        unmet.push(
-          `${familyId} ${suite}: measured ${summary.score.toFixed(3)} against corpus threshold ${summary.threshold.toFixed(3)}`,
-        );
+        const reading = `${familyId} ${suite}: measured ${summary.score.toFixed(3)} against corpus threshold ${summary.threshold.toFixed(3)}`;
+        unmet.push(reading);
+        if (releaseFamilies === undefined || releaseFamilies.has(familyId)) {
+          releaseUnmet.push(reading);
+        }
       }
     }
   }
-  return { passed: problems.length === 0, problems, unmet, audited };
+  return { passed: problems.length === 0, problems, unmet, releaseUnmet, audited };
 }
 
 function argValue(args, flag) {
@@ -350,9 +374,16 @@ function runAudit(args) {
     process.exitCode = 2;
     return;
   }
-  const verdict = auditBaselines({ families: registry.families });
+  const releaseUseOnly = args.includes('--release-use');
+  const verdict = auditBaselines({
+    families: registry.families,
+    ...(releaseUseOnly ? { releaseFamilies: autoReleaseFamilyIds(registry) } : {}),
+  });
   for (const problem of verdict.problems) process.stdout.write(`FAIL ${problem}\n`);
-  for (const entry of verdict.unmet) process.stdout.write(`unmet ${entry}\n`);
+  for (const entry of verdict.unmet) {
+    const releaseRelevant = verdict.releaseUnmet.includes(entry);
+    process.stdout.write(`${releaseRelevant ? 'unmet' : 'inactive-unmet'} ${entry}\n`);
+  }
   process.stdout.write(
     `[evals gate] audited ${verdict.audited.length} committed baselines: ${verdict.passed ? 'every one is a live, well-formed measurement of a registry family slot' : 'see the failures above'}\n`,
   );
