@@ -962,9 +962,16 @@ mod tests {
     }
 
     #[test]
-    fn non_paywall_exit_code_is_1() {
+    fn a_rate_limit_exits_as_a_failure_the_same_command_may_survive() {
         let err = crate::errors::CliError::rate_limited("anthropic", None);
-        assert_eq!(err.exit_code(), 1);
+        assert_eq!(
+            err.exit_code(),
+            crate::errors::ExitClass::TemporaryFailure.code()
+        );
+        assert_ne!(
+            err.exit_code(),
+            crate::errors::CliError::paywall("chat", "pro", "quota").exit_code()
+        );
     }
 
     // -- Spec mapping --
