@@ -155,6 +155,24 @@ describe('Single Conversation API', () => {
         expect(response.status).toBe(404);
       });
 
+      /**
+       * A soft delete leaves the row in place, so the only thing standing
+       * between a direct link and a deleted conversation is the filter on the
+       * read. Nothing drove that path before.
+       */
+      it('answers a direct link to a soft-deleted conversation with not found', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          { headers: { Authorization: 'Bearer valid-token' } },
+        );
+        const response = await GET(request, mockContext);
+
+        expect(response.status).toBe(404);
+        expect(mockQuery.mock.calls[0]?.[0]).toContain('deleted_at is null');
+      });
+
       it('should only return conversations owned by authenticated user', async () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockResolvedValueOnce(mockMessages);
@@ -253,6 +271,54 @@ describe('Single Conversation API', () => {
           expect.stringContaining('update web_conversations'),
           expect.arrayContaining([CHAT_MODEL]),
         );
+      });
+
+      /**
+       * Keeping a temporary chat is the one direction that matters: the row
+       * already exists and the flag is what decides whether it is listed,
+       * searched or exported. Nothing drove turning it off.
+       */
+      it('keeps a temporary conversation when the flag is turned off', async () => {
+        mockQuery.mockResolvedValueOnce([{ ...mockConversation, is_temporary: false }]);
+
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ isTemporary: false }),
+          },
+        );
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ conversation: { is_temporary: false } });
+        const [sql, params] = mockQuery.mock.calls[0] ?? [];
+        expect(sql).toContain('is_temporary = case when $13::boolean then $14::boolean');
+        expect(params?.[12]).toBe(true);
+        expect(params?.[13]).toBe(false);
+      });
+
+      it('leaves the temporary flag alone when the update does not mention it', async () => {
+        mockQuery.mockResolvedValueOnce([{ ...mockConversation, is_temporary: true }]);
+
+        const request = new NextRequest(
+          `http://localhost/api/chat/conversations/${CONVERSATION_ID}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: 'Bearer valid-token',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ title: 'Renamed' }),
+          },
+        );
+        await PUT(request, mockContext);
+
+        expect(mockQuery.mock.calls[0]?.[1]?.[12]).toBe(false);
       });
 
       it('should update conversation project association after verifying project ownership', async () => {
