@@ -257,6 +257,67 @@ describe('AccountSection active sessions', () => {
     expect(mockLogout).toHaveBeenCalledOnce();
   });
 
+  it('shows the signed-in account identifier with a way to copy it for support', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input) === '/api/settings/sessions' && (init?.method ?? 'GET') === 'GET') {
+        return jsonResponse({ sessions, totalCount: sessions.length });
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
+    });
+
+    render(<AccountSection />);
+
+    expect(await screen.findByDisplayValue('user-1')).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'Copy user ID' })).toBeEnabled();
+  });
+
+  it('ends no session when the all-device confirmation is dismissed', async () => {
+    const requests: Array<{ url: string; method: string }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const request = { url: String(input), method: init?.method ?? 'GET' };
+      requests.push(request);
+      if (request.url === '/api/settings/sessions' && request.method === 'GET') {
+        return jsonResponse({ sessions, totalCount: sessions.length });
+      }
+      throw new Error(`Unexpected request: ${request.url} ${request.method}`);
+    });
+
+    render(<AccountSection />);
+    await screen.findByText('Chrome 140');
+    fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
+    expect(
+      await screen.findByText(/Every signed-in session on every device ends immediately/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByText('Log out of all devices?')).toBeNull());
+    expect(requests.filter((request) => request.method === 'DELETE')).toEqual([]);
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(mockLogout).not.toHaveBeenCalled();
+  });
+
+  it('announces a failed all-device log out instead of leaving the button idle', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const method = init?.method ?? 'GET';
+      if (String(input) === '/api/settings/sessions' && method === 'GET') {
+        return jsonResponse({ sessions, totalCount: sessions.length });
+      }
+      if (String(input) === '/api/settings/sessions' && method === 'DELETE') {
+        return jsonResponse({ error: { message: 'Unable to log out every device.' } }, 503);
+      }
+      throw new Error(`Unexpected request: ${String(input)} ${method}`);
+    });
+
+    render(<AccountSection />);
+    await screen.findByText('Chrome 140');
+    fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Log out everywhere' }));
+
+    const failure = await screen.findByText(/log out every device/i);
+    expect(failure).toHaveAttribute('role', 'alert');
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
   it('replaces a timed-out session request with an actionable retry state', async () => {
     const timeoutSignal = AbortSignal.abort(new DOMException('Timed out', 'TimeoutError'));
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutSignal);

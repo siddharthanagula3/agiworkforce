@@ -8,6 +8,7 @@ import {
 import { Switch } from '@agiworkforce/ui';
 import { useWebPushToggle } from '@/features/notifications';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 
 const NAMESPACE = 'notifications';
 
@@ -178,7 +179,10 @@ export function NotificationsSection() {
           Notifications
         </h1>
         {loading || saving || saveError || hasChanged ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }} role="status">
+          <SaveStatusLine
+            failed={saveError !== null}
+            style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}
+          >
             {loading
               ? 'Loading account settings...'
               : saving
@@ -186,7 +190,7 @@ export function NotificationsSection() {
                 : saveError
                   ? `${loadError ? 'Could not load preferences' : 'Changes were not saved'}: ${saveError}`
                   : 'Saved'}
-          </p>
+          </SaveStatusLine>
         ) : null}
         {saveError && !loading && !saving ? (
           <button

@@ -24,6 +24,7 @@ import {
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 
 const NAMESPACE = 'privacy';
 
@@ -360,7 +361,10 @@ export function PrivacySection() {
           Privacy
         </h1>
         {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+          <SaveStatusLine
+            failed={preferenceError !== null}
+            style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }}
+          >
             {loadingPreferences
               ? 'Loading account settings...'
               : savingPreferences
@@ -368,7 +372,7 @@ export function PrivacySection() {
                 : preferenceError
                   ? preferenceError
                   : 'Saved'}
-          </p>
+          </SaveStatusLine>
         ) : null}
         {preferenceError ? (
           <button

@@ -66,7 +66,10 @@ describe('NotificationsSection grouping', () => {
     });
     const retry = await screen.findByRole('button', { name: 'Retry saving' });
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('browserReplyReady');
-    expect(screen.getByRole('status').textContent).not.toContain('HTTP');
+    const failure = screen.getByRole('alert');
+    expect(failure).toHaveTextContent('Changes were not saved');
+    expect(failure.textContent).not.toContain('HTTP');
+    expect(screen.queryByRole('status')).toBeNull();
     fireEvent.click(retry);
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('off');

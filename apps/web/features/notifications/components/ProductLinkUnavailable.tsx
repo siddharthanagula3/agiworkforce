@@ -41,7 +41,7 @@ export function productLinkUnavailableCopy(
     case 'unauthorized':
       return {
         title: 'You don’t have access to this',
-        body: `This ${noun} belongs to a different account. Sign in with the account the link was meant for, or ask its owner to share it with you.`,
+        body: `This ${noun} is not available to the account and workspace you are signed in to. Switch to the workspace the link was meant for, sign in with the account it was shared with, or ask its owner to share it with you.`,
       };
     case 'not_found':
       return {

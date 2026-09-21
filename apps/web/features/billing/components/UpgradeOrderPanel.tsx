@@ -85,6 +85,7 @@ export function UpgradeOrderPanel({
   const [agreed, setAgreed] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<SavedPaymentMethod | null>(null);
   const [paymentMethodsLoaded, setPaymentMethodsLoaded] = useState(false);
+  const [paymentMethodError, setPaymentMethodError] = useState<string | null>(null);
 
   /**
    * Returning from the Stripe portal is a fresh page load, and Clerk has not
@@ -144,10 +145,15 @@ export function UpgradeOrderPanel({
   useEffect(() => {
     if (!authInitialized || !signedIn) return;
     let cancelled = false;
+    setPaymentMethodError(null);
     fetchSavedPaymentMethods()
       .then((methods) => {
         if (cancelled) return;
         setPaymentMethod(methods.find((m) => m.isDefault) ?? methods[0] ?? null);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setPaymentMethodError(toUserMessage(e, 'We could not load your payment method.'));
       })
       .finally(() => {
         if (!cancelled) setPaymentMethodsLoaded(true);
@@ -199,6 +205,8 @@ export function UpgradeOrderPanel({
     <div className="flex flex-col gap-4">
       <section
         aria-label="Order details"
+        aria-busy={waitingForSession || previewing}
+        aria-live="polite"
         className="rounded-2xl border border-border bg-card p-5 text-sm"
       >
         <h2 className="mb-4 text-base font-semibold">Order details</h2>
@@ -214,12 +222,12 @@ export function UpgradeOrderPanel({
             price and naming it a total would understate what gets charged.
           */
           <div className="flex flex-col gap-2">
-            <div className="flex justify-between gap-4 font-semibold">
-              <span>{planLabel}</span>
-              <span className="tabular-nums">
+            <dl className="flex justify-between gap-4 font-semibold">
+              <dt>{planLabel}</dt>
+              <dd className="tabular-nums">
                 {formatMoney(checkoutRequired.cents, checkoutRequired.currency)}
-              </span>
-            </div>
+              </dd>
+            </dl>
             <p className="text-xs text-muted-foreground">Tax is calculated at checkout.</p>
           </div>
         ) : charge ? (
@@ -258,10 +266,10 @@ export function UpgradeOrderPanel({
             </div>
           </dl>
         ) : amountDue ? (
-          <div className="flex justify-between gap-4 font-semibold">
-            <span>Total due today</span>
-            <span className="tabular-nums">{formatMoney(amountDue.cents, currency)}</span>
-          </div>
+          <dl className="flex justify-between gap-4 font-semibold">
+            <dt>Total due today</dt>
+            <dd className="tabular-nums">{formatMoney(amountDue.cents, currency)}</dd>
+          </dl>
         ) : (
           /*
             Every branch above needs a figure the preview returned, so a failed
@@ -297,16 +305,22 @@ export function UpgradeOrderPanel({
           <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-sm font-medium">Payment method</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {!paymentMethodsLoaded
-                  ? 'Loading…'
-                  : paymentMethod
-                    ? describePaymentMethod(paymentMethod)
-                    : 'No payment method on file'}
-              </p>
+              {paymentMethodError ? (
+                <p role="alert" className="mt-1 text-sm text-danger">
+                  {paymentMethodError}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {!paymentMethodsLoaded
+                    ? 'Loading…'
+                    : paymentMethod
+                      ? describePaymentMethod(paymentMethod)
+                      : 'No payment method on file'}
+                </p>
+              )}
             </div>
             <Button variant="outline" size="sm" onClick={() => void changePaymentMethod()}>
-              {paymentMethodsLoaded && !paymentMethod ? 'Add' : 'Change'}
+              {paymentMethodsLoaded && !paymentMethod && !paymentMethodError ? 'Add' : 'Change'}
             </Button>
           </div>
         </section>

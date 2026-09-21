@@ -15,6 +15,7 @@ import { FilePreviewModal } from './FilePreviewModal';
 import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
 
 interface Props {
   projectId: string;
@@ -187,6 +188,13 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   }
 
   const isUploading = uploadState.status === 'uploading';
+  const uploadingFileName = uploadState.status === 'uploading' ? uploadState.fileName : null;
+
+  useEffect(() => {
+    if (!uploadingFileName) return;
+    return beginActiveUpload(uploadingFileName);
+  }, [uploadingFileName]);
+
   const totalBytes = files.reduce((s, f) => s + f.byteCount, 0);
   const totalKb = (totalBytes / 1024).toFixed(1);
 
