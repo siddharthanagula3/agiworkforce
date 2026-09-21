@@ -35,7 +35,9 @@ pub mod wire;
 
 pub use assembler::{INVALID_TOOL_ARGS_MARKER, ToolCallAssembler, parse_tool_arguments_json};
 pub use decode::Utf8StreamDecoder;
-pub use error::{LlmError, PaywallNotice, classify_error_response, parse_paywall_body};
+pub use error::{
+    LlmError, PaywallNotice, StreamFailureDetail, classify_error_response, parse_paywall_body,
+};
 pub use events::{ChatOutcome, StreamEvent, Usage};
 pub use serialize::OllamaRequestOpts;
 pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};

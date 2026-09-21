@@ -130,7 +130,8 @@ fn map_llm_error(err: LlmError) -> anyhow::Error {
             provider,
             message,
             retryable,
-        } => CliError::stream_error(provider, message, retryable).into(),
+            detail,
+        } => CliError::stream_failure(provider, message, retryable, detail).into(),
         LlmError::RateLimited {
             provider,
             retry_after,

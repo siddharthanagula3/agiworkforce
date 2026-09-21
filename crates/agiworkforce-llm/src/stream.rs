@@ -27,7 +27,9 @@ use serde_json::Value;
 
 use crate::assembler::{ToolCallAssembler, normalize_tool_arguments_value};
 use crate::decode::Utf8StreamDecoder;
-use crate::error::{LlmError, classify_error_response, provider_name_from_url};
+use crate::error::{
+    LlmError, StreamFailureDetail, classify_error_response, provider_name_from_url,
+};
 use crate::events::{ChatOutcome, StreamEvent, Usage};
 use crate::serialize::{
     add_message_cache_breakpoint, anthropic_tools_json, build_gemini_tool_name_map,
@@ -869,6 +871,7 @@ where
                             .get("retryable")
                             .and_then(Value::as_bool)
                             .unwrap_or(false),
+                        detail: StreamFailureDetail::from_frame(stream_error),
                     });
                 }
                 {
@@ -2500,12 +2503,50 @@ mod openai_compat_stream_tests {
                 provider,
                 message,
                 retryable,
+                detail,
             } => {
                 assert_eq!(provider, "managed_cloud");
                 assert_eq!(message, "This model is unavailable right now.");
                 assert!(!retryable, "the gateway said not to retry");
+                assert_eq!(detail.code.as_deref(), Some("provider_billing_exhausted"));
+                assert_eq!(detail.retry_after, None, "no wait was stated");
+                assert_eq!(detail.request_id, None);
             }
             other => panic!("unexpected error: {other}"),
         }
+    }
+
+    #[tokio::test]
+    async fn a_stream_error_frame_keeps_the_stated_wait_and_the_reference() {
+        let frames = concat!(
+            "data: {\"choices\":[{\"delta\":{\"x_stream_error\":{\"message\":\"Busy.\",\"code\":\"provider_rate_limited\",\"retryable\":true,\"retryAfterSeconds\":42,\"requestId\":\"req_7f3a\"}},\"index\":0}]}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let error =
+            run_openai_compat_stream(stream, Duration::from_secs(5), "managed_cloud", &mut |_| {})
+                .await
+                .expect_err("the frame is an error");
+        assert_eq!(error.retry_after(), Some(42));
+        match error {
+            LlmError::StreamError { detail, .. } => {
+                assert_eq!(detail.code.as_deref(), Some("provider_rate_limited"));
+                assert_eq!(detail.request_id.as_deref(), Some("req_7f3a"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn a_wait_no_provider_would_state_is_dropped() {
+        for wait in [0_u64, 86_401] {
+            let frame = serde_json::json!({ "message": "x", "retryAfterSeconds": wait });
+            assert_eq!(StreamFailureDetail::from_frame(&frame).retry_after, None);
+        }
+        let blank = serde_json::json!({ "code": " ", "requestId": "" });
+        assert_eq!(
+            StreamFailureDetail::from_frame(&blank),
+            StreamFailureDetail::default()
+        );
     }
 }
