@@ -7,8 +7,14 @@ import {
   MAX_CHAT_ATTACHMENT_COUNT,
   chatAttachmentAcceptAttribute,
   isSupportedChatAttachment,
-  type UnavailableChatAttachment,
 } from '@/lib/chat-attachment-policy';
+import {
+  PICTURE_METADATA_REFUSAL,
+  carriesPictureMetadata,
+  pictureMetadataRefusalNotice,
+  prepareChatAttachments,
+  type ChatDraftRefusal,
+} from '@features/chat/lib/attachment-metadata';
 
 const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
 const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
@@ -60,7 +66,9 @@ export interface UseAttachmentsReturn {
    * model to answer a prompt about a file it never received. Cleared with the
    * rest of the draft, so a refusal rides exactly the turn it happened on.
    */
-  refused: UnavailableChatAttachment[];
+  refused: ChatDraftRefusal[];
+  /** A picture is still having its location and camera details removed. */
+  preparing: boolean;
   addFiles: (files: File[]) => void;
   removeFile: (index: number) => void;
   clearAll: () => void;
@@ -91,8 +99,13 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
-  const [refused, setRefused] = useState<UnavailableChatAttachment[]>([]);
+  const [refused, setRefused] = useState<ChatDraftRefusal[]>([]);
+  const [preparing, setPreparing] = useState(false);
   const previewUrlsRef = useRef<string[]>([]);
+  const heldCountRef = useRef(0);
+  const draftGenerationRef = useRef(0);
+  const pendingBatchesRef = useRef(0);
+  const admissionRef = useRef<Promise<void>>(Promise.resolve());
 
   const revokeUrl = useCallback((url: string) => {
     URL.revokeObjectURL(url);
@@ -108,17 +121,36 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
 
   useEffect(() => {
     return () => {
+      draftGenerationRef.current += 1;
       revokeAllUrls();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const admit = useCallback(
+    (generation: number, accepted: File[], unreadable: ChatDraftRefusal[]) => {
+      if (generation !== draftGenerationRef.current) return;
+      heldCountRef.current -= unreadable.length;
+      for (const refusal of unreadable) onError?.(pictureMetadataRefusalNotice(refusal.filename));
+      if (unreadable.length > 0) setRefused((prev) => [...prev, ...unreadable]);
+      if (accepted.length === 0) return;
+      const newPreviews = accepted.map((file) => {
+        const url = URL.createObjectURL(file);
+        previewUrlsRef.current.push(url);
+        return { file, url, type: classifyFile(file) };
+      });
+      setAttachments((prev) => [...prev, ...accepted]);
+      setPreviews((prev) => [...prev, ...newPreviews]);
+    },
+    [onError],
+  );
+
   const addFiles = useCallback(
     (incoming: File[]) => {
       if (incoming.length === 0) return;
 
-      const availableSlots = maxFiles - attachments.length;
-      const rejected: UnavailableChatAttachment[] = [];
+      const availableSlots = maxFiles - heldCountRef.current;
+      const rejected: ChatDraftRefusal[] = [];
       if (availableSlots <= 0) {
         onError?.(`Maximum ${maxFiles} files allowed.`);
         setRefused((prev) => [
@@ -128,11 +160,10 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         return;
       }
 
-      const accepted: File[] = [];
-      const newPreviews: AttachmentPreview[] = [];
+      const candidates: File[] = [];
 
       for (const file of incoming) {
-        if (accepted.length >= availableSlots) {
+        if (candidates.length >= availableSlots) {
           onError?.(`Only ${availableSlots} more file(s) can be added (max ${maxFiles}).`);
           rejected.push({ filename: file.name, reason: 'too_many' });
           break;
@@ -152,20 +183,38 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           continue;
         }
 
-        const url = URL.createObjectURL(file);
-        previewUrlsRef.current.push(url);
-
-        accepted.push(file);
-        newPreviews.push({ file, url, type: classifyFile(file) });
+        candidates.push(file);
       }
 
-      if (accepted.length > 0) {
-        setAttachments((prev) => [...prev, ...accepted]);
-        setPreviews((prev) => [...prev, ...newPreviews]);
-      }
       if (rejected.length > 0) setRefused((prev) => [...prev, ...rejected]);
+      if (candidates.length === 0) return;
+
+      heldCountRef.current += candidates.length;
+      const generation = draftGenerationRef.current;
+      if (pendingBatchesRef.current === 0 && !candidates.some(carriesPictureMetadata)) {
+        admit(generation, candidates, []);
+        return;
+      }
+
+      pendingBatchesRef.current += 1;
+      setPreparing(true);
+      admissionRef.current = admissionRef.current
+        .then(() => prepareChatAttachments(candidates))
+        .then(
+          ({ accepted, refused: unreadable }) => admit(generation, accepted, unreadable),
+          () =>
+            admit(
+              generation,
+              [],
+              candidates.map((file) => ({ filename: file.name, reason: PICTURE_METADATA_REFUSAL })),
+            ),
+        )
+        .then(() => {
+          pendingBatchesRef.current -= 1;
+          if (pendingBatchesRef.current === 0) setPreparing(false);
+        });
     },
-    [attachments.length, maxFiles, maxFileSize, onError],
+    [admit, maxFiles, maxFileSize, onError],
   );
 
   const removeFile = useCallback(
@@ -177,6 +226,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
         revokeUrl(preview.url);
       }
 
+      heldCountRef.current = Math.max(0, heldCountRef.current - 1);
       setAttachments((prev) => prev.filter((_, i) => i !== index));
       setPreviews((prev) => prev.filter((_, i) => i !== index));
     },
@@ -184,6 +234,8 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
   );
 
   const clearAll = useCallback(() => {
+    draftGenerationRef.current += 1;
+    heldCountRef.current = 0;
     revokeAllUrls();
     setAttachments([]);
     setPreviews([]);
@@ -195,6 +247,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     previews,
     canAddMore: attachments.length < maxFiles,
     refused,
+    preparing,
     addFiles,
     removeFile,
     clearAll,

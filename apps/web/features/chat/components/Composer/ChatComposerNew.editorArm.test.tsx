@@ -12,6 +12,7 @@ import {
   COMPOSER_EDITOR_MODES,
   COMPOSER_EDITOR_QUERY_PARAM,
 } from '@features/chat/lib/composer-editor-gate';
+import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { ChatComposerNew } from './ChatComposerNew';
 
 /**
@@ -291,12 +292,19 @@ describe('editor arm · external message writers', () => {
   });
 
   it('routes a dictated transcript through appendText', () => {
-    render(<ChatComposerNew onSend={vi.fn()} />);
+    const microphone = useMicrophoneNoticeStore.getState();
+    microphone.askForMicrophone('earlier-dictation', () => undefined);
+    microphone.acknowledge();
+    try {
+      render(<ChatComposerNew onSend={vi.fn()} />);
 
-    type('already typed');
-    fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
+      type('already typed');
+      fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
 
-    expect(editorHandle.appendText).toHaveBeenCalledWith(` ${TRANSCRIPT}`);
+      expect(editorHandle.appendText).toHaveBeenCalledWith(` ${TRANSCRIPT}`);
+    } finally {
+      useMicrophoneNoticeStore.setState({ request: null, acknowledgedThisSession: null });
+    }
   });
 
   it('clears the editor when the message is sent', () => {

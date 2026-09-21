@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { uploadChatAttachments } from './chat-attachment-upload';
+import {
+  PICTURE_NEEDLE,
+  bytesOf,
+  includesText,
+  jpegWithLocation,
+  jpegWithLocationBytes,
+} from '@features/chat/lib/__tests__/picture-fixtures';
 
 const csrfMocks = vi.hoisted(() => ({ getCsrfToken: vi.fn() }));
 
@@ -65,6 +72,60 @@ describe('uploadChatAttachments', () => {
     const file = new File(['MZ'], 'installer.exe', { type: 'application/x-msdownload' });
 
     await expect(uploadChatAttachments([file])).rejects.toThrow('not supported');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('puts a photo into storage without the camera and place it was taken', async () => {
+    const id = '32b71cf4-c0d1-4cc7-b6c4-776ece82f138';
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            storageKey: 'chat-attachments/user/key.jpg',
+            uploadUrl: 'https://upload.example.test/signed',
+            uploadMethod: 'PUT',
+            uploadHeaders: { 'Content-Type': 'image/jpeg' },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            attachment: {
+              id,
+              name: 'beach.jpg',
+              mimeType: 'image/jpeg',
+              byteCount: 4,
+              type: 'image',
+              url: `/api/files/${id}`,
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await uploadChatAttachments([jpegWithLocation('beach.jpg')]);
+
+    const put = fetchMock.mock.calls[1]?.[1] as { body: Blob } | undefined;
+    if (!put) throw new Error('nothing was put into storage');
+    const stored = await bytesOf(put.body);
+    expect(includesText(stored, PICTURE_NEEDLE.camera)).toBe(false);
+    expect(includesText(stored, PICTURE_NEEDLE.pixels)).toBe(true);
+  });
+
+  it('refuses a picture it cannot clean before anything leaves the browser', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const whole = jpegWithLocationBytes();
+    const cut = new File([whole.subarray(0, whole.length - 2)], 'cut.jpg', { type: 'image/jpeg' });
+
+    await expect(uploadChatAttachments([cut])).rejects.toThrow(
+      '"cut.jpg" was not uploaded. The location and camera details in a picture are removed before it leaves your device, and this file could not be read well enough to do that. Save a copy from a photo app and upload that instead.',
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ import React, {
   useEffect,
   useLayoutEffect,
   useCallback,
+  useId,
   useMemo,
   useSyncExternalStore,
   memo,
@@ -47,6 +48,7 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
+import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import {
   DesktopRuntimeError,
   LOCAL_ATTACHMENT_REFUSAL,
@@ -68,7 +70,7 @@ import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
 import { ComposerFilesMenu } from './ComposerFilesMenu';
 import { ComposerPluginsMenu } from './ComposerPluginsMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
-import { unavailableChatAttachmentNotes } from '@/lib/chat-attachment-policy';
+import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
@@ -731,6 +733,7 @@ const ChatComposerNewComponent = ({
     attachments,
     previews,
     refused: refusedAttachments,
+    preparing: preparingAttachments,
     addFiles,
     removeFile,
     clearAll: clearAttachments,
@@ -1463,6 +1466,21 @@ const ChatComposerNewComponent = ({
     onSend: handleDictationSend,
   });
 
+  const microphoneOwner = useId();
+  const askForMicrophone = useMicrophoneNoticeStore((state) => state.askForMicrophone);
+  const withdrawMicrophoneRequest = useMicrophoneNoticeStore((state) => state.withdraw);
+  const startDictation = useCallback(
+    () => askForMicrophone(microphoneOwner, dictation.start),
+    [askForMicrophone, microphoneOwner, dictation.start],
+  );
+  const enterVoiceMode = useCallback(() => {
+    if (onEnterVoiceMode) askForMicrophone(microphoneOwner, onEnterVoiceMode);
+  }, [askForMicrophone, microphoneOwner, onEnterVoiceMode]);
+  useEffect(
+    () => () => withdrawMicrophoneRequest(microphoneOwner),
+    [withdrawMicrophoneRequest, microphoneOwner],
+  );
+
   const desktopHost = useDesktopHost();
   const [localFolderPickerOpen, setLocalFolderPickerOpen] = useState(false);
   const [localCommandOpen, setLocalCommandOpen] = useState(false);
@@ -1470,7 +1488,7 @@ const ChatComposerNewComponent = ({
   const [readingClipboard, setReadingClipboard] = useState(false);
   useDesktopVoiceHotkey(() => {
     if (dictation.isActive) dictation.stop();
-    else dictation.start();
+    else startDictation();
   });
 
   const takeIdleFocus = useCallback(() => {
@@ -1691,9 +1709,9 @@ const ChatComposerNewComponent = ({
     }
   }, [addChatAttachments]);
 
-  // A capture or clipboard read lands its file after an await; an Enter pressed meanwhile
-  // used to send without it and leak the file into the next draft. The send waits instead.
-  const attachmentPreparing = isCapturingScreenshot || readingClipboard;
+  // A capture, a clipboard read and a picture's metadata removal land their file after an
+  // await; an Enter pressed meanwhile would send without it. The send waits instead.
+  const attachmentPreparing = isCapturingScreenshot || readingClipboard || preparingAttachments;
   const deferredSendRef = useRef(false);
 
   const attachmentNames = useMemo(() => attachments.map((file) => file.name), [attachments]);
@@ -2635,7 +2653,7 @@ const ChatComposerNewComponent = ({
      * here rather than at the top so an image or video prompt, which refuses
      * attachments outright and returns above, never carries one.
      */
-    const refusalNotes = unavailableChatAttachmentNotes(refusedAttachments);
+    const refusalNotes = chatDraftRefusalNotes(refusedAttachments);
     if (refusalNotes.length > 0) outgoingContent = [outgoingContent, ...refusalNotes].join('\n\n');
 
     const sendArgs: Parameters<typeof onSend> = [
@@ -4623,7 +4641,7 @@ const ChatComposerNewComponent = ({
                   enabled during streaming for type-ahead. Disabling the mic
                   meant a queued follow-up could be typed but never dictated. */}
                 <VoiceInputButton
-                  onStart={dictation.start}
+                  onStart={startDictation}
                   active={dictation.isActive}
                   disabled={composerDisabled || !dictationEnabled}
                   disabledReason={
@@ -4635,7 +4653,7 @@ const ChatComposerNewComponent = ({
               {/* Trailing slot: voice entry while the field is empty, send once
                 it has text, Stop while a turn is running. */}
               {onEnterVoiceMode && sendButtonMode !== 'stop' && !hasContent ? (
-                <VoiceEntryButton onStart={onEnterVoiceMode} disabled={composerDisabled} />
+                <VoiceEntryButton onStart={enterVoiceMode} disabled={composerDisabled} />
               ) : (
                 <SendButton
                   mode={sendButtonMode}

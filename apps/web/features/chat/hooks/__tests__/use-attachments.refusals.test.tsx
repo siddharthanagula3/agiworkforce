@@ -1,10 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import {
-  MAX_CHAT_ATTACHMENT_BYTES,
-  unavailableChatAttachmentNotes,
-} from '@/lib/chat-attachment-policy';
+import { MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
+import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
 import { useAttachments } from '../use-attachments';
 
 function file(name: string, type: string, bytes = 4): File {
@@ -44,7 +42,7 @@ describe('a file the composer refuses', () => {
       result.current.addFiles([file('archive.zip', 'application/zip')]);
     });
 
-    expect(unavailableChatAttachmentNotes(result.current.refused)).toEqual([
+    expect(chatDraftRefusalNotes(result.current.refused)).toEqual([
       '[attachment unavailable: archive.zip is not a file type this chat can read.]',
     ]);
   });

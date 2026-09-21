@@ -4,11 +4,19 @@ import { getCsrfToken } from '@/lib/client/csrf';
 import { createManagedCloudChatAttachmentsClient } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudChatAttachmentUploadOptions } from '@agiworkforce/cloud-contracts';
 import type { Attachment } from '@/shared/stores/web-chat-store';
+import {
+  pictureMetadataUploadRefusal,
+  prepareChatAttachments,
+} from '@features/chat/lib/attachment-metadata';
 
 export async function uploadChatAttachments(
   files: File[],
   options: ManagedCloudChatAttachmentUploadOptions = {},
 ): Promise<Attachment[]> {
+  const { accepted, refused } = await prepareChatAttachments(files);
+  const unreadable = refused[0];
+  if (unreadable) throw new Error(pictureMetadataUploadRefusal(unreadable.filename));
+
   const csrfToken = await getCsrfToken();
   const client = createManagedCloudChatAttachmentsClient({
     decorateMutationHeaders: (headers) => {
@@ -17,7 +25,7 @@ export async function uploadChatAttachments(
       return decorated;
     },
   });
-  return (await client.upload(files, options)).map((attachment) => ({
+  return (await client.upload(accepted, options)).map((attachment) => ({
     id: attachment.id,
     assetId: attachment.id,
     type: attachment.type,

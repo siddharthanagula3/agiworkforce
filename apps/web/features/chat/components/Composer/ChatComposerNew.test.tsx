@@ -21,6 +21,7 @@ import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
+import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
 
 const chatComposerMocks = vi.hoisted(() => ({
   skillResult: {
@@ -472,7 +473,7 @@ describe('ChatComposerNew', () => {
     );
   });
 
-  it('offers explicit recovery choices when an image conflicts with the selected model', () => {
+  it('offers explicit recovery choices when an image conflicts with the selected model', async () => {
     const textOnlyModel = getSelectableModels().find(
       (model) => model.capabilities.vision === false,
     );
@@ -485,10 +486,10 @@ describe('ChatComposerNew', () => {
     expect(input).not.toBeDisabled();
 
     fireEvent.change(input!, {
-      target: { files: [new File(['image'], 'diagram.png', { type: 'image/png' })] },
+      target: { files: [onePixelPng('diagram.png')] },
     });
 
-    const alert = screen.getByRole('alert');
+    const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent("can't read the attached image");
     expect(screen.getByRole('button', { name: 'Use Auto' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove attachments' })).toBeInTheDocument();
@@ -1919,7 +1920,7 @@ describe('ChatComposerNew', () => {
     }
 
     function pngFile(name: string): File {
-      return new File([new Uint8Array([1, 2, 3, 4])], name, { type: 'image/png' });
+      return onePixelPng(name);
     }
 
     async function enterImageMode(): Promise<void> {

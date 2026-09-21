@@ -284,6 +284,12 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         separate private bucket. Images and other non-video files remain in a public R2 bucket:
         normal product responses do not expose its raw URLs, but anyone who obtains an underlying
         storage URL can access that object without signing in.
+        <br />
+        <strong>Location and camera details in pictures:</strong> before a picture you attach in the
+        AGI web, desktop or mobile app leaves your device, AGI removes the location, camera and time
+        details stored inside it, keeping only what is needed to show it the right way up and in the
+        right colours. A picture that cannot be read well enough to do this is not sent. The file
+        name is kept as you gave it.
       </>
     ),
   },

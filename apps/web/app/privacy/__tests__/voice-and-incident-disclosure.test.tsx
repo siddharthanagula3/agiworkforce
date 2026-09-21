@@ -86,3 +86,20 @@ describe('/privacy discloses how a breach notice would reach a reader', () => {
     expect(copy).not.toMatch(/notify you by email/i);
   });
 });
+
+describe('what /privacy says about pictures', () => {
+  it('says location, camera and time details are removed before a picture leaves the device', () => {
+    render(<PrivacyPage />);
+    const text = document.body.textContent ?? '';
+    expect(text).toContain('AGI removes the location, camera and time details stored inside it');
+    expect(text).toContain('A picture that cannot be read well enough to do this is not sent.');
+  });
+
+  it('rests on a strip that the attachment path really calls', () => {
+    const attachments = read('features/chat/hooks/use-attachments.ts');
+    const upload = read('features/chat/services/chat-attachment-upload.ts');
+    expect(attachments).toMatch(/prepareChatAttachments\(/);
+    expect(upload).toMatch(/prepareChatAttachments\(/);
+    expect(read('features/chat/lib/attachment-metadata.ts')).toMatch(/stripImageMetadata/);
+  });
+});

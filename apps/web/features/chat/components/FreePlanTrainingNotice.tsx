@@ -15,28 +15,9 @@ import {
   FREE_PLAN_TRAINING_NOTICE_TAIL,
   FREE_PLAN_TRAINING_NOTICE_TITLE,
 } from '@/lib/compliance/free-plan-training-disclosure';
+import { readAcknowledgedAccount, rememberAcknowledgedAccount } from '../lib/account-notice';
 
 export const FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY = 'agi.notice.free-plan-training';
-
-// The stored value is the account that dismissed it, so a second account on the
-// same browser is still shown it once, and a signed-out visitor is not treated
-// as having seen it.
-function readDismissedAccount(): string | null {
-  try {
-    return window.localStorage.getItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function rememberDismissal(accountId: string): void {
-  try {
-    window.localStorage.setItem(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, accountId);
-  } catch {
-    // Storage refused the write. The notice is dismissed for this session and
-    // returns on the next visit, which is the safe direction for a disclosure.
-  }
-}
 
 export function FreePlanTrainingNotice() {
   const accountId = useBillingStore((state) => state.user?.id ?? null);
@@ -54,7 +35,7 @@ export function FreePlanTrainingNotice() {
       setDismissed(true);
       return;
     }
-    setDismissed(readDismissedAccount() === accountId);
+    setDismissed(readAcknowledgedAccount(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY) === accountId);
   }, [onFreePlan, accountId]);
 
   if (dismissed || !onFreePlan || !accountId) return null;
@@ -80,7 +61,7 @@ export function FreePlanTrainingNotice() {
       <button
         type="button"
         onClick={() => {
-          rememberDismissal(accountId);
+          rememberAcknowledgedAccount(FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, accountId);
           setDismissed(true);
         }}
         aria-label={FREE_PLAN_TRAINING_NOTICE_DISMISS_LABEL}

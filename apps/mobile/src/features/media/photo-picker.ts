@@ -5,6 +5,7 @@ import {
   imageFileNameFor,
   imageMimeTypeFor,
 } from '@/src/features/media/image-normalization';
+import { withoutPictureMetadata } from '@/src/features/media/image-metadata';
 
 type PickImageAssetsOptions = {
   allowsMultipleSelection?: boolean;
@@ -26,7 +27,7 @@ export async function pickImageAssetsFromLibrary({
   });
 
   if (result.canceled) return [];
-  return result.assets;
+  return Promise.all(result.assets.map(withoutPictureMetadata));
 }
 
 export async function captureImageAssetsFromCamera(): Promise<ImagePicker.ImagePickerAsset[]> {
@@ -37,7 +38,7 @@ export async function captureImageAssetsFromCamera(): Promise<ImagePicker.ImageP
   });
 
   if (result.canceled) return [];
-  return result.assets;
+  return Promise.all(result.assets.map(withoutPictureMetadata));
 }
 
 export function imageAssetsToChatAttachments(

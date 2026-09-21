@@ -8,6 +8,14 @@ import {
   MAX_CHAT_ATTACHMENT_COUNT,
   chatAttachmentAcceptAttribute,
 } from '@agiworkforce/cloud-contracts';
+import {
+  PICTURE_NEEDLE,
+  bytesOf,
+  includesText,
+  jpegWithLocation,
+  jpegWithLocationBytes,
+  onePixelPng,
+} from '@features/chat/lib/__tests__/picture-fixtures';
 
 const chatComposerMocks = vi.hoisted(() => ({
   skillResult: {
@@ -189,7 +197,7 @@ describe('ChatComposerNew attachment sources', () => {
   it('attaches files dropped anywhere on the page', async () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    dropOnWindow([textFile('dropped.png', 'image/png')]);
+    dropOnWindow([onePixelPng('dropped.png')]);
 
     expect(await screen.findByRole('button', { name: 'Remove dropped.png' })).toBeTruthy();
   });
@@ -199,7 +207,7 @@ describe('ChatComposerNew attachment sources', () => {
 
     dropOnWindow(
       Array.from({ length: MAX_CHAT_ATTACHMENT_COUNT + 2 }, (_, index) =>
-        textFile(`page-${index}.png`, 'image/png'),
+        onePixelPng(`page-${index}.png`),
       ),
     );
 
@@ -217,7 +225,7 @@ describe('ChatComposerNew attachment sources', () => {
   it('attaches an image pasted into the message field', async () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    pasteImage(screen.getByRole('textbox'), textFile('clipboard.png', 'image/png'));
+    pasteImage(screen.getByRole('textbox'), onePixelPng('clipboard.png'));
 
     expect(await screen.findByRole('button', { name: /^Remove /i })).toBeTruthy();
   });
@@ -235,7 +243,7 @@ describe('ChatComposerNew attachment sources', () => {
     const user = userEvent.setup();
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    dropOnWindow([textFile('one.png', 'image/png'), textFile('two.pdf', 'application/pdf')]);
+    dropOnWindow([onePixelPng('one.png'), textFile('two.pdf', 'application/pdf')]);
     await screen.findByRole('button', { name: 'Remove one.png' });
 
     await user.click(screen.getByRole('button', { name: 'Remove one.png' }));
@@ -244,5 +252,48 @@ describe('ChatComposerNew attachment sources', () => {
       expect(screen.queryByRole('button', { name: 'Remove one.png' })).toBeNull(),
     );
     expect(screen.getByRole('button', { name: 'Remove two.pdf' })).toBeTruthy();
+  });
+
+  it('sends a dropped photo without the camera and place it was taken', async () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+
+    dropOnWindow([jpegWithLocation('beach.jpg')]);
+    await screen.findByRole('button', { name: 'Remove beach.jpg' });
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Where is this?' } });
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    const sent = (onSend.mock.calls[0]?.[1] as File[] | undefined)?.[0];
+    if (!sent) throw new Error('the photo was not sent');
+    const bytes = await bytesOf(sent);
+    expect(includesText(bytes, PICTURE_NEEDLE.camera)).toBe(false);
+    expect(includesText(bytes, PICTURE_NEEDLE.pixels)).toBe(true);
+  });
+
+  it('refuses a photo it cannot clean, says so, and names it in the turn', async () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const whole = jpegWithLocationBytes();
+    const cut = new File([whole.subarray(0, whole.length - 2)], 'cut.jpg', {
+      type: 'image/jpeg',
+    });
+
+    dropOnWindow([cut]);
+
+    expect(
+      await screen.findByText(
+        '"cut.jpg" was not attached. The location and camera details in a picture are removed before it leaves your device, and this file could not be read well enough to do that. Save a copy from a photo app and attach that instead.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove cut.jpg' })).toBeNull();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Where is this?' } });
+    fireEvent.click(screen.getByRole('button', { name: /send/i }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0]?.[0]).toContain(
+      '[attachment unavailable: cut.jpg could not be sent because the location and camera details in it could not be removed.]',
+    );
+    expect(onSend.mock.calls[0]?.[1]).toBeUndefined();
   });
 });
