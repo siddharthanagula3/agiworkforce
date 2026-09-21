@@ -12,6 +12,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { LIBRARY_DEFAULT_PAGE_SIZE } from '@agiworkforce/cloud-contracts';
 import { LibraryView, type LibraryTransport } from '../LibraryView';
 
 function jsonResponse(body: unknown, ok = true): Response {
@@ -137,6 +138,22 @@ describe('shared LibraryView', () => {
 
     expect(await screen.findByTestId('library-error')).toBeTruthy();
     expect(screen.queryByTestId('library-empty-state')).toBeNull();
+  });
+
+  it('asks for one bounded page of a large Library and waits to be asked for more', async () => {
+    const backlog = Array.from({ length: LIBRARY_DEFAULT_PAGE_SIZE }, (_item, index) => ({
+      ...ITEM,
+      id: `asset-${index}`,
+      file_name: `report-${index}.pdf`,
+    }));
+    const transport = makeTransport({ listPage: pageOf(backlog, true, LIBRARY_DEFAULT_PAGE_SIZE) });
+    render(<LibraryView transport={transport} />);
+
+    expect(await screen.findByText('report-0.pdf')).toBeTruthy();
+    expect(lastParams(transport).get('limit')).toBe(String(LIBRARY_DEFAULT_PAGE_SIZE));
+    await waitFor(() => expect(screen.getByTestId('library-show-more')).toBeTruthy());
+    expect(transport.listPage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(`report-${LIBRARY_DEFAULT_PAGE_SIZE}.pdf`)).toBeNull();
   });
 
   it('appends the next page rather than replacing it', async () => {
