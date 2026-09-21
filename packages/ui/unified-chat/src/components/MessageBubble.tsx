@@ -29,7 +29,7 @@ import { StreamingMarkdownContent } from './markdown/StreamingMarkdownContent';
 import { AgentActivityTimeline, hasCanonicalToolActivity } from './AgentActivityTimeline';
 import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
 import { artifactDownloadFile } from '../lib/artifact-download';
-import { getStreamErrorMessage } from '../lib/continue-generation';
+import { getStreamErrorNotice } from '../lib/continue-generation';
 import { useHostBridge } from '../lib/hostBridge';
 import type {
   ChatMessage,
@@ -667,7 +667,7 @@ export function MessageBubble({
   const failureMessage =
     isUser || isStreaming || paywallBlock
       ? undefined
-      : (message.error ?? getStreamErrorMessage(message));
+      : (message.error ?? getStreamErrorNotice(message));
 
   async function handleCopy() {
     try {

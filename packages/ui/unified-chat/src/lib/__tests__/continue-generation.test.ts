@@ -4,6 +4,8 @@ import {
   isMessageContinuable,
   hasStreamError,
   getStreamErrorMessage,
+  getStreamErrorNotice,
+  getStreamErrorReference,
   CONTINUE_GENERATION_INSTRUCTION,
 } from '../continue-generation';
 
@@ -177,6 +179,34 @@ describe('getStreamErrorMessage', () => {
     expect(getStreamErrorMessage({ metadata: {} })).toBeUndefined();
     expect(getStreamErrorMessage(undefined)).toBeUndefined();
     expect(getStreamErrorMessage(null)).toBeUndefined();
+  });
+});
+
+describe('getStreamErrorNotice', () => {
+  const failed = (streamError: unknown) => ({ metadata: { streamError } });
+
+  it('adds the reference the runtime sent, in the form the web uses', () => {
+    expect(
+      getStreamErrorNotice(failed({ message: 'The model is busy.', requestId: 'req_7f3a' })),
+    ).toBe('The model is busy. Reference: req_7f3a');
+  });
+
+  it('shows the sentence alone when no reference was sent', () => {
+    expect(getStreamErrorNotice(failed({ message: 'The model is busy.' }))).toBe(
+      'The model is busy.',
+    );
+    expect(getStreamErrorNotice(failed('The model is busy.'))).toBe('The model is busy.');
+  });
+
+  it('never invents a notice for a turn that reported no sentence', () => {
+    expect(getStreamErrorNotice({ metadata: { finishReason: 'error' } })).toBeUndefined();
+    expect(getStreamErrorNotice(failed({ requestId: 'req_7f3a' }))).toBeUndefined();
+  });
+
+  it('does not show something that is not an id as a reference', () => {
+    for (const requestId of ['', 'ab', 'has spaces in it', '<b>x</b>', 42, null]) {
+      expect(getStreamErrorReference(failed({ message: 'x', requestId }))).toBeUndefined();
+    }
   });
 });
 
