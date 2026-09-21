@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { streamMock, metadataMock, hasKeyMock, loggerMock } = vi.hoisted(() => ({
@@ -23,6 +26,7 @@ import {
   moderateGeneratedMedia,
   moderateUploadedImage,
   parseClassifierVerdict,
+  recordGeneratedMediaProviderRefusal,
 } from '../output-moderation';
 import { resetOutputClassifierModelCache } from '../output-classifier-model';
 
@@ -152,6 +156,148 @@ describe('moderateGeneratedMedia', () => {
     });
     expect(verdict.allowed).toBe(true);
     expect(loggerMock.warn).toHaveBeenCalled();
+  });
+});
+
+describe('moderateGeneratedMedia over a staged file', () => {
+  const VIDEO_BYTES = Buffer.concat([
+    Buffer.from('00000018667479706d70343200000000', 'hex'),
+    Buffer.alloc(512 * 1024, 0x2f),
+  ]);
+  const VIDEO_DIGEST = sha256(VIDEO_BYTES);
+  let directory: string;
+  let filePath: string;
+
+  beforeEach(async () => {
+    directory = await mkdtemp(path.join(tmpdir(), 'agi-output-moderation-'));
+    filePath = path.join(directory, 'provider-output');
+    await writeFile(filePath, VIDEO_BYTES);
+  });
+
+  afterEach(async () => {
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  it('blocks a staged video whose streamed digest is on the denylist', async () => {
+    process.env['MODERATION_HASH_DENYLIST'] = `ncmec:${VIDEO_DIGEST}`;
+
+    const verdict = await moderateGeneratedMedia({
+      userId: 'user_1',
+      media: 'video',
+      operation: 'generate',
+      filePath,
+      mimeType: 'video/mp4',
+      prompt: 'a sunset',
+    });
+
+    expect(verdict.allowed).toBe(false);
+    if (verdict.allowed) throw new Error('expected a refusal');
+    expect(verdict.reason).toBe('output_hash_denylist');
+    expect(verdict.refusal).toBe(GENERATED_OUTPUT_REFUSAL);
+    expect(verdict.contentSha256).toBe(VIDEO_DIGEST);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: 'generated-output',
+        action: 'block',
+        contentSha256: VIDEO_DIGEST,
+        listLabel: 'ncmec',
+        ruleIds: ['managed-video.output.hash-denylist', 'operation:generate'],
+      }),
+      expect.any(String),
+    );
+  });
+
+  it('allows a staged video that is not on the denylist and reports its digest', async () => {
+    const verdict = await moderateGeneratedMedia({
+      userId: 'user_1',
+      media: 'video',
+      operation: 'generate',
+      filePath,
+      mimeType: 'video/mp4',
+    });
+
+    expect(verdict.allowed).toBe(true);
+    expect(verdict.contentSha256).toBe(VIDEO_DIGEST);
+  });
+
+  it('never sends a video to the image classifier, and never reports one as classified', async () => {
+    process.env['MEDIA_OUTPUT_MODERATION_MODEL'] = 'vision-classifier';
+    metadataMock.mockReturnValue({
+      id: 'vision-classifier',
+      provider: 'openai',
+      inputModalities: ['text', 'image'],
+    });
+    streamMock.mockImplementation(() => verdictStream('{"verdict":"block","categories":["csae"]}'));
+
+    const verdict = await moderateGeneratedMedia({
+      userId: 'user_1',
+      media: 'video',
+      operation: 'generate',
+      filePath,
+      mimeType: 'video/mp4',
+    });
+
+    expect(streamMock).not.toHaveBeenCalled();
+    expect(verdict.allowed).toBe(true);
+  });
+
+  it('screens a staged result far past the size the in-memory classifier gives up at', async () => {
+    const large = Buffer.alloc(7 * 1024 * 1024, 0x3b);
+    large.write('staged-video-stand-in', 6 * 1024 * 1024);
+    const largePath = path.join(directory, 'large-provider-output');
+    await writeFile(largePath, large);
+    process.env['MODERATION_HASH_DENYLIST'] = sha256(large);
+
+    const verdict = await moderateGeneratedMedia({
+      userId: 'user_1',
+      media: 'video',
+      operation: 'generate',
+      filePath: largePath,
+      mimeType: 'video/mp4',
+    });
+
+    expect(verdict.allowed).toBe(false);
+    if (verdict.allowed) throw new Error('expected a refusal');
+    expect(verdict.reason).toBe('output_hash_denylist');
+  });
+
+  it('rejects rather than allowing when the staged file cannot be read', async () => {
+    await expect(
+      moderateGeneratedMedia({
+        userId: 'user_1',
+        media: 'video',
+        operation: 'generate',
+        filePath: path.join(directory, 'missing'),
+        mimeType: 'video/mp4',
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe('recordGeneratedMediaProviderRefusal', () => {
+  it('audits the provider verdict with its failure code and returns the refusal sentence', () => {
+    const refusal = recordGeneratedMediaProviderRefusal({
+      userId: 'user_1',
+      media: 'video',
+      operation: 'generate',
+      providerFailureCode: 'SAFETY.INPUT.TEXT',
+      prompt: 'a sunset',
+    });
+
+    expect(refusal).toBe(GENERATED_OUTPUT_REFUSAL);
+    expect(loggerMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: 'generated-output',
+        action: 'block',
+        categories: ['provider_safety'],
+        ruleIds: [
+          'managed-video.output.provider-safety',
+          'operation:generate',
+          'providerFailureCode:SAFETY.INPUT.TEXT',
+        ],
+      }),
+      expect.any(String),
+    );
   });
 });
 
