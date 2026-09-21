@@ -169,7 +169,10 @@ describe('sendPushToUser, every transport the account registered', () => {
     ecdh.generateKeys();
     return {
       publicKey: ecdh.getPublicKey().toString('base64url'),
-      privateKey: ecdh.getPrivateKey().toString('base64url'),
+      // Node strips a leading zero byte about once in 256 keys; a VAPID key is always 32.
+      privateKey: Buffer.concat([Buffer.alloc(32), ecdh.getPrivateKey()])
+        .subarray(-32)
+        .toString('base64url'),
     };
   }
 
