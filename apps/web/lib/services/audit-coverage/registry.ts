@@ -62,6 +62,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'llm/v1/route/preview/route.ts', reason: 'no_governed_state' },
   { route: 'me/routing-preferences/route.ts', reason: 'own_content' },
   { route: 'media/route.ts', reason: 'own_content' },
+  { route: 'media/image/cancel/route.ts', reason: 'own_content' },
   { route: 'media/video/cancel/route.ts', reason: 'own_content' },
   { route: 'media/video/openrouter-webhook/route.ts', reason: 'inbound_callback' },
   { route: 'memory/[id]/route.ts', reason: 'own_content' },
