@@ -58,6 +58,7 @@ export type IncompleteTurnCause =
   | 'sessionExpired'
   | 'accountLimit'
   | 'sharedFreeAllowance'
+  | 'interrupted'
   | 'emptyResponse';
 
 /**
@@ -71,6 +72,7 @@ export const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, Incomp
   provider_rate_limited: 'rateLimit',
   provider_quota_exhausted: 'rateLimit',
   free_allowance_exhausted: 'sharedFreeAllowance',
+  stream_interrupted: 'interrupted',
   provider_overloaded: 'providerOutage',
   provider_unreachable: 'providerOutage',
   provider_error: 'providerOutage',
@@ -124,6 +126,8 @@ const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, str
     'You have reached a usage limit on your account. Open Usage to see when it resets, then retry.',
   sharedFreeAllowance:
     "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. It resets on the provider's schedule. Try again later, or use your own provider key.",
+  interrupted:
+    'The response stopped part way through. The part that arrived is kept above. Retry to get a complete answer.',
   emptyResponse: 'The model returned no response for this turn. Retry, or rephrase your message.',
 };
 
