@@ -6,7 +6,11 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { handlesKeyMaterial, isLifecycleOperation } from './check-security-key-lifecycle.mjs';
+import {
+  handlesKeyMaterial,
+  isLifecycleOperation,
+  readWorkspaceSealedStores,
+} from './check-security-key-lifecycle.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const guard = path.join(repoRoot, 'scripts/check-security-key-lifecycle.mjs');
@@ -192,5 +196,135 @@ test('the crypto directory is a subject whatever it imports', () => {
       "import { openEnvelope } from '@/lib/crypto/envelope';",
     ),
     true,
+  );
+});
+
+const SEALING_MODULE = `
+import { organizationKeyRing } from '@/lib/server/organization-encryption-keys';
+import { sealEnvelope } from '@/lib/crypto/envelope';
+
+export async function saveDestination(db, organizationId, secret) {
+  const { ring } = await organizationKeyRing(db, organizationId);
+  const ciphertext = sealEnvelope(ring, secret, 'versioned', \`audit-destination:\${organizationId}\`);
+  return db.execute('update public.audit_destinations set secret_ciphertext = $1', [ciphertext]);
+}
+`;
+
+function registry(entries) {
+  return `
+export interface WorkspaceSealedStore {
+  readonly module: string;
+}
+
+export const WORKSPACE_SEALED_STORES: readonly WorkspaceSealedStore[] = [
+${entries}
+];
+`;
+}
+
+const AUDIT_ENTRY = `  {
+    module: 'apps/web/lib/services/audit.ts',
+    table: 'public.audit_destinations',
+    column: 'secret_ciphertext',
+    keyColumn: 'organization_id',
+    organizationColumn: 'organization_id',
+    contextPrefix: 'audit-destination:',
+  },`;
+
+test('a column sealed under a workspace ring that the registry does not name fails', () => {
+  withTree(
+    {
+      'apps/web/lib/services/audit.ts': SEALING_MODULE,
+      'apps/web/lib/crypto/connector-secret-reseal.ts': registry(''),
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /audit\.ts seals a value under a workspace key ring/);
+      assert.match(output, /sealed under the version it then retires/);
+    },
+  );
+});
+
+test('the same column passes once the registry names it', () => {
+  withTree(
+    {
+      'apps/web/lib/services/audit.ts': SEALING_MODULE,
+      'apps/web/lib/crypto/connector-secret-reseal.ts': registry(AUDIT_ENTRY),
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 0, output);
+      assert.match(output, /1 workspace-sealed column\(s\) in 1 module\(s\)/);
+    },
+  );
+});
+
+test('a registry entry whose column the module never writes fails', () => {
+  withTree(
+    {
+      'apps/web/lib/services/audit.ts': SEALING_MODULE,
+      'apps/web/lib/crypto/connector-secret-reseal.ts': registry(
+        AUDIT_ENTRY.replace("column: 'secret_ciphertext'", "column: 'signing_secret_enc'"),
+      ),
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /the column "signing_secret_enc", which does not appear in it/);
+    },
+  );
+});
+
+test('a registry entry for a module that no longer seals fails', () => {
+  withTree(
+    {
+      'apps/web/lib/crypto/connector-secret-reseal.ts': registry(AUDIT_ENTRY),
+      'apps/web/lib/services/other.ts': 'export const nothing = 1;\n',
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /which no longer seals under a workspace key ring/);
+    },
+  );
+});
+
+test('the registry reads back the fields the rewrap needs', () => {
+  const [store] = readWorkspaceSealedStores(registry(AUDIT_ENTRY));
+  assert.deepEqual(store, {
+    module: 'apps/web/lib/services/audit.ts',
+    table: 'public.audit_destinations',
+    column: 'secret_ciphertext',
+    contextPrefix: 'audit-destination:',
+  });
+  assert.deepEqual(readWorkspaceSealedStores('export const a = 1;'), []);
+});
+
+test('a maintenance script is a caller, which is what the failure text offers', () => {
+  withTree(
+    {
+      'apps/web/lib/server/workspace-keys.ts': KEY_MODULE,
+      'scripts/rotate-workspace-keys.mjs':
+        "const { rotateWorkspaceKey } = await import('../apps/web/lib/server/workspace-keys.ts');\n",
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 0, output);
+    },
+  );
+});
+
+test('a guard that only names the symbols is not a sealing module', () => {
+  withTree(
+    {
+      'apps/web/lib/crypto/connector-secret-reseal.ts': registry(''),
+      'scripts/check-something.mjs':
+        "const CALL = 'organizationKeyRing(';\nconst SEAL = 'sealEnvelope(';\nconsole.log(CALL, SEAL);\n",
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 0, output);
+    },
   );
 });

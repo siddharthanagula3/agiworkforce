@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 172 of 271 database-backed hosted API route files. Counted against the 271 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 99 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
+      'Partial: 172 of 273 database-backed hosted API route files. Counted against the 273 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
   },
   {
     label: 'Authentication and CSRF',
@@ -384,7 +384,7 @@ export default function TrustPage() {
                       {
                         label: '2026-09-20',
                         value:
-                          'Re-measured after the sign-in methods route, the legal hold preservation count, the soft-deleted resource purge and the client failure ingest shipped, and after connecting GitHub began checking the workspace policy, which makes that route read the database. The database-backed total moved from 267 to 271 and the owner-connection remainder from 95 to 99; the row-level-isolation count stays at 172. The number of hosted routes that touch no database ends the day where it began, at 115.',
+                          'Re-measured after the sign-in methods route, the legal hold preservation count, the soft-deleted resource purge and the client failure ingest shipped, after connecting GitHub began checking the workspace policy, which makes that route read the database, and after the two workspace encryption key routes arrived, which need the owner connection because the key tables grant the policy-bound role read access only. The database-backed total moved from 267 to 273 and the owner-connection remainder from 95 to 101; the row-level-isolation count stays at 172. The number of hosted routes that touch no database ends the day where it began, at 115.',
                       },
                       {
                         label: '2026-09-20',

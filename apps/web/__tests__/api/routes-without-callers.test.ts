@@ -129,6 +129,14 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'lists and unlinks sign-in methods behind step-up; the settings pane that calls it is not built yet',
   },
   {
+    url: '/api/settings/organization/keys',
+    why: 'enrols, rotates, replaces and revokes the workspace encryption key; the settings pane that calls it is not built yet',
+  },
+  {
+    url: '/api/settings/organization/keys/rewrap',
+    why: 'moves ciphertext off a retired key version and retires it; the settings pane that calls it is not built yet',
+  },
+  {
     url: '/api/settings/security/compromise',
     why: 'authenticated emergency account-compromise response, not a routine settings control',
   },
