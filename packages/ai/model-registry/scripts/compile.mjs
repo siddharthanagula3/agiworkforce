@@ -1893,7 +1893,66 @@ function normalizeAutoPolicy(autoPolicy) {
   };
 }
 
-function validateAutoPolicy(autoPolicy, models, capabilities) {
+function validateSemanticResponseAssessmentPolicy(policy, harnessCatalog) {
+  assert.equal(typeof policy, 'object', 'semanticResponseAssessment must be an object');
+  for (const field of [
+    'model',
+    'developer',
+    'transportProvider',
+    'upstreamProvider',
+    'harnessId',
+    'promptId',
+  ]) {
+    assert.equal(
+      typeof policy[field],
+      'string',
+      `semanticResponseAssessment.${field} must be a string`,
+    );
+    assert.ok(policy[field].length > 0, `semanticResponseAssessment.${field} must not be empty`);
+  }
+  const harness = harnessCatalog.harnesses[policy.harnessId];
+  assert.ok(harness, `semanticResponseAssessment references unknown harness ${policy.harnessId}`);
+  assert.equal(
+    harness.provider,
+    policy.transportProvider,
+    'semanticResponseAssessment harness provider must match transportProvider',
+  );
+  assert.deepEqual(
+    harness.trustModes,
+    ['managed_cloud'],
+    'semanticResponseAssessment harness must be managed-cloud only',
+  );
+  assert.equal(harness.apiFamily, 'evaluation');
+  assert.ok(Number.isInteger(policy.contextTokens) && policy.contextTokens > 0);
+  assert.match(policy.promotionEndsOn, /^\d{4}-\d{2}-\d{2}$/u);
+  assert.match(policy.pricing.verifiedOn, /^\d{4}-\d{2}-\d{2}$/u);
+  assert.equal(policy.pricing.currency, 'USD');
+  assert.equal(typeof policy.pricing.source, 'string');
+  assert.ok(policy.pricing.source.startsWith('https://'));
+  for (const field of ['inputPerMillion', 'outputPerMillion']) {
+    assert.ok(Number.isFinite(policy.pricing[field]) && policy.pricing[field] >= 0);
+  }
+  for (const field of [
+    'maxStateBytes',
+    'maxInputTokensPerRequest',
+    'timeoutMs',
+    'maxInFlight',
+    'dailyInputTokenCap',
+  ]) {
+    assert.ok(
+      Number.isInteger(policy.limits[field]) && policy.limits[field] > 0,
+      `semanticResponseAssessment.limits.${field} must be a positive integer`,
+    );
+  }
+  assert.ok(
+    policy.limits.minimumSelectedProbability >= 0 && policy.limits.minimumSelectedProbability <= 1,
+    'semanticResponseAssessment.limits.minimumSelectedProbability must be between zero and one',
+  );
+  assert.equal(typeof policy.zeroDataRetentionVerified, 'boolean');
+  assert.ok(Array.isArray(policy.residencyRegions));
+}
+
+function validateAutoPolicy(autoPolicy, models, capabilities, harnessCatalog) {
   const aliasKeys = Object.keys(autoPolicy.aliases).sort();
   const compatibilityAliases = [...AUTO_POLICY_MODEL_IDS].sort();
   assert.deepEqual(
@@ -1903,6 +1962,7 @@ function validateAutoPolicy(autoPolicy, models, capabilities) {
   );
   assert.ok(autoPolicy.aliases[autoPolicy.defaultAlias], 'defaultAlias must name an Auto alias');
   assert.ok(autoPolicy.slots[autoPolicy.fallbackSlot], 'fallbackSlot must name a routing slot');
+  validateSemanticResponseAssessmentPolicy(autoPolicy.semanticResponseAssessment, harnessCatalog);
 
   for (const [slotId, slot] of Object.entries(autoPolicy.slots)) {
     assert.ok(
@@ -2495,7 +2555,7 @@ function buildNormalizedRegistry(
     resolveFamilyRefsDeep(routingPolicies.auto, familyCatalog),
     catalog,
   );
-  validateAutoPolicy(resolvedAutoPolicy, models, capabilities);
+  validateAutoPolicy(resolvedAutoPolicy, models, capabilities, harnessCatalog);
   const autoPolicy = normalizeAutoPolicy(resolvedAutoPolicy);
   const runtimeProfiles = buildRuntimeProfiles(harnessCatalog);
   const retiredModels = loadRetiredModels();

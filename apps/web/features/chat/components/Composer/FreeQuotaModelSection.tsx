@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Check, ChevronDown } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 import {
@@ -13,10 +13,12 @@ export function FreeQuotaModelSection({
   enabled,
   selectedId,
   onSelect,
+  children,
 }: {
   enabled: boolean;
   selectedId: string;
   onSelect: (id: string) => void;
+  children?: ReactNode;
 }) {
   const [catalogue, setCatalogue] = useState<FreeQuotaCatalogue | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'hidden' | 'error'>('loading');
@@ -24,8 +26,9 @@ export function FreeQuotaModelSection({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('chat');
   const [attempt, setAttempt] = useState(0);
+  const quotaExperimentEnabled = enabled && process.env.NODE_ENV !== 'production';
   useEffect(() => {
-    if (!enabled || process.env.NODE_ENV === 'production') return;
+    if (!quotaExperimentEnabled) return;
     const controller = new AbortController();
     setStatus('loading');
     void fetch('/api/models/free-quota', { signal: controller.signal, cache: 'no-store' })
@@ -43,8 +46,8 @@ export function FreeQuotaModelSection({
         if (!controller.signal.aborted) setStatus('error');
       });
     return () => controller.abort();
-  }, [enabled, attempt]);
-  if (process.env.NODE_ENV === 'production' || status === 'hidden') return null;
+  }, [attempt, quotaExperimentEnabled]);
+  if (!children && (!quotaExperimentEnabled || status === 'hidden')) return null;
   const models =
     catalogue?.models.filter(
       (model) =>
@@ -64,9 +67,12 @@ export function FreeQuotaModelSection({
       </button>
       {expanded && (
         <div className="space-y-2 px-2 pb-2">
-          <p className="px-1 text-xs text-muted-foreground">Use available free quota.</p>
-          {status === 'loading' && <Spinner size="sm" />}
-          {status === 'error' && (
+          <p className="px-1 text-xs text-muted-foreground">
+            Free models and available promotional quota.
+          </p>
+          {children}
+          {quotaExperimentEnabled && status === 'loading' && <Spinner size="sm" />}
+          {quotaExperimentEnabled && status === 'error' && (
             <button
               type="button"
               className="px-1 text-sm text-foreground underline"
@@ -75,7 +81,7 @@ export function FreeQuotaModelSection({
               Retry loading free models
             </button>
           )}
-          {catalogue && status === 'ready' && (
+          {quotaExperimentEnabled && catalogue && status === 'ready' && (
             <>
               <select
                 aria-label="Free model category"

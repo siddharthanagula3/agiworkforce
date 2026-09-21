@@ -1,8 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getDefaultModelFor } from '@agiworkforce/types';
+import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/types';
 
 const PRO_CHAT_MODEL = getDefaultModelFor('pro', 'chat');
+const AUTO_MODEL = getDefaultAutoRoutingProfile().id;
 
 const mocks = vi.hoisted(() => ({
   enforceSafety: vi.fn(),
@@ -70,7 +71,11 @@ const proSubscription = {
   stripe_price_id: 'stripe-price-pro',
 };
 
-function mapIntentRequest(key: string): NextRequest {
+function chatRequest(
+  key: string,
+  message = 'Show coffee shops near me on a map.',
+  options: { maxTokens?: number; model?: string } = {},
+): NextRequest {
   return new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -79,9 +84,10 @@ function mapIntentRequest(key: string): NextRequest {
       'x-agi-surface': 'web',
     },
     body: JSON.stringify({
-      model: PRO_CHAT_MODEL,
-      messages: [{ role: 'user', content: 'Show coffee shops near me on a map.' }],
+      model: options.model ?? PRO_CHAT_MODEL,
+      messages: [{ role: 'user', content: message }],
       stream: true,
+      ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
       x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
     }),
   });
@@ -130,7 +136,7 @@ beforeEach(() => {
 
 describe('processRequest surface binding', () => {
   it('classifies a browser session by the surface its token is bound to and offers the web-only card', async () => {
-    const result = await processRequest(mapIntentRequest('surface-web-1'), auth());
+    const result = await processRequest(chatRequest('surface-web-1'), auth());
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -142,7 +148,7 @@ describe('processRequest surface binding', () => {
 
   it('pins a trusted developer credential to a developer surface despite a spoofed header', async () => {
     const result = await processRequest(
-      mapIntentRequest('surface-dev-1'),
+      chatRequest('surface-dev-1'),
       auth({ surfaceClass: 'developer' }),
     );
 
@@ -154,7 +160,7 @@ describe('processRequest surface binding', () => {
 
   it('pins an API key to the api surface despite a spoofed header', async () => {
     const result = await processRequest(
-      mapIntentRequest('surface-key-1'),
+      chatRequest('surface-key-1'),
       auth({ token: 'sk_live_abc123' }),
     );
 
@@ -163,5 +169,54 @@ describe('processRequest surface binding', () => {
     expect(result.chatSurface).toBe('api');
     expect(result.chatRequest.tools ?? []).toEqual([]);
     expect(mocks.customInstructions).not.toHaveBeenCalled();
+  });
+
+  it('enforces the visible response budget on web chat independently of routing work', async () => {
+    const result = await processRequest(
+      chatRequest('surface-budget-1', 'Did the deployment succeed? Answer in one sentence.', {
+        model: AUTO_MODEL,
+      }),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.responseBudget).toMatchObject({
+      depth: 'one_sentence',
+      format: 'sentence',
+      outputTokenBudget: 128,
+      source: 'explicit',
+    });
+    expect(result.maxTokens).toBe(128);
+    expect(result.llmRequest.messages.map((message) => message.content).join('\n')).toContain(
+      'Use one concise sentence.',
+    );
+  });
+
+  it('leaves an explicitly selected model outside the adaptive Auto budget', async () => {
+    const result = await processRequest(
+      chatRequest('surface-budget-manual-1', 'Did the deployment succeed? Answer in one sentence.'),
+      auth(),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.responseBudget).toBeUndefined();
+    expect(result.maxTokens).toBeGreaterThan(128);
+    expect(result.llmRequest.messages.map((message) => message.content).join('\n')).not.toContain(
+      'Use one concise sentence.',
+    );
+  });
+
+  it('preserves API caller output control', async () => {
+    const result = await processRequest(
+      chatRequest('surface-budget-api-1', 'Did the deployment succeed?', { maxTokens: 777 }),
+      auth({ token: 'sk_live_abc123' }),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.responseBudget).toBeUndefined();
+    expect(result.maxTokens).toBe(777);
   });
 });

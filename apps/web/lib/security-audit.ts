@@ -242,6 +242,7 @@ export type AuditEventType =
   | 'member_invitation_declined'
   | 'plan_changed'
   | 'mobile_purchase_verified'
+  | 'waitlist_access_redeemed'
   | 'checkout_started'
   | 'billing_portal_opened'
   | 'data_exported'
@@ -720,6 +721,7 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'member_invitation_declined':
       return 'organization_member';
     case 'plan_changed':
+    case 'waitlist_access_redeemed':
     case 'checkout_started':
     case 'billing_portal_opened':
       return 'subscription';

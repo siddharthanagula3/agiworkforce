@@ -18,6 +18,6 @@ ALTER TABLE public.plugin_registry_versions
   DROP COLUMN IF EXISTS signature;
 
 DELETE FROM public.schema_migrations
- WHERE filename = '0288_plugin_version_signatures.sql';
+ WHERE filename = '0290_plugin_version_signatures.sql';
 
 COMMIT;

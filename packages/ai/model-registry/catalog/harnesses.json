@@ -150,6 +150,13 @@
       "trustModes": ["managed_cloud"],
       "features": {}
     },
+    "vercel_gateway/evaluation": {
+      "provider": "vercel_gateway",
+      "apiFamily": "evaluation",
+      "adapter": "@agiworkforce/providers-vercel-gateway",
+      "trustModes": ["managed_cloud"],
+      "features": {}
+    },
     "xai/chat-completions": {
       "provider": "xai",
       "apiFamily": "chat_completions",

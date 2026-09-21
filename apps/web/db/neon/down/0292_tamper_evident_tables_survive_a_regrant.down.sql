@@ -22,6 +22,6 @@ DROP TRIGGER IF EXISTS support_access_grants_owner_writes_only ON public.support
 DROP FUNCTION IF EXISTS public.forbid_non_owner_rewrite();
 
 DELETE FROM public.schema_migrations
- WHERE filename = '0290_tamper_evident_tables_survive_a_regrant.sql';
+ WHERE filename = '0292_tamper_evident_tables_survive_a_regrant.sql';
 
 COMMIT;

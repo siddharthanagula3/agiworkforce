@@ -242,6 +242,6 @@ alter table public.managed_usage_requests
   drop column if exists is_overage;
 
 delete from public.schema_migrations
- where filename = '0279_managed_usage_overage_classification.sql';
+ where filename = '0281_managed_usage_overage_classification.sql';
 
 commit;

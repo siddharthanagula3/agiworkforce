@@ -229,10 +229,10 @@ mod tests {
     #[tokio::test]
     async fn test_permissions_check_nonexistent() {
         let check = PermissionsCheck;
-        // Use a path that definitely doesn't exist and can't be created
-        let ctx = DiagnosticContext::new(std::path::PathBuf::from(
-            "/root/definitely_not_writable_12345",
-        ));
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("file-not-directory");
+        std::fs::write(&file, b"occupied").unwrap();
+        let ctx = DiagnosticContext::new(file.join("child"));
 
         let result = check.run(&ctx).await;
         // Should be error because we can't create the directory

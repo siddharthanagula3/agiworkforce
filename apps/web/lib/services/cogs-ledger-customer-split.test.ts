@@ -56,6 +56,22 @@ describe('resolveCustomerCanonicalMicrousd', () => {
 });
 
 describe('recordProviderCostEvent · customer and provider columns', () => {
+  it('preserves provider costs smaller than one cent', async () => {
+    const db = fakeDb();
+    await recordProviderCostEvent(
+      {
+        ...SEARCH_EVENT,
+        providerCostCents: 0,
+        providerEstimatedCostMicrousd: 12,
+        providerReportedCostMicrousd: 11,
+      },
+      db as never,
+    );
+    expect(column(db, 'provider_estimated_cost_microusd')).toBe(12);
+    expect(column(db, 'provider_reported_cost_microusd')).toBe(11);
+    expect(column(db, 'reconciliation_status')).toBe('provider_reported');
+  });
+
   it('writes the customer charge in microUSD and in credits', async () => {
     const db = fakeDb();
     await recordProviderCostEvent(

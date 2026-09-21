@@ -392,9 +392,9 @@ export default function TrustPage() {
                           'Re-measured after the deletion graph was closed over the database schema instead of a hand-kept list. Two stores had kept an erased account\u2019s identifiers: referrals and device installations. Both joined the enumerated erasure list, which grew from 93 user-scoped tables to 95.',
                       },
                       {
-                        label: '2026-09-19',
+                        label: '2026-09-20',
                         value:
-                          'Re-measured for the production release after the current route and authorization changes. The row-level-isolation count moved from 164 to 171 of 266 database-backed routes and the owner-connection remainder from 103 to 95. The number of hosted routes that touch no database moved from 108 to 114. Each figure is derived from the deciding route source by a test, not maintained independently from the implementation.',
+                          'Re-measured after the billing waitlist access route moved onto the caller-scoped connection. The row-level-isolation count is 173 of 268 database-backed routes and the owner-connection remainder is 95. The number of hosted routes that touch no database is 115. Each figure is derived from the deciding route source by a test, not maintained independently from the implementation.',
                       },
                       {
                         label: '2026-09-18',

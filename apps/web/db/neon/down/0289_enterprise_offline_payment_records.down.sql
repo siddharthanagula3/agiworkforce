@@ -21,6 +21,6 @@ drop table if exists public.enterprise_offline_payment_records;
 
 -- destructive: removes this migration's ledger row so the runner can apply it again.
 delete from public.schema_migrations
- where filename = '0287_enterprise_offline_payment_records.sql';
+ where filename = '0289_enterprise_offline_payment_records.sql';
 
 commit;

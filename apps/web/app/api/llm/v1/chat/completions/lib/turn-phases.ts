@@ -25,6 +25,7 @@ export const CHAT_TURN_PHASE = {
   attachmentsAndMemoryPolicy: 'attachments_and_memory_policy',
   memoryEnrichment: 'memory_enrichment',
   routeSelection: 'route_selection',
+  responseAssessment: 'response_assessment',
   modelPolicy: 'model_policy',
   skillCatalog: 'skill_catalog',
   creditCheck: 'credit_check',

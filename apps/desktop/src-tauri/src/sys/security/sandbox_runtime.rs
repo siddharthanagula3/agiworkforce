@@ -289,9 +289,12 @@ mod tests {
             Some(cwd.to_string_lossy().as_ref()),
             &[],
             &preferences,
-        )
-        .unwrap()
-        .unwrap();
+        );
+        if cfg!(windows) {
+            assert!(spec.unwrap_err().contains("not supported on Windows"));
+            return;
+        }
+        let spec = spec.unwrap().unwrap();
 
         assert!(spec.args.iter().any(|arg| arg == "bash"));
         assert!(spec.args.iter().any(|arg| arg == "-c"));
