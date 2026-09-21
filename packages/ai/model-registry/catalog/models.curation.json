@@ -340,8 +340,8 @@
         "nvidia/nemotron-3-nano-30b-a3b": "family:google/gemini-flash-lite",
         "nvidia/nemotron-3-super-120b-a12b": "family:google/gemini-flash-lite",
         "nvidia/nemotron-3-ultra-550b-a55b": "family:google/gemini-flash-lite",
-        "nvidia/nemotron-3-super-120b-a12b:free": "family:google/gemini-flash-lite",
-        "google/gemma-4-26b-a4b-it:free": "family:google/gemini-flash-lite",
+        "nvidia/nemotron-3-super-120b-a12b:free": "openrouter-free",
+        "google/gemma-4-26b-a4b-it:free": "openrouter-free",
         "gemini-3.5-flash": "family:google/gemini-flash"
       }
     },

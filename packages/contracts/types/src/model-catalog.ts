@@ -89,6 +89,7 @@ export function getRegistryRoute(routeId: string): RegistryRoute | null {
   const routes = modelRegistry.routes as Readonly<Record<string, RegistryRoute>>;
   return routes[routeId] ?? null;
 }
+import { normalizeBillingPlanTier } from './billing-catalog';
 import type { Provider } from './provider';
 import type { ModelInfo } from './provider-adapter';
 import type { SubscriptionTier } from './user';
@@ -852,7 +853,35 @@ export interface AutoRoutingProfileView {
   description: string;
 }
 
-export function getAutoRoutingProfiles(): AutoRoutingProfileView[] {
+/**
+ * An Auto alias carries the same `tierPolicy.minTier` a model carries, and for
+ * the same reason: Auto is an offering, not a neutral wrapper, and the plan that
+ * may take it is a catalog fact rather than something each client decides. A
+ * caller that knows the account's tier passes it; one that is describing the
+ * catalog rather than one account's picker leaves it out.
+ */
+export function canAccessAutoRoutingProfileForTier(
+  profileId: string,
+  subscriptionTier: string,
+): boolean {
+  const alias = (
+    modelRegistry.policies.auto.aliases as Record<string, { tierPolicy?: { minTier?: string } }>
+  )[profileId];
+  if (!alias) return false;
+  const minTier = alias.tierPolicy?.minTier;
+  if (!minTier) return true;
+  const plan = normalizeBillingPlanTier(subscriptionTier);
+  // BYOK and local-only bring their own capacity instead of drawing on a
+  // managed plan's model allowance, so a managed-plan floor says nothing about
+  // them. Everything else is measured on the subscription ladder.
+  if (plan === 'byok' || plan === 'local-only') return true;
+  return (
+    SUBSCRIPTION_ACCESS_TIER_ORDER.indexOf(normalizeSubscriptionAccessTier(plan)) >=
+    SUBSCRIPTION_ACCESS_TIER_ORDER.indexOf(minTier as SubscriptionAccessTier)
+  );
+}
+
+export function getAutoRoutingProfiles(subscriptionTier?: string | null): AutoRoutingProfileView[] {
   const policy = modelRegistry.policies.auto as unknown as {
     profileOrder: Array<AutoRoutingProfileView['profile']>;
     aliases: Record<
@@ -868,7 +897,10 @@ export function getAutoRoutingProfiles(): AutoRoutingProfileView[] {
 
   return policy.profileOrder.flatMap((profile) => {
     const entry = Object.entries(policy.aliases).find(
-      ([, alias]) => alias.profile === profile && alias.selectable,
+      ([id, alias]) =>
+        alias.profile === profile &&
+        alias.selectable &&
+        (subscriptionTier == null || canAccessAutoRoutingProfileForTier(id, subscriptionTier)),
     );
     if (!entry) return [];
     const [id, alias] = entry;
@@ -1830,6 +1862,14 @@ export function isModelAllowedForTier(modelId: string, tier: TierKey): boolean {
 }
 
 export type SubscriptionAccessTier = 'free' | 'basic' | 'pro' | 'max' | 'enterprise';
+
+const SUBSCRIPTION_ACCESS_TIER_ORDER: readonly SubscriptionAccessTier[] = Object.freeze([
+  'free',
+  'basic',
+  'pro',
+  'max',
+  'enterprise',
+]);
 
 export function normalizeSubscriptionAccessTier(tier: string): SubscriptionAccessTier {
   switch (tier.toLowerCase()) {

@@ -28,6 +28,7 @@ import {
   EFFORT_LABEL,
   getModelReasoning,
   getModelEffortOptions,
+  canAccessAutoRoutingProfileForTier,
   getAutoRoutingProfiles,
   isAutoModeModelId,
   modelsById,
@@ -46,7 +47,7 @@ import {
   useModelStore,
   selectLastRoutingDecision,
 } from '../stores/modelStore';
-import { useTierStore, selectProviderSwitchGate } from '../stores/tierStore';
+import { useTierStore, selectProviderSwitchGate, selectTier } from '../stores/tierStore';
 import { useChatStore } from '../stores/chatStore';
 import { useHostBridge } from '../lib/hostBridge';
 import type { ModelInfo } from '../lib/types';
@@ -423,6 +424,7 @@ export function ModelSelector({
   const { models, selectedModelId, displayName, selectModel } = useModel();
   const modelCatalogStatus = useModelStore((state) => state.modelCatalogStatus);
   const modelCatalogError = useModelStore((state) => state.modelCatalogError);
+  const planTier = useTierStore(selectTier);
   const hostBridge = useHostBridge();
   const activeConversation = useChatStore((state) =>
     state.conversations.find((conversation) => conversation.id === state.activeConversationId),
@@ -514,8 +516,12 @@ export function ModelSelector({
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
+  // Auto carries its own plan floor in the registry, the same way a model does.
+  // A plan that cannot select it is not shown a row that would be refused.
   const autoModels = displayModels.filter(
-    (m) => m.provider === 'managed_cloud' || isAutoModeModelId(m.id),
+    (m) =>
+      (m.provider === 'managed_cloud' || isAutoModeModelId(m.id)) &&
+      (!isAutoModeModelId(m.id) || canAccessAutoRoutingProfileForTier(m.id, planTier)),
   );
   const providerModels = displayModels.filter(
     (m) => m.provider !== 'managed_cloud' && !isAutoModeModelId(m.id),
@@ -532,7 +538,7 @@ export function ModelSelector({
     return providerSortKey(a) - providerSortKey(b);
   });
 
-  const selectableAutoProfileIds = getAutoRoutingProfiles().map((profile) => profile.id);
+  const selectableAutoProfileIds = getAutoRoutingProfiles(planTier).map((profile) => profile.id);
   const bestAutoId =
     selectableAutoProfileIds.map((id) => autoModels.find((m) => m.id === id)?.id).find(Boolean) ??
     autoModels[0]?.id;

@@ -209,20 +209,15 @@
     },
     "tierMaximumProfiles": {
       "free": "economy",
+      "basic": "economy",
       "pro": "balanced",
       "max": "premium",
       "enterprise": "premium",
       "byok": "premium"
     },
     "tierAllowedSlots": {
-      "free": [
-        "free_workhorse",
-        "free_workhorse_fast",
-        "workhorse_general",
-        "reasoning_economy",
-        "coding_fast",
-        "router_zero_cost"
-      ],
+      "free": ["free_workhorse", "free_workhorse_fast", "router_zero_cost"],
+      "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "router_zero_cost"],
       "pro": [
         "workhorse_general",
         "general_balanced",
@@ -312,7 +307,8 @@
         "label": "Auto",
         "description": "Automatically routes each message to the best model for the task, your plan, and cost",
         "selectable": true,
-        "computeProfile": true
+        "computeProfile": true,
+        "tierPolicy": { "minTier": "basic" }
       },
       "auto-economy": {
         "profile": "economy",

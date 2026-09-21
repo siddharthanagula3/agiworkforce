@@ -182,11 +182,21 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.deepEqual(registry.policies.auto.tierAllowedSlots.free, [
     'free_workhorse',
     'free_workhorse_fast',
-    'workhorse_general',
-    'reasoning_economy',
-    'coding_fast',
     'router_zero_cost',
   ]);
+  for (const slotId of registry.policies.auto.tierAllowedSlots.free) {
+    const modelKey = registry.policies.auto.slots[slotId].modelKey;
+    assert.equal(
+      catalog.models[modelKey].tierPolicy?.minTier,
+      'free',
+      `free routing slot ${slotId} carries ${modelKey}, a model the free plan may not reach`,
+    );
+  }
+  assert.equal(
+    registry.policies.auto.aliases.auto.tierPolicy?.minTier,
+    'basic',
+    'Auto is a paid offering and must declare the plan that may select it',
+  );
   for (const tier of Object.keys(registry.policies.auto.tierAllowedSlots)) {
     if (tier === 'free') continue;
     assert.deepEqual(

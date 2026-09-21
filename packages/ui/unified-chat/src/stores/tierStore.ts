@@ -1,10 +1,15 @@
 import { create } from 'zustand';
 import {
   type UIPlanTier,
+  canAccessAutoRoutingProfileForTier,
   canSwitchProviderInThread,
+  getDefaultModelFor,
+  isAutoModeModelId,
   isFreePlan,
   tierAtLeast,
 } from '@agiworkforce/types';
+
+import { useModelStore } from './modelStore';
 
 interface TierState {
   tier: UIPlanTier;
@@ -14,11 +19,23 @@ interface TierState {
   setCurrentConversationProvider: (provider: string | null) => void;
 }
 
+// A persisted `auto` on a plan that cannot select Auto moves to that plan's
+// default once the plan is known; any other selection is left as the user left it.
+function reconcileSelectionWithTier(tier: UIPlanTier): void {
+  const { selectedModelId, selectModel } = useModelStore.getState();
+  if (!isAutoModeModelId(selectedModelId)) return;
+  if (canAccessAutoRoutingProfileForTier(selectedModelId, tier)) return;
+  selectModel(getDefaultModelFor(tier, 'chat'));
+}
+
 export const useTierStore = create<TierState>()((set) => ({
   tier: 'byok',
   currentConversationProvider: null,
 
-  setTier: (tier) => set({ tier }),
+  setTier: (tier) => {
+    set({ tier });
+    reconcileSelectionWithTier(tier);
+  },
   setCurrentConversationProvider: (currentConversationProvider) =>
     set({ currentConversationProvider }),
 }));
