@@ -52,7 +52,7 @@ async function handleGenerateFollowUps(request: NextRequest, context: RouteConte
   }>(
     `select content, role, metadata
        from web_messages
-      where id = $1 and conversation_id = $2
+      where id = $1 and conversation_id = $2 and deleted_at is null
       limit 1`,
     [messageId, conversationId],
   );

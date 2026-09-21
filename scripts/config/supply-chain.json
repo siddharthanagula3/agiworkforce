@@ -1,0 +1,23 @@
+{
+  "_description": "Supply-chain facts that are true today and are owed a fix. Every entry carries a reason; an undeclared finding fails the guard and an entry that no longer matches fails it too, so the list only shrinks.",
+  "moving-tags": [
+    {
+      "id": "services/signaling-server/docker-compose.yml:ghcr.io/agiworkforce/signaling-server:latest",
+      "reason": "Live defect recorded on 2026-09-20: the deployed signaling server compose file pulls the :latest tag, so a rollback redeploys whatever was pushed most recently rather than the build that was tested. Owned by services/signaling-server, not by the lane that added this guard."
+    },
+    {
+      "id": "docker-compose.yml:dpage/pgadmin4",
+      "reason": "The local development database console, referenced with no tag at all so it resolves to :latest. It never runs in a deployment and holds no product data, but an untagged image still makes two developers disagree about what they are running."
+    }
+  ],
+  "unpinned-tags": [
+    {
+      "id": "docker-compose.yml:pgvector/pgvector:pg16",
+      "reason": "Local development Postgres, pinned to the pg16 line rather than a digest so a patch release is picked up without a manifest edit. It is not part of any deployed image and the production database is Neon, not this container."
+    },
+    {
+      "id": "services/signaling-server/Dockerfile:node:24-alpine",
+      "reason": "The signaling server builds from the node:24-alpine tag in four stages so security patches on the Node 24 line arrive without a manifest edit. Digest pinning here needs a renovation job to move the digest, which does not exist yet."
+    }
+  ]
+}

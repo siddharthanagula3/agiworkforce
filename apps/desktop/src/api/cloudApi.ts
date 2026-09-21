@@ -7,7 +7,7 @@ import {
   MANAGED_CLOUD_PAGE_SIZE,
   createManagedCloudPaginationGuard,
 } from '../services/managedCloudPagination';
-import { WEB_APP_URL } from './config';
+import { WEB_APP_URL, desktopRequestHeaders } from './config';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import {
   parseManagedUsageSummaryResponse,
@@ -98,7 +98,7 @@ export async function getAuthHeaders(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
-    'X-AGI-Surface': 'desktop',
+    ...desktopRequestHeaders(),
   };
 
   const session = await readAccountBoundSession(expectedAccountId);
@@ -265,7 +265,7 @@ export function createDesktopCloudAgentRunCleanupClient(
     next.set('Authorization', `Bearer ${credential.accessToken}`);
     next.set('Content-Type', 'application/json');
     next.set('X-Requested-With', 'XMLHttpRequest');
-    next.set('X-AGI-Surface', 'desktop');
+    for (const [name, value] of Object.entries(desktopRequestHeaders())) next.set(name, value);
     return next;
   };
   return createManagedCloudAgentRunClient({

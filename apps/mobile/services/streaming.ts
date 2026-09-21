@@ -29,6 +29,7 @@ import {
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
+import { platformRequestHeaders } from '../lib/platformHeaders';
 
 export interface ChatWireMessage {
   role: string;
@@ -166,7 +167,7 @@ export function createMobileCloudAgentRunClient(): ManagedCloudAgentRunClient {
     decorateMutationHeaders: (headers) => ({
       ...headers,
       'Content-Type': 'application/json',
-      'X-AGI-Surface': 'mobile',
+      ...platformRequestHeaders(),
     }),
     fetchImpl: (input, init) => guardedFetch(input, init),
   });
@@ -231,7 +232,7 @@ async function attemptStream(
       headers: {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
-        'X-AGI-Surface': 'mobile',
+        ...platformRequestHeaders(),
         'Idempotency-Key': createManagedChatIdempotencyKey({
           surface: 'mobile',
           purpose: path === TOOL_APPROVAL_RESUME_PATH ? 'tool-resume' : 'send',

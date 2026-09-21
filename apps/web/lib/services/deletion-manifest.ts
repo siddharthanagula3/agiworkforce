@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   ANONYMIZED_USER_COLUMNS,
+  EMAIL_SCOPED_USER_TABLES,
   UNDELETED_USER_TABLES,
   USER_SCOPED_TABLES,
   type AccountErasureReport,
@@ -92,6 +93,7 @@ const DERIVED_CONTENT = [
 const OPERATIONAL_RECORD = [
   'account_compromise_responses',
   'account_lockout_attempts',
+  'account_security_settings',
   'account_sessions',
   'admin_request_idempotency',
   'agent_approval_requests',
@@ -102,6 +104,7 @@ const OPERATIONAL_RECORD = [
   'beta_invites',
   'beta_redemptions',
   'cloud_managed_waitlist',
+  'cloud_waitlist',
   'cogs_adjustments',
   'connector_oauth_authorizations',
   'connector_oauth_grants',
@@ -113,11 +116,13 @@ const OPERATIONAL_RECORD = [
   'data_rights_requests',
   'desktop_devices',
   'device_authorization_codes',
+  'device_installations',
   'device_pairings',
   'device_refresh_tokens',
   'device_registrations',
   'directory_sync_connections',
   'email_preferences',
+  'enterprise_offline_payment_records',
   'erasure_tombstones',
   'event_triggers',
   'feature_flags',
@@ -167,6 +172,7 @@ const OPERATIONAL_RECORD = [
   'plugin_marketplace_sources',
   'profiles',
   'provider_cost_events',
+  'referrals',
   'revoked_jwts',
   'scim_group_members',
   'scim_groups',
@@ -176,6 +182,7 @@ const OPERATIONAL_RECORD = [
   'subscriptions',
   'support_access_grants',
   'support_agent_presence',
+  'support_ticket_escalations',
   'token_credits',
   'user_connectors',
   'user_custom_connectors',
@@ -189,6 +196,7 @@ const OPERATIONAL_RECORD = [
 
 const AUDIT_TRAIL = [
   'automation_audit_events',
+  'copyright_notices',
   'directory_sync_events',
   'ediscovery_exports',
   'enterprise_audit_events',
@@ -196,6 +204,7 @@ const AUDIT_TRAIL = [
   'organization_retention_sweeps',
   'security_audit_logs',
   'plugin_registry_lifecycle_events',
+  'release_events',
   'support_access_events',
 ];
 
@@ -349,7 +358,9 @@ function deletionPath(entry: {
 }
 
 function buildRetentionMatrix(): RetentionEntry[] {
-  const erasedWithSubject = new Set(USER_SCOPED_TABLES.map((entry) => entry.table));
+  const erasedWithSubject = new Set(
+    [...USER_SCOPED_TABLES, ...EMAIL_SCOPED_USER_TABLES].map((entry) => entry.table),
+  );
   const erasedWithTenant = new Set(ORGANIZATION_SCOPED_TABLES.map((entry) => entry.table));
   const anonymised = new Set([
     ...ANONYMIZED_USER_COLUMNS.map((entry) => entry.table),

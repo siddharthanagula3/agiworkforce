@@ -41,6 +41,12 @@ export const CONCEPT_NAMES = [
   'credit-bucket',
   'usage-reservation',
   'audit-event',
+  'file',
+  'notification',
+  'device',
+  'agent-run',
+  'feature-release',
+  'client-capability-manifest',
 ] as const;
 
 export type ConceptName = (typeof CONCEPT_NAMES)[number];
@@ -91,24 +97,118 @@ export interface ResourceColumnContract {
   roles: Readonly<Record<ResourceColumnRole, ResourceColumnRule>>;
 }
 
+/**
+ * Who may reach a row. The rule is not a restatement of the ownership: a
+ * workspace row is owned by an account and reached by a role, and conflating
+ * the two is how a member reads a row an admin was meant to.
+ */
+export type ConceptAccessRule =
+  | 'owner-only'
+  | 'owner-or-tenant-member'
+  | 'tenant-role'
+  | 'parent-inherited'
+  | 'share-token'
+  | 'platform-only';
+
+export type ConceptDataClass =
+  'user-content' | 'identity' | 'credential' | 'billing' | 'operational' | 'telemetry';
+
+/** Where the object lives. A device object never reaches a table. */
+export type ConceptStorageScope = 'cloud' | 'device' | 'both';
+
+/**
+ * What ends the row. `swept` names the module that does it, because a
+ * retention promise nothing executes is the promise most often believed.
+ */
+export type ConceptRetention =
+  | { kind: 'until-deleted' }
+  | { kind: 'swept'; purgedBy: string }
+  | { kind: 'audit-class'; class: string }
+  | { kind: 'tenant-policy'; policy: string };
+
+/**
+ * One object a concept covers. The hierarchy is three objects under one concept
+ * because `organizations`, `workspaces` and `organization_members` are one family.
+ */
+export interface ConceptFacetSubject {
+  name: string;
+  table: string;
+  why: string;
+}
+
+export type ConceptFacetKind =
+  'column' | 'table' | 'contract' | 'permission' | 'policy-key' | 'route' | 'absent';
+
+interface ConceptFacetClaim {
+  id: string;
+  subject: string;
+  claim: string;
+}
+
+/**
+ * One checklist line as a citation the guard re-derives. `absent` is the only
+ * kind that records something the product does not have, and it names what does.
+ */
+export type ConceptFacet =
+  | (ConceptFacetClaim & { kind: 'column'; source: { table: string; column: string } })
+  | (ConceptFacetClaim & { kind: 'table'; source: { table: string; references: string } })
+  | (ConceptFacetClaim & { kind: 'contract'; source: { file: string; symbol: string } })
+  | (ConceptFacetClaim & { kind: 'permission'; source: { key: string } })
+  | (ConceptFacetClaim & { kind: 'policy-key'; source: { key: string } })
+  | (ConceptFacetClaim & { kind: 'route'; source: { file: string; table: string } })
+  | (ConceptFacetClaim & {
+      kind: 'absent';
+      source: { instead: string; absentTable?: string; absentColumn?: string };
+    });
+
 export interface ConceptRecord {
   name: ConceptName;
   label: string;
   schema: string;
   symbol: string;
+  /** Every other name the concept's own code uses for it, and no other's. */
+  aliases: readonly string[];
   tables: readonly string[];
+  /** The primary key of the first table, or null for a device-only object. */
+  identity: string | null;
   writeFunctions: readonly string[];
   mutators: readonly string[];
   projections: readonly string[];
   providerCopies: readonly string[];
   ownership: ConceptOwnership;
+  access: ConceptAccessRule;
   parent?: ConceptName;
   sync: ConceptSyncDirection;
+  storage: ConceptStorageScope;
   versioning: ConceptVersioning;
   lifecycle: ResourceLifecycleState;
   childDisposition: ResourceChildDisposition;
+  retention: ConceptRetention;
+  classification: readonly ConceptDataClass[];
   auditBoundary: ConceptAuditBoundary;
+  /** The audit event types whose emission concerns this concept. */
+  events: readonly string[];
+  /** The product link target that addresses it, or null when it has no URL. */
+  deepLink: string | null;
   columns: Readonly<Partial<Record<ResourceColumnRole, string>>>;
+  facetSubjects?: readonly ConceptFacetSubject[];
+  facets?: readonly ConceptFacet[];
+}
+
+export type TableDisposition =
+  'identity' | 'operational' | 'telemetry' | 'pre-account' | 'canonical-gap';
+
+/**
+ * A table a user owns that is not a canonical object, and why. `canonical-gap`
+ * is the only defect in the list: it names the object the table should belong
+ * to and the change that would make it one.
+ */
+export interface TableDispositionRecord {
+  table: string;
+  disposition: TableDisposition;
+  why: string;
+  becomes?: string;
+  fix?: string;
 }
 
 export interface ConceptVocabularyReference {
@@ -134,6 +234,11 @@ export interface ConceptRegistry {
   concepts: readonly ConceptRecord[];
   duplicateVocabularies: readonly DuplicateVocabulary[];
   columnExemptions: readonly { table: string; why: string; exempt?: readonly string[] }[];
+  tableDispositions: readonly TableDispositionRecord[];
+  uiStateColumns: readonly { match: string; why: string }[];
+  vendorImports: readonly string[];
+  /** A canonical schema still outside the shared packages, with the move that fixes it. */
+  schemaHomeExemptions: readonly { concept: string; schema: string; why: string; fix: string }[];
 }
 
 export const CONCEPT_REGISTRY = conceptRegistryJson as ConceptRegistry;
@@ -162,4 +267,26 @@ export function conceptForTable(table: string): ConceptRecord | null {
 
 export function resourceColumn(name: ConceptName, role: ResourceColumnRole): string | null {
   return getConcept(name).columns[role] ?? null;
+}
+
+export function conceptByAlias(name: string): ConceptRecord | null {
+  const lowered = name.toLowerCase();
+  return (
+    CONCEPT_REGISTRY.concepts.find(
+      (concept) => concept.name === lowered || concept.aliases.includes(lowered),
+    ) ?? null
+  );
+}
+
+export function conceptFacets(name: ConceptName): readonly ConceptFacet[] {
+  return getConcept(name).facets ?? [];
+}
+
+/** The facets the product deliberately does not have, each naming what stands in for it. */
+export function absentConceptFacets(name: ConceptName): readonly ConceptFacet[] {
+  return conceptFacets(name).filter((facet) => facet.kind === 'absent');
+}
+
+export function tableDisposition(table: string): TableDispositionRecord | null {
+  return CONCEPT_REGISTRY.tableDispositions.find((entry) => entry.table === table) ?? null;
 }

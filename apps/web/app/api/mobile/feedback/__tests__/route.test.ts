@@ -1,9 +1,16 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockAuth, mockNeonQuery } = vi.hoisted(() => ({
+const { mockAuth, mockOptionalUser, mockNeonQuery } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
+  mockOptionalUser: vi.fn(async (): Promise<{ userId: string } | null> => null),
   mockNeonQuery: vi.fn(),
+}));
+
+vi.mock('@/lib/api-auth', () => ({
+  getOptionalAuthUser: mockOptionalUser,
+  getClerkAuthUser: vi.fn(),
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(() => []),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -40,12 +47,13 @@ function makeRequest(body: unknown) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockOptionalUser.mockResolvedValue(null);
   mockNeonQuery.mockResolvedValue([]);
 });
 
 describe('POST /api/mobile/feedback', () => {
   it('inserts feedback attributed to the signed-in user', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest({ type: 'bug', message: 'The app crashed on launch' }));
 
@@ -57,7 +65,7 @@ describe('POST /api/mobile/feedback', () => {
   });
 
   it('accepts anonymous feedback with a null user_id when not signed in', async () => {
-    mockAuth.mockResolvedValue({ userId: null });
+    mockOptionalUser.mockResolvedValue(null);
 
     const res = await POST(makeRequest({ type: 'general', message: 'Love the app!' }));
 
@@ -71,7 +79,7 @@ describe('POST /api/mobile/feedback', () => {
   });
 
   it('400s on an invalid feedback type', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest({ type: 'not-a-real-type', message: 'hello' }));
 
@@ -80,7 +88,7 @@ describe('POST /api/mobile/feedback', () => {
   });
 
   it('400s on an empty message', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest({ type: 'bug', message: '   ' }));
 
@@ -89,7 +97,7 @@ describe('POST /api/mobile/feedback', () => {
   });
 
   it('400s on a message over 2000 characters', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest({ type: 'bug', message: 'x'.repeat(2001) }));
 

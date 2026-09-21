@@ -16,9 +16,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   effectivePlanTier,
-  getRoutingSlotModel,
+  getDefaultModelFor,
   INTERACTIVE_CARD_REQUEST_KEY,
   MAX_ATTACHMENT_BYTES,
+  normalizeBillingPlanTier,
   parseManagedUsageSummaryResponse,
   type Effort,
   type InteractiveCard,
@@ -29,8 +30,10 @@ import { getFreshClerkAuthContext, getFreshClerkToken, signOutClerk } from './cl
 import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
+import { platformRequestHeaders } from '../../platformHeaders';
 
-export const FREE_TRIAL_MODEL: string = getRoutingSlotModel('general_fast');
+// The plan default the server derives, so the extension never names a model free cannot reach.
+export const FREE_TRIAL_MODEL: string = getDefaultModelFor(normalizeBillingPlanTier(null), 'chat');
 
 /**
  * Character cap on the Chrome request envelope to bound renderer and transport
@@ -101,7 +104,7 @@ export async function getManagedModelAccess(
     headers: {
       Authorization: `Bearer ${token}`,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
     },
     signal,
   };
@@ -803,7 +806,7 @@ export async function* streamFreeChat(
           Authorization: `Bearer ${token}`,
           'Idempotency-Key': idempotencyKey,
           'X-Requested-With': 'XMLHttpRequest',
-          'X-AGI-Surface': 'chrome',
+          ...platformRequestHeaders(),
         },
         body: JSON.stringify(
           approvalResume ?? {

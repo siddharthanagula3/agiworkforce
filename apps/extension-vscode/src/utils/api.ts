@@ -15,8 +15,9 @@ import {
   type ManagedUsageBucketReading,
 } from '@agiworkforce/types';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
+import { MINIMUM_API_VERSION_RESPONSE_HEADER } from '@agiworkforce/cloud-contracts';
 import { Config } from '../platform/config';
-import { getExtensionUserAgent } from '../platform/version';
+import { platformRequestHeaders } from '../platform/platformHeaders';
 
 export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -54,6 +55,23 @@ export class AgiWorkforceApiError extends Error {
   ) {
     super(message);
     this.name = 'AgiWorkforceApiError';
+  }
+}
+
+/**
+ * The deployment no longer answers the API contract this build speaks. The
+ * message is delivered rather than replaced, because a client that is told
+ * nothing retries forever.
+ */
+export class AgiWorkforceClientUpdateRequiredError extends Error {
+  public readonly kind = 'client-update-required' as const;
+
+  constructor(
+    public readonly serverMessage: string,
+    public readonly minimumApiVersion: string | undefined,
+  ) {
+    super(serverMessage);
+    this.name = 'AgiWorkforceClientUpdateRequiredError';
   }
 }
 
@@ -332,7 +350,14 @@ const PLAN_GATE_CODES = new Set([
   'subscription_inactive',
 ]);
 
-export function parseCloudCompletionError(statusCode: number, body: string): Error {
+export const CLIENT_UPDATE_REQUIRED_STATUS = 426;
+const CLIENT_UPDATE_REQUIRED_CODE = 'CLIENT_UPDATE_REQUIRED';
+
+export function parseCloudCompletionError(
+  statusCode: number,
+  body: string,
+  responseHeaders: Record<string, string | string[] | undefined> = {},
+): Error {
   let parsed: Record<string, unknown> | undefined;
   try {
     const candidate = JSON.parse(body) as unknown;
@@ -377,6 +402,15 @@ export function parseCloudCompletionError(statusCode: number, body: string): Err
       : typeof nested?.['required_tier'] === 'string'
         ? nested['required_tier']
         : undefined;
+
+  if (statusCode === CLIENT_UPDATE_REQUIRED_STATUS || code === CLIENT_UPDATE_REQUIRED_CODE) {
+    const advertised = responseHeaders[MINIMUM_API_VERSION_RESPONSE_HEADER];
+    return new AgiWorkforceClientUpdateRequiredError(
+      message ??
+        'This version of AGI for VS Code is older than AGI Workforce now supports. Update the extension to continue.',
+      typeof advertised === 'string' ? advertised : advertised?.[0],
+    );
+  }
 
   if (statusCode === 403 && code !== undefined && PLAN_GATE_CODES.has(code)) {
     notifyAccountTierMayHaveChanged();
@@ -435,7 +469,7 @@ function httpsPostStream(
         res.on('end', () => {
           cancelListener.dispose();
           const errBody = Buffer.concat(errorChunks).toString('utf8');
-          reject(parseCloudCompletionError(res.statusCode ?? 500, errBody));
+          reject(parseCloudCompletionError(res.statusCode ?? 500, errBody, res.headers));
         });
         return;
       }
@@ -535,9 +569,7 @@ export async function streamChatCompletion(
 
   const authHeaders: Record<string, string> = {
     Authorization: `Bearer ${credential.token}`,
-    'User-Agent': getExtensionUserAgent(),
-    'X-Client': 'vscode-extension',
-    'X-AGI-Surface': 'vscode',
+    ...platformRequestHeaders(),
     'Idempotency-Key': idempotencyKey,
   };
 
@@ -768,9 +800,7 @@ export async function fetchAccountIdentity(
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accountToken}`,
-        'User-Agent': getExtensionUserAgent(),
-        'X-Client': 'vscode-extension',
-        'X-AGI-Surface': 'vscode',
+        ...platformRequestHeaders(),
       },
     };
 
@@ -826,9 +856,7 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
       method: 'GET',
       headers: {
         Authorization: `Bearer ${credential.token}`,
-        'User-Agent': getExtensionUserAgent(),
-        'X-Client': 'vscode-extension',
-        'X-AGI-Surface': 'vscode',
+        ...platformRequestHeaders(),
       },
     };
 

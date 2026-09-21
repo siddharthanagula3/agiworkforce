@@ -179,7 +179,7 @@ describe('durable cloud agent workflow settlement', () => {
       lastSequence: 41,
       state: 'ready_for_review',
     });
-    expect(turn?.metadata['truncated']).toBeUndefined();
+    expect(turn?.metadata['truncated']).toBe(false);
   });
 
   it('ends a turn whose steps did not all land as partial, with the per-step reasons', async () => {
@@ -243,7 +243,7 @@ describe('durable cloud agent workflow settlement', () => {
 
     const turn = persistedTurn();
     expect(turn?.content).toBe('I need to run a command');
-    expect(turn?.metadata['truncated']).toBeUndefined();
+    expect(turn?.metadata['truncated']).toBe(false);
     expect(turn?.metadata['cloudAgentRun']).toMatchObject({
       lastSequence: 17,
       state: 'awaiting_input',
@@ -261,7 +261,7 @@ describe('durable cloud agent workflow settlement', () => {
     await settleWorkflowInvocation(makeInput(), 'paused');
 
     const turn = persistedTurn();
-    expect(turn?.metadata['truncated']).toBeUndefined();
+    expect(turn?.metadata['truncated']).toBe(false);
     expect(turn?.metadata['cloudAgentRun']).toMatchObject({ lastSequence: 21, state: 'paused' });
     expect(mocks.transition).not.toHaveBeenCalled();
     expect(mocks.autoMemory).toHaveBeenCalledWith(

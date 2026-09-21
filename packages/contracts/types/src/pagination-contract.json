@@ -1,0 +1,164 @@
+{
+  "routeRoot": "apps/web/app/api",
+  "pageParams": ["limit", "cursor", "page", "offset", "per_page", "pageSize"],
+  "cursorHelpers": {
+    "module": "apps/web/lib/identity/pagination.ts",
+    "symbols": [
+      "keysetSql",
+      "encodeKeysetCursor",
+      "decodeKeysetCursor",
+      "buildPage",
+      "clampPageSize"
+    ]
+  },
+  "collections": {
+    "conversations": {
+      "route": "apps/web/app/api/chat/conversations/route.ts",
+      "why": "Keyset paged on updated_at with the id as the tiebreaker, so a chat written while the sidebar is open cannot move the window."
+    },
+    "projects": {
+      "route": "apps/web/app/api/projects/route.ts",
+      "why": "Keyset paged on the same helpers as conversations."
+    },
+    "library": {
+      "route": "apps/web/app/api/artifacts/index/route.ts",
+      "why": "The artifact index is paged by a sync cursor rather than a page number, because a device pulls what changed since it last looked."
+    },
+    "notifications": {
+      "route": "apps/web/app/api/notifications/route.ts",
+      "why": "Bounded to the unread window a reader can act on, so the route returns one page and no cursor."
+    },
+    "audit": {
+      "route": "apps/web/app/api/settings/audit-logs/route.ts",
+      "why": "Paged by offset today; the compliance reader asks for a page number and the export path streams the whole range."
+    },
+    "tasks": {
+      "route": "apps/web/app/api/schedules/route.ts",
+      "why": "Paged by offset today."
+    },
+    "members": {
+      "route": "apps/web/app/api/settings/team/route.ts",
+      "why": "A workspace roster is bounded by the seat count, so the route returns it whole."
+    },
+    "usage": {
+      "route": "apps/web/app/api/billing/credit-history/route.ts",
+      "why": "Paged by offset today over an append-only ledger."
+    },
+    "search": {
+      "route": "apps/web/app/api/search/route.ts",
+      "why": "Ranked results are capped at one page because relevance past the cap is not meaningful."
+    }
+  },
+  "offsetPagination": [
+    {
+      "route": "apps/web/app/api/admin/background-jobs/route.ts",
+      "why": "An operator page over a queue that changes under the reader, so page two can miss a job that was drained and repeat one that was enqueued.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/billing/credit-history/route.ts",
+      "why": "The credit ledger is append-only, so a row inserted above the window shifts every later row down and page two repeats what page one showed.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/chat/conversations/route.ts",
+      "why": "The cursor path is the one the surface uses; the offset parameter stays for clients that still send it and is documented as such in the route.",
+      "fix": "Drop the offset parameter once no shipped client sends it."
+    },
+    {
+      "route": "apps/web/app/api/projects/route.ts",
+      "why": "Keyset paged; the offset parameter stays for clients that still send it and is documented as such in the route.",
+      "fix": "Drop the offset parameter once no shipped client sends it."
+    },
+    {
+      "route": "apps/web/app/api/chat/conversations/[id]/route.ts",
+      "why": "The message window inside one conversation is offset paged, so a message deleted above the window silently drops one from the next page.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/memory/route.ts",
+      "why": "The memory list is offset paged and ordered by pinned then updated_at, so pinning a memory while the list is open shifts every later row.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/schedules/route.ts",
+      "why": "The task list is offset paged and a schedule created while the reader pages drops one from the next page.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/schedules/[id]/runs/route.ts",
+      "why": "Run history is offset paged over rows a running schedule keeps appending.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/settings/activity/route.ts",
+      "why": "Account activity is offset paged over an append-only trail.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/settings/audit-logs/route.ts",
+      "why": "The compliance reader pages by offset, so an event written during the read shifts the window and the export can miss a row.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/triggers/route.ts",
+      "why": "The trigger list is offset paged.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/triggers/[triggerId]/events/route.ts",
+      "why": "Trigger event history is offset paged over rows the ingest keeps appending.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    }
+  ],
+  "unpagedReads": [
+    {
+      "route": "apps/web/app/api/artifacts/index/route.ts",
+      "why": "The artifact index is pulled by a sync cursor the device holds rather than by a page number, so the limit bounds one pull and the cursor is the position."
+    },
+    {
+      "route": "apps/web/app/api/search/route.ts",
+      "why": "Ranked results are capped at one page because relevance past the cap is not meaningful; the limit bounds the cap rather than naming a page."
+    },
+    {
+      "route": "apps/web/app/api/help/search/route.ts",
+      "why": "Help results are capped at one page for the same reason."
+    },
+    {
+      "route": "apps/web/app/api/admin/content-reports/route.ts",
+      "why": "An operator triage queue bounded by the open report count; the limit caps one screen."
+    },
+    {
+      "route": "apps/web/app/api/admin/security/route.ts",
+      "why": "An operator dashboard bounded by the recent-signal window; the limit caps one screen."
+    },
+    {
+      "route": "apps/web/app/api/admin/support-access/route.ts",
+      "why": "An operator view of live break-glass grants, bounded by the number that can be open at once."
+    },
+    {
+      "route": "apps/web/app/api/connectors/calls/route.ts",
+      "why": "The connector call log is capped at a recent window; the limit caps one screen."
+    },
+    {
+      "route": "apps/web/app/api/research/reports/route.ts",
+      "why": "A reader's own reports, bounded by how many one account produces."
+    },
+    {
+      "route": "apps/web/app/api/llm/v1/chat/completions/runs/route.ts",
+      "why": "The public API returns a bounded run window; the limit caps one response."
+    },
+    {
+      "route": "apps/web/app/api/llm/v1/chat/completions/runs/[runId]/route.ts",
+      "why": "One run's events, bounded by the run."
+    }
+  ],
+  "loadingMore": {
+    "module": "packages/ui/ui/src/primitives/Pagination.tsx",
+    "symbol": "PaginationContent",
+    "gap": {
+      "why": "The Pagination primitive is exported from @agiworkforce/ui and no surface renders it, so every list that loads more rows draws its own control and none of them announce the same thing to a screen reader.",
+      "fix": "Render the shared primitive from the conversation, project and audit lists, or delete it and standardise on the affordance those lists actually use."
+    }
+  }
+}

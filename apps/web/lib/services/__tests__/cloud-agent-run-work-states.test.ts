@@ -19,7 +19,8 @@ import { notifyAgentRunEvent } from '../agent-notification-service';
 import {
   CloudAgentApprovalCheckpointNotFoundError,
   CloudAgentRunNotPausableError,
-  cancelPausedCloudAgentRun,
+  HUMAN_HELD_TASK_STATES,
+  cancelHumanHeldCloudAgentRun,
   claimCloudAgentPauseCheckpoint,
   getCloudAgentRun,
   listCloudAgentRuns,
@@ -244,9 +245,7 @@ describe('cloud agent run Work states', () => {
       });
 
       const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
-      expect(sql).toMatch(
-        /case when runs\.state = any\(\$5::text\[\]\) then runs\.state else \$3 end/,
-      );
+      expect(sql).toMatch(/when runs\.state = any\(\$5::text\[\]\) then runs\.state/);
       expect([...(params![4] as string[])].sort()).toEqual(['partial', 'timed_out']);
       expect(params![3]).toEqual(expect.arrayContaining(['partial', 'timed_out', 'failed']));
       expect(run).toMatchObject({ state: 'failed', workState: 'timed_out' });
@@ -388,29 +387,50 @@ describe('cloud agent run Work states', () => {
     });
   });
 
-  describe('cancelling a paused run', () => {
-    it('ends the run itself, journaling the cancellation at the cursor the pause recorded', async () => {
+  describe('cancelling a run parked on a person', () => {
+    /**
+     * Nothing polls a run that is waiting on a person, so a stop it is asked
+     * for has to be completed here for every state that parks one, not only
+     * for the pause that was noticed first.
+     */
+    it.each([...HUMAN_HELD_TASK_STATES])('ends a %s run itself', async (parked) => {
+      const kind = parked === 'paused' ? 'pause' : 'approval';
       vi.mocked(db.query)
-        .mockResolvedValueOnce([{ ...PAUSE_CHECKPOINT_ROW, state: 'failed' }])
+        .mockResolvedValueOnce([{ ...RUN_ROW, state: parked }])
+        .mockResolvedValueOnce([
+          { ...PAUSE_CHECKPOINT_ROW, checkpoint_kind: kind, state: 'failed' },
+        ])
         .mockResolvedValueOnce([{ sequence: 7 }])
         .mockResolvedValueOnce([
-          { ...RUN_ROW, state: 'cancelled', last_event_sequence: 7, previous_state: 'paused' },
+          { ...RUN_ROW, state: 'cancelled', last_event_sequence: 7, previous_state: parked },
         ]);
 
-      const run = await cancelPausedCloudAgentRun(db, { userId: 'user-1', runId: RUN_ID });
+      const run = await cancelHumanHeldCloudAgentRun(db, { userId: 'user-1', runId: RUN_ID });
 
       expect(run).toMatchObject({ state: 'cancelled', workState: 'cancelled' });
-      const insertParams = vi.mocked(db.query).mock.calls[1]![1] as unknown[];
+      const resolveSql = vi.mocked(db.query).mock.calls[1]![0] as string;
+      expect(resolveSql).toMatch(/set state = 'failed'/);
+      expect(resolveSql).not.toMatch(/checkpoint_kind = /);
+      const insertParams = vi.mocked(db.query).mock.calls[2]![1] as unknown[];
       expect(insertParams).toEqual(
         expect.arrayContaining([
           7,
           'task-state-changed',
           expect.objectContaining({
             sequence: 7,
-            event: expect.objectContaining({ state: 'cancelled', previousState: 'paused' }),
+            event: expect.objectContaining({ state: 'cancelled', previousState: parked }),
           }),
         ]),
       );
+    });
+
+    it('leaves a run an executor is still driving to the executor', async () => {
+      vi.mocked(db.query).mockResolvedValueOnce([{ ...RUN_ROW, state: 'running' }]);
+
+      const run = await cancelHumanHeldCloudAgentRun(db, { userId: 'user-1', runId: RUN_ID });
+
+      expect(run).toMatchObject({ state: 'running' });
+      expect(vi.mocked(db.query)).toHaveBeenCalledTimes(1);
     });
   });
 });

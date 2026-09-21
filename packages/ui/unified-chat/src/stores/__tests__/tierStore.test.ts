@@ -8,6 +8,12 @@ import {
   selectIsCrossProviderSwitch,
   selectProviderSwitchGate,
 } from '../tierStore';
+import { useModelStore } from '../modelStore';
+import {
+  getDefaultAutoRoutingProfile,
+  getDefaultModelFor,
+  getRoutingSlotModel,
+} from '@agiworkforce/types';
 
 function reset() {
   useTierStore.setState({ tier: 'byok', currentConversationProvider: null });
@@ -102,5 +108,38 @@ describe('tierStore', () => {
       useTierStore.setState({ tier, currentConversationProvider: 'anthropic' });
       expect(selectProviderSwitchGate(useTierStore.getState(), 'openai')).toBe('allow');
     });
+  });
+});
+
+describe('learning the plan reconciles a selection the plan cannot make', () => {
+  beforeEach(() => {
+    useTierStore.setState({ tier: 'byok', currentConversationProvider: null });
+  });
+
+  it('moves a persisted Auto selection to the free plan default', () => {
+    useModelStore.setState({ selectedModelId: getDefaultAutoRoutingProfile().id });
+    useTierStore.getState().setTier('free');
+    expect(useModelStore.getState().selectedModelId).toBe(getDefaultModelFor('free', 'chat'));
+  });
+
+  it('leaves Auto alone on a plan that pays for it', () => {
+    const auto = getDefaultAutoRoutingProfile().id;
+    useModelStore.setState({ selectedModelId: auto });
+    useTierStore.getState().setTier('pro');
+    expect(useModelStore.getState().selectedModelId).toBe(auto);
+  });
+
+  it('leaves Auto alone for BYOK, which brings its own capacity', () => {
+    const auto = getDefaultAutoRoutingProfile().id;
+    useModelStore.setState({ selectedModelId: auto });
+    useTierStore.getState().setTier('byok');
+    expect(useModelStore.getState().selectedModelId).toBe(auto);
+  });
+
+  it('never rewrites an explicitly chosen model', () => {
+    const explicit = getRoutingSlotModel('workhorse_general');
+    useModelStore.setState({ selectedModelId: explicit });
+    useTierStore.getState().setTier('free');
+    expect(useModelStore.getState().selectedModelId).toBe(explicit);
   });
 });

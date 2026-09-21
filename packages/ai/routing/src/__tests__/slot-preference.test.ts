@@ -143,13 +143,20 @@ describe('preference reorders within the admitted set', () => {
     expect(decision.modelKey).toBe(modelKey);
   });
 
-  it('keeps the previously-preferred model reachable behind it', () => {
+  /**
+   * The preference reorders; it never removes. Every slot the free ceiling
+   * admits now carries the same zero-priced model, so there is no second model
+   * for the preference to push behind the first, and what remains worth pinning
+   * is that the unpreferred selection is still in the plan rather than dropped.
+   */
+  it('never drops the unpreferred selection out of the plan', () => {
     const before = resolveAutoRoute(ask({ subscriptionTier: 'free' }));
     const after = resolveAutoRoute(ask({ subscriptionTier: 'free', preferSlots: FREE_ONLY_SLOTS }));
     expect(before.status === 'selected' && after.status === 'selected').toBe(true);
     if (before.status !== 'selected' || after.status !== 'selected') return;
-    expect(after.modelKey).not.toBe(before.modelKey);
-    expect(after.fallbacks.map((route) => route.modelKey)).toContain(before.modelKey);
+    expect([after.modelKey, ...after.fallbacks.map((route) => route.modelKey)]).toContain(
+      before.modelKey,
+    );
   });
 
   it('does not reorder anything for a tier that does not admit the preferred slot', () => {

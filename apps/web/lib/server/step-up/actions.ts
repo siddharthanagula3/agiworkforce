@@ -43,6 +43,31 @@ export const STEP_UP_ACTIONS = {
     freshnessSeconds: 300,
     consequence: 'Every other signed-in device is signed out.',
   },
+  'security.compromise_resolve': {
+    freshnessSeconds: 300,
+    consequence:
+      'The hold on your account is lifted and you are no longer asked to reset your password.',
+  },
+  'encryption_key.rotate': {
+    freshnessSeconds: 300,
+    consequence:
+      'This workspace starts sealing new data under a new key version. The old version stays readable until a rewrap retires it.',
+  },
+  'encryption_key.replace': {
+    freshnessSeconds: 300,
+    consequence:
+      'This workspace moves to a different key, and with it a different vendor and region. The previous version stays in the ring until a rewrap retires it.',
+  },
+  'encryption_key.revoke': {
+    freshnessSeconds: 300,
+    consequence:
+      'Everything this workspace has sealed stops opening, including backups. Restoring the key in your own KMS is the only way back.',
+  },
+  'encryption_key.retire': {
+    freshnessSeconds: 300,
+    consequence:
+      'The old key version is dropped for good. Anything still sealed under it could never be opened again, which is why this only runs after a rewrap has covered every store.',
+  },
 } as const satisfies Record<string, StepUpActionSpec>;
 
 export type StepUpAction = keyof typeof STEP_UP_ACTIONS;

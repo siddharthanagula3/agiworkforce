@@ -194,6 +194,45 @@ const deviceRegistrationExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const deviceInstallationExportSchema = z.object({
+  id: z.string(),
+  device_id: z.string(),
+  surface: z.string(),
+  app_version: z.string().nullable(),
+  installed_at: timestampSchema,
+  last_seen_at: timestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const referralMadeExportSchema = z.object({
+  id: z.string(),
+  referral_code: z.string(),
+  referred_email: z.string().nullable(),
+  status: z.string(),
+  reward_type: z.string().nullable(),
+  reward_amount: nullableNumericSchema,
+  reward_issued_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+});
+
+const referralReceivedExportSchema = z.object({
+  id: z.string(),
+  referral_code: z.string(),
+  status: z.string(),
+  created_at: timestampSchema,
+});
+
+const cloudWaitlistExportSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  country: z.string().nullable(),
+  device_model: z.string().nullable(),
+  device_tier: z.string().nullable(),
+  created_at: timestampSchema,
+  notified_at: nullableTimestampSchema,
+});
+
 const connectorCallEventExportSchema = z.object({
   id: z.string(),
   organization_id: z.string().nullable(),
@@ -1180,6 +1219,38 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   rowLimit?: number;
   acrossWorkspaces?: boolean;
 }> = [
+  // Two roles, two sections. Each one carries what this person supplied or was
+  // given, and never the other party's account id.
+  {
+    section: 'referrals_made',
+    table: 'referrals',
+    sql: `select id, referral_code, referred_email, status, reward_type, reward_amount,
+                 reward_issued_at, created_at
+          from referrals
+          where referrer_id = $1
+          order by created_at asc`,
+    schema: referralMadeExportSchema,
+  },
+  {
+    section: 'referral_received',
+    table: 'referrals',
+    sql: `select id, referral_code, status, created_at
+          from referrals
+          where referred_user_id = $1
+          order by created_at asc`,
+    schema: referralReceivedExportSchema,
+  },
+  {
+    section: 'cloud_waitlist',
+    table: 'cloud_waitlist',
+    sql: `select id, email, country, device_model, device_tier, created_at, notified_at
+          from cloud_waitlist
+          where lower(email) in (
+            select lower(email) from profiles where id = $1 and email is not null
+          )
+          order by created_at asc`,
+    schema: cloudWaitlistExportSchema,
+  },
   {
     section: 'gateway_conversations',
     table: 'conversations',
@@ -1844,6 +1915,19 @@ async function collectUserData(
     ledger,
   });
   if (registeredDeviceRows.length > 0) exportData['device_registrations'] = registeredDeviceRows;
+
+  const installationRows = await queryExportRows({
+    db,
+    sql: `select id, device_id, surface, app_version, installed_at, last_seen_at, created_at,
+                 updated_at
+          from device_installations where account_id = $1`,
+    values: [user.id],
+    schema: deviceInstallationExportSchema,
+    section: 'device_installations',
+    userId: user.id,
+    ledger,
+  });
+  if (installationRows.length > 0) exportData['device_installations'] = installationRows;
 
   const connectorCallRows = await queryExportRows({
     db,

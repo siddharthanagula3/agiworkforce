@@ -17,7 +17,7 @@ import {
   type ConsentSurface,
   type ConsentPurpose,
 } from '@/lib/server/consent-records';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getOptionalAuthUser } from '@/lib/api-auth';
 
 type PublicWaitlistSource = 'website' | 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
 
@@ -70,10 +70,10 @@ function parseConsentDecisions(value: unknown): ConsentDecision[] {
   return decisions;
 }
 
-async function getOptionalUserId(): Promise<string | null> {
+// A sign-up is never lost to an identity problem: any failure here captures the address anonymously.
+async function getOptionalUserId(request: NextRequest): Promise<string | null> {
   try {
-    const { subject: userId } = await getRequestIdentity();
-    return userId ?? null;
+    return (await getOptionalAuthUser(request))?.userId ?? null;
   } catch {
     return null;
   }
@@ -139,7 +139,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const userId = await getOptionalUserId();
+  const userId = await getOptionalUserId(request);
   const db = getNeonDb();
   const now = new Date().toISOString();
 

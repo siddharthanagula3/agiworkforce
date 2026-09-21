@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getJob: vi.fn(),
   runAttempt: vi.fn(),
   isDue: vi.fn(),
+  reconcile: vi.fn(),
   scopedDb: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
 }));
 
@@ -31,10 +32,15 @@ vi.mock('@/lib/server/image-generation-jobs', async () => {
   return { ...actual, getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args) };
 });
 
-vi.mock('../../app/api/media/image/lib/image-job-executor', () => ({
-  isImageJobAttemptDue: (...args: unknown[]) => mocks.isDue(...args),
-  runImageGenerationJobAttempt: (...args: unknown[]) => mocks.runAttempt(...args),
-}));
+vi.mock('../../app/api/media/image/lib/image-job-executor', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    isImageJobAttemptDue: (...args: unknown[]) => mocks.isDue(...args),
+    runImageGenerationJobAttempt: (...args: unknown[]) => mocks.runAttempt(...args),
+    reconcileCancelledImageGenerationJob: (...args: unknown[]) => mocks.reconcile(...args),
+  };
+});
 
 import { driveImageGenerationJob } from '../../app/api/media/image/lib/image-job-drain';
 import {
@@ -211,12 +217,44 @@ describe('driveImageGenerationJob', () => {
     expect(mocks.runAttempt).not.toHaveBeenCalled();
   });
 
-  it('leaves a cancelled job and an exhausted job alone', async () => {
-    mocks.getJob.mockResolvedValue(imageJob({ cancelRequestedAt: new Date().toISOString() }));
-    await expect(driveImageGenerationJob(handlerContext())).resolves.toMatchObject({
-      skipped: 'cancelled',
+  it('finishes a cancellation the attempt that held the claim never came back for', async () => {
+    const job = imageJob({
+      status: 'processing',
+      cancelRequestedAt: new Date(Date.now() - 60_000).toISOString(),
+      claimExpiresAt: new Date(Date.now() - 1_000).toISOString(),
+    });
+    mocks.getJob.mockResolvedValue(job);
+    mocks.reconcile.mockResolvedValue({
+      ...job,
+      status: 'canceled',
+      terminalAt: new Date().toISOString(),
     });
 
+    await expect(driveImageGenerationJob(handlerContext())).resolves.toEqual({
+      jobId: JOB_ID,
+      status: 'canceled',
+      settled: true,
+    });
+    expect(mocks.reconcile).toHaveBeenCalledWith({ db: mocks.scopedDb, job });
+    expect(mocks.runAttempt).not.toHaveBeenCalled();
+  });
+
+  it('comes back for a cancellation whose attempt is still inside its provider call', async () => {
+    mocks.getJob.mockResolvedValue(
+      imageJob({
+        status: 'processing',
+        cancelRequestedAt: new Date().toISOString(),
+        claimExpiresAt: new Date(Date.now() + 120_000).toISOString(),
+      }),
+    );
+
+    await expect(driveImageGenerationJob(handlerContext())).rejects.toThrow(
+      /cancelling inside a live attempt/,
+    );
+    expect(mocks.reconcile).not.toHaveBeenCalled();
+  });
+
+  it('leaves an exhausted job alone', async () => {
     mocks.getJob.mockResolvedValue(imageJob({ attempts: 3, maxAttempts: 3 }));
     await expect(driveImageGenerationJob(handlerContext())).resolves.toMatchObject({
       skipped: 'attempts_exhausted',

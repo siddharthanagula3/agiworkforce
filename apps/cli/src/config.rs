@@ -2317,6 +2317,88 @@ model = "fixture-config-model"
 
         assert_eq!(config.default.approval_mode, "full-auto");
     }
+
+    /// Every key a released CLI writes into config.toml, in the shape it
+    /// writes them: one table row per leaf, gathered from the serialised
+    /// default rather than from a hand-written list, so a key added to the
+    /// struct is covered here the moment it exists.
+    fn serialised_config_keys(value: &toml::Value, prefix: &str, keys: &mut Vec<String>) {
+        if let toml::Value::Table(table) = value {
+            for (key, child) in table {
+                let path = if prefix.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{prefix}.{key}")
+                };
+                keys.push(path.clone());
+                serialised_config_keys(child, &path, keys);
+            }
+        }
+    }
+
+    fn without_key(value: &toml::Value, path: &str) -> toml::Value {
+        let mut copy = value.clone();
+        let segments: Vec<&str> = path.split('.').collect();
+        let mut cursor = &mut copy;
+        for segment in &segments[..segments.len() - 1] {
+            cursor = match cursor {
+                toml::Value::Table(table) => table.get_mut(*segment).expect("parent table"),
+                _ => panic!("{path} is not reachable"),
+            };
+        }
+        if let toml::Value::Table(table) = cursor {
+            table.remove(segments[segments.len() - 1]);
+        }
+        copy
+    }
+
+    /// A config written by an older CLI is missing whatever the newer one
+    /// added. It has to keep loading: the alternative is that upgrading the
+    /// CLI leaves the user with a config it refuses to read, which is a
+    /// migration nobody wrote. Removing any one key from a full config must
+    /// still parse and still validate.
+    #[test]
+    fn a_config_missing_any_one_key_still_loads_and_validates() {
+        let full = CliConfig::default();
+        let serialised = toml::to_string_pretty(&full).expect("the default config must serialise");
+        let value: toml::Value = toml::from_str(&serialised).expect("serialised config parses");
+        let mut keys = Vec::new();
+        serialised_config_keys(&value, "", &mut keys);
+        assert!(
+            keys.len() > 5,
+            "the config has almost no keys, which means this is measuring nothing: {keys:?}"
+        );
+
+        for key in &keys {
+            let reduced = without_key(&value, key);
+            let text = toml::to_string_pretty(&reduced).expect("reduced config serialises");
+            let loaded: CliConfig = toml::from_str(&text).unwrap_or_else(|error| {
+                panic!("a config without `{key}` no longer loads: {error}\n{text}")
+            });
+            CliConfig::with_builtin_defaults(loaded)
+                .validate()
+                .unwrap_or_else(|error| {
+                    panic!("a config without `{key}` no longer validates: {error}")
+                });
+        }
+    }
+
+    /// A config written by a NEWER CLI carries keys this one has never heard
+    /// of. Refusing it would mean a user who rolls back to a supported version
+    /// cannot start at all, so unknown keys are ignored rather than rejected.
+    #[test]
+    fn a_config_carrying_a_key_this_version_does_not_know_still_loads() {
+        let mut text =
+            toml::to_string_pretty(&CliConfig::default()).expect("default config serialises");
+        text.push_str("\nunreleased_top_level_key = \"from a newer CLI\"\n");
+        text.push_str("\n[unreleased_section]\nwhatever = 1\n");
+
+        let loaded: CliConfig =
+            toml::from_str(&text).expect("an unknown key must not stop the config loading");
+        CliConfig::with_builtin_defaults(loaded)
+            .validate()
+            .expect("an unknown key must not fail validation");
+    }
 }
 
 #[cfg(test)]

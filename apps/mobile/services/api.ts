@@ -24,6 +24,7 @@ import {
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
 
 import { ApiPaywallError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import { platformRequestHeaders } from '../lib/platformHeaders';
 
 export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
 export type { ApiPaywallRecoveryAction } from './apiErrors';
@@ -526,7 +527,7 @@ export const api = {
           headers: {
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
-            'x-agi-surface': 'mobile',
+            ...platformRequestHeaders(),
             ...authHeaders,
           },
           body: JSON.stringify({

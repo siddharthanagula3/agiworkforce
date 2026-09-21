@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  API_CONTRACT_VERSION,
+  API_VERSION_REQUEST_HEADER,
+  CLIENT_VERSION_HEADER,
+  REQUEST_ID_HEADER,
+  isWellFormedRequestId,
+} from '@agiworkforce/cloud-contracts';
+
 import { addCsrfHeaders, clearCsrfToken, getCsrfToken } from './csrf';
 
 const TOKEN = 'csrf-token-1';
@@ -62,5 +70,61 @@ describe('csrf token fetching', () => {
 
     await expect(pending).resolves.toBe(TOKEN);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('what every browser request tells the platform', () => {
+  beforeEach(() => {
+    clearCsrfToken();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ token: TOKEN, expiresIn: EXPIRES_IN_MS }),
+          }) as unknown as Response,
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('names the contract this bundle was built against on every request', async () => {
+    const headers = (await addCsrfHeaders({ 'Content-Type': 'application/json' })) as Record<
+      string,
+      string
+    >;
+
+    expect(headers[API_VERSION_REQUEST_HEADER]).toBe(API_CONTRACT_VERSION);
+    expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('carries an id for this request, so a reader report names the request that failed', async () => {
+    const first = (await addCsrfHeaders()) as Record<string, string>;
+    const second = (await addCsrfHeaders()) as Record<string, string>;
+
+    expect(isWellFormedRequestId(first[REQUEST_ID_HEADER])).toBe(true);
+    expect(second[REQUEST_ID_HEADER]).not.toBe(first[REQUEST_ID_HEADER]);
+  });
+
+  it('takes the build version from the bundle rather than a literal', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_VERSION', '2026.9.3');
+
+    const headers = (await addCsrfHeaders()) as Record<string, string>;
+
+    expect(headers[CLIENT_VERSION_HEADER]).toBe('2026.9.3');
+  });
+
+  it('omits the version rather than claiming one an unstamped build does not have', async () => {
+    vi.stubEnv('NEXT_PUBLIC_APP_VERSION', '');
+
+    const headers = (await addCsrfHeaders()) as Record<string, string>;
+
+    expect(Object.keys(headers)).not.toContain(CLIENT_VERSION_HEADER);
+    expect(headers[API_VERSION_REQUEST_HEADER]).toBe(API_CONTRACT_VERSION);
   });
 });

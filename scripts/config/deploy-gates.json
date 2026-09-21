@@ -1,0 +1,88 @@
+{
+  "$comment": "The gates a production promotion cannot skip, measured by scripts/check-deploy-gates.mjs against the workflow itself. Editing the workflow so a gate disappears fails this guard rather than shipping quietly.",
+  "workflow": "deploy-production.yml",
+  "verifiedCommitRef": "${{ github.event.workflow_run.head_sha }}",
+  "requiredConditions": [
+    {
+      "expression": "github.event.workflow_run.conclusion == 'success'",
+      "why": "Without it a promotion runs on a commit whose CI went red."
+    },
+    {
+      "expression": "github.event.workflow_run.head_branch == 'main'",
+      "why": "Without it a branch that never merged can reach the production domains."
+    },
+    {
+      "expression": "github.event.workflow_run.head_repository.full_name == github.repository",
+      "why": "Without it a fork's CI run can trigger a promotion of the fork's commit."
+    }
+  ],
+  "gates": [
+    {
+      "id": "staging-verdict",
+      "job": "staging-gate",
+      "step": "Wait for the staging verdict on this commit",
+      "evidence": "staging-web",
+      "why": "Production promotes an artifact staging already accepted; without this the first place a build runs is production."
+    },
+    {
+      "id": "migration-ledger",
+      "job": "deploy-web",
+      "step": "Verify the production schema ledger without mutation",
+      "evidence": "db:migrate -- verify",
+      "runsBefore": "Deploy the prebuilt artifact",
+      "why": "Code that expects a column the production schema does not have must not be promoted, and the check has to run before the build is deployed."
+    },
+    {
+      "id": "env-contract",
+      "job": "deploy-web",
+      "step": "Reconcile production env against the declared contract",
+      "runsBefore": "Deploy the prebuilt artifact",
+      "why": "A missing production variable is a boot failure, and reconciling it after the deploy would find it too late."
+    },
+    {
+      "id": "protected-deployment-contract",
+      "job": "deploy-web",
+      "step": "Require the protected Vercel deployment contract",
+      "runsBefore": "Deploy the prebuilt artifact",
+      "why": "A deployment URL without protection is a second public origin serving unreleased code."
+    },
+    {
+      "id": "record-serving-deployment",
+      "job": "deploy-web",
+      "step": "Record the currently serving production deployment",
+      "runsBefore": "Deploy the prebuilt artifact",
+      "why": "The rollback target has to be captured before the promotion replaces it; afterwards there is nothing to go back to."
+    },
+    {
+      "id": "canary",
+      "job": "deploy-web",
+      "step": "Canary the deployment before it takes the production domains",
+      "runsBefore": "Promote the deployment to the production domains",
+      "why": "A build that cannot serve a request must be caught on its own URL, not on the production domains."
+    },
+    {
+      "id": "serving-path",
+      "job": "deploy-web",
+      "step": "Verify the production serving path",
+      "evidence": "verify-deployment\\.mjs",
+      "why": "The promotion is only complete when the production apex actually serves the promoted commit."
+    },
+    {
+      "id": "migration-state-record",
+      "job": "deploy-web",
+      "step": "Record the migration state this deployment serves",
+      "evidence": "db:migrate -- record",
+      "why": "Without it nothing durable says which schema the serving deployment was built against."
+    },
+    {
+      "id": "sandbox-isolation-headers",
+      "job": "deploy-sandbox",
+      "step": "Verify the promoted origin serves the repo's isolation headers",
+      "why": "The artifact sandbox is a separate origin whose whole safety property is its headers."
+    }
+  ],
+  "rollback": {
+    "job": "deploy-web",
+    "step": "Roll back to the last verified production deployment"
+  }
+}

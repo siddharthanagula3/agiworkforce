@@ -10,6 +10,7 @@ import {
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { MobileIapCatalogProduct, MobileIapPlatform } from '@agiworkforce/types';
+import { isProductionRuntime } from '@/lib/config/runtime-environment';
 import { createError } from '@/lib/errors';
 import type { NormalizedEnvironment } from '@/lib/server/payments/domain';
 import { normalizeEnvironment, normalizeProviderTimestamp } from '@/lib/server/payments/normalize';
@@ -218,7 +219,7 @@ async function verifyApplePurchase(input: {
     originalTransactionId: transaction.originalTransactionId ?? null,
     purchasedAt,
     expiresAt,
-    environment: normalizeEnvironment(transaction.environment ?? environment),
+    environment: normalizeEnvironment(environment),
     entitlementStatus: revoked ? 'revoked' : expired ? 'expired' : 'active',
   };
 }
@@ -389,13 +390,24 @@ async function verifyGooglePurchase(input: {
   };
 }
 
+// A store test purchase moves no money, and both stores report it as one. A
+// production deployment refuses it rather than granting a paid plan for free.
+function isUnfundedStorePurchase(verified: VerifiedMobileIapPurchase): boolean {
+  return verified.environment === 'sandbox' && isProductionRuntime();
+}
+
 export async function verifyMobileIapPurchase(input: {
   platform: MobileIapPlatform;
   product: MobileIapCatalogProduct;
   purchaseToken: string;
   appAccountToken: string;
 }): Promise<VerifiedMobileIapPurchase> {
-  return input.platform === 'ios' ? verifyApplePurchase(input) : verifyGooglePurchase(input);
+  const verified =
+    input.platform === 'ios' ? await verifyApplePurchase(input) : await verifyGooglePurchase(input);
+  if (isUnfundedStorePurchase(verified)) {
+    throw createError.forbidden('This store purchase was made in the test environment.');
+  }
+  return verified;
 }
 
 export async function verifyGooglePlayLifecyclePurchase(input: {
@@ -403,5 +415,8 @@ export async function verifyGooglePlayLifecyclePurchase(input: {
   purchaseToken: string;
   appAccountToken: string;
 }): Promise<VerifiedMobileIapPurchase> {
-  return verifyGooglePurchase({ ...input, allowInactive: true });
+  const verified = await verifyGooglePurchase({ ...input, allowInactive: true });
+  return isUnfundedStorePurchase(verified)
+    ? { ...verified, entitlementStatus: 'revoked' }
+    : verified;
 }

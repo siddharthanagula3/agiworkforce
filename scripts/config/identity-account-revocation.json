@@ -1,0 +1,12 @@
+{
+  "statusesDeliberatelyAllowed": [
+    {
+      "status": "active",
+      "reason": "the ordinary state: an active account keeps the credentials it was issued"
+    },
+    {
+      "status": "deletion_scheduled",
+      "reason": "cancelling a scheduled deletion is done signed in, so denying access would strand the person inside the window they are entitled to change their mind in"
+    }
+  ]
+}

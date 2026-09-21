@@ -161,6 +161,31 @@ describe('outbound content inspection', () => {
     }
   });
 
+  it('will not merely warn on an artifact publish, whatever the workspace asked for', async () => {
+    const verdict = await inspectOutboundContent({
+      channel: 'artifact_publish',
+      value: `const key = '${SECRET}'`,
+      userId: 'user-1',
+      organizationId: null,
+      resourceId: 'artifact-1',
+      resolveMode: async () => ({ mode: 'warn', organizationId: null }),
+    });
+
+    expect(verdict.action).toBe('redacted');
+    if (verdict.action !== 'redacted') return;
+    expect(verdict.value).not.toContain(SECRET);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({ resourceType: 'artifact_publish', status: 'redacted' }),
+      }),
+    );
+  });
+
+  it('keeps the warn mode the workspace chose on the channels without a floor', async () => {
+    const verdict = await inspect({ text: `key ${SECRET}` }, 'warn');
+    expect(verdict.action).toBe('allowed');
+  });
+
   it('refuses to send when a scanner errors and the workspace does not merely warn', async () => {
     const unregister = registerOutboundContentScanner({
       id: 'broken',

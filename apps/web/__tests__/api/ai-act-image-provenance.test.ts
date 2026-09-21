@@ -86,6 +86,23 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   markManagedUsageClientDelivered: managedUsageMocks.delivered,
 }));
 
+// Provider bytes leave through the egress guard rather than global fetch, so
+// the URL candidate is resolved here the same way the route resolves it.
+vi.mock('@/lib/url-fetch/guarded-fetch', () => ({
+  createDeadline: () => ({
+    signal: new AbortController().signal,
+    reason: () => null,
+    release: () => undefined,
+  }),
+  guardedFetch: async (target: URL) => ({
+    ok: true as const,
+    kind: 'response' as const,
+    response: (await mockFetch(target.toString())) as Response,
+    url: target,
+    hops: 0,
+  }),
+}));
+
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 

@@ -1,4 +1,5 @@
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 
 const guardedFetchMock = jest.fn();
@@ -105,7 +106,7 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(
       'agi.chat.mobile.send.0190a000-0000-7000-8000-000000000001',
     );
-    expect((init.headers as Record<string, string>)['X-AGI-Surface']).toBe('mobile');
+    expect((init.headers as Record<string, string>)[SURFACE_REQUEST_HEADER]).toBe('mobile');
     expect(JSON.parse(init.body as string)).toMatchObject({
       model: MODEL_ID,
       web_search: true,

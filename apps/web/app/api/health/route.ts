@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedHealthChecks, type HealthCheckResult } from '@/lib/server/health-check';
+import {
+  getCachedHealthChecks,
+  type DependencyObservation,
+  type HealthCheckResult,
+} from '@/lib/server/health-check';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 
@@ -15,18 +19,32 @@ export const runtime = 'nodejs';
  */
 export const maxDuration = 30;
 
+// A dependency id or a component name paired with a finding tells a stranger
+// which part of the deployment is weak, so the public answer counts what the
+// operator surfaces name, the same reduction `environment` already makes.
 function toPublicHealthCheck(healthCheck: HealthCheckResult) {
-  const missingCount = healthCheck.checks.environment.missingCount;
+  const { configuration = [], dependencies = [], ...rest } = healthCheck;
+  const missingCount = rest.checks.environment.missingCount;
+  const tally = (observation: DependencyObservation) =>
+    dependencies.filter((entry) => entry.observation === observation).length;
 
   return {
-    ...healthCheck,
+    ...rest,
     checks: {
-      ...healthCheck.checks,
+      ...rest.checks,
       environment: {
-        status: healthCheck.checks.environment.status,
+        status: rest.checks.environment.status,
         ...(missingCount === undefined ? {} : { missingCount }),
       },
     },
+    dependencyCounts: {
+      total: dependencies.length,
+      ok: tally('ok'),
+      failing: tally('failing'),
+      unconfigured: tally('unconfigured'),
+      unobserved: tally('unobserved'),
+    },
+    configurationFindings: configuration.filter((entry) => entry.state !== 'ok').length,
   };
 }
 

@@ -95,6 +95,7 @@ pub fn tool_capability(name: &str) -> AgentEventToolCategory {
     } else if normalized.contains("mcp") {
         AgentEventToolCategory::Mcp
     } else if [
+        "git_",
         "read",
         "write",
         "edit",
@@ -311,6 +312,9 @@ fn normalize_policy_alias(alias: &str) -> String {
 }
 
 fn tool_owner(name: &str) -> &'static str {
+    if name.starts_with("git_") {
+        return "cli-git";
+    }
     match name {
         "read_file" | "write_file" | "edit_file" | "multiedit" | "read_many_files"
         | "notebook_edit" => "cli-file-tools",
@@ -426,6 +430,12 @@ pub fn is_plan_mode_mutating_tool(tool_name: &str) -> bool {
 
 /// Build native API tool definitions with JSON Schema for each built-in tool.
 pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
+    let mut definitions = core_tool_definitions();
+    definitions.extend(git_tool_definitions());
+    definitions
+}
+
+fn core_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         def(
             "read_file",
@@ -914,6 +924,31 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
     ]
 }
 
+/// The typed Git API as tools, one per operation.
+///
+/// Every entry is built from `git_tools::git_tool_specs`, so a tool cannot
+/// exist with a permission class the operation it runs does not match. They are
+/// deferred: a session that never touches git pays nothing for them, and the
+/// model loads the one it needs through `tool_search`.
+pub fn git_tool_definitions() -> Vec<ToolDefinition> {
+    use super::git_tools::GitToolClass;
+
+    super::git_tools::git_tool_specs()
+        .iter()
+        .map(|spec| {
+            let definition = def(spec.name, spec.description, (spec.schema)());
+            let definition = match spec.class {
+                GitToolClass::Read => definition.read_only(),
+                _ => definition,
+            };
+            let mut definition = definition.deferred();
+            definition.permission_class = spec.class.label().to_string();
+            definition.diagnostic_tags = diagnostic_tags(spec.name, spec.class.label());
+            definition
+        })
+        .collect()
+}
+
 /// The user's own Chrome, driven through the desktop shell.
 ///
 /// Offered only when a shell is running with a browser paired to it
@@ -1116,7 +1151,15 @@ pub fn effective_tool_definitions_with_browser(
     }
 
     if let Some(mcp_tool_definitions) = mcp_tool_definitions {
-        tool_definitions.extend(mcp_tool_definitions.iter().cloned());
+        // Same rule as the built-ins: deferred schemas stay out of the initial
+        // list. Their names go on tool_search so the model still knows they exist.
+        announce_deferred_mcp_tools(&mut tool_definitions, mcp_tool_definitions);
+        tool_definitions.extend(
+            mcp_tool_definitions
+                .iter()
+                .filter(|definition| !definition.should_defer)
+                .cloned(),
+        );
     }
 
     if let Some(allowed_tools) = allowed_tools {
@@ -1128,6 +1171,56 @@ pub fn effective_tool_definitions_with_browser(
     }
 
     tool_definitions
+}
+
+/// Name the deferred MCP tools on `tool_search` itself.
+///
+/// The system prompt's deferred-tool line is written in `AgentSession::new`,
+/// before any server has connected, so it can only name built-ins. This
+/// description is rebuilt for every turn and costs a name and a clause each,
+/// not a JSON schema.
+fn announce_deferred_mcp_tools(
+    tool_definitions: &mut [ToolDefinition],
+    mcp_tool_definitions: &[ToolDefinition],
+) {
+    const SUMMARY_MAX_CHARS: usize = 100;
+
+    let deferred: Vec<String> = mcp_tool_definitions
+        .iter()
+        .filter(|definition| definition.should_defer)
+        .map(|definition| {
+            format!(
+                "{}: {}",
+                definition.name,
+                summarize_for_index(&definition.description, SUMMARY_MAX_CHARS)
+            )
+        })
+        .collect();
+    if deferred.is_empty() {
+        return;
+    }
+
+    let Some(search) = tool_definitions
+        .iter_mut()
+        .find(|definition| definition.name == "tool_search")
+    else {
+        return;
+    };
+    search.description.push_str(&format!(
+        "\n\nMCP tools available on demand. Call tool_search with `select:<name>` to load one \
+         before calling it:\n{}",
+        deferred.join("\n")
+    ));
+}
+
+fn summarize_for_index(description: &str, max_chars: usize) -> String {
+    let line = description.lines().next().unwrap_or("").trim();
+    if line.chars().count() <= max_chars {
+        return line.to_string();
+    }
+    let mut summary: String = line.chars().take(max_chars).collect();
+    summary.push_str("...");
+    summary
 }
 
 fn filter_read_only_builtin_tool_definitions() -> Vec<ToolDefinition> {
@@ -1465,6 +1558,12 @@ mod tests {
                 "lsp_completion",
                 "lsp_document_symbols",
                 "lsp_format",
+                "git_status",
+                "git_show",
+                "git_log",
+                "git_branches",
+                "git_worktrees",
+                "git_stash_list",
                 "send_message",
                 "team_task",
                 "read_messages",
@@ -1623,9 +1722,75 @@ mod tests {
             match tool.name.as_str() {
                 "update_plan" | "todo_write" => assert_eq!(tool.permission_class, "control"),
                 "ask_user" => assert_eq!(tool.permission_class, "interactive"),
+                name if super::super::git_tools::is_git_tool(name) => {
+                    let spec = super::super::git_tools::git_tool_spec(name).expect("git spec");
+                    assert_eq!(tool.permission_class, spec.class.label());
+                }
                 _ if tool.is_read_only => assert_eq!(tool.permission_class, "read_only"),
                 _ => assert_eq!(tool.permission_class, "mutating"),
             }
+        }
+    }
+
+    /// The catalog entry and the operation are one row, so a git tool cannot be
+    /// advertised with a class the executor does not enforce.
+    #[test]
+    fn every_typed_git_operation_is_offered_with_the_class_its_spec_declares() {
+        use super::super::git_tools::{git_tool_specs, GitToolClass};
+
+        let definitions = git_tool_definitions();
+        assert_eq!(definitions.len(), git_tool_specs().len());
+        for spec in git_tool_specs() {
+            let definition = definitions
+                .iter()
+                .find(|definition| definition.name == spec.name)
+                .unwrap_or_else(|| panic!("{} is missing from the catalog", spec.name));
+            assert_eq!(definition.permission_class, spec.class.label());
+            assert_eq!(definition.is_read_only, spec.class == GitToolClass::Read);
+            assert!(
+                definition.should_defer,
+                "{} must stay out of the initial schema list",
+                spec.name
+            );
+            assert_eq!(definition.owner, "cli-git");
+            assert!(definition.input_schema["properties"].is_object());
+        }
+
+        let offered: Vec<String> = all_builtin_tool_definitions()
+            .into_iter()
+            .map(|definition| definition.name)
+            .filter(|name| name.starts_with("git_"))
+            .collect();
+        assert_eq!(offered.len(), git_tool_specs().len());
+        assert!(offered.iter().any(|name| name == "git_push"));
+    }
+
+    /// A destructive git tool must never be one a permission mode can wave
+    /// through: it is neither read-only nor a file edit, which are the two
+    /// families `auto_approve_safe` and `acceptEdits` cover.
+    #[test]
+    fn no_git_tool_falls_into_a_pre_approved_family() {
+        use super::super::git_tools::{git_tool_specs, GitToolClass};
+
+        for spec in git_tool_specs() {
+            if spec.class == GitToolClass::Read {
+                continue;
+            }
+            assert!(
+                !is_file_edit_tool(spec.name),
+                "{} would be pre-approved under acceptEdits",
+                spec.name
+            );
+            let definition = git_tool_definitions()
+                .into_iter()
+                .find(|definition| definition.name == spec.name)
+                .expect("definition");
+            assert!(
+                !definition.is_read_only,
+                "{} would be pre-approved under auto-approve-safe",
+                spec.name
+            );
+            assert!(is_plan_mode_mutating_tool(spec.name));
         }
     }
 
@@ -1696,6 +1861,12 @@ mod tests {
             vec![
                 "advisor",
                 "cron_list",
+                "git_branches",
+                "git_log",
+                "git_show",
+                "git_stash_list",
+                "git_status",
+                "git_worktrees",
                 "glob",
                 "grep_files",
                 "list_directory",
@@ -1772,5 +1943,53 @@ mod tests {
         assert_eq!(tool_result_size_cap("task"), None);
         assert_eq!(tool_result_size_cap("agent"), Some(20_000));
         assert_eq!(tool_result_size_cap("unknown_tool"), None);
+    }
+
+    fn deferred_test_tool_definition(name: &str) -> ToolDefinition {
+        let mut definition = test_tool_definition(name);
+        definition.should_defer = true;
+        definition
+    }
+
+    #[test]
+    fn deferred_mcp_schemas_leave_the_initial_list_but_keep_their_names_on_tool_search() {
+        let mcp_tool_definitions = vec![
+            test_tool_definition("mcp__files__read_note"),
+            deferred_test_tool_definition("mcp__files__archive_note"),
+        ];
+
+        let tool_definitions =
+            effective_tool_definitions(false, false, None, Some(&mcp_tool_definitions));
+        let names = tool_names(&tool_definitions);
+
+        assert!(names.contains(&"mcp__files__read_note"));
+        assert!(!names.contains(&"mcp__files__archive_note"));
+
+        let search = tool_definitions
+            .iter()
+            .find(|definition| definition.name == "tool_search")
+            .expect("tool_search is always loaded");
+        assert!(
+            search.description.contains("mcp__files__archive_note"),
+            "a deferred MCP tool the model is never told about cannot be searched for"
+        );
+        assert!(!search.description.contains("mcp__files__read_note"));
+    }
+
+    #[test]
+    fn no_deferred_mcp_tool_leaves_tool_search_description_untouched() {
+        let mcp_tool_definitions = vec![test_tool_definition("mcp__files__read_note")];
+
+        let with_mcp = effective_tool_definitions(false, false, None, Some(&mcp_tool_definitions));
+        let without_mcp = effective_tool_definitions(false, false, None, None);
+
+        let description = |definitions: &[ToolDefinition]| {
+            definitions
+                .iter()
+                .find(|definition| definition.name == "tool_search")
+                .map(|definition| definition.description.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(description(&with_mcp), description(&without_mcp));
     }
 }

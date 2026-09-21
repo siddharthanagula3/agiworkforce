@@ -76,7 +76,11 @@ export async function clearCloudAgentDevice(
     };
   }
   logger.warn(
-    { runId: input.runId, reason: clearance.reason },
+    {
+      runId: input.runId,
+      reason: clearance.reason,
+      capabilitySource: clearance.decision === 'withdrawn' ? clearance.capabilitySource : undefined,
+    },
     '[cloud-agent] device withdrawn from the run; its tools are not offered',
   );
   return {

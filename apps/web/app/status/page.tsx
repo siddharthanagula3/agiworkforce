@@ -122,7 +122,7 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'database',
     label: 'Postgres',
-    what: 'A query is executed against the primary database and returns. A pass is then reused for up to an hour before another query runs, so this row can be that far behind the database itself.',
+    what: 'A query is executed against the primary database and returns. The answer is reused for up to a minute before another query runs, so this row can be that far behind the database itself.',
   },
   {
     key: 'stripe',
@@ -147,7 +147,7 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'search',
     label: 'Search',
-    what: 'The retrieval index the search over your own content reads is present in the database. It runs beside the Postgres probe and is reused for the same hour, and it never runs a query on your behalf.',
+    what: 'The retrieval index the search over your own content reads is present in the database. It runs beside the Postgres probe and is reused for the same minute, and it never runs a query on your behalf.',
   },
 ];
 
@@ -240,10 +240,13 @@ export default async function StatusPage() {
               </h2>
               <Prose>
                 This page is served by the same deployment it reports on, so an outage broad enough
-                to take the application down takes this page with it. A copy of the current state is
-                pushed to an origin we do not serve, and every incident alert is also sent on a
-                transport that shares no vendor with our email. Neither depends on the application
-                being able to answer a request.
+                to take the application down takes this page with it. Two fallbacks exist for that
+                case, and both are last resorts rather than a second live feed. When an incident
+                alert reaches nobody by email, pager or our own channel, it is retried on a
+                transport that shares no vendor with our email, and the incident headline is written
+                to an origin we do not serve. Neither runs while things are healthy, so the mirror
+                carries the last incident rather than the current state, and both are silent unless
+                configured in the serving environment.
               </Prose>
             </div>
             <Ledger

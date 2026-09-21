@@ -1,0 +1,99 @@
+{
+  "why": "A closed vocabulary is only closed where the compiler can see it. Every value that enters the product from a form, a request body, a database column or a JSON file arrives as a string, and a cast turns an unknown member into a member the type system then trusts everywhere downstream. This contract names the governed vocabularies, requires each one to own the predicate that admits a value into it, and refuses a cast that skips it.",
+  "vocabularies": [
+    {
+      "name": "permission",
+      "file": "packages/contracts/types/src/enterprise/permissions.ts",
+      "symbol": "ADMIN_PERMISSION_AREAS",
+      "type": "AdminPermissionArea",
+      "predicate": null,
+      "predicateGap": {
+        "why": "an administrator area arrives from a role row and from a request body, and nothing admits it",
+        "fix": "export isAdminPermissionArea in packages/contracts/types/src/enterprise/permissions.ts, reading ADMIN_PERMISSION_AREAS"
+      }
+    },
+    {
+      "name": "policy",
+      "file": "packages/contracts/types/src/enterprise/workspace-controls.ts",
+      "symbol": "WORKSPACE_FEATURES",
+      "type": "WorkspaceFeature",
+      "predicate": "isWorkspaceFeature"
+    },
+    {
+      "name": "trust mode",
+      "file": "packages/contracts/types/src/trust-mode-contract.ts",
+      "symbol": "TRUST_MODE_STRICTNESS",
+      "type": "PrivacyMode",
+      "predicate": "isPrivacyMode"
+    },
+    {
+      "name": "trust boundary",
+      "file": "packages/contracts/types/src/trust-mode-contract.ts",
+      "symbol": "STORAGE_LOCATIONS",
+      "type": "StorageLocation",
+      "predicate": "isStorageLocation"
+    },
+    {
+      "name": "interaction mode",
+      "file": "packages/contracts/types/src/runtime.ts",
+      "symbol": "CLOUD_WORK_MODES",
+      "type": "CloudWorkMode",
+      "predicate": "isCloudWorkMode"
+    },
+    {
+      "name": "entitlement",
+      "file": "packages/contracts/types/src/billing-catalog.ts",
+      "symbol": "BillingPlanCapability",
+      "type": "BillingPlanCapability",
+      "predicate": null,
+      "predicateGap": {
+        "why": "a plan capability arrives from a Stripe payload and from a stored subscription row, and nothing admits it",
+        "fix": "export isBillingPlanCapability in packages/contracts/types/src/billing-catalog.ts, reading the capability vocabulary"
+      }
+    },
+    {
+      "name": "feature",
+      "file": "packages/contracts/types/src/feature-registry.json",
+      "jsonKeys": "features",
+      "type": "FeatureId",
+      "predicate": "isFeatureId",
+      "predicateFile": "packages/contracts/types/src/feature-registry.ts"
+    },
+    {
+      "name": "model",
+      "file": "packages/contracts/types/src/models.json",
+      "jsonKeys": "models",
+      "type": "ModelId",
+      "predicate": null,
+      "predicateGap": {
+        "why": "a model id arrives on every request body and the catalogue is the only thing that can say whether it exists",
+        "fix": "export isModelId in packages/contracts/types/src/model-catalog.ts, reading the catalogue keys"
+      }
+    }
+  ],
+  "castRoots": [
+    "apps/web/app",
+    "apps/web/lib",
+    "apps/web/features",
+    "apps/web/shared",
+    "apps/mobile",
+    "apps/desktop/src",
+    "apps/extension/src",
+    "apps/extension-vscode/src",
+    "packages"
+  ],
+  "castDefects": [
+    {
+      "file": "apps/web/features/settings/sections/WorkspacePolicySection.tsx",
+      "type": "PrivacyMode",
+      "why": "the value comes straight off a select element, so any option the markup grows or a devtools edit supplies becomes a trust mode the rest of the product believes",
+      "fix": "guard with isPrivacyMode from @agiworkforce/types before calling patch, and ignore a value it refuses"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx",
+      "type": "PrivacyMode",
+      "why": "signals.privacyMode arrives from the host as an unvalidated string and decides which provenance line the user is shown",
+      "fix": "guard with isPrivacyMode from @agiworkforce/types and fall back to the managed line when it refuses"
+    }
+  ]
+}

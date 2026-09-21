@@ -37,6 +37,9 @@ function ProjectFlyoutIcon({ project }: { project: SidebarProject }) {
   );
 }
 
+const ROW_FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]';
+
 export interface SessionItemHandlers {
   onSelect: (id: string) => void;
   onRename: (id: string, title: string) => void;
@@ -172,7 +175,10 @@ function SessionItemBase({
     ? `${rowLabel}, ${t('sidebar.agiWork', 'AGI Work')}`
     : undefined;
 
-  const rowClassName = 'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left';
+  const rowClassName = cn(
+    'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left',
+    ROW_FOCUS_RING,
+  );
 
   if (isRenaming) {
     return (
@@ -264,7 +270,10 @@ function SessionItemBase({
                 e.stopPropagation();
                 onOpenCustomInstructions(session.id);
               }}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-amber-500 hover:bg-[hsl(var(--muted))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
+              className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-md text-amber-500 hover:bg-[hsl(var(--muted))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                ROW_FOCUS_RING,
+              )}
             >
               <Sparkles className="h-3 w-3" />
             </button>
@@ -282,7 +291,10 @@ function SessionItemBase({
                   e.stopPropagation();
                   toggle();
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
+                className={cn(
+                  'flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                  ROW_FOCUS_RING,
+                )}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
@@ -356,6 +368,9 @@ function SessionItemBase({
                           {t('sidebar.archive', 'Archive')}
                         </MenuItem>
                       ))}
+                {/* Delete is the one row here that cannot be taken back, so it
+                    does not sit flush against Archive, one row above it. */}
+                {!simple && <MenuSeparator />}
                 <MenuItem
                   close={close}
                   onSelect={() => onDelete(session.id)}

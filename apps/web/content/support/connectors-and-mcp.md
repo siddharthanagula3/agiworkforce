@@ -4,7 +4,7 @@ title: Connectors and MCP
 path: /connectors
 category: connectors
 tags: connector, connectors, mcp, integration, github, tools, revoke, disconnect, permissions, always allow
-updated: 2026-08-05
+updated: 2026-09-20
 scope: public
 ---
 
@@ -28,7 +28,9 @@ When a connector's tool runs for the first time, AGI asks for approval. Choosing
 
 Removing a connector deactivates it and clears the saved "Always allow" tool
 permissions at the same time, so a later reconnect starts from a clean approval
-state.
+state. AGI asks the provider to revoke every account you connected through it,
+not only the one AGI treated as the default, and deletes the credentials it held
+for them.
 
 ## Custom MCP connections and plans
 

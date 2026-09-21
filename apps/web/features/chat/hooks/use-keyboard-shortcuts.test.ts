@@ -76,6 +76,25 @@ describe('KEYBOARD_SHORTCUT_DOCS', () => {
       expect(doc).not.toHaveProperty('action');
     }
   });
+
+  // The matcher takes the first doc whose chord matches, so a second doc on the
+  // same chord is a binding the shortcuts dialog advertises and nothing runs.
+  it('gives every shortcut a chord of its own', () => {
+    const chord = (doc: (typeof KEYBOARD_SHORTCUT_DOCS)[number]) =>
+      [
+        doc.ctrl || doc.meta ? 'mod' : '',
+        doc.shift ? 'shift' : '',
+        doc.alt ? 'alt' : '',
+        doc.key.toLowerCase(),
+      ].join('+');
+    const chords = KEYBOARD_SHORTCUT_DOCS.map(chord);
+    const duplicated = chords.filter((value, index) => chords.indexOf(value) !== index);
+
+    expect(duplicated).toEqual([]);
+    expect(new Set(KEYBOARD_SHORTCUT_DOCS.map((doc) => doc.id)).size).toBe(
+      KEYBOARD_SHORTCUT_DOCS.length,
+    );
+  });
 });
 
 describe('useKeyboardShortcuts bindings', () => {

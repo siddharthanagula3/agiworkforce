@@ -1,0 +1,121 @@
+{
+  "forbiddenKeyColumns": [
+    {
+      "name": "email",
+      "match": "^(email|email_address|user_email)$",
+      "why": "An address is a way to reach somebody, not a name for a row. It changes, it is personal data an erasure has to remove, and every reference taken against it breaks when it does."
+    },
+    {
+      "name": "secret",
+      "match": "(secret|password|api_key|private_key|access_token|refresh_token)$",
+      "why": "A key that is also a credential cannot be logged, put in a URL or shown in an error, which is most of what an identifier is for."
+    },
+    {
+      "name": "filename",
+      "match": "^(file_name|filename|file_path|path|object_key|storage_path)$",
+      "why": "A file keeps its identity when it is renamed or moved, so the name cannot be the identity."
+    },
+    {
+      "name": "rename-unstable",
+      "match": "^(name|slug|title|display_name|handle)$",
+      "why": "A name is what a reader calls the row today. Identity has to survive the rename."
+    },
+    {
+      "name": "foreign-identifier",
+      "match": "^(provider_task_id|provider_job_id|external_id|remote_id|upstream_id|vendor_id)$",
+      "why": "Another system's identifier is theirs to reuse, recycle or retire, and a provider swap leaves every row unaddressable."
+    },
+    {
+      "name": "positional",
+      "match": "^(index|position|ordinal|offset|row_number)$",
+      "why": "A position is true only until something is inserted above it."
+    }
+  ],
+  "positionalIdentifierPatterns": [
+    {
+      "name": "id-from-loop-index",
+      "match": "\\bid:\\s*(?:String\\()?\\s*(?:index|idx|i)\\s*[,)]?\\s*(?:,|$|\\n)"
+    },
+    {
+      "name": "id-template-from-index",
+      "match": "\\bid:\\s*`[^`]*\\$\\{\\s*(?:index|idx)\\s*\\}"
+    }
+  ],
+  "sequentialKeys": [
+    {
+      "table": "cloud_agent_events",
+      "why": "An append-only run transcript read only in order, by the owner of the run it hangs off. The sequence is what puts the events back in order after a reconnect, and no route addresses an event by id."
+    },
+    {
+      "table": "cloud_code_agent_steps",
+      "why": "An append-only step log under one turn, ordered by the sequence and reached only through its turn."
+    },
+    {
+      "table": "cloud_code_terminal_entries",
+      "why": "An append-only terminal scrollback ordered by the sequence and reached only through its session."
+    },
+    {
+      "table": "release_events",
+      "why": "A platform release audit trail read by operators in order; no reader addresses one event."
+    },
+    {
+      "table": "support_access_events",
+      "why": "A hash-chained break-glass trail where the sequence is part of the chain that verifySupportAccessTrail verifies."
+    },
+    {
+      "table": "work_plan_revisions",
+      "why": "An append-only revision history of one plan, ordered by the sequence and reached only through the plan."
+    }
+  ],
+  "keylessTables": [],
+  "positionalExemptions": [],
+  "forbiddenKeyExemptions": [
+    {
+      "table": "object_backup_replicas",
+      "rule": "filename",
+      "why": "The row is the record that one storage object was replicated, so the object key is the thing being identified rather than a name the object happens to carry. A replica is never renamed; a new key is a new object and a new row."
+    }
+  ],
+  "mintedElsewhereKeys": [
+    {
+      "table": "cloud_agent_run_budgets",
+      "mintedBy": "cloud_agent_runs.id, one budget row per run"
+    },
+    {
+      "table": "organization_admin_policies",
+      "mintedBy": "organizations.id, one policy row per workspace"
+    },
+    {
+      "table": "organization_audit_destinations",
+      "mintedBy": "organizations.id, one destination row per workspace"
+    },
+    {
+      "table": "organization_billing_contracts",
+      "mintedBy": "organizations.id, one contract row per workspace"
+    },
+    {
+      "table": "organization_connector_policies",
+      "mintedBy": "organizations.id, one policy row per workspace"
+    },
+    {
+      "table": "organization_encryption_keys",
+      "mintedBy": "organizations.id, one key record per workspace"
+    },
+    {
+      "table": "organization_model_policies",
+      "mintedBy": "organizations.id, one policy row per workspace"
+    },
+    {
+      "table": "organization_spend_limits",
+      "mintedBy": "organizations.id, one limit row per workspace"
+    },
+    {
+      "table": "web_artifact_index",
+      "mintedBy": "the device that indexed the artifact, so an offline client can write the row before it reaches the server"
+    },
+    {
+      "table": "web_artifacts",
+      "mintedBy": "the device that created the artifact, so an offline client can reference it before it syncs"
+    }
+  ]
+}

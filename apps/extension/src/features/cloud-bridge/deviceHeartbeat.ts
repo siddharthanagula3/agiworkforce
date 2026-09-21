@@ -7,6 +7,7 @@ import {
   type DeviceHeartbeatRequest,
 } from '@agiworkforce/cloud-contracts';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 const INSTALL_ID_KEY = 'agi_device_install_id';
 
@@ -69,7 +70,7 @@ async function sendHeartbeat(fetchImpl: typeof fetch): Promise<boolean> {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
     },
     body: JSON.stringify(heartbeat),
   });

@@ -125,6 +125,14 @@ export const createError = {
   capabilityUnavailable: (message: string): AppError =>
     appError(ErrorCode.CAPABILITY_UNAVAILABLE, message),
 
+  /**
+   * Use when the caller's build is below the oldest contract this deployment
+   * answers. The message names what to do, and is delivered rather than
+   * replaced, because a client that is told nothing retries forever.
+   */
+  clientUpdateRequired: (message: string): AppError =>
+    appError(ErrorCode.CLIENT_UPDATE_REQUIRED, message).asUserSafe(),
+
   timeout: (message = 'Operation timed out'): AppError => appError(ErrorCode.TIMEOUT, message),
 
   network: (message = 'Network error'): AppError => appError(ErrorCode.NETWORK_ERROR, message),
@@ -233,6 +241,12 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     title: 'Not available here',
     message: 'This deployment does not offer that.',
     suggestion: 'Check whether the feature is enabled for your plan or workspace.',
+    icon: 'warning',
+  },
+  [ErrorCode.CLIENT_UPDATE_REQUIRED]: {
+    title: 'Update required',
+    message: 'This version is too old to talk to AGI Workforce.',
+    suggestion: 'Install the latest version and sign in again.',
     icon: 'warning',
   },
   [ErrorCode.TIMEOUT]: {

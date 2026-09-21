@@ -688,9 +688,14 @@ fn same_model_fallbacks(
     fallbacks
 }
 
+/// Basic is a priced plan and does not share the free tier's slots. It used to:
+/// while the free tier was granted priced slots the two lists were the same and
+/// folding one into the other cost nothing. Now that the free tier carries only
+/// zero-priced slots, a Basic account routed as free would lose every model its
+/// subscription buys, so it carries its own `tier_allowed_slots` entry.
 fn normalize_tier(tier: Option<&str>) -> &'static str {
     match tier.unwrap_or_default().to_ascii_lowercase().as_str() {
-        "basic" | "hobby" => "free",
+        "basic" | "hobby" => "basic",
         "pro" | "team" => "pro",
         "max" | "max_15x" | "max-15x" | "max15x" | "max+" | "max_plus" | "max-plus" => "max",
         "enterprise" => "enterprise",
@@ -952,11 +957,29 @@ const MAX_FALLBACK_ROUTES: usize = 4;
 /// no task lists is reachable only through a caller preference, and a failover
 /// must not open that door. Admission is unchanged; this only decides how far
 /// a failover may walk.
+/// The slot a request falls back to once its task's own slots are exhausted.
+///
+/// Mirrors the TypeScript resolver's `resolveFallbackSlot`. `fallback_slot` is
+/// the policy-wide answer and only answers for a tier that is granted that slot;
+/// a tier whose `tier_allowed_slots` withholds it, as the free tier does now
+/// that every priced slot has been taken off that list, falls back to its own
+/// first allowed slot instead of having no fallback at all.
+fn tier_fallback_slot<'a>(policy: &'a AutoPolicy, tier_slot_order: &'a [String]) -> &'a str {
+    if tier_slot_order.contains(&policy.fallback_slot) {
+        return policy.fallback_slot.as_str();
+    }
+    tier_slot_order
+        .iter()
+        .find(|slot_id| policy.slots.contains_key(slot_id.as_str()))
+        .map_or(policy.fallback_slot.as_str(), String::as_str)
+}
+
 fn fallback_candidate_slots<'a>(
     policy: &'a AutoPolicy,
     task: &'a AutoTaskPolicy,
     preferred_slots: &'a [String],
     tier_slot_order: &'a [String],
+    fallback_slot: &'a str,
 ) -> Vec<&'a str> {
     let policy_reachable = policy
         .tasks
@@ -976,15 +999,17 @@ fn fallback_candidate_slots<'a>(
                 .unwrap_or_default()
                 .iter()
         }))
-        .chain(std::iter::once(&policy.fallback_slot))
+        .map(String::as_str)
+        .chain(std::iter::once(fallback_slot))
         .chain(
             tier_slot_order
                 .iter()
-                .filter(|slot_id| policy_reachable.contains(slot_id.as_str())),
+                .map(String::as_str)
+                .filter(|slot_id| policy_reachable.contains(slot_id)),
         );
     for slot_id in ladder {
-        if seen.insert(slot_id.as_str()) {
-            ordered.push(slot_id.as_str());
+        if seen.insert(slot_id) {
+            ordered.push(slot_id);
         }
     }
     ordered
@@ -1000,11 +1025,18 @@ fn build_provider_fallbacks(
     allowed_slots: &HashSet<String>,
     preferred_slots: &[String],
     tier_slot_order: &[String],
+    fallback_slot: &str,
     selected_model_key: &str,
     selected_provider: &str,
     selected_model_routes: &[RankedRoute<'_>],
 ) -> Vec<AutoFallbackRoute> {
-    let candidate_slots = fallback_candidate_slots(policy, task, preferred_slots, tier_slot_order);
+    let candidate_slots = fallback_candidate_slots(
+        policy,
+        task,
+        preferred_slots,
+        tier_slot_order,
+        fallback_slot,
+    );
 
     let mut seen_models = HashSet::from([selected_model_key.to_owned()]);
     let mut seen_providers = HashSet::from([selected_provider.to_owned()]);
@@ -1204,6 +1236,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
         .cloned()
         .unwrap_or_else(|| vec![policy.fallback_slot.clone()]);
     let allowed_slots = tier_slot_order.iter().cloned().collect::<HashSet<_>>();
+    let fallback_slot = tier_fallback_slot(policy, &tier_slot_order);
     let preferred_slots = task
         .preferred_slots
         .get(effective_profile.as_key())
@@ -1236,6 +1269,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 &allowed_slots,
                 preferred_slots,
                 &tier_slot_order,
+                fallback_slot,
                 current_model_key,
                 &selected_provider,
                 &eligibility.ranked_routes,
@@ -1283,6 +1317,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 &allowed_slots,
                 preferred_slots,
                 &tier_slot_order,
+                fallback_slot,
                 model_key,
                 &selected_provider,
                 &eligibility.ranked_routes,
@@ -1303,11 +1338,13 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
         reasons.extend(eligibility.reasons);
     }
 
-    if !preferred_slots.contains(&policy.fallback_slot)
-        && allowed_slots.contains(&policy.fallback_slot)
+    if !preferred_slots
+        .iter()
+        .any(|slot_id| slot_id == fallback_slot)
+        && allowed_slots.contains(fallback_slot)
         && let Some(model_key) = policy
             .slots
-            .get(&policy.fallback_slot)
+            .get(fallback_slot)
             .map(|slot| slot.model_key.as_str())
     {
         let eligibility = evaluate_eligibility(registry, model_key, task, request, runtime_profile);
@@ -1322,6 +1359,7 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
                 &allowed_slots,
                 preferred_slots,
                 &tier_slot_order,
+                fallback_slot,
                 model_key,
                 &selected_provider,
                 &eligibility.ranked_routes,

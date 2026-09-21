@@ -1,0 +1,67 @@
+{
+  "why": "The routes that decide who somebody is are the ones an attacker reaches first and the ones a product change reaches last. Each rule here is checked against the route table, the migration history and the analytics vocabulary rather than against a list, so a route added tomorrow is measured the day it lands.",
+  "routeRoots": ["apps/web/app/api/auth", "apps/web/app/api/device"],
+  "rateLimit": {
+    "declaredIn": "apps/web/lib/rate-limit.ts",
+    "helpers": ["withRateLimit", "checkRateLimit", "withRateLimitHandler"],
+    "why": "an unthrottled credential endpoint is a free guessing machine"
+  },
+  "audit": {
+    "decisionRegistry": "apps/web/lib/services/audit-coverage/registry.ts",
+    "emitters": [
+      "recordAuditEvent",
+      "logSecurityEvent",
+      "logAuthFailure",
+      "logAuthorizationFailure",
+      "logSuspiciousActivity"
+    ],
+    "why": "a sign-in nobody recorded cannot be disputed, revoked or explained afterwards",
+    "defects": [
+      {
+        "route": "apps/web/app/api/device/link/route.ts",
+        "why": "linking mints the pairing code the approval consumes, so a trail that starts at approval cannot say which device asked",
+        "fix": "add an entry for device/link/route.ts to UNAUDITED_MUTATING_ROUTES in apps/web/lib/services/audit-coverage/registry.ts with reason no_governed_state, or record the code it mints"
+      }
+    ]
+  },
+  "session": {
+    "module": "apps/web/lib/api-auth.ts",
+    "forbiddenImports": ["@clerk/nextjs/server", "@clerk/backend"],
+    "why": "an identity resolved a second way is a second set of rules nobody keeps in step"
+  },
+  "cookies": {
+    "roots": ["apps/web/app", "apps/web/lib", "apps/web/features"],
+    "required": ["httpOnly", "secure", "sameSite"],
+    "why": "a session cookie without all three is readable by script, sent in the clear or attached to somebody else's form post"
+  },
+  "tokenColumns": {
+    "tables": [
+      "device_authorization_codes",
+      "device_refresh_tokens",
+      "api_keys",
+      "account_sessions",
+      "connector_oauth_grants",
+      "user_two_factor"
+    ],
+    "match": "(?:^|_)(?:token|secret|password|api_key|private_key)$",
+    "safe": "_hash$|_enc$|^encrypted_",
+    "defects": [
+      {
+        "column": "device_authorization_codes.access_token",
+        "why": "a bearer token in a plain text column is a bearer token in every backup and every replica of that backup",
+        "fix": "drop the column; every statement in apps/web/app/api/device and apps/web/app/api/auth/device writes NULL to it, so nothing reads a value from it"
+      },
+      {
+        "column": "device_authorization_codes.refresh_token",
+        "why": "the refresh half of the same pair, and the one that does not expire in minutes",
+        "fix": "drop the column in the same migration as access_token"
+      }
+    ]
+  },
+  "analytics": {
+    "vocabulary": "packages/contracts/types/src/product-analytics.ts",
+    "symbol": "PRODUCT_ANALYTICS_PROPERTY_KEYS",
+    "forbidden": "password|passcode|secret|token|api_?key|credential|ssn|card",
+    "why": "an analytics property is copied to a third party by definition, so a credential-shaped key is an exfiltration route with a dashboard on the end"
+  }
+}

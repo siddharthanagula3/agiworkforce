@@ -316,7 +316,6 @@
           "apps/extension/src/features/side-panel/index.ts",
           "apps/extension/src/integrations/index.ts",
           "apps/extension/src/platform/index.ts",
-          "apps/extension/src/surface.ts",
           "apps/extension/src/ui/index.ts"
         ]
       }

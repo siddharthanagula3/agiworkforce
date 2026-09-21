@@ -4799,6 +4799,7 @@ async fn run_event_loop(
                                     )]),
                                 };
                                 let opts = crate::tools::ToolExecOptions {
+                                    mcp_tool_definitions: None,
                                     require_confirmation: false,
                                     auto_approve_safe: true,
                                     auto_approve_edits: false,
@@ -5758,6 +5759,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -5817,6 +5819,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -5915,6 +5918,7 @@ mod tests {
                 ]),
             };
             let opts = crate::tools::ToolExecOptions {
+                mcp_tool_definitions: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,

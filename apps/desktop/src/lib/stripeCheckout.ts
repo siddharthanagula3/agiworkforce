@@ -60,6 +60,14 @@ function readBillingErrorCode(payload: Record<string, unknown>): string | null {
   return typeof error['code'] === 'string' ? error['code'] : null;
 }
 
+// The desktop app has no waitlist or access-code screen, so the refusal names
+// the one surface that does and opens it.
+async function upgradeGateRedirect(payload: Record<string, unknown>): Promise<string | null> {
+  if (readBillingErrorCode(payload) !== 'waitlist_access_required') return null;
+  await openExternalUrl(`${WEB_APP_URL}/pricing`);
+  return 'Paid upgrades are opening in stages. AGI pricing is now open in your browser, where you can join the waitlist or enter an access code.';
+}
+
 function billingErrorFromPayload(payload: Record<string, unknown>, fallback: string): string {
   const error = payload['error'];
   if (typeof error === 'string') return error;
@@ -107,12 +115,15 @@ export async function openCheckout(
     request.assertBoundary();
 
     if (!res.ok) {
-      const msg = await readBillingError(res, `Checkout failed (${res.status})`);
+      const payload = await readBillingPayload(res);
       request.assertBoundary();
       if (res.status === 503) {
         return 'Stripe is not configured. Please contact support.';
       }
-      return msg;
+      return (
+        (await upgradeGateRedirect(payload)) ??
+        billingErrorFromPayload(payload, `Checkout failed (${res.status})`)
+      );
     }
 
     const payload: unknown = await res.json();
@@ -152,12 +163,15 @@ export async function openBillingPortal(
     request.assertBoundary();
 
     if (!res.ok) {
-      const msg = await readBillingError(res, `Portal error (${res.status})`);
+      const payload = await readBillingPayload(res);
       request.assertBoundary();
       if (res.status === 503) {
         return 'Stripe is not configured. Please contact support.';
       }
-      return msg;
+      return (
+        (await upgradeGateRedirect(payload)) ??
+        billingErrorFromPayload(payload, `Portal error (${res.status})`)
+      );
     }
 
     const payload: unknown = await res.json();

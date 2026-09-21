@@ -1,7 +1,7 @@
 'use client';
 
 import { Eye, EyeOff } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 
 import { useAuthCopy } from './authCopy';
 import { AuthField } from './AuthField';
@@ -29,7 +29,14 @@ export function AuthPasswordField({
 }) {
   const copy = useAuthCopy();
   const [revealed, setRevealed] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const Glyph = revealed ? EyeOff : Eye;
+
+  // A hidden field gives no way to see that every letter arrived uppercase,
+  // which reads as a wrong password until someone notices the key.
+  const readCapsLock = (event: KeyboardEvent<HTMLInputElement>) => {
+    setCapsLock(event.getModifierState?.('CapsLock') === true);
+  };
 
   return (
     <AuthField
@@ -43,6 +50,10 @@ export function AuthPasswordField({
       autoFocus
       required
       onChange={(event) => onChange(event.target.value)}
+      onKeyDown={readCapsLock}
+      onKeyUp={readCapsLock}
+      onBlur={() => setCapsLock(false)}
+      hint={capsLock && !revealed ? copy.text('flow.password.capsLock', 'Caps Lock is on') : null}
       trailing={
         <button
           type="button"

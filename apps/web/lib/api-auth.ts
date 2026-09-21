@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { logAuthFailure } from '@/lib/security-audit';
 import { setTenantScope } from '@/lib/observability/trace-context';
@@ -20,7 +20,12 @@ import {
   resolveAuthenticatedAccount,
   type AuthenticatedAccount,
 } from '@/lib/server/identity-account';
-import { accountAccessDecision, effectiveAccountStatus } from '@/lib/auth/account-status';
+import { accountAccessDecision, type AccountStatus } from '@/lib/auth/account-status';
+import { readAccountStatus } from '@/lib/auth/account-lifecycle';
+import {
+  endSessionPastAbsoluteLifetime,
+  isSessionPastAbsoluteLifetime,
+} from '@/lib/auth/session-age';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
@@ -105,24 +110,6 @@ function assertStatusAllowsAccess(status: string | null): void {
 }
 
 /**
- * Joined to erasure_tombstones because erasure deletes the profile row, and the
- * subject row is synthesised so "no row" means the database did not answer.
- */
-const ACCOUNT_LIFECYCLE = `
-  select profile.account_status,
-         profile.deletion_scheduled_for,
-         (tombstone.user_id is not null) as erased
-    from (select $1::text as id) subject
-    left join public.profiles profile on profile.id = subject.id
-    left join public.erasure_tombstones tombstone on tombstone.user_id = subject.id`;
-
-interface AccountLifecycleRow {
-  account_status: string | null;
-  deletion_scheduled_for: unknown;
-  erased: boolean | null;
-}
-
-/**
  * A workspace locked down during an incident reaches no route. Resolution
  * failures answer "not locked", which is the contract tenant-lockdown.ts states:
  * the switch can only ever take something down deliberately.
@@ -141,6 +128,19 @@ async function assertWorkspaceNotLockedDown(userId: string, request?: NextReques
   await assertTenantNotLockedDown(organizationId);
 }
 
+// The provider's expiry renews on every use, so without this an over-age session works for ever.
+async function assertSessionWithinAbsoluteLifetime(
+  sessionId: string | null,
+  userId: string,
+): Promise<void> {
+  if (!sessionId) return;
+  const identity = getIdentityProvider();
+  if (!(await isSessionPastAbsoluteLifetime(identity, sessionId, userId, Date.now()))) return;
+
+  await endSessionPastAbsoluteLifetime(identity, sessionId, userId);
+  throw createError.unauthorized();
+}
+
 export async function assertAccountActive(userId: string, request?: NextRequest): Promise<void> {
   await assertAccountLifecycleActive(userId);
   await assertWorkspaceNotLockedDown(userId, request);
@@ -155,31 +155,18 @@ async function assertAccountLifecycleActive(userId: string): Promise<void> {
 
   let lastError: unknown;
   for (let attempt = 0; attempt < ACCOUNT_STATUS_ATTEMPTS; attempt++) {
-    let rows: AccountLifecycleRow[];
+    let status: AccountStatus | null;
     try {
-      const raced = await withDeadline(
-        getNeonDb().query<AccountLifecycleRow>(ACCOUNT_LIFECYCLE, [userId]),
-        ACCOUNT_STATUS_DEADLINE_MS,
-      );
+      const raced = await withDeadline(readAccountStatus(userId), ACCOUNT_STATUS_DEADLINE_MS);
       if (raced === DEADLINE_EXCEEDED) {
         lastError = new Error(`account_status lookup exceeded ${ACCOUNT_STATUS_DEADLINE_MS}ms`);
         continue;
       }
-      rows = raced;
+      status = raced;
     } catch (lookupError) {
       lastError = lookupError;
       continue;
     }
-    const row = rows[0];
-    if (!row) {
-      lastError = new Error('account lifecycle lookup returned no row');
-      continue;
-    }
-    const status = effectiveAccountStatus({
-      status: row.account_status,
-      deletionScheduled: row.deletion_scheduled_for != null,
-      erased: row.erased === true,
-    });
     await setCachedAccountStatus(userId, status);
     assertStatusAllowsAccess(status);
     return;
@@ -228,7 +215,16 @@ function authResultFor(account: AuthenticatedAccount, email?: string | null): Au
   };
 }
 
-async function verifyBearerToken(token: string, request: NextRequest): Promise<AuthResult | null> {
+interface VerifiedBearer {
+  auth: AuthResult;
+  /** Null for a device token, which is bound to a credential family rather than a session. */
+  sessionId: string | null;
+}
+
+async function verifyBearerToken(
+  token: string,
+  request: NextRequest,
+): Promise<VerifiedBearer | null> {
   const developerToken = verifyDeveloperTokenSignature(token);
   if (developerToken) {
     try {
@@ -246,9 +242,12 @@ async function verifyBearerToken(token: string, request: NextRequest): Promise<A
       );
     }
     return {
-      userId: developerToken.userId,
-      ...(developerToken.email ? { email: developerToken.email } : {}),
-      surfaceClass: 'developer',
+      auth: {
+        userId: developerToken.userId,
+        ...(developerToken.email ? { email: developerToken.email } : {}),
+        surfaceClass: 'developer',
+      },
+      sessionId: null,
     };
   }
 
@@ -271,8 +270,11 @@ async function verifyBearerToken(token: string, request: NextRequest): Promise<A
     if (!account) return null;
     const boundSurface = bindSurfaceFromClaims(claims.raw);
     return {
-      ...authResultFor(account, claims.email),
-      ...(boundSurface ? { boundSurface } : {}),
+      auth: {
+        ...authResultFor(account, claims.email),
+        ...(boundSurface ? { boundSurface } : {}),
+      },
+      sessionId: claims.sessionId,
     };
   }
 
@@ -323,22 +325,25 @@ export async function getClerkAuthUser(
       throw createError.unauthorized();
     }
 
-    const result = await verifyBearerToken(token, request);
-    if (result) {
-      await assertAccountActive(result.userId, request);
-      setTenantScope({ userId: result.userId });
-      await assertMfaPolicyUnlessExemptOwner(result.userId, options.mfaGateExemptForOwner ?? false);
-      await assertIpAllowList(result.userId, request);
-      return result;
+    const verified = await verifyBearerToken(token, request);
+    if (verified) {
+      const { auth, sessionId } = verified;
+      await assertSessionWithinAbsoluteLifetime(sessionId, auth.userId);
+      await assertAccountActive(auth.userId, request);
+      setTenantScope({ userId: auth.userId });
+      await assertMfaPolicyUnlessExemptOwner(auth.userId, options.mfaGateExemptForOwner ?? false);
+      await assertIpAllowList(auth.userId, request);
+      return auth;
     }
 
     throw createError.unauthorized();
   }
 
-  const { subject } = await getRequestIdentity();
+  const { subject, sessionId } = await getRequestIdentity();
   const account = subject === null ? null : await accountForSubject(subject, request);
   if (account) {
     const userId = account.accountId;
+    await assertSessionWithinAbsoluteLifetime(sessionId, userId);
     await assertAccountActive(userId, request);
     setTenantScope({ userId });
     await assertMfaPolicyUnlessExemptOwner(userId, options.mfaGateExemptForOwner ?? false);
@@ -347,4 +352,35 @@ export async function getClerkAuthUser(
   }
 
   throw createError.unauthorized();
+}
+
+/**
+ * For routes that also serve signed-out callers: no credential answers null, a credential
+ * answers only through the account and workspace gate, never as a raw provider subject.
+ */
+export async function getOptionalAuthUser(
+  request: NextRequest,
+  options: AuthOptions = {},
+): Promise<AuthResult | null> {
+  const bearer = request.headers.get('authorization')?.startsWith('Bearer ') === true;
+  if (!bearer) {
+    let subject: string | null;
+    try {
+      ({ subject } = await getRequestIdentity());
+    } catch (error) {
+      logger.warn({ error }, 'Request identity lookup failed; treating the caller as signed out');
+      return null;
+    }
+    if (subject === null) return null;
+  }
+  try {
+    return await getClerkAuthUser(request, options);
+  } catch (error) {
+    // A gated-out session is served as signed out: support and privacy forms stay reachable
+    // to a suspended person, and nothing is attributed to the account.
+    if (!bearer && isAppError(error) && (error.statusCode === 401 || error.statusCode === 403)) {
+      return null;
+    }
+    throw error;
+  }
 }

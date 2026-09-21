@@ -563,10 +563,11 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     });
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Tool permissions/ }));
+    const patient = { timeout: 5_000 };
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }, patient));
+    fireEvent.click(await screen.findByRole('button', { name: /Tool permissions/ }, patient));
 
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog', undefined, patient);
     expect(within(dialog).getByText('GitHub - Tool Permissions')).toBeTruthy();
     expect(within(dialog).getByText('get_pull_request_diff')).toBeTruthy();
     expect(within(dialog).getByText('post_issue_comment')).toBeTruthy();

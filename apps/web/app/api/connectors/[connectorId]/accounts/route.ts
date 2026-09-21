@@ -14,11 +14,8 @@ import {
   connectorSupportsServiceAccount,
 } from '@/lib/connectors/catalog';
 import { sortConnectorAccounts } from '@/lib/connectors/accounts';
-import {
-  listConnectorAccounts,
-  revokeConnectorOAuthGrant,
-  setDefaultConnectorAccount,
-} from '@/lib/connectors/oauth-store';
+import { listConnectorAccounts, setDefaultConnectorAccount } from '@/lib/connectors/oauth-store';
+import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 import { evictConnectorOAuthCaches } from '@/lib/user-connector-tools';
 
 export const runtime = 'nodejs';
@@ -97,7 +94,7 @@ async function handleDelete(request: NextRequest, context: Params): Promise<Next
   const accountKey = request.nextUrl.searchParams.get('accountKey')?.trim();
   if (!accountKey) throw createError.validation('accountKey is required');
 
-  const revoked = await revokeConnectorOAuthGrant(userId, connectorId, accountKey);
+  const revoked = await disconnectConnectorOAuthGrant(userId, connectorId, accountKey);
   if (!revoked) {
     throw createError.notFound(
       `No connected account "${accountKey}" for ${connectorId}, so nothing was disconnected.`,

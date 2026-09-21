@@ -10,14 +10,27 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { isJobQueueName } from '@/lib/jobs/job-queues';
-import { listDeadJobs, readJobQueueStats, retryDeadJob } from '@/lib/jobs/job-service';
+import {
+  listDeadJobs,
+  readJobQueueStats,
+  retryDeadJob,
+  type BackgroundJob,
+} from '@/lib/jobs/job-service';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { readOperatorContentUnderGrants } from '@/lib/server/support-access-service';
 
 export const runtime = 'nodejs';
 
 const NO_STORE = 'private, no-store';
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+const JOB_CONTENT_SCOPE = 'background_jobs';
+
+// A dead job's payload and its provider error are the tenant's words, not ours.
+// An operator sees the shape of the failure; the content needs a live grant.
+function withoutJobContent(job: BackgroundJob): BackgroundJob {
+  return { ...job, payload: {}, lastError: job.lastError === null ? null : 'redacted' };
+}
 
 const RetrySchema = z.object({ jobId: z.string().uuid() });
 
@@ -30,7 +43,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'admin-operator');
   if (rateLimitResponse) return rateLimitResponse;
 
-  await requirePlatformAdmin(request);
+  const { userId: operatorUserId } = await requirePlatformAdmin(request);
 
   const url = new URL(request.url);
   const queue = url.searchParams.get('queue');
@@ -49,8 +62,39 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     listDeadJobs(db, { limit, offset, queue }),
   ]);
 
+  const view = await readOperatorContentUnderGrants({
+    db,
+    actorUserId: operatorUserId,
+    scope: JOB_CONTENT_SCOPE,
+    resourceType: 'background_job',
+    records: dead,
+    organizationIdOf: (job) => job.organizationId,
+    withoutContent: withoutJobContent,
+  });
+
+  const servedContent = view.grantedOrganizationIds.length > 0;
+  await recordAuditEvent({
+    userId: operatorUserId,
+    eventType: 'data_accessed',
+    request,
+    severity: servedContent ? 'warning' : 'info',
+    detail: {
+      resourceType: 'background_job',
+      resourceId: queue ?? 'all',
+      scope: JOB_CONTENT_SCOPE,
+      count: view.records.length,
+      held: view.redactedCount,
+      status: servedContent ? 'content_served' : 'metadata_only',
+    },
+  });
+
   return NextResponse.json(
-    { queues, dead, pagination: { limit, offset } },
+    {
+      queues,
+      dead: view.records,
+      redacted: view.redactedCount,
+      pagination: { limit, offset },
+    },
     { headers: { 'Cache-Control': NO_STORE } },
   );
 }

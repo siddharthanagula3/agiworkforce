@@ -1,0 +1,23 @@
+{
+  "handSpelled": [
+    {
+      "file": "packages/contracts/types/src/suite-contracts.ts",
+      "key": "provider.changed",
+      "reason": "A developer-session event name, not a flag. It collides with the reserved provider. prefix because both vocabularies use dotted names; renaming either is a wire change, so the collision is recorded rather than papered over."
+    }
+  ],
+  "resolvedElsewhere": {
+    "advanced_model_access": {
+      "resolvedBy": "packages/contracts/types/src/billing-catalog.ts (canAccessManualModelSelection)",
+      "reason": "A plan entitlement, not a rollout. It is handed to clients inside feature_flags for historical reasons and no operator can switch it off, because switching it off would take away something the customer bought. Moving it to the capability handshake is the fix; until then it must never be treated as a flag."
+    },
+    "code_execution": {
+      "resolvedBy": "apps/web/lib/e2b/gate.ts (e2bCutoverEnabled)",
+      "reason": "Deployment configuration: whether this deployment can reach a sandbox at all. It is read from the environment rather than the flag store, so an operator turns it off by changing the deployment, not by flipping a switch during an incident."
+    },
+    "generic_web_search": {
+      "resolvedBy": "apps/web/lib/web-search/web-search-tool.ts (webSearchBackendConfigured)",
+      "reason": "Deployment configuration: whether a search backend is configured. Same shape as code_execution, and the same limitation: it cannot be flipped during an incident."
+    }
+  }
+}

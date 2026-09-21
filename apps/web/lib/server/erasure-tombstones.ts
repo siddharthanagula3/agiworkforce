@@ -148,16 +148,19 @@ export interface ErasureLedgerSyncReport {
   added: string[];
   settled: string[];
   written: boolean;
+  /** Ledger subjects the database no longer holds a tombstone for. */
+  reArmed: string[];
+  /** The evidence row written when the database had lost tombstones. */
+  replayId: string | null;
 }
 
-/**
- * Mirrors the tombstone table into the backup bucket. Runs on the same cadence
- * as the purge cron, so the exposure window is one run: a subject erased after
- * the last sync and before a restore is not in the ledger.
- */
+export const ERASURE_REPLAY_ACTOR = 'cron/purge-deleted-accounts';
+
+// Mirrors tombstones into the bucket and re-arms what the database lost. An
+// entry with no tombstone can only be a restore: nothing ever deletes one.
 export async function syncErasureLedger(
   db: DatabaseAdapter,
-  options: LedgerOptions = {},
+  options: LedgerOptions & { performedBy?: string } = {},
 ): Promise<ErasureLedgerSyncReport> {
   const target = requireTarget(options);
   const tombstones = await readTombstones(db);
@@ -189,12 +192,24 @@ export async function syncErasureLedger(
   const changed = added.length > 0 || settled.length > 0;
   if (changed) await writeErasureLedger(merged, { target });
 
+  const replay = await replayErasureTombstones(db, { target, ledger: merged, tombstones });
+  const replayId =
+    replay.reArmed.length > 0
+      ? await recordErasureReplay(db, {
+          restorePoint: null,
+          performedBy: options.performedBy ?? ERASURE_REPLAY_ACTOR,
+          report: replay,
+        })
+      : null;
+
   return {
     tombstones: tombstones.length,
     ledgerEntries: merged.length,
     added,
     settled,
     written: changed,
+    reArmed: replay.reArmed,
+    replayId,
   };
 }
 
@@ -207,16 +222,18 @@ export interface ErasureReplayReport {
   ledgerDigest: string;
 }
 
-/**
- * The post-restore step. Re-arms every tombstone the restore rolled back so the
- * purge cron erases those subjects again before the database serves traffic.
- */
+// Re-arms every tombstone a restore rolled back so the purge cron erases those
+// subjects again before the database serves traffic.
 export async function replayErasureTombstones(
   db: DatabaseAdapter,
-  options: LedgerOptions = {},
+  options: LedgerOptions & {
+    ledger?: ErasureLedgerEntry[];
+    tombstones?: ErasureLedgerEntry[];
+  } = {},
 ): Promise<ErasureReplayReport> {
-  const ledger = await readErasureLedger(options);
-  const restored = new Map((await readTombstones(db)).map((entry) => [entry.userId, entry]));
+  const ledger = options.ledger ?? (await readErasureLedger(options));
+  const rows = options.tombstones ?? (await readTombstones(db));
+  const restored = new Map(rows.map((entry) => [entry.userId, entry]));
 
   const present: string[] = [];
   const reArmed: string[] = [];
@@ -263,10 +280,7 @@ export interface ErasureReplayRecord extends ErasureReplayReport {
   id: string;
 }
 
-/**
- * Records the replay so the restore drill has evidence. Runs on the privileged
- * connection, like every other read of the suppression list.
- */
+// Evidence for the restore drill, on the privileged connection.
 export async function recordErasureReplay(
   db: DatabaseAdapter,
   input: {

@@ -11,10 +11,18 @@ import {
 import {
   resolveDependencyReadiness,
   type DependencyCriticality,
+  type DependencyReadiness,
 } from '@/lib/config/dependency-readiness';
+import {
+  configurationStates,
+  recordConfigurationState,
+  recordFailure,
+  type ConfigurationStateReport,
+  type FailureKind,
+} from '@/lib/observability/metrics';
+import { dependencySignal } from '@/lib/observability/signal-coverage';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
-import { getKeyValueStore } from '@/lib/server/key-value';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
 import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
@@ -27,32 +35,7 @@ import {
   RENDER_CACHE_TAGS,
 } from '@/lib/server/render-cache';
 
-const DATABASE_PROBE_MIN_INTERVAL_SECONDS = 3_600;
-const DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY = 'agi-health-probe:database-last-success-at';
-const SEARCH_INDEX_PROBE_LAST_SUCCESS_REDIS_KEY = 'agi-health-probe:search-index-last-success-at';
-
-async function shouldSkipProbe(key: string): Promise<boolean> {
-  try {
-    const store = getKeyValueStore();
-    if (!store) return false;
-    const lastSuccessAt = await store.get<number>(key);
-    if (!lastSuccessAt) return false;
-    return Date.now() - lastSuccessAt < DATABASE_PROBE_MIN_INTERVAL_SECONDS * 1_000;
-  } catch (error) {
-    logger.error({ error, key }, 'Health probe throttle check failed');
-    return false;
-  }
-}
-
-async function recordProbeSuccess(key: string): Promise<void> {
-  try {
-    const store = getKeyValueStore();
-    if (!store) return;
-    await store.set(key, Date.now(), { ttlSeconds: DATABASE_PROBE_MIN_INTERVAL_SECONDS });
-  } catch (error) {
-    logger.error({ error, key }, 'Health probe throttle record failed');
-  }
-}
+const HEALTH_PROBE_ERROR_TYPE = 'health_probe';
 
 export interface CapabilityCheck {
   status: 'healthy' | 'unhealthy';
@@ -63,6 +46,22 @@ export interface UnreadyDependency {
   id: string;
   criticality: DependencyCriticality;
   missing: readonly string[];
+}
+
+/**
+ * `unobserved` is the honest answer for a configured dependency no check here
+ * probes: present configuration is not a reachable vendor.
+ */
+export type DependencyObservation = 'ok' | 'failing' | 'unconfigured' | 'unobserved';
+
+export interface DependencyStatus {
+  id: string;
+  criticality: DependencyCriticality;
+  observation: DependencyObservation;
+  /** the failure counter a fault of this dependency lands on, or null */
+  signal: FailureKind | null;
+  /** the dashboard that answers for it, from the signal registry */
+  dashboard: string | null;
 }
 
 export interface HealthCheckResult {
@@ -88,6 +87,13 @@ export interface HealthCheckResult {
     voice: CapabilityCheck;
     search: CapabilityCheck;
   };
+  /**
+   * One entry per PRODUCTION_DEPENDENCIES member, in registry order. Absent
+   * only on a synthetic result for a run that measured nothing.
+   */
+  dependencies?: readonly DependencyStatus[];
+  /** what the boot-time configuration checks last found, per component */
+  configuration?: readonly ConfigurationStateReport[];
 }
 
 const SEARCH_INDEX_TABLES = ['retrieval_documents', 'retrieval_chunks'] as const;
@@ -155,6 +161,53 @@ async function checkSearchIndex(): Promise<CapabilityCheck> {
   }
 }
 
+/**
+ * Which check speaks for a dependency once its configuration is present.
+ * Configured and failing is a different state from never configured, and the
+ * configuration gauge is the only place that difference is standing data.
+ */
+const DEPENDENCY_LIVE_CHECK: Readonly<Record<string, keyof HealthCheckResult['checks']>> = {
+  database: 'database',
+  billing: 'stripe',
+  context_engine: 'search',
+  model_providers: 'chat',
+};
+
+/**
+ * Every dependency's state, the gauge that carries it and the fault of any that
+ * is configured and not answering. Which counter a fault lands on is the signal
+ * registry's decision, not this file's.
+ */
+function observeDependencies(
+  readiness: readonly DependencyReadiness[],
+  checks: HealthCheckResult['checks'],
+): readonly DependencyStatus[] {
+  return readiness.map((state) => {
+    const live = DEPENDENCY_LIVE_CHECK[state.dependency.id];
+    const failing = live !== undefined && checks[live].status !== 'healthy';
+    const observation: DependencyObservation = !state.ready
+      ? 'unconfigured'
+      : live === undefined
+        ? 'unobserved'
+        : failing
+          ? 'failing'
+          : 'ok';
+    recordConfigurationState({
+      component: state.dependency.id,
+      state: observation === 'unconfigured' ? 'unavailable' : failing ? 'invalid' : 'ok',
+    });
+    const signal = dependencySignal(state.dependency.id);
+    if (failing && signal?.failureKind) recordFailure(signal.failureKind, HEALTH_PROBE_ERROR_TYPE);
+    return {
+      id: state.dependency.id,
+      criticality: state.dependency.criticality,
+      observation,
+      signal: signal?.failureKind ?? null,
+      dashboard: signal?.dashboardId ?? null,
+    };
+  });
+}
+
 export async function runHealthChecks(): Promise<HealthCheckResult> {
   const checks: HealthCheckResult['checks'] = {
     database: { status: 'unhealthy' },
@@ -188,29 +241,16 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     checks.environment.unreadyDependencies = unready;
   }
 
-  if (await shouldSkipProbe(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY)) {
+  try {
+    await getNeonDb().query('select 1');
     checks.database.status = 'healthy';
-  } else {
-    try {
-      const db = getNeonDb();
-      await db.query('select 1');
-      checks.database.status = 'healthy';
-      await recordProbeSuccess(DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY);
-    } catch (error) {
-      checks.database.status = 'unhealthy';
-      checks.database.message = 'unavailable';
-      logger.error({ error }, 'Database health check failed');
-    }
+  } catch (error) {
+    checks.database.status = 'unhealthy';
+    checks.database.message = 'unavailable';
+    logger.error({ error }, 'Database health check failed');
   }
 
-  if (await shouldSkipProbe(SEARCH_INDEX_PROBE_LAST_SUCCESS_REDIS_KEY)) {
-    checks.search.status = 'healthy';
-  } else {
-    checks.search = await checkSearchIndex();
-    if (checks.search.status === 'healthy') {
-      await recordProbeSuccess(SEARCH_INDEX_PROBE_LAST_SUCCESS_REDIS_KEY);
-    }
-  }
+  checks.search = await checkSearchIndex();
 
   try {
     const stripe = getStripeClientOrNull();
@@ -263,10 +303,14 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
       ? 'healthy'
       : 'degraded';
 
+  const dependencies = observeDependencies(readiness, checks);
+
   return {
     status,
     timestamp: new Date().toISOString(),
     checks,
+    dependencies,
+    configuration: configurationStates(),
   };
 }
 

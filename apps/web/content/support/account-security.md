@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-09-17
+updated: 2026-09-20
 scope: public
 ---
 
@@ -43,6 +43,10 @@ it is showing.
 
 **Log out of all devices** ends every session including this one, so you will
 need to sign in again. It asks first and names that consequence.
+
+A session also ends on its own once it reaches its maximum age, counted from
+when you signed in rather than from your last request, so a session that is in
+constant use still ends and asks you to sign in again. The maximum is 30 days.
 
 Sessions are reported by your account provider across devices. Revoke anything
 you do not recognise.

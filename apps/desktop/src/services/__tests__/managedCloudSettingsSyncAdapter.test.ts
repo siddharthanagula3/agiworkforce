@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   getHeaders: vi.fn(),
 }));
 
-vi.mock('../../api/config', () => ({ WEB_APP_URL: 'https://cloud.example.test' }));
+vi.mock('../../api/config', () => ({
+  WEB_APP_URL: 'https://cloud.example.test',
+  desktopRequestHeaders: () => ({}),
+}));
 vi.mock('../managedCloudRequestContext', () => ({
   createManagedCloudRequestContext: mocks.createManagedCloudRequestContext,
 }));

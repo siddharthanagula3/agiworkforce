@@ -33,6 +33,7 @@ import {
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
 import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
 import type { InstalledModel } from '@/storage/types';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 const STORAGE_RETURN_PATHS = ['/(app)/settings/data-controls', '/(app)/settings/general'] as const;
 type StorageReturnPath = (typeof STORAGE_RETURN_PATHS)[number];
@@ -104,11 +105,9 @@ export default function StorageManagerScreen() {
     loadStorageInfo().catch(() => undefined);
   }, [loadStorageInfo]);
 
-  const handleBack = useCallback(() => {
-    const returnTo = params.returnTo;
-    const target = isStorageReturnPath(returnTo) ? returnTo : '/(app)/settings/general';
-    router.navigate(target as Parameters<typeof router.navigate>[0]);
-  }, [params.returnTo, router]);
+  const handleBack = useGoBack(
+    isStorageReturnPath(params.returnTo) ? params.returnTo : '/(app)/settings/general',
+  );
 
   const handleDeleteModel = useCallback(
     (model: InstalledModel) => {

@@ -221,6 +221,27 @@ describe('VisualCaptureSession', () => {
     session.stop();
   });
 
+  it('leaves a pause the caller asked for in place across a visibility round trip', async () => {
+    const { session, track } = await startSession([solidFrame(10), solidFrame(220)]);
+
+    session.pause();
+    expect(session.status.state).toBe('paused');
+
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    expect(session.status.state).toBe('paused');
+    expect(track.enabled).toBe(false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(session.status.sampledFrames).toBe(0);
+
+    visibility.mockRestore();
+    session.stop();
+  });
+
   it('stops the tracks and releases the frames when it ends', async () => {
     const { session, grabber, track } = await startSession([solidFrame(10), solidFrame(220)]);
 

@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireCsrfToken } from '@/lib/csrf';
+import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
@@ -46,6 +47,13 @@ async function readSubscription(request: NextRequest) {
     auth: parsed.data.keys.auth,
   };
   if (!isDeliverableSubscription(subscription)) {
+    throw createError.badRequest('Push subscription is not a usable Web Push registration');
+  }
+  // The endpoint is dialled later by the notification sender, with a body and a
+  // VAPID header, so an address inside the deployment's network is refused here.
+  try {
+    await assertResolvedPublicHostname(subscription.endpoint);
+  } catch {
     throw createError.badRequest('Push subscription is not a usable Web Push registration');
   }
   return subscription;

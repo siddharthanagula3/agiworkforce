@@ -45,6 +45,17 @@ function mentionsSelfIdPredicate(sql, tables) {
   );
 }
 
+// A referral row names two accounts, so either column is its owner. Restricted to this table:
+// a column spelled like an owner elsewhere proves nothing about who owns the row.
+const TABLE_OWNER_COLUMNS = new Map([['referrals', /\b(?:referrer_id|referred_user_id)\s*=/i]]);
+
+function mentionsTableOwnerColumn(sql, tables) {
+  return (
+    tables.length > 0 &&
+    tables.every((t) => TABLE_OWNER_COLUMNS.has(t) && TABLE_OWNER_COLUMNS.get(t).test(sql))
+  );
+}
+
 // 0110 made Personal (organization_id IS NULL) and each organization mutually
 // exclusive scopes for these tables. The owner role has BYPASSRLS, so on the
 // service connection `user_id = $1` alone reads BOTH scopes: personal chats and
@@ -869,11 +880,6 @@ const UNPOLICED_APP_ENFORCED_TABLES = new Map([
       'lib/server/account-erasure.ts, which deletes `where ${column} = $1` from ' +
       'USER_SCOPED_TABLES; owner-scoped, but not attributable to a table by a textual scan',
   ]),
-  [
-    'referrals',
-    'no query site at all, the table is provisioned by 0016_misc.sql and nothing reads or ' +
-      'writes it yet.',
-  ],
 ]);
 
 function walk(dir, out = []) {
@@ -1143,6 +1149,7 @@ for (const file of files) {
 
     if (mentionsScopeToken(lower)) continue;
     if (mentionsSelfIdPredicate(sql, tables)) continue;
+    if (mentionsTableOwnerColumn(sql, tables)) continue;
     const interpolated = scopingInterpolations(sql, lower);
     const resolvedByVariable = interpolated.some((name) => resolvesToScope(source, name, 2));
     if (resolvedByVariable) continue;

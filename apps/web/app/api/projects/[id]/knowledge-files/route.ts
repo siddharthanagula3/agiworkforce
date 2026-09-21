@@ -239,6 +239,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
       `select coalesce(sum(k.byte_count), 0) as total
         from project_knowledge_files k
          join user_projects p on p.id = k.project_id
+          and p.deleted_at is null
         where p.user_id = $1
           and p.organization_id is not distinct from $2::uuid
           and k.deleted_at is null
@@ -386,6 +387,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         `select coalesce(sum(k.byte_count), 0) as total
           from project_knowledge_files k
            join user_projects p on p.id = k.project_id
+            and p.deleted_at is null
           where p.user_id = $1
             and p.organization_id is not distinct from $2::uuid
             and k.deleted_at is null

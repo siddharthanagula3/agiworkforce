@@ -1,0 +1,511 @@
+{
+  "markerColumns": {
+    "softDeleted": ["deleted_at", "is_deleted"],
+    "archived": ["archived_at", "is_archived", "archived"]
+  },
+  "archiveFacets": ["listed", "searchable", "aiRetrievable", "retentionClockRunning", "restorable"],
+  "sharingOutcomes": ["revoked", "preserved", "narrowed"],
+  "predicateHelpers": [
+    {
+      "symbol": "activeMemoryPredicate",
+      "module": "apps/web/lib/services/managed-memory-context-service.ts",
+      "resources": ["user_memories"]
+    },
+    {
+      "symbol": "unexpiredMemoryPredicate",
+      "module": "apps/web/lib/services/managed-memory-context-service.ts",
+      "resources": ["user_memories"]
+    }
+  ],
+  "resources": {
+    "web_conversations": {
+      "concept": "conversation",
+      "softDeleted": {
+        "column": "deleted_at",
+        "purgedBy": "apps/web/lib/services/retention-service.ts",
+        "restoredBy": "apps/web/app/api/chat/conversations/[id]/restore/route.ts",
+        "sharing": {
+          "outcome": "revoked",
+          "surfaces": ["published_artifacts"],
+          "revokedBy": "apps/web/app/api/chat/conversations/[id]/route.ts"
+        }
+      },
+      "archived": {
+        "column": "archived",
+        "restoredBy": "apps/web/app/api/chat/conversations/bulk/route.ts",
+        "sharing": {
+          "outcome": "preserved",
+          "surfaces": ["published_artifacts"]
+        }
+      }
+    },
+    "web_messages": {
+      "concept": "message",
+      "softDeleted": {
+        "column": "deleted_at",
+        "purgedBy": "apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts",
+        "restoredBy": null
+      }
+    },
+    "user_projects": {
+      "concept": "project",
+      "softDeleted": {
+        "column": "deleted_at",
+        "purgedBy": "apps/web/lib/services/domain-retention-service.ts",
+        "restoredBy": null
+      },
+      "archived": {
+        "column": "is_archived",
+        "restoredBy": null
+      }
+    },
+    "project_knowledge_files": {
+      "concept": "project",
+      "softDeleted": {
+        "column": "deleted_at",
+        "purgedBy": null,
+        "restoredBy": "apps/web/app/api/projects/[id]/knowledge-files/[fileId]/route.ts"
+      }
+    },
+    "media_assets": {
+      "concept": "artifact",
+      "softDeleted": {
+        "column": "deleted_at",
+        "purgedBy": "apps/web/app/api/cron/purge-deleted-media/route.ts",
+        "restoredBy": "apps/web/lib/server/media-assets.ts"
+      }
+    },
+    "web_artifacts": {
+      "concept": "artifact",
+      "softDeleted": {
+        "column": "deleted_at",
+        "purgedBy": "apps/web/lib/services/domain-retention-service.ts",
+        "restoredBy": null
+      }
+    },
+    "user_memories": {
+      "concept": "memory",
+      "softDeleted": {
+        "column": "is_deleted",
+        "purgedBy": null,
+        "restoredBy": "apps/web/app/api/memory/[id]/route.ts"
+      }
+    },
+    "conversations": {
+      "concept": "conversation",
+      "softDeleted": {
+        "column": "is_deleted",
+        "purgedBy": null,
+        "restoredBy": null
+      },
+      "archived": {
+        "column": "is_archived",
+        "restoredBy": null
+      }
+    },
+    "cloud_code_sessions": {
+      "concept": "developer-session",
+      "archived": {
+        "column": "archived_at",
+        "restoredBy": null
+      }
+    },
+    "feature_flag_definitions": {
+      "concept": "feature-flag",
+      "archived": {
+        "column": "archived_at",
+        "restoredBy": null
+      }
+    }
+  },
+  "recoveryGaps": [
+    {
+      "table": "web_messages",
+      "facet": "softDeleted.restore",
+      "why": "A message variant is withdrawn by the thread route and the surface offers no undo, so the soft delete is only a tombstone the thread walk skips.",
+      "fix": "A restore endpoint beside the conversation restore route, clearing deleted_at for one message id the caller owns."
+    },
+    {
+      "table": "user_projects",
+      "facet": "softDeleted.restore",
+      "why": "Deleting a project sets deleted_at and no surface clears it, so a project deleted by accident is unreachable until an operator edits the row.",
+      "fix": "A restore route beside the conversation one, and a trash listing that reads deleted_at is not null."
+    },
+    {
+      "table": "user_projects",
+      "facet": "archived.restore",
+      "why": "is_archived is written when a project is archived and nothing writes it back to false.",
+      "fix": "Unarchive in the same route that archives, the way the conversation bulk route already does."
+    },
+    {
+      "table": "project_knowledge_files",
+      "facet": "softDeleted.purge",
+      "why": "A withdrawn knowledge file keeps its row and its object for as long as the account lives; only account erasure removes it.",
+      "fix": "Extend the deleted-media purge cron to knowledge files, with the same window."
+    },
+    {
+      "table": "web_artifacts",
+      "facet": "softDeleted.restore",
+      "why": "An artifact is withdrawn with deleted_at and no route clears it.",
+      "fix": "A restore route, or a documented decision that artifact deletion is immediate and the column should go."
+    },
+    {
+      "table": "user_memories",
+      "facet": "softDeleted.purge",
+      "why": "A deleted memory keeps its row forever so the sync tombstone stays readable by an offline device; nothing ever collects it once every device has seen it.",
+      "fix": "A tombstone collector that deletes rows whose is_deleted is true and whose updated_at is older than the longest sync window."
+    },
+    {
+      "table": "conversations",
+      "facet": "softDeleted.restore",
+      "why": "The gateway compatibility table mirrors the chat completions API and carries no product surface of its own.",
+      "fix": "Restore reaches it through the web_conversations restore route once the compatibility mirror is folded in."
+    },
+    {
+      "table": "conversations",
+      "facet": "softDeleted.purge",
+      "why": "The gateway compatibility table has no retention sweep of its own; its rows go with the account.",
+      "fix": "Include it in the retention sweep that already collects web_conversations."
+    },
+    {
+      "table": "conversations",
+      "facet": "archived.restore",
+      "why": "The gateway compatibility table carries is_archived for wire parity and no surface writes it.",
+      "fix": "Drop the column, or mirror the archive write from web_conversations."
+    },
+    {
+      "table": "cloud_code_sessions",
+      "facet": "archived.restore",
+      "why": "A developer session is archived when its work ends and the surface offers no way back to the active list.",
+      "fix": "Clear archived_at from the session route that sets it."
+    },
+    {
+      "table": "feature_flag_definitions",
+      "facet": "archived.restore",
+      "why": "An archived flag definition is retired deliberately; bringing it back would resurrect a rollout nobody is watching.",
+      "fix": "Define a new flag instead, or add an explicit unarchive with an audit event."
+    }
+  ],
+  "readExemptions": [
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts",
+      "table": "web_messages",
+      "class": "write-path",
+      "why": "The statements left unfiltered are the ones that decide lineage rather than serve content: the branched-or-linear shape check, the parent stamping that reads it, and the recursive subtree a delete collects. A withdrawn row still occupies its place in the chain, and hiding it would re-parent live turns onto a gap or leave its children behind."
+    },
+    {
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "table": "user_projects",
+      "class": "tombstone-sync",
+      "why": "The project read fences a conversation onto a project the caller still owns, and the push must carry a project tombstone to the client."
+    },
+    {
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "table": "web_artifacts",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
+    },
+    {
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "table": "web_conversations",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
+    },
+    {
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "table": "web_messages",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
+    },
+    {
+      "file": "apps/web/app/api/cron/purge-deleted-media/route.ts",
+      "table": "media_assets",
+      "class": "purge",
+      "why": "The sweep exists to collect rows past their recovery window, so it selects on the marker rather than filtering it out."
+    },
+    {
+      "file": "apps/web/app/api/cron/purge-temporary-chats/route.ts",
+      "table": "web_conversations",
+      "class": "purge",
+      "why": "The sweep collects expired temporary chats whatever state they are in; a withdrawn one still has to go."
+    },
+    {
+      "file": "apps/web/app/api/cron/replicate-object-backups/route.ts",
+      "table": "project_knowledge_files",
+      "class": "data-export",
+      "why": "The replica covers the objects still in storage, and a withdrawn row keeps its object until a purge collects it."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/route/preview/route.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The read answers only whether the caller owns the conversation id it passed; it returns no content."
+    },
+    {
+      "file": "apps/web/app/api/media/image/generate/route.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The read answers only whether the caller owns the conversation it is attaching the image to."
+    },
+    {
+      "file": "apps/web/app/api/projects/sync/route.ts",
+      "table": "user_projects",
+      "class": "tombstone-sync",
+      "why": "The sync protocol carries the withdrawal itself: a client that never receives the tombstone keeps showing the row it deleted."
+    },
+    {
+      "file": "apps/web/app/api/settings/organization/policy/policy-subject.ts",
+      "table": "user_projects",
+      "class": "ownership-check",
+      "why": "The read resolves which workspace a policy subject belongs to; a withdrawn project still belongs to the same workspace."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "cloud_code_sessions",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "conversations",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "media_assets",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "project_knowledge_files",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "user_memories",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "user_projects",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "web_artifacts",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "web_conversations",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "table": "web_messages",
+      "class": "data-export",
+      "why": "A copy of the subject data includes what the subject withdrew; an export that silently drops it misreports what is held."
+    },
+    {
+      "file": "apps/web/lib/feature-flags/flag-store.ts",
+      "table": "feature_flag_definitions",
+      "class": "write-path",
+      "why": "The by-key read has to see an archived definition so re-creating that key restores it instead of colliding on the primary key; the list takes includeArchived as a parameter."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "table": "media_assets",
+      "class": "erasure",
+      "why": "Erasure removes the bytes of withdrawn assets too, so the read has to see them."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "table": "project_knowledge_files",
+      "class": "erasure",
+      "why": "Erasure removes every row the subject owns, whatever state it is in."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "table": "user_projects",
+      "class": "erasure",
+      "why": "Erasure removes every row the subject owns, whatever state it is in."
+    },
+    {
+      "file": "apps/web/lib/server/generated-file-persist.ts",
+      "table": "media_assets",
+      "class": "write-path",
+      "why": "The read resolves the parent row a revision is being written against; the write itself fences on ownership."
+    },
+    {
+      "file": "apps/web/lib/server/media-assets.ts",
+      "table": "media_assets",
+      "class": "tombstone-check",
+      "why": "The by-id lookup selects deleted_at so the caller refuses or restores; the purge and restore statements select on the marker by design."
+    },
+    {
+      "file": "apps/web/lib/server/media-assets.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The probe asks only whether the conversation the asset is being attached to is temporary; it returns no conversation content."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "table": "media_assets",
+      "class": "erasure",
+      "why": "Workspace erasure removes withdrawn assets as well as live ones."
+    },
+    {
+      "file": "apps/web/lib/server/temporary-files/purge.ts",
+      "table": "media_assets",
+      "class": "purge",
+      "why": "The purge exists to collect rows nobody may read any more."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "table": "cloud_code_sessions",
+      "class": "tombstone-check",
+      "why": "The by-id reads select archived_at so a caller can restore or delete an archived session; the list narrows by a status predicate that names the marker."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "cloud_code_sessions",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects archived sessions as well as active ones."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "media_assets",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "project_knowledge_files",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "user_projects",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "web_artifacts",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/domain-retention-service.ts",
+      "table": "web_conversations",
+      "class": "retention-sweep",
+      "why": "A domain retention sweep collects every row in scope, withdrawn or not."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "project_knowledge_files",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "user_projects",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "web_conversations",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/ediscovery-export-service.ts",
+      "table": "web_messages",
+      "class": "data-export",
+      "why": "A legal export answers what the workspace held in a period, which is not the same question as what a reader may still see."
+    },
+    {
+      "file": "apps/web/lib/services/managed-auto-memory-service.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The read resolves which project a conversation belongs to so a memory is written into the right scope; it returns no conversation content."
+    },
+    {
+      "file": "apps/web/lib/services/product-link-resolver.ts",
+      "table": "media_assets",
+      "class": "tombstone-check",
+      "why": "The resolver selects deleted_at and answers \"deleted\" on it, which it cannot do without reading the withdrawn row."
+    },
+    {
+      "file": "apps/web/lib/services/published-artifact-service.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "The read answers whether the publisher owns the conversation the artifact came from."
+    },
+    {
+      "file": "apps/web/lib/services/retention-service.ts",
+      "table": "web_conversations",
+      "class": "retention-sweep",
+      "why": "A retention sweep ages out rows by their own clock and must see withdrawn rows to collect them."
+    }
+  ],
+  "hardDeleteStores": {
+    "derived-index": {
+      "why": "A retrieval document is a copy of the resource made searchable; a delete that stops at the original leaves the copy findable.",
+      "namePattern": "(_index|retrieval_documents)$",
+      "clearedBy": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/organization-erasure.ts"
+      ]
+    },
+    "embeddings": {
+      "why": "A vector is the resource in a form a model can still recall, so it goes when the resource does.",
+      "columnPattern": "embedding",
+      "clearedBy": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/organization-erasure.ts"
+      ]
+    },
+    "caches": {
+      "why": "A cached body outlives the row it was derived from unless the delete reaches it, and a TTL is not a deletion.",
+      "namePattern": "_cache$",
+      "clearedBy": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/organization-erasure.ts",
+        "apps/web/lib/connectors/mcp-runtime-cache.ts"
+      ]
+    },
+    "scheduled-work": {
+      "why": "Work queued against a deleted resource wakes up, finds nothing, and either fails forever or acts on a stale copy.",
+      "namePattern": "^(scheduled_task|event_trigger|background_jobs)",
+      "clearedBy": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/organization-erasure.ts"
+      ]
+    },
+    "shared-links": {
+      "why": "A link handed to somebody else is the one thing a delete cannot leave working.",
+      "namePattern": "^(shared_|published_|organization_shared_)",
+      "clearedBy": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/organization-erasure.ts"
+      ]
+    },
+    "audit-trail": {
+      "why": "The record that something happened is what survives the thing itself; erasure may not rewrite it.",
+      "namePattern": "(audit_logs|audit_events|access_events)$",
+      "retained": true,
+      "clearedBy": []
+    }
+  },
+  "hardDeleteExclusions": []
+}

@@ -904,6 +904,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
             and conversation.user_id = $2
             and conversation.deleted_at is null
             and message.id = $3
+            and message.deleted_at is null
             and message.role = 'assistant'
           limit 1`,
         [conversationId, userId, assistantMessageId],

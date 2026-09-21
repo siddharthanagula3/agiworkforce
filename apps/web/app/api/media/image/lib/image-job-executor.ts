@@ -5,7 +5,8 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { classifyError, SPENDING_CAP_PROVIDER_HINT } from '@agiworkforce/provider-runtime';
 import { getModelMetadataById, isExecutableImageModel } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
-import { withMediaAttemptSpan } from '@/lib/observability/media-telemetry';
+import { recordMediaSafety, withMediaAttemptSpan } from '@/lib/observability/media-telemetry';
+import { moderateGeneratedMedia, type GeneratedMediaModeration } from '@/lib/moderation';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import {
@@ -24,6 +25,7 @@ import {
 import { insertMediaAssetsAtomically } from '@/lib/server/media-assets';
 import {
   claimImageGenerationJobAttempt,
+  closeCancelledImageGenerationJob,
   completeImageGenerationJob,
   deferImageGenerationJobFailure,
   failImageGenerationJob,
@@ -41,7 +43,6 @@ import {
   ImageProviderHttpError,
   isRetryableImageFailure,
   resolveImageRefBytes,
-  sha256HexFromBase64,
   sha256HexFromBytes,
   type GeneratedImage,
   type ImageEditContext,
@@ -62,7 +63,7 @@ export interface ImageJobAttemptOutcome {
   failureKind?: ImageAttemptFailureKind;
 }
 
-export type ImageAttemptFailureKind = 'setup' | 'provider' | 'persistence';
+export type ImageAttemptFailureKind = 'setup' | 'provider' | 'moderation' | 'persistence';
 
 const IMAGE_ATTEMPT_BACKOFF_SECONDS = 5;
 
@@ -176,6 +177,39 @@ async function closeAttemptAsFailed(input: {
   });
 }
 
+/**
+ * Whether a cancelled job is this caller's to finish. The attempt that held the
+ * claim when the cancellation arrived owns the close while its claim is live,
+ * because it is inside a provider call it already paid for; once that claim
+ * lapses without the job becoming terminal, the attempt is gone and the job
+ * would otherwise sit cancelling forever.
+ */
+export function isImageJobCancellationPending(job: ImageGenerationJob, now: number): boolean {
+  if (job.cancelRequestedAt === null || job.terminalAt !== null) return false;
+  return job.claimExpiresAt === null || Date.parse(job.claimExpiresAt) <= now;
+}
+
+/**
+ * Release the reservation a cancelled job was holding and close it. Safe to
+ * call from anywhere that has just read the job: the close itself requires the
+ * cancellation and a lapsed claim, so two callers racing settle once.
+ */
+export async function reconcileCancelledImageGenerationJob(input: {
+  db: DatabaseAdapter;
+  job: ImageGenerationJob;
+  now?: number;
+}): Promise<ImageGenerationJob | null> {
+  if (!isImageJobCancellationPending(input.job, input.now ?? Date.now())) return null;
+  const settlement = await settleFailure(input.db, input.job, 'canceled_by_user');
+  return closeCancelledImageGenerationJob({
+    db: input.db,
+    jobId: input.job.id,
+    userId: input.job.userId,
+    billingOutcome: settlement.billingOutcome,
+    billingSettlementStatus: settlement.billingSettlementStatus,
+  });
+}
+
 async function resolveEditContext(input: {
   db: DatabaseAdapter;
   job: ImageGenerationJob;
@@ -233,10 +267,81 @@ interface PersistedImages {
   failures: string[];
 }
 
+interface ResolvedImage {
+  idx: number;
+  bytes: Buffer;
+  contentType: string;
+}
+
+/**
+ * Provider output as bytes. A URL is fetched only when those bytes are needed
+ * for the library, which is the same condition under which they are screened.
+ */
+async function resolveGeneratedImageBytes(
+  images: readonly GeneratedImage[],
+): Promise<{ resolved: ResolvedImage[]; failures: string[] }> {
+  const wantsRemoteBytes = isImageStorageConfigured();
+  const outcomes = await Promise.all(
+    images.map(
+      async (img, idx): Promise<{ idx: number; resolved?: ResolvedImage; error?: string }> => {
+        try {
+          if (img.b64_json) {
+            return {
+              idx,
+              resolved: {
+                idx,
+                bytes: bytesFromBase64(img.b64_json),
+                contentType: img.contentType ?? 'image/png',
+              },
+            };
+          }
+          if (!img.url) return { idx, error: 'provider returned neither image bytes nor a URL' };
+          if (!wantsRemoteBytes) return { idx };
+          const fetched = await bytesFromUrl(img.url);
+          return { idx, resolved: { idx, bytes: fetched.data, contentType: fetched.contentType } };
+        } catch (err) {
+          return { idx, error: err instanceof Error ? err.message : String(err) };
+        }
+      },
+    ),
+  );
+
+  const resolved: ResolvedImage[] = [];
+  const failures: string[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.resolved) resolved.push(outcome.resolved);
+    else if (outcome.error) failures.push(`image ${outcome.idx}: ${outcome.error}`);
+  }
+  return { resolved, failures };
+}
+
+/**
+ * The output half of the safety floor, ahead of the library and of settlement:
+ * a refused candidate is never stored, never delivered and never charged for.
+ */
+async function screenGeneratedImages(
+  job: ImageGenerationJob,
+  resolved: readonly ResolvedImage[],
+): Promise<Extract<GeneratedMediaModeration, { allowed: false }> | null> {
+  for (const image of resolved) {
+    const verdict = await moderateGeneratedMedia({
+      userId: job.userId,
+      media: 'image',
+      operation: job.operation,
+      bytes: image.bytes,
+      mimeType: image.contentType,
+      prompt: job.prompt,
+    });
+    if (!verdict.allowed) return verdict;
+  }
+  return null;
+}
+
 async function persistGeneratedImages(input: {
   db: DatabaseAdapter;
   job: ImageGenerationJob;
   images: GeneratedImage[];
+  resolved: readonly ResolvedImage[];
   provenance: AiGeneratedProvenance[];
   generatedAt: string;
 }): Promise<PersistedImages> {
@@ -248,42 +353,26 @@ async function persistGeneratedImages(input: {
 
   type StagedImage = { idx: number; pathname: string; byteSize: number; contentType: string };
   const stagedOutcomes = await Promise.all(
-    input.images.map(
-      async (img, idx): Promise<{ staged?: StagedImage; idx: number; error?: string }> => {
+    input.resolved.map(
+      async (image): Promise<{ staged?: StagedImage; idx: number; error?: string }> => {
+        const idx = image.idx;
         let storedPathname: string | null = null;
         try {
-          let bytes: Buffer | null = null;
-          let contentType: string = img.contentType ?? 'image/png';
-          if (img.b64_json) {
-            bytes = bytesFromBase64(img.b64_json);
-          } else if (img.url) {
-            const fetched = await bytesFromUrl(img.url);
-            bytes = fetched.data;
-            contentType = fetched.contentType;
-          }
-          if (!bytes) return { idx, error: 'provider returned neither image bytes nor a URL' };
-
-          const existingClaim = input.provenance[idx];
-          if (existingClaim && !existingClaim.content_hash_sha256) {
-            input.provenance[idx] = buildAiGeneratedProvenance({
-              kind: 'image',
-              provider: job.provider,
-              model: job.model,
-              generatedAt: input.generatedAt,
-              contentHashSha256: sha256HexFromBytes(bytes),
-            });
-          }
-
           const stored = await storeMedia({
             userId: job.userId,
             kind: 'image',
-            data: bytes,
-            contentType,
+            data: image.bytes,
+            contentType: image.contentType,
           });
           storedPathname = stored.pathname;
           return {
             idx,
-            staged: { idx, pathname: stored.pathname, byteSize: stored.byteSize, contentType },
+            staged: {
+              idx,
+              pathname: stored.pathname,
+              byteSize: stored.byteSize,
+              contentType: image.contentType,
+            },
           };
         } catch (err) {
           if (storedPathname) await deleteStoredMedia(storedPathname).catch(() => undefined);
@@ -551,8 +640,34 @@ async function executeImageGenerationJobAttempt(input: {
   }
 
   const generatedAt = new Date().toISOString();
-  const provenance: AiGeneratedProvenance[] = result.images.map((img) => {
-    const hash = img.b64_json ? sha256HexFromBase64(img.b64_json) : undefined;
+  const { resolved, failures: resolveFailures } = await resolveGeneratedImageBytes(result.images);
+
+  const refusal = resolveFailures.length > 0 ? null : await screenGeneratedImages(job, resolved);
+  if (refusal) {
+    recordMediaSafety({ media: 'image', decision: 'blocked', reason: refusal.reason });
+    const failed = await closeAttemptAsFailed({
+      db: input.db,
+      job,
+      claimToken,
+      detached,
+      publicError: refusal.refusal,
+      reason: 'output_moderation',
+      retryable: false,
+    });
+    return {
+      job: failed,
+      images: [],
+      providerModel: result.model,
+      provenance: [],
+      failureKind: 'moderation',
+    };
+  }
+
+  const contentHashes = new Map(
+    resolved.map((image) => [image.idx, sha256HexFromBytes(image.bytes)]),
+  );
+  const provenance: AiGeneratedProvenance[] = result.images.map((_img, idx) => {
+    const hash = contentHashes.get(idx);
     return buildAiGeneratedProvenance({
       kind: 'image',
       provider: job.provider,
@@ -566,13 +681,15 @@ async function executeImageGenerationJobAttempt(input: {
     db: input.db,
     job,
     images: result.images,
+    resolved,
     provenance,
     generatedAt,
   });
 
-  if (persisted.failures.length > 0) {
+  const persistenceFailures = [...resolveFailures, ...persisted.failures];
+  if (persistenceFailures.length > 0) {
     logger.error(
-      { userId: job.userId, jobId: job.id, failures: persisted.failures },
+      { userId: job.userId, jobId: job.id, failures: persistenceFailures },
       'Generated image persistence failed; the reservation is not settled against this attempt',
     );
     const failed = await closeAttemptAsFailed({

@@ -1,5 +1,10 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useUIStore } from '@shared/stores/layout-store';
+import {
+  conversationDeleteConfirm,
+  sessionRowActionFailureMessage,
+} from './sidebar-session-actions';
 import { WebAppShell } from './WebAppShell';
 
 /**
@@ -38,9 +43,22 @@ const shellState = vi.hoisted(() => ({
     error: null as string | null,
     unauthenticated: false,
   },
+  conversations: [] as Array<{
+    id: string;
+    title: string;
+    updatedAt: string;
+    isPinned?: boolean;
+    isArchived?: boolean;
+  }>,
   conversationsLoading: false,
   conversationsListError: null as string | null,
   fetchConversations: vi.fn(),
+  // `useConversations` reports a refused mutation as `false` rather than by
+  // throwing, which is what the shell has to notice.
+  updateConversation: vi.fn<(id: string, updates: unknown) => Promise<boolean>>(),
+  deleteConversation: vi.fn<(id: string) => Promise<boolean>>(),
+  projects: [] as Array<{ id: string; name: string }>,
+  usage: null as { percent: number } | null,
 }));
 
 const providerState = vi.hoisted(() => ({
@@ -126,9 +144,23 @@ vi.mock('@/features/chat/components/dialogs/KeyboardShortcutsDialog', () => ({
     open ? <div data-testid="keyboard-shortcuts-dialog" /> : null,
 }));
 
+// The overlay itself is Radix; the stub keeps the one part the shell owns,
+// that dismissing it is reported back and the shell closes it.
 vi.mock('@/features/chat/components/dialogs/GlobalSearchDialog', () => ({
-  GlobalSearchDialog: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="global-search-dialog" /> : null,
+  GlobalSearchDialog: ({
+    open,
+    onOpenChange,
+  }: {
+    open: boolean;
+    onOpenChange: (next: boolean) => void;
+  }) =>
+    open ? (
+      <div data-testid="global-search-dialog">
+        <button type="button" onClick={() => onOpenChange(false)}>
+          Dismiss search
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('@agiworkforce/ui', async () => {
@@ -141,10 +173,20 @@ vi.mock('@agiworkforce/ui', async () => {
       isLoading?: boolean;
       error?: string | null;
       onRetryLoad?: () => void;
+      onNewChat?: () => void;
       onOpenCode?: () => void;
       onOpenSearch?: () => void;
+      onToggleCollapse?: () => void;
+      onRename?: (id: string, title: string) => void;
+      onDelete?: (id: string) => void;
+      onTogglePin?: (id: string) => void;
+      onArchive?: (id: string) => void;
+      onMoveToProject?: (id: string, projectId: string) => void;
       showUsageWidget?: boolean;
       budgetPercent?: number;
+      sessions?: unknown[];
+      projects?: unknown[];
+      navItems?: Array<{ id: string }>;
       footerSlot?: React.ReactNode;
     }) => (
       <div
@@ -152,7 +194,13 @@ vi.mock('@agiworkforce/ui', async () => {
         data-collapsed={String(props.collapsed ?? false)}
         data-loading={String(props.isLoading ?? false)}
         data-list-error={props.error ?? ''}
+        data-sessions={String(props.sessions?.length ?? 0)}
+        data-projects={String(props.projects?.length ?? 0)}
+        data-nav-items={(props.navItems ?? []).map((item) => item.id).join(',')}
       >
+        <button type="button" onClick={props.onNewChat}>
+          New chat
+        </button>
         {props.onRetryLoad && (
           <button type="button" onClick={props.onRetryLoad}>
             Retry
@@ -165,6 +213,26 @@ vi.mock('@agiworkforce/ui', async () => {
         )}
         <button type="button" onClick={props.onOpenSearch}>
           Search
+        </button>
+        <button type="button" onClick={props.onToggleCollapse}>
+          Toggle sidebar
+        </button>
+        {/* The row menu's own entries are the sidebar package's test. What the
+            shell owes each of them is an answer when the mutation is refused. */}
+        <button type="button" onClick={() => props.onRename?.('c1', 'Renamed')}>
+          Row rename
+        </button>
+        <button type="button" onClick={() => props.onTogglePin?.('c1')}>
+          Row pin
+        </button>
+        <button type="button" onClick={() => props.onArchive?.('c1')}>
+          Row archive
+        </button>
+        <button type="button" onClick={() => props.onMoveToProject?.('c1', 'p1')}>
+          Row move
+        </button>
+        <button type="button" onClick={() => props.onDelete?.('c1')}>
+          Row delete
         </button>
         <span data-testid="app-sidebar-usage" data-shown={String(props.showUsageWidget ?? false)}>
           {props.budgetPercent ?? 0}
@@ -302,9 +370,9 @@ vi.mock('@agiworkforce/ui', async () => {
 
 vi.mock('@/lib/hooks/useConversations', () => ({
   useConversations: () => ({
-    conversations: [],
-    deleteConversation: vi.fn(),
-    updateConversation: vi.fn(),
+    conversations: shellState.conversations,
+    deleteConversation: shellState.deleteConversation,
+    updateConversation: shellState.updateConversation,
     isLoading: shellState.conversationsLoading,
     listError: shellState.conversationsListError,
     fetchConversations: shellState.fetchConversations,
@@ -337,7 +405,7 @@ vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
 }));
 
 vi.mock('@/features/projects', () => ({
-  useManagedCloudProjects: () => ({ projects: [] }),
+  useManagedCloudProjects: () => ({ projects: shellState.projects }),
   useProjectStore: (selector: (state: Record<string, () => void>) => unknown) =>
     selector({ toggleStar: vi.fn(), removeProject: vi.fn() }),
 }));
@@ -350,7 +418,9 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({
   SidebarWordmark: () => <div data-testid="wordmark" />,
 }));
 
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+const toastState = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+
+vi.mock('sonner', () => ({ toast: toastState }));
 
 const mediaState = vi.hoisted(() => ({
   matches: false,
@@ -383,9 +453,16 @@ beforeEach(() => {
   shellState.billing.error = null;
   shellState.billing.unauthenticated = false;
   providerState.user = null;
+  shellState.conversations = [];
   shellState.conversationsLoading = false;
   shellState.conversationsListError = null;
   shellState.fetchConversations = vi.fn();
+  shellState.updateConversation = vi.fn().mockResolvedValue(true);
+  shellState.deleteConversation = vi.fn().mockResolvedValue(true);
+  shellState.projects = [];
+  toastState.error.mockReset();
+  confirmStub.confirm.mockClear();
+  useUIStore.getState().setSidebarCollapsed(false);
   settingsModalState.openSettings = vi.fn();
   upgradeFlowState.openUpgradeDialog = vi.fn();
   menuEscape.keepOpenForMenuEscape.mockReset();
@@ -871,5 +948,260 @@ describe('WebAppShell responsive navigation', () => {
     );
 
     expect(screen.getByTestId('app-sidebar-usage')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Bootstrap independence: the shell is chrome plus several independent
+ * fetches, and the account, recents, projects and usage calls all resolve at
+ * different times. Each of them failing or staying in flight must cost the
+ * user only that region.
+ */
+describe('WebAppShell bootstrap independence', () => {
+  const renderShell = () =>
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+  it('paints the shell and its route before any secondary call has answered', () => {
+    shellState.auth.initialized = false;
+    shellState.auth.isLoading = true;
+    shellState.billing.initialized = false;
+    shellState.billing.isLoading = true;
+    shellState.conversationsLoading = true;
+
+    renderShell();
+
+    expect(screen.getByText('content')).toBeInTheDocument();
+    expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New chat' })).toBeInTheDocument();
+  });
+
+  it('keeps New chat working while the recents list is still loading', () => {
+    shellState.conversationsLoading = true;
+
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+
+    expect(routerState.push).toHaveBeenCalledWith('/chat');
+  });
+
+  it('keeps New chat working when the recents list failed outright', () => {
+    shellState.conversationsListError = LIST_FAILURE;
+
+    renderShell();
+
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-list-error', LIST_FAILURE);
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }));
+    expect(routerState.push).toHaveBeenCalledWith('/chat');
+  });
+
+  it('renders the rail and the route before the project list arrives', () => {
+    renderShell();
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-projects', '0');
+    expect(screen.getByText('content')).toBeInTheDocument();
+    cleanup();
+
+    shellState.projects = [{ id: 'p1', name: 'Atlas' }];
+    renderShell();
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-projects', '1');
+  });
+
+  it('holds the usage meter back until its summary arrives, and shows the shell anyway', () => {
+    renderShell();
+
+    expect(screen.getByTestId('app-sidebar-usage')).toHaveAttribute('data-shown', 'false');
+    expect(screen.getByText('content')).toBeInTheDocument();
+  });
+
+  it('keeps the account footer when the profile carries neither name nor email', () => {
+    shellState.auth.user = { id: 'user-1', name: '', email: '' };
+    shellState.billing.user = null;
+    providerState.user = null;
+
+    renderShell();
+
+    expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Account menu for/ })).toBeInTheDocument();
+    expect(screen.getByText('content')).toBeInTheDocument();
+  });
+
+  it('carries the rail across a route change rather than rebuilding it', () => {
+    const { rerender } = renderShell();
+    const railBefore = screen.getByTestId('app-sidebar').getAttribute('data-nav-items');
+
+    routerState.pathname = '/chat/library';
+    rerender(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByTestId('app-sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('app-sidebar').getAttribute('data-nav-items')).toBe(railBefore);
+  });
+});
+
+/**
+ * Every route on this shell mounts the keyboard-shortcuts reference dialog,
+ * which lists New conversation, Open search, Show shortcuts and Toggle
+ * sidebar. None of the four fired here: the bindings were read only by the
+ * chat page, so the dialog advertised four chords that did nothing on
+ * Projects, Library, Tasks, Schedules, Models and Study.
+ */
+describe('WebAppShell honours the shortcuts it advertises', () => {
+  const renderShell = (props: Partial<React.ComponentProps<typeof WebAppShell>> = {}) =>
+    render(
+      <WebAppShell {...props}>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+  const press = (key: string, modifiers: Partial<KeyboardEventInit> = {}) =>
+    fireEvent.keyDown(window, { key, ctrlKey: true, ...modifiers });
+
+  it('collapses and re-expands the sidebar on the documented chord', () => {
+    renderShell();
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-collapsed', 'false');
+
+    press('b');
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-collapsed', 'true');
+
+    press('b');
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-collapsed', 'false');
+  });
+
+  it('reaches the same state the collapse control does, so the two cannot disagree', () => {
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle sidebar' }));
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-collapsed', 'true');
+
+    press('b');
+    expect(screen.getByTestId('app-sidebar')).toHaveAttribute('data-collapsed', 'false');
+  });
+
+  it('opens search and the shortcuts reference from their chords', () => {
+    renderShell();
+
+    press('F', { shiftKey: true, metaKey: true });
+    expect(screen.getByTestId('global-search-dialog')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss search' }));
+    expect(screen.queryByTestId('global-search-dialog')).toBeNull();
+
+    press('/');
+    expect(screen.getByTestId('keyboard-shortcuts-dialog')).toBeInTheDocument();
+  });
+
+  it('starts a new conversation from its chord', () => {
+    renderShell();
+
+    press('o', { shiftKey: true });
+
+    expect(routerState.push).toHaveBeenCalledWith('/chat');
+  });
+
+  // CloudCodePage mounts this shell with its own left column. Claiming
+  // Cmd/Ctrl+B there would swallow the key from whatever does own a sidebar.
+  it('leaves the collapse chord free on a surface with no rail of its own', () => {
+    renderShell({ rail: false });
+
+    press('b');
+
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+  });
+});
+
+/**
+ * The row menu closes the instant an item is chosen. `useConversations`
+ * answers a refused mutation with `false` and files the reason in the chat
+ * store, which no route on this shell renders, so a failed rename, pin,
+ * archive, move or delete left the row unchanged and said nothing at all.
+ */
+describe('WebAppShell answers a row action the server refused', () => {
+  const renderShell = () =>
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+  beforeEach(() => {
+    shellState.conversations = [
+      { id: 'c1', title: 'Quarterly revenue model', updatedAt: new Date().toISOString() },
+    ];
+  });
+
+  it.each([
+    ['Row rename', 'rename'],
+    ['Row pin', 'pin'],
+    ['Row archive', 'archive'],
+    ['Row move', 'moveToProject'],
+  ] as const)('says so when %s is refused', async (control, action) => {
+    shellState.updateConversation = vi.fn().mockResolvedValue(false);
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: control }));
+
+    await waitFor(() =>
+      expect(toastState.error).toHaveBeenCalledWith(sessionRowActionFailureMessage(action)),
+    );
+  });
+
+  it('asks before deleting, naming the conversation and what survives it', () => {
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row delete' }));
+
+    expect(confirmStub.confirm).toHaveBeenCalledWith(
+      expect.objectContaining(conversationDeleteConfirm('Quarterly revenue model')),
+    );
+  });
+
+  it('says so when a confirmed delete is refused', async () => {
+    shellState.deleteConversation = vi.fn().mockResolvedValue(false);
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row delete' }));
+
+    await waitFor(() =>
+      expect(toastState.error).toHaveBeenCalledWith(sessionRowActionFailureMessage('delete')),
+    );
+  });
+
+  it('names the action that failed rather than one generic apology', async () => {
+    shellState.conversations = [
+      {
+        id: 'c1',
+        title: 'Quarterly revenue model',
+        updatedAt: new Date().toISOString(),
+        isPinned: true,
+        isArchived: true,
+      },
+    ];
+    shellState.updateConversation = vi.fn().mockResolvedValue(false);
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row pin' }));
+    await waitFor(() =>
+      expect(toastState.error).toHaveBeenCalledWith(sessionRowActionFailureMessage('unpin')),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row archive' }));
+    await waitFor(() =>
+      expect(toastState.error).toHaveBeenCalledWith(sessionRowActionFailureMessage('restore')),
+    );
+  });
+
+  it('stays quiet when the server accepts the change', async () => {
+    renderShell();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Row rename' }));
+
+    await waitFor(() => expect(shellState.updateConversation).toHaveBeenCalled());
+    expect(toastState.error).not.toHaveBeenCalled();
   });
 });

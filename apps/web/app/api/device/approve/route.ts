@@ -17,6 +17,7 @@ import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 import { QrLinkCodeSchema } from '@/lib/validations/device';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { unauthorizedResponseFor } from '@/lib/api-auth-response';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 
@@ -104,8 +105,6 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
                 user_id      = $1,
                 denied_at    = $2,
                 updated_at   = $2,
-                access_token  = NULL,
-                refresh_token = NULL,
                 user_email   = $3,
                 user_name    = $4
           WHERE device_id = $5
@@ -117,6 +116,14 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       if (!updated.length) {
         throw createError.conflict('This device code has already been processed');
       }
+
+      await recordAuditEvent({
+        userId,
+        eventType: 'device_authorization_denied',
+        outcome: 'denied',
+        request,
+        detail: { resourceType: 'device_authorization', subjectRef: record.device_id },
+      });
 
       return NextResponse.json(
         { success: true, status: 'denied' },
@@ -170,8 +177,6 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
               user_id       = $1,
               user_email    = $2,
               user_name     = $3,
-              access_token  = NULL,
-              refresh_token = NULL,
               authorized_at = $4,
               updated_at    = $4
         WHERE device_id = $5
@@ -185,6 +190,13 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     }
 
     await notifyDeviceSignInApproved(approverDb, { userId, deviceRef: record.device_id });
+
+    await recordAuditEvent({
+      userId,
+      eventType: 'device_authorization_approved',
+      request,
+      detail: { resourceType: 'device_authorization', subjectRef: record.device_id },
+    });
 
     return NextResponse.json(
       { success: true, status: 'approved' },

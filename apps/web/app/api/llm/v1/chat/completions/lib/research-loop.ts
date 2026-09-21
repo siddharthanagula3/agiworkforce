@@ -1901,6 +1901,7 @@ export async function* runResearchLoop(
         yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
         const outcome = await executeUrlFetch(call.args, {
           maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
+          ...(options.signal ? { signal: options.signal } : {}),
         });
         if (outcome.ok) {
           sources.add({

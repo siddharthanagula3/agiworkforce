@@ -78,6 +78,9 @@ const BASELINE_ROUTES = {
   multimodalBalanced: `${getRoutingSlotModel('multimodal_balanced')}@balanced`,
   longContextBalanced: `${getRoutingSlotModel('long_context_balanced')}@balanced`,
   reasoningEconomy: `${getRoutingSlotModel('reasoning_economy')}@economy`,
+  // Every slot the free tier is granted carries the same zero-priced model,
+  // so every free row that resolves at all resolves here.
+  freeZeroCostEconomy: `${getRoutingSlotModel('router_zero_cost')}@economy`,
   reasoningBalanced: `${getRoutingSlotModel('reasoning_balanced')}@balanced`,
   reasoningPremium: `${getRoutingSlotModel('reasoning_premium_pro')}@premium`,
   // The `research` task now prefers `search_premium` at every profile band.
@@ -135,7 +138,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { researchMode: true, estimatedInputTokens: 90_000 },
     taskType: 'research',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Research outranks the long-context guard; free tier clamps the band.',
   },
   {
@@ -194,7 +197,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { workMode: 'agiwork', estimatedInputTokens: 120_000 },
     taskType: 'agentic',
     subscriptionTier: 'free',
-    expectedBaselineRoute: `${getRoutingSlotModel('coding_fast')}@economy`,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Free tier clamps agentic to the economy band.',
   },
   {
@@ -253,7 +256,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { officeCreation: true, estimatedInputTokens: 65_000 },
     taskType: 'agentic',
     subscriptionTier: 'free',
-    expectedBaselineRoute: `${getRoutingSlotModel('coding_fast')}@economy`,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Office creation outranks the long-context guard.',
   },
   {
@@ -308,7 +311,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { codeExecution: true, estimatedInputTokens: 80_000 },
     taskType: 'coding',
     subscriptionTier: 'free',
-    expectedBaselineRoute: `${getRoutingSlotModel('coding_fast')}@economy`,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Free tier clamps coding to the economy band.',
   },
   {
@@ -354,7 +357,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, messageCharCount: 30, priorTurnCount: 1 },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'A grounded one-liner still classifies as simple_chat canonically.',
   },
   {
@@ -363,7 +366,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { webSearch: true, attachments: [{ mime: 'image/png', type: 'image' }] },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Explicit tool toggles outrank attachments in the priority order.',
   },
   {
@@ -497,7 +500,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     },
     taskType: 'multimodal',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Free tier clamps multimodal to the economy band.',
   },
   {
@@ -555,7 +558,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { estimatedInputTokens: 60_000 },
     taskType: 'long_context',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Free tier clamps long context to the economy band.',
   },
   {
@@ -592,7 +595,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { toolChoiceForced: true, messageCharCount: 45 },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'A forced tool_choice with no tools[] still means a tool loop.',
   },
   {
@@ -619,7 +622,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { declaredToolCount: 2, estimatedInputTokens: 10_000 },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Below the long-context threshold the tool surface decides.',
   },
   {
@@ -674,7 +677,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { thinkingMode: true, messageCharCount: 12 },
     taskType: 'reasoning',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.reasoningEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'The thinking toggle outranks the residual length branch.',
   },
   {
@@ -693,7 +696,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 4 },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'A greeting.',
   },
   {
@@ -729,7 +732,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 61, declaredToolCount: 0, toolChoiceForced: false },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Tool signals present but negative.',
   },
   {
@@ -775,7 +778,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 2_400, estimatedInputTokens: 30_000 },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Below the long-context threshold.',
   },
   {
@@ -793,7 +796,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { messageCharCount: 500, thinkingMode: false, researchMode: false },
     taskType: 'general',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Every toggle explicitly off.',
   },
 
@@ -821,7 +824,7 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     signals: { runtimeProfileId: CORPUS_RUNTIME_PROFILE_ID },
     taskType: 'simple_chat',
     subscriptionTier: 'free',
-    expectedBaselineRoute: BASELINE_ROUTES.workhorseEconomy,
+    expectedBaselineRoute: BASELINE_ROUTES.freeZeroCostEconomy,
     note: 'Surface alone decides nothing; it is recorded, not branched on.',
   },
   {

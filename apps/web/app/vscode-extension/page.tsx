@@ -48,7 +48,7 @@ export default function VscodeExtensionPage() {
               </p>
               <div className="agi-fl-cta-row">
                 <WaitlistTrigger
-                  label="Get VSIX Access"
+                  label="Discuss Enterprise access"
                   source="website"
                   className="agi-fl-cta agi-fl-cta--primary"
                 />
@@ -86,7 +86,7 @@ export default function VscodeExtensionPage() {
                 'Adds diagnostics, open files, and project structure',
                 'Pinned files travel with the conversation',
               ],
-              cta: { label: 'Get VSIX Access', waitlist: true },
+              cta: { label: 'Discuss Enterprise access', waitlist: true },
             },
             {
               mode: 'Diff review',
@@ -153,7 +153,7 @@ export default function VscodeExtensionPage() {
           title="Bring @agi into your editor."
           body="AGI in VS Code is in developer preview and ships as a VSIX. Request access and pair it with AGI Desktop and the AGI CLI. Installers open at public launch."
           ctas={[
-            { label: 'Get VSIX Access', waitlist: true },
+            { label: 'Discuss Enterprise access', waitlist: true },
             { href: '/download', label: 'Get notified' },
             { href: '/cli', label: 'See the CLI' },
           ]}

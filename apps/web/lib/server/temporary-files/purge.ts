@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
+import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gate';
 import { TEMPORARY_FILE_PURGE_BATCH, temporaryFileCutoff } from './retention';
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -17,6 +18,8 @@ export interface TemporaryChatFilePurge {
   objectsDeleted: number;
   objectsFailed: number;
   purged: number;
+  /** Expired attachments an active legal hold preserved. */
+  heldFromPurge: number;
   remaining: boolean;
 }
 
@@ -25,30 +28,41 @@ const EMPTY_PURGE: TemporaryChatFilePurge = {
   objectsDeleted: 0,
   objectsFailed: 0,
   purged: 0,
+  heldFromPurge: 0,
   remaining: false,
 };
 
-/**
- * Bytes first, then the row, and only for rows still flagged temporary: a file
- * saved to the Library has no flag left. Not the soft-delete path, whose 30-day
- * recovery window would double the 30 days the privacy pages promise.
- */
+// Bytes first, then the row, and only while still flagged temporary. A legal
+// hold beats the promise: a held attachment survives until the hold is released.
 export async function purgeTemporaryChatFiles(
   db: Pick<DatabaseAdapter, 'query'>,
   options: { nowMs?: number; batchSize?: number } = {},
 ): Promise<TemporaryChatFilePurge> {
   const batchSize = Math.max(1, options.batchSize ?? TEMPORARY_FILE_PURGE_BATCH);
   try {
+    const cutoff = temporaryFileCutoff(options.nowMs).toISOString();
+    const due = `candidate.temporary_chat
+          and candidate.created_at < $1::timestamptz`;
+    const heldFromPurge = await countHeldRows(db, 'file', {
+      table: 'media_assets',
+      alias: 'candidate',
+      where: due,
+      params: [cutoff],
+    });
+    // The hold decides candidacy before any byte is touched, so a held
+    // attachment keeps its object as well as its row.
+    const exclusion = legalHoldExclusion('file', { alias: 'candidate', nextParamIndex: 3 });
+
     const expired = await db.query<{ id: string; storage_pathname: string | null }>(
-      `select id, storage_pathname
-         from public.media_assets
-        where temporary_chat
-          and created_at < $1::timestamptz
-        order by created_at asc
+      `select candidate.id, candidate.storage_pathname
+         from public.media_assets candidate
+        where ${due}
+          and ${exclusion.sql}
+        order by candidate.created_at asc
         limit $2`,
-      [temporaryFileCutoff(options.nowMs).toISOString(), batchSize],
+      [cutoff, batchSize, ...exclusion.params],
     );
-    if (expired.length === 0) return EMPTY_PURGE;
+    if (expired.length === 0) return { ...EMPTY_PURGE, heldFromPurge };
 
     const { deleted, failedPathnames } = await deleteStoredMediaObjects(
       expired.map((row) => row.storage_pathname),
@@ -60,11 +74,16 @@ export async function purgeTemporaryChatFiles(
 
     let purged = 0;
     if (purgeableIds.length > 0) {
+      const purgeExclusion = legalHoldExclusion('file', {
+        alias: 'target',
+        nextParamIndex: 2,
+      });
       const rows = await db.query<{ id: string }>(
-        `delete from public.media_assets
-          where id = any($1::uuid[]) and temporary_chat
-          returning id`,
-        [purgeableIds],
+        `delete from public.media_assets target
+          where target.id = any($1::uuid[]) and target.temporary_chat
+            and ${purgeExclusion.sql}
+          returning target.id`,
+        [purgeableIds, ...purgeExclusion.params],
       );
       purged = rows.length;
     }
@@ -74,6 +93,7 @@ export async function purgeTemporaryChatFiles(
       objectsDeleted: deleted,
       objectsFailed: failedPathnames.length,
       purged,
+      heldFromPurge,
       remaining: expired.length === batchSize,
     };
   } catch (error) {

@@ -34,6 +34,7 @@ import { getE2BExecutor, killE2BSession } from '@/lib/e2b/runtime';
 import { InvalidExtraEgressHostsError, normalizeExtraEgressHosts } from '@/lib/e2b/egress-hosts';
 import { assertExtraEgressHostsResolveSafely } from '@/lib/e2b/egress-host-resolution';
 import { confineWorkspacePath } from '@/lib/e2b/execution-tools';
+import { tracedCodeAction } from '@/lib/observability/code-action-span';
 import type { CommandExecutionResult } from '@/lib/e2b/types';
 import {
   harnessCredentialSpecs,
@@ -1052,217 +1053,224 @@ async function assertInstallationBelongsToUser(
   }
 }
 
-export async function createCloudCodeSession(
-  db: DatabaseAdapter,
-  owner: CloudCodeOwner,
-  input: CreateCloudCodeSessionInput,
-  planTier: string,
-): Promise<CloudCodeSession> {
-  const validated = validateCreateCloudCodeSession(input);
-  try {
-    await assertExtraEgressHostsResolveSafely(validated.extraHosts);
-  } catch (error) {
-    if (error instanceof InvalidExtraEgressHostsError) {
-      throw new CloudCodeValidationError(error.message);
+export const createCloudCodeSession = tracedCodeAction(
+  'clone',
+  async function createCloudCodeSession(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    input: CreateCloudCodeSessionInput,
+    planTier: string,
+  ): Promise<CloudCodeSession> {
+    const validated = validateCreateCloudCodeSession(input);
+    try {
+      await assertExtraEgressHostsResolveSafely(validated.extraHosts);
+    } catch (error) {
+      if (error instanceof InvalidExtraEgressHostsError) {
+        throw new CloudCodeValidationError(error.message);
+      }
+      throw error;
     }
-    throw error;
-  }
-  await assertRuntimeIsAvailable(validated.runtimeId);
-  await assertInstallationBelongsToUser(owner.userId, validated.installationId);
-  await assertRepositoryIsClonable(owner.userId, validated.repositoryUrl, validated.installationId);
+    await assertRuntimeIsAvailable(validated.runtimeId);
+    await assertInstallationBelongsToUser(owner.userId, validated.installationId);
+    await assertRepositoryIsClonable(
+      owner.userId,
+      validated.repositoryUrl,
+      validated.installationId,
+    );
 
-  let claimed: { row: SessionRow; reused: boolean };
-  try {
-    claimed = await db.transaction(async (tx) => {
-      await tx.query(
-        `select pg_advisory_xact_lock(hashtextextended('agi:cloud-code-sessions:' || $1, 0))`,
-        [cloudCodeQuotaLockKey(owner)],
-      );
+    let claimed: { row: SessionRow; reused: boolean };
+    try {
+      claimed = await db.transaction(async (tx) => {
+        await tx.query(
+          `select pg_advisory_xact_lock(hashtextextended('agi:cloud-code-sessions:' || $1, 0))`,
+          [cloudCodeQuotaLockKey(owner)],
+        );
 
-      const existing = await findByRequestId(tx, owner, validated.requestId);
-      if (existing) {
-        if (!sameCreateRequest(existing, validated)) {
-          throw new CloudCodeConflictError(
-            'requestId was already used with different session details',
+        const existing = await findByRequestId(tx, owner, validated.requestId);
+        if (existing) {
+          if (!sameCreateRequest(existing, validated)) {
+            throw new CloudCodeConflictError(
+              'requestId was already used with different session details',
+            );
+          }
+          return { row: existing, reused: true };
+        }
+
+        const maxSessions = getPlanMaxSandboxes(planTier);
+        if (maxSessions <= 0) {
+          throw new CloudCodeLimitError(
+            'Your plan does not include managed Code sessions',
+            maxSessions,
           );
         }
-        return { row: existing, reused: true };
-      }
 
-      const maxSessions = getPlanMaxSandboxes(planTier);
-      if (maxSessions <= 0) {
-        throw new CloudCodeLimitError(
-          'Your plan does not include managed Code sessions',
-          maxSessions,
-        );
-      }
-
-      const scoped = ownerSql(owner, 1);
-      const activeRows = await tx.query<{ count: string | number }>(
-        `select count(*) as count
+        const scoped = ownerSql(owner, 1);
+        const activeRows = await tx.query<{ count: string | number }>(
+          `select count(*) as count
            from cloud_code_sessions
           where ${scoped.clause}
             and state in ('provisioning', 'ready', 'running')`,
-        scoped.params,
-      );
-      if (Number(activeRows[0]?.count ?? 0) >= maxSessions) {
-        throw new CloudCodeLimitError(
-          `Your plan allows ${maxSessions} active Code session${maxSessions === 1 ? '' : 's'}`,
-          maxSessions,
+          scoped.params,
         );
-      }
+        if (Number(activeRows[0]?.count ?? 0) >= maxSessions) {
+          throw new CloudCodeLimitError(
+            `Your plan allows ${maxSessions} active Code session${maxSessions === 1 ? '' : 's'}`,
+            maxSessions,
+          );
+        }
 
-      const inserted = await tx.query<SessionRow>(
-        `insert into cloud_code_sessions (
+        const inserted = await tx.query<SessionRow>(
+          `insert into cloud_code_sessions (
            user_id, organization_id, request_id, title, repository_url,
            network_access, state, workspace_path, runtime_id, repository_branch, extra_hosts
          ) values ($1, $2, $3, $4, $5, $6, 'provisioning', $7, $8, $9, $10)
          returning *`,
-        [
-          owner.userId,
-          owner.organizationId,
-          validated.requestId,
-          validated.title,
-          validated.repositoryUrl,
-          validated.networkAccess,
-          validated.workspacePath,
-          validated.runtimeId,
-          validated.repositoryBranch,
-          validated.extraHosts,
-        ],
-      );
-      return { row: inserted[0]!, reused: false };
-    });
-  } catch (error) {
-    if (error instanceof CloudCodeConflictError || error instanceof CloudCodeLimitError)
+          [
+            owner.userId,
+            owner.organizationId,
+            validated.requestId,
+            validated.title,
+            validated.repositoryUrl,
+            validated.networkAccess,
+            validated.workspacePath,
+            validated.runtimeId,
+            validated.repositoryBranch,
+            validated.extraHosts,
+          ],
+        );
+        return { row: inserted[0]!, reused: false };
+      });
+    } catch (error) {
+      if (error instanceof CloudCodeConflictError || error instanceof CloudCodeLimitError)
+        throw error;
+      const raced = await findByRequestId(db, owner, validated.requestId);
+      if (raced && sameCreateRequest(raced, validated)) return mapCloudCodeSession(raced);
       throw error;
-    const raced = await findByRequestId(db, owner, validated.requestId);
-    if (raced && sameCreateRequest(raced, validated)) return mapCloudCodeSession(raced);
-    throw error;
-  }
+    }
 
-  if (claimed.reused) return mapCloudCodeSession(claimed.row);
-  const row = claimed.row;
+    if (claimed.reused) return mapCloudCodeSession(claimed.row);
+    const row = claimed.row;
 
-  const sessionId = row.id;
-  const scope = managedCloudCodeSessionScope(
-    owner.userId,
-    sessionId,
-    validated.networkAccess,
-    planTier,
-    validated.runtimeId,
-    validated.harnessCredential,
-    validated.extraHosts,
-  );
-  const executor = await getE2BExecutor(scope);
-  if (!executor?.runCommand) {
-    await failSessionIfOpen(
-      db,
-      owner,
+    const sessionId = row.id;
+    const scope = managedCloudCodeSessionScope(
+      owner.userId,
       sessionId,
-      'Managed Code environment could not be provisioned',
+      validated.networkAccess,
+      planTier,
+      validated.runtimeId,
+      validated.harnessCredential,
+      validated.extraHosts,
     );
-    await killE2BSession(scope);
-    throw new CloudCodeUnavailableError();
-  }
+    const executor = await getE2BExecutor(scope);
+    if (!executor?.runCommand) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        'Managed Code environment could not be provisioned',
+      );
+      await killE2BSession(scope);
+      throw new CloudCodeUnavailableError();
+    }
 
-  let disposed = false;
-  try {
-    if (
-      validated.runtimeId &&
-      !validated.harnessCredential &&
-      harnessIsProxyCovered(validated.runtimeId)
-    ) {
-      const configFile = harnessProxyConfigFile(validated.runtimeId);
-      const spec = harnessCredentialSpecs(validated.runtimeId)[0];
-      if (configFile && spec) {
-        const baseUrl = providerProxyBaseUrl(sessionId);
-        if (!baseUrl) {
-          throw new CloudCodeUnavailableError('Coding agent proxy is not configured');
+    let disposed = false;
+    try {
+      if (
+        validated.runtimeId &&
+        !validated.harnessCredential &&
+        harnessIsProxyCovered(validated.runtimeId)
+      ) {
+        const configFile = harnessProxyConfigFile(validated.runtimeId);
+        const spec = harnessCredentialSpecs(validated.runtimeId)[0];
+        if (configFile && spec) {
+          const baseUrl = providerProxyBaseUrl(sessionId);
+          if (!baseUrl) {
+            throw new CloudCodeUnavailableError('Coding agent proxy is not configured');
+          }
+          const write = await executor.writeFile({
+            path: configFile.path,
+            content: configFile.content(baseUrl, spec.envVar),
+          });
+          if (!write.ok) {
+            throw new CloudCodeUnavailableError(
+              write.error || 'Coding agent proxy configuration failed',
+            );
+          }
         }
-        const write = await executor.writeFile({
-          path: configFile.path,
-          content: configFile.content(baseUrl, spec.envVar),
-        });
-        if (!write.ok) {
+      }
+      if (validated.repositoryUrl) {
+        if (!executor.git) {
+          throw new CloudCodeUnavailableError('Managed Code environment cannot clone repositories');
+        }
+        const credential = await resolveGithubCloneCredential(
+          owner.userId,
+          validated.repositoryUrl,
+          GITHUB_CLONE_PERMISSIONS,
+          validated.installationId,
+        );
+        if (validated.installationId && !credential) {
           throw new CloudCodeUnavailableError(
-            write.error || 'Coding agent proxy configuration failed',
+            'The connected GitHub account could not authorise this clone',
           );
         }
+        const clone = await executor.git.clone({
+          url: validated.repositoryUrl,
+          path: REPOSITORY_WORKSPACE_PATH,
+          depth: 1,
+          ...(validated.repositoryBranch ? { branch: validated.repositoryBranch } : {}),
+          ...(credential ? credential : {}),
+          timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+        });
+        if (!clone.ok) {
+          throw new CloudCodeUnavailableError(
+            clone.error || clone.stderr || 'Repository setup failed',
+          );
+        }
+        // Read the base before branching: afterwards HEAD is the working branch.
+        const baseBranch =
+          (await resolveClonedBranch(executor, REPOSITORY_WORKSPACE_PATH)) ??
+          validated.repositoryBranch;
+        const workingBranch = cloudCodeWorkingBranchName(validated.title, sessionId);
+        const branched = await executor.git.createBranch({
+          path: REPOSITORY_WORKSPACE_PATH,
+          branch: workingBranch,
+        });
+        if (!branched.ok) {
+          throw new CloudCodeUnavailableError(
+            branched.error || branched.stderr || 'Working branch could not be created',
+          );
+        }
+        await recordSessionBranches(db, owner, sessionId, { workingBranch, baseBranch });
       }
-    }
-    if (validated.repositoryUrl) {
-      if (!executor.git) {
-        throw new CloudCodeUnavailableError('Managed Code environment cannot clone repositories');
-      }
-      const credential = await resolveGithubCloneCredential(
-        owner.userId,
-        validated.repositoryUrl,
-        GITHUB_CLONE_PERMISSIONS,
-        validated.installationId,
-      );
-      if (validated.installationId && !credential) {
-        throw new CloudCodeUnavailableError(
-          'The connected GitHub account could not authorise this clone',
-        );
-      }
-      const clone = await executor.git.clone({
-        url: validated.repositoryUrl,
-        path: REPOSITORY_WORKSPACE_PATH,
-        depth: 1,
-        ...(validated.repositoryBranch ? { branch: validated.repositoryBranch } : {}),
-        ...(credential ? credential : {}),
-        timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
-      });
-      if (!clone.ok) {
-        throw new CloudCodeUnavailableError(
-          clone.error || clone.stderr || 'Repository setup failed',
-        );
-      }
-      // Read the base before branching: afterwards HEAD is the working branch.
-      const baseBranch =
-        (await resolveClonedBranch(executor, REPOSITORY_WORKSPACE_PATH)) ??
-        validated.repositoryBranch;
-      const workingBranch = cloudCodeWorkingBranchName(validated.title, sessionId);
-      const branched = await executor.git.createBranch({
-        path: REPOSITORY_WORKSPACE_PATH,
-        branch: workingBranch,
-      });
-      if (!branched.ok) {
-        throw new CloudCodeUnavailableError(
-          branched.error || branched.stderr || 'Working branch could not be created',
-        );
-      }
-      await recordSessionBranches(db, owner, sessionId, { workingBranch, baseBranch });
-    }
-    await executor.pause?.();
-    const ready = await transitionSessionState(
-      db,
-      owner,
-      sessionId,
-      ['provisioning'],
-      'ready',
-      null,
-    );
-    if (!ready) throw new CloudCodeConflictError('Code session changed while provisioning');
-    return ready;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    try {
       await executor.pause?.();
+      const ready = await transitionSessionState(
+        db,
+        owner,
+        sessionId,
+        ['provisioning'],
+        'ready',
+        null,
+      );
+      if (!ready) throw new CloudCodeConflictError('Code session changed while provisioning');
+      return ready;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      try {
+        await executor.pause?.();
+      } finally {
+        await executor.dispose();
+        disposed = true;
+        await killE2BSession(scope);
+      }
+      await failSessionIfOpen(db, owner, sessionId, message);
+      logger.warn({ error, userId: owner.userId, sessionId }, '[code] session provisioning failed');
+      if (error instanceof CloudCodeUnavailableError) throw error;
+      throw new CloudCodeUnavailableError(message);
     } finally {
-      await executor.dispose();
-      disposed = true;
-      await killE2BSession(scope);
+      if (!disposed) await executor.dispose();
     }
-    await failSessionIfOpen(db, owner, sessionId, message);
-    logger.warn({ error, userId: owner.userId, sessionId }, '[code] session provisioning failed');
-    if (error instanceof CloudCodeUnavailableError) throw error;
-    throw new CloudCodeUnavailableError(message);
-  } finally {
-    if (!disposed) await executor.dispose();
-  }
-}
+  },
+);
 
 /**
  * Take the session for one run, under a lease that expires on its own.
@@ -1382,92 +1390,94 @@ export async function releaseCloudCodeSessionAfterRun(
   return transitionSessionState(db, owner, sessionId, ['running'], 'ready', null, leaseToken);
 }
 
-export async function runCloudCodeCommand(
-  db: DatabaseAdapter,
-  owner: CloudCodeOwner,
-  sessionId: string,
-  commandValue: unknown,
-  planTier: string,
-  signal?: AbortSignal,
-): Promise<{ session: CloudCodeSession; terminalEntry: CloudCodeTerminalEntry }> {
-  const command = typeof commandValue === 'string' ? commandValue.trim() : '';
-  if (!command || command.length > MAX_COMMAND_LENGTH || command.includes('\0')) {
-    throw new CloudCodeValidationError(
-      `Command must be 1–${MAX_COMMAND_LENGTH} characters and contain no null bytes`,
-    );
-  }
+export const runCloudCodeCommand = tracedCodeAction(
+  'terminal_command',
+  async function runCloudCodeCommand(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+    commandValue: unknown,
+    planTier: string,
+    signal?: AbortSignal,
+  ): Promise<{ session: CloudCodeSession; terminalEntry: CloudCodeTerminalEntry }> {
+    const command = typeof commandValue === 'string' ? commandValue.trim() : '';
+    if (!command || command.length > MAX_COMMAND_LENGTH || command.includes('\0')) {
+      throw new CloudCodeValidationError(
+        `Command must be 1–${MAX_COMMAND_LENGTH} characters and contain no null bytes`,
+      );
+    }
 
-  const session = await getCloudCodeSession(db, owner, sessionId);
-  if (session.state === 'closed') {
-    throw new CloudCodeConflictError('Closed Code sessions cannot run commands');
-  }
-  assertSessionIsNotArchived(session, 'run commands');
-  if (session.state === 'provisioning') {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-  if (session.state === 'failed') {
-    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
-  }
+    const session = await getCloudCodeSession(db, owner, sessionId);
+    if (session.state === 'closed') {
+      throw new CloudCodeConflictError('Closed Code sessions cannot run commands');
+    }
+    assertSessionIsNotArchived(session, 'run commands');
+    if (session.state === 'provisioning') {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    if (session.state === 'failed') {
+      throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+    }
 
-  // `running` is deliberately not rejected here. The claim below is what
-  // adjudicates it: a live lease still loses, but a session left running by a
-  // killed turn becomes reclaimable once that lease expires.
-  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
-  if (!claim) {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-  const scope = managedCloudCodeSessionScope(
-    owner.userId,
-    sessionId,
-    claim.session.networkAccess,
-    planTier,
-    claim.session.runtimeId,
-    null,
-    claim.session.extraHosts,
-  );
-  const startedAt = new Date();
-  const executor = await getE2BExecutor(scope);
-  if (!executor?.runCommand) {
-    await failSessionIfOpen(
-      db,
-      owner,
+    // `running` is deliberately not rejected here. The claim below is what
+    // adjudicates it: a live lease still loses, but a session left running by a
+    // killed turn becomes reclaimable once that lease expires.
+    const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+    if (!claim) {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    const scope = managedCloudCodeSessionScope(
+      owner.userId,
       sessionId,
-      'Managed Code environment could not be attached',
-      claim.leaseToken,
+      claim.session.networkAccess,
+      planTier,
+      claim.session.runtimeId,
+      null,
+      claim.session.extraHosts,
     );
-    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
-  }
+    const startedAt = new Date();
+    const executor = await getE2BExecutor(scope);
+    if (!executor?.runCommand) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        'Managed Code environment could not be attached',
+        claim.leaseToken,
+      );
+      throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+    }
 
-  try {
-    const result = await executor.runCommand({
-      command,
-      cwd: claim.session.workspacePath,
-      timeoutMs: resolveCloudCodeCommandDeadlineMs(command, knownHarnessCommandIds()),
-      ...(signal ? { signal } : {}),
-    });
-    const completedAt = new Date();
-    const scoped = ownerSql(owner, 3);
-    const rows = await db.transaction(async (tx) => {
-      const entryRows = await tx.query<TerminalEntryRow>(
-        `insert into cloud_code_terminal_entries (
+    try {
+      const result = await executor.runCommand({
+        command,
+        cwd: claim.session.workspacePath,
+        timeoutMs: resolveCloudCodeCommandDeadlineMs(command, knownHarnessCommandIds()),
+        ...(signal ? { signal } : {}),
+      });
+      const completedAt = new Date();
+      const scoped = ownerSql(owner, 3);
+      const rows = await db.transaction(async (tx) => {
+        const entryRows = await tx.query<TerminalEntryRow>(
+          `insert into cloud_code_terminal_entries (
            session_id, user_id, organization_id, command, stdout, stderr,
            exit_code, started_at, completed_at
          ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          returning id, session_id, command, stdout, stderr, exit_code, started_at, completed_at`,
-        [
-          sessionId,
-          owner.userId,
-          owner.organizationId,
-          command,
-          result.stdout,
-          result.stderr,
-          result.exitCode,
-          startedAt.toISOString(),
-          completedAt.toISOString(),
-        ],
-      );
-      const sessionRows = await tx.query<SessionRow>(
-        `update cloud_code_sessions
+          [
+            sessionId,
+            owner.userId,
+            owner.organizationId,
+            command,
+            result.stdout,
+            result.stderr,
+            result.exitCode,
+            startedAt.toISOString(),
+            completedAt.toISOString(),
+          ],
+        );
+        const sessionRows = await tx.query<SessionRow>(
+          `update cloud_code_sessions
             set state = 'ready',
                 last_error = null,
                 run_lease_token = null,
@@ -1478,29 +1488,30 @@ export async function runCloudCodeCommand(
             and run_lease_token = $2
             and ${scoped.clause}
           returning *`,
-        [sessionId, claim.leaseToken, ...scoped.params],
+          [sessionId, claim.leaseToken, ...scoped.params],
+        );
+        return { entry: entryRows[0], session: sessionRows[0] };
+      });
+      if (!rows.entry || !rows.session) throw new CloudCodeNotFoundError();
+      return {
+        terminalEntry: mapCloudCodeTerminalEntry(rows.entry),
+        session: mapCloudCodeSession(rows.session),
+      };
+    } catch (error) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        error instanceof Error ? error.message : String(error),
+        claim.leaseToken,
       );
-      return { entry: entryRows[0], session: sessionRows[0] };
-    });
-    if (!rows.entry || !rows.session) throw new CloudCodeNotFoundError();
-    return {
-      terminalEntry: mapCloudCodeTerminalEntry(rows.entry),
-      session: mapCloudCodeSession(rows.session),
-    };
-  } catch (error) {
-    await failSessionIfOpen(
-      db,
-      owner,
-      sessionId,
-      error instanceof Error ? error.message : String(error),
-      claim.leaseToken,
-    );
-    throw error;
-  } finally {
-    await executor.pause?.();
-    await executor.dispose();
-  }
-}
+      throw error;
+    } finally {
+      await executor.pause?.();
+      await executor.dispose();
+    }
+  },
+);
 
 function validateNotebookCell(value: unknown): { code: string; language: NotebookCellLanguage } {
   const record =
@@ -1534,80 +1545,88 @@ function notebookFileEntry(path: string, byteSize: number): CloudCodeNotebookFil
   return { path, name: path.split('/').pop() || path, isDir: false, byteSize };
 }
 
-export async function runCloudCodeNotebookCell(
-  db: DatabaseAdapter,
-  owner: CloudCodeOwner,
-  sessionId: string,
-  cellValue: unknown,
-  planTier: string,
-): Promise<{
-  session: CloudCodeSession;
-  ok: boolean;
-  outputs: NotebookCellOutput[];
-  error?: string;
-}> {
-  const { code, language } = validateNotebookCell(cellValue);
+export const runCloudCodeNotebookCell = tracedCodeAction(
+  'notebook_execute',
+  async function runCloudCodeNotebookCell(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+    cellValue: unknown,
+    planTier: string,
+  ): Promise<{
+    session: CloudCodeSession;
+    ok: boolean;
+    outputs: NotebookCellOutput[];
+    error?: string;
+  }> {
+    const { code, language } = validateNotebookCell(cellValue);
 
-  const session = await getCloudCodeSession(db, owner, sessionId);
-  if (session.state === 'closed') {
-    throw new CloudCodeConflictError('Closed Code sessions cannot run cells');
-  }
-  if (session.state === 'provisioning') {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-  if (session.state === 'failed') {
-    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
-  }
+    const session = await getCloudCodeSession(db, owner, sessionId);
+    if (session.state === 'closed') {
+      throw new CloudCodeConflictError('Closed Code sessions cannot run cells');
+    }
+    if (session.state === 'provisioning') {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    if (session.state === 'failed') {
+      throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+    }
 
-  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
-  if (!claim) {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-  const scope = managedCloudCodeSessionScope(
-    owner.userId,
-    sessionId,
-    claim.session.networkAccess,
-    planTier,
-    claim.session.runtimeId,
-    null,
-    claim.session.extraHosts,
-  );
-  const executor = await getE2BExecutor(scope);
-  if (!executor) {
-    await failSessionIfOpen(
-      db,
-      owner,
+    const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+    if (!claim) {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    const scope = managedCloudCodeSessionScope(
+      owner.userId,
       sessionId,
-      'Managed Code environment could not be attached',
-      claim.leaseToken,
+      claim.session.networkAccess,
+      planTier,
+      claim.session.runtimeId,
+      null,
+      claim.session.extraHosts,
     );
-    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
-  }
+    const executor = await getE2BExecutor(scope);
+    if (!executor) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        'Managed Code environment could not be attached',
+        claim.leaseToken,
+      );
+      throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+    }
 
-  try {
-    const result = await executor.runCode({ language, code });
-    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
-    if (!released) throw new CloudCodeNotFoundError();
-    return {
-      session: released,
-      ok: result.ok,
-      outputs: result.outputs ?? [],
-      ...(result.error ? { error: result.error } : {}),
-    };
-  } catch (error) {
-    await failSessionIfOpen(
-      db,
-      owner,
-      sessionId,
-      error instanceof Error ? error.message : String(error),
-      claim.leaseToken,
-    );
-    throw error;
-  } finally {
-    await executor.pause?.();
-    await executor.dispose();
-  }
-}
+    try {
+      const result = await executor.runCode({ language, code });
+      const released = await releaseCloudCodeSessionAfterRun(
+        db,
+        owner,
+        sessionId,
+        claim.leaseToken,
+      );
+      if (!released) throw new CloudCodeNotFoundError();
+      return {
+        session: released,
+        ok: result.ok,
+        outputs: result.outputs ?? [],
+        ...(result.error ? { error: result.error } : {}),
+      };
+    } catch (error) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        error instanceof Error ? error.message : String(error),
+        claim.leaseToken,
+      );
+      throw error;
+    } finally {
+      await executor.pause?.();
+      await executor.dispose();
+    }
+  },
+);
 
 export async function writeCloudCodeNotebookFile(
   db: DatabaseAdapter,
@@ -1829,121 +1848,132 @@ export async function readCloudCodeNotebookFile(
   }
 }
 
-export async function commitAndPushCloudCodeSession(
-  db: DatabaseAdapter,
-  owner: CloudCodeOwner,
-  sessionId: string,
-  planTier: string,
-  messageValue: unknown,
-): Promise<{ session: CloudCodeSession; push: CommandExecutionResult }> {
-  const message = typeof messageValue === 'string' ? messageValue.trim() : '';
-  if (!message || message.length > MAX_COMMIT_MESSAGE_LENGTH || message.includes('\0')) {
-    throw new CloudCodeValidationError(
-      `Commit message must be 1–${MAX_COMMIT_MESSAGE_LENGTH} characters and contain no null bytes`,
+export const commitAndPushCloudCodeSession = tracedCodeAction(
+  'commit_push',
+  async function commitAndPushCloudCodeSession(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+    planTier: string,
+    messageValue: unknown,
+  ): Promise<{ session: CloudCodeSession; push: CommandExecutionResult }> {
+    const message = typeof messageValue === 'string' ? messageValue.trim() : '';
+    if (!message || message.length > MAX_COMMIT_MESSAGE_LENGTH || message.includes('\0')) {
+      throw new CloudCodeValidationError(
+        `Commit message must be 1–${MAX_COMMIT_MESSAGE_LENGTH} characters and contain no null bytes`,
+      );
+    }
+
+    const session = await getCloudCodeSession(db, owner, sessionId);
+    if (!session.repositoryUrl) {
+      throw new CloudCodeValidationError('Code session has no repository to push to');
+    }
+    if (session.state === 'closed') {
+      throw new CloudCodeConflictError('Closed Code sessions cannot be pushed');
+    }
+    assertSessionIsNotArchived(session, 'commit and push');
+    if (session.state === 'provisioning') {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    if (session.state === 'failed') {
+      throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+    }
+
+    const credential = await resolveGithubCloneCredential(
+      owner.userId,
+      session.repositoryUrl,
+      GITHUB_PUSH_PERMISSIONS,
     );
-  }
+    if (!credential) {
+      throw new CloudCodeValidationError(
+        'No connected GitHub installation can push to this repository',
+      );
+    }
 
-  const session = await getCloudCodeSession(db, owner, sessionId);
-  if (!session.repositoryUrl) {
-    throw new CloudCodeValidationError('Code session has no repository to push to');
-  }
-  if (session.state === 'closed') {
-    throw new CloudCodeConflictError('Closed Code sessions cannot be pushed');
-  }
-  assertSessionIsNotArchived(session, 'commit and push');
-  if (session.state === 'provisioning') {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-  if (session.state === 'failed') {
-    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
-  }
-
-  const credential = await resolveGithubCloneCredential(
-    owner.userId,
-    session.repositoryUrl,
-    GITHUB_PUSH_PERMISSIONS,
-  );
-  if (!credential) {
-    throw new CloudCodeValidationError(
-      'No connected GitHub installation can push to this repository',
-    );
-  }
-
-  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
-  if (!claim) {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-  const scope = managedCloudCodeSessionScope(
-    owner.userId,
-    sessionId,
-    claim.session.networkAccess,
-    planTier,
-    claim.session.runtimeId,
-    null,
-    claim.session.extraHosts,
-  );
-  const executor = await getE2BExecutor(scope);
-  if (!executor?.git) {
-    await failSessionIfOpen(
-      db,
-      owner,
+    const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+    if (!claim) {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    const scope = managedCloudCodeSessionScope(
+      owner.userId,
       sessionId,
-      'Managed Code environment could not be attached',
-      claim.leaseToken,
+      claim.session.networkAccess,
+      planTier,
+      claim.session.runtimeId,
+      null,
+      claim.session.extraHosts,
     );
-    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
-  }
+    const executor = await getE2BExecutor(scope);
+    if (!executor?.git) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        'Managed Code environment could not be attached',
+        claim.leaseToken,
+      );
+      throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+    }
 
-  try {
-    const add = await executor.git.add({ path: claim.session.workspacePath, all: true });
-    if (!add.ok) {
-      throw new CloudCodeUnavailableError(add.error || add.stderr || 'Staging changes failed');
+    try {
+      const add = await executor.git.add({ path: claim.session.workspacePath, all: true });
+      if (!add.ok) {
+        throw new CloudCodeUnavailableError(add.error || add.stderr || 'Staging changes failed');
+      }
+      const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
+      if (!commit.ok) {
+        throw new CloudCodeUnavailableError(commit.error || commit.stderr || 'Commit failed');
+      }
+      const push = await executor.git.push({
+        path: claim.session.workspacePath,
+        ...(claim.session.workingBranch ? { branch: claim.session.workingBranch } : {}),
+        username: credential.username,
+        password: credential.password,
+        timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+      });
+      if (!push.ok) {
+        throw new CloudCodeUnavailableError(push.error || push.stderr || 'Push failed');
+      }
+      const released = await releaseCloudCodeSessionAfterRun(
+        db,
+        owner,
+        sessionId,
+        claim.leaseToken,
+      );
+      if (!released) throw new CloudCodeNotFoundError();
+      return { session: released, push };
+    } catch (error) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        error instanceof Error ? error.message : String(error),
+        claim.leaseToken,
+      );
+      throw error;
+    } finally {
+      await executor.pause?.();
+      await executor.dispose();
     }
-    const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
-    if (!commit.ok) {
-      throw new CloudCodeUnavailableError(commit.error || commit.stderr || 'Commit failed');
-    }
-    const push = await executor.git.push({
-      path: claim.session.workspacePath,
-      ...(claim.session.workingBranch ? { branch: claim.session.workingBranch } : {}),
-      username: credential.username,
-      password: credential.password,
-      timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
-    });
-    if (!push.ok) {
-      throw new CloudCodeUnavailableError(push.error || push.stderr || 'Push failed');
-    }
-    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
-    if (!released) throw new CloudCodeNotFoundError();
-    return { session: released, push };
-  } catch (error) {
-    await failSessionIfOpen(
-      db,
-      owner,
-      sessionId,
-      error instanceof Error ? error.message : String(error),
-      claim.leaseToken,
+  },
+);
+
+export const closeCloudCodeSession = tracedCodeAction(
+  'worktree_cleanup',
+  async function closeCloudCodeSession(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+    planTier: string,
+  ): Promise<CloudCodeSession> {
+    const session = await getCloudCodeSession(db, owner, sessionId);
+    if (session.state === 'closed') return session;
+    await killE2BSession(
+      managedCloudCodeSessionScope(owner.userId, sessionId, session.networkAccess, planTier),
     );
-    throw error;
-  } finally {
-    await executor.pause?.();
-    await executor.dispose();
-  }
-}
-
-export async function closeCloudCodeSession(
-  db: DatabaseAdapter,
-  owner: CloudCodeOwner,
-  sessionId: string,
-  planTier: string,
-): Promise<CloudCodeSession> {
-  const session = await getCloudCodeSession(db, owner, sessionId);
-  if (session.state === 'closed') return session;
-  await killE2BSession(
-    managedCloudCodeSessionScope(owner.userId, sessionId, session.networkAccess, planTier),
-  );
-  return updateSessionState(db, owner, sessionId, 'closed', null);
-}
+    return updateSessionState(db, owner, sessionId, 'closed', null);
+  },
+);
 
 const GIT_PORCELAIN_RENAME_SEPARATOR = ' -> ';
 const GIT_PORCELAIN_PATH_INDEX = 3;
@@ -2039,93 +2069,101 @@ function assertSessionAcceptsWork(session: CloudCodeSession, verb: string): void
   }
 }
 
-export async function readCloudCodeSessionChanges(
-  db: DatabaseAdapter,
-  owner: CloudCodeOwner,
-  sessionId: string,
-  planTier: string,
-): Promise<CloudCodeSessionChanges> {
-  const session = await getCloudCodeSession(db, owner, sessionId);
-  assertSessionAcceptsWork(session, 'show changes');
-  if (!session.repositoryUrl) {
-    return {
-      session,
-      base: null,
-      workingBranch: session.workingBranch,
-      files: [],
-      diff: '',
-      diffTruncated: false,
-    };
-  }
+export const readCloudCodeSessionChanges = tracedCodeAction(
+  'diff',
+  async function readCloudCodeSessionChanges(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+    planTier: string,
+  ): Promise<CloudCodeSessionChanges> {
+    const session = await getCloudCodeSession(db, owner, sessionId);
+    assertSessionAcceptsWork(session, 'show changes');
+    if (!session.repositoryUrl) {
+      return {
+        session,
+        base: null,
+        workingBranch: session.workingBranch,
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      };
+    }
 
-  const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
-  if (!claim) {
-    throw new CloudCodeConflictError('Code session is busy; wait and try again');
-  }
-  const scope = managedCloudCodeSessionScope(
-    owner.userId,
-    sessionId,
-    claim.session.networkAccess,
-    planTier,
-    claim.session.runtimeId,
-    null,
-    claim.session.extraHosts,
-  );
-  const executor = await getE2BExecutor(scope);
-  if (!executor?.git) {
-    await failSessionIfOpen(
-      db,
-      owner,
+    const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+    if (!claim) {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    const scope = managedCloudCodeSessionScope(
+      owner.userId,
       sessionId,
-      'Managed Code environment could not be attached',
-      claim.leaseToken,
+      claim.session.networkAccess,
+      planTier,
+      claim.session.runtimeId,
+      null,
+      claim.session.extraHosts,
     );
-    throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
-  }
+    const executor = await getE2BExecutor(scope);
+    if (!executor?.git) {
+      await failSessionIfOpen(
+        db,
+        owner,
+        sessionId,
+        'Managed Code environment could not be attached',
+        claim.leaseToken,
+      );
+      throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+    }
 
-  try {
-    const workspacePath = claim.session.workspacePath;
-    const status = await executor.git.status({ path: workspacePath });
-    if (!status.ok) {
-      throw new CloudCodeUnavailableError(
-        status.error || status.stderr || 'Workspace status could not be read',
+    try {
+      const workspacePath = claim.session.workspacePath;
+      const status = await executor.git.status({ path: workspacePath });
+      if (!status.ok) {
+        throw new CloudCodeUnavailableError(
+          status.error || status.stderr || 'Workspace status could not be read',
+        );
+      }
+      const baseRef = sessionBaseRef(claim.session);
+      let base = cloudCodeSessionBaseBranch(claim.session);
+      let diff = baseRef
+        ? await executor.git.diff({ path: workspacePath, baseRef })
+        : await executor.git.diff({ path: workspacePath });
+      if (!diff.ok && baseRef) {
+        // The base branch is known but its remote ref is not there to compare
+        // against. Fall back to the last commit and stop naming a base, rather
+        // than draw a branch flow for a comparison that did not happen.
+        base = null;
+        diff = await executor.git.diff({ path: workspacePath });
+      }
+      if (!diff.ok) {
+        throw new CloudCodeUnavailableError(
+          diff.error || diff.stderr || 'Workspace diff could not be read',
+        );
+      }
+      const released = await releaseCloudCodeSessionAfterRun(
+        db,
+        owner,
+        sessionId,
+        claim.leaseToken,
       );
+      if (!released) throw new CloudCodeNotFoundError();
+      return {
+        session: released,
+        base,
+        workingBranch: released.workingBranch,
+        files: parseGitPorcelainStatus(status.stdout),
+        diff: diff.stdout.slice(0, MAX_DIFF_LENGTH),
+        diffTruncated: diff.stdout.length > MAX_DIFF_LENGTH,
+      };
+    } catch (error) {
+      await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
+      throw error;
+    } finally {
+      await executor.pause?.();
+      await executor.dispose();
     }
-    const baseRef = sessionBaseRef(claim.session);
-    let base = cloudCodeSessionBaseBranch(claim.session);
-    let diff = baseRef
-      ? await executor.git.diff({ path: workspacePath, baseRef })
-      : await executor.git.diff({ path: workspacePath });
-    if (!diff.ok && baseRef) {
-      // The base branch is known but its remote ref is not there to compare
-      // against. Fall back to the last commit and stop naming a base, rather
-      // than draw a branch flow for a comparison that did not happen.
-      base = null;
-      diff = await executor.git.diff({ path: workspacePath });
-    }
-    if (!diff.ok) {
-      throw new CloudCodeUnavailableError(
-        diff.error || diff.stderr || 'Workspace diff could not be read',
-      );
-    }
-    const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
-    if (!released) throw new CloudCodeNotFoundError();
-    return {
-      session: released,
-      base,
-      workingBranch: released.workingBranch,
-      files: parseGitPorcelainStatus(status.stdout),
-      diff: diff.stdout.slice(0, MAX_DIFF_LENGTH),
-      diffTruncated: diff.stdout.length > MAX_DIFF_LENGTH,
-    };
-  } catch (error) {
-    await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
-    throw error;
-  } finally {
-    await executor.pause?.();
-    await executor.dispose();
-  }
-}
+  },
+);
 
 const MAX_PULL_REQUEST_BODY_LENGTH = 60_000;
 const PULL_REQUEST_EXISTS_MARKER = 'a pull request already exists';
@@ -2189,111 +2227,116 @@ async function recordPullRequest(
  * refusal that says one already exists is resolved by looking it up, and the
  * looked-up pull request is recorded so the next call takes the first path.
  */
-export async function openCloudCodeSessionPullRequest(
-  db: DatabaseAdapter,
-  owner: CloudCodeOwner,
-  sessionId: string,
-): Promise<CloudCodePullRequestResponse> {
-  const session = await getCloudCodeSession(db, owner, sessionId);
-  assertSessionAcceptsWork(session, 'open a pull request');
-  if (session.pullRequestUrl && session.pullRequestNumber) {
-    return {
-      session,
-      url: session.pullRequestUrl,
-      number: session.pullRequestNumber,
-      alreadyOpen: true,
-    };
-  }
-  if (!session.repositoryUrl) {
-    throw new CloudCodeValidationError('Code session has no repository to open a pull request on');
-  }
-  if (!session.workingBranch) {
-    throw new CloudCodeValidationError(
-      'Code session has no working branch to open a pull request from',
-    );
-  }
-  const parsed = parseGithubRepositoryUrl(session.repositoryUrl);
-  if (!parsed) {
-    throw new CloudCodeValidationError('Code session repository is not a GitHub repository');
-  }
-  const credential = await resolveGithubCloneCredential(
-    owner.userId,
-    session.repositoryUrl,
-    GITHUB_PULL_REQUEST_PERMISSIONS,
-  );
-  if (!credential) {
-    throw new CloudCodeValidationError(
-      'No connected GitHub installation can open a pull request on this repository',
-    );
-  }
-
-  const token = credential.password;
-  const base =
-    session.repositoryBranch ??
-    (await getGitHubRepositoryDefaultBranch(token, parsed.owner, parsed.repo));
-
-  const result = await readCloudCodeSessionResult(db, owner, sessionId);
-  logger.info(
-    { sessionId, ...result.metrics },
-    'Cloud Code session pull request opened from verified results',
-  );
-
-  let pullRequest: GitHubPullRequest;
-  try {
-    pullRequest = await createGitHubPullRequest(token, {
-      owner: parsed.owner,
-      repo: parsed.repo,
-      title: session.title,
-      body: buildCloudCodePullRequestBody({
-        goal: result.goal,
-        summary: result.summary,
-        verdict: result.verdict,
-      }).slice(0, MAX_PULL_REQUEST_BODY_LENGTH),
-      head: session.workingBranch,
-      base,
-      // Work that cannot back its own "done" claim opens as a draft rather
-      // than asking for a review it has not earned.
-      draft: !result.verdict.complete,
-    });
-  } catch (error) {
-    if (!(error instanceof GitHubPullRequestError)) throw error;
-    const detail = error.detail.toLowerCase();
-    if (
-      error.status === GITHUB_UNPROCESSABLE_STATUS &&
-      detail.includes(PULL_REQUEST_EXISTS_MARKER)
-    ) {
-      const existing = await findOpenGitHubPullRequest(
-        token,
-        parsed.owner,
-        parsed.repo,
-        session.workingBranch,
-      );
-      if (!existing) throw error;
+export const openCloudCodeSessionPullRequest = tracedCodeAction(
+  'pull_request',
+  async function openCloudCodeSessionPullRequest(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+  ): Promise<CloudCodePullRequestResponse> {
+    const session = await getCloudCodeSession(db, owner, sessionId);
+    assertSessionAcceptsWork(session, 'open a pull request');
+    if (session.pullRequestUrl && session.pullRequestNumber) {
       return {
-        session: await recordPullRequest(db, owner, sessionId, existing),
-        url: existing.url,
-        number: existing.number,
+        session,
+        url: session.pullRequestUrl,
+        number: session.pullRequestNumber,
         alreadyOpen: true,
       };
     }
-    if (
-      error.status === GITHUB_UNPROCESSABLE_STATUS &&
-      detail.includes(PULL_REQUEST_NO_COMMITS_MARKER)
-    ) {
-      throw new CloudCodeConflictError(
-        'This session has pushed no commits yet, so there is nothing to open a pull request for.',
+    if (!session.repositoryUrl) {
+      throw new CloudCodeValidationError(
+        'Code session has no repository to open a pull request on',
       );
     }
-    throw new CloudCodeUnavailableError('GitHub refused to open the pull request');
-  }
+    if (!session.workingBranch) {
+      throw new CloudCodeValidationError(
+        'Code session has no working branch to open a pull request from',
+      );
+    }
+    const parsed = parseGithubRepositoryUrl(session.repositoryUrl);
+    if (!parsed) {
+      throw new CloudCodeValidationError('Code session repository is not a GitHub repository');
+    }
+    const credential = await resolveGithubCloneCredential(
+      owner.userId,
+      session.repositoryUrl,
+      GITHUB_PULL_REQUEST_PERMISSIONS,
+    );
+    if (!credential) {
+      throw new CloudCodeValidationError(
+        'No connected GitHub installation can open a pull request on this repository',
+      );
+    }
 
-  return {
-    session: await recordPullRequest(db, owner, sessionId, pullRequest),
-    url: pullRequest.url,
-    number: pullRequest.number,
-    alreadyOpen: false,
-  };
-}
+    const token = credential.password;
+    const base =
+      session.repositoryBranch ??
+      (await getGitHubRepositoryDefaultBranch(token, parsed.owner, parsed.repo));
+
+    const result = await readCloudCodeSessionResult(db, owner, sessionId);
+    logger.info(
+      { sessionId, ...result.metrics },
+      'Cloud Code session pull request opened from verified results',
+    );
+
+    let pullRequest: GitHubPullRequest;
+    try {
+      pullRequest = await createGitHubPullRequest(token, {
+        owner: parsed.owner,
+        repo: parsed.repo,
+        title: session.title,
+        body: buildCloudCodePullRequestBody({
+          goal: result.goal,
+          summary: result.summary,
+          verdict: result.verdict,
+        }).slice(0, MAX_PULL_REQUEST_BODY_LENGTH),
+        head: session.workingBranch,
+        base,
+        // Work that cannot back its own "done" claim opens as a draft rather
+        // than asking for a review it has not earned.
+        draft: !result.verdict.complete,
+      });
+    } catch (error) {
+      if (!(error instanceof GitHubPullRequestError)) throw error;
+      const detail = error.detail.toLowerCase();
+      if (
+        error.status === GITHUB_UNPROCESSABLE_STATUS &&
+        detail.includes(PULL_REQUEST_EXISTS_MARKER)
+      ) {
+        const existing = await findOpenGitHubPullRequest(
+          token,
+          parsed.owner,
+          parsed.repo,
+          session.workingBranch,
+        );
+        if (!existing) throw error;
+        return {
+          session: await recordPullRequest(db, owner, sessionId, existing),
+          url: existing.url,
+          number: existing.number,
+          alreadyOpen: true,
+        };
+      }
+      if (
+        error.status === GITHUB_UNPROCESSABLE_STATUS &&
+        detail.includes(PULL_REQUEST_NO_COMMITS_MARKER)
+      ) {
+        throw new CloudCodeConflictError(
+          'This session has pushed no commits yet, so there is nothing to open a pull request for.',
+        );
+      }
+      throw new CloudCodeUnavailableError('GitHub refused to open the pull request');
+    }
+
+    return {
+      session: await recordPullRequest(db, owner, sessionId, pullRequest),
+      url: pullRequest.url,
+      number: pullRequest.number,
+      alreadyOpen: false,
+    };
+  },
+);
 
 function assertSessionIsNotArchived(session: CloudCodeSession, action: string): void {
   if (!session.archivedAt) return;

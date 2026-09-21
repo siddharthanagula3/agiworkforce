@@ -10,6 +10,7 @@ const {
   mockVerifyToken,
   mockNeonExecute,
   mockNeonQuery,
+  mockEmitIdentitySecurityEvent,
 } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockGetSessionList: vi.fn(),
@@ -18,6 +19,14 @@ const {
   mockVerifyToken: vi.fn(),
   mockNeonExecute: vi.fn(async () => 1),
   mockNeonQuery: vi.fn(async () => [] as Record<string, unknown>[]),
+  mockEmitIdentitySecurityEvent: vi.fn(async (..._args: unknown[]) => ({
+    level: 'none',
+    signals: [] as string[],
+  })),
+}));
+
+vi.mock('@/lib/services/identity-events', () => ({
+  emitIdentitySecurityEvent: (...args: unknown[]) => mockEmitIdentitySecurityEvent(...args),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -61,6 +70,7 @@ function session(
     status: string;
     createdAt: number;
     lastActiveAt: number;
+    expireAt: number;
     latestActivity: Record<string, unknown>;
   }> = {},
 ) {
@@ -72,8 +82,8 @@ function session(
     createdAt: overrides.createdAt ?? Date.now() - DAY_MS,
     updatedAt: Date.parse('2026-07-02T12:00:00.000Z'),
     lastActiveAt: overrides.lastActiveAt ?? Date.parse('2026-07-03T12:00:00.000Z'),
-    expireAt: Date.parse('2026-08-01T12:00:00.000Z'),
-    abandonAt: Date.parse('2026-08-02T12:00:00.000Z'),
+    expireAt: overrides.expireAt ?? Date.now() + 7 * DAY_MS,
+    abandonAt: Date.now() + 8 * DAY_MS,
     latestActivity: overrides.latestActivity,
     actor: null,
   };
@@ -84,6 +94,12 @@ function providerError(status: number, retryAfter?: number): Error {
     status,
     ...(retryAfter === undefined ? {} : { retryAfter }),
   });
+}
+
+function revokeAllRequest() {
+  return new Request('http://localhost:3000/api/settings/sessions', {
+    method: 'DELETE',
+  }) as never;
 }
 
 function bearerRequest(method: 'GET' | 'DELETE', token: string) {
@@ -213,6 +229,48 @@ describe('/api/settings/sessions', () => {
       expect(body.sessions[0]).toMatchObject({ surface: 'web', os: null });
     });
 
+    it('gives the screen every field a session row shows, and no field it must not', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [
+          session('sess_cli', {
+            latestActivity: {
+              id: 'activity-cli',
+              isMobile: false,
+              ipAddress: '198.51.100.7',
+              city: 'Lisbon',
+              country: 'PT',
+              browserName: 'Chrome',
+              browserVersion: '141',
+              deviceType: 'Mac',
+            },
+          }),
+        ],
+        totalCount: 1,
+      });
+      mockNeonQuery.mockResolvedValue([
+        { identity_session_id: 'sess_cli', surface: 'cli', os: 'macos', os_version: '26.1' },
+      ]);
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+      const body = (await response.json()) as { sessions: Array<Record<string, unknown>> };
+      const row = body.sessions[0] as Record<string, unknown>;
+
+      expect(row['browser']).toBe('Chrome 141');
+      expect(row['device']).toBe('Mac');
+      expect(row['os']).toBe('macos');
+      expect(row['osVersion']).toBe('26.1');
+      expect(row['surface']).toBe('cli');
+      expect(row['location']).toBe('Lisbon, PT');
+      expect(typeof row['lastActiveAt']).toBe('string');
+      expect(typeof row['createdAt']).toBe('string');
+      expect(typeof row['expiresAt']).toBe('string');
+      expect(typeof row['absoluteExpiresAt']).toBe('string');
+      expect(row['isCurrent']).toBe(false);
+      expect(JSON.stringify(row)).not.toContain('198.51.100.7');
+    });
+
     it('ends a session that has outlived the absolute lifetime and never returns it', async () => {
       const ancient = Date.now() - 400 * DAY_MS;
       mockGetSessionList.mockResolvedValue({
@@ -226,17 +284,39 @@ describe('/api/settings/sessions', () => {
       const body = (await response.json()) as {
         sessions: Array<{ id: string; absoluteExpiresAt: string | null }>;
         totalCount: number;
-        endedByAbsoluteTimeout: number;
+        endedByLifetime: number;
       };
 
       expect(response.status).toBe(200);
       expect(mockRevokeSession).toHaveBeenCalledWith('sess_ancient');
       expect(body.sessions.map((row) => row.id)).toEqual(['sess_current']);
-      expect(body.endedByAbsoluteTimeout).toBe(1);
+      expect(body.endedByLifetime).toBe(1);
       expect(body.totalCount).toBe(1);
       expect(body.sessions[0]?.absoluteExpiresAt).toBe(
         new Date(Date.parse(String(body.sessions[0]?.absoluteExpiresAt))).toISOString(),
       );
+    });
+
+    it('ends a session the provider still lists but whose own expiry has passed', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_stale', { expireAt: Date.now() - DAY_MS })],
+        totalCount: 2,
+      });
+
+      const response = await GET(
+        new Request('http://localhost:3000/api/settings/sessions') as never,
+      );
+      const body = (await response.json()) as {
+        sessions: Array<{ id: string }>;
+        endedByLifetime: number;
+        endedByLifetimeBounds: string[];
+      };
+
+      expect(response.status).toBe(200);
+      expect(mockRevokeSession).toHaveBeenCalledWith('sess_stale');
+      expect(body.sessions.map((row) => row.id)).toEqual(['sess_current']);
+      expect(body.endedByLifetime).toBe(1);
+      expect(body.endedByLifetimeBounds).toEqual(['idle']);
     });
 
     it('honours a shorter absolute lifetime when policy sets one', async () => {
@@ -252,16 +332,66 @@ describe('/api/settings/sessions', () => {
         );
         const body = (await response.json()) as {
           sessions: unknown[];
-          endedByAbsoluteTimeout: number;
+          endedByLifetime: number;
         };
 
         expect(response.status).toBe(200);
         expect(mockRevokeSession).toHaveBeenCalledWith('sess_yesterday');
         expect(body.sessions).toEqual([]);
-        expect(body.endedByAbsoluteTimeout).toBe(1);
+        expect(body.endedByLifetime).toBe(1);
       } finally {
         delete process.env['SESSION_ABSOLUTE_LIFETIME_HOURS'];
       }
+    });
+
+    // Signing other devices out is protective, and the control that calls this
+    // sends no step-up header. Gating it would lock out the person who most
+    // needs it: one who suspects a takeover and holds no second factor.
+    it('ends every other session without asking for a second factor', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')],
+        totalCount: 2,
+      });
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(200);
+      expect(mockRevokeSession.mock.calls.map(([id]) => id)).toContain('sess_other');
+    });
+
+    it('tells the account holder every session was ended, and counts what ended', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')],
+        totalCount: 2,
+      });
+      mockNeonQuery.mockResolvedValue([{ id: 'credential-1' }, { id: 'credential-2' }]);
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(200);
+      expect(mockEmitIdentitySecurityEvent).toHaveBeenCalledTimes(1);
+      const [, emitted] = mockEmitIdentitySecurityEvent.mock.calls[0] as unknown as [
+        unknown,
+        Record<string, unknown>,
+      ];
+      expect(emitted['event']).toBe('all_sessions_revoked');
+      expect(emitted['userId']).toBe('user-1');
+      expect(emitted['context']).toContain('2 sessions ended');
+      expect(emitted['detail']).toMatchObject({ count: 2, isCurrent: true, deleted: 2 });
+      expect(await response.json()).toMatchObject({ deviceCredentialsRevoked: 2 });
+    });
+
+    it('raises nothing when the sweep could not finish', async () => {
+      mockGetSessionList.mockResolvedValue({
+        data: [session('sess_current'), session('sess_other')],
+        totalCount: 2,
+      });
+      mockRevokeSession.mockRejectedValueOnce(providerError(500));
+
+      const response = await DELETE(revokeAllRequest());
+
+      expect(response.status).toBe(502);
+      expect(mockEmitIdentitySecurityEvent).not.toHaveBeenCalled();
     });
 
     it('revokes other devices before ending the current session', async () => {
@@ -270,9 +400,7 @@ describe('/api/settings/sessions', () => {
         totalCount: 2,
       });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(mockRevokeSession.mock.calls.map(([id]) => id)).toEqual([
@@ -280,10 +408,9 @@ describe('/api/settings/sessions', () => {
         'sess_current',
       ]);
       expect(await response.json()).toMatchObject({ currentSessionRevoked: true, revokedCount: 2 });
-      expect(mockNeonExecute).toHaveBeenCalledWith(
-        expect.stringContaining('device_refresh_tokens'),
-        ['user-1'],
-      );
+      expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('device_refresh_tokens'), [
+        'user-1',
+      ]);
     });
 
     it('keeps the current session active and reports progress when a device cannot be revoked', async () => {
@@ -293,9 +420,7 @@ describe('/api/settings/sessions', () => {
       });
       mockRevokeSession.mockRejectedValueOnce(providerError(500));
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(502);
       expect(mockRevokeSession).toHaveBeenCalledTimes(1);
@@ -316,9 +441,7 @@ describe('/api/settings/sessions', () => {
         .mockRejectedValueOnce(providerError(429, 0))
         .mockResolvedValue({ status: 'revoked' });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ revokedCount: 2, currentSessionRevoked: true });
@@ -336,9 +459,7 @@ describe('/api/settings/sessions', () => {
       });
       mockRevokeSession.mockRejectedValue(providerError(429, 0));
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(502);
       expect(mockRevokeSession).toHaveBeenCalledTimes(3);
@@ -359,9 +480,7 @@ describe('/api/settings/sessions', () => {
         return { status: 'revoked' };
       });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ currentSessionRevoked: true });
@@ -410,9 +529,7 @@ describe('/api/settings/sessions', () => {
         return { status: 'revoked' };
       });
 
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/sessions', { method: 'DELETE' }) as never,
-      );
+      const response = await DELETE(revokeAllRequest());
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({

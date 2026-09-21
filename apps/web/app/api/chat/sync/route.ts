@@ -3,7 +3,10 @@ import {
   ChatSyncPullResponseSchema,
   ChatSyncPushRequestSchema,
   ChatSyncPushResponseSchema,
+  SYNC_PROTOCOL_VERSION,
   ServerVersionSchema,
+  resolveSyncProtocolVersion,
+  syncProtocolRefusalMessage,
   type ArtifactWireDelta,
   type ConversationSyncPushItem,
   type ConversationWireDelta,
@@ -280,6 +283,29 @@ const PUSH_MESSAGES_SQL = `
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `;
 
+const CLEAR_COMPACTION_SUMMARY_SQL = `update web_conversations
+             set compaction_summary = null,
+                 compaction_summary_through_message_id = null,
+                 compaction_summary_digest = null
+           where user_id = $1
+             and id = any($2::uuid[])
+             and compaction_summary is not null`;
+
+/**
+ * The conversations whose turns this batch actually changed. A push that only
+ * conflicts leaves every row as it was, so the summary covering them still
+ * answers for what it summarised.
+ */
+function conversationsApplied(
+  messages: MessageSyncPushItem[],
+  rows: Array<BatchRow<MessageDelta>>,
+): string[] {
+  const applied = new Set(rows.flatMap((row) => (row.kind === 'applied' ? [row.id] : [])));
+  return [
+    ...new Set(messages.filter((item) => applied.has(item.id)).map((item) => item.conversationId)),
+  ];
+}
+
 type ThreadParent = { id: string; parentId: string | null };
 
 /**
@@ -334,11 +360,14 @@ async function pushMessages(
     });
 
   if (threadScopes.length === 0) {
-    return db.query<BatchRow<MessageDelta>>(PUSH_MESSAGES_SQL, [
+    const rows = await db.query<BatchRow<MessageDelta>>(PUSH_MESSAGES_SQL, [
       userId,
       JSON.stringify(messages),
       JSON.stringify([]),
     ]);
+    const touched = conversationsApplied(messages, rows);
+    if (touched.length > 0) await db.execute(CLEAR_COMPACTION_SUMMARY_SQL, [userId, touched]);
+    return rows;
   }
 
   // Only the rows this batch creates take a parent. An edit or a tombstone
@@ -418,6 +447,8 @@ async function pushMessages(
       if (!appliedIds.has(leafMessageId)) continue;
       await setActiveLeaf(tx, scope, leafMessageId);
     }
+    const touched = conversationsApplied(messages, rows);
+    if (touched.length > 0) await tx.execute(CLEAR_COMPACTION_SUMMARY_SQL, [userId, touched]);
     return rows;
   });
 }
@@ -437,17 +468,15 @@ async function handlePush(request: NextRequest) {
   } catch {
     throw createError.validation('Invalid JSON body');
   }
-  if (isLegacyMutablePush(rawBody)) {
-    return syncProtocolUpgradeRequired();
-  }
   if (isLegacyNoopPush(rawBody)) {
     return NextResponse.json({
-      protocolVersion: 2,
+      protocolVersion: SYNC_PROTOCOL_VERSION,
       applied: { conversations: [], messages: [], artifacts: [] },
       conflicts: { conversations: [], messages: [], artifacts: [] },
       cursor: '0',
     });
   }
+  assertReadableSyncProtocol(rawBody);
   const parsed = ChatSyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid sync payload', parsed.error);
@@ -709,7 +738,12 @@ async function handlePush(request: NextRequest) {
       conflictRows,
     );
     return NextResponse.json(
-      ChatSyncPushResponseSchema.parse({ protocolVersion: 2, applied, conflicts, cursor }),
+      ChatSyncPushResponseSchema.parse({
+        protocolVersion: SYNC_PROTOCOL_VERSION,
+        applied,
+        conflicts,
+        cursor,
+      }),
     );
   } catch (error) {
     logger.error({ error, userId }, 'Cloud sync push failed');
@@ -733,13 +767,18 @@ function collectBatchRows<T>(
   }
 }
 
-function isLegacyMutablePush(value: unknown): boolean {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const body = value as Record<string, unknown>;
-  if (body['protocolVersion'] === 2) return false;
-  return ['conversations', 'messages', 'artifacts'].some(
-    (key) => Array.isArray(body[key]) && body[key].length > 0,
-  );
+/**
+ * The floor the shared contract defines, applied before the batch is parsed so
+ * a caller below it reads a sentence naming the remedy rather than a list of
+ * fields it has never heard of.
+ */
+function assertReadableSyncProtocol(value: unknown): void {
+  const body = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const decision = resolveSyncProtocolVersion((body as Record<string, unknown>)['protocolVersion']);
+  if (decision.compatibility === 'readable') return;
+  const message = syncProtocolRefusalMessage(decision, 'chat sync');
+  if (decision.compatibility === 'too_new') throw createError.validation(message);
+  throw createError.clientUpdateRequired(message);
 }
 
 function isLegacyNoopPush(value: unknown): boolean {
@@ -748,19 +787,6 @@ function isLegacyNoopPush(value: unknown): boolean {
   if ('protocolVersion' in body) return false;
   return ['conversations', 'messages', 'artifacts'].every(
     (key) => body[key] === undefined || (Array.isArray(body[key]) && body[key].length === 0),
-  );
-}
-
-function syncProtocolUpgradeRequired(): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: 'SYNC_PROTOCOL_UPGRADE_REQUIRED',
-        message: 'Upgrade this client before pushing Managed Cloud chat changes.',
-      },
-      requiredProtocolVersion: 2,
-    },
-    { status: 409 },
   );
 }
 

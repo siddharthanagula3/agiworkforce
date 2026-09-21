@@ -1,0 +1,35 @@
+{
+  "$comment": "What every scheduled route owes, measured by scripts/check-cron-contract.mjs against apps/web/app/api/cron and vercel.json. vercel.json is changed only through a reviewed deploy change, so a collision recorded here is one the guard refuses to let grow.",
+  "allowedRuntimes": ["nodejs"],
+  "minSeconds": 30,
+  "maxSeconds": 800,
+  "heavySeconds": 300,
+  "boundedByConstruction": [
+    {
+      "id": "enforce-billing-retention",
+      "reason": "it walks FINANCIAL_RETENTION_RULES, a constant in the repository, and each rule is one bounded statement"
+    },
+    {
+      "id": "evaluate-model-rollout",
+      "reason": "it walks the alerts one evaluation produced, which is at most one per rollout under evaluation"
+    },
+    {
+      "id": "reconcile-provider-costs",
+      "reason": "it walks PROVIDER_COST_REPORT_CLIENTS, a constant list of provider adapters"
+    }
+  ],
+  "allowedCollisions": [
+    {
+      "id": "enforce-domain-retention + purge-deleted-organizations",
+      "reason": "both are scheduled at 40 4 every day and both sweep organization-scoped rows; the schedules live in vercel.json, which only a reviewed deploy change may edit",
+      "fix": "in vercel.json move /api/cron/enforce-domain-retention from \"40 4 * * *\" to \"50 4 * * *\", the next free slot in the nightly retention block"
+    }
+  ],
+  "overlapSafe": [
+    {
+      "id": "drain-background-jobs",
+      "mechanism": "every job is taken under a lease before it runs, so two drains claim disjoint work and a job a lost worker held is only re-claimed once its lease expires; the route also stops at DRAIN_BUDGET_MS, which is below its maxDuration",
+      "reason": "the queue is drained every five minutes and a burst must be allowed to use the whole window"
+    }
+  ]
+}

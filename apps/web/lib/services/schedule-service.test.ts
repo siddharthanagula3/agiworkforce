@@ -7,9 +7,11 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
 }));
 
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { ACCOUNT_STATUSES, accountAccessDecision } from '@/lib/auth/account-status';
 
 import {
   ScheduleConflictError,
+  UNATTENDED_RUN_DENIED_STATUSES,
   ScheduleNotFoundError,
   ScheduleValidationError,
   claimDueScheduleRuns,
@@ -30,6 +32,7 @@ import {
   type ScheduledExecutionResult,
   type ScheduledTaskExecutor,
 } from './schedule-service';
+import { MEMBERSHIP_STATUSES_THAT_MAY_ACT } from '@/lib/server/workspace-scope';
 
 function createSchedule(
   db: DatabaseAdapter,
@@ -603,11 +606,39 @@ describe('schedule service persistence', () => {
     expect(sql).toMatch(/expired_candidates[\s\S]*for update skip locked[\s\S]*limit \$1/i);
     expect(sql).toMatch(/is_enabled = true/i);
     expect(sql).toMatch(/status = 'active'/i);
-    expect(params).toEqual([7, 45]);
+    expect(params).toEqual([
+      7,
+      45,
+      UNATTENDED_RUN_DENIED_STATUSES,
+      MEMBERSHIP_STATUSES_THAT_MAY_ACT,
+    ]);
+    expect(sql).toMatch(/organization_members member/i);
     expect(claims[0]?.scope).toEqual({
       userId: 'user-1',
       organizationId: '11111111-1111-4111-8111-111111111111',
     });
+  });
+
+  /**
+   * A scheduled run is unattended, so the sign-in page that would turn a closed
+   * account away never gets a chance to. The claim refuses instead.
+   */
+  it('refuses to claim for an owner the product would not let sign in', async () => {
+    const query = vi.fn().mockResolvedValue([]);
+
+    await claimDueScheduleRuns(database(query), { limit: 7 });
+
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/profile\.account_status = any\(\$3::text\[\]\)/i);
+    expect(sql).toMatch(/erasure_tombstones/i);
+    const denied = params[2] as string[];
+    for (const status of ACCOUNT_STATUSES) {
+      const refused = !accountAccessDecision(status).allowed;
+      expect(denied.includes(status)).toBe(refused);
+    }
+    expect(denied).toContain('suspended');
+    expect(denied).toContain('banned');
+    expect(denied).not.toContain('active');
   });
 
   it('uses the canonical task_id schema and owner join for paginated run history', async () => {

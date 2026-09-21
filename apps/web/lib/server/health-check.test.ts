@@ -30,12 +30,13 @@ import {
   type UpstashRedisLike,
 } from '@agiworkforce/key-value';
 
+import { PRODUCTION_DEPENDENCIES } from '@/lib/config/dependency-readiness';
+import { recordConfigurationState } from '@/lib/observability/metrics';
+
 import { runHealthChecks } from './health-check';
 function asKeyValueStore(client: unknown): KeyValueStore {
   return createUpstashKeyValueStore(client as UpstashRedisLike);
 }
-
-const DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY = 'agi-health-probe:database-last-success-at';
 
 function fakeRedis() {
   return { get: mocks.redisGet, set: mocks.redisSet };
@@ -104,48 +105,63 @@ describe('runHealthChecks core dependency readiness', () => {
   });
 });
 
-describe('runHealthChecks database throttle', () => {
-  it('probes and records success when redis has no prior probe', async () => {
+describe('runHealthChecks database probe', () => {
+  it('observes the database on every run, whatever an earlier run recorded', async () => {
     mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(null);
+    mocks.redisGet.mockResolvedValue(Date.now());
 
     const result = await runHealthChecks();
 
     expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
     expect(result.checks.database.status).toBe('healthy');
-    expect(mocks.redisSet).toHaveBeenCalledWith(
-      DATABASE_PROBE_LAST_SUCCESS_REDIS_KEY,
-      expect.any(Number),
-      { ex: 3_600 },
-    );
   });
 
-  it('skips the database probe when the last success is within the interval', async () => {
+  it('reports the database unhealthy however recently a probe last succeeded', async () => {
     mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(Date.now() - 10 * 60 * 1_000);
+    mocks.redisGet.mockResolvedValue(Date.now());
+    mocks.neonQuery.mockImplementation(async (sql: string) => {
+      if (sql === 'select 1') throw new Error('ECONNREFUSED');
+      return [{ missing: 0 }];
+    });
 
     const result = await runHealthChecks();
 
-    expect(mocks.neonQuery).not.toHaveBeenCalledWith('select 1');
+    expect(result.checks.database).toEqual({ status: 'unhealthy', message: 'unavailable' });
+    expect(result.status).toBe('unhealthy');
+  });
+
+  it('reports the search index from the index itself however recently it answered', async () => {
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
+    mocks.redisGet.mockResolvedValue(Date.now());
+    mocks.neonQuery.mockImplementation(async (sql: string) =>
+      sql.includes('to_regclass') ? [{ missing: 2 }] : [{ '?column?': 1 }],
+    );
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.search).toEqual({ status: 'unhealthy', message: 'index schema missing' });
+  });
+
+  it('leaves no stored verdict behind for a later run to answer from', async () => {
+    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
+    mocks.redisGet.mockResolvedValue(null);
+
+    await runHealthChecks();
+
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+  });
+
+  it('queries the queue table on the same run, so the probe adds no connection', async () => {
+    await runHealthChecks();
+
     expect(mocks.neonQuery).toHaveBeenCalledWith(
       expect.stringContaining('from public.background_jobs'),
       [],
     );
-    expect(result.checks.database.status).toBe('healthy');
-    expect(mocks.redisSet).not.toHaveBeenCalled();
-  });
-
-  it('probes again once the last success ages past the interval', async () => {
-    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(Date.now() - 61 * 60 * 1_000);
-
-    const result = await runHealthChecks();
-
     expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
-    expect(result.checks.database.status).toBe('healthy');
   });
 
-  it('falls back to probing when redis is unavailable', async () => {
+  it('probes when no key-value store is configured', async () => {
     mocks.getKeyValueStore.mockReturnValue(null);
 
     const result = await runHealthChecks();
@@ -153,26 +169,69 @@ describe('runHealthChecks database throttle', () => {
     expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
     expect(result.checks.database.status).toBe('healthy');
   });
+});
 
-  it('falls back to probing when redis throws', async () => {
-    mocks.getKeyValueStore.mockImplementation(() => {
-      throw new Error('redis unavailable');
+describe('runHealthChecks dependency enumeration', () => {
+  it('reports one entry per registered production dependency, in registry order', async () => {
+    const result = await runHealthChecks();
+
+    expect(result.dependencies).toBeDefined();
+    expect((result.dependencies ?? []).map((entry) => entry.id)).toEqual(
+      PRODUCTION_DEPENDENCIES.map((dependency) => dependency.id),
+    );
+  });
+
+  it('says unobserved for a dependency no check here probes, rather than ok', async () => {
+    const result = await runHealthChecks();
+
+    const identity = (result.dependencies ?? []).find((entry) => entry.id === 'identity');
+    expect(identity).toMatchObject({ criticality: 'core', observation: 'unobserved' });
+  });
+
+  it('separates a dependency that is not configured from one that is failing', async () => {
+    delete process.env['E2B_API_KEY'];
+    mocks.neonQuery.mockImplementation(async (sql: string) => {
+      if (sql === 'select 1') throw new Error('ECONNREFUSED');
+      return [{ missing: 0 }];
     });
 
     const result = await runHealthChecks();
 
-    expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
-    expect(result.checks.database.status).toBe('healthy');
+    expect(result.dependencies).toContainEqual(
+      expect.objectContaining({ id: 'database', observation: 'failing' }),
+    );
+    expect(result.dependencies).toContainEqual(
+      expect.objectContaining({ id: 'code_execution', observation: 'unconfigured' }),
+    );
   });
 
-  it('never records success on a failed probe, so the next run retries', async () => {
-    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(null);
-    mocks.neonQuery.mockRejectedValue(new Error('ECONNREFUSED'));
+  it('names the failure counter and dashboard the signal registry declares', async () => {
+    const result = await runHealthChecks();
+
+    expect(result.dependencies).toContainEqual(
+      expect.objectContaining({ id: 'database', signal: 'database', dashboard: 'database-health' }),
+    );
+  });
+
+  it('carries no environment variable name into the result', async () => {
+    delete process.env['E2B_API_KEY'];
 
     const result = await runHealthChecks();
 
-    expect(result.checks.database.status).toBe('unhealthy');
-    expect(mocks.redisSet).not.toHaveBeenCalled();
+    expect(JSON.stringify(result.dependencies)).not.toContain('E2B_API_KEY');
+  });
+
+  it('makes a boot-time configuration finding readable from the health surface', async () => {
+    recordConfigurationState({ component: 'environment-production-values', state: 'invalid' });
+    recordConfigurationState({ component: 'platform-keys', state: 'ok' });
+
+    const result = await runHealthChecks();
+
+    expect(result.configuration).toContainEqual(
+      expect.objectContaining({ component: 'environment-production-values', state: 'invalid' }),
+    );
+    expect(result.configuration).toContainEqual(
+      expect.objectContaining({ component: 'platform-keys', state: 'ok' }),
+    );
   });
 });

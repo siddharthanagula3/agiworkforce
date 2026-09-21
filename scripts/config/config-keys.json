@@ -1,0 +1,47 @@
+{
+  "$comment": "Environment keys apps/web reads that the config key registry in apps/web/lib/validate-env.ts does not declare, measured by scripts/check-config-keys.mjs on 2026-09-20. Each entry says where the decision lives instead. The guard refuses a new unclassified key and refuses an entry nothing reads any more.",
+  "unregistered": [
+    {
+      "key": "HOSTNAME",
+      "reason": "set by the build or by the hosting platform rather than by an operator, so it has no owner to declare and no environment it can be restricted to"
+    },
+    {
+      "key": "NEXT_PHASE",
+      "reason": "set by the build or by the hosting platform rather than by an operator, so it has no owner to declare and no environment it can be restricted to"
+    },
+    {
+      "key": "NEXT_PUBLIC_VERCEL_ENV",
+      "reason": "set by the build or by the hosting platform rather than by an operator, so it has no owner to declare and no environment it can be restricted to"
+    },
+    {
+      "key": "NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA",
+      "reason": "set by the build or by the hosting platform rather than by an operator, so it has no owner to declare and no environment it can be restricted to"
+    },
+    {
+      "key": "VERCEL_GIT_COMMIT_SHA",
+      "reason": "set by the build or by the hosting platform rather than by an operator, so it has no owner to declare and no environment it can be restricted to"
+    },
+    {
+      "key": "VERCEL_REGION",
+      "reason": "set by the build or by the hosting platform rather than by an operator, so it has no owner to declare and no environment it can be restricted to"
+    }
+  ],
+  "registeredButUnread": [
+    {
+      "key": "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+      "reason": "read by the identity package and by the root layout outside the scanned roots"
+    },
+    {
+      "key": "AGI_ALLOW_REMOTE_DATABASE",
+      "reason": "read by packages/platform/data-layer, which is where the isolation rule it overrides lives"
+    },
+    {
+      "key": "AGI_E2B_COMPUTE_MICROUSD_PER_SECOND",
+      "reason": "read by the cost ledger in packages, and warned about by validateRequiredEnvVars"
+    },
+    {
+      "key": "AGI_OTEL_EXPORTER_ENDPOINT",
+      "reason": "read by packages/platform/observability, which owns the exporter"
+    }
+  ]
+}

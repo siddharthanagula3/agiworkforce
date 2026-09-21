@@ -12,6 +12,7 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 interface RuleOutcome {
   table: string;

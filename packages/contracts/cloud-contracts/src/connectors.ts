@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// The shape the connector list is written against, so a client that meets a
+// newer one can say so instead of dropping rows it does not understand.
+export const CONNECTOR_CONTRACT_SCHEMA_VERSION = 1;
+export const CONNECTOR_CONTRACT_MIN_SCHEMA_VERSION = 1;
+
 export const MANAGED_CLOUD_CONNECTORS_PATH = '/api/connectors';
 
 export const CONNECTOR_SOURCES = ['user', 'github-app', 'custom', 'oauth'] as const;

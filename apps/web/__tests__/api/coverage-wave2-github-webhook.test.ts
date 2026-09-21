@@ -45,6 +45,15 @@ const mockGetInstallationAccessToken = vi.fn();
 const mockGetPrDiff = vi.fn();
 const mockPostIssueComment = vi.fn();
 
+vi.mock('@/lib/services/organization-policy-code-gate', () => ({
+  assertWorkspaceCodeAccess: vi.fn(async () => ({
+    allowed: true,
+    code: 'allowed',
+    reason: '',
+    control: null,
+    organizationId: null,
+  })),
+}));
 vi.mock('@/lib/github-app', () => ({
   listPrReviewCommentBodies: vi.fn(async () => []),
   postPrReview: vi.fn(async () => undefined),

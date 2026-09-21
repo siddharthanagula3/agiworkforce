@@ -13,6 +13,7 @@ import { TERMINAL_AGENT_TASK_STATES, AGENT_EVENT_SCHEMA_VERSION } from '@agiwork
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   APPROVAL_CHECKPOINT_TTL_HOURS,
+  EXECUTOR_HELD_TASK_STATES,
   appendCloudAgentEvent,
   appendCloudAgentEvents,
   claimCloudAgentApprovalCheckpoint,
@@ -224,13 +225,14 @@ describe('cloud agent run service', () => {
 
     expect(active?.id).toBe(RUN_ROW.id);
     const [sql, params] = vi.mocked(db.query).mock.calls[0]!;
-    expect(sql).toMatch(/state in \('queued', 'planning', 'running', 'resuming'\)/i);
+    expect(sql).toMatch(/state = any\(\$4::text\[\]\)/i);
     expect(sql).toMatch(/cancellation_requested_at is null/i);
     expect(sql).toMatch(/request_id <> \$3/i);
     expect(params).toEqual([
       'user-1',
       '0190a000-0000-7000-8000-000000000099',
       'agi.chat.web.send.turn-2',
+      [...EXECUTOR_HELD_TASK_STATES],
     ]);
   });
 
@@ -247,6 +249,7 @@ describe('cloud agent run service', () => {
       'user-1',
       '0190a000-0000-7000-8000-000000000099',
       null,
+      [...EXECUTOR_HELD_TASK_STATES],
     ]);
   });
 
@@ -308,9 +311,7 @@ describe('cloud agent run service', () => {
 
     expect(db.query).toHaveBeenNthCalledWith(
       2,
-      expect.stringMatching(
-        /when \$4::text is not null and \$5::bigint >= runs\.last_event_sequence/i,
-      ),
+      expect.stringMatching(/when \$5::bigint < runs\.last_event_sequence then runs\.state/i),
       [RUN_ROW.id, 'user-1', 2, 'ready_for_review', 2, TERMINAL_STATE_VALUES],
     );
     expect(run.state).toBe('ready_for_review');
@@ -797,9 +798,7 @@ describe('cloud agent run service', () => {
     );
     expect(db.query).toHaveBeenNthCalledWith(
       2,
-      expect.stringMatching(
-        /set state = case when runs\.state = any\(\$5::text\[\]\) then runs\.state else \$3 end/i,
-      ),
+      expect.stringMatching(/when runs\.state = any\(\$5::text\[\]\) then runs\.state/i),
       [RUN_ROW.id, 'user-1', 'failed', TERMINAL_STATE_VALUES, ['partial', 'timed_out']],
     );
   });
@@ -845,7 +844,7 @@ describe('cloud agent run service', () => {
     expect(db.query).toHaveBeenNthCalledWith(
       7,
       expect.stringMatching(/state = 'awaiting_input'/i),
-      [RUN_ROW.id, 'user-1'],
+      [RUN_ROW.id, 'user-1', TERMINAL_STATE_VALUES],
     );
     // All three checkpoint events land in ONE insert, not one transaction each.
     expect(db.query).toHaveBeenNthCalledWith(
@@ -1117,7 +1116,7 @@ describe('cloud agent run service', () => {
       expect(db.query).toHaveBeenNthCalledWith(
         7,
         expect.stringMatching(/state = 'awaiting_input'/i),
-        [RUN_ROW.id, 'user-1'],
+        [RUN_ROW.id, 'user-1', TERMINAL_STATE_VALUES],
       );
     });
 

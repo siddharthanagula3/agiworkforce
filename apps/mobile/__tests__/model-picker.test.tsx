@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -266,11 +266,20 @@ describe('ModelPickerSheet', () => {
     }
   });
 
-  it('offers the same registry-owned Auto modes in AGI Cloud', () => {
+  it('offers the same registry-owned Auto modes in AGI Cloud on a paid plan', () => {
+    useTierStore.setState({ tier: 'pro' });
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     for (const mode of AUTO_MODES) {
       expect(getByLabelText(`${mode.name}: ${mode.description}`)).toBeTruthy();
+    }
+  });
+
+  it('does not offer Auto in AGI Cloud on the free plan, which the server would refuse', () => {
+    const { queryByLabelText } = renderPicker({ modelScope: 'cloud' });
+
+    for (const mode of AUTO_MODES) {
+      expect(queryByLabelText(`${mode.name}: ${mode.description}`)).toBeNull();
     }
   });
 
@@ -357,12 +366,10 @@ describe('ModelPickerSheet', () => {
       readySystemModelIds: [],
       jobs: {},
     });
-    const { getByLabelText } = renderPicker();
-    // The sheet reads what is installed asynchronously and marks every
-    // on-device model "download required" until that resolves. Pressing before
-    // the read settles selects a model the sheet believes is absent, and the
-    // wait below then never sees the store change.
-    await act(async () => {});
+    const { getByLabelText, queryByTestId } = renderPicker();
+    // Pressing before the installed read settles selects a model the sheet
+    // believes is absent, so wait for the sheet's own loading row to go.
+    await waitFor(() => expect(queryByTestId('model-picker-loading')).toBeNull());
 
     fireEvent.press(getByLabelText(/AGI Lite/));
 

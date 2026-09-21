@@ -12,11 +12,10 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { generateCliUserCode } from '@/lib/server/device-codes';
 import { CLI_USER_CODE_PATTERN } from '@/lib/validations/device';
+import { DEVICE_CODE_EXPIRES_SECONDS, DEVICE_POLL_INTERVAL_SECONDS } from '../grant-policy';
 
 export const runtime = 'nodejs';
 
-const DEVICE_CODE_EXPIRES_SECONDS = 900;
-const POLL_INTERVAL_SECONDS = 5;
 const DEVICE_SURFACES = {
   cli: { name: 'AGI CLI', type: 'cli' },
   desktop: { name: 'AGI Desktop', type: 'desktop' },
@@ -90,7 +89,7 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
       user_code: userCode,
       verification_uri: verificationUri,
       verification_uri_complete: `${verificationUri}?${verificationParams.toString()}`,
-      interval: POLL_INTERVAL_SECONDS,
+      interval: DEVICE_POLL_INTERVAL_SECONDS,
       expires_in: DEVICE_CODE_EXPIRES_SECONDS,
     },
     { headers: { 'Cache-Control': 'no-store' } },
@@ -98,7 +97,7 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
 }
 
 async function handleDeviceCodeLookup(request: NextRequest): Promise<NextResponse> {
-  const rateLimitResponse = await withRateLimit(request, 'device-link');
+  const rateLimitResponse = await withRateLimit(request, 'device-code-lookup');
   if (rateLimitResponse) return rateLimitResponse;
 
   await getClerkAuthUser(request);

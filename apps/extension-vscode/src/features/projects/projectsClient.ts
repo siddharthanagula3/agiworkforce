@@ -9,8 +9,7 @@ import {
   type ManagedCloudProjectsClient,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { getExtensionUserAgent } from '../../platform/version';
-import { SOURCE_SURFACE } from '../../platform/surface';
+import { platformRequestHeaders } from '../../platform/platformHeaders';
 
 export interface ProjectKnowledgeReader {
   listKnowledgeFiles(projectId: string): Promise<ManagedCloudProjectKnowledgeFile[]>;
@@ -23,16 +22,13 @@ export interface ProjectsWorkspace {
 }
 
 export type ProjectsWorkspaceResolution =
-  | { status: 'ready'; workspace: ProjectsWorkspace }
-  | { status: 'signed-out' };
+  { status: 'ready'; workspace: ProjectsWorkspace } | { status: 'signed-out' };
 
 function hostedHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
-    'User-Agent': getExtensionUserAgent(),
-    'X-Client': 'vscode-extension',
-    'X-AGI-Surface': SOURCE_SURFACE,
+    ...platformRequestHeaders(),
   };
 }
 

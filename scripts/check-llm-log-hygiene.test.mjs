@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { SCANNED_ROOTS, logHygieneViolations, productFiles } from './check-llm-log-hygiene.mjs';
+import {
+  SCANNED_ROOTS,
+  logHygieneViolations,
+  productFiles,
+  withoutMeasurements,
+} from './check-llm-log-hygiene.mjs';
 
 function fixtureRoot(files) {
   const root = mkdtempSync(path.join(tmpdir(), 'llm-log-hygiene-'));
@@ -87,4 +92,19 @@ test('the real repository roots are scanned and clean', () => {
 
   assert.deepEqual(violations, []);
   assert.ok(sites > 50, 'the guard must have log call sites to measure');
+});
+
+test('a measurement of a banned value is the count the rule asks for', () => {
+  assert.equal(
+    withoutMeasurements('logger.info({ promptLength: prompt.length })').includes('prompt.'),
+    false,
+  );
+  assert.equal(withoutMeasurements('logger.info({ prompt })'), 'logger.info({ prompt })');
+});
+
+test('the scanned roots cover the whole server, not three directories inside it', () => {
+  assert.ok(SCANNED_ROOTS.includes('apps/web/app'), 'every route logs');
+  assert.ok(SCANNED_ROOTS.includes('apps/web/lib'), 'every service logs');
+  const { sites } = logHygieneViolations();
+  assert.ok(sites > 1000, `a scope this narrow cannot be the whole server: ${sites} call sites`);
 });

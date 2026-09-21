@@ -4,6 +4,11 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { LIBRARY_DEFAULT_SORT, type LibrarySort } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { deleteStoredMedia } from '@/lib/server/media-storage';
+import {
+  legalHoldExclusion,
+  legalHoldPredicate,
+  refuseHeldDeletion,
+} from '@/lib/services/legal-hold-gate';
 import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
@@ -753,36 +758,49 @@ export async function saveTemporaryChatAssetToLibrary(
   }
 }
 
+// Both statements carry the predicate, so a hold placed between the read and
+// the delete still wins. A held asset is refused, never silently kept.
 export async function permanentlyDeleteMediaAsset(
   userId: string,
   id: string,
   db: DatabaseAdapter,
 ): Promise<boolean> {
+  const held = legalHoldPredicate('file', { alias: 'asset', nextParamIndex: 4 });
+  const exclusion = legalHoldExclusion('file', { alias: 'asset', nextParamIndex: 4 });
   try {
     return await db.transaction(async (tx) => {
       const organizationId = await resolveActiveOrganizationId(tx, userId);
-      const [asset] = await tx.query<{ storage_pathname: string | null }>(
-        `select storage_pathname
-           from public.media_assets
-          where id = $1 and user_id = $2
-            and organization_id is not distinct from $3::uuid
-            and deleted_at is not null
+      const scope = `asset.id = $1 and asset.user_id = $2
+            and asset.organization_id is not distinct from $3::uuid
+            and asset.deleted_at is not null`;
+
+      const [asset] = await tx.query<{ storage_pathname: string | null; held: boolean }>(
+        `select asset.storage_pathname, ${held.sql} as held
+           from public.media_assets asset
+          where ${scope}
           for update`,
-        [id, userId, organizationId],
+        [id, userId, organizationId, ...held.params],
       );
       if (!asset) return false;
+      if (asset.held) {
+        await refuseHeldDeletion({
+          resourceType: 'file',
+          resourceId: id,
+          userId,
+          organizationId,
+        });
+      }
 
       if (asset.storage_pathname) {
         await deleteStoredMedia(asset.storage_pathname);
       }
 
       const deleted = await tx.query<{ id: string }>(
-        `delete from public.media_assets
-          where id = $1 and user_id = $2
-            and organization_id is not distinct from $3::uuid
-            and deleted_at is not null
-          returning id`,
-        [id, userId, organizationId],
+        `delete from public.media_assets asset
+          where ${scope}
+            and ${exclusion.sql}
+          returning asset.id`,
+        [id, userId, organizationId, ...exclusion.params],
       );
       if (deleted.length !== 1) {
         throw new Error('The media asset changed while permanent deletion was in progress.');

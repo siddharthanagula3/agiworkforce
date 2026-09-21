@@ -211,9 +211,11 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import {
-  applyProjectContext,
+  fitProjectContextBlocks,
   loadProjectContext,
-  renderProjectContext,
+  MAX_PROJECT_CONTEXT_CHARS,
+  renderProjectContextBlocks,
+  type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
 import {
@@ -1110,11 +1112,14 @@ export function collectManagedPromptMaterials(request: ChatCompletionRequest): s
  * boundary ahead of its own dynamic time context; `dynamicSystemAddition`
  * (skill/memory content) is inserted right after it, and
  * `customInstructionsPreamble` (static, per-user config) joins the stable
- * side.
+ * side. `projectInstruction` joins it too: the workspace sets it once, so it
+ * is stable for the conversation, and it outranks the account's own
+ * preference, so it is ordered by layer rather than by arrival.
  */
 export function composeManagedSystemPreamble(input: {
   capabilityPreamble: string | null;
   customInstructionsPreamble: string | null | undefined;
+  projectInstruction?: string | null;
   dynamicSystemAddition: string;
 }): string {
   const withDynamicAddition = prependSystemPromptAdditionAfterCacheBoundary({
@@ -1124,6 +1129,7 @@ export function composeManagedSystemPreamble(input: {
   const split = splitSystemPromptCacheBoundary(withDynamicAddition);
   const stableBlock = orderInstructionBlocks([
     { layer: 'system', text: split ? split.stablePrefix : withDynamicAddition },
+    { layer: 'project', text: input.projectInstruction ?? '' },
     { layer: 'personalized', text: input.customInstructionsPreamble ?? '' },
   ])
     .map((block) => block.text)
@@ -1820,6 +1826,22 @@ export function resolveTurnPromptCache(input: {
 }
 
 /**
+ * Whether a second copy of this turn's messages may be sent to a shadow route.
+ *
+ * The mirror is a duplicate of the user's prompt sent to a model the user did
+ * not ask for, purely to measure a candidate. A Temporary Chat promises nothing
+ * outlives the turn and a zero-retention workspace promises the provider keeps
+ * nothing; a mirror breaks both, so the same privacy class that refuses a
+ * cached prefix refuses a mirror.
+ */
+export function turnMayBeShadowMirrored(input: {
+  temporaryChat: boolean;
+  zeroDataRetentionOnly: boolean;
+}): boolean {
+  return resolvePromptCachePrivacyClass(input) === 'standard';
+}
+
+/**
  * The residency region routing must admit against, or `null` when the workspace
  * has asked for nothing beyond the region this deployment already processes in.
  *
@@ -2369,12 +2391,14 @@ export async function processRequest(
         ok: true;
         isTemporary: boolean;
         projectId: string | null;
+        projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
       }
     | ProcessFailure
   > = chatRequest.conversation_id
     ? (async () => {
         let projectSources: ProjectFileCitation[] = [];
+        let projectBlocks: readonly ProjectContextBlock[] = [];
         try {
           const scoped = await scopedDbPromise;
           if (scoped.userId !== userId) {
@@ -2444,10 +2468,8 @@ export async function processRequest(
                   ),
                 };
               }
-              const rendered = renderProjectContext(projectContext);
-              if (rendered.prompt) {
-                applyProjectContext(chatRequest, rendered.prompt);
-              }
+              const rendered = renderProjectContextBlocks(projectContext);
+              projectBlocks = fitProjectContextBlocks(rendered.blocks, MAX_PROJECT_CONTEXT_CHARS);
               projectSources = rendered.citations;
             } catch (error) {
               logger.error(
@@ -2480,6 +2502,7 @@ export async function processRequest(
             ok: true,
             isTemporary: ownedRows[0].is_temporary,
             projectId: ownedRows[0].project_id,
+            projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
           };
         } catch (error) {
@@ -2502,7 +2525,7 @@ export async function processRequest(
           };
         }
       })()
-    : Promise.resolve({ ok: true, isTemporary: false, projectId: null });
+    : Promise.resolve({ ok: true, isTemporary: false, projectId: null, projectBlocks: [] });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
     const platform = moderateManagedPrompt({
@@ -2577,6 +2600,8 @@ export async function processRequest(
 
   const conversationIsTemporary = ownership.isTemporary;
   const conversationProjectId = ownership.projectId;
+  const projectInstructionBlock =
+    ownership.projectBlocks.find((block) => block.layer === 'project')?.text ?? null;
 
   const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
     ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
@@ -2650,10 +2675,22 @@ export async function processRequest(
 
   const dynamicSystemMessageRefs = new Map<object, InstructionLayer>();
 
+  // The project instruction is stable for the conversation and joins the cached
+  // preamble below. What the project merely supplies to read varies with the
+  // question, so each remaining block is carried at its own layer instead.
+  for (const block of ownership.projectBlocks) {
+    if (block.layer === 'project') continue;
+    chatRequest.messages.unshift({ role: 'system', content: block.text });
+    dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, block.layer);
+  }
+
   if (chatRequest.mcp_context) {
     try {
       const context = await loadSelectedMcpContext(userId, chatRequest.mcp_context);
-      if (context) chatRequest.messages.unshift({ role: 'system', content: context });
+      if (context) {
+        chatRequest.messages.unshift({ role: 'system', content: context });
+        dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, 'untrusted_context');
+      }
     } catch (error) {
       if (error instanceof McpContextError) {
         return {
@@ -4222,6 +4259,7 @@ export async function processRequest(
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
+      projectInstruction: projectInstructionBlock,
       dynamicSystemAddition: dynamicTurnInstruction,
     });
     const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
@@ -4239,7 +4277,7 @@ export async function processRequest(
     }
     if (dynamicPreambleBlock) {
       // Inserted after every other leading system message (the client's own
-      // system text, MCP context, JSON/research mode directives) so those
+      // system text, JSON/research mode directives) so those
       // stay ahead of the boundary too: none of them vary with the timestamp
       // or matched skills/memories, so none belong in the uncacheable tail.
       const firstNonSystemIndex = internalMessages.findIndex((msg) => msg.role !== 'system');
@@ -4253,14 +4291,25 @@ export async function processRequest(
         tool_call_id: undefined,
       });
     }
-  } else if (dynamicTurnInstruction) {
-    internalMessages.unshift({
-      role: 'system',
-      content: dynamicTurnInstruction,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+  } else {
+    if (dynamicTurnInstruction) {
+      internalMessages.unshift({
+        role: 'system',
+        content: dynamicTurnInstruction,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
+    }
+    if (projectInstructionBlock) {
+      internalMessages.unshift({
+        role: 'system',
+        content: projectInstructionBlock,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
+    }
   }
 
   const executionRequirement = resolveCodeExecutionRequirement({
@@ -4371,7 +4420,10 @@ export async function processRequest(
   const failoverRoutes =
     freeTrialEnabled && !freeLanePlan ? [] : buildFailoverRoutes(routeDecision.fallbacks);
 
-  if (routeDecision.shadow) {
+  if (
+    routeDecision.shadow &&
+    turnMayBeShadowMirrored({ temporaryChat: conversationIsTemporary, zeroDataRetentionOnly })
+  ) {
     scheduleShadowDispatch({
       shadow: routeDecision.shadow,
       servedTrace: routingTrace,

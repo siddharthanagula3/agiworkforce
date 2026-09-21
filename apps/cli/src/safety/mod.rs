@@ -6,6 +6,8 @@ pub(crate) mod command_shape;
 mod dangerous_commands;
 pub(crate) mod filesystem_effect;
 pub(crate) mod network_target;
+pub(crate) mod program;
+pub mod push_consent;
 
 pub use dangerous_commands::{bypasses_git_hooks, git_hook_bypass_reason, DANGEROUS_COMMANDS};
 pub(crate) use filesystem_effect::classify_filesystem_effect;
@@ -46,6 +48,35 @@ pub enum CommandSafety {
 /// Special case: `xargs` is `Safe` only when it appears after a pipe from a
 /// safe command. As a standalone command it is `Unknown`.
 pub fn classify_command(command: &str) -> CommandSafety {
+    let classification = classify_command_at_depth(command, 0);
+    // A line that does not tokenise is not the arguments it appears to have, so
+    // a safe-looking program name proves nothing about what would run.
+    if classification == CommandSafety::Safe && shlex::split(command.trim()).is_none() {
+        return CommandSafety::Unknown;
+    }
+    classification
+}
+
+/// How deep a wrapper chain (`sh -c 'sh -c ...'`) is followed before the command
+/// is simply treated as not understood.
+const MAX_WRAPPER_DEPTH: usize = 8;
+
+fn escalate(left: CommandSafety, right: CommandSafety) -> CommandSafety {
+    fn rank(value: CommandSafety) -> u8 {
+        match value {
+            CommandSafety::Safe => 0,
+            CommandSafety::Unknown => 1,
+            CommandSafety::Dangerous => 2,
+        }
+    }
+    if rank(right) > rank(left) {
+        right
+    } else {
+        left
+    }
+}
+
+fn classify_command_at_depth(command: &str, depth: usize) -> CommandSafety {
     let trimmed = command.trim();
 
     // Before the subshell check, see if the top-level command itself is dangerous.
@@ -88,7 +119,7 @@ pub fn classify_command(command: &str) -> CommandSafety {
     let mut prev_safe = false;
 
     for segment in &segments {
-        let classification = classify_single_segment(segment, prev_safe);
+        let classification = classify_single_segment(segment, prev_safe, depth);
         match classification {
             CommandSafety::Dangerous => return CommandSafety::Dangerous,
             CommandSafety::Unknown => all_safe = false,
@@ -238,7 +269,28 @@ fn demote_safe_on_redirection(classification: CommandSafety, segment: &str) -> C
 }
 
 /// Classify a single command segment (no pipes/chains).
-fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety {
+fn classify_single_segment(segment: &str, prev_was_safe: bool, depth: usize) -> CommandSafety {
+    let classification = classify_named_program(segment, prev_was_safe, depth);
+    demote_safe_on_untrusted_spelling(classification, segment)
+}
+
+/// The command allowlist names system tools. A program the workspace supplies
+/// shares only the name, so its verdict never reaches `Safe`.
+fn demote_safe_on_untrusted_spelling(
+    classification: CommandSafety,
+    segment: &str,
+) -> CommandSafety {
+    if classification != CommandSafety::Safe {
+        return classification;
+    }
+    let first_word = segment.split_whitespace().next().unwrap_or("");
+    if first_word.is_empty() || program::program_spelling_is_trusted(first_word) {
+        return classification;
+    }
+    CommandSafety::Unknown
+}
+
+fn classify_named_program(segment: &str, prev_was_safe: bool, depth: usize) -> CommandSafety {
     let trimmed = segment.trim();
     if trimmed.is_empty() {
         return CommandSafety::Safe;
@@ -253,6 +305,19 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
     for prefix in DANGEROUS_PREFIXES {
         if normalized_segment.starts_with(prefix) {
             return CommandSafety::Dangerous;
+        }
+    }
+
+    // A wrapper's arguments are another command line. Classifying only the
+    // wrapper reads `sh -c 'rm -rf /'` as the unremarkable program `sh`.
+    if depth < MAX_WRAPPER_DEPTH {
+        if let Some(payload) = program::wrapped_payload(trimmed) {
+            let own = if DC.contains(&base_cmd) {
+                CommandSafety::Dangerous
+            } else {
+                CommandSafety::Unknown
+            };
+            return escalate(own, classify_command_at_depth(&payload, depth + 1));
         }
     }
 
@@ -347,7 +412,7 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
     // xargs is safe only when piped from a safe command and its payload is
     // also safe. Standalone xargs or mutating payloads require a prompt.
     if base_cmd == "xargs" {
-        return classify_xargs(trimmed, prev_was_safe);
+        return classify_xargs(trimmed, prev_was_safe, depth);
     }
 
     CommandSafety::Unknown
@@ -403,7 +468,7 @@ fn classify_ip(command: &str) -> CommandSafety {
     CommandSafety::Safe
 }
 
-fn classify_xargs(segment: &str, prev_was_safe: bool) -> CommandSafety {
+fn classify_xargs(segment: &str, prev_was_safe: bool, depth: usize) -> CommandSafety {
     if !prev_was_safe {
         return CommandSafety::Unknown;
     }
@@ -413,7 +478,7 @@ fn classify_xargs(segment: &str, prev_was_safe: bool) -> CommandSafety {
 
     match xargs_payload(segment) {
         None => CommandSafety::Safe,
-        Some(payload) => classify_single_segment(&payload, false),
+        Some(payload) => classify_single_segment(&payload, false, depth),
     }
 }
 
@@ -1390,6 +1455,87 @@ mod tests {
     }
 
     // -- split_segments --
+
+    #[test]
+    fn a_program_spelled_by_a_relative_path_is_never_auto_approved() {
+        // The allowlist names system tools. A file the workspace itself supplies
+        // shares only the name, so `./cat` is whatever the repository put there.
+        assert_eq!(classify_command("./cat notes.txt"), CommandSafety::Unknown);
+        assert_eq!(classify_command("../bin/ls -la"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("node_modules/.bin/grep -rn pattern ."),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("tools/find . -name '*.rs'"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(classify_command("./git status"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("scripts/sed -n 5p a.txt"),
+            CommandSafety::Unknown
+        );
+        // A destructive name keeps its warning however it is spelled.
+        assert_eq!(classify_command("./rm -rf build"), CommandSafety::Dangerous);
+        // System locations are still the tools the allowlist means.
+        assert_eq!(
+            classify_command("/usr/bin/cat /etc/hosts"),
+            CommandSafety::Safe
+        );
+        assert_eq!(classify_command("/bin/ls -la"), CommandSafety::Safe);
+        assert_eq!(classify_command("cat notes.txt"), CommandSafety::Safe);
+        // An absolute path outside the system directories is the workspace's own.
+        assert_eq!(
+            classify_command("/Users/someone/project/bin/cat notes.txt"),
+            CommandSafety::Unknown
+        );
+    }
+
+    #[test]
+    fn a_wrapper_carries_the_class_of_the_command_it_runs() {
+        assert_eq!(
+            classify_command("sh -c 'rm -rf /tmp/data'"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("bash -c \"sudo reboot\""),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("env RUST_LOG=debug rm -rf target"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("timeout 5 rm -f secrets.env"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("nohup killall node"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("nice -n 10 mkfs.ext4 /dev/sda1"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("command chown root:root file"),
+            CommandSafety::Dangerous
+        );
+        // A wrapper around something harmless still asks: the payload is a
+        // second command line, and reading it as one is a guess.
+        assert_eq!(classify_command("sh -c 'ls -la'"), CommandSafety::Unknown);
+        assert_eq!(classify_command("env ls"), CommandSafety::Unknown);
+        // The wrapper's own class is never softened by a harmless payload.
+        assert_eq!(classify_command("sudo ls"), CommandSafety::Dangerous);
+    }
+
+    #[test]
+    fn a_command_line_that_cannot_be_tokenised_is_never_auto_approved() {
+        // An unterminated quote means the rest of the line is not the arguments
+        // it appears to be, so the safe-looking prefix proves nothing.
+        assert_eq!(classify_command("ls 'unterminated"), CommandSafety::Unknown);
+        assert_eq!(classify_command("cat \"file.txt"), CommandSafety::Unknown);
+    }
 
     #[test]
     fn splits_on_pipe() {

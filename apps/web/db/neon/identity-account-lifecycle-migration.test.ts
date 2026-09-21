@@ -2,8 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { ACCOUNT_STATUSES } from '@/lib/auth/account-status';
-
 const MIGRATION = '0225_identity_account_lifecycle.sql';
 
 const migration = fs.readFileSync(path.resolve(import.meta.dirname, MIGRATION), 'utf8');
@@ -17,8 +15,12 @@ describe('identity account lifecycle migration', () => {
     expect(migration).toContain('NOT YET APPLIED');
   });
 
-  it('accepts exactly the account statuses the auth boundary decides on', () => {
-    for (const status of ACCOUNT_STATUSES) {
+  // The vocabulary the database ends up holding is whatever the last migration
+  // to redefine this constraint says, and lib/auth/__tests__/account-status.schema
+  // is what keeps that in step with the code. This file answers only for the
+  // three states 0020 had no way to express.
+  it('introduces the states a bare text column could not express', () => {
+    for (const status of ['locked', 'deletion_scheduled', 'deleted']) {
       expect(migration).toContain(`'${status}'`);
     }
   });

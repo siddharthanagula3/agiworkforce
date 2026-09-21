@@ -1,0 +1,43 @@
+{
+  "generator": "scripts/check-ui-icons.mjs",
+  "sources": ["lucide-react", "@agiworkforce/icons"],
+  "entries": [
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:194:🌐",
+      "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
+    },
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:200:📄",
+      "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
+    },
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:206:🎮",
+      "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
+    },
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:212:⚡",
+      "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
+    },
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:218:✨",
+      "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
+    },
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:224:📝",
+      "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
+    },
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:230:🔲",
+      "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
+    },
+    {
+      "key": "apps/web/app/providers/page.tsx:115:✓",
+      "reason": "inside a terminal transcript shown as a code sample, not a control: the glyph is the literal output being quoted"
+    },
+    {
+      "key": "apps/web/app/providers/page.tsx:120:✗",
+      "reason": "inside a terminal transcript shown as a code sample, not a control: the glyph is the literal output being quoted"
+    }
+  ],
+  "note": "Emoji drawn where an icon belongs, and any icon vocabulary outside the two sources above. The gallery entries are a real gap this lane does not own; the code-sample entries are quoted output."
+}

@@ -63,6 +63,10 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread id graph");
     agiworkforce_protocol::developer_session::ThreadForkParams::export_all_to(dir)
         .expect("export developer-session thread fork graph");
+    agiworkforce_protocol::developer_session::ThreadHandoffParams::export_all_to(dir)
+        .expect("export developer-session handoff params graph");
+    agiworkforce_protocol::developer_session::ThreadHandoffAcceptParams::export_all_to(dir)
+        .expect("export developer-session handoff accept graph");
     agiworkforce_protocol::developer_session::TurnStartParams::export_all_to(dir)
         .expect("export developer-session turn graph");
     agiworkforce_protocol::developer_session::TurnSteerParams::export_all_to(dir)
@@ -160,4 +164,13 @@ fn export_typescript_bindings() {
         .expect("export tool result graph");
     agiworkforce_protocol::tool_primitive::ToolAuditRecord::export_all_to(dir)
         .expect("export tool audit record graph");
+
+    // Session handoff. The record and what a receiving surface makes of it are
+    // three independent roots: no envelope above carries them as typed params.
+    agiworkforce_protocol::developer_session::DeveloperSessionHandoff::export_all_to(dir)
+        .expect("export session handoff graph");
+    agiworkforce_protocol::developer_session::HandoffAdmission::export_all_to(dir)
+        .expect("export session handoff admission graph");
+    agiworkforce_protocol::developer_session::HandoffRefusal::export_all_to(dir)
+        .expect("export session handoff refusal graph");
 }

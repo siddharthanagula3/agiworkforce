@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { initSandboxRepository, sandboxGit } from './lib/sandbox-git.mjs';
 
 import {
+  DRIFT_PATH,
+  REPO_ROOT,
   analyzeMockFactory,
   checkTestFile,
+  driftFailures,
+  driftRootOf,
+  droppedExports,
   extractImportsBySpecifier,
   extractNamedExports,
   findMockFactoryCalls,
@@ -300,4 +305,80 @@ test('runMockExportsGuard reports zero findings and exit-worthy output on a clea
   const result = runMockExportsGuard({ repoRoot: sandbox, roots: ['src'] });
   assert.deepEqual(result.findings, []);
   assert.match(result.output, /passed/);
+});
+
+const DRIFT_REASON =
+  'Recorded by the fixture to stand in for a real reason that says what this count is and what brings it down.';
+
+function driftSandbox(factory) {
+  const sandbox = createSandbox();
+  writeFiles(sandbox, {
+    'src/mocked.ts': 'export function foo() {}\nexport const bar = 1;\n',
+    'src/subject.ts': "import { foo } from './mocked';\nexport function use() { return foo(); }\n",
+    'src/__tests__/consumer.test.ts':
+      "import { describe, it, vi } from 'vitest';\n" +
+      `vi.mock('../mocked', ${factory});\n` +
+      "import { use } from '../subject';\n" +
+      "describe('consumer', () => { it('works', () => { use(); }); });\n",
+  });
+  initGitRepo(sandbox);
+  return sandbox;
+}
+
+test('a whole-module factory that drops an export the module declares is counted', () => {
+  const sandbox = driftSandbox("() => ({ foo: () => 'stub' })");
+  const dropped = droppedExports(sandbox, path.join(sandbox, 'src/__tests__/consumer.test.ts'));
+  assert.equal(dropped.length, 1);
+  assert.deepEqual(dropped[0].missing, ['bar']);
+});
+
+test('a factory that spreads importOriginal is not counted', () => {
+  const sandbox = driftSandbox(
+    "async (importOriginal) => ({ ...(await importOriginal()), foo: () => 'stub' })",
+  );
+  assert.deepEqual(
+    droppedExports(sandbox, path.join(sandbox, 'src/__tests__/consumer.test.ts')),
+    [],
+  );
+});
+
+test('a factory that names every export is not counted', () => {
+  const sandbox = driftSandbox("() => ({ foo: () => 'stub', bar: 2 })");
+  assert.deepEqual(
+    droppedExports(sandbox, path.join(sandbox, 'src/__tests__/consumer.test.ts')),
+    [],
+  );
+});
+
+test('the surface ceiling refuses growth, an undeclared surface, and a stale one', () => {
+  const ceilings = { 'apps/web': { count: 2, reason: DRIFT_REASON } };
+  assert.deepEqual(driftFailures({ 'apps/web': 2 }, ceilings), []);
+  assert.match(driftFailures({ 'apps/web': 3 }, ceilings).join('\n'), /up from 2/);
+  assert.match(
+    driftFailures({ 'apps/web': 1, other: 2 }, ceilings).join('\n'),
+    /records no ceiling/,
+  );
+  assert.deepEqual(driftFailures({ 'apps/web': 1, other: 0 }, ceilings), []);
+  assert.match(driftFailures({}, ceilings).join('\n'), /no longer a surface/);
+  assert.match(
+    driftFailures({ 'apps/web': 1 }, { 'apps/web': { count: 2, reason: 'legacy' } }).join('\n'),
+    /needs a reason, not a number/,
+  );
+  assert.equal(driftRootOf('apps/web/x.test.ts', ['apps/web']), 'apps/web');
+  assert.equal(driftRootOf('tools/x.test.ts', ['apps/web']), 'other');
+});
+
+test('the guard fails on drift and the shipped ceilings each carry a reason', () => {
+  const sandbox = driftSandbox("() => ({ foo: () => 'stub' })");
+  writeFiles(sandbox, {
+    [DRIFT_PATH]: JSON.stringify({ surfaces: { src: { count: 0, reason: DRIFT_REASON } } }),
+  });
+  const result = runMockExportsGuard({ repoRoot: sandbox, roots: ['src'] });
+  assert.equal(result.drift.length, 1);
+  assert.match(result.output, /up from 0/);
+
+  const shipped = JSON.parse(readFileSync(path.join(REPO_ROOT, DRIFT_PATH), 'utf8')).surfaces;
+  for (const [surface, entry] of Object.entries(shipped)) {
+    assert.ok(entry.reason.trim().length >= 60, `${surface} is a number with no reason`);
+  }
 });

@@ -1,6 +1,10 @@
 import { ErrorCode } from '@agiworkforce/types';
 
 import { OBSERVABILITY_ATTRIBUTE } from './attributes';
+import { CLIENT_FAILURE_CLASSES, CLIENT_FAILURE_DETAILS } from './client-failures';
+import { CODE_ACTIONS } from './code-actions';
+import { CLIENT_VERSION_LABELS } from './client-versions';
+import { WORK_PLAN_MEASURES, WORK_PLAN_SHAPES } from './work-plan-measures';
 
 export const UNCLASSIFIED_LABEL = 'unclassified';
 export const OVERFLOW_LABEL = 'other';
@@ -65,11 +69,17 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.browserTaskId]: IDENTIFIER,
   [OBSERVABILITY_ATTRIBUTE.remoteSessionId]: IDENTIFIER,
   [OBSERVABILITY_ATTRIBUTE.remoteDeviceId]: IDENTIFIER,
+  // Stable per fault rather than per occurrence, but one series per distinct
+  // exception site is still more than a metric should carry; it belongs on the
+  // error record, which is where it is set.
+  [OBSERVABILITY_ATTRIBUTE.errorFingerprint]: IDENTIFIER,
   [LOCAL_METRIC_LABEL.mediaJobId]: IDENTIFIER,
 
   [OBSERVABILITY_ATTRIBUTE.errorType]: classified(),
   [OBSERVABILITY_ATTRIBUTE.notificationReason]: classified(),
   [OBSERVABILITY_ATTRIBUTE.completionReason]: classified(),
+  [OBSERVABILITY_ATTRIBUTE.denialReason]: classified(),
+  [OBSERVABILITY_ATTRIBUTE.rejectionReason]: classified(),
   [LOCAL_METRIC_LABEL.mediaReason]: classified(),
 
   [OBSERVABILITY_ATTRIBUTE.surface]: bounded(),
@@ -88,9 +98,16 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.deploymentId]: bounded(100),
   [OBSERVABILITY_ATTRIBUTE.deploymentEnvironment]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.cloudRegion]: bounded(),
-  [OBSERVABILITY_ATTRIBUTE.clientVersion]: bounded(100),
+  [OBSERVABILITY_ATTRIBUTE.clientVersion]: enumerated(...CLIENT_VERSION_LABELS),
+  [OBSERVABILITY_ATTRIBUTE.protocolVersion]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.dataRegion]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.trustMode]: bounded(),
+  [OBSERVABILITY_ATTRIBUTE.workspaceKind]: enumerated('personal', 'organization'),
+  [OBSERVABILITY_ATTRIBUTE.requestMode]: bounded(),
+  [OBSERVABILITY_ATTRIBUTE.denialLayer]: bounded(),
+  [OBSERVABILITY_ATTRIBUTE.rejectionKind]: bounded(),
+  [OBSERVABILITY_ATTRIBUTE.turnOutcome]: enumerated('succeeded', 'failed'),
+  [OBSERVABILITY_ATTRIBUTE.cacheOutcome]: enumerated('hit', 'miss'),
   [OBSERVABILITY_ATTRIBUTE.routeId]: bounded(200),
   [OBSERVABILITY_ATTRIBUTE.routingCohort]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.routingStatus]: bounded(),
@@ -99,6 +116,13 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.completionKind]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.completionStatus]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.completionReportedStatus]: bounded(),
+  [OBSERVABILITY_ATTRIBUTE.codeAction]: enumerated(...CODE_ACTIONS),
+  [OBSERVABILITY_ATTRIBUTE.workPlanShape]: enumerated(...WORK_PLAN_SHAPES),
+  [OBSERVABILITY_ATTRIBUTE.workPlanMeasure]: enumerated(...WORK_PLAN_MEASURES),
+  // Authored in a browser, so enumerated rather than bounded: a limit still
+  // admits as many invented values as the limit allows.
+  [OBSERVABILITY_ATTRIBUTE.clientFailureClass]: enumerated(...CLIENT_FAILURE_CLASSES),
+  [OBSERVABILITY_ATTRIBUTE.clientFailureDetail]: enumerated(...CLIENT_FAILURE_DETAILS),
 
   [LOCAL_METRIC_LABEL.spanName]: bounded(200),
   [LOCAL_METRIC_LABEL.spanDomain]: bounded(),
@@ -134,9 +158,24 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
 const ERROR_CODE_TOKEN = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/;
 const HTTP_ERROR_CLASS = /^[45]xx$/;
 
-const CANONICAL_ERROR_CODES: ReadonlySet<string> = new Set(
-  Object.values(ErrorCode).map((code) => code.toLowerCase()),
-);
+// Built on first use rather than at import: this module is pulled in by every
+// recorder, and reading the catalogue at module scope makes loading an
+// instrument depend on the whole contracts package being resolved first.
+let canonicalErrorCodes: ReadonlySet<string> | null = null;
+
+function isCanonicalErrorCode(value: string): boolean {
+  if (canonicalErrorCodes === null) {
+    // Bounding a label must never be the reason a recorder throws into the code
+    // it is measuring. A catalogue this process cannot read costs the canonical
+    // spelling, not the caller, and the token rule below still bounds the label.
+    try {
+      canonicalErrorCodes = new Set(Object.values(ErrorCode).map((code) => code.toLowerCase()));
+    } catch {
+      canonicalErrorCodes = new Set<string>();
+    }
+  }
+  return canonicalErrorCodes.has(value);
+}
 
 /**
  * A metric label built from an error. Anything that is not a code the repo
@@ -148,7 +187,7 @@ export function classifyErrorType(value: string): string {
   if (trimmed.length === 0) return UNCLASSIFIED_LABEL;
   if (HTTP_ERROR_CLASS.test(trimmed)) return trimmed;
   const lower = trimmed.toLowerCase();
-  if (CANONICAL_ERROR_CODES.has(lower)) return lower;
+  if (isCanonicalErrorCode(lower)) return lower;
   return ERROR_CODE_TOKEN.test(trimmed) ? trimmed : UNCLASSIFIED_LABEL;
 }
 

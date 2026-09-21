@@ -87,11 +87,24 @@ describe('accountAccessDecision', () => {
     });
   });
 
+  it('withholds normal access while a recovery is still open, without calling it a lockout', () => {
+    const recovery = accountAccessDecision('recovery_pending');
+    const locked = accountAccessDecision('locked');
+
+    expect(recovery).toMatchObject({
+      allowed: false,
+      reason: 'recovery',
+      recoveryPath: LOCKOUT_RECOVERY_PATH,
+    });
+    if (recovery.allowed || locked.allowed) throw new Error('both states deny access');
+    expect(recovery.message).not.toBe(locked.message);
+  });
+
   it('decides on every status in the vocabulary and on nothing outside it', () => {
     for (const status of ACCOUNT_STATUSES) {
       expect(isAccountStatus(status)).toBe(true);
       expect(typeof accountAccessDecision(status).allowed).toBe('boolean');
     }
-    expect(isAccountStatus('recovery_pending')).toBe(false);
+    expect(isAccountStatus('pending_review')).toBe(false);
   });
 });
