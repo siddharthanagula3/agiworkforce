@@ -54,7 +54,7 @@ jobs:
         with:
           node-version: 24
 
-      # --scanners misconfig covers Dockerfiles, Compose files, GitHub Actions
+      # The config subcommand scans Dockerfiles, Compose files, GitHub Actions
       # workflows and Kubernetes manifests from one pass, so a deploy target
       # added later is scanned without a second tool.
       - name: Scan infrastructure configuration (Trivy config)
@@ -65,7 +65,6 @@ jobs:
             --volume "$PWD/trivy-out:/out" \
             --user "$(id -u):$(id -g)" \
             "$TRIVY_IMAGE" config /repo \
-              --scanners misconfig \
               --format json \
               --output /out/iac.json \
               --exit-code 0
