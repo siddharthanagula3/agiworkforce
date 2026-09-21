@@ -1,22 +1,17 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
+import { buildToolApprovalToolRows } from '@/lib/tool-approval-view';
 
 /**
  * Claim guard for the "Create a document file" row on /agent-permissions.
  *
  * The page shipped "Generates a document, spreadsheet, or deck inside the
- * sandbox" while create_office_file's discriminated union accepts only `docx`
- * and `pptx`, a public promise of a format the tool cannot produce. This
- * reads the page source as text (matching app/enterprise's claim guards) so it
- * trips on the words a future writer types, and derives the permitted formats
- * from the tool schema so adding xlsx to the union unblocks the copy on its
- * own.
+ * sandbox" while create_office_file's discriminated union accepted only `docx`
+ * and `pptx`, a public promise of a format the tool cannot produce. The
+ * permitted formats are derived from the tool schema, so adding one to the
+ * union unblocks the copy on its own.
  */
-
-const PAGE = path.join(path.resolve(__dirname, '..'), 'page.tsx');
 
 const OFFICE_FORMAT_WORDS: Readonly<Record<string, readonly RegExp[]>> = {
   docx: [/\.docx\b/iu, /\bword\b/iu],
@@ -27,12 +22,9 @@ const OFFICE_FORMAT_WORDS: Readonly<Record<string, readonly RegExp[]>> = {
 };
 
 function officeFileRowCopy(): string {
-  const source = readFileSync(PAGE, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//gu, '')
-    .replace(/^\s*\/\/.*$/gmu, '');
-  const row = /k:\s*'Create a document file',\s*v:\s*'((?:[^'\\]|\\.)*)'/u.exec(source);
-  expect(row).not.toBeNull();
-  return row![1]!;
+  const row = buildToolApprovalToolRows().find((entry) => entry.name === 'create_office_file');
+  expect(row, 'create_office_file needs a published row').toBeDefined();
+  return row!.description;
 }
 
 describe('/agent-permissions, document file creation claims', () => {

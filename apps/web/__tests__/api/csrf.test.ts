@@ -76,7 +76,12 @@ vi.mock('@/lib/server/rls-db', () => ({
       const { userId } = await mockGetClerkAuthUser(request);
       return {
         db: {
-          query: (...args: unknown[]) => mockMemoryNeonQuery(...args),
+          // A memory write first reads the member's switch; the stub answers it as on.
+          query: async (...args: unknown[]) => {
+            const { answerMemoryPolicyQuery } =
+              await import('@/lib/services/__tests__/memory-policy-stub');
+            return answerMemoryPolicyQuery(args[0]) ?? mockMemoryNeonQuery(...args);
+          },
           execute: (...args: unknown[]) => mockMemoryNeonExecute(...args),
         },
         userId,

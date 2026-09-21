@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { createHash } from 'node:crypto';
+
 import { estimateTokens } from '@agiworkforce/routing';
 import type { AutoRouteDecision } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
@@ -101,6 +103,24 @@ function spanFromPersistableIndex(
 interface ConversationCompactionRow {
   compaction_summary: string | null;
   compaction_summary_through_message_id: string | null;
+  compaction_summary_digest: string | null;
+}
+
+interface PersistedMessageRow {
+  id: string;
+  server_version: string;
+}
+
+/**
+ * The visible messages a stored summary claims to cover, each at the row
+ * version it held when the summary was written. A delete or an edit inside the
+ * span leaves the boundary id untouched while changing what the span says, so
+ * the cache is validated against this rather than against the boundary alone.
+ */
+function summaryCoverageDigest(rows: readonly PersistedMessageRow[]): string {
+  const hash = createHash('sha256');
+  for (const row of rows) hash.update(`${row.id}:${row.server_version}\n`);
+  return hash.digest('hex');
 }
 
 async function generateCompactionSummary(params: {
@@ -256,25 +276,36 @@ async function resolveCompactionSummary(params: {
     );
   }
 
-  const [conversationRows, persistedIdRows] = await Promise.all([
+  const [conversationRows, persistedRows] = await Promise.all([
     params.db.query<ConversationCompactionRow>(
-      `select compaction_summary, compaction_summary_through_message_id
+      `select compaction_summary, compaction_summary_through_message_id, compaction_summary_digest
          from web_conversations
         where id = $1
           and user_id = $2
+          and deleted_at is null
         limit 1`,
       [params.conversationId, params.userId],
     ),
-    params.db.query<{ id: string }>(
-      `select id from web_messages
-        where conversation_id = $1 and role in ('user', 'assistant')
+    params.db.query<PersistedMessageRow>(
+      `select id, server_version::text as server_version
+         from web_messages
+        where conversation_id = $1
+          and role in ('user', 'assistant')
+          and deleted_at is null
         order by created_at asc, id asc
         limit $2`,
       [params.conversationId, persistableCount],
     ),
   ]);
 
-  const ids = persistedIdRows.map((row) => row.id);
+  const conversation = conversationRows[0];
+  if (!conversation) {
+    throw new Error(
+      `conversation ${params.conversationId} is withdrawn or unreadable and must not be compacted`,
+    );
+  }
+
+  const ids = persistedRows.map((row) => row.id);
   if (ids.length < persistableCount) {
     throw new Error(
       `conversation ${params.conversationId} has fewer persisted messages (${ids.length}) than the drop plan expects (${persistableCount})`,
@@ -282,19 +313,21 @@ async function resolveCompactionSummary(params: {
   }
   const boundaryMessageId = ids[persistableCount - 1];
   if (!boundaryMessageId) throw new Error('could not resolve a compaction boundary message id');
+  const coverageDigest = summaryCoverageDigest(persistedRows);
 
-  const cachedSummary = conversationRows[0]?.compaction_summary ?? null;
-  const cachedBoundaryId = conversationRows[0]?.compaction_summary_through_message_id ?? null;
-
-  if (cachedSummary && cachedBoundaryId === boundaryMessageId) {
-    return cachedSummary;
-  }
+  const cachedSummary = conversation.compaction_summary ?? null;
+  const cachedBoundaryId = conversation.compaction_summary_through_message_id ?? null;
+  const cachedDigest = conversation.compaction_summary_digest ?? null;
 
   let priorSummary: string | null = null;
   let spanMessages = params.droppedMessages;
-  if (cachedSummary && cachedBoundaryId) {
+  if (cachedSummary && cachedBoundaryId && cachedDigest) {
     const cachedIndex = ids.indexOf(cachedBoundaryId);
-    if (cachedIndex !== -1 && cachedIndex < persistableCount - 1) {
+    const stillCovers =
+      cachedIndex !== -1 &&
+      summaryCoverageDigest(persistedRows.slice(0, cachedIndex + 1)) === cachedDigest;
+    if (stillCovers && cachedIndex === persistableCount - 1) return cachedSummary;
+    if (stillCovers) {
       priorSummary = cachedSummary;
       spanMessages = spanFromPersistableIndex(params.droppedMessages, cachedIndex + 1);
     }
@@ -315,10 +348,12 @@ async function resolveCompactionSummary(params: {
   await params.db.execute(
     `update web_conversations
         set compaction_summary = $1,
-            compaction_summary_through_message_id = $2
-      where id = $3
-        and user_id = $4`,
-    [summary, boundaryMessageId, params.conversationId, params.userId],
+            compaction_summary_through_message_id = $2,
+            compaction_summary_digest = $3
+      where id = $4
+        and user_id = $5
+        and deleted_at is null`,
+    [summary, boundaryMessageId, coverageDigest, params.conversationId, params.userId],
   );
 
   return summary;

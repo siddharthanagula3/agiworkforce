@@ -29,9 +29,11 @@ const { editorHandle, editorProps } = vi.hoisted(() => ({
   editorProps: { current: null as ComposerEditorProps | null },
 }));
 
-vi.mock('@agiworkforce/unified-chat/composer-editor', async () => {
+vi.mock('@agiworkforce/unified-chat/composer-editor', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
   const { forwardRef, useImperativeHandle } = await import('react');
   return {
+    ...actual,
     ComposerEditor: forwardRef<ComposerEditorHandle, ComposerEditorProps>(
       function FakeComposerEditor(props, ref) {
         editorProps.current = props;

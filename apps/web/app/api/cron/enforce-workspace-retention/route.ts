@@ -14,6 +14,7 @@ import {
 } from '@/lib/services/retention-service';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 /** Bounded per run so one night's work cannot exceed the function timeout. */
 const MAX_ORGANIZATIONS_PER_RUN = 50;

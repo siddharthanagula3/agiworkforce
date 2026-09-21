@@ -259,6 +259,7 @@ export type AuditEventType =
   | 'retention_sweep_completed'
   | 'legal_hold_created'
   | 'legal_hold_released'
+  | 'deletion_blocked_by_legal_hold'
   | 'secret_detected'
   | 'spend_cap_exceeded'
   | 'ip_not_allowed'
@@ -368,13 +369,15 @@ export type AuditEventType =
   | 'new_location_sign_in'
   | 'account_recovery_requested'
   /**
-   * The risk engine fired, the account holder said they were compromised, and
-   * the guided response finished. All three are separate: a signal that nobody
-   * acted on and a contained account are different states.
+   * The risk engine fired, the account holder said they were compromised, the
+   * guided response finished, and the hold it left was lifted. All four are
+   * separate: a signal nobody acted on, a contained account and an account
+   * released back to its owner are different states.
    */
   | 'risk_signal_detected'
   | 'account_compromise_reported'
   | 'account_compromise_contained'
+  | 'account_compromise_resolved'
   | 'admin_delegation_granted'
   | 'admin_delegation_revoked'
   | 'admin_delegation_refused';
@@ -414,6 +417,7 @@ export interface AuditEventDetail {
   enabled?: boolean;
   durationMs?: number;
   keyVersion?: string;
+  expiresAt?: string;
   version?: string;
   variant?: string;
   region?: string;
@@ -457,6 +461,7 @@ const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditE
   'organization_deletion_completed',
   'legal_hold_created',
   'legal_hold_released',
+  'deletion_blocked_by_legal_hold',
   'retention_sweep_completed',
   'domain_retention_sweep_completed',
   'retention_policy_changed',
@@ -511,6 +516,7 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'enabled',
   'durationMs',
   'keyVersion',
+  'expiresAt',
   'version',
   'variant',
   'region',
@@ -827,6 +833,7 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'admin_api_key_revoked':
       return 'admin_api_key';
     case 'ediscovery_export':
+    case 'deletion_blocked_by_legal_hold':
       return 'legal_hold';
     case 'dlp_content_blocked':
       return 'dlp';

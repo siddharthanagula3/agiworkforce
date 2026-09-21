@@ -16,6 +16,13 @@ import {
 } from './flag-store';
 import { killSwitchDefinition } from './kill-switches';
 import { archivableStaleFlags, findStaleFlags, type StaleFlag } from './stale-flags';
+import {
+  versionDisableBlockers,
+  versionDisableDescription,
+  withVersionDisable,
+  withoutVersionDisable,
+  type FeatureVersionDisable,
+} from './version-disable';
 
 const FLAG_RESOURCE_TYPE = 'feature_flag';
 const FLAG_ADMIN_SURFACE = 'operator';
@@ -122,6 +129,64 @@ export async function engageKillSwitch(
   }
   if (definition.killSwitch === engaged) return definition;
   return toggleFlagKillSwitch(actor, key, engaged);
+}
+
+/**
+ * Close one capability for one range of builds. This is the response to a
+ * release that shipped broken: the affected builds stop being offered the
+ * thing, every other build keeps it, and nobody has to wait for a store review
+ * or a forced update. The switch is created open if it did not exist, so an
+ * incident is not the moment to discover nobody defined it.
+ */
+export async function disableFeatureForVersions(
+  actor: AdminActor,
+  disable: FeatureVersionDisable,
+): Promise<FlagDefinition> {
+  const [blocker] = versionDisableBlockers(disable);
+  if (blocker !== undefined) throw createError.badRequest(blocker);
+  const key = withVersionDisable(null, disable).key;
+  const prepared = await ensureFlagDefinition(
+    killSwitchDefinition(key, versionDisableDescription(disable)),
+  );
+  if (!prepared) {
+    throw createError.internal('The switch could not be prepared. Nothing was changed.');
+  }
+  const updated = await updateFlagDefinition(
+    withVersionDisable(prepared, disable),
+    prepared.version,
+  );
+  if (!updated) {
+    throw createError.conflict('The switch changed while it was being written. Try again.');
+  }
+  await auditFlagChange(actor, updated, `disabled_for_versions:${disable.incident}`, [
+    'rules',
+    'description',
+  ]);
+  return updated;
+}
+
+/**
+ * Lift one incident's range. Every other range on the same switch stays closed,
+ * because two builds can be broken at once and clearing one is not clearing
+ * both.
+ */
+export async function clearFeatureVersionDisable(
+  actor: AdminActor,
+  key: string,
+  incident: string,
+): Promise<FlagDefinition> {
+  const existing = await getFlagDefinition(key);
+  if (!existing || existing.archivedAt !== null) {
+    throw createError.notFound('No active flag by that name');
+  }
+  const cleared = withoutVersionDisable(existing, incident);
+  if (!cleared) throw createError.notFound('That incident holds nothing off on this switch');
+  const updated = await updateFlagDefinition(cleared, existing.version);
+  if (!updated) {
+    throw createError.conflict('The switch changed while it was being written. Try again.');
+  }
+  await auditFlagChange(actor, updated, `version_disable_cleared:${incident}`, ['rules']);
+  return updated;
 }
 
 export async function cleanUpStaleFlags(

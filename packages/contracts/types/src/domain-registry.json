@@ -1,0 +1,777 @@
+{
+  "domains": [
+    {
+      "name": "identity",
+      "label": "Identity",
+      "owner": "apps/web/lib/auth",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "account_compromise_responses",
+        "account_lockout_attempts",
+        "account_security_settings",
+        "authentication_attempts",
+        "directory_sync_connections",
+        "directory_sync_events",
+        "identities",
+        "identity_risk_observations",
+        "revoked_jwts",
+        "scim_group_members",
+        "scim_groups",
+        "scim_provisioned_users",
+        "scim_tokens",
+        "sso_connections",
+        "user_two_factor"
+      ]
+    },
+    {
+      "name": "accounts",
+      "label": "Accounts",
+      "owner": "apps/web/app/api/me/route.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "beta_applications",
+        "beta_invites",
+        "beta_redemptions",
+        "cloud_managed_waitlist",
+        "cloud_waitlist",
+        "consent_records",
+        "data_rights_requests",
+        "email_preferences",
+        "profiles",
+        "referrals",
+        "user_settings",
+        "waitlist"
+      ]
+    },
+    {
+      "name": "sessions",
+      "label": "Sessions",
+      "owner": "apps/web/app/api/auth/device/token/route.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["account_sessions", "device_authorization_codes", "device_refresh_tokens"]
+    },
+    {
+      "name": "devices",
+      "label": "Devices",
+      "owner": "apps/web/app/api/settings/devices/[deviceId]/route.ts",
+      "capabilities": ["canUseCamera", "canUsePhotos"],
+      "concepts": ["device"],
+      "tables": [
+        "desktop_devices",
+        "device_installations",
+        "device_pairings",
+        "device_registrations",
+        "mobile_devices",
+        "web_push_subscriptions"
+      ]
+    },
+    {
+      "name": "organizations",
+      "label": "Organizations",
+      "owner": "apps/web/app/api/settings/organization/route.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "organization_invitations",
+        "organization_permission_aliases",
+        "organizations",
+        "teams"
+      ]
+    },
+    {
+      "name": "workspaces",
+      "label": "Workspaces",
+      "owner": "apps/web/lib/services/active-workspace-service.ts",
+      "capabilities": [],
+      "concepts": ["workspace"],
+      "tables": ["workspaces"]
+    },
+    {
+      "name": "membership",
+      "label": "Membership",
+      "owner": "apps/web/lib/services/organization-invitation-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["organization_members", "team_members"]
+    },
+    {
+      "name": "groups",
+      "label": "Groups",
+      "owner": "apps/web/lib/server/scim",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["organization_group_managers", "organization_group_roles"]
+    },
+    {
+      "name": "roles",
+      "label": "Roles",
+      "owner": "apps/web/lib/authorization",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["organization_member_roles", "organization_roles"]
+    },
+    {
+      "name": "policy",
+      "label": "Policy",
+      "owner": "apps/web/lib/services/organization-policy-override-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "organization_admin_policies",
+        "organization_connector_policies",
+        "organization_encryption_keys",
+        "organization_key_rewrap_runs",
+        "organization_model_policies",
+        "organization_policy_overrides",
+        "organization_policy_revisions"
+      ]
+    },
+    {
+      "name": "entitlements",
+      "label": "Entitlements",
+      "owner": "apps/web/lib/services/entitlement-resolution.ts",
+      "capabilities": [],
+      "concepts": ["subscription"],
+      "tables": ["organization_subscription_state_transitions", "subscriptions"]
+    },
+    {
+      "name": "billing",
+      "label": "Billing",
+      "owner": "apps/web/lib/services/enterprise-billing-service.ts",
+      "capabilities": ["canUseBilling"],
+      "concepts": ["credit-bucket"],
+      "tables": [
+        "cogs_adjustments",
+        "credit_idempotency_keys",
+        "credit_settlement_jobs",
+        "credit_transactions",
+        "enterprise_offline_payment_records",
+        "mobile_iap_accounts",
+        "mobile_iap_notification_receipts",
+        "mobile_iap_transactions",
+        "organization_billing_contracts",
+        "organization_billing_invoices",
+        "organization_commercial_agreements",
+        "organization_spend_alerts",
+        "organization_spend_limits",
+        "processed_stripe_events",
+        "token_credits"
+      ]
+    },
+    {
+      "name": "usage",
+      "label": "Usage",
+      "owner": "apps/web/lib/services/cogs-ledger-service.ts",
+      "capabilities": [],
+      "concepts": ["usage-reservation"],
+      "tables": [
+        "free_daily_usage_reservations",
+        "managed_usage_request_extensions",
+        "managed_usage_requests",
+        "organization_usage_ledger",
+        "provider_cost_events",
+        "provider_cost_reconciliation_days",
+        "usage_events",
+        "website_auto_economy_trial_usage"
+      ]
+    },
+    {
+      "name": "chat",
+      "label": "Chat",
+      "owner": "apps/web/app/api/llm/v1/chat/completions",
+      "capabilities": ["canChat"],
+      "concepts": ["conversation", "message"],
+      "tables": [
+        "chat_messages",
+        "conversations",
+        "message_bookmarks",
+        "message_reactions",
+        "messages",
+        "web_conversations",
+        "web_messages"
+      ]
+    },
+    {
+      "name": "conversation-history",
+      "label": "Conversation History",
+      "owner": "apps/web/lib/services/conversation-branch-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "chat_folders",
+        "conversation_branch_messages",
+        "conversation_branches",
+        "conversation_tags"
+      ]
+    },
+    {
+      "name": "context",
+      "label": "Context",
+      "owner": "packages/contracts/context",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["context_manifests"]
+    },
+    {
+      "name": "personalization",
+      "label": "Personalization",
+      "owner": "apps/web/app/api/settings/preferences",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["user_shortcuts"]
+    },
+    {
+      "name": "memory",
+      "label": "Memory",
+      "owner": "apps/web/lib/memory",
+      "capabilities": [],
+      "concepts": ["memory"],
+      "tables": ["user_memories"]
+    },
+    {
+      "name": "projects",
+      "label": "Projects",
+      "owner": "apps/web/app/api/projects/route.ts",
+      "capabilities": [],
+      "concepts": ["project"],
+      "tables": ["organization_project_access", "organization_shared_projects", "user_projects"]
+    },
+    {
+      "name": "files",
+      "label": "Files",
+      "owner": "apps/web/lib/server/media-assets.ts",
+      "capabilities": ["canUploadFiles"],
+      "concepts": ["file"],
+      "tables": ["file_lineage", "media_assets", "project_knowledge_files"]
+    },
+    {
+      "name": "library",
+      "label": "Library",
+      "owner": "apps/web/features/library",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "search",
+      "label": "Search",
+      "owner": "apps/web/lib/web-search",
+      "capabilities": ["canUseWebSearch"],
+      "concepts": [],
+      "tables": ["search_history"]
+    },
+    {
+      "name": "retrieval",
+      "label": "Retrieval",
+      "owner": "apps/web/lib/services/retrieval-index-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["retrieval_chunks", "retrieval_documents"]
+    },
+    {
+      "name": "knowledge",
+      "label": "Knowledge",
+      "owner": "apps/web/lib/services/project-knowledge-retrieval.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "citations",
+      "label": "Citations",
+      "owner": "packages/contracts/types/src/web-search-citations.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "research",
+      "label": "Research",
+      "owner": "apps/web/lib/services/research-report-service.ts",
+      "capabilities": ["canUseDeepResearch"],
+      "concepts": [],
+      "tables": ["research_reports"]
+    },
+    {
+      "name": "learning",
+      "label": "Learning",
+      "owner": "apps/web/features/study/server/study-session-store.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["study_sessions"]
+    },
+    {
+      "name": "work",
+      "label": "Work",
+      "owner": "apps/web/lib/services/work-plan-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["background_jobs", "work_plan_revisions", "work_plan_steps", "work_plans"]
+    },
+    {
+      "name": "agents",
+      "label": "Agents",
+      "owner": "packages/ai/agent-core",
+      "capabilities": [],
+      "concepts": ["agent-run"],
+      "tables": [
+        "cloud_agent_events",
+        "cloud_agent_execution_operations",
+        "cloud_agent_run_budgets",
+        "cloud_agent_runs"
+      ]
+    },
+    {
+      "name": "tools",
+      "label": "Tools",
+      "owner": "apps/web/lib/mcp-tool-executor.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["agent_tool_executions", "agent_tools"]
+    },
+    {
+      "name": "approvals",
+      "label": "Approvals",
+      "owner": "packages/contracts/types/src/tool-approval-policy.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "agent_approval_requests",
+        "cloud_agent_approval_checkpoints",
+        "cloud_code_agent_approvals"
+      ]
+    },
+    {
+      "name": "code",
+      "label": "Code",
+      "owner": "apps/web/lib/services/cloud-code-agent-service.ts",
+      "capabilities": ["canUseCloudExecution"],
+      "concepts": [],
+      "tables": [
+        "cloud_code_agent_steps",
+        "cloud_code_agent_turns",
+        "cloud_code_sessions",
+        "cloud_code_terminal_entries",
+        "github_installations",
+        "github_pr_review_attempts"
+      ]
+    },
+    {
+      "name": "browser",
+      "label": "Browser",
+      "owner": "packages/contracts/types/src/browser-session.ts",
+      "capabilities": ["canUseBrowserAutomation"],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "computer-use",
+      "label": "Computer Use",
+      "owner": "packages/contracts/types/src/visual-session.ts",
+      "capabilities": ["canTakeScreenshot", "canUseClipboard", "canUseDesktopAutomation"],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "remote-control",
+      "label": "Remote Control",
+      "owner": "packages/contracts/types/src/cross-device.ts",
+      "capabilities": ["canUseNativeIntegrations"],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "voice",
+      "label": "Voice",
+      "owner": "packages/contracts/types/src/voice.ts",
+      "capabilities": ["canUseVoice"],
+      "concepts": [],
+      "tables": ["voice_sessions"]
+    },
+    {
+      "name": "image-generation",
+      "label": "Image Generation",
+      "owner": "apps/web/lib/server/image-generation-jobs.ts",
+      "capabilities": ["canUseImages"],
+      "concepts": [],
+      "tables": ["image_generation_job_assets", "image_generation_jobs"]
+    },
+    {
+      "name": "video-generation",
+      "label": "Video Generation",
+      "owner": "apps/web/lib/server/video-generation-jobs.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["video_generation_jobs"]
+    },
+    {
+      "name": "artifacts",
+      "label": "Artifacts",
+      "owner": "apps/web/lib/services/published-artifact-service.ts",
+      "capabilities": [],
+      "concepts": ["artifact"],
+      "tables": [
+        "organization_shared_artifacts",
+        "published_artifact_versions",
+        "published_artifacts",
+        "web_artifact_index",
+        "web_artifact_versions",
+        "web_artifacts"
+      ]
+    },
+    {
+      "name": "documents",
+      "label": "Documents",
+      "owner": "packages/contracts/types/src/file-model.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "spreadsheets",
+      "label": "Spreadsheets",
+      "owner": "packages/contracts/types/src/artifacts.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "presentations",
+      "label": "Presentations",
+      "owner": "packages/contracts/types/src/interactive-cards.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "notebooks",
+      "label": "Notebooks",
+      "owner": "apps/web/app/api/code/sessions/[sessionId]/notebook/lib/notebook-runs.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["notebook_runs"]
+    },
+    {
+      "name": "connected-accounts",
+      "label": "Connected Accounts",
+      "owner": "apps/web/lib/connectors/oauth-store.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "connector_oauth_authorizations",
+        "connector_oauth_grants",
+        "messaging_connections"
+      ]
+    },
+    {
+      "name": "connectors",
+      "label": "Connectors",
+      "owner": "apps/web/lib/connectors",
+      "capabilities": ["canUseConnectors"],
+      "concepts": ["connector"],
+      "tables": [
+        "connector_call_events",
+        "connector_tool_permissions",
+        "organization_shared_connectors",
+        "user_connectors",
+        "user_custom_connectors"
+      ]
+    },
+    {
+      "name": "mcp",
+      "label": "MCP",
+      "owner": "apps/web/lib/connectors/mcp-state-store.ts",
+      "capabilities": ["canUseLocalMcp"],
+      "concepts": [],
+      "tables": [
+        "mcp_app_payloads",
+        "mcp_discovery_cache",
+        "mcp_oauth_clients",
+        "mcp_response_cache",
+        "mcp_task_bindings",
+        "organization_mcp_servers"
+      ]
+    },
+    {
+      "name": "skills",
+      "label": "Skills",
+      "owner": "apps/web/lib/services/user-skill-service.ts",
+      "capabilities": ["canUseSkills"],
+      "concepts": ["skill"],
+      "tables": ["user_skills"]
+    },
+    {
+      "name": "plugins",
+      "label": "Plugins",
+      "owner": "apps/web/lib/services/plugin-lifecycle.ts",
+      "capabilities": ["canUseMarketplace", "canUsePlugins"],
+      "concepts": [],
+      "tables": [
+        "plugin_installations",
+        "plugin_marketplace_entries",
+        "plugin_marketplace_entry_files",
+        "plugin_marketplace_installations",
+        "plugin_marketplace_sources",
+        "plugin_package_scans",
+        "plugin_registry_entries",
+        "plugin_registry_lifecycle_events",
+        "plugin_registry_versions"
+      ]
+    },
+    {
+      "name": "hooks",
+      "label": "Hooks",
+      "owner": "packages/contracts/types/src/web-hooks.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "scheduler",
+      "label": "Scheduler",
+      "owner": "apps/web/lib/services/schedule-service.ts",
+      "capabilities": [],
+      "concepts": ["schedule"],
+      "tables": ["scheduled_task_runs", "scheduled_tasks"]
+    },
+    {
+      "name": "notifications",
+      "label": "Notifications",
+      "owner": "apps/web/lib/services/notification-service.ts",
+      "capabilities": ["canUseNotifications"],
+      "concepts": ["notification"],
+      "tables": ["notifications"]
+    },
+    {
+      "name": "events",
+      "label": "Events",
+      "owner": "packages/contracts/cloud-contracts/src/domain-events.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["automation_audit_events", "event_trigger_events", "event_triggers"]
+    },
+    {
+      "name": "webhooks",
+      "label": "Webhooks",
+      "owner": "apps/web/app/api/webhooks",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["github_webhook_deliveries"]
+    },
+    {
+      "name": "model-registry",
+      "label": "Model Registry",
+      "owner": "packages/contracts/types/src/model-catalog.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["model_rollout_benchmarks"]
+    },
+    {
+      "name": "provider-registry",
+      "label": "Provider Registry",
+      "owner": "packages/contracts/types/src/provider.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "routing",
+      "label": "Routing",
+      "owner": "packages/ai/routing",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["routing_decision_traces"]
+    },
+    {
+      "name": "prompt-registry",
+      "label": "Prompt Registry",
+      "owner": "apps/web/lib/prompts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "inference",
+      "label": "Inference",
+      "owner": "packages/ai/provider-runtime",
+      "capabilities": ["canUseCloudModels"],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "local-runtime",
+      "label": "Local Runtime",
+      "owner": "packages/contracts/local-runtime",
+      "capabilities": [
+        "canRunLocalCode",
+        "canUseFileSystem",
+        "canUseLocalDatabase",
+        "canUseLocalModels",
+        "canUseTerminal",
+        "canUseWorkingDirectory"
+      ],
+      "concepts": ["client-capability-manifest"],
+      "tables": []
+    },
+    {
+      "name": "byok",
+      "label": "BYOK",
+      "owner": "packages/contracts/types/src/customModel.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "sync",
+      "label": "Sync",
+      "owner": "packages/contracts/types/src/sync",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["sync_data"]
+    },
+    {
+      "name": "sharing",
+      "label": "Sharing",
+      "owner": "apps/web/lib/services/org-shared-session-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["organization_shared_sessions", "shared_conversations", "shared_sessions"]
+    },
+    {
+      "name": "export",
+      "label": "Export",
+      "owner": "apps/web/app/api/user/export",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["ediscovery_exports"]
+    },
+    {
+      "name": "deletion",
+      "label": "Deletion",
+      "owner": "apps/web/lib/services/domain-retention-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "erasure_ledger_replays",
+        "erasure_tombstones",
+        "object_backup_replicas",
+        "organization_domain_retention_policies",
+        "organization_domain_retention_sweeps",
+        "organization_retention_sweeps"
+      ]
+    },
+    {
+      "name": "audit",
+      "label": "Audit",
+      "owner": "apps/web/lib/security-audit.ts",
+      "capabilities": [],
+      "concepts": ["audit-event"],
+      "tables": [
+        "enterprise_audit_events",
+        "legal_hold_custodians",
+        "legal_holds",
+        "organization_audit_destinations",
+        "security_audit_logs",
+        "support_access_events",
+        "support_access_grants"
+      ]
+    },
+    {
+      "name": "analytics",
+      "label": "Analytics",
+      "owner": "packages/contracts/types/src/product-analytics.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["product_analytics_events", "product_metric_days"]
+    },
+    {
+      "name": "feedback",
+      "label": "Feedback",
+      "owner": "apps/web/app/api/feedback",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["feedback"]
+    },
+    {
+      "name": "support",
+      "label": "Support",
+      "owner": "apps/web/lib/support",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "support_action_proposals",
+        "support_agent_presence",
+        "support_cases",
+        "support_handoff_messages",
+        "support_handoff_sessions",
+        "support_ticket_escalations",
+        "support_ticket_replies",
+        "support_tickets"
+      ]
+    },
+    {
+      "name": "safety",
+      "label": "Safety",
+      "owner": "packages/contracts/types/src/content-safety.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["content_reports", "copyright_notices"]
+    },
+    {
+      "name": "abuse",
+      "label": "Abuse",
+      "owner": "apps/web/lib/rate-limit.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "admin",
+      "label": "Admin",
+      "owner": "apps/web/app/api/settings/organization",
+      "capabilities": [],
+      "concepts": [],
+      "tables": [
+        "admin_request_idempotency",
+        "organization_admin_api_keys",
+        "organization_admin_delegations",
+        "organization_service_principals"
+      ]
+    },
+    {
+      "name": "developer-api",
+      "label": "Developer API",
+      "owner": "apps/web/app/api/llm/v1",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["api_keys"]
+    },
+    {
+      "name": "experiments",
+      "label": "Experiments",
+      "owner": "apps/web/lib/feature-flags/flag-definition.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": []
+    },
+    {
+      "name": "feature-flags",
+      "label": "Feature Flags",
+      "owner": "apps/web/lib/feature-flags",
+      "capabilities": [],
+      "concepts": ["feature-release"],
+      "tables": ["feature_flag_definitions", "feature_flags"]
+    },
+    {
+      "name": "release-management",
+      "label": "Release Management",
+      "owner": "apps/web/lib/services/release-ledger-service.ts",
+      "capabilities": [],
+      "concepts": [],
+      "tables": ["release_channels", "release_downloads", "release_events", "releases"]
+    }
+  ]
+}

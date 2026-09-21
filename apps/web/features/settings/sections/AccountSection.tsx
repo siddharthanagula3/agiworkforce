@@ -425,7 +425,7 @@ export function AccountSection() {
                 )}. ${
                   deletionStatus.data?.canCancel
                     ? 'You can cancel any time before then.'
-                    : 'The cancellation window has closed and erasure is already underway.'
+                    : 'The cancellation window has closed. Erasure begins with the next daily run.'
                 }`}
               >
                 {deletionStatus.data?.canCancel && (

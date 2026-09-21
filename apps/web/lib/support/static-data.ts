@@ -144,7 +144,7 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     title: 'Getting started with AGI',
     slug: 'getting-started',
     excerpt: 'Learn how to set up AGI and start your first conversation.',
-    content: `# Getting started with AGI\n\n1. Create an account with Google, GitHub, or an email address and a password. Managed cloud is open by default, so there is no waitlist and no invite code.\n2. Start a new chat and confirm the visible route label, which names where the answer came from.\n3. Leave the model on Auto, or pick one by name from the control under the composer.\n\nThe web app and Desktop run on your AGI account. The released CLI provides Local mode through ${CLI_LOCAL_RUNTIMES.label} and accepts provider keys with "agi login <provider>". VS Code BYOK is coming soon. ${BYOK_SURFACES.exclusion}`,
+    content: `# Getting started with AGI\n\n1. Create an account with Google, GitHub, or an email address and a password. The Free plan on managed cloud is open by default, with no waitlist and no invite code; paid upgrades are opening in stages and need an access code.\n2. Start a new chat and confirm the visible route label, which names where the answer came from.\n3. Leave the model on Auto, or pick one by name from the control under the composer.\n\nThe web app and Desktop run on your AGI account. The released CLI provides Local mode through ${CLI_LOCAL_RUNTIMES.label} and accepts provider keys with "agi login <provider>". VS Code BYOK is coming soon. ${BYOK_SURFACES.exclusion}`,
     views: 1240,
     updated: '2026-09-18',
     maturity: 'ga',

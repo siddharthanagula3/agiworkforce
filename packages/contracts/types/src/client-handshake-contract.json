@@ -1,0 +1,166 @@
+{
+  "why": "A server that cannot tell which build is calling it cannot refuse a dangerously old one, cannot degrade a feature for a client that will not render it, and cannot answer 'which version broke' after the fact. These three headers are the whole handshake, and every surface that reaches the API owes all three.",
+  "headers": {
+    "surface": {
+      "value": "x-agi-surface",
+      "symbol": "SURFACE_REQUEST_HEADER",
+      "declaredIn": "packages/contracts/cloud-contracts/src/client-handshake.ts",
+      "answers": "which product surface is calling"
+    },
+    "clientVersion": {
+      "value": "x-agi-client-version",
+      "symbol": "CLIENT_VERSION_HEADER",
+      "declaredIn": "packages/contracts/cloud-contracts/src/me.ts",
+      "answers": "which build of that surface the user is running"
+    },
+    "apiVersion": {
+      "value": "x-agi-api-version",
+      "symbol": "API_VERSION_REQUEST_HEADER",
+      "declaredIn": "packages/contracts/cloud-contracts/src/client-handshake.ts",
+      "answers": "which request and response shapes that build was written against"
+    }
+  },
+  "helper": {
+    "why": "six surfaces send the same three headers, so the names and the contract version are settled once and consumed rather than restated",
+    "module": "packages/contracts/cloud-contracts/src/client-handshake.ts",
+    "symbol": "clientHandshakeHeaders"
+  },
+  "clients": [
+    {
+      "surface": "web",
+      "roots": [
+        "apps/web/lib/hooks",
+        "apps/web/lib/client",
+        "apps/web/features",
+        "apps/web/shared"
+      ],
+      "builder": {
+        "file": "apps/web/lib/client/csrf.ts",
+        "symbol": "addCsrfHeaders",
+        "sets": ["clientVersion", "apiVersion"],
+        "why": "the same bundle runs in a browser and inside the desktop shell, so the surface is named by the caller that knows which host it is in"
+      },
+      "build": {
+        "file": "apps/web/package.json",
+        "field": "version",
+        "readAt": "NEXT_PUBLIC_APP_VERSION"
+      },
+      "sends": ["surface", "clientVersion", "apiVersion"],
+      "defects": []
+    },
+    {
+      "surface": "desktop",
+      "roots": ["apps/desktop/src", "apps/desktop/electron"],
+      "builder": {
+        "file": "apps/desktop/src/lib/platformHeaders.ts",
+        "symbol": "platformRequestHeaders",
+        "sets": ["surface", "clientVersion", "apiVersion"],
+        "why": "the shell has two runtimes and each learns its version differently, so the version arrives at the builder rather than being read inside it"
+      },
+      "build": {
+        "file": "apps/desktop/package.json",
+        "field": "version",
+        "readAt": "app.getVersion"
+      },
+      "sends": ["surface", "clientVersion", "apiVersion"],
+      "defects": []
+    },
+    {
+      "surface": "mobile",
+      "roots": ["apps/mobile/services", "apps/mobile/lib", "apps/mobile/app"],
+      "builder": {
+        "file": "apps/mobile/lib/platformHeaders.ts",
+        "symbol": "platformRequestHeaders",
+        "sets": ["surface", "clientVersion", "apiVersion"]
+      },
+      "build": { "file": "apps/mobile/app.config.js", "field": "version", "readAt": "expoConfig" },
+      "sends": ["surface", "clientVersion", "apiVersion"],
+      "defects": []
+    },
+    {
+      "surface": "cli",
+      "roots": ["apps/cli/src"],
+      "builder": {
+        "file": "apps/cli/src/cloud/handshake.rs",
+        "symbol": "cloud::handshake",
+        "sets": ["surface", "clientVersion", "apiVersion"]
+      },
+      "build": { "file": "apps/cli/Cargo.toml", "field": "version", "readAt": "CARGO_PKG_VERSION" },
+      "sends": ["surface", "clientVersion", "apiVersion"],
+      "defects": []
+    },
+    {
+      "surface": "vscode",
+      "roots": ["apps/extension-vscode/src"],
+      "builder": {
+        "file": "apps/extension-vscode/src/platform/platformHeaders.ts",
+        "symbol": "platformRequestHeaders",
+        "sets": ["surface", "clientVersion", "apiVersion"]
+      },
+      "build": {
+        "file": "apps/extension-vscode/package.json",
+        "field": "version",
+        "readAt": "packageJSON"
+      },
+      "sends": ["surface", "clientVersion", "apiVersion"],
+      "defects": []
+    },
+    {
+      "surface": "chrome",
+      "roots": ["apps/extension/src"],
+      "builder": {
+        "file": "apps/extension/src/platformHeaders.ts",
+        "symbol": "platformRequestHeaders",
+        "sets": ["surface", "clientVersion", "apiVersion"]
+      },
+      "build": {
+        "file": "apps/extension/manifest.json",
+        "field": "version",
+        "readAt": "getManifest"
+      },
+      "sends": ["surface", "clientVersion", "apiVersion"],
+      "defects": []
+    }
+  ],
+  "mirror": {
+    "why": "the CLI cannot import the TypeScript contract, so its copy of the names and the version is compared here rather than trusted",
+    "file": "apps/cli/src/cloud/handshake.rs",
+    "headerConstants": {
+      "surface": "SURFACE_HEADER",
+      "clientVersion": "CLIENT_VERSION_HEADER",
+      "apiVersion": "API_VERSION_HEADER"
+    },
+    "versionConstant": "API_CONTRACT_VERSION"
+  },
+  "server": {
+    "latest": {
+      "file": "packages/contracts/cloud-contracts/src/client-handshake.ts",
+      "symbol": "API_CONTRACT_VERSION"
+    },
+    "advertisedOn": {
+      "file": "apps/web/lib/error-handler.ts",
+      "symbol": "API_VERSION_RESPONSE_HEADER"
+    },
+    "minimumSupported": {
+      "file": "packages/contracts/cloud-contracts/src/client-handshake.ts",
+      "symbol": "MINIMUM_SUPPORTED_API_CONTRACT_VERSION",
+      "advertisedOn": "MINIMUM_API_VERSION_RESPONSE_HEADER",
+      "refusesWith": "CLIENT_UPDATE_REQUIRED"
+    },
+    "refusal": {
+      "file": "apps/web/lib/api-gateway-policy.ts",
+      "symbol": "SERVER_VERSION_ADVERTISEMENT"
+    },
+    "defects": []
+  },
+  "negotiation": {
+    "module": "packages/contracts/types/src/client-capability-manifest.ts",
+    "statesSymbol": "CLIENT_UPGRADE_STATES",
+    "requiredStates": ["current", "upgrade_optional", "upgrade_required", "unsupported"],
+    "unknownHandlers": [
+      "readClientCapabilityManifest",
+      "resolveClientUpgrade",
+      "degradeUnsupported"
+    ]
+  }
+}

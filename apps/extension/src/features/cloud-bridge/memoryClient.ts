@@ -1,4 +1,5 @@
 import { FREE_TRIAL_GATEWAY } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 export interface AccountMemory {
   id: string;
@@ -62,7 +63,7 @@ function headers(token: string, sendsBody: boolean): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     'X-Requested-With': 'XMLHttpRequest',
-    'X-AGI-Surface': 'chrome',
+    ...platformRequestHeaders(),
     ...(sendsBody ? { 'Content-Type': 'application/json' } : {}),
   };
 }

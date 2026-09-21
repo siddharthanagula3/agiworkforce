@@ -74,20 +74,24 @@ describe('/enterprise, audit delivery cadence matches the cron that delivers it'
   });
 });
 
-describe('/status, the Postgres row admits the probe throttle', () => {
-  it('reads a throttle window out of the health check', () => {
-    const source = readFileSync(join(WEB_ROOT, 'lib/server/health-check.ts'), 'utf8');
-    const declared = /const DATABASE_PROBE_MIN_INTERVAL_SECONDS = ([\d_]+)/u.exec(source);
-    expect(declared, 'the database probe throttle is gone from health-check.ts').not.toBeNull();
-    expect(Number(declared![1]!.replace(/_/gu, ''))).toBe(3600);
+describe('/status, the Postgres row admits how stale it can be', () => {
+  it('reads the reuse window out of the render cache, the only one left', () => {
+    const health = readFileSync(join(WEB_ROOT, 'lib/server/health-check.ts'), 'utf8');
+    expect(health, 'a probe throttle is back, so the page understates its lag').not.toMatch(
+      /PROBE_MIN_INTERVAL_SECONDS/u,
+    );
+    expect(health).toMatch(/revalidate: RENDER_CACHE_SECONDS\.liveSignal/u);
+    const cache = readFileSync(join(WEB_ROOT, 'lib/server/render-cache.ts'), 'utf8');
+    expect(Number(/liveSignal: (\d+)/u.exec(cache)?.[1])).toBe(60);
   });
 
-  it('says a pass is reused rather than implying every load runs a query', () => {
+  it('says an answer is reused rather than implying every load runs a query', () => {
     const page = collapsed('app/status/page.tsx');
-    expect(page).toMatch(/reused for up to an hour/iu);
+    expect(page).toMatch(/reused for up to a minute/iu);
+    expect(page).not.toMatch(/up to an hour|the same hour/iu);
     expect(
       /A query is executed against the primary database and returns\.'/u.test(page),
-      'the Postgres row dropped the throttle caveat and claims a query every time',
+      'the Postgres row dropped the reuse caveat and claims a query every time',
     ).toBe(false);
   });
 });

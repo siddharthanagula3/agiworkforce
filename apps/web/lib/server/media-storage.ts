@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
 import { withSpan } from '@/lib/observability/span';
+import { createDeadline, guardedFetch } from '@/lib/url-fetch/guarded-fetch';
 import {
   putPrivateObject,
   getObject,
@@ -198,12 +199,40 @@ export function bytesFromBase64(b64: string): Buffer {
   return Buffer.from(raw, 'base64');
 }
 
+const MEDIA_FETCH_MAX_REDIRECTS = 3;
+
 export async function bytesFromUrl(url: string): Promise<{ data: Buffer; contentType: string }> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(OBJECT_STORAGE_REQUEST_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`Failed to fetch media for persistence (HTTP ${res.status})`);
-  const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
-  const data = Buffer.from(await res.arrayBuffer());
-  return { data, contentType };
+  let target: URL;
+  try {
+    target = new URL(url);
+  } catch {
+    throw new Error('Failed to fetch media for persistence (the URL is not absolute)');
+  }
+
+  // A provider names this URL and redirects it onto a signed CDN host, so every
+  // hop is resolved rather than refused.
+  const deadline = createDeadline(OBJECT_STORAGE_REQUEST_TIMEOUT_MS);
+  try {
+    const outcome = await guardedFetch(target, {
+      deadline,
+      maxRedirects: MEDIA_FETCH_MAX_REDIRECTS,
+      headers: {},
+    });
+    if (!outcome.ok) {
+      throw new Error(`Failed to fetch media for persistence (${outcome.refusal})`);
+    }
+    if (outcome.kind === 'redirect') {
+      throw new Error('Failed to fetch media for persistence (too many redirects)');
+    }
+    const { response } = outcome;
+    if (!response.ok) {
+      throw new Error(`Failed to fetch media for persistence (HTTP ${response.status})`);
+    }
+    const contentType = response.headers.get('content-type') ?? 'application/octet-stream';
+    return { data: Buffer.from(await response.arrayBuffer()), contentType };
+  } finally {
+    deadline.release();
+  }
 }
 
 export async function storeMedia(params: {

@@ -1,0 +1,12 @@
+{
+  "ungated": {
+    "apps/web/features/plugins/server/directory/install.ts#upsertInstallation": {
+      "reason": "The directory install path writes an installation row without reading a recorded scan verdict for the pack it admits, so a directory entry installs on provenance alone. The fix is the same call the marketplace path now makes, from the function that resolves the entry.",
+      "gateIn": "apps/web/features/plugins/server/directory/install.ts"
+    },
+    "apps/web/lib/services/plugin-lifecycle.ts#rollbackPlugin": {
+      "reason": "Rollback moves installations back to a version the catalogue previously served, which cleared the gate when it was published; refusing here would strand every install on the withdrawn version instead. It is an operator action recorded with its actor in plugin_registry_lifecycle_events.",
+      "gateIn": "apps/web/lib/services/plugin-lifecycle.ts"
+    }
+  }
+}

@@ -125,7 +125,11 @@ describe('the export carries every class of content the account owns', () => {
     )) {
       const [, name, sql] = section as unknown as [string, string, string];
       sections += 1;
-      if (!/\b(?:user_id|owner_user_id|owner_id)\s*=\s*\$1/.test(sql)) unscoped.push(name);
+      // A referral names two accounts, and the waitlist is keyed by the address on the subject's own profile.
+      const scoped =
+        /\b(?:user_id|owner_user_id|owner_id|referrer_id|referred_user_id)\s*=\s*\$1/.test(sql) ||
+        /from profiles where id = \$1/.test(sql);
+      if (!scoped) unscoped.push(name);
     }
 
     expect(sections).toBeGreaterThan(30);

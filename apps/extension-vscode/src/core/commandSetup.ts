@@ -98,6 +98,11 @@ import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import {
+  admitDeveloperSessionHandoff,
+  describeHandoffRefusal,
+} from '../integrations/developerSessionHandoff';
+import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
+import {
   CliCapabilityAdapter,
   openArtifactsSurface,
   openCapabilitySurface,
@@ -407,6 +412,63 @@ async function readHostModels(
   }
 }
 
+/**
+ * Takes the session the CLI is holding in this folder and opens it here.
+ *
+ * The record is validated before anything is started: an expired one, one
+ * already taken, one for another account and one for another checkout are all
+ * refused with the reason, rather than silently resuming someone else's work.
+ */
+async function continueCliSessionHere(
+  localRuntimes: LocalRuntimePool,
+  accepted: Set<string>,
+): Promise<void> {
+  const folder = getActiveWorkspaceFolderSync();
+  if (folder === undefined) {
+    await vscode.window.showWarningMessage(
+      'AGI Workforce: open the folder the session is working in before continuing it here.',
+    );
+    return;
+  }
+  const cwd = folder.uri.fsPath;
+  const runtime = localRuntimes.forWorkspace(cwd);
+  let threads;
+  try {
+    threads = await runtime.listThreads({ cwd });
+  } catch (error) {
+    await vscode.window.showErrorMessage(
+      `AGI Workforce: could not reach the AGI CLI. ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
+  const newest = [...threads.threads].sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  )[0];
+  if (newest === undefined) {
+    await vscode.window.showInformationMessage(
+      'AGI Workforce: the AGI CLI has no session in this folder to continue.',
+    );
+    return;
+  }
+
+  const handoff = await runtime.handOffThread(newest.id, 'local');
+  const outcome = admitDeveloperSessionHandoff(handoff, {
+    supportedProtocolVersions: [DEVELOPER_SESSION_PROTOCOL_VERSION],
+    nowMs: Date.now(),
+    workspaceCwd: cwd,
+    accepted,
+  });
+  if (outcome.status === 'refused') {
+    await vscode.window.showWarningMessage(
+      `AGI Workforce: ${describeHandoffRefusal(outcome.refusal)}`,
+    );
+    return;
+  }
+  accepted.add(outcome.receipt);
+  await runtime.acceptHandoff(handoff);
+  await vscode.commands.executeCommand('agi-workforce.chat');
+}
+
 async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {
   if (unreachable.action === 'sign_in_account') {
     await vscode.commands.executeCommand('agi-workforce.signIn');
@@ -465,6 +527,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   } = deps;
 
   const cliCapabilities = new CliCapabilityAdapter(localRuntimes);
+  const acceptedHandoffs = new Set<string>();
 
   type CommandHandler = Parameters<typeof vscode.commands.registerCommand>[1];
   const failedCommandIds: string[] = [];
@@ -1113,6 +1176,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.refreshConversations', () => {
       conversationTreeProvider.refresh();
+    }),
+
+    register('agi-workforce.continueCliSession', async () => {
+      await continueCliSessionHere(localRuntimes, acceptedHandoffs);
     }),
 
     register('agi-workforce.showSessionsHistory', async () => {

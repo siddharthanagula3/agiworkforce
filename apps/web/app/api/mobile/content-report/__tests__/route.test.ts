@@ -1,9 +1,16 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockAuth, mockNeonQuery } = vi.hoisted(() => ({
+const { mockAuth, mockOptionalUser, mockNeonQuery } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
+  mockOptionalUser: vi.fn(async (): Promise<{ userId: string } | null> => null),
   mockNeonQuery: vi.fn(),
+}));
+
+vi.mock('@/lib/api-auth', () => ({
+  getOptionalAuthUser: mockOptionalUser,
+  getClerkAuthUser: vi.fn(),
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(() => []),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -49,12 +56,13 @@ const validBody = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockOptionalUser.mockResolvedValue(null);
   mockNeonQuery.mockResolvedValue([]);
 });
 
 describe('POST /api/mobile/content-report', () => {
   it('inserts a report attributed to the signed-in user', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest(validBody));
 
@@ -75,7 +83,7 @@ describe('POST /api/mobile/content-report', () => {
   });
 
   it('is idempotent on the client report id (on conflict do nothing)', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     await POST(makeRequest(validBody));
 
@@ -86,7 +94,7 @@ describe('POST /api/mobile/content-report', () => {
   });
 
   it('accepts an anonymous report with a null user_id when not signed in', async () => {
-    mockAuth.mockResolvedValue({ userId: null });
+    mockOptionalUser.mockResolvedValue(null);
 
     const res = await POST(makeRequest(validBody));
 
@@ -104,7 +112,7 @@ describe('POST /api/mobile/content-report', () => {
   });
 
   it('defaults optional excerpt/note to empty strings', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(
       makeRequest({
@@ -129,7 +137,7 @@ describe('POST /api/mobile/content-report', () => {
   });
 
   it('400s on an invalid category', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest({ ...validBody, category: 'spam' }));
 
@@ -138,7 +146,7 @@ describe('POST /api/mobile/content-report', () => {
   });
 
   it('400s on a missing conversationId', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest({ reportId: 'r', messageId: 'm', category: 'harmful' }));
 
@@ -147,7 +155,7 @@ describe('POST /api/mobile/content-report', () => {
   });
 
   it('400s on a user note over 2000 characters', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     const res = await POST(makeRequest({ ...validBody, userNote: 'x'.repeat(2001) }));
 

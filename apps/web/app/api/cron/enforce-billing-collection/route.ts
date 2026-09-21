@@ -21,8 +21,12 @@ import {
 } from '@/app/api/stripe-webhook/lib/seats';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+// Every row in this sweep sends mail and writes an audit event. Unbounded, a
+// backlog outruns maxDuration and the run is killed after some were notified.
+const MAX_CONTRACTS_PER_RUN = 200;
 const AUDIT_ENDPOINT = '/api/cron/enforce-billing-collection';
 const AUDIT_SURFACE = 'cron';
 const COLLECTION_STAGE_CHANGED_AUDIT_REASON = 'collection_stage_changed';
@@ -67,6 +71,8 @@ export interface CollectionStageOutcome {
   seatCatchUp: SeatPersistenceOutcome | null;
 }
 
+// Most overdue first. Rows that stay due are re-read every run, so past this many open
+// contracts the tail waits: there is no cursor column yet.
 async function loadEnterpriseContractsNeedingReview(db: DatabaseAdapter): Promise<ContractRow[]> {
   return db.query<ContractRow>(
     `select c.organization_id,
@@ -82,8 +88,10 @@ async function loadEnterpriseContractsNeedingReview(db: DatabaseAdapter): Promis
        join public.organizations o on o.id = c.organization_id
        left join public.profiles p on p.id = o.owner_user_id
       where c.ended_at is null
-        and (c.oldest_open_invoice_due_at is not null or c.collection_stage <> $1::text)`,
-    [CURRENT_COLLECTION_STAGE],
+        and (c.oldest_open_invoice_due_at is not null or c.collection_stage <> $1::text)
+      order by c.oldest_open_invoice_due_at asc nulls last, c.organization_id asc
+      limit $2`,
+    [CURRENT_COLLECTION_STAGE, MAX_CONTRACTS_PER_RUN],
   );
 }
 

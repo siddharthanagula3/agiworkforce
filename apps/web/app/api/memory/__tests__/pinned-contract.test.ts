@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+import {
+  answerMemoryPolicyQuery,
+  isMemoryPolicyQuery,
+} from '@/lib/services/__tests__/memory-policy-stub';
+
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
@@ -45,7 +50,9 @@ function row(overrides: Record<string, unknown> = {}) {
 const context = { params: Promise.resolve({ id: MEM_ID }) };
 
 function memoryRowCalls() {
-  return mocks.query.mock.calls.filter((call) => !String(call[0]).includes("settings -> 'memory'"));
+  return mocks.query.mock.calls.filter(
+    (call) => !String(call[0]).includes("settings -> 'memory'") && !isMemoryPolicyQuery(call[0]),
+  );
 }
 
 function sql(callIndex = 0): string {
@@ -105,7 +112,10 @@ describe('/api/memory pinned contract', () => {
   });
 
   it('PUT /api/memory/[id] updates content and pin state together', async () => {
-    mocks.query.mockResolvedValue([row({ content: 'new text', pinned: false })]);
+    mocks.query.mockImplementation(
+      async (sql: unknown) =>
+        answerMemoryPolicyQuery(sql) ?? [row({ content: 'new text', pinned: false })],
+    );
 
     const res = await PUT(
       new NextRequest(`http://localhost:3000/api/memory/${MEM_ID}`, {
@@ -148,7 +158,9 @@ describe('/api/memory pinned contract', () => {
   });
 
   it('POST /api/memory persists and returns the requested pin state', async () => {
-    mocks.query.mockResolvedValue([row({ pinned: true })]);
+    mocks.query.mockImplementation(
+      async (sql: unknown) => answerMemoryPolicyQuery(sql) ?? [row({ pinned: true })],
+    );
 
     const res = await CREATE(
       new NextRequest('http://localhost:3000/api/memory', {

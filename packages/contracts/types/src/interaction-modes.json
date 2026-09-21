@@ -1,0 +1,424 @@
+{
+  "modes": {
+    "chat": {
+      "label": "Chat",
+      "description": "Quick questions and conversation.",
+      "selector": {
+        "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+        "marker": "WORK_MODE_LABELS",
+        "label": "Chat"
+      },
+      "request": {
+        "kind": "chat-completions",
+        "field": "work_mode",
+        "route": "apps/web/app/api/llm/v1/chat/completions"
+      },
+      "gates": {
+        "feature": null,
+        "entitlement": "managed_chat"
+      },
+      "models": {
+        "catalog": "chat"
+      },
+      "requiredModelCapabilities": ["streaming"],
+      "requiredTools": [],
+      "optionalTools": ["web_search", "code_execution"],
+      "sourceBehavior": "conversation",
+      "fileBehavior": "inline-and-attached",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "optional",
+      "approvalBehavior": "none",
+      "streamingFormat": "sse-chat-completions",
+      "persistence": "conversation",
+      "backgroundExecution": false,
+      "usageAccounting": "chat",
+      "billing": "managed_chat",
+      "cancellation": "stop-stream",
+      "resume": "same-conversation",
+      "crossDevice": "synced",
+      "offline": "queued-draft-only",
+      "trustModes": ["local", "byok", "managed"],
+      "enterprisePolicy": null,
+      "outputTypes": ["text", "markdown", "artifact"],
+      "draft": "carried"
+    },
+    "agiwork": {
+      "label": "AGI Work",
+      "description": "Multi-step tasks with tools, files and reviewable deliverables.",
+      "selector": {
+        "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+        "marker": "WORK_MODE_LABELS",
+        "label": "AGI Work"
+      },
+      "request": {
+        "kind": "chat-completions",
+        "field": "work_mode",
+        "route": "apps/web/app/api/llm/v1/chat/completions"
+      },
+      "gates": {
+        "feature": "work",
+        "entitlement": "agi_work"
+      },
+      "models": {
+        "catalog": "chat"
+      },
+      "requiredModelCapabilities": ["streaming", "tools", "agentic"],
+      "requiredTools": [],
+      "optionalTools": ["web_search", "code_execution", "office_creation"],
+      "sourceBehavior": "conversation-and-project",
+      "fileBehavior": "inline-and-attached",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "required-when-available",
+      "approvalBehavior": "per-tool",
+      "streamingFormat": "sse-chat-completions",
+      "persistence": "conversation",
+      "backgroundExecution": true,
+      "usageAccounting": "chat",
+      "billing": "agi_work",
+      "cancellation": "stop-run",
+      "resume": "same-conversation",
+      "crossDevice": "synced",
+      "offline": "queued-draft-only",
+      "trustModes": ["managed"],
+      "enterprisePolicy": "work",
+      "outputTypes": ["text", "markdown", "artifact", "deliverable"],
+      "draft": "carried"
+    },
+    "search": {
+      "label": "/search",
+      "description": "Answer from the live web and cite what was read.",
+      "selector": {
+        "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+        "marker": "id: 'search'",
+        "label": "/search"
+      },
+      "request": {
+        "kind": "chat-completions",
+        "field": "search_requested",
+        "route": "apps/web/app/api/llm/v1/chat/completions"
+      },
+      "gates": {
+        "feature": null,
+        "entitlement": "chat_tools"
+      },
+      "models": {
+        "catalog": "chat"
+      },
+      "requiredModelCapabilities": ["streaming", "search"],
+      "requiredTools": ["web_search"],
+      "optionalTools": [],
+      "sourceBehavior": "web",
+      "fileBehavior": "inline-and-attached",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "optional",
+      "approvalBehavior": "none",
+      "streamingFormat": "sse-chat-completions",
+      "persistence": "conversation",
+      "backgroundExecution": false,
+      "usageAccounting": "chat",
+      "billing": "chat_tools",
+      "cancellation": "stop-stream",
+      "resume": "same-conversation",
+      "crossDevice": "synced",
+      "offline": "unavailable",
+      "trustModes": ["byok", "managed"],
+      "enterprisePolicy": null,
+      "outputTypes": ["text", "markdown", "citation"],
+      "draft": "carried"
+    },
+    "research": {
+      "label": "Deep Research",
+      "description": "A planned, multi-round investigation that returns a sourced report.",
+      "selector": {
+        "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+        "marker": "onToggleResearch",
+        "label": "Deep Research"
+      },
+      "request": {
+        "kind": "chat-completions",
+        "field": "research",
+        "route": "apps/web/app/api/llm/v1/chat/completions"
+      },
+      "gates": {
+        "feature": "research",
+        "entitlement": "chat_tools"
+      },
+      "models": {
+        "catalog": "chat"
+      },
+      "requiredModelCapabilities": ["streaming", "research"],
+      "requiredTools": ["web_search"],
+      "optionalTools": ["code_execution"],
+      "sourceBehavior": "web-and-files",
+      "fileBehavior": "inline-and-attached",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "optional",
+      "approvalBehavior": "per-plan",
+      "streamingFormat": "sse-chat-completions",
+      "persistence": "conversation",
+      "backgroundExecution": true,
+      "usageAccounting": "chat",
+      "billing": "chat_tools",
+      "cancellation": "stop-run",
+      "resume": "research-resume",
+      "crossDevice": "synced",
+      "offline": "unavailable",
+      "trustModes": ["managed"],
+      "enterprisePolicy": "research",
+      "outputTypes": ["text", "markdown", "citation", "report"],
+      "draft": "carried"
+    },
+    "code": {
+      "label": "/code",
+      "description": "Run code in a sandbox and return its output.",
+      "selector": {
+        "file": "packages/ui/unified-chat/src/lib/slashCommands.ts",
+        "marker": "id: 'code'",
+        "label": "/code"
+      },
+      "request": {
+        "kind": "chat-completions",
+        "field": "code_execution",
+        "route": "apps/web/app/api/llm/v1/chat/completions"
+      },
+      "gates": {
+        "feature": "code",
+        "entitlement": "developer_surfaces"
+      },
+      "models": {
+        "catalog": "chat"
+      },
+      "requiredModelCapabilities": ["streaming", "tools", "codeExecution"],
+      "requiredTools": ["code_execution"],
+      "optionalTools": ["web_search"],
+      "sourceBehavior": "conversation",
+      "fileBehavior": "inline-and-attached",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "optional",
+      "approvalBehavior": "per-tool",
+      "streamingFormat": "sse-chat-completions",
+      "persistence": "conversation",
+      "backgroundExecution": false,
+      "usageAccounting": "chat",
+      "billing": "developer_surfaces",
+      "cancellation": "stop-run",
+      "resume": "same-conversation",
+      "crossDevice": "synced",
+      "offline": "unavailable",
+      "trustModes": ["local", "byok", "managed"],
+      "enterprisePolicy": "code",
+      "outputTypes": ["text", "markdown", "artifact", "file"],
+      "draft": "carried"
+    },
+    "office": {
+      "label": "Create Office files",
+      "description": "Produce a document, sheet or deck as a downloadable file.",
+      "selector": {
+        "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+        "marker": "onToggleOfficeCreation",
+        "label": "Create Office files"
+      },
+      "request": {
+        "kind": "chat-completions",
+        "field": "office_creation",
+        "route": "apps/web/app/api/llm/v1/chat/completions"
+      },
+      "gates": {
+        "feature": null,
+        "entitlement": "chat_tools"
+      },
+      "models": {
+        "catalog": "chat"
+      },
+      "requiredModelCapabilities": ["streaming", "tools"],
+      "requiredTools": ["office_creation"],
+      "optionalTools": ["code_execution"],
+      "sourceBehavior": "conversation",
+      "fileBehavior": "inline-and-attached",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "optional",
+      "approvalBehavior": "none",
+      "streamingFormat": "sse-chat-completions",
+      "persistence": "conversation",
+      "backgroundExecution": false,
+      "usageAccounting": "chat",
+      "billing": "chat_tools",
+      "cancellation": "stop-run",
+      "resume": "same-conversation",
+      "crossDevice": "synced",
+      "offline": "unavailable",
+      "trustModes": ["managed"],
+      "enterprisePolicy": null,
+      "outputTypes": ["text", "markdown", "file"],
+      "draft": "carried"
+    },
+    "image": {
+      "label": "Create image",
+      "description": "Generate or edit a picture from a prompt.",
+      "selector": {
+        "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+        "marker": "ROW_LABEL_IMAGE",
+        "label": "Create image"
+      },
+      "request": {
+        "kind": "route",
+        "field": "prompt",
+        "route": "apps/web/app/api/media/image/generate"
+      },
+      "gates": {
+        "feature": null,
+        "entitlement": "image_generation"
+      },
+      "models": {
+        "catalog": "image"
+      },
+      "requiredModelCapabilities": ["imageGen"],
+      "requiredTools": [],
+      "optionalTools": [],
+      "sourceBehavior": "none",
+      "fileBehavior": "reference-image",
+      "memoryBehavior": "none",
+      "projectBehavior": "unavailable",
+      "approvalBehavior": "none",
+      "streamingFormat": "none",
+      "persistence": "media-asset",
+      "backgroundExecution": false,
+      "usageAccounting": "image",
+      "billing": "image_generation",
+      "cancellation": "discard-request",
+      "resume": "none",
+      "crossDevice": "synced",
+      "offline": "unavailable",
+      "trustModes": ["managed"],
+      "enterprisePolicy": null,
+      "outputTypes": ["image"],
+      "draft": "carried"
+    },
+    "video": {
+      "label": "Create video",
+      "description": "Generate a short clip from a prompt.",
+      "selector": {
+        "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+        "marker": "ROW_LABEL_VIDEO",
+        "label": "Create video"
+      },
+      "request": {
+        "kind": "route",
+        "field": "prompt",
+        "route": "apps/web/app/api/media/video/generate"
+      },
+      "gates": {
+        "feature": null,
+        "entitlement": "video_generation"
+      },
+      "models": {
+        "catalog": "video"
+      },
+      "requiredModelCapabilities": ["videoGen"],
+      "requiredTools": [],
+      "optionalTools": [],
+      "sourceBehavior": "none",
+      "fileBehavior": "reference-image",
+      "memoryBehavior": "none",
+      "projectBehavior": "unavailable",
+      "approvalBehavior": "none",
+      "streamingFormat": "none",
+      "persistence": "media-asset",
+      "backgroundExecution": true,
+      "usageAccounting": "video",
+      "billing": "video_generation",
+      "cancellation": "cancel-task",
+      "resume": "poll-task",
+      "crossDevice": "synced",
+      "offline": "unavailable",
+      "trustModes": ["managed"],
+      "enterprisePolicy": null,
+      "outputTypes": ["video"],
+      "draft": "carried"
+    },
+    "voice": {
+      "label": "Start voice mode",
+      "description": "Speak with the model in a live session.",
+      "selector": {
+        "file": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+        "marker": "VoiceEntryButton",
+        "label": "Start voice mode"
+      },
+      "request": {
+        "kind": "route",
+        "field": "session",
+        "route": "apps/web/app/api/voice/live/sessions"
+      },
+      "gates": {
+        "feature": null,
+        "entitlement": "managed_chat"
+      },
+      "models": {
+        "catalog": "voice"
+      },
+      "requiredModelCapabilities": ["streaming"],
+      "requiredTools": [],
+      "optionalTools": ["web_search"],
+      "sourceBehavior": "conversation",
+      "fileBehavior": "none",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "unavailable",
+      "approvalBehavior": "none",
+      "streamingFormat": "realtime-session",
+      "persistence": "conversation",
+      "backgroundExecution": false,
+      "usageAccounting": "chat",
+      "billing": "managed_chat",
+      "cancellation": "end-session",
+      "resume": "none",
+      "crossDevice": "single-device",
+      "offline": "unavailable",
+      "trustModes": ["managed"],
+      "enterprisePolicy": null,
+      "outputTypes": ["audio", "text"],
+      "draft": "dropped"
+    },
+    "study": {
+      "label": "Study",
+      "description": "Work through a subject one idea at a time.",
+      "selector": {
+        "file": "apps/web/features/study/components/StudyPage.tsx",
+        "marker": "StudyPage",
+        "label": "Study"
+      },
+      "request": {
+        "kind": "route",
+        "field": "sessions",
+        "route": "apps/web/app/api/study/sessions"
+      },
+      "gates": {
+        "feature": null,
+        "entitlement": "managed_chat"
+      },
+      "models": {
+        "catalog": "chat"
+      },
+      "requiredModelCapabilities": ["streaming"],
+      "requiredTools": [],
+      "optionalTools": [],
+      "sourceBehavior": "conversation",
+      "fileBehavior": "none",
+      "memoryBehavior": "read-write",
+      "projectBehavior": "unavailable",
+      "approvalBehavior": "none",
+      "streamingFormat": "sse-chat-completions",
+      "persistence": "study-session",
+      "backgroundExecution": false,
+      "usageAccounting": "chat",
+      "billing": "managed_chat",
+      "cancellation": "stop-stream",
+      "resume": "study-session",
+      "crossDevice": "synced",
+      "offline": "unavailable",
+      "trustModes": ["managed"],
+      "enterprisePolicy": null,
+      "outputTypes": ["text", "markdown"],
+      "draft": "dropped"
+    }
+  }
+}

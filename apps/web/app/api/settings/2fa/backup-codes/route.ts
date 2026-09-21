@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { generateBackupCodes, hashBackupCode } from '@/features/settings/services/user-preferences';
 import { requireStepUp } from '@/lib/server/step-up-auth';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
 
 const ENDPOINT = '/api/settings/2fa/backup-codes';
 
@@ -66,6 +67,16 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
     request,
     organizationId,
     detail: { resourceType: 'two_factor', count: newCodes.length, source: grant.method },
+  });
+
+  // The old set stopped working in the statement above, which is a change the
+  // account holder has to hear about even when they made it.
+  await announceTwoFactorChange({
+    userId,
+    event: 'backup_codes_regenerated',
+    request,
+    organizationId,
+    detail: { count: newCodes.length, source: grant.method },
   });
 
   return NextResponse.json({ backup_codes: newCodes });

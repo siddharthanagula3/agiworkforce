@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   eraseUserAccountData: vi.fn(),
   eraseProfileRow: vi.fn(),
   deleteUser: vi.fn(),
+  invalidateAccountStatusCache: vi.fn(),
   calls: [] as string[],
 }));
 
@@ -19,6 +20,10 @@ vi.mock('../neon-db', () => ({
 }));
 vi.mock('../identity', () => ({
   getIdentityProvider: () => ({ deleteUser: (...args: unknown[]) => mocks.deleteUser(...args) }),
+}));
+vi.mock('../request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../request-context-cache')>()),
+  invalidateAccountStatusCache: (...args: unknown[]) => mocks.invalidateAccountStatusCache(...args),
 }));
 vi.mock('../account-erasure', () => ({
   openErasureTombstone: (...args: unknown[]) => {
@@ -67,6 +72,17 @@ describe('eraseScheduledAccount', () => {
 
     expect(mocks.calls).toEqual(['open', 'erase', 'close', 'profile']);
     expect(mocks.deleteUser).toHaveBeenCalledWith('user-1');
+  });
+
+  it('drops the cached account status as soon as the tombstone is open, before anything is erased', async () => {
+    await eraseScheduledAccount('user-1');
+
+    expect(mocks.invalidateAccountStatusCache).toHaveBeenCalledWith('user-1');
+    const invalidated = mocks.invalidateAccountStatusCache.mock.invocationCallOrder[0] ?? 0;
+    const opened = mocks.openErasureTombstone.mock.invocationCallOrder[0] ?? 0;
+    const erased = mocks.eraseUserAccountData.mock.invocationCallOrder[0] ?? 0;
+    expect(invalidated).toBeGreaterThan(opened);
+    expect(invalidated).toBeLessThan(erased);
   });
 
   it('does nothing for an account whose deletion was cancelled after the job was queued', async () => {

@@ -19,10 +19,7 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 vi.mock('@shared/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    if (key === 'DEVICE_TOKEN_ENCRYPTION_KEY') return 'a'.repeat(64);
-    return 'test-value';
-  }),
+  requireEnv: vi.fn(() => 'test-value'),
 }));
 
 const mockClerkAuth = vi.fn();
@@ -58,6 +55,16 @@ vi.mock('@/lib/server/device-signin-policy', () => ({
 
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (userId: string) => mockHasAcceptedCurrentTerms(userId),
+}));
+
+const mockRecordAuditEvent = vi.fn();
+
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args),
+  BLOCK_APPEAL_PATH: '/support/appeal',
+  getClientIp: vi.fn(() => '203.0.113.7'),
+  logAuthFailure: vi.fn(),
+  logRateLimitExceeded: vi.fn(),
 }));
 
 import { POST, OPTIONS } from '@/app/api/device/approve/route';
@@ -387,6 +394,70 @@ describe('Device Approve API', () => {
         const data = await response.json();
         expect(data.status).toBe('denied');
         expect(mockIsDeviceCodeSignInEnabled).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('the audit trail', () => {
+      it('records the approval, the same event its sibling route records', async () => {
+        mockQuery.mockReset();
+        mockQuery.mockResolvedValueOnce([makePendingRecord()]);
+        mockQuery.mockResolvedValueOnce([{ status: 'approved' }]);
+
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: validCode, action: 'approve' }),
+        });
+
+        expect((await POST(request)).status).toBe(200);
+        expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: 'user-123',
+            eventType: 'device_authorization_approved',
+            detail: expect.objectContaining({
+              resourceType: 'device_authorization',
+              subjectRef: 'device-123',
+            }),
+          }),
+        );
+      });
+
+      it('records the refusal as a denial, so a rejected device is not a gap', async () => {
+        mockQuery.mockReset();
+        mockQuery.mockResolvedValueOnce([makePendingRecord()]);
+        mockQuery.mockResolvedValueOnce([{ status: 'denied' }]);
+
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: validCode, action: 'deny' }),
+        });
+
+        expect((await POST(request)).status).toBe(200);
+        expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: 'user-123',
+            eventType: 'device_authorization_denied',
+            outcome: 'denied',
+          }),
+        );
+      });
+
+      it('leaves no bearer column on the row it writes', async () => {
+        mockQuery.mockReset();
+        mockQuery.mockResolvedValueOnce([makePendingRecord()]);
+        mockQuery.mockResolvedValueOnce([{ status: 'approved' }]);
+
+        const request = new NextRequest('http://localhost/api/device/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: validCode, action: 'approve' }),
+        });
+        await POST(request);
+
+        for (const [statement] of mockQuery.mock.calls) {
+          expect(String(statement)).not.toMatch(/access_token|refresh_token/);
+        }
       });
     });
   });

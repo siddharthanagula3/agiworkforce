@@ -34,6 +34,14 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mocks.auth() }));
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: async () => {
+    const { createError } = await import('@/lib/errors');
+    const { userId } = (await mocks.auth()) as { userId: string | null };
+    if (!userId) throw createError.unauthorized('Sign in to record terms acceptance');
+    return { userId };
+  },
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mocks.withRateLimit(...args),

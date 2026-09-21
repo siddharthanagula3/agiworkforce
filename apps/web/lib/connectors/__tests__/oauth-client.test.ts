@@ -5,6 +5,9 @@ vi.mock('server-only', () => ({}));
 const mockAssertResolvedPublicHostname = vi.fn();
 vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: (...a: unknown[]) => mockAssertResolvedPublicHostname(...a),
+  EgressPolicyError: class EgressPolicyError extends Error {},
+  pinnedPublicFetch: (input: unknown, init?: unknown) =>
+    (globalThis.fetch as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init),
 }));
 
 import {

@@ -15,7 +15,7 @@ import {
   isIntakeTableMissing,
   recordBetaApplication,
 } from '@/lib/server/beta-applications';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getOptionalAuthUser } from '@/lib/api-auth';
 
 const optionalText = (max: number) =>
   z
@@ -51,7 +51,7 @@ async function handleApply(request: NextRequest) {
     );
   }
 
-  const { subject: userId } = await getRequestIdentity().catch(() => ({ subject: null }));
+  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
   const data = parsed.data;
 
   let alreadyReviewed: boolean;

@@ -6,6 +6,9 @@ import {
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
+import { recordRejection } from '@/lib/observability/metrics';
+import { UNKNOWN_SURFACE } from '@/lib/observability/denials';
+import { httpRequestLabels, type HttpRequestLabels } from '@/lib/observability/request-labels';
 import {
   getCachedActiveOrganizationId,
   setCachedActiveOrganizationId,
@@ -42,6 +45,21 @@ interface WorkspaceScopedRequest {
   headers: { get(name: string): string | null };
 }
 
+// A switch the server would not honour is a disagreement between the client's
+// idea of the workspace and the server's, not a failure of the request.
+function noteSwitchRejection(reason: string, request?: WorkspaceScopedRequest): void {
+  const labels: HttpRequestLabels = request
+    ? httpRequestLabels((name) => request.headers.get(name))
+    : {};
+  recordRejection({
+    kind: 'workspace_switch',
+    reason,
+    surface: labels.surface ?? UNKNOWN_SURFACE,
+    clientVersion: labels.clientVersion,
+    protocolVersion: labels.protocolVersion,
+  });
+}
+
 export async function resolveActiveOrganizationId(
   db: DatabaseAdapter,
   userId: string,
@@ -51,10 +69,12 @@ export async function resolveActiveOrganizationId(
   if (requested) {
     if (requested === MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE) return null;
     if (!UUID_RE.test(requested)) {
+      noteSwitchRejection('malformed_selector', request);
       throw createError.validation('Invalid Managed Cloud workspace selector');
     }
     const membershipId = await resolveOrganizationMembershipId(db, userId, requested);
     if (!membershipId) {
+      noteSwitchRejection('not_a_member', request);
       throw createError.forbidden('You are not a member of that workspace');
     }
     return membershipId;
@@ -189,6 +209,7 @@ export async function persistActiveWorkspaceSelection(
   if (organizationId) {
     const membershipId = await resolveOrganizationMembershipId(db, userId, organizationId);
     if (!membershipId) {
+      noteSwitchRejection('not_a_member');
       throw createError.forbidden('You are not a member of that workspace');
     }
   }

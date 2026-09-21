@@ -4,6 +4,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { isDbUnavailableError } from '@/lib/db-error';
 import { createError, isAppError, type AppError } from '@/lib/errors';
 import { requirePlatformAdmin } from '@/lib/auth-guards';
+import { withErrorHandler } from '@/lib/error-handler';
 import {
   getObservabilityBreakdown,
   resolveObservabilityWindow,
@@ -26,7 +27,7 @@ function parseDimension(value: string | null): ObservabilityDimension {
     : DEFAULT_DIMENSION;
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function handleGet(request: NextRequest): Promise<NextResponse> {
   const limited = await withRateLimit(request, 'admin-operator');
   if (limited) return limited;
 
@@ -57,3 +58,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return errorResponse(createError.internal());
   }
 }
+
+export const GET = withErrorHandler(handleGet);

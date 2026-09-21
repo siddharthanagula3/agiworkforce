@@ -715,6 +715,21 @@ impl AgentSession {
         self.disallowed_tools = disallowed_tools.to_vec();
     }
 
+    /// The MCP catalogue `tool_search` needs to hand over a schema the initial
+    /// list deferred. Built for that tool alone: any other call would clone
+    /// every connected schema and never read one.
+    pub(crate) fn mcp_catalog_for(
+        &self,
+        tool_name: &str,
+    ) -> Option<std::sync::Arc<Vec<ToolDefinition>>> {
+        if tool_name != "tool_search" {
+            return None;
+        }
+        self.mcp_manager
+            .as_ref()
+            .map(|manager| std::sync::Arc::new(manager.tool_definitions(self.privacy_mode)))
+    }
+
     pub(crate) fn effective_tool_definitions(&self) -> Vec<ToolDefinition> {
         let mcp_tool_definitions = self
             .mcp_manager
@@ -2012,12 +2027,19 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 40);
+        assert_eq!(defs.len(), 61);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs
             .iter()
             .any(|definition| definition.name == "resolve_conflict"));
+        assert_eq!(
+            defs.iter()
+                .filter(|definition| definition.name.starts_with("git_"))
+                .count(),
+            crate::runtime::git_tools::git_tool_specs().len(),
+            "every typed git operation is offered to the model"
+        );
     }
 
     #[test]

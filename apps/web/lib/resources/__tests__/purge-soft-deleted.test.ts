@@ -23,12 +23,17 @@ function tableOf(sql: string): string {
   return /delete from public\.(\w+)/u.exec(sql)?.[1] ?? '';
 }
 
+/** The count of what a hold withheld is a read; only the deletes are ordered. */
+function isDelete(sql: string): boolean {
+  return /delete from public\./u.test(sql);
+}
+
 describe('purgeSoftDeletedResources', () => {
   it('purges a child table before the parent whose cascade would take it', async () => {
     const order: string[] = [];
     await purgeSoftDeletedResources(
       adapter(async (sql) => {
-        order.push(tableOf(sql));
+        if (isDelete(sql)) order.push(tableOf(sql));
         return [];
       }),
     );
@@ -42,7 +47,7 @@ describe('purgeSoftDeletedResources', () => {
     const order: string[] = [];
     const result = await purgeSoftDeletedResources(
       adapter(async (sql) => {
-        order.push(tableOf(sql));
+        if (isDelete(sql)) order.push(tableOf(sql));
         return [];
       }),
     );
@@ -56,7 +61,7 @@ describe('purgeSoftDeletedResources', () => {
     const issued: string[] = [];
     const result = await purgeSoftDeletedResources(
       adapter(async (sql) => {
-        issued.push(tableOf(sql));
+        if (isDelete(sql)) issued.push(tableOf(sql));
         return [];
       }),
     );
@@ -87,11 +92,26 @@ describe('purgeSoftDeletedResources', () => {
       }),
     );
 
-    for (const call of calls) {
+    const deletes = calls.filter((call) => isDelete(call.sql));
+    expect(deletes.length).toBeGreaterThan(0);
+    for (const call of deletes) {
       expect(call.sql).toContain('deleted_at < now() - $1::interval');
       expect(call.sql).toContain('limit $2');
       expect(call.params[0]).toBe('30 days');
       expect(typeof call.params[1]).toBe('number');
+    }
+
+    // Every one of these tables can be placed under legal hold, so every
+    // statement carries the predicate and binds the store it is reading.
+    const store: Record<string, string> = {
+      web_conversations: 'conversation',
+      web_messages: 'message',
+      web_artifacts: 'artifact',
+    };
+    for (const call of calls) {
+      const table = tableOf(call.sql) || /from public\.(\w+) candidate/u.exec(call.sql)?.[1] || '';
+      expect(call.sql).toContain('legal_hold_custodians');
+      expect(call.params).toContain(store[table]);
     }
   });
 

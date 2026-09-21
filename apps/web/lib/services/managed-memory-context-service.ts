@@ -8,8 +8,12 @@ import {
   contextFenceTag,
   contextSource,
   contextSourceClassPolicy,
+  prohibitedMemoryCategory,
+  prohibitedMemoryMessage,
+  provenanceRecord,
   type ContextSource,
   type ContextSourceClass,
+  type ProvenanceRecord,
 } from '@agiworkforce/context';
 import {
   CLOSED_ORGANIZATION_CONTEXT_POLICY,
@@ -189,12 +193,23 @@ export async function loadManagedMemoryPolicy(
   if (params.organizationId && !(await organizationAllowsMemory(db, params.organizationId))) {
     return DISABLED_MANAGED_MEMORY_POLICY;
   }
+  return readUserMemoryCapabilities(db, params.userId);
+}
+
+/**
+ * The member's own switches, without re-reading the workspace policy a caller
+ * may already hold. `loadMemoryWritePolicies` reads each of the two once.
+ */
+export async function readUserMemoryCapabilities(
+  db: ManagedMemoryContextDb,
+  userId: string,
+): Promise<ManagedMemoryPolicy> {
   const [row] = await db.query<{ capabilities: unknown }>(
     `select coalesce(settings -> 'capabilities', '{}'::jsonb) as capabilities
        from user_settings
       where user_id = $1
       limit 1`,
-    [params.userId],
+    [userId],
   );
   const capabilities =
     row?.capabilities && typeof row.capabilities === 'object' && !Array.isArray(row.capabilities)
@@ -381,6 +396,49 @@ export interface ConsolidatedMemoryWrite {
   sourceClass?: ContextSourceClass;
   /** Trust boundary the turn ran under. Defaults to `managed`. */
   trustMode?: PrivacyMode;
+  /** A turn under the temporary boundary never leaves a durable memory behind. */
+  temporaryChat?: boolean;
+  /** The conversation and turn the fact was learned in, when it was learned at all. */
+  sourceConversationId?: string | null;
+  sourceTurnId?: string | null;
+  /** Set when an unattended run produced the fact. */
+  agentId?: string | null;
+}
+
+/**
+ * Where a memory came from, in the shape the canonical provenance model
+ * declares. A memory the user typed in Settings was learned nowhere and has
+ * none, which is itself the answer to "where did this come from".
+ */
+export function memoryProvenance(input: {
+  userId: string;
+  conversationId: string;
+  turnId: string;
+  agentId?: string | null;
+  trustMode?: PrivacyMode;
+  createdAt?: string;
+}): ProvenanceRecord {
+  return provenanceRecord('memory', {
+    creatorAccountId: input.userId,
+    sourceConversationId: input.conversationId,
+    sourceTurnId: input.turnId,
+    agentId: input.agentId ?? null,
+    trustMode: input.trustMode ?? 'managed',
+    ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+  });
+}
+
+function memoryWriteProvenance(write: ConsolidatedMemoryWrite): ProvenanceRecord | null {
+  const conversationId = write.sourceConversationId?.trim();
+  const turnId = write.sourceTurnId?.trim();
+  if (!conversationId || !turnId) return null;
+  return memoryProvenance({
+    userId: write.userId,
+    conversationId,
+    turnId,
+    agentId: write.agentId ?? null,
+    ...(write.trustMode ? { trustMode: write.trustMode } : {}),
+  });
 }
 
 export const MEMORY_RETENTION_CLASSES = [
@@ -410,6 +468,9 @@ export function memoryRetentionClass(write: {
 }
 
 export const MEMORY_INELIGIBILITY_REASONS = [
+  'prohibited_content_category',
+  'temporary_chat',
+  'user_memory_disabled',
   'organization_memory_disabled',
   'source_class_cannot_generate_memory',
   'trust_mode_outside_managed_storage',
@@ -434,6 +495,31 @@ export type MemoryEligibilityDecision =
 const DEFAULT_MEMORY_SOURCE_CLASS: ContextSourceClass = 'past_chat';
 
 /**
+ * What a write is refused for before anything is read: a credential or a
+ * special-category fact is never storable, and a temporary turn never saves.
+ */
+export function memoryContentRefusal(
+  write: ConsolidatedMemoryWrite,
+): MemoryEligibilityDecision | null {
+  const prohibited = prohibitedMemoryCategory(write.content);
+  if (prohibited) {
+    return {
+      eligible: false,
+      reason: 'prohibited_content_category',
+      message: prohibitedMemoryMessage(prohibited),
+    };
+  }
+  if (write.temporaryChat) {
+    return {
+      eligible: false,
+      reason: 'temporary_chat',
+      message: 'This is a temporary chat, so nothing from it is saved to Memory.',
+    };
+  }
+  return null;
+}
+
+/**
  * The one place a fact is judged fit to enter managed memory, across all three
  * axes the product governs: who the workspace lets remember, what kind of
  * context the fact came from, and which trust boundary produced it.
@@ -441,15 +527,27 @@ const DEFAULT_MEMORY_SOURCE_CLASS: ContextSourceClass = 'past_chat';
 export function memoryEligibilityGate(input: {
   write: ConsolidatedMemoryWrite;
   organizationPolicy: OrganizationMemoryPolicy;
+  userPolicy?: ManagedMemoryPolicy;
   nowMs?: number;
 }): MemoryEligibilityDecision {
   const { write, organizationPolicy } = input;
+
+  const refusedOnSight = memoryContentRefusal(write);
+  if (refusedOnSight) return refusedOnSight;
 
   if (!organizationPolicy.allowMemory) {
     return {
       eligible: false,
       reason: 'organization_memory_disabled',
       message: 'This workspace has memory turned off for its members.',
+    };
+  }
+
+  if (input.userPolicy && !input.userPolicy.enabled) {
+    return {
+      eligible: false,
+      reason: 'user_memory_disabled',
+      message: 'Memory is turned off in your settings, so I did not save that.',
     };
   }
 
@@ -512,14 +610,57 @@ const CONSOLIDATED_MEMORY_COLUMNS = (alias: string, outcome: string) =>
    ${alias}.source, ${alias}.pinned, ${alias}.project_id::text as project_id, ${alias}.expires_at,
    ${alias}.superseded_by::text as superseded_by, ${alias}.created_at, ${alias}.updated_at`;
 
+export interface MemoryWritePolicies {
+  organization: OrganizationMemoryPolicy;
+  user: ManagedMemoryPolicy;
+}
+
+/**
+ * Both halves of the answer to "may this account remember anything here", read
+ * once. A workspace with memory off settles it without a second query.
+ */
+export async function loadMemoryWritePolicies(
+  db: ManagedMemoryContextDb,
+  params: { userId: string; organizationId?: string | null },
+): Promise<MemoryWritePolicies> {
+  const organization = await loadOrganizationMemoryPolicy(db, params.organizationId);
+  if (!organization.allowMemory) return { organization, user: DISABLED_MANAGED_MEMORY_POLICY };
+  return { organization, user: await readUserMemoryCapabilities(db, params.userId) };
+}
+
+/**
+ * The one admission decision for every path that puts new memory text in front
+ * of the user, including the ones that write their own SQL. Callers that also
+ * persist through `writeConsolidatedMemory` get it applied again there, which
+ * costs a policy read and removes any way to skip it.
+ */
+export async function memoryWriteAdmission(
+  db: ManagedMemoryContextDb,
+  write: ConsolidatedMemoryWrite,
+  options: { policies?: MemoryWritePolicies } = {},
+): Promise<MemoryEligibilityDecision> {
+  const refusedOnSight = memoryContentRefusal(write);
+  if (refusedOnSight) return refusedOnSight;
+
+  const policies =
+    options.policies ??
+    (await loadMemoryWritePolicies(db, {
+      userId: write.userId,
+      organizationId: write.organizationId ?? null,
+    }));
+  return memoryEligibilityGate({
+    write,
+    organizationPolicy: policies.organization,
+    userPolicy: policies.user,
+  });
+}
+
 export async function writeConsolidatedMemory(
   db: ManagedMemoryContextDb,
   write: ConsolidatedMemoryWrite,
-  options: { organizationPolicy?: OrganizationMemoryPolicy } = {},
+  options: { policies?: MemoryWritePolicies } = {},
 ): Promise<ConsolidatedMemoryRow | null> {
-  const organizationPolicy =
-    options.organizationPolicy ?? (await loadOrganizationMemoryPolicy(db, write.organizationId));
-  const decision = memoryEligibilityGate({ write, organizationPolicy });
+  const decision = await memoryWriteAdmission(db, write, options);
   if (!decision.eligible) {
     logger.warn(
       { userId: write.userId, reason: decision.reason },
@@ -579,11 +720,13 @@ export async function writeConsolidatedMemory(
      ), inserted as (
        insert into user_memories as stored
          (id, user_id, content, category, source, pinned, project_id, organization_id,
-          expires_at, superseded_by, superseded_at)
+          expires_at, superseded_by, superseded_at,
+          source_conversation_id, source_turn_id, provenance)
        select incoming.id, $1, incoming.content, $6, $7, $8::boolean, $3::uuid, $4::uuid,
               incoming.expires_at,
               (select keeper.id from keeper),
-              case when exists (select 1 from keeper) then now() end
+              case when exists (select 1 from keeper) then now() end,
+              $12::uuid, $13::text, $14::jsonb
          from incoming
         where not exists (select 1 from duplicate)
        on conflict (user_id, id) do update
@@ -594,6 +737,9 @@ export async function writeConsolidatedMemory(
               expires_at = excluded.expires_at,
               superseded_by = excluded.superseded_by,
               superseded_at = excluded.superseded_at,
+              source_conversation_id = excluded.source_conversation_id,
+              source_turn_id = excluded.source_turn_id,
+              provenance = excluded.provenance,
               updated_at = now()
         where stored.is_deleted = false
           and (stored.superseded_by is not null
@@ -626,6 +772,9 @@ export async function writeConsolidatedMemory(
       decision.expiresAt ?? null,
       topicPatterns,
       memoryWriteRank(write),
+      write.sourceConversationId ?? null,
+      write.sourceTurnId ?? null,
+      JSON.stringify(memoryWriteProvenance(write) ?? {}),
     ],
   );
   return row ?? null;
@@ -813,7 +962,7 @@ export async function loadProjectMemoryScope(
     `select coalesce((to_jsonb(user_projects)->>'uses_global_memory')::boolean, true)
               as uses_global_memory
        from user_projects
-      where id = $1::uuid and user_id = $2
+      where id = $1::uuid and user_id = $2 and deleted_at is null
       limit 1`,
     [params.projectId, params.userId],
   );
@@ -881,6 +1030,10 @@ export async function persistManagedAutoMemoryFacts(
     organizationId?: string | null;
     sourceClass?: ContextSourceClass;
     trustMode?: PrivacyMode;
+    sourceConversationId?: string | null;
+    sourceTurnId?: string | null;
+    agentId?: string | null;
+    temporaryChat?: boolean;
   },
 ): Promise<ManagedAutoMemoryResult> {
   const extracted = params.candidates.length;
@@ -930,7 +1083,10 @@ export async function persistManagedAutoMemoryFacts(
   }
   if (batch.length === 0) return { extracted, inserted: 0, excluded };
 
-  const organizationPolicy = await loadOrganizationMemoryPolicy(db, params.organizationId);
+  const policies = await loadMemoryWritePolicies(db, {
+    userId: params.userId,
+    organizationId: params.organizationId ?? null,
+  });
   let inserted = 0;
   for (const item of batch) {
     try {
@@ -946,8 +1102,12 @@ export async function persistManagedAutoMemoryFacts(
           organizationId: params.organizationId ?? null,
           sourceClass: params.sourceClass ?? DEFAULT_MEMORY_SOURCE_CLASS,
           trustMode: params.trustMode ?? 'managed',
+          sourceConversationId: params.sourceConversationId ?? null,
+          sourceTurnId: params.sourceTurnId ?? null,
+          agentId: params.agentId ?? null,
+          temporaryChat: params.temporaryChat === true,
         },
-        { organizationPolicy },
+        { policies },
       );
       if (row && row.outcome !== 'merged') inserted += 1;
     } catch (error) {

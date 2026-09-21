@@ -7,6 +7,7 @@
 pub mod artifacts;
 pub mod chat;
 pub mod client;
+pub mod handshake;
 pub mod image;
 pub mod memory;
 pub mod projects;

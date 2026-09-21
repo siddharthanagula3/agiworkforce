@@ -456,7 +456,13 @@ pub(super) fn strip_html_tags_pub(input: &str) -> String {
     strip_html_tags(input)
 }
 
-pub(super) async fn execute_tool_search(args: &HashMap<String, String>) -> Result<ToolResult> {
+/// `mcp_tools` is the session's connected MCP catalog. It must be searched
+/// alongside the built-ins: an MCP tool the initial list deferred is reachable
+/// only if this is the place its schema can be loaded from.
+pub(super) async fn execute_tool_search(
+    args: &HashMap<String, String>,
+    mcp_tools: &[crate::models::ToolDefinition],
+) -> Result<ToolResult> {
     let query = match args.get("query") {
         Some(q) => q,
         None => {
@@ -472,7 +478,8 @@ pub(super) async fn execute_tool_search(args: &HashMap<String, String>) -> Resul
         .and_then(|s| s.parse().ok())
         .unwrap_or(10);
 
-    let catalog = crate::runtime::tool_catalog::all_builtin_tool_definitions();
+    let mut catalog = crate::runtime::tool_catalog::all_builtin_tool_definitions();
+    catalog.extend(mcp_tools.iter().cloned());
     let results = crate::tool_search::search_tool_schemas(query, &catalog, max);
     Ok(ToolResult {
         tool_name: "tool_search".into(),
@@ -678,5 +685,40 @@ mod tests {
     fn tavily_body_clamps_max_results_to_documented_range() {
         assert_eq!(tavily_search_body("q", 100)["max_results"], 20);
         assert_eq!(tavily_search_body("q", 3)["max_results"], 3);
+    }
+
+    /// The initial list can only defer an MCP schema if this call can hand it
+    /// over afterwards; otherwise deferral silently removes the tool.
+    #[tokio::test]
+    async fn tool_search_loads_a_deferred_mcp_schema_by_name() {
+        let mcp_tools = crate::mcp::McpManager::with_discovered_stdio_tools_for_test(
+            "files",
+            crate::mcp::MCP_ALWAYS_LOADED_TOOL_BUDGET + 2,
+        )
+        .tool_definitions(crate::agent::PrivacyMode::Byok);
+        let deferred = mcp_tools
+            .iter()
+            .find(|definition| definition.should_defer)
+            .expect("a catalogue past the budget defers something");
+
+        let args = HashMap::from([("query".to_string(), format!("select:{}", deferred.name))]);
+        let result = execute_tool_search(&args, &mcp_tools)
+            .await
+            .expect("tool_search runs");
+
+        assert!(result.success);
+        assert!(result.output.contains(&deferred.name));
+        assert!(result.output.contains("\"was_deferred\": true"));
+    }
+
+    #[tokio::test]
+    async fn tool_search_still_answers_for_built_ins_with_no_mcp_server() {
+        let args = HashMap::from([("query".to_string(), "select:apply_patch".to_string())]);
+        let result = execute_tool_search(&args, &[])
+            .await
+            .expect("tool_search runs");
+
+        assert!(result.success);
+        assert!(result.output.contains("apply_patch"));
     }
 }

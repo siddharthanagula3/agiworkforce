@@ -157,14 +157,15 @@ pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchEr
         .build()
         .map_err(|e| UsageFetchError::Other(anyhow::anyhow!("{e}")))?;
 
-    let response = client
-        .get(format!("{base}{USAGE_PATH}"))
-        .header("Authorization", format!("Bearer {jwt}"))
-        .header("Accept", "application/json")
-        .header("X-AGI-Surface", "cli")
-        .send()
-        .await
-        .map_err(|e| UsageFetchError::Other(anyhow::anyhow!("{e}")))?;
+    let response = crate::cloud::handshake::apply(
+        client
+            .get(format!("{base}{USAGE_PATH}"))
+            .header("Authorization", format!("Bearer {jwt}"))
+            .header("Accept", "application/json"),
+    )
+    .send()
+    .await
+    .map_err(|e| UsageFetchError::Other(anyhow::anyhow!("{e}")))?;
 
     let status = response.status().as_u16();
     if tier_cache::status_invalidates_tier(status) {

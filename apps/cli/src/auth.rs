@@ -271,6 +271,21 @@ fn write_owner_only_file(path: &Path, data: &str) -> Result<()> {
         .with_context(|| format!("Failed to restrict permissions on {}", path.display()))
 }
 
+/// Read the file store, which holds credential material in the clear. The mode
+/// is a precondition, not a report: a file other accounts can read is refused.
+fn read_file_store(path: &Path, data: &str) -> Result<AuthStore> {
+    if !check_file_permissions_secure(path) {
+        bail!(
+            "{} holds credentials in the clear and is readable by other accounts on this machine. \
+             Sign in again with `agi login` to move them into the OS credential store, or run \
+             `chmod 600 {}` once you know who has read it.",
+            path.display(),
+            path.display()
+        );
+    }
+    serde_json::from_str(data).context("Failed to parse auth.json")
+}
+
 fn load_keyring_auth(
     credentials: &dyn CredentialStore,
     index: AuthKeyringIndex,
@@ -352,7 +367,7 @@ impl AuthStore {
         // One-time migration from the legacy owner-readable JSON file. We do
         // not silently fall back to plaintext when the OS keyring fails; an
         // explicit headless opt-out is required for that compatibility mode.
-        let store: AuthStore = serde_json::from_str(&data).context("Failed to parse auth.json")?;
+        let store = read_file_store(&path, &data)?;
         if !keyring_disabled() {
             save_keyring_auth(&OsKeyring, &path, &store).context(
                 "Could not migrate auth.json into the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to retain the owner-only file store",
@@ -1791,6 +1806,35 @@ mod tests {
             !check_file_permissions_secure(&path),
             "0o644 should be reported as insecure"
         );
+    }
+
+    /// The file store is the clear-text fallback, so its mode is the whole of
+    /// its protection. Reporting the mode on `agi auth status` is not enforcing
+    /// it: the credential is handed out either way.
+    #[cfg(unix)]
+    #[test]
+    fn a_credential_file_other_accounts_can_read_is_refused_not_reported() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("auth.json");
+        let data = r#"{"anthropic":{"type":"api","key":"API_KEY_VALUE_PLACEHOLDER"}}"#;
+        std::fs::write(&path, data).expect("write store");
+
+        for mode in [0o644, 0o640, 0o604, 0o666] {
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode))
+                .expect("set mode");
+            let error = read_file_store(&path, data)
+                .expect_err("a store readable by another account must be refused");
+            assert!(
+                error.to_string().contains("readable by other accounts"),
+                "unexpected message for 0o{mode:o}: {error}"
+            );
+        }
+
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+            .expect("set owner-only mode");
+        let store = read_file_store(&path, data).expect("an owner-only store still loads");
+        assert!(store.entries.contains_key("anthropic"));
     }
 
     #[cfg(unix)]

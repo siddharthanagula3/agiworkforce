@@ -7,14 +7,18 @@ export {
   recordSignedOrder,
   recordSignedOrderFromEnvelope,
   resolveActivationState,
+  today,
   type EnterpriseActivationState,
   type RecordSignedOrderInput,
 } from './activation';
 export {
   authorCommercialAgreementVersion,
+  readAgreementByEnvelope,
   readCommercialAgreementHistory,
   readCurrentCommercialAgreement,
+  terminateCommercialAgreement,
   type AuthorCommercialAgreementInput,
+  type TerminateCommercialAgreementInput,
 } from './agreement-store';
 export {
   docusignESignatureProvider,
@@ -26,6 +30,20 @@ export {
   type ESignatureProvider,
   type SendOrderFormInput,
 } from './e-signature';
+export {
+  assertInvoiceIssuable,
+  contractInvoiceDueDate,
+  contractViewOf,
+  invoiceRefusalsFor,
+  permittedOfflineMethods,
+  permittedPaymentMethods,
+  readEnterpriseInvoicePositions,
+  reportOfflinePayment,
+  type EnterpriseInvoicePosition,
+  type OfflinePaymentOutcome,
+  type OfflinePaymentRecord,
+  type ReportOfflinePaymentInput,
+} from './invoicing';
 export {
   allowedCollectionMethods,
   allowedPaymentMethodTypes,
@@ -42,9 +60,13 @@ export {
 } from './stripe-metadata';
 export {
   ACTIVATION_BLOCKED_REASONS,
+  agreementForce,
+  agreementLifecycleState,
+  agreementTermWindow,
   COMMERCIAL_AGREEMENT_STATUSES,
   E_SIGNATURE_PROVIDERS,
   isExecutedAgreement,
+  isPersistedAgreementStatus,
   type ActivationBlockedReason,
   type CommercialAgreement,
   type CommercialAgreementContact,

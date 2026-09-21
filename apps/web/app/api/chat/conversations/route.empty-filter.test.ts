@@ -41,8 +41,9 @@ describe('GET /api/chat/conversations empty conversations', () => {
     await GET(new NextRequest(url()));
 
     const [sql] = mocks.query.mock.calls[0]!;
-    expect(sql).toContain(
-      'exists (select 1 from web_messages where web_messages.conversation_id = web_conversations.id)',
+    // A thread whose only messages were deleted is as empty as one that never had any.
+    expect(String(sql).replace(/\s+/g, ' ')).toContain(
+      'exists (select 1 from web_messages where web_messages.conversation_id = web_conversations.id and web_messages.deleted_at is null)',
     );
   });
 

@@ -3,6 +3,7 @@
 import { ArrowUp, Clock, Square } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import { useId } from 'react';
 
 export type SendButtonMode = 'send' | 'stop' | 'queue';
 
@@ -11,11 +12,15 @@ export interface SendButtonProps {
   isSending?: boolean;
   hasContent?: boolean;
   disabled?: boolean;
+  /** Why the control is shut, announced to assistive technology. */
+  disabledReason?: string;
   /** Messages waiting for the running response to finish. */
   queuedCount?: number;
   onClick: () => void;
   className?: string;
 }
+
+export const SEND_EMPTY_REASON = 'Send is off until you type a message or attach a file.';
 
 const QUEUED_CHIP_LABEL = 'Queued';
 const QUEUED_CHIP_CLASS =
@@ -26,9 +31,12 @@ function SendControl({
   isSending = false,
   hasContent = false,
   disabled = false,
+  disabledReason,
   onClick,
   className,
 }: Omit<SendButtonProps, 'queuedCount'>) {
+  const reasonId = useId();
+
   if (mode === 'stop') {
     return (
       <button
@@ -68,28 +76,37 @@ function SendControl({
   }
 
   const canSend = hasContent && !disabled && !isSending;
+  const reason = canSend ? null : (disabledReason ?? (hasContent ? null : SEND_EMPTY_REASON));
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!canSend}
-      className={cn(
-        'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
-        canSend
-          ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80'
-          : 'bg-muted text-muted-foreground cursor-not-allowed',
-        className,
-      )}
-      title={isSending ? 'Sending…' : 'Send message'}
-      aria-label={isSending ? 'Sending message…' : 'Send message'}
-    >
-      {isSending ? (
-        <Spinner size="sm" />
-      ) : (
-        <ArrowUp className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
-      )}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={!canSend}
+        aria-describedby={reason ? reasonId : undefined}
+        className={cn(
+          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
+          canSend
+            ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80'
+            : 'bg-muted text-muted-foreground cursor-not-allowed',
+          className,
+        )}
+        title={isSending ? 'Sending…' : 'Send message'}
+        aria-label={isSending ? 'Sending message…' : 'Send message'}
+      >
+        {isSending ? (
+          <Spinner size="sm" />
+        ) : (
+          <ArrowUp className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
+        )}
+      </button>
+      {reason ? (
+        <span id={reasonId} className="sr-only" data-testid="composer-send-disabled-reason">
+          {reason}
+        </span>
+      ) : null}
+    </>
   );
 }
 

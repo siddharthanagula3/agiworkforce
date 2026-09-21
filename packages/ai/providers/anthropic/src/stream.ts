@@ -3,12 +3,6 @@ import type { StreamChunk, StreamChunkStop } from '@agiworkforce/types';
 
 type MessageStreamEvent = Anthropic.MessageStreamEvent;
 
-const stopReasonMap: Record<
-  string,
-  StreamChunk['type'] extends 'stop' ? never : never
-> = {} as never;
-void stopReasonMap;
-
 function mapStopReason(
   reason: Anthropic.Message['stop_reason'] | null | undefined,
 ): StreamChunkStop['reason'] {
@@ -139,6 +133,7 @@ export async function* translateAnthropicStream(
           break;
         }
         case 'message_delta': {
+          if (stopEmitted) break;
           const usage = event.usage;
           const outputTokens = usage?.output_tokens;
           const usageChunk: StreamChunk = {

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
+import { resetSessionStartCache, unreadableSessionStartCount } from '@/lib/auth/session-age';
+
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', () => ({
@@ -19,17 +21,33 @@ vi.mock('@/lib/server/key-value', async (importOriginal) => ({
 
 const mockAuth = vi.fn();
 const mockClerkGetUser = vi.fn();
+const mockClerkGetSession = vi.fn();
+const mockClerkRevokeSession = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
-  clerkClient: vi.fn(async () => ({ users: { getUser: mockClerkGetUser } })),
+  clerkClient: vi.fn(async () => ({
+    users: { getUser: mockClerkGetUser },
+    sessions: {
+      getSession: (...args: unknown[]) => mockClerkGetSession(...args),
+      revokeSession: (...args: unknown[]) => mockClerkRevokeSession(...args),
+    },
+  })),
 }));
 
-function authSession(userId: string | null): {
+function authSession(
+  userId: string | null,
+  sessionId?: string,
+): {
   userId: string | null;
+  sessionId?: string;
   getToken: () => Promise<string>;
 } {
   const token = userId ? jwt.sign({ sub: userId }, TEST_DEVELOPER_JWT_SECRET) : '';
-  return { userId, getToken: vi.fn(async () => token) };
+  return {
+    userId,
+    ...(sessionId ? { sessionId } : {}),
+    getToken: vi.fn(async () => token),
+  };
 }
 
 const mockVerifyToken = vi.fn();
@@ -218,7 +236,7 @@ function makeFakeDb() {
 
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
-import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
+import { assertAccountActive, getClerkAuthUser, getOptionalAuthUser } from '@/lib/api-auth';
 import {
   createUpstashKeyValueStore,
   type KeyValueStore,
@@ -1255,5 +1273,186 @@ describe('getClerkAuthUser · a database without the identity bridge', () => {
     await expect(
       getClerkAuthUser(new NextRequest('http://localhost/api/some-route')),
     ).rejects.toThrow();
+  });
+});
+
+describe('getOptionalAuthUser · the gate a signed-out caller does not need', () => {
+  const LOCKED_ORGANIZATION = '44444444-4444-4444-8444-444444444444';
+
+  function bindWorkspace(organizationId: string | null, locked: boolean) {
+    const inner = mockNeonQuery.getMockImplementation();
+    mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      const s = String(sql).toLowerCase();
+      if (s.includes('from public.user_settings')) {
+        return organizationId ? [{ organization_id: organizationId }] : [];
+      }
+      if (s.includes('from public.feature_flags')) {
+        return locked && organizationId
+          ? [
+              {
+                flag_name: 'tenant.lockdown',
+                user_id: null,
+                organization_id: organizationId,
+                variant: 'off',
+                enabled: false,
+                expires_at: null,
+              },
+            ]
+          : [];
+      }
+      return inner ? ((await inner(sql, params)) as unknown[]) : [];
+    });
+  }
+
+  function request(): NextRequest {
+    return new NextRequest('http://localhost/api/feedback');
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearIpAllowListCacheForTests();
+    vi.mocked(getKeyValueStore).mockReturnValue(null as unknown as KeyValueStore);
+  });
+
+  it('answers null for a caller with no session at all', async () => {
+    makeFakeDb();
+    mockAuth.mockResolvedValue(authSession(null));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('answers the account id for an active signed-in caller', async () => {
+    const db = makeFakeDb();
+    db.identities.set('clerk:optional-subject', {
+      identityId: 'identity-optional',
+      accountId: 'account-optional',
+    });
+    mockAuth.mockResolvedValue(authSession('optional-subject'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toEqual({
+      userId: 'account-optional',
+      identityId: 'identity-optional',
+    });
+  });
+
+  it('serves a suspended account as signed out, so support stays reachable and nothing is attributed', async () => {
+    const db = makeFakeDb();
+    db.accountStatuses.set('suspended-optional-user', 'suspended');
+    mockAuth.mockResolvedValue(authSession('suspended-optional-user'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('serves a caller whose workspace is locked down as signed out', async () => {
+    makeFakeDb();
+    bindWorkspace(LOCKED_ORGANIZATION, true);
+    mockAuth.mockResolvedValue(authSession('locked-optional-user'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('serves a stale cookie for an erased account as signed out', async () => {
+    const db = makeFakeDb();
+    db.erasedAccounts.add('erased-optional-user');
+    mockAuth.mockResolvedValue(authSession('erased-optional-user'));
+
+    await expect(getOptionalAuthUser(request())).resolves.toBeNull();
+  });
+
+  it('still refuses a credential it cannot verify, rather than reading it as signed out', async () => {
+    makeFakeDb();
+    mockAuth.mockResolvedValue(authSession(null));
+
+    const bearer = new NextRequest('http://localhost/api/feedback', {
+      headers: { authorization: 'Bearer sk_live_0000000000000000_not_a_real_secret_at_all' },
+    });
+    await expect(getOptionalAuthUser(bearer)).rejects.toMatchObject({ statusCode: 401 });
+  });
+});
+
+describe('getClerkAuthUser: a session may not outlive the absolute lifetime', () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const SESSION_ID = 'sess_absolute_lifetime';
+
+  function cookieRequest() {
+    return new NextRequest('http://localhost/api/chat/conversations');
+  }
+
+  function providerSession(createdAt: number, userId = 'aged-user') {
+    return { id: SESSION_ID, userId, status: 'active', createdAt, lastActiveAt: createdAt };
+  }
+
+  beforeEach(() => {
+    resetSessionStartCache();
+    mockClerkGetSession.mockReset();
+    mockClerkRevokeSession.mockClear();
+    mockAuth.mockResolvedValue(authSession('aged-user', SESSION_ID));
+  });
+
+  it('refuses a session one second past the limit, on an ordinary route', async () => {
+    makeFakeDb();
+    const pastTheLimit = Date.now() - (30 * DAY_MS + 1000);
+    mockClerkGetSession.mockResolvedValue(providerSession(pastTheLimit));
+
+    await expect(getClerkAuthUser(cookieRequest())).rejects.toMatchObject({ statusCode: 401 });
+    expect(mockClerkRevokeSession).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it('serves a session one second inside the limit', async () => {
+    makeFakeDb();
+    const insideTheLimit = Date.now() - (30 * DAY_MS - 1000);
+    mockClerkGetSession.mockResolvedValue(providerSession(insideTheLimit));
+
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+  });
+
+  it('serves the request and counts it when the session start cannot be read', async () => {
+    makeFakeDb();
+    mockClerkGetSession.mockRejectedValue(new Error('provider unavailable'));
+    const before = unreadableSessionStartCount();
+
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    expect(unreadableSessionStartCount()).toBe(before + 1);
+    expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+  });
+
+  it('asks the provider once per session, not once per request', async () => {
+    makeFakeDb();
+    mockClerkGetSession.mockResolvedValue(providerSession(Date.now() - DAY_MS));
+
+    await getClerkAuthUser(cookieRequest());
+    await getClerkAuthUser(cookieRequest());
+    await getClerkAuthUser(cookieRequest());
+
+    expect(mockClerkGetSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('never measures a session against somebody else account', async () => {
+    makeFakeDb();
+    mockClerkGetSession.mockResolvedValue(
+      providerSession(Date.now() - (30 * DAY_MS + 1000), 'another-user'),
+    );
+
+    await expect(getClerkAuthUser(cookieRequest())).resolves.toEqual({ userId: 'aged-user' });
+    expect(mockClerkRevokeSession).not.toHaveBeenCalled();
+  });
+
+  it('honours a shorter lifetime and measures the bearer branch the same way', async () => {
+    makeFakeDb();
+    process.env['SESSION_ABSOLUTE_LIFETIME_HOURS'] = '1';
+    process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
+    mockAuth.mockResolvedValue(authSession(null));
+    mockVerifyToken.mockResolvedValue({ sub: 'aged-user', sid: SESSION_ID });
+    mockClerkGetSession.mockResolvedValue(providerSession(Date.now() - (60 * 60 * 1000 + 1000)));
+
+    try {
+      const bearer = new NextRequest('http://localhost/api/chat/conversations', {
+        headers: { authorization: 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZ2VkIn0.sig' },
+      });
+      await expect(getClerkAuthUser(bearer)).rejects.toMatchObject({ statusCode: 401 });
+    } finally {
+      delete process.env['SESSION_ABSOLUTE_LIFETIME_HOURS'];
+    }
   });
 });

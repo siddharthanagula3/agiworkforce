@@ -6,14 +6,23 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const { dbHolder, verifyScimTokenMock, recordSyncEventMock, getSubscriptionMock } = vi.hoisted(
-  () => ({
-    dbHolder: { current: null as unknown },
-    verifyScimTokenMock: vi.fn(),
-    recordSyncEventMock: vi.fn(async (..._args: unknown[]) => {}),
-    getSubscriptionMock: vi.fn(),
-  }),
-);
+const {
+  dbHolder,
+  verifyScimTokenMock,
+  recordSyncEventMock,
+  getSubscriptionMock,
+  isTenantLockedDownMock,
+} = vi.hoisted(() => ({
+  dbHolder: { current: null as unknown },
+  verifyScimTokenMock: vi.fn(),
+  recordSyncEventMock: vi.fn(async (..._args: unknown[]) => {}),
+  getSubscriptionMock: vi.fn(),
+  isTenantLockedDownMock: vi.fn(async (_organizationId: string | null) => false),
+}));
+
+vi.mock('@/lib/feature-flags/tenant-lockdown', () => ({
+  isTenantLockedDown: (...args: unknown[]) => isTenantLockedDownMock(...(args as [string | null])),
+}));
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => dbHolder.current,
@@ -79,6 +88,7 @@ beforeEach(() => {
     createdByUserId: ISSUER,
   });
   getSubscriptionMock.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
+  isTenantLockedDownMock.mockResolvedValue(false);
   recordSyncEventMock.mockClear();
 });
 
@@ -127,5 +137,39 @@ describe('authenticateScimRequest issuer role gate', () => {
     expect(membershipQuery).toBeDefined();
     expect(membershipQuery).not.toMatch(/'owner'/);
     expect(membershipQuery).not.toMatch(/'admin'/);
+  });
+});
+
+describe('authenticateScimRequest tenant lockdown', () => {
+  it('refuses a workspace that is locked down, entitlement and role notwithstanding', async () => {
+    dbHolder.current = createDb({ role: 'owner' });
+    isTenantLockedDownMock.mockResolvedValue(true);
+
+    const error = await expectScimError(authenticateScimRequest(scimRequest()));
+
+    expect(error.status).toBe(403);
+    expect(error.message).toMatch(/locked down/);
+    expect(isTenantLockedDownMock).toHaveBeenCalledWith(ORG);
+  });
+
+  it('records the refusal against the connection that was turned away', async () => {
+    dbHolder.current = createDb({ role: 'admin' });
+    isTenantLockedDownMock.mockResolvedValue(true);
+
+    await expectScimError(authenticateScimRequest(scimRequest()));
+
+    expect(recordSyncEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ organizationId: ORG, connectionId: CONNECTION }),
+      expect.objectContaining({ eventType: 'sync.denied' }),
+    );
+  });
+
+  it('lets the same connection through once the lockdown is lifted', async () => {
+    dbHolder.current = createDb({ role: 'owner' });
+
+    await expect(authenticateScimRequest(scimRequest())).resolves.toMatchObject({
+      organizationId: ORG,
+    });
   });
 });

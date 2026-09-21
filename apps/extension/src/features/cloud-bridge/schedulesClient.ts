@@ -6,6 +6,7 @@ import {
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 export const CHROME_SCHEDULE_PAGE_SIZE = MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE;
 
@@ -24,12 +25,10 @@ export interface ChromeSchedulesError {
 }
 
 export type ChromeScheduleListResult =
-  | { status: 'success'; schedules: ManagedCloudScheduleTask[] }
-  | ChromeSchedulesError;
+  { status: 'success'; schedules: ManagedCloudScheduleTask[] } | ChromeSchedulesError;
 
 export type ChromeScheduleResult =
-  | { status: 'success'; schedule: ManagedCloudScheduleTask }
-  | ChromeSchedulesError;
+  { status: 'success'; schedule: ManagedCloudScheduleTask } | ChromeSchedulesError;
 
 export type ChromeScheduleRunResult = { status: 'success'; replay: boolean } | ChromeSchedulesError;
 
@@ -40,7 +39,7 @@ function createDefaultClient(token: string): ManagedCloudSchedulesClient {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
     }),
   });
 }

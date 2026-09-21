@@ -12,9 +12,14 @@ import { buildManagedAgentStream } from '@/app/api/llm/v1/chat/completions/lib/m
 import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { runToolLoop, type ApprovalMode } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import {
+  PLATFORM_ADMIN_ENV_VAR,
+  isPlatformAdmin,
+} from '@/features/admin/lib/platform-admin-access';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import type { FlagSubject } from '@/lib/feature-flags/evaluate-flags';
 import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
+import { managedCloudDataRegion } from '@/lib/server/data-region';
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { withSpan, type ActiveSpan } from '@/lib/observability/span';
@@ -58,9 +63,10 @@ function workFlagSubject(input: StartCloudAgentWorkflowExecutionInput): FlagSubj
     surface: input.processed.chatSurface,
     role: null,
     plan: null,
-    region: null,
+    region: managedCloudDataRegion(),
     country: null,
     clientVersion: null,
+    internalStaff: isPlatformAdmin(input.userId, process.env[PLATFORM_ADMIN_ENV_VAR]),
   };
 }
 

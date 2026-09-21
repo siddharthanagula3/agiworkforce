@@ -30,10 +30,10 @@ import {
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
   matchDenylistedUpload,
-  moderateGeneratedMedia,
   moderateManagedPrompt,
   moderateUploadedImage,
   recordModerationEvent,
+  GENERATED_OUTPUT_REFUSAL,
   PLATFORM_POLICY_REFUSAL,
   UPLOADED_IMAGE_REFUSAL,
 } from '@/lib/moderation';
@@ -905,15 +905,20 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   const corsHeaders = { ...getCorsHeaders(request), ...getSecurityHeaders() };
 
+  // The request that submits a job is not what finishes it. A drive queued for
+  // every durable job is what carries the work when this process is killed
+  // mid-attempt, whether or not the caller ever asks about it again. It is a
+  // no-op once the job is terminal.
+  if (jobStoreReady) {
+    await scheduleImageGenerationJobDrive({
+      db: scopedDb,
+      job,
+      delaySeconds: IMAGE_JOB_CLAIM_SECONDS,
+    });
+  }
+
   if (wantsAsync) {
     const detachedJob = job;
-    if (jobStoreReady) {
-      await scheduleImageGenerationJobDrive({
-        db: scopedDb,
-        job: detachedJob,
-        delaySeconds: IMAGE_JOB_CLAIM_SECONDS,
-      });
-    }
     after(async () => {
       try {
         await runImageGenerationJobAttempt({ db: scopedDb, job: detachedJob, inlineEdit });
@@ -947,6 +952,18 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   });
 
   if (outcome.job.status !== 'completed') {
+    if (outcome.failureKind === 'moderation') {
+      return NextResponse.json(
+        {
+          error: {
+            message: outcome.job.publicError ?? GENERATED_OUTPUT_REFUSAL,
+            type: 'invalid_request_error',
+            code: 'content_policy_violation',
+          },
+        },
+        { status: 422, headers: corsHeaders },
+      );
+    }
     const status =
       outcome.failureKind === 'persistence'
         ? 502
@@ -983,32 +1000,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     outcome.images.length > 0
       ? outcome.images
       : await imageJobDeliveredImages(scopedDb, outcome.job);
-
-  // Output-side floor on every image this response carries inline, and the only
-  // re-check an edit's result gets before it reaches the caller.
-  for (const image of images) {
-    if (!image.b64_json) continue;
-    const outputModeration = await moderateGeneratedMedia({
-      userId,
-      media: 'image',
-      operation,
-      bytes: Buffer.from(image.b64_json, 'base64'),
-      mimeType: catalogModel.imageOutputMimeType,
-      prompt,
-    });
-    if (outputModeration.allowed) continue;
-    recordMediaSafety({ media: 'image', decision: 'blocked', reason: outputModeration.reason });
-    return NextResponse.json(
-      {
-        error: {
-          message: outputModeration.refusal,
-          type: 'invalid_request_error',
-          code: 'content_policy_violation',
-        },
-      },
-      { status: 422, headers: corsHeaders },
-    );
-  }
 
   try {
     await markManagedUsageClientDelivered(reservationForImageJob(scopedDb, outcome.job));

@@ -6,6 +6,16 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
+    date: '2026-09-20',
+    headline: 'Deletion, holds and connector revocation · corrected',
+    body: [
+      'A legal hold now outlives every deletion window it covers, including the one that retires a temporary chat, and the sweeps that hard-delete a held store refuse to run without the hold predicate.',
+      'Disconnecting a connector now asks the provider to revoke every account you connected through it, not only the one treated as the default, and still clears that connector\u2019s saved approval verdicts.',
+      'A deleted message can no longer return to a model: a fork drops it, and a compaction summary is rebuilt whenever the span it covered changed.',
+      'Memory switched off is honoured on every write path, and the developer API documents the error body of every published operation.',
+    ],
+  },
+  {
     date: '2026-09-15',
     headline: 'Desktop · one desktop app',
     body: [

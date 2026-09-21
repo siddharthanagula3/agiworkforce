@@ -1,0 +1,262 @@
+{
+  "features": {
+    "work": {
+      "label": "Work",
+      "domain": "work",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "work",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "code": {
+      "label": "Code",
+      "domain": "code",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": "code",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "research": {
+      "label": "Research",
+      "domain": "research",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "chat_tools",
+        "policy": "research",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "skills": {
+      "label": "Skills",
+      "domain": "skills",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "skills_connectors",
+        "policy": "skills",
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    },
+    "plugins": {
+      "label": "Plugins",
+      "domain": "plugins",
+      "maturity": "beta",
+      "dependsOn": ["skills"],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "governance": {
+        "owner": "apps/web/lib/services/plugin-lifecycle.ts",
+        "exitCriteria": "A workspace can install, update and remove a marketplace plugin without an operator touching the database, and an install survives a plugin version bump.",
+        "killSwitch": "canUsePlugins",
+        "dataMigration": "An installation row records the plugin version it was written against, and removal archives the row rather than deleting it, so a workspace that installed during the beta keeps its history.",
+        "rolloutRing": "plugins",
+        "support": "Answered on the normal support queue; a failed install is a defect, and a plugin author's own bug is referred to that author.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "skills_connectors",
+        "policy": "plugins",
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    },
+    "hooks": {
+      "label": "Hooks",
+      "domain": "hooks",
+      "maturity": "beta",
+      "dependsOn": ["code"],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "governance": {
+        "owner": "packages/contracts/types/src/web-hooks.ts",
+        "exitCriteria": "Every hook event a surface can raise is declared in the shared contract, and a hook that fails or times out leaves the run it was attached to in a state the user can read.",
+        "killSwitch": "canRunLocalCode",
+        "dataMigration": "Hook definitions are stored per workspace with the contract version that wrote them; an unknown event name is retained and skipped rather than dropped.",
+        "rolloutRing": "hooks",
+        "support": "Best effort while beta: a hook that does not fire is investigated, a hook script's own failure is the author's.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": "hooks",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "browser": {
+      "label": "Browser",
+      "domain": "browser",
+      "maturity": "beta",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "browser extension",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "governance": {
+        "owner": "packages/contracts/types/src/browser-session.ts",
+        "exitCriteria": "A browser session survives a page navigation and a tab close without stranding the run, and every action the model takes is attributable to a session the user opened.",
+        "killSwitch": "canUseBrowserAutomation",
+        "dataMigration": "Sessions are transient; nothing written by the beta outlives the session, so widening it migrates no stored row.",
+        "rolloutRing": "browser",
+        "support": "Answered on the normal support queue; a site that blocks automation is reported, not treated as a defect.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "chat_tools",
+        "policy": "browser",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "computer_use": {
+      "label": "Computer use",
+      "domain": "computer-use",
+      "maturity": "experimental",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "governance": {
+        "owner": "packages/contracts/types/src/visual-session.ts",
+        "exitCriteria": "Every action is approved or replayable, the user can stop a run mid-action, and no action reaches a screen the user did not hand over.",
+        "killSwitch": "canUseDesktopAutomation",
+        "dataMigration": "Screenshots and action logs are held for the life of the session only; nothing an experimental run wrote needs migrating when it widens.",
+        "rolloutRing": "computer_use",
+        "support": "Experimental: reported defects are triaged but carry no response commitment, and the feature can be withdrawn between releases.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "computer_use",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "remote_control": {
+      "label": "Remote Control",
+      "domain": "remote-control",
+      "maturity": "experimental",
+      "dependsOn": ["computer_use"],
+      "incompatibleWith": [],
+      "requiresHost": "desktop",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "governance": {
+        "owner": "packages/contracts/types/src/cross-device.ts",
+        "exitCriteria": "A device pairing can be revoked from either side and takes effect on the next request, and a controlled device shows the user that it is being controlled for as long as it is.",
+        "killSwitch": "screen_share",
+        "dataMigration": "Pairings carry the protocol version that created them; revoking a pairing keeps its audit trail, so no experimental pairing is silently erased when it widens.",
+        "rolloutRing": "remote_control",
+        "support": "Experimental: reported defects are triaged but carry no response commitment, and the feature can be withdrawn between releases.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": "remote_control",
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "schedules": {
+      "label": "Schedules",
+      "domain": "scheduler",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "schedules",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "event_triggers": {
+      "label": "Event triggers",
+      "domain": "events",
+      "maturity": "beta",
+      "dependsOn": ["schedules"],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "governance": {
+        "owner": "packages/contracts/cloud-contracts/src/domain-events.ts",
+        "exitCriteria": "A trigger fires once per event, a run it started is attributable to the event that started it, and pausing a trigger stops it without deleting its history.",
+        "killSwitch": "work",
+        "dataMigration": "Trigger definitions carry the event contract version they were written against; an event name a newer contract renamed keeps its old name on stored rows until the trigger is edited.",
+        "rolloutRing": "event_triggers",
+        "support": "Answered on the normal support queue; a missed fire is a defect, a third party's webhook not arriving is not.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "agi_work",
+        "policy": "event_triggers",
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "projects": {
+      "label": "Projects",
+      "domain": "projects",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "projects",
+        "policy": "projects",
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    }
+  }
+}

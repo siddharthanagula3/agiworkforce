@@ -4,6 +4,7 @@ import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
 import {
   INTERACTIVE_CARDS_METADATA_KEY,
   PROJECT_FILE_CITATIONS_METADATA_KEY,
+  type AssistantTurnAttribution,
   type InteractiveCard,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -64,6 +65,7 @@ const SELECT_ASSISTANT_TURN_METADATA_SQL = `select m.metadata
           and c.user_id = $3
           and c.organization_id is not distinct from $4::uuid
           and c.deleted_at is null
+          and m.deleted_at is null
         limit 1`;
 
 const PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL = `update web_messages m
@@ -125,6 +127,70 @@ export interface AssistantTurnSnapshot {
   };
 }
 
+function offeredToolNames(tools: unknown): string[] {
+  if (!Array.isArray(tools)) return [];
+  const names = tools.map((tool) => {
+    const entry = tool as { name?: unknown; function?: { name?: unknown } } | null;
+    const name = entry?.function?.name ?? entry?.name;
+    return typeof name === 'string' ? name : '';
+  });
+  return [...new Set(names.filter((name) => name.length > 0))].sort();
+}
+
+/** The metadata keys whose presence still proves a tool ran once the loop is gone. */
+function evidencedToolKeys(snapshot: AssistantTurnSnapshot): string[] {
+  return (
+    [
+      ['searchResults', Boolean(snapshot.sources?.length)],
+      ['citations', Boolean(snapshot.citations?.length)],
+      ['codeExecutionResult', Boolean(snapshot.codeExecutionResult)],
+      ['generatedFiles', Boolean(snapshot.generatedFiles?.length)],
+      ['research', Boolean(snapshot.research)],
+    ] as const
+  )
+    .filter(([, present]) => present)
+    .map(([key]) => key);
+}
+
+/**
+ * Written whole on every turn. The on-conflict set-list merges metadata with
+ * `||`, so a field a later write leaves out keeps the earlier attempt's value.
+ */
+export function buildAssistantTurnAttribution(
+  processed: ProcessedRequest,
+  snapshot: AssistantTurnSnapshot,
+): AssistantTurnAttribution {
+  return {
+    completionStatus: snapshot.truncated ? 'truncated' : 'complete',
+    requestedModel: processed.requestedModel,
+    servedModel: snapshot.model,
+    requestedRoute: {
+      lane: processed.routeLane ?? null,
+      slot: processed.resolvedSlot ?? null,
+      taskType: processed.resolvedTaskType ?? null,
+      planId: processed.routePlanId ?? null,
+    },
+    servedRoute: {
+      provider: snapshot.provider,
+      harnessId: processed.servingHarnessId ?? null,
+      usedFallback: processed.usedFallback === true,
+      fallbackReason: processed.fallbackReason ?? null,
+      movedFromModel: processed.movedFromModel ?? null,
+      retries: Math.max(0, Math.trunc(processed.retries ?? 0)),
+    },
+    reasoningProfile: {
+      thinking: processed.llmRequest?.thinking_mode === true,
+      effort: processed.llmRequest?.effort ?? null,
+      budgetTokens: processed.llmRequest?.thinking?.budget_tokens ?? null,
+    },
+    toolInvocations: {
+      offered: offeredToolNames(processed.llmRequest?.tools ?? processed.chatRequest?.tools),
+      observed: processed.toolExecutionObserved === true,
+      evidenced: evidencedToolKeys(snapshot),
+    },
+  };
+}
+
 /**
  * True when this turn can be persisted server-side at all. Exported so callers
  * can skip building an expensive snapshot for a turn that would be dropped.
@@ -181,9 +247,11 @@ export async function persistAssistantTurn(params: {
     serverPersisted: true,
     requestId: processed.requestId,
     provider: snapshot.provider,
-    ...(snapshot.truncated
-      ? { truncated: true, truncationReason: TRUNCATED_ASSISTANT_TURN_REASON }
-      : {}),
+    // Asserted on every write, never spread conditionally: a Continue reuses
+    // this message id, and a key left out would keep the cancelled attempt's.
+    truncated: snapshot.truncated,
+    truncationReason: snapshot.truncated ? TRUNCATED_ASSISTANT_TURN_REASON : null,
+    ...buildAssistantTurnAttribution(processed, snapshot),
     ...(snapshot.runReference ? { cloudAgentRun: snapshot.runReference } : {}),
     // The on-conflict set-list merges with `||`, so a client save that lands
     // later overwrites this key with its own richer copy. This is the floor,
@@ -431,12 +499,20 @@ export async function readPersistedAssistantTurn(params: {
   if (!row) return null;
 
   const metadata = asMetadataRecord(row.metadata) ?? {};
+  const completionStatus = metadata['completionStatus'];
+  // A row written before the status key existed is read from the flag it did write.
+  const truncated =
+    completionStatus === undefined
+      ? metadata['truncated'] === true
+      : completionStatus === 'truncated';
   const truncationReason =
-    typeof metadata['truncationReason'] === 'string' ? metadata['truncationReason'] : null;
+    truncated && typeof metadata['truncationReason'] === 'string'
+      ? metadata['truncationReason']
+      : null;
   return {
     content: row.content ?? '',
     model: row.model ?? '',
-    truncated: metadata['truncated'] === true,
+    truncated,
     truncationReason,
   };
 }

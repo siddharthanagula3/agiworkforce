@@ -69,45 +69,108 @@ import {
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const MAX_OUTPUT_TOKENS = 256;
 
-function buildMessages(): TrimmableMessage[] {
+const TURN_LABELS = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth'] as const;
+
+function buildMessages(turns = 3): TrimmableMessage[] {
   const filler = (label: string) => `${label} `.repeat(400);
-  return [
-    { role: 'system', content: 'stay on task' },
-    { role: 'user', content: filler('first-question') },
-    { role: 'assistant', content: filler('first-answer') },
-    { role: 'user', content: filler('second-question') },
-    { role: 'assistant', content: filler('second-answer') },
-    { role: 'user', content: filler('third-question') },
-    { role: 'assistant', content: filler('third-answer') },
-    { role: 'user', content: 'final question, keep this' },
-  ];
+  const messages: TrimmableMessage[] = [{ role: 'system', content: 'stay on task' }];
+  for (const label of TURN_LABELS.slice(0, turns)) {
+    messages.push({ role: 'user', content: filler(`${label}-question`) });
+    messages.push({ role: 'assistant', content: filler(`${label}-answer`) });
+  }
+  messages.push({ role: 'user', content: 'final question, keep this' });
+  return messages;
 }
 
-function droppedPersistableCount(): number {
-  const plan = planContextTrim(buildMessages(), TEST_MODEL, MAX_OUTPUT_TOKENS);
+function droppedPersistableCount(turns = 3): number {
+  const plan = planContextTrim(buildMessages(turns), TEST_MODEL, MAX_OUTPUT_TOKENS);
   if (!plan) throw new Error('test fixture does not overflow the fake context window');
-  const messages = buildMessages();
+  const messages = buildMessages(turns);
   return plan.droppedIndices
     .map((index) => messages[index])
     .filter((message) => message?.role === 'user' || message?.role === 'assistant').length;
 }
 
+/**
+ * Message rows as Postgres holds them: a soft delete leaves the row in place,
+ * an edit bumps server_version, and both are invisible to a reader that filters.
+ */
+interface StoredMessage {
+  id: string;
+  version: number;
+  deletedAt: string | null;
+}
+
+interface StoredConversation {
+  compaction_summary: string | null;
+  compaction_summary_through_message_id: string | null;
+  compaction_summary_digest: string | null;
+  deleted_at: string | null;
+}
+
+function storedMessages(count: number): StoredMessage[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `msg-${index + 1}`,
+    version: index + 1,
+    deletedAt: null,
+  }));
+}
+
+function emptyConversation(): StoredConversation {
+  return {
+    compaction_summary: null,
+    compaction_summary_through_message_id: null,
+    compaction_summary_digest: null,
+    deleted_at: null,
+  };
+}
+
 interface FakeDb {
   query: ReturnType<typeof vi.fn>;
   execute: ReturnType<typeof vi.fn>;
+  conversation: StoredConversation;
+  messages: StoredMessage[];
 }
 
-function makeDb(conversationRow?: Record<string, unknown>): FakeDb {
+/**
+ * Answers the way Postgres would, predicate by predicate: a filter the
+ * statement does not spell is a filter the rows do not get.
+ */
+function makeDb(
+  options: { conversation?: StoredConversation; messages?: StoredMessage[] } = {},
+): FakeDb {
+  const conversation = options.conversation ?? emptyConversation();
+  const messages = options.messages ?? storedMessages(24);
+
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
-    if (/from web_conversations/.test(sql)) return conversationRow ? [conversationRow] : [];
-    if (/from web_messages/.test(sql)) {
-      const limit = params[1] as number;
-      return Array.from({ length: limit }, (_, index) => ({ id: `msg-${index + 1}` }));
+    const text = String(sql);
+    if (/from web_conversations/.test(text)) {
+      if (/deleted_at is null/.test(text) && conversation.deleted_at !== null) return [];
+      return [conversation];
+    }
+    if (/from web_messages/.test(text)) {
+      const visible = /deleted_at is null/.test(text)
+        ? messages.filter((message) => message.deletedAt === null)
+        : messages;
+      const limit = Number(params[1]);
+      return visible
+        .slice(0, limit)
+        .map((message) => ({ id: message.id, server_version: String(message.version) }));
     }
     return [];
   });
-  const execute = vi.fn(async () => 1);
-  return { query, execute };
+
+  const execute = vi.fn(async (sql: string, params: unknown[] = []) => {
+    const text = String(sql);
+    if (/update web_conversations/.test(text) && /compaction_summary/.test(text)) {
+      conversation.compaction_summary = params[0] as string;
+      conversation.compaction_summary_through_message_id = params[1] as string;
+      conversation.compaction_summary_digest = (params[2] ?? null) as string | null;
+    }
+    return 1;
+  });
+
+  return { query, execute, conversation, messages };
 }
 
 const SELECTED_ROUTE = {
@@ -139,6 +202,13 @@ function baseInput(overrides: Partial<ContextCompactionInput> = {}): ContextComp
     resolveEconomyRoute: vi.fn(() => SELECTED_ROUTE) as never,
     ...overrides,
   };
+}
+
+function summarySentToModel(call = 0): string {
+  const request = vi.mocked(openAIWireRequestToChatRequest).mock.calls[call]?.[0] as {
+    messages: Array<{ role: string; content: string }>;
+  };
+  return request.messages.find((message) => message.role === 'user')?.content ?? '';
 }
 
 describe('resolveContextCompactionEnabled', () => {
@@ -223,20 +293,142 @@ describe('compactContextWindow', () => {
       ),
     ).toBe(true);
 
-    expect(db.execute).toHaveBeenCalledWith(expect.any(String), [
-      'Summary of earlier turns.',
-      `msg-${persistableDropped}`,
-      CONVERSATION_ID,
-      'user-1',
-    ]);
+    expect(db.conversation.compaction_summary).toBe('Summary of earlier turns.');
+    expect(db.conversation.compaction_summary_through_message_id).toBe(`msg-${persistableDropped}`);
+    expect(db.conversation.compaction_summary_digest).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('reuses the cached summary when the boundary is unchanged, without calling the model again', async () => {
+  it('reuses the cached summary when the boundary and the span are unchanged', async () => {
+    const db = makeDb();
+    await compactContextWindow(baseInput({ messages: buildMessages(), db: db as never }));
+    vi.clearAllMocks();
+
+    const messages = buildMessages();
+    const result = await compactContextWindow(baseInput({ messages, db: db as never }));
+
+    expect(result).not.toBeNull();
+    expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+    expect(drainToLlmResponse).not.toHaveBeenCalled();
+    expect(db.execute).not.toHaveBeenCalled();
+    expect(
+      messages.some(
+        (message) =>
+          message.role === 'system' && message.content.includes('Summary of earlier turns.'),
+      ),
+    ).toBe(true);
+  });
+
+  it('extends the cached summary by only the messages that newly fell off', async () => {
+    const shortSpan = droppedPersistableCount(3);
+    const longSpan = droppedPersistableCount(6);
+    expect(longSpan).toBeGreaterThan(shortSpan);
+
+    const db = makeDb();
+    await compactContextWindow(baseInput({ messages: buildMessages(3), db: db as never }));
+    vi.clearAllMocks();
+    vi.mocked(drainToLlmResponse).mockResolvedValue({
+      model: 'model-key',
+      content: 'Combined summary.',
+      promptTokens: 50,
+      completionTokens: 20,
+      totalTokens: 70,
+    });
+
+    await compactContextWindow(baseInput({ messages: buildMessages(6), db: db as never }));
+
+    expect(drainToLlmResponse).toHaveBeenCalledTimes(1);
+    expect(summarySentToModel()).toContain('Summary of earlier turns.');
+    expect(db.conversation.compaction_summary).toBe('Combined summary.');
+    expect(db.conversation.compaction_summary_through_message_id).toBe(`msg-${longSpan}`);
+  });
+
+  it('anchors the boundary to the nth visible message, not the nth row', async () => {
     const persistableDropped = droppedPersistableCount();
-    const boundaryId = `msg-${persistableDropped}`;
+    const messages = storedMessages(24);
+    messages[0]!.deletedAt = '2026-09-19T00:00:00.000Z';
+    messages[2]!.deletedAt = '2026-09-19T00:00:00.000Z';
+    const db = makeDb({ messages });
+
+    await compactContextWindow(baseInput({ messages: buildMessages(), db: db as never }));
+
+    expect(db.conversation.compaction_summary_through_message_id).toBe(
+      `msg-${persistableDropped + 2}`,
+    );
+  });
+
+  it('retires the cached summary when a message inside the span is deleted', async () => {
+    const db = makeDb();
+    await compactContextWindow(baseInput({ messages: buildMessages(), db: db as never }));
+    const staleSummary = db.conversation.compaction_summary;
+    vi.clearAllMocks();
+    vi.mocked(drainToLlmResponse).mockResolvedValue({
+      model: 'model-key',
+      content: 'Summary without the deleted turn.',
+      promptTokens: 50,
+      completionTokens: 20,
+      totalTokens: 70,
+    });
+
+    db.messages[2]!.deletedAt = '2026-09-19T00:00:00.000Z';
+
+    const messages = buildMessages();
+    await compactContextWindow(baseInput({ messages, db: db as never }));
+
+    expect(drainToLlmResponse).toHaveBeenCalledTimes(1);
+    expect(summarySentToModel()).not.toContain(staleSummary);
+    expect(db.conversation.compaction_summary).toBe('Summary without the deleted turn.');
+    expect(
+      messages.some((message) => message.content.includes('Summary without the deleted turn.')),
+    ).toBe(true);
+  });
+
+  it('retires the cached summary when a message inside the span is edited', async () => {
+    const db = makeDb();
+    await compactContextWindow(baseInput({ messages: buildMessages(), db: db as never }));
+    const staleSummary = db.conversation.compaction_summary;
+    vi.clearAllMocks();
+    vi.mocked(drainToLlmResponse).mockResolvedValue({
+      model: 'model-key',
+      content: 'Summary of the edited turns.',
+      promptTokens: 50,
+      completionTokens: 20,
+      totalTokens: 70,
+    });
+
+    db.messages[1]!.version = 900;
+
+    await compactContextWindow(baseInput({ messages: buildMessages(), db: db as never }));
+
+    expect(drainToLlmResponse).toHaveBeenCalledTimes(1);
+    expect(summarySentToModel()).not.toContain(staleSummary);
+    expect(db.conversation.compaction_summary).toBe('Summary of the edited turns.');
+  });
+
+  it('does not carry a stale summary forward as the prior summary when the span changed', async () => {
+    const db = makeDb();
+    await compactContextWindow(baseInput({ messages: buildMessages(3), db: db as never }));
+    const staleSummary = db.conversation.compaction_summary;
+    expect(staleSummary).toBe('Summary of earlier turns.');
+    vi.clearAllMocks();
+    vi.mocked(drainToLlmResponse).mockResolvedValue({
+      model: 'model-key',
+      content: 'Rebuilt summary.',
+      promptTokens: 50,
+      completionTokens: 20,
+      totalTokens: 70,
+    });
+
+    db.messages[1]!.deletedAt = '2026-09-19T00:00:00.000Z';
+
+    await compactContextWindow(baseInput({ messages: buildMessages(6), db: db as never }));
+
+    expect(drainToLlmResponse).toHaveBeenCalledTimes(1);
+    expect(summarySentToModel()).not.toContain(staleSummary);
+  });
+
+  it('does not compact a withdrawn conversation', async () => {
     const db = makeDb({
-      compaction_summary: 'Cached summary text.',
-      compaction_summary_through_message_id: boundaryId,
+      conversation: { ...emptyConversation(), deleted_at: '2026-09-19T00:00:00.000Z' },
     });
     const messages = buildMessages();
 
@@ -246,37 +438,7 @@ describe('compactContextWindow', () => {
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
     expect(drainToLlmResponse).not.toHaveBeenCalled();
     expect(db.execute).not.toHaveBeenCalled();
-    expect(
-      messages.some(
-        (message) => message.role === 'system' && message.content.includes('Cached summary text.'),
-      ),
-    ).toBe(true);
-  });
-
-  it('extends the cached summary by only the messages that newly fell off', async () => {
-    const persistableDropped = droppedPersistableCount();
-    expect(persistableDropped).toBeGreaterThanOrEqual(2);
-    const staleBoundaryId = `msg-${persistableDropped - 1}`;
-    const db = makeDb({
-      compaction_summary: 'Prior summary text.',
-      compaction_summary_through_message_id: staleBoundaryId,
-    });
-    const messages = buildMessages();
-
-    await compactContextWindow(baseInput({ messages, db: db as never }));
-
-    expect(drainToLlmResponse).toHaveBeenCalledTimes(1);
-    const sentRequest = vi.mocked(openAIWireRequestToChatRequest).mock.calls[0]?.[0] as {
-      messages: Array<{ role: string; content: string }>;
-    };
-    const userTurn = sentRequest.messages.find((message) => message.role === 'user');
-    expect(userTurn?.content).toContain('Prior summary text.');
-    expect(db.execute).toHaveBeenCalledWith(expect.any(String), [
-      'Summary of earlier turns.',
-      `msg-${persistableDropped}`,
-      CONVERSATION_ID,
-      'user-1',
-    ]);
+    expect(messages.some((message) => message.content === DROPPED_HISTORY_MARKER)).toBe(true);
   });
 
   it('falls back to the mechanical trim when the kill switch is off', async () => {

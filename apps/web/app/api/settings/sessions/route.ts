@@ -7,6 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { emitIdentitySecurityEvent } from '@/lib/services/identity-events';
 import { resolveSessionsPrincipal } from './session-principal';
 import type { IdentitySession } from '@agiworkforce/identity';
 import { getIdentityProvider } from '@/lib/server/identity';
@@ -16,7 +17,13 @@ import {
   revokeInBatches,
   type IdentitySessionOperations,
 } from '@/lib/server/session-revocation';
-import { hasOutlivedAbsoluteLifetime, sessionAbsoluteDeadline } from '@/lib/auth/session-policy';
+import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
+import {
+  sessionAbsoluteDeadline,
+  sessionLifetimeExceeded,
+  SESSION_LIFETIME_AUDIT_SOURCE,
+  type SessionLifetimeBound,
+} from '@/lib/auth/session-policy';
 import { isRegistryMissing } from '../devices/schema-state';
 
 function toIsoTimestamp(timestamp: number | null): string | null {
@@ -102,19 +109,27 @@ function serializeSession(
  * The provider's expiry renews on use, so only this ends a sign-in that is
  * older than policy allows but still active.
  */
-async function endSessionsPastAbsoluteLifetime(
+async function endSessionsPastLifetime(
   identity: IdentitySessionOperations,
   sessions: IdentitySession[],
   now: number,
-): Promise<{ live: IdentitySession[]; endedCount: number }> {
-  const expired = sessions.filter((session) => hasOutlivedAbsoluteLifetime(session.createdAt, now));
-  if (expired.length === 0) return { live: sessions, endedCount: 0 };
+): Promise<{ live: IdentitySession[]; endedCount: number; bounds: SessionLifetimeBound[] }> {
+  const expired: IdentitySession[] = [];
+  const bounds = new Set<SessionLifetimeBound>();
+  for (const session of sessions) {
+    const bound = sessionLifetimeExceeded(session, now);
+    if (bound === null) continue;
+    expired.push(session);
+    bounds.add(bound);
+  }
+  if (expired.length === 0) return { live: sessions, endedCount: 0, bounds: [] };
 
   const outcome = await revokeInBatches(identity, expired);
   const ended = new Set([...outcome.ended, ...outcome.alreadyGone]);
   return {
     live: sessions.filter((session) => !ended.has(session.id)),
     endedCount: ended.size,
+    bounds: [...bounds],
   };
 }
 
@@ -126,7 +141,7 @@ async function handleList(request: NextRequest) {
   const identity = getIdentityProvider();
   const { sessions, totalCount, truncated } = await listActiveIdentitySessions(identity, userId);
 
-  const { live, endedCount } = await endSessionsPastAbsoluteLifetime(
+  const { live, endedCount, bounds } = await endSessionsPastLifetime(
     identity,
     sessions,
     Date.now(),
@@ -146,7 +161,7 @@ async function handleList(request: NextRequest) {
       eventType: 'session_revoked',
       request,
       detail: {
-        source: 'absolute_session_timeout',
+        source: bounds.map((bound) => SESSION_LIFETIME_AUDIT_SOURCE[bound]).join(','),
         resourceType: 'session',
         count: endedCount,
       },
@@ -158,13 +173,14 @@ async function handleList(request: NextRequest) {
     totalCount: Math.max(0, totalCount - endedCount),
     returnedCount: projected.length,
     truncated,
-    endedByAbsoluteTimeout: endedCount,
+    endedByLifetime: endedCount,
+    endedByLifetimeBounds: bounds,
     currentSessionKnown: currentSessionId !== null,
   });
 }
 
 async function handleRevokeAll(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
+  const rateLimitResponse = await withRateLimit(request, 'settings-sessions-revoke-all');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, currentSessionId } = await resolveSessionsPrincipal(request);
@@ -175,13 +191,7 @@ async function handleRevokeAll(request: NextRequest) {
   const identity = getIdentityProvider();
   const result = await revokeEveryOtherSession(identity, userId, currentSessionId);
   const currentSession = result.currentSession;
-  await db.execute(
-    `update device_refresh_tokens
-        set revoked_at = coalesce(revoked_at, now())
-      where user_id = $1
-        and revoked_at is null`,
-    [userId],
-  );
+  const deviceCredentialsRevoked = await revokeEveryDeviceRefreshCredential(db, userId);
 
   const settled = result.ended.length + result.alreadyGone.length;
 
@@ -222,21 +232,25 @@ async function handleRevokeAll(request: NextRequest) {
     'All active sessions revoked',
   );
 
-  await recordAuditEvent({
+  // The catalogued notice, not only a log line: whoever holds this session can
+  // end every other one, and the account holder has to hear that it happened.
+  await emitIdentitySecurityEvent(db, {
     userId,
-    eventType: 'logout',
+    event: 'all_sessions_revoked',
     request,
+    context: `${revokedIds.length} session${revokedIds.length === 1 ? '' : 's'} ended, including this one.`,
     detail: {
       source: 'revoke_all_sessions',
-      resourceType: 'session',
       count: revokedIds.length,
       isCurrent: currentSession !== undefined,
+      deleted: deviceCredentialsRevoked,
     },
   });
 
   return NextResponse.json({
     message: 'All active sessions revoked',
     revokedCount: revokedIds.length,
+    deviceCredentialsRevoked,
     currentSessionRevoked: currentSession !== undefined,
   });
 }

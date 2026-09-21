@@ -48,8 +48,7 @@ interface UserSettingsRow {
 }
 
 export type ManagedReflectLoadResult =
-  | { kind: 'memory-disabled' }
-  | { kind: 'recap'; recap: ManagedCloudReflectRecap };
+  { kind: 'memory-disabled' } | { kind: 'recap'; recap: ManagedCloudReflectRecap };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -271,6 +270,7 @@ export async function loadManagedReflectRecap(input: {
                 select left(wm.content, 2000) as content, wm.created_at
                 from public.web_messages wm
                 where wm.conversation_id = wc.id and wm.role = 'user'
+                  and wm.deleted_at is null
                 order by wm.created_at asc
                 limit 5
               ) sample
@@ -279,10 +279,11 @@ export async function loadManagedReflectRecap(input: {
               select left(wm.content, 2000)
               from public.web_messages wm
               where wm.conversation_id = wc.id and wm.role = 'user'
+                and wm.deleted_at is null
               order by wm.created_at asc
               limit 1
             ), '') as first_user_message,
-            (select count(*) from public.web_messages wm where wm.conversation_id = wc.id and wm.role = 'user')::int as user_message_count,
+            (select count(*) from public.web_messages wm where wm.conversation_id = wc.id and wm.role = 'user' and wm.deleted_at is null)::int as user_message_count,
             count(*) over()::int as total_conversations
        from public.web_conversations wc
       where wc.user_id = $1
@@ -295,6 +296,7 @@ export async function loadManagedReflectRecap(input: {
           select 1
           from public.web_messages excluded
           where excluded.conversation_id = wc.id
+            and excluded.deleted_at is null
             and excluded.metadata ? 'cloudAgentRun'
         )
       order by wc.created_at desc

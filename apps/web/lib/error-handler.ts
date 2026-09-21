@@ -4,11 +4,14 @@ import {
   ATTR_HTTP_RESPONSE_STATUS_CODE,
   ATTR_URL_PATH,
 } from '@opentelemetry/semantic-conventions';
+import { REQUEST_ID_HEADER, isWellFormedRequestId } from '@agiworkforce/cloud-contracts';
 import { DenialErrorCode } from '@agiworkforce/types';
 import { AppError, createError } from './errors';
 import {
   API_CONTRACT_VERSION,
   API_VERSION_RESPONSE_HEADER,
+  MINIMUM_API_VERSION_RESPONSE_HEADER,
+  MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
   InboundCircuitOpenError,
   assertInboundContract,
   runUnderGatewayPolicy,
@@ -17,6 +20,7 @@ import {
 import { logger } from './logger';
 import { captureServerError } from './observability/error-capture';
 import { recordHttpRequest } from './observability/metrics';
+import { httpRequestLabels } from './observability/request-labels';
 import { redactAttributes, redactValue } from './observability/redact';
 import {
   PayloadCeilingExceededError,
@@ -229,11 +233,12 @@ export function withErrorHandler<T extends unknown[]>(
   return async (...args: T): Promise<NextResponse | Response> => {
     const inbound = parseTraceparent(readHeader(args[0], 'traceparent'));
     const serverSpan = startBridgedSpan(HTTP_SERVER_SPAN, HTTP_SERVER_SPAN_KIND, inbound);
-    const inboundRequestId = readHeader(args[0], 'x-request-id');
-    const requestId =
-      inboundRequestId && /^[A-Za-z0-9._~-]{1,128}$/u.test(inboundRequestId)
-        ? inboundRequestId
-        : serverSpan.traceId;
+    // A caller's own id is honoured when it is one this server can put in a log
+    // line unchanged; anything else is replaced rather than repaired.
+    const inboundRequestId = readHeader(args[0], REQUEST_ID_HEADER);
+    const requestId = isWellFormedRequestId(inboundRequestId)
+      ? inboundRequestId
+      : serverSpan.traceId;
     const context: TraceContext = {
       traceId: serverSpan.traceId,
       spanId: serverSpan.spanId,
@@ -242,6 +247,7 @@ export function withErrorHandler<T extends unknown[]>(
     };
     const method = (args[0] as { method?: string } | undefined)?.method;
     const url = (args[0] as { url?: string } | undefined)?.url;
+    const callerLabels = httpRequestLabels((name) => readHeader(args[0], name));
     const breach = findPayloadCeilingBreach(
       (args[0] ?? {}) as Parameters<typeof findPayloadCeilingBreach>[0],
     );
@@ -288,7 +294,12 @@ export function withErrorHandler<T extends unknown[]>(
         }
 
         const durationMs = Date.now() - startedAt;
-        recordHttpRequest({ method, statusCode: response.status, durationMs });
+        recordHttpRequest({
+          method,
+          statusCode: response.status,
+          durationMs,
+          ...callerLabels,
+        });
 
         const attributes = redactAttributes({
           [ATTR_HTTP_REQUEST_METHOD]: method,
@@ -324,9 +335,13 @@ export function withErrorHandler<T extends unknown[]>(
 
         try {
           applySensitiveNoStore(args[0], response);
-          response.headers.set('x-request-id', requestId);
+          response.headers.set(REQUEST_ID_HEADER, requestId);
           response.headers.set('traceparent', formatTraceparent(context));
           response.headers.set(API_VERSION_RESPONSE_HEADER, API_CONTRACT_VERSION);
+          response.headers.set(
+            MINIMUM_API_VERSION_RESPONSE_HEADER,
+            MINIMUM_SUPPORTED_API_CONTRACT_VERSION,
+          );
         } catch (err) {
           void err;
         }

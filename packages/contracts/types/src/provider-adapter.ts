@@ -22,6 +22,7 @@
  * @packageDocumentation
  */
 
+import type { RequestIdentity } from './request-identity';
 import type { Provider } from './provider';
 import type { ModelMetadata, ModelCapabilities, ModelType } from './model-catalog';
 import type { Effort } from './design-system/effort';
@@ -179,6 +180,12 @@ export interface ChatRequest {
    * tenants whose stable prefix matches can never land on one namespace.
    */
   promptCache?: PromptCacheScope;
+  /**
+   * Which call this is, which operation it belongs to and which try it is.
+   * A retry that mints a fresh operation id is a second operation to every
+   * reader downstream, including the one that settles the bill.
+   */
+  identity?: RequestIdentity;
   metadata?: Record<string, unknown>;
 }
 

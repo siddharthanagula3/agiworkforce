@@ -110,6 +110,10 @@ export function computeJobBackoffSeconds(
 ): number {
   const exponent = Math.max(0, Math.min(30, attempts - 1));
   const ceiling = Math.min(policy.backoffMaxSeconds, policy.backoffBaseSeconds * 2 ** exponent);
-  const jitter = 0.8 + Math.min(1, Math.max(0, random())) * 0.4;
+  // A clamp built from min and max alone passes NaN straight through, and the
+  // delay ends up in make_interval, where it is no longer a number at all.
+  const roll = random();
+  const bounded = Number.isFinite(roll) ? Math.min(1, Math.max(0, roll)) : 0.5;
+  const jitter = 0.8 + bounded * 0.4;
   return Math.max(1, Math.round(Math.min(policy.backoffMaxSeconds, ceiling * jitter)));
 }

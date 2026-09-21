@@ -281,6 +281,19 @@ describe('LiveVoiceSession', () => {
     expect(peer.channel.sent.at(-1)).toMatchObject({ type: 'session.input_audio.unmute' });
   });
 
+  it('replays a mute chosen while connecting once the session starts', async () => {
+    const { session } = await startSession();
+    session.setMuted(true);
+    expect(peer.channel.sent).toEqual([]);
+
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+
+    expect(peer.channel.sent).toContainEqual(
+      expect.objectContaining({ type: 'session.input_audio.mute' }),
+    );
+    expect(tracks[0]!.enabled).toBe(false);
+  });
+
   it('reports usage snapshots and finishes the close handshake before tearing down', async () => {
     const { session, cb } = await startSession();
     peer.channel.receive({ type: 'session.started', event_id: 'e1' });

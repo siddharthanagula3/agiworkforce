@@ -1,7 +1,16 @@
 import 'server-only';
 
 import { z } from 'zod';
+import { recordRejection } from '@/lib/observability/metrics';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
+
+const PROVIDER_RESPONSE_SURFACE = 'api';
+
+// A provider answer our schema refuses is a contract disagreement, not an
+// outage: it is counted apart from the request failures around it.
+function noteProviderRejection(reason: string): void {
+  recordRejection({ kind: 'contract_decode', reason, surface: PROVIDER_RESPONSE_SURFACE });
+}
 
 const PROVIDER_TASK_ID_PATTERN = /^[A-Za-z0-9._~-]{1,512}$/u;
 const MAX_DATABASE_COST_CENTS = 2_147_483_647;
@@ -173,6 +182,7 @@ export async function submitOpenRouterVideo(input: {
   }
   const parsed = SubmissionResponseSchema.safeParse(payload);
   if (!parsed.success) {
+    noteProviderRejection('submission_response');
     throw new OpenRouterVideoSubmissionOutcomeUnknownError(
       'OpenRouter accepted the request but returned no usable task identity.',
     );
@@ -233,6 +243,7 @@ export async function pollOpenRouterVideo(
   }
   const parsed = PollResponseSchema.safeParse(payload);
   if (!parsed.success || parsed.data.id !== providerTaskId) {
+    noteProviderRejection('poll_response');
     throw new OpenRouterVideoPollError('OpenRouter returned an invalid task state.', true);
   }
   switch (parsed.data.status) {

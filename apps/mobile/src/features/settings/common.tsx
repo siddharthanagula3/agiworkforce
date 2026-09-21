@@ -1,14 +1,13 @@
-import { useCallback } from 'react';
 import type React from 'react';
 import { ActivityIndicator, View, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 export function SettingsScreenShell({
   title,
@@ -19,15 +18,8 @@ export function SettingsScreenShell({
   children: React.ReactNode;
   backHref?: string;
 }) {
-  const router = useRouter();
   const { colors, statusBarStyle } = useTheme();
-  const goBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.navigate(backHref as Parameters<typeof router.navigate>[0]);
-    }
-  }, [backHref, router]);
+  const goBack = useGoBack(backHref);
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>

@@ -16,6 +16,7 @@ import {
   extractOfficeDocumentText,
   officeDocumentKind,
   OfficeDocumentUnreadableError,
+  OFFICE_DOCUMENT_FAILURE_REASONS,
 } from './office-document-text';
 
 function cell(text: string): TableCell {
@@ -146,5 +147,54 @@ describe('extractOfficeDocumentText', () => {
         'xlsx',
       ),
     ).rejects.toBeInstanceOf(OfficeDocumentUnreadableError);
+  });
+});
+
+describe('a file that cannot be read says why in words a reader can act on', () => {
+  async function failureFor(data: Buffer, fileName: string, kind: 'docx' | 'xlsx' | 'pptx') {
+    try {
+      await extractOfficeDocumentText(data, fileName, kind);
+    } catch (error) {
+      if (error instanceof OfficeDocumentUnreadableError) return error;
+      throw error;
+    }
+    throw new Error(`${fileName} was read when it should not have been`);
+  }
+
+  it('names a password-protected package rather than calling it damaged', async () => {
+    const encrypted = Buffer.concat([
+      Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+      Buffer.alloc(512),
+    ]);
+    const failure = await failureFor(encrypted, 'locked.docx', 'docx');
+    expect(failure.reason).toBe('encrypted');
+    expect(failure.message).toContain('password');
+  });
+
+  it('refuses a package that carries a macro project', async () => {
+    const zip = new JSZip();
+    zip.file('word/document.xml', '<w:document/>');
+    zip.file('word/vbaProject.bin', Buffer.from([0x00, 0x01, 0x02, 0x03]));
+    const failure = await failureFor(
+      await zip.generateAsync({ type: 'nodebuffer' }),
+      'macros.docx',
+      'docx',
+    );
+    expect(failure.reason).toBe('macro_present');
+    expect(failure.message).toContain('macros');
+  });
+
+  it('calls bytes that are not a package damaged, without quoting the decoder', async () => {
+    const failure = await failureFor(Buffer.from('not a zip at all'), 'broken.docx', 'docx');
+    expect(failure.reason).toBe('corrupt');
+    expect(failure.message).not.toMatch(/zip|jszip|mammoth|offset|0x/i);
+  });
+
+  it('gives every declared reason a distinct message', () => {
+    const messages = OFFICE_DOCUMENT_FAILURE_REASONS.map(
+      (reason) => new OfficeDocumentUnreadableError('a.docx', reason).message,
+    );
+    expect(new Set(messages).size).toBe(OFFICE_DOCUMENT_FAILURE_REASONS.length);
+    for (const message of messages) expect(message.startsWith('a.docx ')).toBe(true);
   });
 });

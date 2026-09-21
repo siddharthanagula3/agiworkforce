@@ -12,8 +12,7 @@ import {
   type ManagedCloudPublishedArtifact,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { getExtensionUserAgent } from '../../platform/version';
-import { SOURCE_SURFACE } from '../../platform/surface';
+import { platformRequestHeaders } from '../../platform/platformHeaders';
 
 export class ArtifactsHttpError extends Error {
   constructor(
@@ -36,16 +35,13 @@ export interface ArtifactsWorkspace {
 }
 
 export type ArtifactsWorkspaceResolution =
-  | { status: 'ready'; workspace: ArtifactsWorkspace }
-  | { status: 'signed-out' };
+  { status: 'ready'; workspace: ArtifactsWorkspace } | { status: 'signed-out' };
 
 function hostedHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
-    'User-Agent': getExtensionUserAgent(),
-    'X-Client': 'vscode-extension',
-    'X-AGI-Surface': SOURCE_SURFACE,
+    ...platformRequestHeaders(),
   };
 }
 

@@ -2,7 +2,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
-import { resolveLiveVoiceDelegationTools } from '@/lib/voice/live-voice-tools';
+import {
+  describeDelegationTools,
+  resolveLiveVoiceDelegationTools,
+} from '@/lib/voice/live-voice-tools';
 
 const LIVE_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live'))!;
 const BACKEND_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live_backend'))!;
@@ -216,6 +219,41 @@ describe('POST /api/voice/live/sessions', () => {
     const insert = rows.find(([sql]) => sql.includes('insert into public.voice_sessions'));
     expect(insert?.[1]).toEqual(
       expect.arrayContaining(['user-1', 'conv-1', 'live_2', 'web', 'quartz', 'es', 1.25]),
+    );
+    // The tools the delegation was offered are what a later audit reads back,
+    // so the record carries the resolver's answer rather than an empty list.
+    const offeredTools = describeDelegationTools(resolveLiveVoiceDelegationTools(BACKEND_MODEL));
+    expect(offeredTools.length).toBeGreaterThan(0);
+    expect(JSON.parse(String(insert?.[1]?.[10]))).toEqual(offeredTools);
+  });
+
+  it('refuses a session the store could not record and charges nothing for it', async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_3' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
+    );
+    mocks.userScopedDb.mockResolvedValue({
+      db: {
+        query: async (sql: string) => {
+          if (sql.includes('to_regclass')) return [{ ready: true }];
+          if (sql.includes('insert into public.voice_sessions')) return [];
+          return [];
+        },
+      },
+      userId: 'user-1',
+      organizationId: null,
+    });
+
+    const response = await POST(request({ sdp: OFFER, conversationId: 'conv-1' }));
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('voice_session_not_recorded');
+    expect(body.error.message).toContain('nothing was charged');
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
     );
   });
 

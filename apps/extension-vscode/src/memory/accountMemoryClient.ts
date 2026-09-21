@@ -5,8 +5,7 @@ import {
   type MemoryWireDelta,
 } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
-import { getExtensionUserAgent } from '../platform/version';
-import { SOURCE_SURFACE } from '../platform/surface';
+import { platformRequestHeaders } from '../platform/platformHeaders';
 
 export const MEMORY_SYNC_PATH = '/api/memory/sync';
 export const MEMORY_SYNC_PROTOCOL_VERSION = 2;
@@ -89,9 +88,7 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
           ...(init.headers as Record<string, string> | undefined),
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
-          'User-Agent': getExtensionUserAgent(),
-          'X-Client': 'vscode-extension',
-          'X-AGI-Surface': SOURCE_SURFACE,
+          ...platformRequestHeaders(),
         },
       });
     } catch (error) {

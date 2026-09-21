@@ -3,9 +3,11 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
+  resolveWorkspaceCodeControls,
   resolveWorkspaceControls,
   strictestSecretHandlingMode,
   type AdminPolicy,
+  type EffectiveWorkspaceCodeControls,
   type EffectiveWorkspacePolicy,
   type SecretHandlingMode,
 } from '@agiworkforce/types';
@@ -15,6 +17,7 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
 import {
   readLayeredOrganizationPolicy,
   readOrganizationPolicy,
+  readWorkspaceCodeControls,
   type LayeredOrganizationPolicy,
 } from '@/lib/services/organization-policy-service';
 import { readApplicablePolicyOverrides } from '@/lib/services/organization-policy-override-service';
@@ -293,6 +296,7 @@ export interface EffectiveWorkspaceControls {
   organizationId: string;
   revision: number;
   controls: EffectiveWorkspacePolicy;
+  code: EffectiveWorkspaceCodeControls;
 }
 
 export async function resolveEffectiveWorkspaceControls(
@@ -328,6 +332,11 @@ export async function resolveEffectiveWorkspaceControls(
       organizationId: scopedOrganizationId,
       revision,
       controls: resolveWorkspaceControls(layered.policy.controls, overrides, revision),
+      code: resolveWorkspaceCodeControls(
+        readWorkspaceCodeControls(layered.policy.metadata),
+        overrides,
+        revision,
+      ),
     };
   } catch (error) {
     logger.error(

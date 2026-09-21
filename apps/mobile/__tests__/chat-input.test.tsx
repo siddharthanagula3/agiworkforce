@@ -6,6 +6,7 @@ import { render, fireEvent, waitFor, act, within } from '@testing-library/react-
 import { getModelMetadataById } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { LARGE_PASTE_THRESHOLD, pastedTextFileName } from '@agiworkforce/utils/composer-paste';
+import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
 
 const mockCapabilityModelId = requireMobileCloudModel((model) => {
   const metadata = getModelMetadataById(model.id);
@@ -1055,6 +1056,21 @@ describe('ChatInput', () => {
 
       expect(onOpenModelPicker).toHaveBeenCalled();
       dismiss.mockRestore();
+    });
+  });
+
+  describe('wide windows', () => {
+    it('caps the composer at the reading column instead of spanning a tablet', () => {
+      const screen = renderInput();
+      const style = screen.getByTestId('chat.composer').props.style as {
+        width?: number | string;
+        maxWidth?: number;
+        alignSelf?: string;
+      };
+
+      expect(style.maxWidth).toBe(READING_COLUMN_MAX_WIDTH);
+      expect(style.alignSelf).toBe('center');
+      expect(style.width).toBe('100%');
     });
   });
 });

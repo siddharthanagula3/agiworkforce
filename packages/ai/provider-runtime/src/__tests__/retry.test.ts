@@ -4,6 +4,7 @@ import { CannotRetryError, FallbackTriggeredError } from '../errors';
 import {
   computeDelay,
   createRetryContext,
+  retryAfterExceedsCeiling,
   withRetry,
   MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST,
   type RetryEvent,
@@ -329,5 +330,78 @@ describe('withRetry', () => {
   it('does not invoke onEvent if hook throws (does not catch)', () => {
     const hook = vi.fn();
     expect(hook).not.toBeCalled();
+  });
+});
+
+describe('a Retry-After longer than the ceiling', () => {
+  const rateLimited = (retryAfterSeconds: number) => ({
+    status: 429,
+    message: 'rate limit',
+    headers: { 'retry-after': String(retryAfterSeconds) },
+  });
+
+  it('is a wait no request can take, so the loop gives up instead of sleeping on it', async () => {
+    const events: RetryEvent[] = [];
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
+    let calls = 0;
+    const started = Date.now();
+
+    await expect(
+      withRetry(
+        async () => {
+          calls += 1;
+          throw rateLimited(3600);
+        },
+        ctx,
+        { maxBackoffMs: 32_000, maxRetries: 5, onEvent: (event) => events.push(event) },
+      ),
+    ).rejects.toBeInstanceOf(CannotRetryError);
+
+    expect(calls).toBe(1);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(events.filter((event) => event.type === 'delay')).toHaveLength(0);
+    expect(events.filter((event) => event.type === 'give-up')).toHaveLength(1);
+  });
+
+  it('is still honoured while it fits under the ceiling', async () => {
+    const events: RetryEvent[] = [];
+    const ctx = createRetryContext({ model: PRIMARY_FIXTURE_MODEL_ID });
+    let calls = 0;
+
+    const result = await withRetry(
+      async () => {
+        calls += 1;
+        if (calls < 2) throw rateLimited(0);
+        return 'ok';
+      },
+      ctx,
+      { maxBackoffMs: 32_000, onEvent: (event) => events.push(event) },
+    );
+
+    expect(result).toBe('ok');
+    expect(events.filter((event) => event.type === 'delay')).toHaveLength(1);
+  });
+
+  it('reports the ceiling from the caller-supplied bound, never a literal', () => {
+    expect(retryAfterExceedsCeiling(40, 32_000)).toBe(true);
+    expect(retryAfterExceedsCeiling(40, 60_000)).toBe(false);
+    expect(retryAfterExceedsCeiling(undefined, 32_000)).toBe(false);
+  });
+});
+
+describe('Retry-After jitter', () => {
+  it('spreads clients that all read the same number off one 429', () => {
+    const spread = new Set(
+      Array.from({ length: 64 }, (_unused, index) =>
+        computeDelay(1, 5, 500, 32_000, () => index / 64),
+      ),
+    );
+    expect(spread.size).toBeGreaterThan(1);
+  });
+
+  it('never wakes before the provider said it would serve again', () => {
+    for (let index = 0; index < 64; index += 1) {
+      expect(computeDelay(1, 5, 500, 32_000, () => index / 64)).toBeGreaterThanOrEqual(5000);
+    }
   });
 });

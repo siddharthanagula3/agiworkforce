@@ -1,0 +1,123 @@
+{
+  "suite": "memory-quality",
+  "version": 1,
+  "priority": "P0",
+  "passThreshold": 1,
+  "measures": "whether a stored fact is recalled, and whether a memory the account, the workspace or the conversation has switched off is never recalled",
+  "provenance": "hand written 2026-09-20 against the context engine's own admission, permission and policy checks; no account data",
+  "cases": [
+    {
+      "id": "memory-quality/recalls-a-stored-fact",
+      "risk": "low",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "sources": [
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/morning-meetings",
+          "text": "Prefers meetings before noon."
+        }
+      ],
+      "expect": { "includes": ["account_memory:memory/morning-meetings"] }
+    },
+    {
+      "id": "memory-quality/never-recalls-a-memory-the-account-switched-off",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "disabledToggles": ["capabilities.memory"],
+      "sources": [
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/morning-meetings",
+          "text": "Prefers meetings before noon."
+        }
+      ],
+      "expect": {
+        "excludes": ["account_memory:memory/morning-meetings"],
+        "excludedFor": { "account_memory:memory/morning-meetings": "source_disabled" }
+      }
+    },
+    {
+      "id": "memory-quality/never-recalls-memory-a-workspace-disallows",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": "org-1" },
+      "policy": { "allowMemory": false },
+      "sources": [
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/morning-meetings",
+          "organizationId": "org-1",
+          "text": "Prefers meetings before noon."
+        }
+      ],
+      "expect": {
+        "excludes": ["account_memory:memory/morning-meetings"],
+        "excludedFor": { "account_memory:memory/morning-meetings": "policy_denied" }
+      }
+    },
+    {
+      "id": "memory-quality/never-recalls-memory-into-a-temporary-chat",
+      "risk": "high",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "temporaryChat": true,
+      "sources": [
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/morning-meetings",
+          "text": "Prefers meetings before noon."
+        }
+      ],
+      "expect": {
+        "excludes": ["account_memory:memory/morning-meetings"],
+        "excludedFor": { "account_memory:memory/morning-meetings": "temporary_chat" }
+      }
+    },
+    {
+      "id": "memory-quality/never-recalls-another-accounts-memory",
+      "risk": "high",
+      "isolation": true,
+      "actor": { "userId": "u-1", "organizationId": null },
+      "sources": [
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/mine",
+          "ownerUserId": "u-1",
+          "text": "Prefers meetings before noon."
+        },
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/theirs",
+          "ownerUserId": "u-2",
+          "text": "Lives in Lisbon and banks with the credit union."
+        }
+      ],
+      "expect": {
+        "includes": ["account_memory:memory/mine"],
+        "excludes": ["account_memory:memory/theirs"],
+        "excludedFor": { "account_memory:memory/theirs": "permission_denied" },
+        "neverMentions": ["Lisbon"]
+      }
+    },
+    {
+      "id": "memory-quality/carries-one-copy-of-a-fact-stored-twice",
+      "risk": "low",
+      "actor": { "userId": "u-1", "organizationId": null },
+      "sources": [
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/first",
+          "text": "Prefers meetings before noon."
+        },
+        {
+          "sourceClass": "account_memory",
+          "locator": "memory/second",
+          "text": "Prefers meetings before noon."
+        }
+      ],
+      "expect": {
+        "includes": ["account_memory:memory/first"],
+        "excludes": ["account_memory:memory/second"],
+        "excludedFor": { "account_memory:memory/second": "duplicate_fact" }
+      }
+    }
+  ]
+}

@@ -1,14 +1,23 @@
 {
   "_description": "Grandfathered web UI invariant violations, seeded at the start of the frontend redesign. New violations fail CI. This list only ever shrinks, every redesign phase should reduce it, and the redesign is not finished while it is non-empty. Do not add to it.",
   "_counts": {
-    "raw-palette": 1066,
     "raw-bw": 70,
+    "raw-palette": 1066,
     "opacity-diluted-text": 19,
     "hover-only-affordance": 14,
+    "outline-none-without-focus-ring": 22,
+    "arbitrary-z-index": 10,
+    "arbitrary-z-index-css": 23,
     "tiny-type-css": 71,
     "arbitrary-color": 1
   },
   "violations": [
+    {
+      "file": "apps/web/app/blog/error.tsx",
+      "line": 40,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
     {
       "file": "apps/web/app/blog/error.tsx",
       "line": 24,
@@ -34,12 +43,6 @@
       "literal": "bg-blue-700"
     },
     {
-      "file": "apps/web/app/blog/error.tsx",
-      "line": 40,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
       "file": "apps/web/app/blog/loading.tsx",
       "line": 3,
       "rule": "raw-bw",
@@ -86,6 +89,12 @@
       "line": 134,
       "rule": "raw-palette",
       "literal": "text-blue-700"
+    },
+    {
+      "file": "apps/web/app/dev/inline-toolcall-demo/page.tsx",
+      "line": 51,
+      "rule": "raw-bw",
+      "literal": "bg-white"
     },
     {
       "file": "apps/web/app/dev/inline-toolcall-demo/page.tsx",
@@ -104,12 +113,6 @@
       "line": 51,
       "rule": "raw-palette",
       "literal": "text-stone-100"
-    },
-    {
-      "file": "apps/web/app/dev/inline-toolcall-demo/page.tsx",
-      "line": 51,
-      "rule": "raw-bw",
-      "literal": "bg-white"
     },
     {
       "file": "apps/web/app/dev/inline-toolcall-demo/page.tsx",
@@ -344,258 +347,6 @@
       "line": 213,
       "rule": "opacity-diluted-text",
       "literal": "text-foreground/40"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 77,
-      "rule": "raw-palette",
-      "literal": "bg-green-50"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 77,
-      "rule": "raw-palette",
-      "literal": "bg-green-950"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 78,
-      "rule": "raw-palette",
-      "literal": "bg-blue-50"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 78,
-      "rule": "raw-palette",
-      "literal": "bg-blue-950"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 79,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-50"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 79,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-950"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 80,
-      "rule": "raw-palette",
-      "literal": "bg-red-50"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 80,
-      "rule": "raw-palette",
-      "literal": "bg-red-950"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 84,
-      "rule": "raw-palette",
-      "literal": "border-green-200"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 84,
-      "rule": "raw-palette",
-      "literal": "border-green-800"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 85,
-      "rule": "raw-palette",
-      "literal": "border-blue-200"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 85,
-      "rule": "raw-palette",
-      "literal": "border-blue-800"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 86,
-      "rule": "raw-palette",
-      "literal": "border-yellow-200"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 86,
-      "rule": "raw-palette",
-      "literal": "border-yellow-800"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 87,
-      "rule": "raw-palette",
-      "literal": "border-red-200"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 87,
-      "rule": "raw-palette",
-      "literal": "border-red-800"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 91,
-      "rule": "raw-palette",
-      "literal": "text-green-900"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 91,
-      "rule": "raw-palette",
-      "literal": "text-green-100"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 92,
-      "rule": "raw-palette",
-      "literal": "text-blue-900"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 92,
-      "rule": "raw-palette",
-      "literal": "text-blue-100"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 93,
-      "rule": "raw-palette",
-      "literal": "text-yellow-900"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 93,
-      "rule": "raw-palette",
-      "literal": "text-yellow-100"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 94,
-      "rule": "raw-palette",
-      "literal": "text-red-900"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 94,
-      "rule": "raw-palette",
-      "literal": "text-red-100"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 98,
-      "rule": "raw-palette",
-      "literal": "text-green-600"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 98,
-      "rule": "raw-palette",
-      "literal": "text-green-400"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 99,
-      "rule": "raw-palette",
-      "literal": "text-blue-600"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 99,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 100,
-      "rule": "raw-palette",
-      "literal": "text-yellow-600"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 100,
-      "rule": "raw-palette",
-      "literal": "text-yellow-400"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 101,
-      "rule": "raw-palette",
-      "literal": "text-red-600"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 101,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 158,
-      "rule": "raw-palette",
-      "literal": "bg-red-200"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 158,
-      "rule": "raw-palette",
-      "literal": "bg-red-300"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 158,
-      "rule": "raw-palette",
-      "literal": "bg-red-800"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 158,
-      "rule": "raw-palette",
-      "literal": "bg-red-700"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 159,
-      "rule": "raw-palette",
-      "literal": "text-red-900"
-    },
-    {
-      "file": "apps/web/shared/components/OfflineIndicator.tsx",
-      "line": 159,
-      "rule": "raw-palette",
-      "literal": "text-red-100"
-    },
-    {
-      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
-      "line": 23,
-      "rule": "raw-palette",
-      "literal": "bg-blue-600"
-    },
-    {
-      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
-      "line": 23,
-      "rule": "raw-palette",
-      "literal": "ring-blue-400"
-    },
-    {
-      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
-      "line": 23,
-      "rule": "raw-palette",
-      "literal": "bg-blue-700"
-    },
-    {
-      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
-      "line": 23,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "apps/web/features/admin/components/ContentReportQueuePanel.tsx",
@@ -1342,6 +1093,486 @@
       "literal": "text-red-300"
     },
     {
+      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+      "line": 159,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+      "line": 159,
+      "rule": "raw-palette",
+      "literal": "text-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+      "line": 199,
+      "rule": "raw-palette",
+      "literal": "text-amber-600"
+    },
+    {
+      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+      "line": 199,
+      "rule": "raw-palette",
+      "literal": "text-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+      "line": 217,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+      "line": 217,
+      "rule": "raw-palette",
+      "literal": "text-amber-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+      "line": 217,
+      "rule": "raw-palette",
+      "literal": "text-amber-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1659,
+      "rule": "raw-bw",
+      "literal": "bg-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1983,
+      "rule": "raw-bw",
+      "literal": "bg-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1344,
+      "rule": "raw-palette",
+      "literal": "text-green-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1590,
+      "rule": "raw-palette",
+      "literal": "border-yellow-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1590,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-50"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1591,
+      "rule": "raw-palette",
+      "literal": "text-yellow-600"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1592,
+      "rule": "raw-palette",
+      "literal": "text-yellow-800"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1640,
+      "rule": "raw-palette",
+      "literal": "text-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1726,
+      "rule": "raw-palette",
+      "literal": "bg-gray-900"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1726,
+      "rule": "raw-palette",
+      "literal": "text-gray-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1731,
+      "rule": "raw-palette",
+      "literal": "bg-gray-900"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1733,
+      "rule": "raw-palette",
+      "literal": "text-gray-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1810,
+      "rule": "raw-palette",
+      "literal": "text-green-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1934,
+      "rule": "raw-palette",
+      "literal": "border-yellow-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1934,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-50"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1935,
+      "rule": "raw-palette",
+      "literal": "text-yellow-600"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 1936,
+      "rule": "raw-palette",
+      "literal": "text-yellow-800"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 2059,
+      "rule": "raw-palette",
+      "literal": "bg-gray-900"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+      "line": 2062,
+      "rule": "raw-palette",
+      "literal": "text-gray-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 198,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 283,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 283,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 144,
+      "rule": "raw-palette",
+      "literal": "bg-orange-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 144,
+      "rule": "raw-palette",
+      "literal": "text-orange-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 144,
+      "rule": "raw-palette",
+      "literal": "text-orange-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 146,
+      "rule": "raw-palette",
+      "literal": "bg-sky-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 146,
+      "rule": "raw-palette",
+      "literal": "text-sky-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 146,
+      "rule": "raw-palette",
+      "literal": "text-sky-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 148,
+      "rule": "raw-palette",
+      "literal": "bg-violet-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 148,
+      "rule": "raw-palette",
+      "literal": "text-violet-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 148,
+      "rule": "raw-palette",
+      "literal": "text-violet-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 150,
+      "rule": "raw-palette",
+      "literal": "bg-fuchsia-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 150,
+      "rule": "raw-palette",
+      "literal": "text-fuchsia-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 150,
+      "rule": "raw-palette",
+      "literal": "text-fuchsia-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 152,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 152,
+      "rule": "raw-palette",
+      "literal": "text-emerald-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 152,
+      "rule": "raw-palette",
+      "literal": "text-emerald-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 154,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 154,
+      "rule": "raw-palette",
+      "literal": "text-amber-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
+      "line": 154,
+      "rule": "raw-palette",
+      "literal": "text-amber-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
+      "line": 57,
+      "rule": "raw-palette",
+      "literal": "bg-gray-900"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
+      "line": 61,
+      "rule": "raw-palette",
+      "literal": "text-gray-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
+      "line": 65,
+      "rule": "raw-palette",
+      "literal": "bg-gray-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/CalculationCard.tsx",
+      "line": 225,
+      "rule": "raw-palette",
+      "literal": "text-blue-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/CalculationCard.tsx",
+      "line": 225,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/CalculationCard.tsx",
+      "line": 307,
+      "rule": "raw-palette",
+      "literal": "text-emerald-600"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 234,
+      "rule": "raw-palette",
+      "literal": "text-indigo-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 234,
+      "rule": "raw-palette",
+      "literal": "text-indigo-400"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 273,
+      "rule": "raw-palette",
+      "literal": "text-emerald-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 273,
+      "rule": "raw-palette",
+      "literal": "text-emerald-400"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 281,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 293,
+      "rule": "raw-palette",
+      "literal": "text-rose-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 293,
+      "rule": "raw-palette",
+      "literal": "text-rose-400"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 301,
+      "rule": "raw-palette",
+      "literal": "bg-rose-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 328,
+      "rule": "raw-palette",
+      "literal": "text-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 337,
+      "rule": "raw-palette",
+      "literal": "text-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 367,
+      "rule": "raw-palette",
+      "literal": "text-amber-600"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
+      "line": 367,
+      "rule": "raw-palette",
+      "literal": "text-amber-400"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/RecipeCard.tsx",
+      "line": 170,
+      "rule": "raw-palette",
+      "literal": "text-amber-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/RecipeCard.tsx",
+      "line": 170,
+      "rule": "raw-palette",
+      "literal": "text-amber-400"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 338,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 269,
+      "rule": "raw-palette",
+      "literal": "text-teal-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 269,
+      "rule": "raw-palette",
+      "literal": "text-teal-400"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 288,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 288,
+      "rule": "raw-palette",
+      "literal": "text-emerald-800"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 288,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-900"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 288,
+      "rule": "raw-palette",
+      "literal": "text-emerald-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 322,
+      "rule": "raw-palette",
+      "literal": "border-emerald-200"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 322,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-50"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 322,
+      "rule": "raw-palette",
+      "literal": "border-emerald-800"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 322,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 338,
+      "rule": "raw-palette",
+      "literal": "border-emerald-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
+      "line": 338,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-700"
+    },
+    {
       "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
       "line": 3072,
       "rule": "raw-palette",
@@ -1480,6 +1711,42 @@
       "literal": "text-foreground/60"
     },
     {
+      "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+      "line": 136,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/ComposerInput.tsx",
+      "line": 57,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx",
+      "line": 1386,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+      "line": 37,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+      "line": 39,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/Composer/ModelCatalogue.tsx",
+      "line": 45,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
       "file": "apps/web/features/chat/components/Composer/SlashCommandMenu.tsx",
       "line": 180,
       "rule": "raw-palette",
@@ -1490,834 +1757,6 @@
       "line": 298,
       "rule": "hover-only-affordance",
       "literal": "opacity-0"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
-      "line": 611,
-      "rule": "raw-palette",
-      "literal": "text-amber-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
-      "line": 611,
-      "rule": "raw-palette",
-      "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
-      "line": 735,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
-      "line": 745,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
-      "line": 756,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 109,
-      "rule": "opacity-diluted-text",
-      "literal": "text-white/70"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 123,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 132,
-      "rule": "opacity-diluted-text",
-      "literal": "text-white/70"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 143,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 157,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 173,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 186,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 204,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
-      "line": 217,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 29,
-      "rule": "raw-palette",
-      "literal": "border-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 29,
-      "rule": "raw-palette",
-      "literal": "bg-amber-50"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 29,
-      "rule": "raw-palette",
-      "literal": "border-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 29,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 32,
-      "rule": "raw-palette",
-      "literal": "text-amber-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 32,
-      "rule": "raw-palette",
-      "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 36,
-      "rule": "raw-palette",
-      "literal": "text-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 36,
-      "rule": "raw-palette",
-      "literal": "text-amber-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 43,
-      "rule": "raw-palette",
-      "literal": "text-amber-900"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 43,
-      "rule": "raw-palette",
-      "literal": "text-amber-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 54,
-      "rule": "raw-palette",
-      "literal": "border-amber-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 54,
-      "rule": "raw-palette",
-      "literal": "text-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 54,
-      "rule": "raw-palette",
-      "literal": "bg-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 54,
-      "rule": "raw-palette",
-      "literal": "text-amber-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 54,
-      "rule": "raw-palette",
-      "literal": "bg-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 54,
-      "rule": "raw-bw",
-      "literal": "bg-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 73,
-      "rule": "raw-palette",
-      "literal": "text-amber-800"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 73,
-      "rule": "raw-palette",
-      "literal": "bg-amber-200"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 73,
-      "rule": "raw-palette",
-      "literal": "text-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 73,
-      "rule": "raw-palette",
-      "literal": "text-amber-200"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 73,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
-      "line": 73,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
-      "line": 407,
-      "rule": "raw-palette",
-      "literal": "border-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
-      "line": 407,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
-      "line": 407,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
-      "line": 411,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
-      "line": 411,
-      "rule": "raw-palette",
-      "literal": "text-amber-600"
-    },
-    {
-      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
-      "line": 411,
-      "rule": "raw-palette",
-      "literal": "text-amber-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 21,
-      "rule": "raw-palette",
-      "literal": "border-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 21,
-      "rule": "raw-palette",
-      "literal": "bg-amber-50"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 21,
-      "rule": "raw-palette",
-      "literal": "border-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 21,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 24,
-      "rule": "raw-palette",
-      "literal": "text-amber-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 24,
-      "rule": "raw-palette",
-      "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 28,
-      "rule": "raw-palette",
-      "literal": "text-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 28,
-      "rule": "raw-palette",
-      "literal": "text-amber-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 31,
-      "rule": "raw-palette",
-      "literal": "text-amber-900"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 31,
-      "rule": "raw-palette",
-      "literal": "text-amber-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 40,
-      "rule": "raw-palette",
-      "literal": "text-amber-800"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 40,
-      "rule": "raw-palette",
-      "literal": "bg-amber-200"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 40,
-      "rule": "raw-palette",
-      "literal": "text-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 40,
-      "rule": "raw-palette",
-      "literal": "text-amber-200"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 40,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
-      "line": 40,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 159,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 159,
-      "rule": "raw-palette",
-      "literal": "text-amber-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 199,
-      "rule": "raw-palette",
-      "literal": "text-amber-600"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 199,
-      "rule": "raw-palette",
-      "literal": "text-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 217,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 217,
-      "rule": "raw-palette",
-      "literal": "text-amber-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
-      "line": 217,
-      "rule": "raw-palette",
-      "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1344,
-      "rule": "raw-palette",
-      "literal": "text-green-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1590,
-      "rule": "raw-palette",
-      "literal": "border-yellow-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1590,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-50"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1591,
-      "rule": "raw-palette",
-      "literal": "text-yellow-600"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1592,
-      "rule": "raw-palette",
-      "literal": "text-yellow-800"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1640,
-      "rule": "raw-palette",
-      "literal": "text-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1659,
-      "rule": "raw-bw",
-      "literal": "bg-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1726,
-      "rule": "raw-palette",
-      "literal": "bg-gray-900"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1726,
-      "rule": "raw-palette",
-      "literal": "text-gray-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1731,
-      "rule": "raw-palette",
-      "literal": "bg-gray-900"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1733,
-      "rule": "raw-palette",
-      "literal": "text-gray-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1810,
-      "rule": "raw-palette",
-      "literal": "text-green-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1934,
-      "rule": "raw-palette",
-      "literal": "border-yellow-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1934,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-50"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1935,
-      "rule": "raw-palette",
-      "literal": "text-yellow-600"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1936,
-      "rule": "raw-palette",
-      "literal": "text-yellow-800"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 1983,
-      "rule": "raw-bw",
-      "literal": "bg-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 2059,
-      "rule": "raw-palette",
-      "literal": "bg-gray-900"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
-      "line": 2062,
-      "rule": "raw-palette",
-      "literal": "text-gray-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 144,
-      "rule": "raw-palette",
-      "literal": "bg-orange-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 144,
-      "rule": "raw-palette",
-      "literal": "text-orange-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 144,
-      "rule": "raw-palette",
-      "literal": "text-orange-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 146,
-      "rule": "raw-palette",
-      "literal": "bg-sky-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 146,
-      "rule": "raw-palette",
-      "literal": "text-sky-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 146,
-      "rule": "raw-palette",
-      "literal": "text-sky-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 148,
-      "rule": "raw-palette",
-      "literal": "bg-violet-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 148,
-      "rule": "raw-palette",
-      "literal": "text-violet-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 148,
-      "rule": "raw-palette",
-      "literal": "text-violet-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 150,
-      "rule": "raw-palette",
-      "literal": "bg-fuchsia-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 150,
-      "rule": "raw-palette",
-      "literal": "text-fuchsia-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 150,
-      "rule": "raw-palette",
-      "literal": "text-fuchsia-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 152,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 152,
-      "rule": "raw-palette",
-      "literal": "text-emerald-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 152,
-      "rule": "raw-palette",
-      "literal": "text-emerald-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 154,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 154,
-      "rule": "raw-palette",
-      "literal": "text-amber-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 154,
-      "rule": "raw-palette",
-      "literal": "text-amber-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 198,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 283,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/InlineArtifactCards.tsx",
-      "line": 283,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
-      "line": 57,
-      "rule": "raw-palette",
-      "literal": "bg-gray-900"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
-      "line": 61,
-      "rule": "raw-palette",
-      "literal": "text-gray-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/artifacts/StreamingArtifactView.tsx",
-      "line": 65,
-      "rule": "raw-palette",
-      "literal": "bg-gray-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/CalculationCard.tsx",
-      "line": 225,
-      "rule": "raw-palette",
-      "literal": "text-blue-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/CalculationCard.tsx",
-      "line": 225,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/CalculationCard.tsx",
-      "line": 307,
-      "rule": "raw-palette",
-      "literal": "text-emerald-600"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 234,
-      "rule": "raw-palette",
-      "literal": "text-indigo-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 234,
-      "rule": "raw-palette",
-      "literal": "text-indigo-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 273,
-      "rule": "raw-palette",
-      "literal": "text-emerald-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 273,
-      "rule": "raw-palette",
-      "literal": "text-emerald-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 281,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 293,
-      "rule": "raw-palette",
-      "literal": "text-rose-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 293,
-      "rule": "raw-palette",
-      "literal": "text-rose-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 301,
-      "rule": "raw-palette",
-      "literal": "bg-rose-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 328,
-      "rule": "raw-palette",
-      "literal": "text-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 337,
-      "rule": "raw-palette",
-      "literal": "text-amber-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 367,
-      "rule": "raw-palette",
-      "literal": "text-amber-600"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/ComparisonCard.tsx",
-      "line": 367,
-      "rule": "raw-palette",
-      "literal": "text-amber-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/RecipeCard.tsx",
-      "line": 170,
-      "rule": "raw-palette",
-      "literal": "text-amber-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/RecipeCard.tsx",
-      "line": 170,
-      "rule": "raw-palette",
-      "literal": "text-amber-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 269,
-      "rule": "raw-palette",
-      "literal": "text-teal-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 269,
-      "rule": "raw-palette",
-      "literal": "text-teal-400"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 288,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-100"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 288,
-      "rule": "raw-palette",
-      "literal": "text-emerald-800"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 288,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-900"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 288,
-      "rule": "raw-palette",
-      "literal": "text-emerald-300"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 322,
-      "rule": "raw-palette",
-      "literal": "border-emerald-200"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 322,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-50"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 322,
-      "rule": "raw-palette",
-      "literal": "border-emerald-800"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 322,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-950"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 338,
-      "rule": "raw-palette",
-      "literal": "border-emerald-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 338,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-700"
-    },
-    {
-      "file": "apps/web/features/chat/components/cards/StepsCard.tsx",
-      "line": 338,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
@@ -2434,16 +1873,304 @@
       "literal": "text-gray-100"
     },
     {
-      "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
-      "line": 56,
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 274,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[200]"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 535,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[90]"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 549,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[95]"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 735,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 771,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 745,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 756,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 611,
       "rule": "raw-palette",
-      "literal": "text-violet-400"
+      "literal": "text-amber-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageGenerationCard.tsx",
+      "line": 611,
+      "rule": "raw-palette",
+      "literal": "text-amber-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 101,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[100]"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 109,
+      "rule": "opacity-diluted-text",
+      "literal": "text-white/70"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 132,
+      "rule": "opacity-diluted-text",
+      "literal": "text-white/70"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 123,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 143,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 157,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 173,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 186,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 204,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageLightbox.tsx",
+      "line": 217,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 54,
+      "rule": "raw-bw",
+      "literal": "bg-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 73,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 29,
+      "rule": "raw-palette",
+      "literal": "border-amber-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 29,
+      "rule": "raw-palette",
+      "literal": "bg-amber-50"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 29,
+      "rule": "raw-palette",
+      "literal": "border-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 29,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 32,
+      "rule": "raw-palette",
+      "literal": "text-amber-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 32,
+      "rule": "raw-palette",
+      "literal": "text-amber-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 36,
+      "rule": "raw-palette",
+      "literal": "text-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 36,
+      "rule": "raw-palette",
+      "literal": "text-amber-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 43,
+      "rule": "raw-palette",
+      "literal": "text-amber-900"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 43,
+      "rule": "raw-palette",
+      "literal": "text-amber-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 54,
+      "rule": "raw-palette",
+      "literal": "border-amber-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 54,
+      "rule": "raw-palette",
+      "literal": "text-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 54,
+      "rule": "raw-palette",
+      "literal": "bg-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 54,
+      "rule": "raw-palette",
+      "literal": "text-amber-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 54,
+      "rule": "raw-palette",
+      "literal": "bg-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 73,
+      "rule": "raw-palette",
+      "literal": "text-amber-800"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 73,
+      "rule": "raw-palette",
+      "literal": "bg-amber-200"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 73,
+      "rule": "raw-palette",
+      "literal": "text-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 73,
+      "rule": "raw-palette",
+      "literal": "text-amber-200"
+    },
+    {
+      "file": "apps/web/features/chat/components/ImageTranscriptRecoveryNotice.tsx",
+      "line": 73,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+      "line": 407,
+      "rule": "raw-palette",
+      "literal": "border-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+      "line": 407,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+      "line": 407,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+      "line": 411,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+      "line": 411,
+      "rule": "raw-palette",
+      "literal": "text-amber-600"
+    },
+    {
+      "file": "apps/web/features/chat/components/InlinePaywallCard.tsx",
+      "line": 411,
+      "rule": "raw-palette",
+      "literal": "text-amber-400"
     },
     {
       "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
       "line": 57,
       "rule": "opacity-diluted-text",
       "literal": "text-foreground/80"
+    },
+    {
+      "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+      "line": 88,
+      "rule": "opacity-diluted-text",
+      "literal": "text-foreground/90"
+    },
+    {
+      "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
+      "line": 56,
+      "rule": "raw-palette",
+      "literal": "text-violet-400"
     },
     {
       "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
@@ -2462,12 +2189,6 @@
       "line": 63,
       "rule": "raw-palette",
       "literal": "text-red-500"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/CodeExecutionBlock.tsx",
-      "line": 88,
-      "rule": "opacity-diluted-text",
-      "literal": "text-foreground/90"
     },
     {
       "file": "apps/web/features/chat/components/messages/EditableMessage.tsx",
@@ -2627,13 +2348,19 @@
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 1639,
-      "rule": "raw-palette",
-      "literal": "text-amber-500"
+      "line": 2067,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 2067,
+      "line": 2617,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
+    },
+    {
+      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
+      "line": 2957,
       "rule": "hover-only-affordance",
       "literal": "opacity-0"
     },
@@ -2657,15 +2384,9 @@
     },
     {
       "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 2617,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
-    },
-    {
-      "file": "apps/web/features/chat/components/messages/MessageBubble.tsx",
-      "line": 2957,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
+      "line": 1639,
+      "rule": "raw-palette",
+      "literal": "text-amber-500"
     },
     {
       "file": "apps/web/features/chat/components/messages/ToolTimeline.tsx",
@@ -2702,6 +2423,12 @@
       "line": 146,
       "rule": "opacity-diluted-text",
       "literal": "text-muted-foreground/0"
+    },
+    {
+      "file": "apps/web/features/chat/components/research/ResearchReportView.tsx",
+      "line": 718,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
     },
     {
       "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
@@ -2782,6 +2509,114 @@
       "literal": "text-green-400"
     },
     {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 40,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 21,
+      "rule": "raw-palette",
+      "literal": "border-amber-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 21,
+      "rule": "raw-palette",
+      "literal": "bg-amber-50"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 21,
+      "rule": "raw-palette",
+      "literal": "border-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 21,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 24,
+      "rule": "raw-palette",
+      "literal": "text-amber-700"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 24,
+      "rule": "raw-palette",
+      "literal": "text-amber-300"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 28,
+      "rule": "raw-palette",
+      "literal": "text-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 28,
+      "rule": "raw-palette",
+      "literal": "text-amber-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 31,
+      "rule": "raw-palette",
+      "literal": "text-amber-900"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 31,
+      "rule": "raw-palette",
+      "literal": "text-amber-100"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 40,
+      "rule": "raw-palette",
+      "literal": "text-amber-800"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 40,
+      "rule": "raw-palette",
+      "literal": "bg-amber-200"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 40,
+      "rule": "raw-palette",
+      "literal": "text-amber-950"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 40,
+      "rule": "raw-palette",
+      "literal": "text-amber-200"
+    },
+    {
+      "file": "apps/web/features/chat/components/UnavailableModelNotice.tsx",
+      "line": 40,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "apps/web/features/chat/components/Voice/VoiceComposer.tsx",
+      "line": 115,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "apps/web/features/chat/pages/WebChatPage.tsx",
+      "line": 5230,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
       "file": "apps/web/features/chat/pages/WebChatPage.tsx",
       "line": 5176,
       "rule": "raw-palette",
@@ -2836,12 +2671,6 @@
       "literal": "bg-amber-500"
     },
     {
-      "file": "apps/web/features/chat/pages/WebChatPage.tsx",
-      "line": 5230,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
       "file": "apps/web/features/connectors/components/OfficialConnectorLogo.tsx",
       "line": 169,
       "rule": "raw-bw",
@@ -2858,6 +2687,18 @@
       "line": 208,
       "rule": "raw-bw",
       "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/connectors/data/connectors.ts",
+      "line": 437,
+      "rule": "raw-bw",
+      "literal": "to-black"
+    },
+    {
+      "file": "apps/web/features/connectors/data/connectors.ts",
+      "line": 623,
+      "rule": "raw-bw",
+      "literal": "to-black"
     },
     {
       "file": "apps/web/features/connectors/data/connectors.ts",
@@ -3155,12 +2996,6 @@
     },
     {
       "file": "apps/web/features/connectors/data/connectors.ts",
-      "line": 437,
-      "rule": "raw-bw",
-      "literal": "to-black"
-    },
-    {
-      "file": "apps/web/features/connectors/data/connectors.ts",
       "line": 448,
       "rule": "raw-palette",
       "literal": "from-indigo-500"
@@ -3344,12 +3179,6 @@
       "line": 623,
       "rule": "raw-palette",
       "literal": "from-gray-700"
-    },
-    {
-      "file": "apps/web/features/connectors/data/connectors.ts",
-      "line": 623,
-      "rule": "raw-bw",
-      "literal": "to-black"
     },
     {
       "file": "apps/web/features/connectors/data/connectors.ts",
@@ -3929,6 +3758,18 @@
     },
     {
       "file": "apps/web/features/marketing/components/legacy-landing.css",
+      "line": 187,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-landing.css",
+      "line": 620,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-landing.css",
       "line": 32,
       "rule": "tiny-type-css",
       "literal": "font-size: 11px"
@@ -4016,6 +3857,96 @@
       "line": 2631,
       "rule": "tiny-type-css",
       "literal": "font-size: 11px"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 39,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 70"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 209,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 90"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 356,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 365,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -2"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 374,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 466,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 802,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 813,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 856,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 2530,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 2825,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 2"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 3307,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 4733,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 60"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 4949,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/legacy-pages.css",
+      "line": 6326,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 40"
     },
     {
       "file": "apps/web/features/marketing/components/legacy-pages.css",
@@ -4271,6 +4202,30 @@
     },
     {
       "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 676,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 20"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 2094,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: -1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 2105,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 1"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
+      "line": 2430,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 40"
+    },
+    {
+      "file": "apps/web/features/marketing/components/system/system.css",
       "line": 57,
       "rule": "tiny-type-css",
       "literal": "font-size: 11px"
@@ -4355,18 +4310,6 @@
     },
     {
       "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
-      "line": 170,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
-      "line": 171,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
       "line": 199,
       "rule": "opacity-diluted-text",
       "literal": "text-foreground/85"
@@ -4408,6 +4351,18 @@
       "literal": "text-foreground/70"
     },
     {
+      "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+      "line": 170,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "apps/web/features/schedules/components/ScheduleCard.tsx",
+      "line": 171,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
       "file": "apps/web/features/schedules/components/ScheduleRunHistory.tsx",
       "line": 35,
       "rule": "raw-palette",
@@ -4446,6 +4401,12 @@
     {
       "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
       "line": 249,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
+      "line": 249,
       "rule": "raw-palette",
       "literal": "bg-red-600"
     },
@@ -4454,12 +4415,6 @@
       "line": 249,
       "rule": "raw-palette",
       "literal": "bg-red-700"
-    },
-    {
-      "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
-      "line": 249,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "apps/web/features/settings/components/CustomCommandsSettings.tsx",
@@ -4476,6 +4431,18 @@
     {
       "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
       "line": 99,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+      "line": 279,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
+      "line": 99,
       "rule": "raw-palette",
       "literal": "bg-green-700"
     },
@@ -4487,12 +4454,6 @@
     },
     {
       "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
-      "line": 99,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
       "line": 279,
       "rule": "raw-palette",
       "literal": "bg-green-700"
@@ -4502,12 +4463,6 @@
       "line": 279,
       "rule": "raw-palette",
       "literal": "bg-green-800"
-    },
-    {
-      "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
-      "line": 279,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "apps/web/features/settings/components/Settings/ApiKeys.tsx",
@@ -4523,15 +4478,15 @@
     },
     {
       "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
-      "line": 202,
-      "rule": "raw-palette",
-      "literal": "text-emerald-500"
-    },
-    {
-      "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
       "line": 315,
       "rule": "raw-bw",
       "literal": "bg-white"
+    },
+    {
+      "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
+      "line": 202,
+      "rule": "raw-palette",
+      "literal": "text-emerald-500"
     },
     {
       "file": "apps/web/features/settings/sections/GeneralSection.tsx",
@@ -4542,14 +4497,26 @@
     {
       "file": "apps/web/features/settings/sections/GeneralSection.tsx",
       "line": 577,
-      "rule": "raw-palette",
-      "literal": "bg-amber-700"
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+      "line": 623,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
+      "line": 825,
+      "rule": "raw-bw",
+      "literal": "text-white"
     },
     {
       "file": "apps/web/features/settings/sections/GeneralSection.tsx",
       "line": 577,
-      "rule": "raw-bw",
-      "literal": "text-white"
+      "rule": "raw-palette",
+      "literal": "bg-amber-700"
     },
     {
       "file": "apps/web/features/settings/sections/GeneralSection.tsx",
@@ -4564,16 +4531,274 @@
       "literal": "bg-amber-700"
     },
     {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 623,
+      "file": "apps/web/features/support/components/SupportWidget.module.css",
+      "line": 51,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 40"
+    },
+    {
+      "file": "apps/web/features/support/components/SupportWidget.module.css",
+      "line": 143,
+      "rule": "arbitrary-z-index-css",
+      "literal": "z-index: 45"
+    },
+    {
+      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
+      "line": 17,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[9999]"
+    },
+    {
+      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
+      "line": 23,
       "rule": "raw-bw",
       "literal": "text-white"
     },
     {
-      "file": "apps/web/features/settings/sections/GeneralSection.tsx",
-      "line": 825,
-      "rule": "raw-bw",
-      "literal": "text-white"
+      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
+      "line": 23,
+      "rule": "raw-palette",
+      "literal": "bg-blue-600"
+    },
+    {
+      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
+      "line": 23,
+      "rule": "raw-palette",
+      "literal": "ring-blue-400"
+    },
+    {
+      "file": "apps/web/shared/components/accessibility/SkipLinks.tsx",
+      "line": 23,
+      "rule": "raw-palette",
+      "literal": "bg-blue-700"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 77,
+      "rule": "raw-palette",
+      "literal": "bg-green-50"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 77,
+      "rule": "raw-palette",
+      "literal": "bg-green-950"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 78,
+      "rule": "raw-palette",
+      "literal": "bg-blue-50"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 78,
+      "rule": "raw-palette",
+      "literal": "bg-blue-950"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 79,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-50"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 79,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-950"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 80,
+      "rule": "raw-palette",
+      "literal": "bg-red-50"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 80,
+      "rule": "raw-palette",
+      "literal": "bg-red-950"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 84,
+      "rule": "raw-palette",
+      "literal": "border-green-200"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 84,
+      "rule": "raw-palette",
+      "literal": "border-green-800"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 85,
+      "rule": "raw-palette",
+      "literal": "border-blue-200"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 85,
+      "rule": "raw-palette",
+      "literal": "border-blue-800"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 86,
+      "rule": "raw-palette",
+      "literal": "border-yellow-200"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 86,
+      "rule": "raw-palette",
+      "literal": "border-yellow-800"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 87,
+      "rule": "raw-palette",
+      "literal": "border-red-200"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 87,
+      "rule": "raw-palette",
+      "literal": "border-red-800"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 91,
+      "rule": "raw-palette",
+      "literal": "text-green-900"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 91,
+      "rule": "raw-palette",
+      "literal": "text-green-100"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 92,
+      "rule": "raw-palette",
+      "literal": "text-blue-900"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 92,
+      "rule": "raw-palette",
+      "literal": "text-blue-100"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 93,
+      "rule": "raw-palette",
+      "literal": "text-yellow-900"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 93,
+      "rule": "raw-palette",
+      "literal": "text-yellow-100"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 94,
+      "rule": "raw-palette",
+      "literal": "text-red-900"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 94,
+      "rule": "raw-palette",
+      "literal": "text-red-100"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 98,
+      "rule": "raw-palette",
+      "literal": "text-green-600"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 98,
+      "rule": "raw-palette",
+      "literal": "text-green-400"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 99,
+      "rule": "raw-palette",
+      "literal": "text-blue-600"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 99,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 100,
+      "rule": "raw-palette",
+      "literal": "text-yellow-600"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 100,
+      "rule": "raw-palette",
+      "literal": "text-yellow-400"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 101,
+      "rule": "raw-palette",
+      "literal": "text-red-600"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 101,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 158,
+      "rule": "raw-palette",
+      "literal": "bg-red-200"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 158,
+      "rule": "raw-palette",
+      "literal": "bg-red-300"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 158,
+      "rule": "raw-palette",
+      "literal": "bg-red-800"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 158,
+      "rule": "raw-palette",
+      "literal": "bg-red-700"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 159,
+      "rule": "raw-palette",
+      "literal": "text-red-900"
+    },
+    {
+      "file": "apps/web/shared/components/OfflineIndicator.tsx",
+      "line": 159,
+      "rule": "raw-palette",
+      "literal": "text-red-100"
     },
     {
       "file": "packages/ui/ui/src/primitives/Alert.tsx",
@@ -4636,6 +4861,12 @@
       "literal": "text-yellow-600"
     },
     {
+      "file": "packages/ui/ui/src/primitives/Command.tsx",
+      "line": 58,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
       "file": "packages/ui/ui/src/primitives/FormField.tsx",
       "line": 128,
       "rule": "raw-palette",
@@ -4660,6 +4891,12 @@
       "literal": "text-green-600"
     },
     {
+      "file": "packages/ui/ui/src/primitives/NavigationMenu.tsx",
+      "line": 130,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[1]"
+    },
+    {
       "file": "packages/ui/ui/src/settings-modal/SettingsModal.tsx",
       "line": 588,
       "rule": "raw-palette",
@@ -4673,6 +4910,18 @@
     },
     {
       "file": "packages/ui/ui/src/sidebar/Menu.tsx",
+      "line": 295,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[9999]"
+    },
+    {
+      "file": "packages/ui/ui/src/sidebar/Menu.tsx",
+      "line": 467,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[9999]"
+    },
+    {
+      "file": "packages/ui/ui/src/sidebar/Menu.tsx",
       "line": 337,
       "rule": "raw-palette",
       "literal": "text-red-500"
@@ -4682,6 +4931,12 @@
       "line": 337,
       "rule": "raw-palette",
       "literal": "text-red-500"
+    },
+    {
+      "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
+      "line": 258,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
     },
     {
       "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
@@ -4700,12 +4955,6 @@
       "line": 214,
       "rule": "raw-palette",
       "literal": "ring-purple-500"
-    },
-    {
-      "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
-      "line": 258,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
     },
     {
       "file": "packages/ui/ui/src/sidebar/SessionItem.tsx",
@@ -4844,6 +5093,36 @@
       "line": 146,
       "rule": "raw-palette",
       "literal": "text-red-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
+      "line": 17,
+      "rule": "raw-palette",
+      "literal": "bg-violet-950"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
+      "line": 17,
+      "rule": "raw-palette",
+      "literal": "border-violet-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
+      "line": 17,
+      "rule": "raw-palette",
+      "literal": "text-violet-300"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
+      "line": 21,
+      "rule": "raw-palette",
+      "literal": "text-violet-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
+      "line": 24,
+      "rule": "raw-palette",
+      "literal": "text-violet-400"
     },
     {
       "file": "packages/ui/unified-chat/src/components/AgentProgressFooter.tsx",
@@ -5056,34 +5335,100 @@
       "literal": "text-slate-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
-      "line": 17,
+      "file": "packages/ui/unified-chat/src/components/artifact-components/EmailArtifact.tsx",
+      "line": 133,
       "rule": "raw-palette",
-      "literal": "bg-violet-950"
+      "literal": "text-green-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
-      "line": 17,
-      "rule": "raw-palette",
-      "literal": "border-violet-500"
+      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
+      "line": 150,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
-      "line": 17,
-      "rule": "raw-palette",
-      "literal": "text-violet-300"
+      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
+      "line": 111,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
-      "line": 21,
-      "rule": "raw-palette",
-      "literal": "text-violet-500"
+      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
+      "line": 111,
+      "rule": "raw-bw",
+      "literal": "bg-black"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx",
-      "line": 24,
+      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
+      "line": 125,
+      "rule": "raw-bw",
+      "literal": "to-black"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
+      "line": 128,
       "rule": "raw-palette",
-      "literal": "text-violet-400"
+      "literal": "bg-purple-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
+      "line": 129,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/ReactPreview.tsx",
+      "line": 286,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/ReactPreview.tsx",
+      "line": 357,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/ReactPreview.tsx",
+      "line": 358,
+      "rule": "raw-palette",
+      "literal": "text-red-300"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+      "line": 169,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+      "line": 114,
+      "rule": "raw-palette",
+      "literal": "bg-green-100"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+      "line": 114,
+      "rule": "raw-palette",
+      "literal": "bg-green-900"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+      "line": 114,
+      "rule": "raw-palette",
+      "literal": "text-green-700"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
+      "line": 114,
+      "rule": "raw-palette",
+      "literal": "text-green-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
+      "line": 728,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
@@ -5094,6 +5439,12 @@
     {
       "file": "packages/ui/unified-chat/src/components/ArtifactPanel.tsx",
       "line": 856,
+      "rule": "raw-bw",
+      "literal": "bg-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
+      "line": 284,
       "rule": "raw-bw",
       "literal": "bg-white"
     },
@@ -5135,12 +5486,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
-      "line": 284,
-      "rule": "raw-bw",
-      "literal": "bg-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
       "line": 451,
       "rule": "raw-palette",
       "literal": "text-amber-500"
@@ -5174,6 +5519,18 @@
       "line": 726,
       "rule": "raw-palette",
       "literal": "text-cyan-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+      "line": 264,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[60]"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx",
+      "line": 442,
+      "rule": "arbitrary-z-index",
+      "literal": "z-[60]"
     },
     {
       "file": "packages/ui/unified-chat/src/components/BrandedGreeting.tsx",
@@ -5350,6 +5707,42 @@
       "literal": "bg-emerald-500"
     },
     {
+      "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
+      "line": 1156,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInput.tsx",
+      "line": 1474,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
+      "line": 72,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
+      "line": 124,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
+      "line": 146,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
+      "line": 166,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
       "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
       "line": 72,
       "rule": "raw-palette",
@@ -5360,12 +5753,6 @@
       "line": 72,
       "rule": "raw-palette",
       "literal": "bg-indigo-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
-      "line": 72,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
@@ -5381,12 +5768,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
-      "line": 124,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
       "line": 146,
       "rule": "raw-palette",
       "literal": "bg-violet-600"
@@ -5396,12 +5777,6 @@
       "line": 146,
       "rule": "raw-palette",
       "literal": "bg-violet-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
-      "line": 146,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
@@ -5416,8 +5791,14 @@
       "literal": "bg-emerald-800"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/ChatInputToolbar.tsx",
-      "line": 166,
+      "file": "packages/ui/unified-chat/src/components/ChatInterface.tsx",
+      "line": 182,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatNotificationBadge.tsx",
+      "line": 46,
       "rule": "raw-bw",
       "literal": "text-white"
     },
@@ -5440,8 +5821,26 @@
       "literal": "bg-green-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/ChatNotificationBadge.tsx",
-      "line": 46,
+      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
+      "line": 409,
+      "rule": "opacity-diluted-text",
+      "literal": "text-foreground/90"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
+      "line": 315,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
+      "line": 350,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
+      "line": 431,
       "rule": "raw-bw",
       "literal": "text-white"
     },
@@ -5456,12 +5855,6 @@
       "line": 314,
       "rule": "raw-palette",
       "literal": "to-orange-600"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
-      "line": 315,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
@@ -5528,12 +5921,6 @@
       "line": 349,
       "rule": "raw-palette",
       "literal": "to-orange-600"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
-      "line": 350,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
@@ -5608,16 +5995,10 @@
       "literal": "bg-blue-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
-      "line": 409,
-      "rule": "opacity-diluted-text",
-      "literal": "text-foreground/90"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ChatStream.tsx",
-      "line": 431,
-      "rule": "raw-bw",
-      "literal": "text-white"
+      "file": "packages/ui/unified-chat/src/components/CheckpointManager.tsx",
+      "line": 370,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
     },
     {
       "file": "packages/ui/unified-chat/src/components/CheckpointManager.tsx",
@@ -5630,12 +6011,6 @@
       "line": 301,
       "rule": "raw-bw",
       "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/CheckpointManager.tsx",
-      "line": 370,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
     },
     {
       "file": "packages/ui/unified-chat/src/components/CodeExecutionOutput.tsx",
@@ -5680,6 +6055,12 @@
       "literal": "text-rose-400"
     },
     {
+      "file": "packages/ui/unified-chat/src/components/CommandPalette.tsx",
+      "line": 192,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
       "file": "packages/ui/unified-chat/src/components/FileMentionPicker.tsx",
       "line": 24,
       "rule": "raw-palette",
@@ -5690,6 +6071,18 @@
       "line": 46,
       "rule": "raw-palette",
       "literal": "text-emerald-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
+      "line": 104,
+      "rule": "raw-bw",
+      "literal": "fill-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
+      "line": 104,
+      "rule": "raw-bw",
+      "literal": "text-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
@@ -5741,18 +6134,6 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 104,
-      "rule": "raw-bw",
-      "literal": "fill-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
-      "line": 104,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/GeneratedFileCard.tsx",
       "line": 106,
       "rule": "raw-palette",
       "literal": "text-indigo-300"
@@ -5786,6 +6167,12 @@
       "line": 153,
       "rule": "raw-palette",
       "literal": "text-zinc-300"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/library/LibraryView.tsx",
+      "line": 1152,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
     },
     {
       "file": "packages/ui/unified-chat/src/components/LocalByokHandoffDialog.tsx",
@@ -5878,6 +6265,42 @@
       "literal": "text-emerald-300"
     },
     {
+      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+      "line": 69,
+      "rule": "raw-palette",
+      "literal": "bg-gray-100"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+      "line": 69,
+      "rule": "raw-palette",
+      "literal": "bg-gray-800"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+      "line": 69,
+      "rule": "raw-palette",
+      "literal": "text-gray-800"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
+      "line": 69,
+      "rule": "raw-palette",
+      "literal": "text-gray-200"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+      "line": 617,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
+      "line": 731,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
       "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
       "line": 455,
       "rule": "raw-palette",
@@ -5926,22 +6349,16 @@
       "literal": "text-red-400"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/MessageBubble.tsx",
-      "line": 617,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
+      "file": "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx",
+      "line": 510,
+      "rule": "raw-bw",
+      "literal": "bg-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx",
       "line": 490,
       "rule": "raw-palette",
       "literal": "text-rose-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/MessageGeneratedFiles.tsx",
-      "line": 510,
-      "rule": "raw-bw",
-      "literal": "bg-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/MessageLimitCard.tsx",
@@ -5960,6 +6377,18 @@
       "line": 95,
       "rule": "raw-palette",
       "literal": "text-amber-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
+      "line": 143,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
+      "line": 150,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
     },
     {
       "file": "packages/ui/unified-chat/src/components/ProjectCard.tsx",
@@ -6353,6 +6782,24 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
+      "line": 57,
+      "rule": "opacity-diluted-text",
+      "literal": "text-white/70"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
+      "line": 35,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
+      "line": 58,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
       "line": 35,
       "rule": "raw-palette",
       "literal": "bg-red-500"
@@ -6371,21 +6818,9 @@
     },
     {
       "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
-      "line": 35,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
       "line": 57,
       "rule": "raw-palette",
       "literal": "bg-amber-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
-      "line": 57,
-      "rule": "opacity-diluted-text",
-      "literal": "text-white/70"
     },
     {
       "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
@@ -6398,12 +6833,6 @@
       "line": 58,
       "rule": "raw-palette",
       "literal": "bg-amber-600"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SendButton.tsx",
-      "line": 58,
-      "rule": "raw-bw",
-      "literal": "text-white"
     },
     {
       "file": "packages/ui/unified-chat/src/components/SendPreview.tsx",
@@ -6458,654 +6887,6 @@
       "line": 60,
       "rule": "raw-palette",
       "literal": "bg-sky-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SlashCommandMenu.tsx",
-      "line": 114,
-      "rule": "raw-palette",
-      "literal": "bg-amber-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SlashCommandMenu.tsx",
-      "line": 114,
-      "rule": "raw-palette",
-      "literal": "text-amber-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 76,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-900"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 76,
-      "rule": "raw-palette",
-      "literal": "border-emerald-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 77,
-      "rule": "raw-palette",
-      "literal": "bg-rose-900"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 77,
-      "rule": "raw-palette",
-      "literal": "border-rose-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 112,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 113,
-      "rule": "raw-palette",
-      "literal": "bg-teal-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 114,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
-      "line": 115,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 31,
-      "rule": "raw-palette",
-      "literal": "text-green-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 33,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 35,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 55,
-      "rule": "raw-palette",
-      "literal": "text-red-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 57,
-      "rule": "raw-palette",
-      "literal": "text-blue-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 71,
-      "rule": "raw-palette",
-      "literal": "bg-green-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
-      "line": 73,
-      "rule": "raw-palette",
-      "literal": "bg-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 28,
-      "rule": "raw-palette",
-      "literal": "border-teal-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 30,
-      "rule": "raw-palette",
-      "literal": "border-emerald-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 32,
-      "rule": "raw-palette",
-      "literal": "border-red-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 39,
-      "rule": "raw-palette",
-      "literal": "text-teal-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 41,
-      "rule": "raw-palette",
-      "literal": "text-emerald-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 43,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 62,
-      "rule": "raw-palette",
-      "literal": "bg-amber-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 64,
-      "rule": "raw-palette",
-      "literal": "bg-emerald-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 66,
-      "rule": "raw-palette",
-      "literal": "bg-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
-      "line": 117,
-      "rule": "opacity-diluted-text",
-      "literal": "text-foreground/90"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 149,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 153,
-      "rule": "raw-palette",
-      "literal": "bg-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 178,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 181,
-      "rule": "raw-palette",
-      "literal": "bg-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 200,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 203,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 207,
-      "rule": "raw-palette",
-      "literal": "bg-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
-      "line": 210,
-      "rule": "raw-palette",
-      "literal": "text-green-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 191,
-      "rule": "raw-palette",
-      "literal": "text-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 192,
-      "rule": "raw-palette",
-      "literal": "text-red-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 201,
-      "rule": "raw-palette",
-      "literal": "bg-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 201,
-      "rule": "raw-palette",
-      "literal": "text-green-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 201,
-      "rule": "raw-palette",
-      "literal": "text-green-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 202,
-      "rule": "raw-palette",
-      "literal": "bg-red-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 202,
-      "rule": "raw-palette",
-      "literal": "text-red-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 202,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 203,
-      "rule": "raw-palette",
-      "literal": "text-blue-600"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 203,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 242,
-      "rule": "raw-palette",
-      "literal": "text-gray-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 242,
-      "rule": "raw-palette",
-      "literal": "text-gray-200"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 242,
-      "rule": "raw-palette",
-      "literal": "bg-gray-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 242,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 467,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-50"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 467,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-950"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 467,
-      "rule": "raw-palette",
-      "literal": "border-yellow-200"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 467,
-      "rule": "raw-palette",
-      "literal": "border-yellow-900"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 468,
-      "rule": "raw-palette",
-      "literal": "text-yellow-600"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 468,
-      "rule": "raw-palette",
-      "literal": "text-yellow-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 469,
-      "rule": "raw-palette",
-      "literal": "text-yellow-900"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 469,
-      "rule": "raw-palette",
-      "literal": "text-yellow-100"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 477,
-      "rule": "raw-palette",
-      "literal": "bg-green-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 477,
-      "rule": "raw-palette",
-      "literal": "bg-green-800"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 477,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 537,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 555,
-      "rule": "raw-palette",
-      "literal": "border-yellow-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 555,
-      "rule": "raw-palette",
-      "literal": "border-yellow-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 555,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-50"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 555,
-      "rule": "raw-palette",
-      "literal": "bg-yellow-950"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 576,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
-      "line": 604,
-      "rule": "raw-palette",
-      "literal": "text-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
-      "line": 143,
-      "rule": "raw-palette",
-      "literal": "text-violet-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
-      "line": 147,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
-      "line": 180,
-      "rule": "raw-palette",
-      "literal": "border-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
-      "line": 183,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
-      "line": 184,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
-      "line": 32,
-      "rule": "raw-palette",
-      "literal": "border-amber-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
-      "line": 32,
-      "rule": "raw-palette",
-      "literal": "bg-amber-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
-      "line": 43,
-      "rule": "raw-palette",
-      "literal": "text-amber-600"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
-      "line": 43,
-      "rule": "raw-palette",
-      "literal": "text-amber-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 131,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 131,
-      "rule": "raw-palette",
-      "literal": "text-blue-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 141,
-      "rule": "raw-palette",
-      "literal": "bg-amber-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 141,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 195,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 266,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 266,
-      "rule": "raw-palette",
-      "literal": "text-blue-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 267,
-      "rule": "raw-palette",
-      "literal": "bg-purple-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
-      "line": 267,
-      "rule": "raw-palette",
-      "literal": "text-purple-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
-      "line": 88,
-      "rule": "raw-bw",
-      "literal": "bg-black"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
-      "line": 94,
-      "rule": "raw-bw",
-      "literal": "bg-black"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
-      "line": 116,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
-      "line": 116,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
-      "line": 127,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
-      "line": 127,
-      "rule": "raw-bw",
-      "literal": "text-white"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/EmailArtifact.tsx",
-      "line": 133,
-      "rule": "raw-palette",
-      "literal": "text-green-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
-      "line": 111,
-      "rule": "raw-bw",
-      "literal": "bg-black"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
-      "line": 125,
-      "rule": "raw-bw",
-      "literal": "to-black"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
-      "line": 128,
-      "rule": "raw-palette",
-      "literal": "bg-purple-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
-      "line": 129,
-      "rule": "raw-palette",
-      "literal": "bg-blue-500"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/PresentationArtifact.tsx",
-      "line": 150,
-      "rule": "hover-only-affordance",
-      "literal": "opacity-0"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/ReactPreview.tsx",
-      "line": 286,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/ReactPreview.tsx",
-      "line": 357,
-      "rule": "raw-palette",
-      "literal": "text-red-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/ReactPreview.tsx",
-      "line": 358,
-      "rule": "raw-palette",
-      "literal": "text-red-300"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 114,
-      "rule": "raw-palette",
-      "literal": "bg-green-100"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 114,
-      "rule": "raw-palette",
-      "literal": "bg-green-900"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 114,
-      "rule": "raw-palette",
-      "literal": "text-green-700"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/artifact-components/SpreadsheetArtifact.tsx",
-      "line": 114,
-      "rule": "raw-palette",
-      "literal": "text-green-400"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
-      "line": 69,
-      "rule": "raw-palette",
-      "literal": "bg-gray-100"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
-      "line": 69,
-      "rule": "raw-palette",
-      "literal": "bg-gray-800"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
-      "line": 69,
-      "rule": "raw-palette",
-      "literal": "text-gray-800"
-    },
-    {
-      "file": "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
-      "line": 69,
-      "rule": "raw-palette",
-      "literal": "text-gray-200"
     },
     {
       "file": "packages/ui/unified-chat/src/components/sidecar/SidecarPanel.tsx",
@@ -7324,40 +7105,166 @@
       "literal": "text-amber-300"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 205,
+      "file": "packages/ui/unified-chat/src/components/SlashCommandMenu.tsx",
+      "line": 114,
       "rule": "raw-palette",
-      "literal": "text-emerald-500"
+      "literal": "bg-amber-400"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 229,
+      "file": "packages/ui/unified-chat/src/components/SlashCommandMenu.tsx",
+      "line": 114,
       "rule": "raw-palette",
-      "literal": "bg-emerald-500"
+      "literal": "text-amber-400"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
-      "line": 518,
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 76,
       "rule": "raw-palette",
-      "literal": "bg-emerald-500"
+      "literal": "bg-emerald-900"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
-      "line": 614,
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 76,
       "rule": "raw-palette",
-      "literal": "border-amber-500"
+      "literal": "border-emerald-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
-      "line": 614,
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 77,
+      "rule": "raw-palette",
+      "literal": "bg-rose-900"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 77,
+      "rule": "raw-palette",
+      "literal": "border-rose-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 112,
       "rule": "raw-palette",
       "literal": "bg-amber-500"
     },
     {
-      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
-      "line": 617,
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 113,
       "rule": "raw-palette",
-      "literal": "text-amber-500"
+      "literal": "bg-teal-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 114,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/StatusTrail.tsx",
+      "line": 115,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
+      "line": 31,
+      "rule": "raw-palette",
+      "literal": "text-green-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
+      "line": 33,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
+      "line": 35,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
+      "line": 55,
+      "rule": "raw-palette",
+      "literal": "text-red-300"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
+      "line": 57,
+      "rule": "raw-palette",
+      "literal": "text-blue-300"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
+      "line": 71,
+      "rule": "raw-palette",
+      "literal": "bg-green-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx",
+      "line": 73,
+      "rule": "raw-palette",
+      "literal": "bg-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 117,
+      "rule": "opacity-diluted-text",
+      "literal": "text-foreground/90"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 28,
+      "rule": "raw-palette",
+      "literal": "border-teal-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 30,
+      "rule": "raw-palette",
+      "literal": "border-emerald-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 32,
+      "rule": "raw-palette",
+      "literal": "border-red-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 39,
+      "rule": "raw-palette",
+      "literal": "text-teal-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 41,
+      "rule": "raw-palette",
+      "literal": "text-emerald-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 43,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 62,
+      "rule": "raw-palette",
+      "literal": "bg-amber-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 64,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx",
+      "line": 66,
+      "rule": "raw-palette",
+      "literal": "bg-red-400"
     },
     {
       "file": "packages/ui/unified-chat/src/components/tasks/task-display.ts",
@@ -7454,6 +7361,445 @@
       "line": 91,
       "rule": "raw-palette",
       "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+      "line": 205,
+      "rule": "raw-palette",
+      "literal": "text-emerald-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+      "line": 229,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx",
+      "line": 518,
+      "rule": "raw-palette",
+      "literal": "bg-emerald-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+      "line": 614,
+      "rule": "raw-palette",
+      "literal": "border-amber-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+      "line": 614,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/tasks/TasksPage.tsx",
+      "line": 617,
+      "rule": "raw-palette",
+      "literal": "text-amber-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 149,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 153,
+      "rule": "raw-palette",
+      "literal": "bg-green-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 178,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 181,
+      "rule": "raw-palette",
+      "literal": "bg-green-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 200,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 203,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 207,
+      "rule": "raw-palette",
+      "literal": "bg-green-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/TokenCounter.tsx",
+      "line": 210,
+      "rule": "raw-palette",
+      "literal": "text-green-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 242,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 576,
+      "rule": "hover-only-affordance",
+      "literal": "opacity-0"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 477,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 191,
+      "rule": "raw-palette",
+      "literal": "text-green-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 192,
+      "rule": "raw-palette",
+      "literal": "text-red-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 201,
+      "rule": "raw-palette",
+      "literal": "bg-green-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 201,
+      "rule": "raw-palette",
+      "literal": "text-green-700"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 201,
+      "rule": "raw-palette",
+      "literal": "text-green-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 202,
+      "rule": "raw-palette",
+      "literal": "bg-red-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 202,
+      "rule": "raw-palette",
+      "literal": "text-red-700"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 202,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 203,
+      "rule": "raw-palette",
+      "literal": "text-blue-600"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 203,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 242,
+      "rule": "raw-palette",
+      "literal": "text-gray-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 242,
+      "rule": "raw-palette",
+      "literal": "text-gray-200"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 242,
+      "rule": "raw-palette",
+      "literal": "bg-gray-700"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 467,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-50"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 467,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-950"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 467,
+      "rule": "raw-palette",
+      "literal": "border-yellow-200"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 467,
+      "rule": "raw-palette",
+      "literal": "border-yellow-900"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 468,
+      "rule": "raw-palette",
+      "literal": "text-yellow-600"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 468,
+      "rule": "raw-palette",
+      "literal": "text-yellow-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 469,
+      "rule": "raw-palette",
+      "literal": "text-yellow-900"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 469,
+      "rule": "raw-palette",
+      "literal": "text-yellow-100"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 477,
+      "rule": "raw-palette",
+      "literal": "bg-green-700"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 477,
+      "rule": "raw-palette",
+      "literal": "bg-green-800"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 537,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 555,
+      "rule": "raw-palette",
+      "literal": "border-yellow-300"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 555,
+      "rule": "raw-palette",
+      "literal": "border-yellow-700"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 555,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-50"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 555,
+      "rule": "raw-palette",
+      "literal": "bg-yellow-950"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolCallCard.tsx",
+      "line": 604,
+      "rule": "raw-palette",
+      "literal": "text-green-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
+      "line": 143,
+      "rule": "raw-palette",
+      "literal": "text-violet-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
+      "line": 147,
+      "rule": "raw-palette",
+      "literal": "text-red-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
+      "line": 180,
+      "rule": "raw-palette",
+      "literal": "border-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
+      "line": 183,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/ToolTimeline.tsx",
+      "line": 184,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
+      "line": 32,
+      "rule": "raw-palette",
+      "literal": "border-amber-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
+      "line": 32,
+      "rule": "raw-palette",
+      "literal": "bg-amber-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
+      "line": 43,
+      "rule": "raw-palette",
+      "literal": "text-amber-600"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UsageWarningBanner.tsx",
+      "line": 43,
+      "rule": "raw-palette",
+      "literal": "text-amber-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 406,
+      "rule": "outline-none-without-focus-ring",
+      "literal": "outline-none"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 195,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 131,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 131,
+      "rule": "raw-palette",
+      "literal": "text-blue-300"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 141,
+      "rule": "raw-palette",
+      "literal": "bg-amber-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 141,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 266,
+      "rule": "raw-palette",
+      "literal": "bg-blue-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 266,
+      "rule": "raw-palette",
+      "literal": "text-blue-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 267,
+      "rule": "raw-palette",
+      "literal": "bg-purple-500"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/UserProfile.tsx",
+      "line": 267,
+      "rule": "raw-palette",
+      "literal": "text-purple-400"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
+      "line": 88,
+      "rule": "raw-bw",
+      "literal": "bg-black"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
+      "line": 94,
+      "rule": "raw-bw",
+      "literal": "bg-black"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
+      "line": 116,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
+      "line": 116,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
+      "line": 127,
+      "rule": "raw-bw",
+      "literal": "text-white"
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/VideoGenCard.tsx",
+      "line": 127,
+      "rule": "raw-bw",
+      "literal": "text-white"
     }
-  ]
+  ],
+  "_reasons": {
+    "raw-palette": "Seeded at the start of the frontend redesign: a literal Tailwind palette class where a semantic token belongs. Each one is owed a token; the count only falls.",
+    "raw-bw": "Seeded at the start of the frontend redesign: bg-white or text-black assumes light mode is the only theme. Owed a background/foreground token.",
+    "arbitrary-color": "Seeded at the start of the frontend redesign: a literal colour in an arbitrary-value class. Owed a token in the theme layer.",
+    "opacity-diluted-text": "Seeded at the start of the frontend redesign: a foreground token diluted with an opacity modifier, which drops it under 4.5:1. Owed a size or weight change instead.",
+    "tiny-type-css": "Seeded at the start of the frontend redesign: a stylesheet declaration below the 12px legibility floor, mostly in the legacy marketing CSS. Owed a role token.",
+    "hover-only-affordance": "Seeded at the start of the frontend redesign: an affordance revealed only on hover, unreachable on touch. Owed a permanent low-emphasis state.",
+    "arbitrary-z-index": "Rung measured on 2026-09-20 when the rule was added: a bare Tailwind z-[n] outside the overlay/modal/popover ladder, so two layers can outrank each other by accident. Owed a token rung.",
+    "arbitrary-z-index-css": "Rung measured on 2026-09-20 when the rule was added: a bare z-index in a stylesheet, almost all of it the legacy marketing CSS. Owed a token rung.",
+    "outline-none-without-focus-ring": "Measured on 2026-09-20 and re-measured the same day once the rule stopped accepting focus-visible:outline-none as its own replacement, which had been hiding nine occurrences. Each entry is a focusable element with no focus indicator, owed a ring by the design review, not a style preference.",
+    "unsafe-blank-target": "Cleared on 2026-09-20: every anchor that opens a new tab now carries rel=\"noopener noreferrer\". The rule stays so a new one cannot land.",
+    "clickable-div-without-semantics": "Measured on 2026-09-20 and narrowed the same day: an empty aria-hidden scrim and a handler that only stops propagation are not controls, so the rule no longer reports them. What remains is a real control with no keyboard path, owed a role and a key handler."
+  }
 }

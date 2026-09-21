@@ -29,8 +29,10 @@ SQLCipher; the key lives in the iOS Keychain.
 **AGI Cloud (optional, requires sign-in).** Signing in with an AGI account
 enables server-side chat, web search, and, on paid plans, image generation.
 Requests go to `https://agiworkforce.com` and `https://api.agiworkforce.com`.
-Cloud is in public alpha and open to anyone who signs in; there is no invite
-code or waitlist.
+Cloud is in public alpha and its Free plan is open to anyone who signs in, with
+no invite code or waitlist. Paid upgrades are opening in stages and need an
+access code, which is a server-side gate and not a reviewer step: nothing in
+this build is purchasable, see "Purchases: please read".
 
 The two modes never mix silently. Local chats are not uploaded, and switching a
 conversation to Cloud is an explicit user action.
@@ -103,15 +105,21 @@ Why nothing can be bought:
 - The server (`apps/web/lib/server/mobile-iap-catalog.ts`) reports the catalog as
   enabled only when the deployment sets `MOBILE_IAP_ENABLED` **and** maps at
   least one logical product key to a real store ID in
-  `MOBILE_IAP_APPLE_PRODUCT_IDS_JSON`. The gate fails closed, in two separate
-  branches with two different reasons, we quote them exactly because you may see
-  either one:
+  `MOBILE_IAP_APPLE_PRODUCT_IDS_JSON`. The gate fails closed, in separate
+  branches with different reasons, we quote them exactly because you may see any
+  of them:
   - flag off or unset → `enabled: false`, reason **"Native purchases are not
     enabled for this deployment."** (`mobile-iap-catalog.ts:63-69`). This is the
     branch our deployments are in.
   - flag on but no product key mapped → still `enabled: false`, reason **"App
     Store products have not been registered for this build."**
     (`mobile-iap-catalog.ts:77-86`).
+  - deployment flag on and products mapped, but the account has never bought and
+    holds no upgrade access → still `enabled: false`, reason **"Paid upgrades are
+    opening in stages. This account needs upgrade access before plans and credits
+    can be bought here."** (`apps/web/app/api/mobile/iap/catalog/route.ts`). The
+    screen then titles the same inert notice "Paid upgrades are opening in
+    stages" instead of "Native purchases are not configured".
 
   Our checked-in environment templates ship `MOBILE_IAP_ENABLED=false` and define
   no product-ID map, and we confirm the flag is off on the deployment this build

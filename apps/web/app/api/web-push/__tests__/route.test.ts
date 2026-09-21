@@ -2,15 +2,23 @@ import { createECDH, randomBytes } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockExecute, mockQuery, mockCsrf, mockRequireUser, mockRateLimit, mockPublicKey } =
-  vi.hoisted(() => ({
-    mockExecute: vi.fn(),
-    mockQuery: vi.fn(),
-    mockCsrf: vi.fn(),
-    mockRequireUser: vi.fn(),
-    mockRateLimit: vi.fn(),
-    mockPublicKey: vi.fn(),
-  }));
+const {
+  mockExecute,
+  mockQuery,
+  mockCsrf,
+  mockRequireUser,
+  mockRateLimit,
+  mockPublicKey,
+  mockResolveHost,
+} = vi.hoisted(() => ({
+  mockExecute: vi.fn(),
+  mockQuery: vi.fn(),
+  mockCsrf: vi.fn(),
+  mockRequireUser: vi.fn(),
+  mockRateLimit: vi.fn(),
+  mockPublicKey: vi.fn(),
+  mockResolveHost: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
@@ -22,6 +30,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ execute: mockExecute, query: mockQuery }),
 }));
 vi.mock('@/lib/server/neon-chat', () => ({ requireCurrentUserId: mockRequireUser }));
+vi.mock('@/lib/egress-policy', () => ({ assertResolvedPublicHostname: mockResolveHost }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { execute: mockExecute, query: mockQuery },
@@ -69,6 +78,7 @@ beforeEach(() => {
   mockExecute.mockResolvedValue(1);
   mockQuery.mockResolvedValue([]);
   mockPublicKey.mockReturnValue('a-public-key');
+  mockResolveHost.mockResolvedValue(undefined);
 });
 
 describe('GET /api/web-push', () => {
@@ -168,6 +178,24 @@ describe('POST /api/web-push', () => {
 
     expect(response.status).toBe(400);
     expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('resolves the endpoint host before storing a URL the sender will later dial', async () => {
+    await POST(request('POST', { endpoint: ENDPOINT, keys: validKeys() }));
+
+    expect(mockResolveHost).toHaveBeenCalledWith(ENDPOINT);
+  });
+
+  it('stores nothing when the endpoint host resolves inside the deployment network', async () => {
+    mockResolveHost.mockRejectedValue(new Error('refused'));
+
+    const response = await POST(
+      request('POST', { endpoint: 'https://metadata.internal.test/latest', keys: validKeys() }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockExecute).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.not.toHaveProperty('address');
   });
 });
 

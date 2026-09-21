@@ -3,6 +3,8 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
+import { recordCapabilityDenial } from '@/lib/observability/denials';
+import { httpRequestLabels } from '@/lib/observability/request-labels';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
@@ -20,6 +22,17 @@ const UNGOVERNED: ModelAccessDecision = {
 
 interface WorkspaceScopedRequest {
   headers: { get(name: string): string | null };
+}
+
+// A policy refusal is an administrator's decision, so it is counted apart from
+// a capability that is off and an entitlement the plan does not include.
+function notePolicyRefusal(organizationId: string, request?: WorkspaceScopedRequest): void {
+  recordCapabilityDenial({
+    layer: 'policy',
+    reason: 'policy_blocked',
+    organizationId,
+    surface: request ? httpRequestLabels((name) => request.headers.get(name)).surface : undefined,
+  });
 }
 
 /**
@@ -58,6 +71,7 @@ export async function evaluateModelAccessForOrganization(
     const decision = evaluateModelAccess(policy, ask);
 
     if (!decision.allowed) {
+      notePolicyRefusal(organizationId);
       logger.info(
         { organizationId, provider: ask.provider, model: ask.modelId, code: decision.code },
         '[model-policy] model refused by workspace policy',
@@ -94,6 +108,7 @@ export async function evaluateActiveWorkspaceModelAccess(
     const decision = evaluateModelAccess(policy, ask);
 
     if (!decision.allowed) {
+      notePolicyRefusal(organizationId, request);
       logger.info(
         { userId, organizationId, provider: ask.provider, model: ask.modelId, code: decision.code },
         '[model-policy] model refused by workspace policy',

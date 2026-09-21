@@ -10,9 +10,11 @@ import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
+import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gate';
 import { getObjectStore, objectStorageConfig } from '@/lib/server/object-storage-runtime';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const RECOVERY_WINDOW_DAYS = 30;
 
@@ -60,20 +62,40 @@ export async function GET(request: NextRequest) {
     const db = getNeonDb();
     const multipart = await sweepOrphanedMultipartUploads();
 
+    // The hold decides candidacy before any byte is touched: one that only
+    // reached the DELETE would still have lost the file it preserved.
+    const due = `candidate.deleted_at is not null
+           and candidate.deleted_at < now() - interval '${RECOVERY_WINDOW_DAYS} days'`;
+    const heldFromPurge = await countHeldRows(db, 'file', {
+      table: 'media_assets',
+      alias: 'candidate',
+      where: due,
+      params: [],
+    });
+    const candidateExclusion = legalHoldExclusion('file', {
+      alias: 'candidate',
+      nextParamIndex: 1,
+    });
+
     const expired = await db.query<{ id: string; storage_pathname: string | null }>(
       `
-        select id, storage_pathname
-          from public.media_assets
-         where deleted_at is not null
-           and deleted_at < now() - interval '${RECOVERY_WINDOW_DAYS} days'
-         order by deleted_at asc
+        select candidate.id, candidate.storage_pathname
+          from public.media_assets candidate
+         where ${due}
+           and ${candidateExclusion.sql}
+         order by candidate.deleted_at asc
          limit ${MAX_ASSETS_PER_RUN}
       `,
-      [],
+      candidateExclusion.params,
     );
 
     if (expired.length === 0) {
-      return NextResponse.json({ message: 'No expired media to purge', purged: 0, multipart });
+      return NextResponse.json({
+        message: 'No expired media to purge',
+        purged: 0,
+        heldFromPurge,
+        multipart,
+      });
     }
 
     const { deleted: objectsDeleted, failedPathnames } = await deleteStoredMediaObjects(
@@ -87,22 +109,34 @@ export async function GET(request: NextRequest) {
 
     let rowsPurged = 0;
     if (purgeableIds.length > 0) {
+      // Carried again: a hold placed between the two statements has to win.
+      const purgeExclusion = legalHoldExclusion('file', {
+        alias: 'target',
+        nextParamIndex: 2,
+      });
       const purged = await db.query<{ id: string }>(
-        `delete from public.media_assets where id = any($1::uuid[]) returning id`,
-        [purgeableIds],
+        `delete from public.media_assets target
+          where target.id = any($1::uuid[])
+            and ${purgeExclusion.sql}
+          returning target.id`,
+        [purgeableIds, ...purgeExclusion.params],
       );
       rowsPurged = purged.length;
     }
 
+    // Counted, never named: whose files they are is not for a log.
     logger.info(
       {
         candidates: expired.length,
         objectsDeleted,
         objectsFailed: failedPathnames.length,
         rowsPurged,
+        heldFromPurge,
         multipart,
       },
-      'Purged expired soft-deleted media assets',
+      heldFromPurge > 0
+        ? 'Purged expired soft-deleted media assets; some were preserved by an active legal hold and will be purged once it is released'
+        : 'Purged expired soft-deleted media assets',
     );
 
     return NextResponse.json({
@@ -111,12 +145,15 @@ export async function GET(request: NextRequest) {
       objectsDeleted,
       objectsFailed: failedPathnames.length,
       purged: rowsPurged,
+      heldFromPurge,
       multipart,
     });
   } catch (error) {
+    // Nothing was destroyed: the predicate is inside the candidate statement,
+    // so an unreadable hold set fails it before any object or row is touched.
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },
-      'Deleted media purge cron job failed',
+      'Deleted media purge cron job failed; nothing was purged',
     );
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

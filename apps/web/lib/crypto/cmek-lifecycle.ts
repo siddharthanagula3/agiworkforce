@@ -312,13 +312,14 @@ function reseal(ring: KeyRing, fromVersion: string, entry: RewrapEntry): RewrapE
   if (keyId !== fromVersion) {
     throw new Error(`sealed under "${keyId}", which is not the version being retired`);
   }
-  const opened = openEnvelope(ring, entry.sealed, 'hex-triple', entry.context);
-  const sealed = sealEnvelope(
+  const opened = openEnvelope(
     ring,
-    opened.plaintext,
-    'versioned',
-    opened.contextBound ? entry.context : undefined,
+    entry.sealed,
+    'hex-triple',
+    entry.context === undefined ? undefined : { value: entry.context, acceptUnbound: true },
   );
+  // A row sealed before its context existed is bound here, so rotation pays the re-seal it is owed.
+  const sealed = sealEnvelope(ring, opened.plaintext, 'versioned', entry.context);
   return entry.context === undefined
     ? { id: entry.id, sealed }
     : { id: entry.id, sealed, context: entry.context };

@@ -77,6 +77,7 @@ process.env['JWT_SECRET'] = 'test-developer-jwt-secret-at-least-32-bytes';
 
 import {
   ANONYMIZED_USER_COLUMNS,
+  EMAIL_SCOPED_USER_TABLES,
   FINANCIAL_ERASURE_DISPOSITION,
   UNDELETED_USER_TABLES,
   USER_SCOPED_TABLES,
@@ -93,11 +94,17 @@ const SCOPE_COLUMNS = new Set([
   'user_id',
   'owner_id',
   'owner_user_id',
+  'actor',
   'actor_user_id',
+  'account_id',
   'created_by',
   'added_by_user_id',
   'granted_by_user_id',
   'agent_user_id',
+  'escalated_by_user_id',
+  'referrer_id',
+  'referred_user_id',
+  'target_owner_id',
 ]);
 
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../db/neon');
@@ -214,7 +221,9 @@ function executedStatements(): string[] {
 describe('account erasure inventory', () => {
   it('classifies every user-scoped table in the schema', () => {
     const scoped = userScopedSchemaTables();
-    const deleted = new Set(USER_SCOPED_TABLES.map((entry) => entry.table));
+    const deleted = new Set(
+      [...USER_SCOPED_TABLES, ...EMAIL_SCOPED_USER_TABLES].map((entry) => entry.table),
+    );
     const anonymized = new Set(ANONYMIZED_USER_COLUMNS.map((entry) => entry.table));
     const undeleted = new Set(Object.keys(UNDELETED_USER_TABLES));
 
@@ -226,34 +235,43 @@ describe('account erasure inventory', () => {
     expect(unclassified).toEqual([]);
   });
 
-  it('classifies each table exactly once, by a column that exists', () => {
-    const scoped = userScopedSchemaTables();
+  it('gives each table one disposition, by a column that exists', () => {
     const schema = schemaColumnsByTable();
-    const buckets = [
-      USER_SCOPED_TABLES.map((entry) => entry.table),
-      ANONYMIZED_USER_COLUMNS.map((entry) => entry.table),
-      Object.keys(UNDELETED_USER_TABLES),
+    const dispositions = [
+      {
+        name: 'deleted',
+        entries: [...USER_SCOPED_TABLES, ...EMAIL_SCOPED_USER_TABLES] as ReadonlyArray<{
+          table: string;
+          column: string;
+          alsoColumn?: string;
+        }>,
+      },
+      {
+        name: 'anonymized',
+        entries: ANONYMIZED_USER_COLUMNS as ReadonlyArray<{
+          table: string;
+          column: string;
+          alsoColumn?: string;
+        }>,
+      },
     ];
 
-    const seen = new Map<string, number>();
-    buckets.forEach((bucket, index) => {
-      for (const table of bucket) {
-        expect(seen.has(table), `${table} is classified twice`).toBe(false);
-        seen.set(table, index);
+    const seen = new Map<string, string>();
+    for (const { name, entries } of dispositions) {
+      for (const entry of entries) {
+        const { table, column } = entry;
+        const previous = seen.get(table);
+        expect(previous ?? name, `${table} is both ${previous} and ${name}`).toBe(name);
+        seen.set(table, name);
+        for (const named of [column, 'alsoColumn' in entry ? entry.alsoColumn : undefined]) {
+          if (named === undefined) continue;
+          expect(schema.get(table)?.has(named), `${table}.${named} does not exist`).toBe(true);
+        }
       }
-    });
-
-    for (const [table, index] of seen) {
-      if (table === 'profiles') continue;
-      expect(scoped.has(table), `${table} is classified but not user-scoped in the schema`).toBe(
-        true,
-      );
-      if (index === 2) continue;
-      const bucket = index === 0 ? USER_SCOPED_TABLES : ANONYMIZED_USER_COLUMNS;
-      const entry = bucket.find((candidate) => candidate.table === table)!;
-      expect(schema.get(table)?.has(entry.column), `${table}.${entry.column} does not exist`).toBe(
-        true,
-      );
+    }
+    for (const table of Object.keys(UNDELETED_USER_TABLES)) {
+      expect(seen.get(table), `${table} is retained and also erased`).toBe(undefined);
+      expect(schema.has(table), `${table} is retained and no live migration creates it`).toBe(true);
     }
   });
 
@@ -459,12 +477,28 @@ describe('eraseUserAccountData', () => {
     expect(mocks.deleteObject).toHaveBeenCalledWith('av.png');
 
     const statements = executedStatements();
-    for (const { table } of USER_SCOPED_TABLES) {
-      expect(statements.some((sql) => sql.includes(`delete from public.${table} `))).toBe(true);
+    for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
+      const subject =
+        alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
+      expect(
+        statements.some((sql) => sql.includes(`delete from public.${table} where ${subject}`)),
+        `${table}.${column} still names an account that no longer exists`,
+      ).toBe(true);
     }
     expect(
       statements.some((sql) => sql.includes('delete from public.user_skills where user_id = $1')),
     ).toBe(true);
+    for (const { table, column } of EMAIL_SCOPED_USER_TABLES) {
+      expect(
+        statements.some(
+          (sql) =>
+            sql.startsWith(`delete from public.${table} where lower(${column}) in`) &&
+            sql.includes('select lower(email) from public.profiles where id = $1'),
+        ),
+        `${table} keeps the address of an account that no longer exists`,
+      ).toBe(true);
+      expect(report.tables[table]?.deleted).toBe(true);
+    }
     for (const { table, column } of ANONYMIZED_USER_COLUMNS) {
       if (table === 'organization_usage_ledger') {
         expect(

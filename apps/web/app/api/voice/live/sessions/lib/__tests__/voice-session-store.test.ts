@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   clampVoicePace,
+  closeExpiredVoiceSessions,
   closeVoiceSession,
   createVoiceSession,
   getActiveVoiceSessionForConversation,
   isVoiceSessionStoreReady,
   listVoiceSessionHistory,
+  meteredVoiceSessionSeconds,
   updateVoiceSessionSettings,
   VOICE_PACE_DEFAULT,
   type VoiceSessionDb,
@@ -177,5 +179,52 @@ describe('close and history', () => {
   it('reports the table missing rather than throwing', async () => {
     const { db } = stubDb([[{ ready: false }]]);
     expect(await isVoiceSessionStoreReady(db)).toBe(false);
+  });
+});
+
+describe('closeExpiredVoiceSessions', () => {
+  it('closes every session open past the span it could run for', async () => {
+    const { db, calls } = stubDb([[{ id: 'vs_1' }, { id: 'vs_2' }]]);
+    const closed = await closeExpiredVoiceSessions({
+      db,
+      userId: 'user_1',
+      maxOpenSeconds: 600,
+    });
+    expect(closed).toBe(2);
+    const [sql, params] = calls[0] ?? ['', []];
+    expect(sql).toContain("status = 'active'");
+    expect(sql).toContain('started_at <= now() - make_interval');
+    expect(sql).toContain('closed_at = now()');
+    expect(params[0]).toBe('user_1');
+    expect(params[1]).toBe(600);
+    expect(params[2]).toBe('expired');
+  });
+
+  it('never opens the window wider than a whole second', async () => {
+    const { db, calls } = stubDb([[]]);
+    await closeExpiredVoiceSessions({ db, userId: 'user_1', maxOpenSeconds: 0.2 });
+    expect(calls[0]?.[1]?.[1]).toBe(1);
+  });
+});
+
+describe('meteredVoiceSessionSeconds', () => {
+  const startedAt = '2026-09-18T00:00:00.000Z';
+  const nowMs = Date.parse('2026-09-18T00:03:04.000Z');
+
+  it('bills the span the record proves when the client reported less', () => {
+    expect(meteredVoiceSessionSeconds({ startedAt, closedAt: null }, 0, nowMs)).toBe(184);
+  });
+
+  it('keeps a report the record cannot account for', () => {
+    expect(meteredVoiceSessionSeconds({ startedAt, closedAt: null }, 400, nowMs)).toBe(400);
+  });
+
+  it('stops counting at the moment the session closed', () => {
+    const closedAt = '2026-09-18T00:01:00.000Z';
+    expect(meteredVoiceSessionSeconds({ startedAt, closedAt }, 0, nowMs)).toBe(60);
+  });
+
+  it('falls back to the report when the record carries no usable start', () => {
+    expect(meteredVoiceSessionSeconds({ startedAt: 'never', closedAt: null }, 12, nowMs)).toBe(12);
   });
 });

@@ -412,7 +412,7 @@ describe('PricingPage', () => {
     const comparison = screen.getByRole('table', { name: 'Plan capabilities' });
     const rows = within(comparison);
     expect(rows.getByRole('row', { name: /^Free / })).toHaveAccessibleName(
-      'Free free foreverLabel compareFreeUsage 1 project 1 custom MCP Yes No No No No No managed access No No compareFreeBestFor',
+      'Free free foreverLabel compareFreeUsage 1 project 1 custom MCP Yes No No No No No managed access No Not by AGI. Free model providers may. compareFreeBestFor',
     );
     expect(rows.getByRole('row', { name: /^Basic / })).toHaveAccessibleName(
       'Basic $7/mo monthly compareBasicUsage 5 projects 5 custom MCP Yes No No No No No managed access No No compareBasicBestFor',

@@ -25,6 +25,8 @@ export interface EdiscoveryRecord {
 
 interface SourceDefinition {
   type: LegalHoldResourceType;
+  /** The table the contract declares for this store, read back by the guard. */
+  table: string;
   sql: string;
 }
 
@@ -35,8 +37,10 @@ interface SourceDefinition {
 const SOURCES: readonly SourceDefinition[] = [
   {
     type: 'conversation',
+    table: 'web_conversations',
     sql: `select c.id, c.user_id, c.title, c.model, c.project_id, c.created_at, c.updated_at,
-                 c.deleted_at
+                 c.deleted_at,
+                 true as content_preserved
             from public.web_conversations c
            where c.organization_id = $1
              and ($2::text[] is null or c.user_id = any($2::text[]))
@@ -48,8 +52,9 @@ const SOURCES: readonly SourceDefinition[] = [
   },
   {
     type: 'message',
+    table: 'web_messages',
     sql: `select m.id, m.conversation_id, c.user_id, m.role, m.content, m.model, m.provider,
-                 m.created_at
+                 m.created_at, true as content_preserved
             from public.web_messages m
             join public.web_conversations c on c.id = m.conversation_id
            where c.organization_id = $1
@@ -62,8 +67,9 @@ const SOURCES: readonly SourceDefinition[] = [
   },
   {
     type: 'project',
+    table: 'user_projects',
     sql: `select p.id, p.user_id, p.name, p.description, p.instructions, p.is_archived,
-                 p.created_at, p.updated_at
+                 p.created_at, p.updated_at, true as content_preserved
             from public.user_projects p
            where p.organization_id = $1
              and ($2::text[] is null or p.user_id = any($2::text[]))
@@ -75,8 +81,10 @@ const SOURCES: readonly SourceDefinition[] = [
   },
   {
     type: 'project_file',
+    table: 'project_knowledge_files',
     sql: `select k.id, k.project_id, p.user_id, k.file_name, k.mime_type, k.byte_count,
-                 k.checksum_sha256, k.summary, k.storage_uri, k.added_by_user_id, k.created_at
+                 k.checksum_sha256, k.summary, k.storage_uri, k.added_by_user_id, k.created_at,
+                 (k.storage_uri is not null) as content_preserved
             from public.project_knowledge_files k
             join public.user_projects p on p.id = k.project_id
            where p.organization_id = $1
@@ -89,8 +97,10 @@ const SOURCES: readonly SourceDefinition[] = [
   },
   {
     type: 'file',
+    table: 'media_assets',
     sql: `select f.id, f.user_id, f.kind, f.mime_type, f.byte_size, f.storage_pathname, f.prompt,
-                 f.provider, f.model, f.source_surface, f.created_at, f.deleted_at
+                 f.provider, f.model, f.source_surface, f.created_at, f.deleted_at,
+                 (f.storage_pathname is not null) as content_preserved
             from public.media_assets f
            where f.organization_id = $1
              and ($2::text[] is null or f.user_id = any($2::text[]))
@@ -102,8 +112,10 @@ const SOURCES: readonly SourceDefinition[] = [
   },
   {
     type: 'artifact',
+    table: 'web_artifacts',
     sql: `select a.id, a.user_id, a.conversation_id, a.title, a.artifact_type, a.language,
-                 a.content, a.current_version, a.created_at, a.updated_at, a.deleted_at
+                 a.content, a.current_version, a.created_at, a.updated_at, a.deleted_at,
+                 true as content_preserved
             from public.web_artifacts a
            where a.organization_id = $1
              and ($2::text[] is null or a.user_id = any($2::text[]))
@@ -115,8 +127,9 @@ const SOURCES: readonly SourceDefinition[] = [
   },
   {
     type: 'work_run',
+    table: 'cloud_agent_runs',
     sql: `select r.id, r.user_id, r.conversation_id, r.origin_surface, r.work_mode, r.state,
-                 r.provider, r.model, r.created_at, r.completed_at
+                 r.provider, r.model, r.created_at, r.completed_at, true as content_preserved
             from public.cloud_agent_runs r
            where r.organization_id = $1
              and ($2::text[] is null or r.user_id = any($2::text[]))
@@ -154,6 +167,8 @@ export interface EdiscoveryManifestEntry {
   resourceType: EdiscoveryRecordType;
   records: number;
   bytes: number;
+  /** Records carrying metadata for content this product never stored. */
+  referenceOnly: number;
   sha256: string;
 }
 
@@ -168,8 +183,23 @@ export interface EdiscoveryManifest {
   entries: EdiscoveryManifestEntry[];
   records: number;
   bytes: number;
+  referenceOnly: number;
   sha256: string;
   generatedAt: string;
+}
+
+const SOURCE_BY_TYPE: ReadonlyMap<LegalHoldResourceType, SourceDefinition> = new Map(
+  SOURCES.map((source) => [source.type, source]),
+);
+
+// A store a hold can name and the export cannot read would leave the manifest
+// claiming evidence nobody received.
+export function unexportableResourceTypes(): LegalHoldResourceType[] {
+  return LEGAL_HOLD_RESOURCE_TYPES.filter((type) => !SOURCE_BY_TYPE.has(type));
+}
+
+export function exportSourceTable(type: LegalHoldResourceType): string | null {
+  return SOURCE_BY_TYPE.get(type)?.table ?? null;
 }
 
 function toCursorValue(value: unknown): string {
@@ -205,6 +235,8 @@ export function exportedCustodians(hold: LegalHold, filter: EdiscoveryFilter): s
 export interface EdiscoveryExportChunk {
   records: EdiscoveryRecord[];
   resourceType: EdiscoveryRecordType;
+  /** Of those records, how many carry no content this product holds. */
+  referenceOnly: number;
 }
 
 export async function* iterateLegalHoldExport(
@@ -212,7 +244,11 @@ export async function* iterateLegalHoldExport(
   hold: LegalHold,
   filter: EdiscoveryFilter = UNFILTERED_EXPORT,
 ): AsyncGenerator<EdiscoveryExportChunk> {
-  yield { resourceType: 'hold', records: [{ type: 'hold', data: { ...hold } }] };
+  yield {
+    resourceType: 'hold',
+    records: [{ type: 'hold', data: { ...hold } }],
+    referenceOnly: 0,
+  };
 
   const custodians = exportedCustodians(hold, filter);
   // An intersection that came out empty is not "no filter": it means the filter
@@ -221,6 +257,13 @@ export async function* iterateLegalHoldExport(
   if (custodians !== null && custodians.length === 0) return;
 
   const types = new Set(exportedResourceTypes(hold, filter));
+  const unreadable = [...types].filter((type) => !SOURCE_BY_TYPE.has(type));
+  if (unreadable.length > 0) {
+    throw new Error(
+      `This hold preserves ${unreadable.join(', ')} and the export has no source for it, ` +
+        'so the export would be incomplete without saying so.',
+    );
+  }
 
   for (const source of SOURCES) {
     if (!types.has(source.type)) continue;
@@ -239,6 +282,7 @@ export async function* iterateLegalHoldExport(
       yield {
         resourceType: source.type,
         records: rows.map((data) => ({ type: source.type, data })),
+        referenceOnly: rows.filter((row) => row['content_preserved'] === false).length,
       };
       const last = rows[rows.length - 1] as Record<string, unknown>;
       cursor = { createdAt: toCursorValue(last['created_at']), id: String(last['id']) };
@@ -254,29 +298,48 @@ export async function* iterateLegalHoldExport(
 export class EdiscoveryManifestBuilder {
   private readonly entries = new Map<
     EdiscoveryRecordType,
-    { records: number; bytes: number; hash: ReturnType<typeof createHash> }
+    { records: number; bytes: number; referenceOnly: number; hash: ReturnType<typeof createHash> }
   >();
   private readonly whole = createHash('sha256');
   private totalRecords = 0;
   private totalBytes = 0;
+  private totalReferenceOnly = 0;
 
+  // Seeded with every store the hold puts in scope, so a store that produced
+  // nothing says zero rather than being absent from the manifest entirely.
   constructor(
     private readonly hold: LegalHold,
     private readonly filter: EdiscoveryFilter,
-  ) {}
+  ) {
+    for (const resourceType of ['hold' as const, ...exportedResourceTypes(hold, filter)]) {
+      this.entry(resourceType);
+    }
+  }
 
-  add(resourceType: EdiscoveryRecordType, records: number, bytes: Uint8Array): void {
+  private entry(resourceType: EdiscoveryRecordType) {
     let entry = this.entries.get(resourceType);
     if (!entry) {
-      entry = { records: 0, bytes: 0, hash: createHash('sha256') };
+      entry = { records: 0, bytes: 0, referenceOnly: 0, hash: createHash('sha256') };
       this.entries.set(resourceType, entry);
     }
+    return entry;
+  }
+
+  add(
+    resourceType: EdiscoveryRecordType,
+    records: number,
+    bytes: Uint8Array,
+    referenceOnly = 0,
+  ): void {
+    const entry = this.entry(resourceType);
     entry.records += records;
     entry.bytes += bytes.byteLength;
+    entry.referenceOnly += referenceOnly;
     entry.hash.update(bytes);
     this.whole.update(bytes);
     this.totalRecords += records;
     this.totalBytes += bytes.byteLength;
+    this.totalReferenceOnly += referenceOnly;
   }
 
   build(generatedAt: string): EdiscoveryManifest {
@@ -291,10 +354,12 @@ export class EdiscoveryManifestBuilder {
         resourceType,
         records: entry.records,
         bytes: entry.bytes,
+        referenceOnly: entry.referenceOnly,
         sha256: entry.hash.copy().digest('hex'),
       })),
       records: this.totalRecords,
       bytes: this.totalBytes,
+      referenceOnly: this.totalReferenceOnly,
       sha256: this.whole.copy().digest('hex'),
       generatedAt,
     };

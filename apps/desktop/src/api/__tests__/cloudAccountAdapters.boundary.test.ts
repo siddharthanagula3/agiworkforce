@@ -10,7 +10,10 @@ vi.mock('../cloudApi', () => ({
   accountBoundCloudFetch: mocks.fetch,
   getAuthHeaders: async () => ({ Authorization: 'Bearer live-account-a-token' }),
 }));
-vi.mock('../config', () => ({ WEB_APP_URL: 'https://cloud.agi.example' }));
+vi.mock('../config', () => ({
+  WEB_APP_URL: 'https://cloud.agi.example',
+  desktopRequestHeaders: () => ({}),
+}));
 vi.mock('../../services/managedCloudRequestContext', () => ({
   createManagedCloudRequestContext: mocks.createManagedCloudRequestContext,
 }));

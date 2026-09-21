@@ -1,0 +1,17 @@
+{
+  "$comment": "Outbound calls scripts/check-dependency-deadlines.mjs found with no deadline. The four provider clients recorded here on 2026-09-20 were fixed the same day and their entries deleted; what remains is browser and shell code the tab or the host bounds. The recorded count per file only shrinks.",
+  "known": [
+    {
+      "file": "apps/web/lib/services/waitlistServiceClient.ts",
+      "calls": 3,
+      "reason": "a browser module that posts to this deployment's own routes; the tab bounds it, and the founder has frozen the waitlist path so no change is made here",
+      "fix": "none needed while it stays a browser module; if it is ever called from the server, give each call a deadline"
+    },
+    {
+      "file": "apps/web/lib/tauri-bridge.ts",
+      "calls": 1,
+      "reason": "a desktop shell bridge that reaches the local host process, bounded by the shell rather than by a server request",
+      "fix": "none needed while it stays a shell module; the desktop lane owns its transport ceiling"
+    }
+  ]
+}

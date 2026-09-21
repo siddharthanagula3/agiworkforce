@@ -18,6 +18,7 @@ vi.mock('@modelcontextprotocol/client', () => ({
 }));
 vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: vi.fn(async () => undefined),
+  EgressPolicyError: class EgressPolicyError extends Error {},
   pinnedPublicFetch: (...args: unknown[]) => mocks.pinnedFetch(...args),
 }));
 vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({

@@ -1,7 +1,9 @@
 import 'server-only';
 
+import type { NextRequest } from 'next/server';
+import { getOptionalAuthUser } from '@/lib/api-auth';
 import { getOrCreateAnonSession } from '@/lib/csrf';
-import { getIdentityUser, getRequestIdentity } from '@/lib/server/identity';
+import { getIdentityUser } from '@/lib/server/identity';
 import { logger } from '@/lib/logger';
 
 export interface HandoffRequestIdentity {
@@ -27,16 +29,10 @@ async function resolveVerifiedEmail(userId: string): Promise<string | null> {
 }
 
 export async function resolveHandoffIdentity(
-  request: Request,
+  request: NextRequest,
   options: { needEmail?: boolean } = {},
 ): Promise<HandoffRequestIdentity> {
-  let userId: string | null = null;
-  try {
-    const session = await getRequestIdentity();
-    userId = session.subject;
-  } catch {
-    userId = null;
-  }
+  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
 
   if (userId) {
     const verifiedEmail = options.needEmail ? await resolveVerifiedEmail(userId) : null;

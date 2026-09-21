@@ -27,18 +27,7 @@ export type { AgentMode, ChatPreferences };
 export type Theme = 'light' | 'dark' | 'system' | string;
 export type ChatFont = 'default' | 'sans' | 'mono' | 'dyslexic';
 export type Language =
-  | 'en'
-  | 'es'
-  | 'zh'
-  | 'ja'
-  | 'ko'
-  | 'fr'
-  | 'de'
-  | 'pt'
-  | 'it'
-  | 'ru'
-  | 'ar'
-  | 'hi';
+  'en' | 'es' | 'zh' | 'ja' | 'ko' | 'fr' | 'de' | 'pt' | 'it' | 'ru' | 'ar' | 'hi';
 
 export type TaskCategory = 'search' | 'code' | 'docs' | 'chat' | 'vision' | 'image' | 'video';
 
@@ -498,6 +487,59 @@ async function restoreLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Prom
 }
 
 const SETTINGS_STORE_VERSION = 28;
+const SETTINGS_STORE_NAME = 'agiworkforce-settings';
+
+function settingsStorage(): Storage {
+  return typeof window === 'undefined' ? storageFallback : window.localStorage;
+}
+
+export function settingsBackupKey(version: number): string {
+  return `${SETTINGS_STORE_NAME}.v${version}`;
+}
+
+/**
+ * A build older than the one that wrote this has no code for its shape, so it
+ * starts from defaults. The newer state is kept beside the store under its own
+ * version, which is what makes the downgrade reversible.
+ */
+function setAsideNewerSettings(persistedState: unknown, version: number): void {
+  try {
+    settingsStorage().setItem(
+      settingsBackupKey(version),
+      JSON.stringify({ state: persistedState, version }),
+    );
+  } catch (error) {
+    console.warn('[Settings] Newer settings could not be set aside:', getSimpleErrorMessage(error));
+  }
+}
+
+/**
+ * The state this build set aside the last time it was downgraded from. Reading
+ * it clears it, so a restore happens once and a later downgrade sets aside the
+ * state that is current then.
+ */
+function takeSetAsideSettings(version: number): Partial<SettingsState> | null {
+  const storage = settingsStorage();
+  const key = settingsBackupKey(version);
+  try {
+    const raw = storage.getItem(key);
+    if (raw === null) return null;
+    storage.removeItem(key);
+    const parsed = JSON.parse(raw) as { state?: unknown; version?: number };
+    if (parsed.version !== version || typeof parsed.state !== 'object' || parsed.state === null) {
+      return null;
+    }
+    return parsed.state as Partial<SettingsState>;
+  } catch (error) {
+    console.warn('[Settings] Set-aside settings could not be read:', getSimpleErrorMessage(error));
+    try {
+      storage.removeItem(key);
+    } catch {
+      return null;
+    }
+    return null;
+  }
+}
 
 function normalizeKnownCatalogModelId(modelId: string | undefined): string | null {
   if (!modelId) return null;
@@ -1779,8 +1821,7 @@ export const useSettingsStore = create<SettingsState>()(
           const persisted = persistedState as Partial<SettingsState> | undefined;
 
           const persistedDefaultModels = persisted?.llmConfig?.defaultModels as
-            | { managed_cloud?: string; ollama?: string }
-            | undefined;
+            { managed_cloud?: string; ollama?: string } | undefined;
 
           const mergedLLMConfig: LLMConfig = {
             ...currentState.llmConfig,
@@ -1874,6 +1915,16 @@ export const useSettingsStore = create<SettingsState>()(
             chatPreferences?: Partial<ChatPreferences>;
             executionPreferences?: Partial<ExecutionPreferences>;
           };
+
+          if (version > SETTINGS_STORE_VERSION) {
+            setAsideNewerSettings(persistedState, version);
+            return {} as SettingsState;
+          }
+
+          if (version < SETTINGS_STORE_VERSION) {
+            const restored = takeSetAsideSettings(SETTINGS_STORE_VERSION);
+            if (restored) return restored as SettingsState;
+          }
 
           if (version < 2) {
             if (state?.llmConfig) {

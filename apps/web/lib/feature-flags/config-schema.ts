@@ -1,5 +1,7 @@
+import { EXPERIMENT_CONTROL_VARIANT } from '@agiworkforce/types';
 import { z } from 'zod';
 
+import { EXPERIMENT_FLAG_PREFIX, parseExperimentFlagKey } from './experiments';
 import {
   ALL_KILL_SWITCH_CAPABILITIES,
   CAPABILITY_FLAG_PREFIX,
@@ -20,6 +22,7 @@ import { ROUTING_FLAG_KEYS, ROUTING_FLAG_PREFIX, canaryCohortFlagKey } from './r
 
 export const FLAG_NAMESPACE_IDS = [
   'capability',
+  'experiment',
   'model',
   'provider',
   'rollout',
@@ -38,14 +41,18 @@ export const FlagNamespaceSchema = z
     id: z.enum(FLAG_NAMESPACE_IDS),
     prefix: z.string().min(2).max(40),
     reader: z.string().min(1).max(120),
-    variants: z.array(FlagVariantSchema).min(2).max(16),
+    /** Null when the members come from a registry, so each key serves its own. */
+    variants: z.array(FlagVariantSchema).min(2).max(16).nullable(),
     defaultVariant: FlagVariantSchema.nullable(),
     killSwitch: z.boolean(),
     keys: z.array(FlagKeySchema).nullable(),
   })
   .strict()
   .refine(
-    (entry) => entry.defaultVariant === null || entry.variants.includes(entry.defaultVariant),
+    (entry) =>
+      entry.defaultVariant === null ||
+      entry.variants === null ||
+      entry.variants.includes(entry.defaultVariant),
     {
       message: 'A namespace default variant must be one the namespace serves',
       path: ['defaultVariant'],
@@ -87,6 +94,16 @@ const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSch
     defaultVariant: FLAG_ON_VARIANT,
     killSwitch: true,
     keys: CAPABILITY_KEYS,
+  },
+  {
+    id: 'experiment',
+    prefix: EXPERIMENT_FLAG_PREFIX,
+    reader: 'lib/feature-flags/experiments (experimentFlagKey)',
+    // The arms are the registry's, so this namespace fixes only the control.
+    variants: null,
+    defaultVariant: EXPERIMENT_CONTROL_VARIANT,
+    killSwitch: false,
+    keys: null,
   },
   {
     id: 'model',
@@ -137,6 +154,7 @@ const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSch
 
 const OPEN_KEY_TESTS: Readonly<Record<FlagNamespaceId, (key: string) => boolean>> = {
   capability: () => false,
+  experiment: (key) => parseExperimentFlagKey(key) !== null,
   model: (key) => slugSuffixOf(key, MODEL_FLAG_PREFIX),
   provider: (key) => slugSuffixOf(key, PROVIDER_FLAG_PREFIX),
   rollout: (key) => parseRolloutRingFlagKey(key) !== null,
@@ -187,7 +205,7 @@ export function flagConfigProblems(
     return [`${definition.key} is not a name ${claimed.reader} spells, so no code reads it`];
   }
   const problems: string[] = [];
-  if (!sameMembers(definition.variants, namespace.variants)) {
+  if (namespace.variants !== null && !sameMembers(definition.variants, namespace.variants)) {
     problems.push(
       `${definition.key} serves ${definition.variants.join('/')} where ${namespace.id} flags serve ${namespace.variants.join('/')}`,
     );

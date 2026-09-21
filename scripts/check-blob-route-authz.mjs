@@ -56,6 +56,7 @@ const METADATA_ONLY_IMPORTS = new Set([
 const AUTHORIZATION_CALLS = [
   'getUserScopedDb',
   'getClerkAuthUser',
+  'getOptionalAuthUser',
   'getRequestIdentity',
   'assertAccountActive',
   'createClaimedUserScopedDb',

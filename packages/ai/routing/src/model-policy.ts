@@ -69,9 +69,27 @@ function normalize(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();
 }
 
-function has(list: readonly string[], value: string): boolean {
+/**
+ * The four lists as lists, whatever arrived.
+ *
+ * Totality is this module's contract, and a policy object reaches it from a
+ * database row: a column that is null, a row written before a list existed, or
+ * a caller that built the object by hand all produce a policy with a list
+ * missing. Reading `.some` off that turns an admission decision into a
+ * TypeError inside routing, which the caller can only report as a failure of
+ * the whole request rather than as a refusal with a reason.
+ *
+ * Absent reads as empty, which is the same answer this module already gives an
+ * empty list: denial is something an administrator writes down, never
+ * something a blank field implies.
+ */
+function list(value: readonly string[] | null | undefined): readonly string[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function has(candidates: readonly string[] | null | undefined, value: string): boolean {
   if (!value) return false;
-  return list.some((entry) => normalize(entry) === value);
+  return list(candidates).some((entry) => normalize(entry) === value);
 }
 
 /**
@@ -132,9 +150,9 @@ export function canonicalProvider(value: string | null | undefined): string {
   return PROVIDER_SYNONYMS[squashed] ?? squashed;
 }
 
-function hasProvider(list: readonly string[], value: string): boolean {
+function hasProvider(candidates: readonly string[] | null | undefined, value: string): boolean {
   if (!value) return false;
-  return list.some((entry) => canonicalProvider(entry) === value);
+  return list(candidates).some((entry) => canonicalProvider(entry) === value);
 }
 
 /**
@@ -226,7 +244,7 @@ export function evaluateModelAccess(
     };
   }
 
-  if (policy.allowedModels.length > 0) {
+  if (list(policy.allowedModels).length > 0) {
     return {
       allowed: false,
       code: 'model_not_allowed',
@@ -236,7 +254,7 @@ export function evaluateModelAccess(
 
   // Vendor only. See the identity rule above: a transport neither satisfies an
   // allowlist nor defeats one.
-  if (policy.allowedProviders.length > 0 && !hasProvider(policy.allowedProviders, vendor)) {
+  if (list(policy.allowedProviders).length > 0 && !hasProvider(policy.allowedProviders, vendor)) {
     return {
       allowed: false,
       code: 'provider_not_allowed',
@@ -257,9 +275,9 @@ export function evaluateModelAccess(
 export function policyRestrictsAnything(policy: ModelAccessPolicy | null): boolean {
   if (!policy) return false;
   return (
-    policy.allowedProviders.length > 0 ||
-    policy.blockedProviders.length > 0 ||
-    policy.allowedModels.length > 0 ||
-    policy.blockedModels.length > 0
+    list(policy.allowedProviders).length > 0 ||
+    list(policy.blockedProviders).length > 0 ||
+    list(policy.allowedModels).length > 0 ||
+    list(policy.blockedModels).length > 0
   );
 }

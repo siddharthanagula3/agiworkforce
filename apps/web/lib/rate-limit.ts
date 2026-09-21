@@ -103,6 +103,13 @@ export const rateLimitConfigs = {
     window: '1 s', // 10 requests per second
     failClosed: false,
   },
+  // Reading a code back is a guess at a live one, so it is throttled apart from
+  // issuing codes, which a client does once per sign-in.
+  'device-code-lookup': {
+    limit: 20,
+    window: '1 m',
+    failClosed: true,
+  },
   'mobile-push-token': {
     limit: 30,
     window: '1 m', // 30 push-token updates per minute (mirrors api-gateway limiter)
@@ -457,6 +464,21 @@ export const rateLimitConfigs = {
     window: '1 h', // irreversible once the grace window passes
     failClosed: true,
   },
+  'settings-org-keys-write': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'settings-org-keys-revoke': {
+    limit: 3,
+    window: '1 h', // everything the workspace sealed stops opening
+    failClosed: true,
+  },
+  'settings-org-keys-rewrap': {
+    limit: 5,
+    window: '1 h', // each run walks every sealed store
+    failClosed: true,
+  },
   'settings-org-delete-cancel': {
     limit: 10,
     window: '1 h',
@@ -489,6 +511,13 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  // Ending every session is one deliberate act, not something anybody repeats,
+  // and it is the loudest thing a stolen session can do.
+  'settings-sessions-revoke-all': {
+    limit: 5,
+    window: '1 h',
+    failClosed: true,
+  },
   'settings-account-compromise-read': {
     limit: 60,
     window: '1 m',
@@ -498,6 +527,23 @@ export const rateLimitConfigs = {
     limit: 5,
     window: '1 m',
     // Ends every session, so a repeat is never a way to reach anything.
+    failClosed: true,
+  },
+  'settings-account-compromise-resolve': {
+    limit: 5,
+    window: '1 m',
+    // Lifts a lockdown, so a limiter outage must not turn it into a free retry.
+    failClosed: true,
+  },
+  'settings-identities-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-identity-unlink': {
+    limit: 10,
+    window: '1 m',
+    // Removes a way into the account, so a limiter outage must not open it.
     failClosed: true,
   },
   'settings-audit-logs': {
@@ -554,6 +600,11 @@ export const rateLimitConfigs = {
     limit: 60,
     window: '1 m',
     failClosed: false,
+  },
+  'client-telemetry': {
+    limit: 30,
+    window: '1 m', // a browser reports a handful of render faults per session, not a stream
+    failClosed: true, // the payload is authored in a browser; unmetered ingest is the risk
   },
   waitlist: {
     limit: 5,

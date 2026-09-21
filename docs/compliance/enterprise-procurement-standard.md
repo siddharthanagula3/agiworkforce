@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-09-18
+Last updated: 2026-09-20
 
 The one route an enterprise deal takes, from a quote to a billed subscription,
 and the code that enforces each step. The two documents a customer signs are
@@ -25,7 +25,8 @@ counsel review, and the Order Form template says so on its first line.
 | Stripe sync        | Contract fields are generated from the agreement, not read back from Stripe | `enterprise-billing-service.ts` `syncEnterpriseContractFromSubscription`                          |
 | Drift detection    | A term retyped in the Stripe dashboard is reported, never adopted           | `compareStripeContractMetadata`                                                                   |
 | Invoice routing    | Invoices address the billing contact; procurement gets the PO reference     | `organization_billing_contracts.billing_contact_*`, `procurement_contact_*`                       |
-| Payment method     | Only the methods the signed policy permits may collect                      | `auditPaymentMethodPolicy` audits a violation on every enterprise invoice event                   |
+| Issuance           | An invoice the agreement does not permit is never created                   | `assertInvoiceIssuable` throws before the first Stripe call; six refusal reasons, listed below    |
+| Payment method     | Only the methods the signed policy permits may collect                      | Refused at issuance; `auditInvoiceAgainstAgreement` audits an invoice created outside the product |
 
 ## 2. Invoice routing
 
@@ -40,35 +41,61 @@ signed Order Form and are stored on the contract row:
 - `payment_terms_days`: the net terms the due date is computed from
   (`resolveInvoiceDueAt`), capped at 180 days.
 
-An invoice with no billing contact on the contract is a gap in the signed
-Order Form, not a defect in the code. Fill in section 1 of the template.
+An invoice with no recipient on the contract is never issued. The six reasons
+`invoiceIssuanceRefusals` returns
+(`packages/contracts/types/src/enterprise/invoice-terms.ts`) are the whole
+list, and any one of them stops the document:
+
+| Refusal                        | What is missing or wrong                                         |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `contract_not_in_force`        | No executed agreement covering the date, grace period included   |
+| `purchase_order_required`      | The agreement requires a PO and `procurement_reference` is blank |
+| `invoice_recipient_missing`    | `invoice_recipient_emails` holds no non-blank address            |
+| `negotiated_rate_missing`      | `seat_unit_price_cents` is null or not positive                  |
+| `currency_not_contracted`      | The requested currency is not the agreement's `billing_currency` |
+| `payment_method_not_permitted` | A collection method or instrument the signed policy excludes     |
+
+`assertInvoiceIssuable` raises a validation error carrying those reasons, and
+`buildEnterpriseInvoiceDraft` calls it before building anything, so the refusal
+happens before Stripe is contacted. Fill in section 1 of the Order Form
+template and re-author the agreement version; the invoice cannot be forced.
 
 ## 3. Payment methods
 
-The signed Order Form states which methods may collect. The code checks each
-enterprise invoice's collection method and payment method types against that
-policy and audits a violation; it does not silently accept a method the
-agreement excludes. Card-on-file for an invoiced account is the case this
-exists to catch.
+The signed Order Form states which methods may collect, and an invoice this
+product issues on an excluded rail is refused rather than audited: the
+collection method and every payment method type go through
+`assertInvoiceIssuable` as `payment_method_not_permitted`. Card-on-file for an
+invoiced account is the case this exists to catch.
+
+One path is not refusable. An invoice created in the Stripe dashboard already
+exists by the time its webhook arrives, so `recordEnterpriseInvoiceEvent`
+writes it to the ledger and then calls `auditInvoiceAgainstAgreement`, which
+re-runs the same six checks, logs at error level and records a
+`plan_changed` audit event with the refusal reasons. It does not void the
+invoice and it does not stop the ledger write. Finance has to void that
+document by hand.
 
 ## 4. Two decisions this process still needs
 
 Both are recorded here rather than guessed in code, and both are named in the
 launch checklist.
 
-**Discount authority.** The repository models a list price for every
-self-serve plan (`BILLING_PLAN_PRICING`), but the Enterprise tier is
-`contractPriced: true` and `CommercialAgreementTerms` carries no negotiated
-per-seat amount. There is therefore nothing to compute a discount against and
-no ladder to approve it with. Closing this needs, in order:
+**Discount authority.** `CommercialAgreementTerms` now carries
+`seatUnitPriceCents`
+(`apps/web/lib/services/enterprise-contracts/types.ts`), stored on
+`organization_commercial_agreements.seat_unit_price_cents`, and an agreement
+with no positive rate cannot issue an invoice at all. What is still missing is
+the authority to set it:
 
-1. A product decision on discount thresholds and who approves each band.
-2. A negotiated seat price on `CommercialAgreementTerms`
-   (`apps/web/lib/services/enterprise-contracts/types.ts`) and its store, with
-   a migration adding the column.
-3. A gate in `authorCommercialAgreementVersion` that refuses to author a
-   discounted agreement without a recorded approver, alongside the existing
-   `authoredBy` and `amendmentReason`.
+1. A product decision on discount thresholds and who approves each band. The
+   Enterprise tier is `contractPriced: true`, so there is no list price in
+   `BILLING_PLAN_PRICING` to measure a discount against.
+2. A gate in `authorCommercialAgreementVersion`
+   (`apps/web/lib/services/enterprise-contracts/agreement-store.ts`) that
+   refuses to author a discounted agreement without a recorded approver,
+   alongside the existing `authoredBy` and `amendmentReason`. No such gate
+   exists today: any seat price an operator types is authored as signed.
 
 **Contract-derived security controls.** Retention, DLP and customer-managed
 keys are set by a workspace admin today. A contract that promises a retention
@@ -88,3 +115,34 @@ manual signature rather than failing at import:
 No route calls `sendOrderForm` or `readEnvelope` yet. Until one exists, a
 signed Order Form reaches the system through
 `recordSignedOrderFromEnvelope` only.
+
+## 6. The security pack a reviewer asks for
+
+A procurement security review asks the same five questions every time. Each one
+already has an authoritative answer in this repository, and the answer is cited
+here rather than restated, because a restated answer drifts from the one the
+code enforces.
+
+| Question a reviewer asks  | Where the answer lives                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Security overview         | `docs/security/security.md`, the single security document                                                                             |
+| Data flow and boundaries  | `docs/architecture/trust-boundaries.md` for Local, BYOK and Managed Cloud per surface; `docs/architecture/overview.md` for the system |
+| Access control            | The enterprise authorization contract in `packages/contracts/types/src/enterprise`, and the permission each admin route resolves      |
+| Retention and deletion    | `docs/architecture/RETENTION_MATRIX.md` per store, and `docs/security/security.md` section 5 for the posture                          |
+| Legal hold and eDiscovery | `docs/compliance/legal-hold-and-ediscovery.md`, with the operator procedure in `docs/runbooks/legal-hold.md`                          |
+| Vulnerability management  | Root `SECURITY.md` for the reporting policy and scope                                                                                 |
+| Incident response         | `docs/runbooks/incident-response.md`, with `docs/runbooks/personal-data-breach.md` for a personal-data incident                       |
+
+Three answers a reviewer will ask for and this repository does not have. Say so
+rather than deferring:
+
+1. **No SOC 2 report, no ISO 27001 certificate and no HIPAA position.** `/trust`
+   carries the dated status. A questionnaire answered as "in progress" where
+   nothing is in progress is a misrepresentation, not optimism.
+2. **No third-party penetration test report.** The security work in this
+   repository is internal review plus the guards in `scripts/`.
+3. **Managed Cloud is in public alpha.** Say so wherever an answer bears on an
+   availability or durability commitment.
+
+A questionnaire answer that is not one of the cited documents needs the document
+written first. Do not answer from memory of what the product used to do.

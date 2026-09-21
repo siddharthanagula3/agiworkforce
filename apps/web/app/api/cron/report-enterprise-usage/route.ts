@@ -8,6 +8,7 @@ import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { reportEnterpriseOverageUsage } from '@/lib/services/enterprise-usage-metering';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {

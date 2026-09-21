@@ -1,9 +1,14 @@
 import 'server-only';
 
+import type { CapabilityDenialReason } from '@agiworkforce/types';
+
 import { createError } from '@/lib/errors';
+import { recordCapabilityDenial } from '@/lib/observability/denials';
 
 import type { FlagEvaluation, FlagSubject } from './evaluate-flags';
 import { evaluateFlagsForSubject } from './flag-evaluation-service';
+import { getActiveFlagDefinitions } from './flag-store';
+import { versionDisableReason } from './version-disable';
 import {
   ALL_KILL_SWITCH_CAPABILITIES,
   KILL_SWITCH_PREFIXES,
@@ -57,14 +62,39 @@ export async function assertCapabilityAvailable(
   nowMs: number = Date.now(),
 ): Promise<void> {
   const gate = await readKillSwitchGate(subject, nowMs);
+  const denied = (reason: CapabilityDenialReason): void => {
+    recordCapabilityDenial({
+      layer: 'capability',
+      reason,
+      surface: subject.surface,
+      organizationId: subject.workspaceId,
+    });
+  };
   if (gate.tenantLockedDown) {
+    denied('disabled_by_organization');
     throw createError.forbidden(
       'This workspace is locked down while an incident is investigated. Contact support.',
     );
   }
   if (!gate.capabilityAllowed(capability)) {
-    throw createError.serviceUnavailable(
-      `${label} is temporarily switched off while we investigate a problem with it.`,
-    );
+    denied('temporarily_unavailable');
+    throw createError.serviceUnavailable(await closedMessage(capability, label, nowMs));
   }
+}
+
+/**
+ * What the caller is told. When an operator closed this capability for a range
+ * of builds they wrote down why and which incident it belongs to, and that is
+ * the sentence to say: a person told only "unavailable" has no next step and
+ * support has nothing to look up.
+ */
+async function closedMessage(
+  capability: KillSwitchCapability,
+  label: string,
+  nowMs: number,
+): Promise<string> {
+  const generic = `${label} is temporarily switched off while we investigate a problem with it.`;
+  const definitions = await getActiveFlagDefinitions(nowMs).catch(() => []);
+  const reason = versionDisableReason(definitions, capability);
+  return reason === null ? generic : `${label} is switched off for this version. ${reason}`;
 }

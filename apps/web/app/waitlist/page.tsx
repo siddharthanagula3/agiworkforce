@@ -36,7 +36,7 @@ const HERO_STATUS_ROWS = HERO_STATUS_SURFACES.map((surface) => ({
 export const metadata = buildMetadata({
   title: 'AGI Cloud is open: Enterprise contract access',
   description:
-    'AGI managed cloud is open by default: sign in and start, no waitlist. Pricing shows current Team checkout availability. Request a conversation about contract-scoped Enterprise access and additional governance requirements.',
+    'The Free plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid upgrades are opening in stages and need an access code. Request a conversation about contract-scoped Enterprise access and additional governance requirements.',
   path: '/waitlist',
 });
 
@@ -78,13 +78,14 @@ export default function WaitlistPage() {
           title="Managed compute, open today."
           lede={
             <>
-              AGI managed cloud is open by default:{' '}
+              The Free plan on AGI managed cloud is open by default:{' '}
               <Link href="/get-started" className="agi-ds-link">
                 sign in and start
               </Link>
-              , no waitlist.{' '}
+              , no waitlist. Paid upgrades are opening in stages, so without an access code you join
+              the upgrade waitlist from{' '}
               <Link href="/pricing" className="agi-ds-link">
-                See team pricing and checkout availability
+                pricing
               </Link>
               . This list is for <strong>contract-scoped Enterprise access</strong>. SSO, SCIM,
               audit export, and retention controls are live for entitled workspaces; leave your

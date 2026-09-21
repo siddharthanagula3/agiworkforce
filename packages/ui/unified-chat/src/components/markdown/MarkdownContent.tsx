@@ -4,6 +4,7 @@ import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { reportClientFailure } from '../../lib/client-failures';
 import { cn } from '../../lib/utils';
 import { MARKDOWN_SANITIZE_SCHEMA } from './markdownSanitizeSchema';
 import { preprocessMath } from './preprocessMath';
@@ -49,6 +50,7 @@ export const CodeBlock = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
+      reportClientFailure({ failure: 'code_copy', detail: 'permission_denied' });
       setCopyFailed(true);
       setTimeout(() => setCopyFailed(false), 4000);
     }

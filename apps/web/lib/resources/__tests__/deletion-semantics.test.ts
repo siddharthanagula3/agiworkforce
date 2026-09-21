@@ -174,12 +174,22 @@ describe('resource deletion semantics', () => {
   it('purges oldest-first, bounded, and only past the window', () => {
     const policy = resourceDeletionPolicy('web_conversations');
     expect(policy).not.toBeNull();
-    const statement = resourcePurgeStatement(policy!);
+    const statement = resourcePurgeStatement(policy!, { sql: 'true', params: [] });
     expect(statement.sql).toContain('deleted_at is not null');
     expect(statement.sql).toContain('deleted_at < now() - $1::interval');
-    expect(statement.sql).toContain('order by deleted_at asc');
+    expect(statement.sql).toContain('order by candidate.deleted_at asc');
     expect(statement.params[0]).toBe('30 days');
     expect(statement.params[1]).toBeGreaterThan(0);
+  });
+
+  it('refuses to build a purge of a holdable store without the hold predicate', () => {
+    for (const table of ['web_conversations', 'web_messages', 'web_artifacts', 'user_projects']) {
+      const policy = resourceDeletionPolicy(table);
+      expect(policy).not.toBeNull();
+      expect(() => resourcePurgeStatement(policy!, null)).toThrow(
+        /can be placed under legal hold/u,
+      );
+    }
   });
 
   it('never returns a soft-deleted row to a reader, whatever it asked for', () => {
@@ -210,7 +220,13 @@ describe('resource deletion semantics', () => {
   it('refuses a table name that is not an identifier', () => {
     const policy = resourceDeletionPolicy('web_conversations');
     expect(() =>
-      resourcePurgeStatement({ ...policy!, table: 'web_conversations; drop table profiles' }),
+      resourcePurgeStatement(
+        { ...policy!, table: 'web_conversations; drop table profiles' },
+        {
+          sql: 'true',
+          params: [],
+        },
+      ),
     ).toThrow(/Unsafe table/u);
   });
 });

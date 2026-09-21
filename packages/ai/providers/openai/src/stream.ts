@@ -26,6 +26,25 @@ function mapFinishReason(
   }
 }
 
+function usageChunk(usage: NonNullable<OpenAIChatCompletionChunk['usage']>): StreamChunk {
+  return {
+    type: 'usage',
+    ...(usage.prompt_tokens !== undefined ? { inputTokens: usage.prompt_tokens } : {}),
+    ...(usage.completion_tokens !== undefined ? { outputTokens: usage.completion_tokens } : {}),
+    ...(usage.prompt_tokens_details?.cached_tokens !== undefined
+      ? { cacheReadTokens: usage.prompt_tokens_details.cached_tokens }
+      : {}),
+    ...(usage.prompt_tokens_details?.cache_write_tokens !== undefined
+      ? { cacheWriteTokens: usage.prompt_tokens_details.cache_write_tokens }
+      : {}),
+    ...(usage.completion_tokens_details?.reasoning_tokens !== undefined
+      ? { reasoningTokens: usage.completion_tokens_details.reasoning_tokens }
+      : {}),
+  };
+}
+
+// `stop` is emitted at finish_reason, not held to the end: the passthrough wire
+// owes OpenAI's own frame order, which puts the usage-only chunk last.
 export async function* translateOpenAIStream(
   chunks: AsyncIterable<OpenAIChatCompletionChunk>,
 ): AsyncIterable<StreamChunk> {
@@ -88,7 +107,7 @@ export async function* translateOpenAIStream(
       }
     }
 
-    if (choice.finish_reason) {
+    if (choice.finish_reason && !stopEmitted) {
       for (const state of toolCalls.values()) {
         if (state.emittedStart) {
           yield { type: 'tool-use-end', toolUseId: state.id };
@@ -97,25 +116,7 @@ export async function* translateOpenAIStream(
       toolCalls.clear();
 
       if (lastUsage) {
-        const usageChunk: StreamChunk = {
-          type: 'usage',
-          ...(lastUsage.prompt_tokens !== undefined
-            ? { inputTokens: lastUsage.prompt_tokens }
-            : {}),
-          ...(lastUsage.completion_tokens !== undefined
-            ? { outputTokens: lastUsage.completion_tokens }
-            : {}),
-          ...(lastUsage.prompt_tokens_details?.cached_tokens !== undefined
-            ? { cacheReadTokens: lastUsage.prompt_tokens_details.cached_tokens }
-            : {}),
-          ...(lastUsage.prompt_tokens_details?.cache_write_tokens !== undefined
-            ? { cacheWriteTokens: lastUsage.prompt_tokens_details.cache_write_tokens }
-            : {}),
-          ...(lastUsage.completion_tokens_details?.reasoning_tokens !== undefined
-            ? { reasoningTokens: lastUsage.completion_tokens_details.reasoning_tokens }
-            : {}),
-        };
-        yield usageChunk;
+        yield usageChunk(lastUsage);
         lastUsage = undefined;
       }
 
@@ -124,27 +125,6 @@ export async function* translateOpenAIStream(
     }
   }
 
-  if (lastUsage) {
-    const usageChunk: StreamChunk = {
-      type: 'usage',
-      ...(lastUsage.prompt_tokens !== undefined ? { inputTokens: lastUsage.prompt_tokens } : {}),
-      ...(lastUsage.completion_tokens !== undefined
-        ? { outputTokens: lastUsage.completion_tokens }
-        : {}),
-      ...(lastUsage.prompt_tokens_details?.cached_tokens !== undefined
-        ? { cacheReadTokens: lastUsage.prompt_tokens_details.cached_tokens }
-        : {}),
-      ...(lastUsage.prompt_tokens_details?.cache_write_tokens !== undefined
-        ? { cacheWriteTokens: lastUsage.prompt_tokens_details.cache_write_tokens }
-        : {}),
-      ...(lastUsage.completion_tokens_details?.reasoning_tokens !== undefined
-        ? { reasoningTokens: lastUsage.completion_tokens_details.reasoning_tokens }
-        : {}),
-    };
-    yield usageChunk;
-  }
-
-  if (!stopEmitted) {
-    yield { type: 'stop', reason: 'end_turn' };
-  }
+  if (lastUsage) yield usageChunk(lastUsage);
+  if (!stopEmitted) yield { type: 'stop', reason: 'end_turn' };
 }

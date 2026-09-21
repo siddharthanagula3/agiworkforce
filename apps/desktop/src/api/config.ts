@@ -1,3 +1,5 @@
+import { platformRequestHeaders } from '../lib/platformHeaders';
+
 /**
  * Base URL for `/api/*` routes served by the Next.js app.
  *
@@ -23,3 +25,10 @@ export const WEB_APP_URL: string =
 export const GATEWAY_BASE_URL: string =
   (import.meta.env['VITE_GATEWAY_BASE_URL'] as string | undefined) ||
   'https://api.agiworkforce.com';
+
+/** The renderer's half: the version Vite stamped into this bundle. */
+const DESKTOP_BUILD_VERSION: string | undefined = import.meta.env['VITE_APP_VERSION'];
+
+export function desktopRequestHeaders(): Record<string, string> {
+  return platformRequestHeaders(DESKTOP_BUILD_VERSION);
+}

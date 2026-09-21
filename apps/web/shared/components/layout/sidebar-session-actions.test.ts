@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   conversationDeleteConfirm,
+  conversationHref,
   projectDeleteConfirm,
 } from '@shared/components/layout/sidebar-session-actions';
+import { projectHref, projectNewChatHref } from '@shared/components/layout/sidebar-project-actions';
 
 const ROOT = join(__dirname, '../../..');
 
@@ -49,5 +51,23 @@ describe('both chat shells read their destructive copy from one definition (WEB-
     expect(projectDeleteConfirm('Launch').description).toContain(
       'Conversations in this project will be moved to “All Chats”',
     );
+  });
+});
+
+// A row link is minted from the row's id, never its title, so renaming a
+// conversation or a project cannot invalidate a link already shared or stored.
+describe('shared links survive a rename', () => {
+  it('addresses a conversation by id whatever its title says', () => {
+    const id = 'c0ffee00-0000-4000-8000-000000000001';
+    const before = conversationHref(id);
+
+    expect(before).toContain(id);
+    expect(conversationHref(id)).toBe(before);
+    expect(before).not.toContain('Untitled');
+  });
+
+  it('addresses a project by id and escapes it rather than interpolating it raw', () => {
+    expect(projectHref('a b/c')).toBe('/chat/projects/a%20b%2Fc');
+    expect(projectNewChatHref('a b/c')).toBe('/chat?projectId=a%20b%2Fc');
   });
 });

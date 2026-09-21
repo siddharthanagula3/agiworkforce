@@ -31,6 +31,13 @@ export const ErrorCode = {
    * for the reader and is useless if replaced.
    */
   CAPABILITY_UNAVAILABLE: 'CAPABILITY_UNAVAILABLE',
+
+  /**
+   * The build making the request speaks a contract older than the oldest this
+   * deployment still answers. Nothing about the request is malformed, so
+   * correcting a field does not help: the reader has to move to a newer build.
+   */
+  CLIENT_UPDATE_REQUIRED: 'CLIENT_UPDATE_REQUIRED',
   TIMEOUT: 'TIMEOUT',
 
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
@@ -57,14 +64,20 @@ export const DenialErrorCode = {
   DISABLED_BY_USER: 'DISABLED_BY_USER',
   DISABLED_BY_ORGANIZATION: 'DISABLED_BY_ORGANIZATION',
   DISABLED_BY_WORKSPACE: 'DISABLED_BY_WORKSPACE',
+  DISABLED_BY_ROLE: 'DISABLED_BY_ROLE',
+  DISABLED_BY_DEVICE_POLICY: 'DISABLED_BY_DEVICE_POLICY',
 
+  UNSUPPORTED_BY_MODEL: 'UNSUPPORTED_BY_MODEL',
   UNSUPPORTED_BY_PROVIDER: 'UNSUPPORTED_BY_PROVIDER',
   UNSUPPORTED_BY_ROUTE: 'UNSUPPORTED_BY_ROUTE',
   UNSUPPORTED_BY_SURFACE: 'UNSUPPORTED_BY_SURFACE',
+  UNSUPPORTED_BY_OPERATING_SYSTEM: 'UNSUPPORTED_BY_OPERATING_SYSTEM',
+  UNSUPPORTED_BY_REGION: 'UNSUPPORTED_BY_REGION',
 
   PERMISSION_REQUIRED: 'PERMISSION_REQUIRED',
   CONNECTED_ACCOUNT_REQUIRED: 'CONNECTED_ACCOUNT_REQUIRED',
   DESKTOP_HOST_REQUIRED: 'DESKTOP_HOST_REQUIRED',
+  BROWSER_EXTENSION_REQUIRED: 'BROWSER_EXTENSION_REQUIRED',
 
   UPGRADE_REQUIRED: 'UPGRADE_REQUIRED',
   SEAT_REQUIRED: 'SEAT_REQUIRED',
@@ -76,15 +89,40 @@ export const DenialErrorCode = {
   PROVIDER_DEGRADED: 'PROVIDER_DEGRADED',
   PROVIDER_UNAVAILABLE: 'PROVIDER_UNAVAILABLE',
   OFFLINE: 'OFFLINE',
+  TEMPORARILY_UNAVAILABLE: 'TEMPORARILY_UNAVAILABLE',
+  MAINTENANCE: 'MAINTENANCE',
 
   FEATURE_EXPERIMENTAL: 'FEATURE_EXPERIMENTAL',
   FEATURE_CLOSED_BETA: 'FEATURE_CLOSED_BETA',
   FEATURE_DEPRECATED: 'FEATURE_DEPRECATED',
+  FEATURE_REMOVED: 'FEATURE_REMOVED',
 } as const;
 
 export type DenialErrorCodeValue = (typeof DenialErrorCode)[keyof typeof DenialErrorCode];
 
+/**
+ * What broke, for the subsystems whose failures used to arrive as
+ * INTERNAL_ERROR. A blob write, a search backend, a tool, a connector and a
+ * sandbox each fail for their own reasons and each earns its own remedy, and
+ * none of them is the transport failing.
+ */
+export const DomainErrorCode = {
+  RESOURCE_DELETED: 'RESOURCE_DELETED',
+
+  STORAGE_ERROR: 'STORAGE_ERROR',
+  SEARCH_ERROR: 'SEARCH_ERROR',
+  TOOL_ERROR: 'TOOL_ERROR',
+  CONNECTOR_ERROR: 'CONNECTOR_ERROR',
+  SANDBOX_ERROR: 'SANDBOX_ERROR',
+
+  SAFETY_BLOCKED: 'SAFETY_BLOCKED',
+} as const;
+
+export type DomainErrorCodeValue = (typeof DomainErrorCode)[keyof typeof DomainErrorCode];
+
 export type AnyErrorCodeValue = ErrorCodeValue | DenialErrorCodeValue;
+
+export type ClassifiedErrorCode = AnyErrorCodeValue | DomainErrorCodeValue;
 
 /**
  * Standard API error response format.
@@ -159,6 +197,7 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.INTERNAL_ERROR]: 500,
   [ErrorCode.SERVICE_UNAVAILABLE]: 503,
   [ErrorCode.CAPABILITY_UNAVAILABLE]: 503,
+  [ErrorCode.CLIENT_UPDATE_REQUIRED]: 426,
   [ErrorCode.TIMEOUT]: 504,
   [ErrorCode.RATE_LIMIT_EXCEEDED]: 429,
   [ErrorCode.STRIPE_ERROR]: 502,
@@ -174,12 +213,18 @@ export const DENIAL_ERROR_CODE_TO_HTTP_STATUS: Record<DenialErrorCodeValue, numb
   [DenialErrorCode.DISABLED_BY_USER]: 403,
   [DenialErrorCode.DISABLED_BY_ORGANIZATION]: 403,
   [DenialErrorCode.DISABLED_BY_WORKSPACE]: 403,
+  [DenialErrorCode.DISABLED_BY_ROLE]: 403,
+  [DenialErrorCode.DISABLED_BY_DEVICE_POLICY]: 403,
+  [DenialErrorCode.UNSUPPORTED_BY_MODEL]: 501,
   [DenialErrorCode.UNSUPPORTED_BY_PROVIDER]: 501,
   [DenialErrorCode.UNSUPPORTED_BY_ROUTE]: 501,
   [DenialErrorCode.UNSUPPORTED_BY_SURFACE]: 501,
+  [DenialErrorCode.UNSUPPORTED_BY_OPERATING_SYSTEM]: 501,
+  [DenialErrorCode.UNSUPPORTED_BY_REGION]: 451,
   [DenialErrorCode.PERMISSION_REQUIRED]: 403,
   [DenialErrorCode.CONNECTED_ACCOUNT_REQUIRED]: 428,
   [DenialErrorCode.DESKTOP_HOST_REQUIRED]: 428,
+  [DenialErrorCode.BROWSER_EXTENSION_REQUIRED]: 428,
   [DenialErrorCode.UPGRADE_REQUIRED]: 402,
   [DenialErrorCode.SEAT_REQUIRED]: 402,
   [DenialErrorCode.ENTITLEMENT_REQUIRED]: 403,
@@ -188,19 +233,36 @@ export const DENIAL_ERROR_CODE_TO_HTTP_STATUS: Record<DenialErrorCodeValue, numb
   [DenialErrorCode.PROVIDER_DEGRADED]: 503,
   [DenialErrorCode.PROVIDER_UNAVAILABLE]: 503,
   [DenialErrorCode.OFFLINE]: 503,
+  [DenialErrorCode.TEMPORARILY_UNAVAILABLE]: 503,
+  [DenialErrorCode.MAINTENANCE]: 503,
   [DenialErrorCode.FEATURE_EXPERIMENTAL]: 403,
   [DenialErrorCode.FEATURE_CLOSED_BETA]: 403,
   [DenialErrorCode.FEATURE_DEPRECATED]: 410,
+  [DenialErrorCode.FEATURE_REMOVED]: 410,
+};
+
+export const DOMAIN_ERROR_CODE_TO_HTTP_STATUS: Record<DomainErrorCodeValue, number> = {
+  [DomainErrorCode.RESOURCE_DELETED]: 410,
+  [DomainErrorCode.STORAGE_ERROR]: 502,
+  [DomainErrorCode.SEARCH_ERROR]: 502,
+  [DomainErrorCode.TOOL_ERROR]: 502,
+  [DomainErrorCode.CONNECTOR_ERROR]: 502,
+  [DomainErrorCode.SANDBOX_ERROR]: 502,
+  [DomainErrorCode.SAFETY_BLOCKED]: 403,
 };
 
 export function isDenialErrorCode(code: string): code is DenialErrorCodeValue {
   return Object.prototype.hasOwnProperty.call(DENIAL_ERROR_CODE_TO_HTTP_STATUS, code);
 }
 
-export function errorCodeHttpStatus(code: AnyErrorCodeValue): number {
-  return isDenialErrorCode(code)
-    ? DENIAL_ERROR_CODE_TO_HTTP_STATUS[code]
-    : (ERROR_CODE_TO_HTTP_STATUS[code] ?? 500);
+export function isDomainErrorCode(code: string): code is DomainErrorCodeValue {
+  return Object.prototype.hasOwnProperty.call(DOMAIN_ERROR_CODE_TO_HTTP_STATUS, code);
+}
+
+export function errorCodeHttpStatus(code: ClassifiedErrorCode): number {
+  if (isDenialErrorCode(code)) return DENIAL_ERROR_CODE_TO_HTTP_STATUS[code];
+  if (isDomainErrorCode(code)) return DOMAIN_ERROR_CODE_TO_HTTP_STATUS[code];
+  return ERROR_CODE_TO_HTTP_STATUS[code] ?? 500;
 }
 
 export interface FriendlyError {

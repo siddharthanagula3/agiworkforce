@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { recordManagedAutoMemoryTurn } from '../managed-auto-memory-service';
+import { answerMemoryPolicyQuery, asQuery } from './memory-policy-stub';
 
 function processed(autoMemoryFacts: string[]): ProcessedRequest {
   return {
@@ -11,7 +12,12 @@ function processed(autoMemoryFacts: string[]): ProcessedRequest {
 
 describe('recordManagedAutoMemoryTurn', () => {
   it('persists prepared facts only for a completed turn', async () => {
-    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }]);
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
+    );
 
     await recordManagedAutoMemoryTurn({
       db: { query },
@@ -51,7 +57,12 @@ describe('recordManagedAutoMemoryTurn', () => {
   });
 
   it('keeps its facts when tools were offered but the turn ran none', async () => {
-    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }]);
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
+    );
 
     await recordManagedAutoMemoryTurn({
       db: { query },
@@ -85,7 +96,12 @@ describe('recordManagedAutoMemoryTurn', () => {
   });
 
   it('keeps its facts from a tool-assisted turn the policy allows', async () => {
-    const query = vi.fn().mockResolvedValue([{ id: 'memory-1' }]);
+    const query = asQuery(
+      vi.fn(
+        async (sql: string, _params?: unknown[]) =>
+          answerMemoryPolicyQuery(sql) ?? [{ id: 'memory-1' }],
+      ),
+    );
 
     await recordManagedAutoMemoryTurn({
       db: { query },

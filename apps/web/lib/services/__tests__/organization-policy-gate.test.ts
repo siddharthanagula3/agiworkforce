@@ -1158,6 +1158,57 @@ describe('resolveEffectiveWorkspaceControls', () => {
     expect(effective?.controls.appliedOverrideIds).toEqual(['o-1']);
   });
 
+  it('resolves the Code connections a client has to honour, narrowed by the override', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([
+        policyRow({
+          metadata: {
+            codeControls: {
+              allowGithubConnection: false,
+              allowedEgressHosts: ['api.example.com', 'files.example.com'],
+              sessionRetentionDays: 30,
+            },
+          },
+          revision: '12',
+          override_count: '1',
+        }),
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'o-1',
+          organization_id: ORGANIZATION_ID,
+          subject_type: 'user',
+          subject_id: 'user-1',
+          layer: { code: { allowMcpServers: false, sessionRetentionDays: 7 } },
+          updated_at: '2026-09-17T00:00:00.000Z',
+        },
+      ]);
+
+    const effective = await resolveEffectiveWorkspaceControls(h.db, 'user-1');
+
+    expect(effective?.code.allowGithubConnection).toBe(false);
+    expect(effective?.code.allowMcpServers).toBe(false);
+    expect(effective?.code.allowedEgressHosts).toEqual(['api.example.com', 'files.example.com']);
+    expect(effective?.code.sessionRetentionDays).toBe(7);
+    expect(effective?.code.appliedOverrideIds).toEqual(['o-1']);
+  });
+
+  it('defaults every Code connection to permitted for a workspace that set none', async () => {
+    const h = harness();
+    h.query
+      .mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }])
+      .mockResolvedValueOnce([policyRow({ revision: '3' })]);
+
+    const effective = await resolveEffectiveWorkspaceControls(h.db, 'user-1');
+
+    expect(effective?.code.allowGithubConnection).toBe(true);
+    expect(effective?.code.allowMcpServers).toBe(true);
+    expect(effective?.code.allowedEgressHosts).toEqual([]);
+    expect(effective?.code.sessionRetentionDays).toBeNull();
+  });
+
   it('fails closed when the policy cannot be read', async () => {
     const h = harness();
     h.query

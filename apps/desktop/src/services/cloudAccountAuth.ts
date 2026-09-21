@@ -6,12 +6,8 @@ import {
   type Subscription,
   asPlanTier,
 } from '../lib/cloudAccountTypes';
-import { WEB_APP_URL } from '../api/config';
-import {
-  CLIENT_VERSION_HEADER,
-  parseMeResponse,
-  type MeResponse,
-} from '@agiworkforce/cloud-contracts';
+import { WEB_APP_URL, desktopRequestHeaders } from '../api/config';
+import { parseMeResponse, type MeResponse } from '@agiworkforce/cloud-contracts';
 import { effectivePlanTier, normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
@@ -76,7 +72,6 @@ interface NativeDeviceAuthorizationResponse {
   body: string;
 }
 
-const DESKTOP_CLIENT_VERSION = import.meta.env['VITE_APP_VERSION'] ?? '0.0.0';
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
 const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 const DEV_BROWSER_SESSION_STORAGE_KEY = '__AGI_DEV_BROWSER_CLOUD_SESSION__';
@@ -614,7 +609,7 @@ class CloudAccountAuthService {
                 Authorization: `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
-                'X-AGI-Surface': 'desktop',
+                ...desktopRequestHeaders(),
               },
               body: '{}',
               signal: controller.signal,
@@ -654,7 +649,7 @@ class CloudAccountAuthService {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
           'X-Requested-With': 'XMLHttpRequest',
-          'X-AGI-Surface': 'desktop',
+          ...desktopRequestHeaders(),
         },
         body: JSON.stringify(updates),
       });
@@ -1029,7 +1024,7 @@ class CloudAccountAuthService {
       headers: {
         'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
-        'X-AGI-Surface': 'desktop',
+        ...desktopRequestHeaders(),
       },
       body: JSON.stringify({ refresh_token: refreshToken }),
       signal,
@@ -1076,7 +1071,7 @@ class CloudAccountAuthService {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        [CLIENT_VERSION_HEADER]: DESKTOP_CLIENT_VERSION,
+        ...desktopRequestHeaders(),
       },
     });
 

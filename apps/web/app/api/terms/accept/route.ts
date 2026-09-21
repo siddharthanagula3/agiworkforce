@@ -6,7 +6,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CURRENT_TERMS_VERSION, recordTermsAcceptance } from '@/lib/server/terms';
-import { getRequestIdentity } from '@/lib/server/identity';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 
 const AcceptTermsSchema = z.object({
@@ -18,10 +18,7 @@ async function handleAcceptTerms(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
-  const { subject: userId } = await getRequestIdentity();
-  if (!userId) {
-    throw createError.unauthorized('Sign in to record terms acceptance');
-  }
+  const { userId } = await getClerkAuthUser(request);
 
   const parsed = AcceptTermsSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

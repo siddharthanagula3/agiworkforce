@@ -6,6 +6,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import {
+  PROHIBITED_MEMORY_CATEGORIES,
+  prohibitedMemoryCategory,
+  type ProhibitedMemoryCategory,
+} from '@agiworkforce/context';
+import {
   CLOSED_ORGANIZATION_MEMORY_POLICY,
   DISABLED_MANAGED_MEMORY_POLICY,
   MemoryIneligibleError,
@@ -16,12 +21,22 @@ import {
   memoryRetentionClass,
   writeConsolidatedMemory,
   type ConsolidatedMemoryWrite,
+  type ManagedMemoryPolicy,
   type OrganizationMemoryPolicy,
 } from '../managed-memory-context-service';
 
 const ORG = '0190a000-0000-7000-8000-00000000b001';
 const PROJECT = '0190a000-0000-7000-8000-00000000b002';
 const NOW = Date.parse('2026-09-18T00:00:00.000Z');
+
+const SAMPLE_PROHIBITED: { readonly [K in ProhibitedMemoryCategory]: string } = {
+  credential: `User's password is ${'correct-horse-battery'}`,
+  payment_instrument: 'User pays with card 4111 1111 1111 1111',
+  government_identifier: 'User SSN is 123-45-6789',
+  health: 'User was diagnosed with type 1 diabetes',
+  biometric: 'User unlocks the laptop with a fingerprint',
+  precise_location: 'User lives at 221 Baker Street',
+};
 
 function write(overrides: Partial<ConsolidatedMemoryWrite> = {}): ConsolidatedMemoryWrite {
   return {
@@ -32,6 +47,13 @@ function write(overrides: Partial<ConsolidatedMemoryWrite> = {}): ConsolidatedMe
     ...overrides,
   };
 }
+
+const MEMORY_ON: ManagedMemoryPolicy = {
+  enabled: true,
+  generateFromHistory: true,
+  allowToolAssistedGeneration: true,
+  searchPastChats: true,
+};
 
 function enforcing(retentionDays: number): OrganizationMemoryPolicy {
   return { allowMemory: true, retentionDays, retentionEnforced: true };
@@ -134,6 +156,68 @@ describe('memoryEligibilityGate', () => {
   });
 });
 
+describe('the prohibited-content screen', () => {
+  it('refuses a stated value in every category the policy declares', () => {
+    for (const category of PROHIBITED_MEMORY_CATEGORIES) {
+      const sample = SAMPLE_PROHIBITED[category];
+      expect(prohibitedMemoryCategory(sample), sample).toBe(category);
+      expect(
+        memoryEligibilityGate({
+          write: write({ content: sample }),
+          organizationPolicy: UNGOVERNED_MEMORY_POLICY,
+        }),
+      ).toMatchObject({ eligible: false, reason: 'prohibited_content_category' });
+    }
+  });
+
+  it('refuses before the workspace gate, so an open workspace is no way in', () => {
+    const decision = memoryEligibilityGate({
+      write: write({ content: SAMPLE_PROHIBITED.credential, organizationId: ORG }),
+      organizationPolicy: enforcing(365),
+    });
+    expect(decision).toMatchObject({ eligible: false, reason: 'prohibited_content_category' });
+  });
+
+  it('never reaches the insert, and never repeats the value in the refusal', async () => {
+    const query = vi.fn(async () => []);
+    const error = await writeConsolidatedMemory(
+      { query } as never,
+      write({ content: SAMPLE_PROHIBITED.payment_instrument }),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(MemoryIneligibleError);
+    expect((error as MemoryIneligibleError).message).not.toContain('4111');
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
+describe('the write funnel is fail closed', () => {
+  it('resolves the member switch itself when the caller hands it no policies', async () => {
+    const query = vi.fn(async (sql: string) =>
+      sql.includes("settings -> 'capabilities'")
+        ? [{ capabilities: { memory: false } }]
+        : [{ outcome: 'inserted', id: 'm1' }],
+    );
+
+    await expect(writeConsolidatedMemory({ query } as never, write())).rejects.toMatchObject({
+      reason: 'user_memory_disabled',
+    });
+    expect(query.mock.calls.some(([sql]) => sql.includes('into user_memories'))).toBe(false);
+  });
+
+  it('writes when that same read says the switch is on', async () => {
+    const query = vi.fn(async (sql: string) =>
+      sql.includes("settings -> 'capabilities'")
+        ? [{ capabilities: { memory: true } }]
+        : [{ outcome: 'inserted', id: 'm1' }],
+    );
+
+    await expect(writeConsolidatedMemory({ query } as never, write())).resolves.toMatchObject({
+      outcome: 'inserted',
+    });
+  });
+});
+
 describe('memoryRetentionClass', () => {
   it('separates a project’s standing context from an ordinary project fact', () => {
     expect(memoryRetentionClass({ projectId: null, category: 'decision' })).toBe('account');
@@ -162,7 +246,7 @@ describe('writeConsolidatedMemory runs the gate before it persists', () => {
   it('stamps the retention ceiling on the row it writes', async () => {
     const query = vi.fn(async (_sql: string) => [{ outcome: 'inserted', id: 'm1' }]);
     await writeConsolidatedMemory({ query } as never, write({ organizationId: ORG }), {
-      organizationPolicy: enforcing(1),
+      policies: { organization: enforcing(1), user: MEMORY_ON },
     });
 
     const [, params] = query.mock.calls[0] as unknown as [string, unknown[]];

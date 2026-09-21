@@ -12,6 +12,7 @@ vi.mock('../../api/config', () => ({
   API_BASE_URL: 'https://agiworkforce.com',
   WEB_APP_URL: 'https://agiworkforce.com',
   GATEWAY_BASE_URL: 'https://api.agiworkforce.com',
+  desktopRequestHeaders: () => ({}),
 }));
 
 const { toastInfo, toastError } = vi.hoisted(() => ({

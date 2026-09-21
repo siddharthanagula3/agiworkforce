@@ -82,17 +82,21 @@ describe('POST /api/memory/import, dry-run', () => {
 
 describe('POST /api/memory/import, commit', () => {
   it('persists selected items with imported provenance and reports counts', async () => {
-    mocks.query.mockResolvedValue([
-      {
-        id: '018f6f2a-0000-7000-8000-000000000010',
-        content: 'Likes dark mode',
-        category: null,
-        source: 'imported:chatgpt',
-        pinned: false,
-        created_at: '2026-09-03T00:00:00.000Z',
-        updated_at: '2026-09-03T00:00:00.000Z',
-      },
-    ]);
+    mocks.query.mockImplementation(async (sql: string) =>
+      String(sql).includes("settings -> 'capabilities'")
+        ? [{ capabilities: { memory: true } }]
+        : [
+            {
+              id: '018f6f2a-0000-7000-8000-000000000010',
+              content: 'Likes dark mode',
+              category: null,
+              source: 'imported:chatgpt',
+              pinned: false,
+              created_at: '2026-09-03T00:00:00.000Z',
+              updated_at: '2026-09-03T00:00:00.000Z',
+            },
+          ],
+    );
 
     const response = await POST(
       request({

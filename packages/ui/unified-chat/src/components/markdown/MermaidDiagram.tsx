@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { MermaidConfig } from 'mermaid';
 
+import { reportClientFailure } from '../../lib/client-failures';
 import { sanitizeSvg } from '../ArtifactRenderer';
 
 type RenderState =
@@ -178,6 +179,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         // an empty container - that is the empty-output-with-source-available
         // case the source fallback exists to prevent.
         if (!sanitized) {
+          reportClientFailure({ failure: 'mermaid_render', detail: 'render' });
           setState({ phase: 'failed', reason: 'The rendered diagram had no displayable content' });
           return;
         }
@@ -185,6 +187,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         setState({ phase: 'ready', svg: sanitized });
       } catch (error) {
         if (cancelled) return;
+        reportClientFailure({ failure: 'mermaid_render', detail: 'parse' });
         const reason = error instanceof Error ? error.message : 'Unknown diagram error';
         setState({ phase: 'failed', reason: reason.split('\n')[0] ?? reason });
       }

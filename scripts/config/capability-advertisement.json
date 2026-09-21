@@ -1,0 +1,20 @@
+{
+  "why": "DeviceCapabilitiesSchema is strict, so a capability with no field there is one a device physically cannot tell the server about. Every capability a machine has and a browser does not now has a field, and each is recorded with the field that carries it; a capability the matrix adds with no field here fails, so the list is measured rather than maintained.",
+  "advertises": {
+    "canUseBrowserAutomation": "browser",
+    "canUseDesktopAutomation": "computerUse",
+    "canUseLocalModels": "localModels",
+    "canUseLocalMcp": "localMcp",
+    "canUseWorkingDirectory": "workingDirectory",
+    "canUseFileSystem": "filesystem",
+    "canRunLocalCode": "localExecution",
+    "canUseTerminal": "terminal",
+    "canUseLocalDatabase": "localDatabase",
+    "canTakeScreenshot": "screenCapture",
+    "canUseClipboard": "clipboard",
+    "canUseNativeIntegrations": "nativeIntegrations",
+    "canUsePhotos": "photos",
+    "canUseNotifications": "notifications"
+  },
+  "gaps": {}
+}

@@ -44,11 +44,24 @@
 export type PluginPublisherKind = 'first-party' | 'third-party' | 'partner';
 
 /** Every valid {@link PluginPublisherKind}. */
+/**
+ * The shape a plugin manifest is written against. Three surfaces read the
+ * same JSON, so a reader that meets a higher one refuses the manifest
+ * instead of installing the half it recognises.
+ */
+export const PLUGIN_MANIFEST_SCHEMA_VERSION = 1;
+
+export const PLUGIN_MANIFEST_MIN_SCHEMA_VERSION = 1;
+
 export const PLUGIN_PUBLISHER_KINDS: readonly PluginPublisherKind[] = [
   'first-party',
   'third-party',
   'partner',
 ] as const;
+
+export function isPluginPublisherKind(value: unknown): value is PluginPublisherKind {
+  return typeof value === 'string' && (PLUGIN_PUBLISHER_KINDS as readonly string[]).includes(value);
+}
 
 export interface PluginPublisher {
   id: string;

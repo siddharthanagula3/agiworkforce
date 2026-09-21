@@ -186,4 +186,26 @@ describe('Desktop Stripe upgrade flow', () => {
     await expect(openCheckout('pro')).resolves.toMatch(/could not be verified/i);
     expect(mocks.requestFetch).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['checkout', () => openCheckout('pro')],
+    ['the billing portal', () => openBillingPortal()],
+  ])('sends a gated account to web pricing from %s', async (_label, action) => {
+    mocks.requestAssertBoundary.mockImplementation(() => undefined);
+    mocks.requestFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'waitlist_access_required',
+            message:
+              'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.',
+          },
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await expect(action()).resolves.toMatch(/now open in your browser/i);
+    expect(mocks.openExternalUrl).toHaveBeenCalledWith(expect.stringMatching(/\/pricing$/));
+  });
 });

@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+// The shape a managed skill summary is written against. A host that meets a
+// higher one refuses the manifest rather than running half of it.
+export const MANAGED_SKILL_SCHEMA_VERSION = 1;
+export const MANAGED_SKILL_MIN_SCHEMA_VERSION = 1;
+
 export const MANAGED_SKILL_SOURCES = [
   'bundled',
   'managed-local',

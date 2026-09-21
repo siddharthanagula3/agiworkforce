@@ -135,6 +135,37 @@ describe('DELETE /api/chat/conversations/[id]', () => {
     expect(pendingParams).toEqual(['user-1', null, CONVERSATION_ID]);
   });
 
+  it('retires the cached compaction summary with the conversation', async () => {
+    const row = {
+      id: CONVERSATION_ID,
+      deleted_at: null as string | null,
+      compaction_summary: 'Earlier turns, in a model words.',
+      compaction_summary_through_message_id: 'msg-9',
+      compaction_summary_digest: 'a'.repeat(64),
+    };
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      const text = String(sql);
+      if (!/update web_conversations/u.test(text) || !/deleted_at = now\(\)/u.test(text)) return [];
+      for (const column of [
+        'compaction_summary',
+        'compaction_summary_through_message_id',
+        'compaction_summary_digest',
+      ] as const) {
+        if (new RegExp(`${column} = null`, 'u').test(text)) row[column] = null as never;
+      }
+      row.deleted_at = '2026-09-19T00:00:00.000Z';
+      return [{ id: CONVERSATION_ID }];
+    });
+
+    const response = await DELETE(request(), context);
+
+    expect(response.status).toBe(200);
+    expect(row.deleted_at).not.toBeNull();
+    expect(row.compaction_summary).toBeNull();
+    expect(row.compaction_summary_through_message_id).toBeNull();
+    expect(row.compaction_summary_digest).toBeNull();
+  });
+
   it('finishes an unrevoked publication when the delete is retried', async () => {
     mocks.query.mockResolvedValue([{ id: CONVERSATION_ID }]);
     mocks.unpublishForConversations.mockRejectedValueOnce(new Error('db down'));

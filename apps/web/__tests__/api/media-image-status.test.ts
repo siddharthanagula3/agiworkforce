@@ -49,6 +49,8 @@ const mocks = vi.hoisted(() => ({
   assetIds: vi.fn(),
   runAttempt: vi.fn(),
   delivered: vi.fn(),
+  finalize: vi.fn(),
+  closeCancelled: vi.fn(),
 }));
 
 vi.mock('@/lib/api-auth', () => ({
@@ -72,7 +74,7 @@ vi.mock('@/lib/server/media-storage', () => ({
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   markManagedUsageClientDelivered: (...args: unknown[]) => mocks.delivered(...args),
   markManagedUsageProviderStarted: vi.fn(),
-  finalizeManagedUsageRequest: vi.fn(),
+  finalizeManagedUsageRequest: (...args: unknown[]) => mocks.finalize(...args),
 }));
 
 vi.mock('@/lib/server/image-generation-jobs', async () => {
@@ -84,6 +86,7 @@ vi.mock('@/lib/server/image-generation-jobs', async () => {
     isImageJobStoreReady: (...args: unknown[]) => mocks.storeReady(...args),
     getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args),
     listImageGenerationJobAssetIds: (...args: unknown[]) => mocks.assetIds(...args),
+    closeCancelledImageGenerationJob: (...args: unknown[]) => mocks.closeCancelled(...args),
   };
 });
 
@@ -161,12 +164,62 @@ describe('GET /api/media/image/status', () => {
     mocks.scoped.mockResolvedValue({ userId: 'user-1', organizationId: null, db: {} });
     mocks.storeReady.mockResolvedValue(true);
     mocks.assetIds.mockResolvedValue([]);
+    mocks.finalize.mockResolvedValue({ settlementStatus: 'succeeded', requestStatus: 'released' });
+    mocks.closeCancelled.mockResolvedValue(null);
     mocks.runAttempt.mockResolvedValue({
       job: job(),
       images: [],
       providerModel: null,
       provenance: [],
     });
+  });
+
+  it('finishes a cancellation whose attempt never came back, and reports it canceled', async () => {
+    const cancelling = job({
+      status: 'processing',
+      cancelRequestedAt: new Date(Date.now() - 300_000).toISOString(),
+      claimExpiresAt: new Date(Date.now() - 120_000).toISOString(),
+    });
+    mocks.getJob.mockResolvedValue(cancelling);
+    mocks.closeCancelled.mockResolvedValue({
+      ...cancelling,
+      status: 'canceled',
+      retryable: false,
+      terminalAt: new Date().toISOString(),
+    });
+
+    const response = await GET(statusRequest(JOB_ID));
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(body['status']).toBe('canceled');
+    expect(body['retryable']).toBe(false);
+    // The reservation is released before the row closes, so a row that still
+    // says it is running is a job that was never settled.
+    const settled = mocks.finalize.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(settled['outcome']).toBe('failed');
+    expect(settled['actualCostMicrousd']).toBe(0);
+    expect((settled['usage'] as Record<string, unknown>)['reason']).toBe('canceled_by_user');
+    expect(mocks.closeCancelled).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: JOB_ID, userId: 'user-1', billingOutcome: 'released' }),
+    );
+    expect(mocks.runAttempt).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it('leaves a cancellation alone while its attempt still holds the claim', async () => {
+    mocks.getJob.mockResolvedValue(
+      job({
+        status: 'processing',
+        cancelRequestedAt: new Date().toISOString(),
+        claimExpiresAt: new Date(Date.now() + 120_000).toISOString(),
+      }),
+    );
+
+    const response = await GET(statusRequest(JOB_ID));
+
+    expect(response.status).toBe(200);
+    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.closeCancelled).not.toHaveBeenCalled();
   });
 
   it('refuses a job that does not belong to the caller', async () => {

@@ -26,6 +26,7 @@ import {
 import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 function statusLabel(status: PermissionStatus): string {
   switch (status) {
@@ -75,6 +76,7 @@ function SectionHeader({ title, colors }: { title: string; colors: ColorScheme }
 
 export default function IntegrationsScreen() {
   const router = useRouter();
+  const handleBack = useGoBack('/(app)/(tabs)/settings');
   const colors = useThemeColors();
 
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
@@ -149,7 +151,7 @@ export default function IntegrationsScreen() {
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
         <Pressable
-          onPress={() => router.back()}
+          onPress={handleBack}
           className="p-2 -ml-2 rounded-lg"
           style={({ pressed }) => ({ backgroundColor: pressed ? colors.surfaceHover : undefined })}
           accessibilityLabel="Go back"

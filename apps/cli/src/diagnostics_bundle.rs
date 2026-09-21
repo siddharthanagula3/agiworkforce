@@ -1,9 +1,10 @@
 //! The `agi doctor` report in the shape every surface posts to
-//! `/api/support/diagnostics`. The server validates and redacts it, so this.
+//! `/api/support/diagnostics`.
 
 use serde::Serialize;
 
 use crate::doctor::{DoctorReport, DoctorStatus};
+use crate::secret_redaction::redact_tool_output;
 
 pub const DIAGNOSTICS_PATH: &str = "/api/support/diagnostics";
 pub const MAX_DIAGNOSTIC_EVENTS: usize = 10;
@@ -58,10 +59,12 @@ pub fn diagnostics_from_report(report: &DoctorReport) -> SupportDiagnostics {
                 DoctorStatus::Warn | DoctorStatus::Unknown => "warning",
                 DoctorStatus::Pass => return None,
             };
+            // A failing check names what it read: a provider base URL, an MCP
+            // endpoint, a remote. Any of them can carry userinfo or a token.
             Some(DiagnosticEvent {
                 at: report.generated_at.clone(),
                 kind: kind.to_string(),
-                message: format!("{}: {}", check.id, check.message),
+                message: redact_tool_output(&format!("{}: {}", check.id, check.message)),
             })
         })
         .collect();
@@ -118,6 +121,39 @@ mod tests {
             },
             checks,
         }
+    }
+
+    /// This payload leaves the machine. A check that failed on a URL quotes
+    /// that URL, and the client scrubs it rather than trusting the receiver to.
+    #[test]
+    fn a_credential_quoted_by_a_failing_check_does_not_leave_the_machine() {
+        let bundle = diagnostics_from_report(&report(vec![
+            check(
+                "providers.base-url",
+                DoctorStatus::Fail,
+                "anthropic: invalid base URL `https://deploy:PLACEHOLDER_USERINFO@proxy.example.com/v1`",
+            ),
+            check(
+                "mcp.servers",
+                DoctorStatus::Warn,
+                "notes: invalid SSE URL `https://mcp.example.com/sse?api_key=PLACEHOLDER_QUERY_VALUE`",
+            ),
+        ]));
+
+        let sent = serde_json::to_string(&bundle).expect("serializes");
+        assert!(
+            !sent.contains("PLACEHOLDER_USERINFO"),
+            "userinfo survived into the support payload: {sent}"
+        );
+        assert!(
+            !sent.contains("PLACEHOLDER_QUERY_VALUE"),
+            "a query-string key survived into the support payload: {sent}"
+        );
+        assert!(sent.contains("CREDENTIALS_REDACTED"));
+        assert!(
+            sent.contains("providers.base-url"),
+            "the check that failed must still be identifiable"
+        );
     }
 
     #[test]

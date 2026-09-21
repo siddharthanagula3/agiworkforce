@@ -3,6 +3,8 @@ import 'server-only';
 import JSZip from 'jszip';
 import mammoth from 'mammoth';
 
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+
 import {
   DecompressionLimitError,
   declaredMemberSize,
@@ -11,7 +13,7 @@ import {
   type DecompressionBudget,
 } from '@/lib/security/archive-bounds';
 
-export const MAX_OFFICE_TEXT_CHARS = 200_000;
+export const MAX_OFFICE_TEXT_CHARS = MAX_FILE_TEXT_CHARS;
 
 const MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
 const MAX_SHEET_ROWS = 5_000;
@@ -37,11 +39,41 @@ const KIND_BY_EXTENSION: Record<string, OfficeDocumentKind> = {
   '.pptx': 'pptx',
 };
 
+export const OFFICE_DOCUMENT_FAILURE_REASONS = [
+  'corrupt',
+  'encrypted',
+  'archive_bomb',
+  'macro_present',
+] as const;
+export type OfficeDocumentFailureReason = (typeof OFFICE_DOCUMENT_FAILURE_REASONS)[number];
+
+const FAILURE_MESSAGES: Readonly<Record<OfficeDocumentFailureReason, string>> = {
+  corrupt: 'could not be read. It may be damaged or incomplete.',
+  encrypted: 'is password protected. Remove the password and upload it again.',
+  archive_bomb: 'expands to far more data than it declares, so it was not opened.',
+  macro_present: 'contains macros, which are not read. Save it without macros.',
+};
+
+/**
+ * Why the file was refused, in words a reader can act on. The decoder's own
+ * message is never part of it: it names internal paths and offsets.
+ */
 export class OfficeDocumentUnreadableError extends Error {
-  constructor(readonly filename: string) {
-    super(`${filename} could not be read as an Office document.`);
+  readonly reason: OfficeDocumentFailureReason;
+  constructor(
+    readonly filename: string,
+    reason: OfficeDocumentFailureReason = 'corrupt',
+  ) {
+    super(`${filename} ${FAILURE_MESSAGES[reason]}`);
     this.name = 'OfficeDocumentUnreadableError';
+    this.reason = reason;
   }
+}
+
+const OLE_COMPOUND_FILE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0]);
+
+function isEncryptedOfficeContainer(data: Buffer): boolean {
+  return data.subarray(0, 4).equals(OLE_COMPOUND_FILE_MAGIC);
 }
 
 export function officeDocumentKind(fileName: string, mimeType: string): OfficeDocumentKind | null {
@@ -121,11 +153,18 @@ interface BoundedZip {
 }
 
 async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
+  if (isEncryptedOfficeContainer(data)) {
+    throw new OfficeDocumentUnreadableError(filename, 'encrypted');
+  }
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(data);
   } catch {
-    throw new OfficeDocumentUnreadableError(filename);
+    throw new OfficeDocumentUnreadableError(filename, 'corrupt');
+  }
+
+  if (zip.file(/vbaProject\.bin$/i).length > 0) {
+    throw new OfficeDocumentUnreadableError(filename, 'macro_present');
   }
 
   const budget = decompressionBudget(data.byteLength, MAX_UNCOMPRESSED_BYTES);
@@ -140,7 +179,9 @@ async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
     for (const entry of entries) declared += declaredMemberSize(entry);
     if (declared > budget.ceiling) throw new DecompressionLimitError('total_bytes');
   } catch (error) {
-    if (error instanceof DecompressionLimitError) throw new OfficeDocumentUnreadableError(filename);
+    if (error instanceof DecompressionLimitError) {
+      throw new OfficeDocumentUnreadableError(filename, 'archive_bomb');
+    }
     throw error;
   }
 
@@ -165,8 +206,9 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
   try {
     const result = await mammoth.convertToHtml({ buffer: data });
     return htmlToText(result.value);
-  } catch {
-    throw new OfficeDocumentUnreadableError(filename);
+  } catch (error) {
+    if (error instanceof OfficeDocumentUnreadableError) throw error;
+    throw new OfficeDocumentUnreadableError(filename, 'corrupt');
   }
 }
 
@@ -308,7 +350,9 @@ export async function extractOfficeDocumentText(
           : await extractPptx(data, fileName);
     return boundText(text);
   } catch (error) {
-    if (error instanceof DecompressionLimitError) throw new OfficeDocumentUnreadableError(fileName);
+    if (error instanceof DecompressionLimitError) {
+      throw new OfficeDocumentUnreadableError(fileName, 'archive_bomb');
+    }
     throw error;
   }
 }

@@ -4,7 +4,7 @@ title: Find your files and artifacts in the Library
 path: /chat/library
 category: files
 tags: library, files, my files, artifacts, generated files, documents, uploads, recently deleted, restore file, download, grid view, list view, search files
-updated: 2026-09-17
+updated: 2026-09-20
 scope: public
 ---
 
@@ -31,10 +31,15 @@ A file too large to preview in place says so and offers a download instead.
 
 ## Deleting and restoring
 
-Deleting moves an item to **Recently deleted**, where it stays restorable for 30
-days before it is removed for good. **Delete permanently** erases the stored
-bytes now: nothing restores the file afterwards and anything linking to it stops
-resolving, so it asks first and says so.
+Deleting moves an item to **Recently deleted**, where it stays restorable. For
+an uploaded or generated file, that window is 30 days: after it the stored bytes
+are removed for good. Other items stay in **Recently deleted** until you restore
+them or delete them yourself. A legal hold on your workspace keeps held material
+past either window until the hold is released.
+
+**Delete permanently** erases the stored bytes now: nothing restores the file
+afterwards and anything linking to it stops resolving, so it asks first and says
+so.
 
 ## Projects in the Library
 

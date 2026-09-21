@@ -138,7 +138,7 @@ describe('POST /api/pair/claim', () => {
     const event = mocks.recordWorkspaceAuditEvent.mock.calls[0]?.[2];
     expect(event).toMatchObject({
       userId: USER_ID,
-      eventType: 'remote_pairing_initiated',
+      eventType: 'remote_pairing_claimed',
       detail: { resourceType: 'remote_pairing', resourceId: CODE, source: 'mobile' },
     });
     expect(JSON.stringify(event)).not.toContain('f'.repeat(64));

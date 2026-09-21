@@ -9,6 +9,11 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { version: '1.2.0' } },
+}));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   router: { push: jest.fn() },

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   MemorySyncPushRequestSchema,
+  SYNC_PROTOCOL_VERSION,
   ServerVersionSchema,
+  resolveSyncProtocolVersion,
+  syncProtocolRefusalMessage,
   type MemoryWireDelta,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -12,6 +15,10 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
+import {
+  loadMemoryWritePolicies,
+  memoryWriteAdmission,
+} from '@/lib/services/managed-memory-context-service';
 import {
   activeMemoryPredicate,
   workspaceMemoryPredicate,
@@ -124,9 +131,7 @@ async function handlePost(request: NextRequest) {
     }
   }
 
-  if (!hasSyncProtocolV2(rawBody)) {
-    return syncProtocolUpgradeRequired();
-  }
+  assertReadableSyncProtocol(rawBody);
   const parsed = MemorySyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid memory sync payload', parsed.error);
@@ -140,10 +145,36 @@ async function handlePost(request: NextRequest) {
   });
   const refused = rejected.map(({ candidate, term }) => ({ id: candidate.id, term }));
 
+  // A push carrying new text is a memory write and passes the same gate the web
+  // surface does. A push that only deletes is how a client obeys a switch that
+  // was turned off, so it is never blocked here.
+  const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
+  const blocked: Array<{ id: string; reason: string }> = [];
+  const admitted = [];
+  for (const memory of allowed) {
+    if (memory.isDeleted === true) {
+      admitted.push(memory);
+      continue;
+    }
+    const decision = await memoryWriteAdmission(
+      db,
+      {
+        userId,
+        content: memory.content,
+        category: memory.category ?? null,
+        source: memory.source ?? 'web',
+        organizationId: organizationId ?? null,
+      },
+      { policies },
+    );
+    if (decision.eligible) admitted.push(memory);
+    else blocked.push({ id: memory.id, reason: decision.reason });
+  }
+
   const applied: Array<{ id: string; server_version: string }> = [];
   const conflicts: Array<{ id: string; current: MemoryDelta | null }> = [];
   try {
-    if (allowed.length > 0) {
+    if (admitted.length > 0) {
       const rows = await db.query<{
         kind: 'applied' | 'conflict';
         id: string;
@@ -208,7 +239,7 @@ async function handlePost(request: NextRequest) {
           union all
           select 'conflict'::text, id::text, null::text, current from conflict_rows
         `,
-        [userId, JSON.stringify(allowed), organizationId ?? null],
+        [userId, JSON.stringify(admitted), organizationId ?? null],
       );
       for (const row of rows) {
         if (row.kind === 'applied' && row.server_version !== null) {
@@ -225,7 +256,13 @@ async function handlePost(request: NextRequest) {
       conflict.current ? [conflict.current] : [],
     );
     const cursor = maxServerVersion('0', applied, conflictRows);
-    return NextResponse.json({ protocolVersion: 2, applied, conflicts, rejected: refused, cursor });
+    return NextResponse.json({
+      protocolVersion: SYNC_PROTOCOL_VERSION,
+      applied,
+      conflicts,
+      rejected: refused,
+      cursor,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Memory sync push failed');
     throw createError.internal('Failed to push memory changes');
@@ -238,26 +275,18 @@ function hasMemoriesKey(value: unknown): boolean {
   );
 }
 
-function hasSyncProtocolV2(value: unknown): boolean {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    (value as Record<string, unknown>)['protocolVersion'] === 2,
-  );
-}
-
-function syncProtocolUpgradeRequired(): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: 'SYNC_PROTOCOL_UPGRADE_REQUIRED',
-        message: 'Upgrade this client before pushing Managed Cloud memory changes.',
-      },
-      requiredProtocolVersion: 2,
-    },
-    { status: 409 },
-  );
+/**
+ * The floor the shared contract defines, applied before the batch is parsed so
+ * a caller below it reads a sentence naming the remedy rather than a list of
+ * fields it has never heard of.
+ */
+function assertReadableSyncProtocol(value: unknown): void {
+  const body = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const decision = resolveSyncProtocolVersion((body as Record<string, unknown>)['protocolVersion']);
+  if (decision.compatibility === 'readable') return;
+  const message = syncProtocolRefusalMessage(decision, 'memory sync');
+  if (decision.compatibility === 'too_new') throw createError.validation(message);
+  throw createError.clientUpdateRequired(message);
 }
 
 /**

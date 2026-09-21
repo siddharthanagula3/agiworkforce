@@ -18,6 +18,10 @@ export const CLOUD_WORK_MODES = ['chat', 'agiwork'] as const;
 
 export type CloudWorkMode = (typeof CLOUD_WORK_MODES)[number];
 
+export function isCloudWorkMode(value: unknown): value is CloudWorkMode {
+  return typeof value === 'string' && (CLOUD_WORK_MODES as readonly string[]).includes(value);
+}
+
 export type RuntimeActivityType = 'tool_call' | 'agent_action' | 'system_event' | 'mcp_request';
 
 export type RuntimeActivityStatus = WorkLifecycleStatus;

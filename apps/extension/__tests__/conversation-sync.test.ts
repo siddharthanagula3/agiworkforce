@@ -10,6 +10,7 @@
  *   • an owner change mid-flight fails before any payload leaves the browser;
  *   • `flushConversation` never rejects, on any branch.
  */
+import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 
@@ -168,7 +169,7 @@ describe('conversation cloud sync', () => {
     expect(conversationPosts()).toHaveLength(1);
     const created = conversationPosts()[0]!;
     expect(created.body['id']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-/i);
-    expect(created.headers['X-AGI-Surface']).toBe('chrome');
+    expect(created.headers[SURFACE_REQUEST_HEADER]).toBe('chrome');
     expect(created.headers['Authorization']).toBe('Bearer test-bearer');
 
     const posts = messagePosts();

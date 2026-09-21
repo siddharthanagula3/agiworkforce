@@ -1,11 +1,20 @@
-import { useWindowDimensions } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Dimensions, useWindowDimensions, type ScaledSize } from 'react-native';
 import { getResponsiveLayout, type ResponsiveLayout } from './useResponsiveLayout';
 
 export const TABLET_MIN_WIDTH = 768;
 export const REGULAR_MIN_WIDTH = 1024;
 
+// A window one point narrower than the screen is rounding, not multitasking.
+const SPLIT_VIEW_MIN_INSET = 8;
+
 export type ShellOrientation = 'portrait' | 'landscape';
 export type ShellSizeClass = 'compact' | 'tablet' | 'regular';
+
+export interface ShellMetrics {
+  width: number;
+  height: number;
+}
 
 export interface TabletLayout extends ResponsiveLayout {
   viewportHeight: number;
@@ -15,33 +24,46 @@ export interface TabletLayout extends ResponsiveLayout {
   isSplitView: boolean;
 }
 
-export function getTabletLayout(viewportWidth: number, viewportHeight: number): TabletLayout {
-  const base = getResponsiveLayout(viewportWidth);
-  const safeViewportHeight = Math.max(0, viewportHeight);
+// Split View, Slide Over, Stage Manager and Android split screen all hand the
+// app a phone-sized window on a tablet-sized screen, so only the pair tells.
+export function getTabletLayout(window: ShellMetrics, screen: ShellMetrics = window): TabletLayout {
+  const base = getResponsiveLayout(window.width);
+  const viewportHeight = Math.max(0, window.height);
+  const screenWidth = Math.max(0, screen.width);
+  const screenHeight = Math.max(0, screen.height);
   const orientation: ShellOrientation =
-    base.viewportWidth >= safeViewportHeight ? 'landscape' : 'portrait';
+    base.viewportWidth >= viewportHeight ? 'landscape' : 'portrait';
   const sizeClass: ShellSizeClass =
     base.viewportWidth >= REGULAR_MIN_WIDTH
       ? 'regular'
       : base.viewportWidth >= TABLET_MIN_WIDTH
         ? 'tablet'
         : 'compact';
-  // A tablet in split view reports a phone-sized width on a tablet-sized
-  // screen, so the long edge is what says the device is a tablet at all.
-  const longestEdge = Math.max(base.viewportWidth, safeViewportHeight);
-  const isSplitView = sizeClass !== 'regular' && longestEdge >= REGULAR_MIN_WIDTH;
+  const isTablet = Math.max(screenWidth, screenHeight) >= REGULAR_MIN_WIDTH;
 
   return {
     ...base,
-    viewportHeight: safeViewportHeight,
+    viewportHeight,
     orientation,
     sizeClass,
-    isTablet: longestEdge >= REGULAR_MIN_WIDTH,
-    isSplitView,
+    isTablet,
+    isSplitView: isTablet && base.viewportWidth <= screenWidth - SPLIT_VIEW_MIN_INSET,
   };
 }
 
+function useScreenDimensions(): ScaledSize {
+  const [screen, setScreen] = useState(() => Dimensions.get('screen'));
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ screen: next }) => {
+      setScreen(next);
+    });
+    return () => subscription.remove();
+  }, []);
+  return screen;
+}
+
 export function useTabletLayout(): TabletLayout {
-  const { width, height } = useWindowDimensions();
-  return getTabletLayout(width, height);
+  const window = useWindowDimensions();
+  const screen = useScreenDimensions();
+  return getTabletLayout(window, screen);
 }

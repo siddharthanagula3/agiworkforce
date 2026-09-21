@@ -38,7 +38,17 @@ function bind({
       }
       return [{ retention_days: 90, retention_enforced: enforced }];
     }
-    if (/from public\.legal_holds/i.test(text)) {
+    if (/^\s*select count/i.test(text) && /from public\.legal_holds/i.test(text)) {
+      if (holdsThrow) throw new Error('connection reset');
+      return [
+        {
+          count: /h\.scope = \$3/.test(text)
+            ? holds.filter((entry) => entry['scope'] === 'organization').length
+            : holds.length,
+        },
+      ];
+    }
+    if (/custodian_user_ids/.test(text)) {
       if (holdsThrow) throw new Error('connection reset');
       return holds;
     }
@@ -141,7 +151,9 @@ describe('GET /api/cron/enforce-workspace-retention', () => {
         if (seen === 1) throw new Error('boom');
         return [{ retention_days: 90, retention_enforced: true }];
       }
-      if (/from public\.legal_holds/i.test(text)) return [];
+      if (/^\s*select count/i.test(text) && /from public\.legal_holds/i.test(text)) {
+        return [{ count: 0 }];
+      }
       if (/delete from public\.web_conversations/i.test(text)) return [{ id: 'c1' }];
       if (/count\(\*\)/i.test(text)) return [{ count: 0 }];
       return [];

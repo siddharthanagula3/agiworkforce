@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NextRequest } from 'next/server';
 
+import { PRODUCTION_DEPENDENCIES } from '@/lib/config/dependency-readiness';
+import { recordConfigurationState } from '@/lib/observability/metrics';
+
 const stripeMocks = vi.hoisted(() => ({
   retrievePrice: vi.fn(),
 }));
@@ -38,7 +41,8 @@ vi.mock('stripe', () => ({
 }));
 
 const mockNeonQuery = vi.fn().mockResolvedValue([{ '?column?': 1 }]);
-vi.mock('@agiworkforce/types', () => ({
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
   getDefaultModelFor: () => 'model-under-test',
   getModelMetadataById: () => ({ id: 'model-under-test' }),
   isModelLive: () => true,
@@ -231,6 +235,30 @@ describe('Health Check API', () => {
       expect(JSON.stringify(data)).not.toContain('unreadyDependencies');
       expect(JSON.stringify(data)).not.toContain('E2B_API_KEY');
       expect(JSON.stringify(data)).not.toContain('code_execution');
+    });
+
+    it('accounts for every registered dependency without naming one', async () => {
+      const response = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+      const data = await response.json();
+
+      const { total, ok, failing, unconfigured, unobserved } = data.dependencyCounts;
+      expect(total).toBe(PRODUCTION_DEPENDENCIES.length);
+      expect(ok + failing + unconfigured + unobserved).toBe(total);
+      const checkNames = Object.keys(data.checks);
+      for (const dependency of PRODUCTION_DEPENDENCIES) {
+        if (checkNames.includes(dependency.id)) continue;
+        expect(JSON.stringify(data)).not.toContain(dependency.id);
+      }
+    });
+
+    it('counts boot-time configuration findings without naming the component', async () => {
+      recordConfigurationState({ component: 'environment-production-values', state: 'invalid' });
+
+      const response = await GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+      const data = await response.json();
+
+      expect(data.configurationFindings).toBeGreaterThan(0);
+      expect(JSON.stringify(data)).not.toContain('environment-production-values');
     });
 
     it('should handle DB connection failure gracefully', async () => {

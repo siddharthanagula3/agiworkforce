@@ -111,6 +111,37 @@ describe('GET /api/cron/enforce-billing-collection', () => {
   });
 });
 
+describe('enforceBillingCollection · per-run bound', () => {
+  it('asks for a bounded, ordered page rather than every contract needing review', async () => {
+    const { db, calls } = makeDb([]);
+    await enforceBillingCollection(db, NOW);
+
+    const load = calls.find((call) =>
+      call.sql.includes('from public.organization_billing_contracts c'),
+    );
+    expect(load).toBeDefined();
+    expect(load?.sql).toMatch(/limit \$2/u);
+    expect(load?.sql).toMatch(/order by c\.oldest_open_invoice_due_at asc nulls last/u);
+
+    const ceiling = load?.params[1];
+    expect(typeof ceiling).toBe('number');
+    expect(ceiling as number).toBeGreaterThan(0);
+  });
+
+  it('works the most overdue contracts first so a run that stops leaves the rest for the next', async () => {
+    const { db, calls } = makeDb([]);
+    await enforceBillingCollection(db, NOW);
+
+    const load = calls.find((call) =>
+      call.sql.includes('from public.organization_billing_contracts c'),
+    );
+    const orderAt = load?.sql.indexOf('order by') ?? -1;
+    const limitAt = load?.sql.indexOf('limit $2') ?? -1;
+    expect(orderAt).toBeGreaterThan(-1);
+    expect(limitAt).toBeGreaterThan(orderAt);
+  });
+});
+
 describe('enforceBillingCollection · stage transitions', () => {
   it('persists a stage change with collection_stage_changed_at and records an audit event', async () => {
     const { db, calls } = makeDb([contractRow({ oldest_open_invoice_due_at: daysAgoIso(10) })]);

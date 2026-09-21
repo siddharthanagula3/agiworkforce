@@ -1,7 +1,12 @@
 import 'server-only';
 import { randomBytes } from 'crypto';
 
-import { loadKeyRing, openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
+import { loadKeyRing, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
+import {
+  CONNECTOR_SECRET_PURPOSES,
+  openConnectorSecret,
+  type ConnectorSecretPurpose,
+} from '@/lib/crypto/connector-secret-reseal';
 
 export const CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY_ENV = 'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY';
 
@@ -29,15 +34,7 @@ export class CustomConnectorCredentialError extends Error {
   }
 }
 
-export const CONNECTOR_SECRET_PURPOSES = [
-  'custom-connector-auth-header',
-  'oauth-client-secret',
-  'oauth-code-verifier',
-  'oauth-access-token',
-  'oauth-refresh-token',
-] as const;
-
-export type ConnectorSecretPurpose = (typeof CONNECTOR_SECRET_PURPOSES)[number];
+export { CONNECTOR_SECRET_PURPOSES, type ConnectorSecretPurpose };
 
 export const CONNECTOR_TOKEN_STORAGE_UNAVAILABLE =
   'Connector authorization is unavailable because secure token storage is not configured. Contact your administrator.';
@@ -80,7 +77,7 @@ export function decryptConnectorToken(
   encryptedValue: string,
   purpose: ConnectorSecretPurpose,
 ): string {
-  return openEnvelope(getKeyRing(), encryptedValue, 'hex-triple', purpose).plaintext;
+  return openConnectorSecret(getKeyRing(), encryptedValue, purpose).plaintext;
 }
 
 export function bearerCredential(token: string): CustomConnectorCredential {

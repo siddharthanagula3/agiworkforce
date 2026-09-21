@@ -1,5 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const egress = vi.hoisted(() => ({ fetch: vi.fn(), privateHosts: new Set<string>() }));
+
+// The real resolver would ask DNS about a test hostname. The hosts named here
+// stand for the ones whose addresses come back inside the deployment network.
+vi.mock('@/lib/egress-policy', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/egress-policy')>('@/lib/egress-policy');
+  return {
+    ...actual,
+    pinnedPublicFetch: (...args: unknown[]) => egress.fetch(...args),
+    assertResolvedPublicHostname: async (url: string) => {
+      if (egress.privateHosts.has(new URL(url).host)) throw new actual.EgressPolicyError(url);
+    },
+  };
+});
+
 const putObject = vi.fn();
 const putPrivateObject = vi.fn();
 const getObject = vi.fn();
@@ -56,6 +71,7 @@ vi.mock('node:fs', () => ({
 
 import {
   bytesFromBase64,
+  bytesFromUrl,
   storeMedia,
   storeMediaFile,
   isGeneratedMediaStorageConfigured,
@@ -78,6 +94,66 @@ describe('bytesFromBase64', () => {
     const b64 = Buffer.from('png-bytes').toString('base64');
     const buf = bytesFromBase64(`data:image/png;base64,${b64}`);
     expect(buf.toString('utf8')).toBe('png-bytes');
+  });
+});
+
+describe('bytesFromUrl', () => {
+  beforeEach(() => {
+    egress.fetch.mockReset();
+    egress.privateHosts.clear();
+  });
+
+  function response(init: { status: number; headers?: Record<string, string>; body?: string }) {
+    return new Response(init.body ?? 'bytes', {
+      status: init.status,
+      headers: new Headers(init.headers ?? { 'content-type': 'image/png' }),
+    });
+  }
+
+  it('refuses a URL whose host resolves inside the deployment network', async () => {
+    egress.privateHosts.add('metadata.internal.test');
+
+    await expect(bytesFromUrl('https://metadata.internal.test/latest')).rejects.toThrow(
+      /blocked_host/,
+    );
+    expect(egress.fetch).not.toHaveBeenCalled();
+  });
+
+  it('follows a provider redirect onto a signed CDN host and returns those bytes', async () => {
+    egress.fetch
+      .mockResolvedValueOnce(
+        response({ status: 302, headers: { location: 'https://cdn.example.test/signed/a.png' } }),
+      )
+      .mockResolvedValueOnce(
+        response({ status: 200, headers: { 'content-type': 'image/png' }, body: 'png' }),
+      );
+
+    const result = await bytesFromUrl('https://provider.example.test/out/a');
+
+    expect(result.contentType).toBe('image/png');
+    expect(result.data.toString('utf8')).toBe('png');
+    expect(egress.fetch.mock.calls.map((call) => call[0])).toEqual([
+      'https://provider.example.test/out/a',
+      'https://cdn.example.test/signed/a.png',
+    ]);
+  });
+
+  it('stops when a redirect leads to a host inside the deployment network', async () => {
+    egress.privateHosts.add('metadata.internal.test');
+    egress.fetch.mockResolvedValueOnce(
+      response({ status: 302, headers: { location: 'https://metadata.internal.test/latest' } }),
+    );
+
+    await expect(bytesFromUrl('https://provider.example.test/out/a')).rejects.toThrow(
+      /blocked_host/,
+    );
+    expect(egress.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failing status rather than returning an empty body', async () => {
+    egress.fetch.mockResolvedValue(response({ status: 404 }));
+
+    await expect(bytesFromUrl('https://provider.example.test/out/a')).rejects.toThrow(/HTTP 404/);
   });
 });
 

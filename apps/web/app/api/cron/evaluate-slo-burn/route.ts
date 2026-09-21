@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { notifyIncident } from '@/lib/server/incident/dispatch';
 import type { AlertSeverity } from '@/lib/server/incident/pager';
+import { describeAnomaly, evaluateAnomalies, type AnomalyAlert } from '@/lib/server/slo/anomaly';
 import { evaluateBurnRates, type BurnRateAlert } from '@/lib/server/slo/attainment';
 
 export const runtime = 'nodejs';
@@ -50,6 +51,81 @@ function buildPage(
   };
 }
 
+function buildAnomalyPage(
+  severity: AlertSeverity,
+  anomalies: readonly AnomalyAlert[],
+): { subject: string; text: string } {
+  const environment = environmentLabel();
+  const series = anomalies.map((anomaly) => anomaly.id).join(', ');
+  return {
+    subject: `[AGI ${severity === 'critical' ? 'CRITICAL' : 'WARNING'}] ${environment} cost or latency left its baseline · ${series}`,
+    text: [
+      `Environment: ${environment}`,
+      '',
+      'SERIES OFF BASELINE',
+      ...anomalies.map(describeAnomaly),
+      '',
+      ...anomalies.map((anomaly) => `${anomaly.id}: ${anomaly.statement}`),
+      '',
+      'The baselines and thresholds are in apps/web/lib/server/slo/anomaly.ts.',
+      'Follow docs/runbooks/incident-response.md.',
+    ].join('\n'),
+  };
+}
+
+/**
+ * A deviation from the recent normal never reaches an error budget: every
+ * request succeeded, so no objective burns. It is reported as its own incident
+ * rather than folded into the burn page, because what an operator does about
+ * doubled spend is not what they do about a failing objective.
+ */
+async function reportAnomalies(): Promise<{
+  detected: number;
+  severity?: AlertSeverity;
+  paged?: string;
+  series?: string[];
+}> {
+  let anomalies: AnomalyAlert[];
+  try {
+    anomalies = await evaluateAnomalies();
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Cost and latency anomaly evaluation failed',
+    );
+    return { detected: 0 };
+  }
+  if (anomalies.length === 0) return { detected: 0 };
+
+  const severity: AlertSeverity = anomalies.some((anomaly) => anomaly.severity === 'critical')
+    ? 'critical'
+    : 'warning';
+  const { subject, text } = buildAnomalyPage(severity, anomalies);
+  const dispatched = await notifyIncident({
+    key: `slo-anomaly:${severity}`,
+    severity,
+    subject,
+    text,
+    source: 'slo-anomaly',
+  });
+  logger.error(
+    {
+      severity,
+      series: anomalies.map((anomaly) => anomaly.id),
+      owners: anomalies.map((anomaly) => anomaly.owner?.runbook ?? null),
+      paged: dispatched.paged,
+      delivery: dispatched.delivery,
+    },
+    'Cost or latency anomaly alert dispatched',
+  );
+  return {
+    detected: anomalies.length,
+    severity,
+    paged: dispatched.paged,
+    series: anomalies.map((anomaly) => anomaly.id),
+  };
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized SLO burn-rate cron request');
@@ -67,8 +143,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
+  const anomalies = await reportAnomalies();
+
   if (alerts.length === 0) {
-    return NextResponse.json({ burning: 0, paged: 'not_needed' });
+    return NextResponse.json({ burning: 0, paged: 'not_needed', anomalies });
   }
 
   const severity = worstSeverity(alerts);
@@ -96,6 +174,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json(
     {
       burning: alerts.length,
+      anomalies,
       severity,
       paged: dispatched.paged,
       delivery: dispatched.delivery,

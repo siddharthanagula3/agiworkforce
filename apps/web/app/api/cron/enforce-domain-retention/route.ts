@@ -13,6 +13,7 @@ import {
 } from '@/lib/services/domain-retention-service';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const MAX_POLICIES_PER_RUN = 100;
 

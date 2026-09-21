@@ -1,5 +1,5 @@
 import { session, type Session } from 'electron';
-import { resolveApiBase } from './accountBridge';
+import { resolveApiBase, shellRequestHeaders } from './accountBridge';
 import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION, RENDERER_MODE } from './config';
 import type { ShellIdentity } from './runtime/developerAccountSync';
 import { getSecret } from './secretStore';
@@ -43,6 +43,12 @@ function readError(body: unknown, fallback: string): string {
 }
 
 let reportedIdentity: ShellIdentity | null = null;
+let identityListeners: ((identity: ShellIdentity) => void)[] = [];
+
+/** Told whenever the renderer names the account, including a sign-out. */
+export function onShellIdentityReported(listener: (identity: ShellIdentity) => void): void {
+  identityListeners = [...identityListeners, listener];
+}
 
 /**
  * The renderer is the authority on its own account, and it says so the moment
@@ -52,6 +58,7 @@ let reportedIdentity: ShellIdentity | null = null;
  */
 export function reportShellIdentity(identity: ShellIdentity): void {
   reportedIdentity = identity;
+  for (const listener of identityListeners) listener(identity);
 }
 
 /**
@@ -71,7 +78,7 @@ export async function readShellIdentity(): Promise<ShellIdentity | null> {
   try {
     response = await shellSession().fetch(`${endpoint.base}/api/me`, {
       method: 'GET',
-      headers: { Accept: 'application/json', 'X-AGI-Surface': 'desktop', ...bearer(endpoint) },
+      headers: { Accept: 'application/json', ...shellRequestHeaders(), ...bearer(endpoint) },
       cache: 'no-store',
       signal: AbortSignal.timeout(IDENTITY_TIMEOUT_MS),
     });
@@ -106,7 +113,7 @@ export async function approveDeviceCode(userCode: string): Promise<void> {
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      'X-AGI-Surface': 'desktop',
+      ...shellRequestHeaders(),
       ...bearer(endpoint),
       ...(await csrfToken(endpoint)),
     },

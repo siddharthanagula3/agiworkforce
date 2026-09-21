@@ -1,0 +1,760 @@
+{
+  "roles": {
+    "resourceType": {
+      "column": "resource_type",
+      "why": "what kind of object the row is, for a table that stores more than one kind"
+    },
+    "schemaVersion": {
+      "carriedBy": "packages/contracts/types/src/resource-metadata-contract.ts",
+      "why": "the shape a stored row was written against, a property of the canonical schema rather than of each row"
+    },
+    "ownerAccount": {
+      "column": "user_id",
+      "why": "the account the row belongs to, the value every isolation policy compares against"
+    },
+    "organization": {
+      "column": "organization_id",
+      "why": "the organization the row is scoped to, null for a personal row"
+    },
+    "workspace": {
+      "column": "workspace_id",
+      "why": "the workspace the row is filed under, for a tenant that partitions its work"
+    },
+    "project": {
+      "column": "project_id",
+      "why": "the project the row is filed under, null when it is loose"
+    },
+    "createdBy": {
+      "column": "created_by",
+      "why": "the principal that created the row, which is not always its owner"
+    },
+    "updatedBy": {
+      "column": "updated_by",
+      "why": "the principal that last wrote the row"
+    },
+    "createdAt": {
+      "column": "created_at",
+      "why": "when the row came into existence"
+    },
+    "updatedAt": {
+      "column": "updated_at",
+      "why": "when the row was last written"
+    },
+    "deletedAt": {
+      "column": "deleted_at",
+      "why": "when the row was soft deleted, null while it is alive"
+    },
+    "archivedAt": {
+      "column": "archived_at",
+      "why": "when the row was archived, which hides it without deleting it"
+    },
+    "version": {
+      "column": "server_version",
+      "why": "the optimistic-concurrency token an If-Match precondition quotes"
+    },
+    "visibility": {
+      "column": "visibility",
+      "why": "who may read the row beyond its owner"
+    },
+    "retentionClass": {
+      "column": "retention_days",
+      "why": "how long the row is kept before a retention sweep removes it"
+    },
+    "source": {
+      "column": "source",
+      "why": "what produced the row, for a table fed by more than one path"
+    },
+    "originSurface": {
+      "column": "origin_surface",
+      "why": "which product surface produced the row"
+    },
+    "parent": {
+      "declaredPerTable": true,
+      "why": "the owning row, for a child object whose ownership is its parent's"
+    },
+    "operationId": {
+      "column": "id",
+      "why": "the handle a caller quotes to ask about this run and nothing else"
+    },
+    "startedAt": {
+      "column": "started_at",
+      "why": "when the work actually began, which is not when the row was created"
+    },
+    "progress": {
+      "column": "progress",
+      "why": "how far along it is, for work a reader waits on"
+    },
+    "stage": {
+      "column": "status",
+      "why": "which step it is in, in the shared lifecycle vocabulary"
+    },
+    "cancellation": {
+      "column": "cancel_requested_at",
+      "why": "that a stop was asked for, so a worker can honour it and a reader can be told"
+    },
+    "retry": {
+      "column": "attempts",
+      "why": "how many times it has been tried, so a replay is bounded"
+    },
+    "result": {
+      "column": "result",
+      "why": "what it produced, readable after the caller has gone"
+    },
+    "error": {
+      "column": "last_error",
+      "why": "why it failed, kept apart from the result"
+    },
+    "requestId": {
+      "column": "idempotency_key",
+      "why": "the reference a reader quotes to support"
+    },
+    "cost": {
+      "column": "usage",
+      "why": "what it spent, so a bill can be explained"
+    },
+    "completedAt": {
+      "column": "completed_at",
+      "why": "when it ended, which is what a duration is measured against"
+    }
+  },
+  "tables": {
+    "account_compromise_responses": {
+      "createdAt": "opened_at",
+      "updatedAt": "resolved_at"
+    },
+    "admin_request_idempotency": {
+      "updatedAt": "completed_at"
+    },
+    "authentication_attempts": {
+      "createdAt": "occurred_at"
+    },
+    "beta_redemptions": {
+      "createdAt": "redeemed_at"
+    },
+    "cloud_code_agent_approvals": {
+      "updatedAt": "decided_at"
+    },
+    "cloud_code_agent_steps": {
+      "createdAt": "started_at"
+    },
+    "cloud_code_terminal_entries": {
+      "createdAt": "started_at"
+    },
+    "cloud_managed_waitlist": {
+      "createdAt": "joined_at"
+    },
+    "connector_call_events": {
+      "createdAt": "occurred_at"
+    },
+    "connector_oauth_authorizations": {
+      "updatedAt": "consumed_at"
+    },
+    "consent_records": {
+      "createdAt": "recorded_at"
+    },
+    "conversation_branch_messages": {
+      "parent": {
+        "column": "branch_id",
+        "table": "conversation_branches"
+      }
+    },
+    "conversation_tags": {
+      "createdAt": "classified_at"
+    },
+    "ediscovery_exports": {
+      "createdAt": "started_at"
+    },
+    "erasure_tombstones": {
+      "createdAt": "erased_at"
+    },
+    "event_trigger_events": {
+      "createdAt": "received_at"
+    },
+    "free_daily_usage_reservations": {
+      "updatedAt": "settled_at"
+    },
+    "github_pr_review_attempts": {
+      "createdAt": "attempted_at",
+      "updatedAt": "completed_at"
+    },
+    "github_webhook_deliveries": {
+      "createdAt": "received_at"
+    },
+    "identity_risk_observations": {
+      "createdAt": "observed_at"
+    },
+    "mcp_discovery_cache": {
+      "createdAt": "updated_at"
+    },
+    "messaging_connections": {
+      "createdAt": "connected_at"
+    },
+    "mobile_iap_notification_receipts": {
+      "createdAt": "received_at",
+      "updatedAt": "processed_at"
+    },
+    "notebook_runs": {
+      "createdAt": "started_at"
+    },
+    "notifications": {
+      "updatedAt": "read_at"
+    },
+    "object_backup_replicas": {
+      "createdAt": "replicated_at"
+    },
+    "organization_admin_delegations": {
+      "updatedAt": "revoked_at"
+    },
+    "organization_commercial_agreements": {
+      "updatedAt": "superseded_at"
+    },
+    "organization_key_rewrap_runs": {
+      "createdAt": "started_at"
+    },
+    "organization_members": {
+      "createdAt": "joined_at"
+    },
+    "organization_policy_revisions": {
+      "createdAt": "changed_at"
+    },
+    "organization_service_principals": {
+      "updatedAt": "disabled_at"
+    },
+    "plugin_installations": {
+      "createdAt": "installed_at"
+    },
+    "plugin_marketplace_installations": {
+      "createdAt": "installed_at"
+    },
+    "plugin_package_scans": {
+      "createdAt": "scanned_at"
+    },
+    "processed_stripe_events": {
+      "createdAt": "processed_at"
+    },
+    "product_metric_days": {
+      "createdAt": "computed_at"
+    },
+    "project_knowledge_files": {
+      "parent": {
+        "column": "project_id",
+        "table": "user_projects"
+      }
+    },
+    "provider_cost_reconciliation_days": {
+      "createdAt": "fetched_at"
+    },
+    "referrals": {
+      "ownerAccount": "referrer_id"
+    },
+    "release_downloads": {
+      "createdAt": "downloaded_at"
+    },
+    "release_events": {
+      "createdAt": "recorded_at"
+    },
+    "revoked_jwts": {
+      "createdAt": "revoked_at"
+    },
+    "routing_decision_traces": {
+      "updatedAt": "completed_at"
+    },
+    "scheduled_task_runs": {
+      "createdAt": "started_at",
+      "updatedAt": "completed_at",
+      "parent": {
+        "column": "task_id",
+        "table": "scheduled_tasks"
+      }
+    },
+    "shared_sessions": {
+      "ownerAccount": "owner_id"
+    },
+    "study_sessions": {
+      "createdAt": "started_at",
+      "updatedAt": "ended_at"
+    },
+    "support_access_events": {
+      "createdAt": "occurred_at"
+    },
+    "support_action_proposals": {
+      "updatedAt": "consumed_at"
+    },
+    "support_handoff_sessions": {
+      "ownerAccount": "owner_user_id"
+    },
+    "team_members": {
+      "createdAt": "joined_at"
+    },
+    "user_connectors": {
+      "createdAt": "connected_at"
+    },
+    "voice_sessions": {
+      "createdAt": "started_at",
+      "updatedAt": "last_seen_at"
+    },
+    "web_artifact_versions": {
+      "parent": {
+        "column": "artifact_id",
+        "table": "web_artifacts"
+      }
+    },
+    "web_messages": {
+      "parent": {
+        "column": "conversation_id",
+        "table": "web_conversations"
+      }
+    },
+    "website_auto_economy_trial_usage": {
+      "createdAt": "first_prompt_at",
+      "updatedAt": "last_prompt_at"
+    },
+    "published_artifacts": {
+      "version": "version"
+    }
+  },
+  "gaps": [
+    {
+      "table": "shared_conversations",
+      "role": "visibility",
+      "standIn": "expires_at",
+      "why": "the share row records only when the link dies, never who the link was meant for.",
+      "fix": "add visibility alongside the token and have the share route read it, as published_artifacts does."
+    }
+  ],
+  "shareTokenColumn": "token",
+  "undeclaredDispositions": [
+    {
+      "child": "cloud_agent_approval_checkpoints",
+      "parent": "cloud_agent_runs",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "cloud_agent_events",
+      "parent": "cloud_agent_runs",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "cloud_agent_execution_operations",
+      "parent": "cloud_agent_runs",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "cloud_code_agent_turns",
+      "parent": "cloud_code_sessions",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "cloud_code_terminal_entries",
+      "parent": "cloud_code_sessions",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "credit_transactions",
+      "parent": "token_credits",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "image_generation_jobs",
+      "parent": "managed_usage_requests",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "media_assets",
+      "parent": "organizations",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "media_assets",
+      "parent": "web_conversations",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "organization_group_managers",
+      "parent": "organization_members",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "organization_member_roles",
+      "parent": "organization_members",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "organization_project_access",
+      "parent": "organization_members",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "organization_project_access",
+      "parent": "organization_shared_projects",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "project_knowledge_files",
+      "parent": "project_knowledge_files",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "release_downloads",
+      "parent": "releases",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "subscriptions",
+      "parent": "profiles",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "support_handoff_sessions",
+      "parent": "support_agent_presence",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "token_credits",
+      "parent": "subscriptions",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "video_generation_jobs",
+      "parent": "managed_usage_requests",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    },
+    {
+      "child": "web_messages",
+      "parent": "web_messages",
+      "why": "predates the convention; the implicit no action blocks the parent delete, which is safe but undeclared.",
+      "answer": "block_deletion"
+    }
+  ],
+  "operations": {
+    "agent_approval_requests": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": {
+        "none": "the outcome is the row's own columns rather than a separate result document"
+      },
+      "error": "denial_reason",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "resolved_at"
+    },
+    "agent_tool_executions": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "success",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": "result",
+      "error": "error_message",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": {
+        "none": "the row is written once, when the work has already ended"
+      }
+    },
+    "background_jobs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": "cancel_requested_at",
+      "retry": "attempts",
+      "result": "result",
+      "error": "last_error",
+      "requestId": "idempotency_key",
+      "cost": "usage",
+      "completedAt": "completed_at"
+    },
+    "cloud_agent_execution_operations": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": "attempt",
+      "result": "result",
+      "error": "error",
+      "requestId": "operation_key",
+      "cost": "usage",
+      "completedAt": "completed_at"
+    },
+    "cloud_agent_runs": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "state",
+      "cancellation": "cancellation_requested_at",
+      "retry": {
+        "none": "the run is not retried; its execution operations carry the attempt and the replay bound"
+      },
+      "result": {
+        "none": "a run produces messages and events, not one result document; settled_usage is what the row closes with"
+      },
+      "error": {
+        "none": "failures are recorded as events beside the row rather than on it"
+      },
+      "requestId": "request_id",
+      "cost": "settled_usage",
+      "completedAt": "completed_at"
+    },
+    "credit_settlement_jobs": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": "attempt_count",
+      "result": "result",
+      "error": "last_error",
+      "requestId": "idempotency_key",
+      "cost": "amount_microusd",
+      "completedAt": "completed_at"
+    },
+    "data_rights_requests": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": "resolution_note",
+      "error": {
+        "none": "failures are recorded as events beside the row rather than on it"
+      },
+      "requestId": "reference",
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "resolved_at"
+    },
+    "image_generation_jobs": {
+      "operationId": "id",
+      "startedAt": "attempt_started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": "cancel_requested_at",
+      "retry": "attempts",
+      "result": {
+        "none": "the image lands in the media store and the row carries its billing outcome"
+      },
+      "error": "public_error",
+      "requestId": "idempotency_key",
+      "cost": "actual_cost_microusd",
+      "completedAt": "terminal_at"
+    },
+    "managed_usage_requests": {
+      "operationId": "id",
+      "startedAt": "provider_started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "a lease is re-claimed rather than counted; the replay bound lives on the execution operation row"
+      },
+      "result": {
+        "none": "the answer is streamed to the caller; the row records what it cost and how it ended"
+      },
+      "error": "final_error_code",
+      "requestId": "idempotency_key",
+      "cost": "usage",
+      "completedAt": "finalized_at"
+    },
+    "notebook_runs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "ok",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": {
+        "none": "cell output is streamed to the notebook; the row records whether it ran and for how long"
+      },
+      "error": "error",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "finished_at"
+    },
+    "organization_key_rewrap_runs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": "scanned",
+      "stage": "state",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": {
+        "none": "one attempt only, so a failure is final and a fresh request is a new row"
+      },
+      "result": "resealed",
+      "error": "last_error",
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "completed_at"
+    },
+    "scheduled_task_runs": {
+      "operationId": "id",
+      "startedAt": "started_at",
+      "progress": {
+        "none": "the work is one step, so nothing sits between started and ended for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "nothing can stop it once it is claimed; a caller waits for the outcome it already paid for"
+      },
+      "retry": "attempt_count",
+      "result": "result",
+      "error": "error",
+      "requestId": "idempotency_key",
+      "cost": {
+        "none": "it spends nothing a bill is built from"
+      },
+      "completedAt": "completed_at"
+    },
+    "video_generation_jobs": {
+      "operationId": "id",
+      "startedAt": "provider_started_at",
+      "progress": "progress",
+      "stage": "status",
+      "cancellation": "cancel_requested_at",
+      "retry": "reconcile_failures",
+      "result": {
+        "none": "the outcome is the row's own columns rather than a separate result document"
+      },
+      "error": "public_error",
+      "requestId": "idempotency_key",
+      "cost": "actual_cost_cents",
+      "completedAt": "terminal_at"
+    }
+  },
+  "notOperations": [],
+  "concurrency": {
+    "projects": {
+      "table": "user_projects",
+      "why": "a project is edited from more than one device at once"
+    },
+    "project-instructions": {
+      "table": "user_projects",
+      "why": "the instructions live on the project row and two editors overwrite each other"
+    },
+    "artifacts": {
+      "table": "web_artifacts",
+      "why": "an artifact is edited while a run is still writing to it"
+    },
+    "documents": {
+      "table": "project_knowledge_files",
+      "why": "a knowledge file is replaced while another reader is citing it"
+    },
+    "policies": {
+      "table": "organization_admin_policies",
+      "why": "two administrators edit the same tenant policy"
+    },
+    "settings": {
+      "table": "user_settings",
+      "why": "settings are written from every surface the account signs in to"
+    },
+    "memory-summary": {
+      "table": "user_memories",
+      "why": "a summary is rewritten by a run while the reader is editing it"
+    },
+    "shared-resources": {
+      "table": "published_artifacts",
+      "why": "a published artifact is republished while someone holds the link"
+    },
+    "schedules": {
+      "table": "scheduled_tasks",
+      "why": "a schedule is edited while the dispatcher is reading it"
+    },
+    "agent-definitions": {
+      "table": "agent_tools",
+      "why": "an agent definition is edited while a run is loading it"
+    }
+  },
+  "childDispositionsNotUsed": {
+    "archive_child": "No parent archives its children. Archive is a per-resource flag a surface writes, and nothing reads a parent archive to decide a child is archived too.",
+    "ask_user": "No deletion offers the owner a choice about the children. Every parent delete either cascades or is blocked, and the confirmation names the consequence rather than asking for a disposition.",
+    "preserve_shared_derivative": "A published artifact cascades from the conversation it came from, so no derivative outlives its parent once the parent is really gone. Soft delete is what keeps the derivative reachable today.",
+    "preserve_external_source": "Nothing in the schema owns a row in somebody else external system. A connector holds a grant, and revoking it leaves the external document untouched because no row here points at it."
+  }
+}

@@ -47,7 +47,7 @@ import {
   relayDeveloperSessionEvent,
   stopRemoteControl,
 } from './remote/remoteControlService';
-import { approveDeviceCode, readShellIdentity } from './shellIdentity';
+import { approveDeviceCode, onShellIdentityReported, readShellIdentity } from './shellIdentity';
 import {
   handBackComputerUse,
   stopComputerUseHelper,
@@ -91,15 +91,18 @@ import { toggleGlobalDictation } from './voiceDictation';
 import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
 import { pageBackgroundColor, titleBarChrome } from './windowChrome';
 import {
-  readWindowState,
+  NEW_CHAT_ROUTE,
+  accountFingerprint,
+  adoptAccount,
   rememberFrame,
-  restoreFrame,
+  rememberRoute,
+  resolveWindowRestore,
   routeFromUrl,
   shouldFallBackToRoot,
-  writeWindowState,
   type ShellWindowState,
-  type WindowFrameState,
+  type WindowRestore,
 } from './windowState';
+import { patchShellWindowState, readShellWindowState } from './shellWindowStore';
 import { handleWorkspaceDrop } from './workspaceDrop';
 import {
   isTrustedCloudRendererOrigin,
@@ -616,16 +619,12 @@ function paintWindowsForTheme(): void {
   }
 }
 
-function windowStatePath(): string {
-  return path.join(app.getPath('userData'), 'window-state.json');
-}
-
 /**
  * Reads the shell's window state, seeding it once from the single frame the
  * preferences file used to hold so an upgrade does not lose the user's window.
  */
 function loadWindowState(): ShellWindowState {
-  const state = readWindowState(windowStatePath());
+  const state = readShellWindowState();
   if (Object.keys(state.frames).length > 0) return state;
   const legacy: WindowFrame | null = getPreferences().windowFrame;
   if (!legacy) return state;
@@ -639,14 +638,19 @@ function loadWindowState(): ShellWindowState {
   );
 }
 
-function patchWindowState(patch: Partial<ShellWindowState>): ShellWindowState {
-  const next = { ...readWindowState(windowStatePath()), ...patch };
-  writeWindowState(windowStatePath(), next);
-  return next;
+function windowRestore(): WindowRestore {
+  return resolveWindowRestore(loadWindowState(), screen.getAllDisplays());
 }
 
-function rememberedFrame(): WindowFrameState | null {
-  return restoreFrame(loadWindowState(), screen.getAllDisplays());
+let signedInAccount: string | null = null;
+
+/**
+ * The account switch that must not reopen the previous account's chat. The
+ * route is dropped the moment a different account names itself.
+ */
+function adoptReportedAccount(account: string | null): void {
+  signedInAccount = account;
+  patchShellWindowState(adoptAccount(readShellWindowState(), account));
 }
 
 /**
@@ -659,22 +663,16 @@ function rememberedFrame(): WindowFrameState | null {
  * writing that down is what makes a remembered window creep outwards a little
  * on every launch until it fills the screen.
  */
-function followWindowFrame(win: BrowserWindow, restored: WindowFrameState | null): () => void {
-  let bounds = restored
-    ? { x: restored.x, y: restored.y, width: restored.width, height: restored.height }
-    : win.getBounds();
-  let maximized = restored?.maximized ?? false;
+function followWindowFrame(win: BrowserWindow, restored: WindowRestore): () => void {
+  let bounds = { ...restored.bounds };
+  let maximized = restored.maximized;
   let pending: ReturnType<typeof setTimeout> | null = null;
 
   const persist = () => {
     const display = screen.getDisplayMatching(bounds);
-    const state = rememberFrame(
-      readWindowState(windowStatePath()),
-      display,
-      { ...bounds, maximized },
-      Date.now(),
+    patchShellWindowState(
+      rememberFrame(readShellWindowState(), display, { ...bounds, maximized }, Date.now()),
     );
-    writeWindowState(windowStatePath(), state);
     saveSettings({ windowFrame: { ...bounds, maximized } });
   };
 
@@ -715,12 +713,13 @@ function followWindowFrame(win: BrowserWindow, restored: WindowFrameState | null
 
 function createMainWindow(): void {
   const isRemote = RENDERER_MODE === 'remote';
-  const frame = rememberedFrame();
+  const restore = windowRestore();
 
   mainWindow = new BrowserWindow({
-    width: frame?.width ?? 1280,
-    height: frame?.height ?? 800,
-    ...(frame ? { x: frame.x, y: frame.y } : {}),
+    width: restore.bounds.width,
+    height: restore.bounds.height,
+    x: restore.bounds.x,
+    y: restore.bounds.y,
     minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
     show: false,
@@ -748,13 +747,13 @@ function createMainWindow(): void {
 
   applyRemoteWindowPolicy(mainWindow);
 
-  if (frame?.maximized) mainWindow.maximize();
+  if (restore.maximized) mainWindow.maximize();
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
   });
 
-  const flushWindowFrame = followWindowFrame(mainWindow, frame);
+  const flushWindowFrame = followWindowFrame(mainWindow, restore);
   mainWindow.on('close', flushWindowFrame);
 
   mainWindow.webContents.once('did-finish-load', () => {
@@ -779,8 +778,10 @@ function createMainWindow(): void {
 
   paintWindowsForTheme();
 
-  const rootUrl = isRemote ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
-  const restoredRoute = isRemote ? loadWindowState().lastRoute : null;
+  const rootUrl = isRemote
+    ? `${CLOUD_APP_ORIGIN}${NEW_CHAT_ROUTE}`
+    : `${RENDERER_ORIGIN}/index.html`;
+  const restoredRoute = isRemote ? restore.route : null;
   const entryUrl = restoredRoute ? `${CLOUD_APP_ORIGIN}${restoredRoute}` : rootUrl;
 
   if (isRemote) {
@@ -789,12 +790,14 @@ function createMainWindow(): void {
       // app opens on, so a not-found answer sends the window to the root. The
       // root answering the same way is not something a second load can fix.
       if (shouldFallBackToRoot(httpStatusCode) && url !== rootUrl) {
-        patchWindowState({ lastRoute: null });
+        patchShellWindowState(rememberRoute(readShellWindowState(), null, signedInAccount));
         void mainWindow?.loadURL(rootUrl);
         return;
       }
       const route = routeFromUrl(url, CLOUD_APP_ORIGIN);
-      if (route) patchWindowState({ lastRoute: route });
+      if (route) {
+        patchShellWindowState(rememberRoute(readShellWindowState(), route, signedInAccount));
+      }
     };
     mainWindow.webContents.on('did-navigate', followRoute);
     mainWindow.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
@@ -828,7 +831,9 @@ function showMainWindow(): void {
 function openNewChat(): void {
   showMainWindow();
   const target =
-    RENDERER_MODE === 'remote' ? `${CLOUD_APP_ORIGIN}/chat` : `${RENDERER_ORIGIN}/index.html`;
+    RENDERER_MODE === 'remote'
+      ? `${CLOUD_APP_ORIGIN}${NEW_CHAT_ROUTE}`
+      : `${RENDERER_ORIGIN}/index.html`;
   void mainWindow?.loadURL(target);
 }
 
@@ -1037,6 +1042,8 @@ if (!hasSingleInstanceLock) {
     // the other end of it. `isTrustedSender` is what decides who may call, not
     // which mode we booted in.
     registerIpcHandlers();
+    signedInAccount = readShellWindowState().lastAccount;
+    onShellIdentityReported((identity) => adoptReportedAccount(accountFingerprint(identity)));
     nativeTheme.themeSource = getPreferences().appearance;
     nativeTheme.on('updated', paintWindowsForTheme);
     if (RENDERER_MODE === 'bundled') {

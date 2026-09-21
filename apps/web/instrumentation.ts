@@ -70,6 +70,25 @@ export async function register() {
       }
       console.error('⚠️ Environment validation could not run:', error);
     }
+
+    // Outside the block above on purpose: a platform key that will not unseal
+    // must reach the caller, not the catch that excuses a validation misfire.
+    const { preloadPlatformKeys } = await import('./lib/crypto/platform-keys');
+    const { recordConfigurationState } = await import('./lib/observability/metrics');
+    try {
+      const posture = await preloadPlatformKeys(async () => {
+        const { buildCmekProviderRegistry } =
+          await import('./lib/server/organization-encryption-keys');
+        return buildCmekProviderRegistry();
+      });
+      recordConfigurationState({
+        component: 'platform-keys',
+        state: posture.ready ? 'ok' : 'unavailable',
+      });
+    } catch (error) {
+      recordConfigurationState({ component: 'platform-keys', state: 'invalid' });
+      throw error;
+    }
   }
 
   const runtime = process.env['NEXT_RUNTIME'];

@@ -9,6 +9,7 @@ vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: 
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import { policyAutoApprovesTool } from '../api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { classifyToolLoopInputs } from '../api/llm/v1/chat/completions/lib/tool-loop-routing';
+import { TOOL_CALL_GATE_RANKS } from '../api/llm/v1/chat/completions/lib/tool-call-gate';
 import { rateLimitConfigs } from '@/lib/rate-limit';
 
 const APP_DIR = path.resolve(__dirname, '..');
@@ -17,16 +18,20 @@ const read = (relative: string) => readFileSync(path.join(APP_DIR, relative), 'u
 const AUP = read('acceptable-use/page.tsx');
 const AGENT_PERMISSIONS = read('agent-permissions/page.tsx');
 const TOOL_LOOP = read('api/llm/v1/chat/completions/lib/tool-loop.ts');
+const GATE_MODULE = read('api/llm/v1/chat/completions/lib/tool-call-gate.ts');
 const APPROVE_ROUTE = read('api/llm/v1/chat/completions/approve/route.ts');
 
-function toolCallGateSource(): string {
-  const start = TOOL_LOOP.indexOf('function resolveToolCallGate');
-  expect(
-    start,
-    'tool-loop.ts must still resolve tool calls through resolveToolCallGate',
-  ).toBeGreaterThan(-1);
-  const end = TOOL_LOOP.indexOf('\n  }', TOOL_LOOP.indexOf('auto_approval_mode', start));
-  return TOOL_LOOP.slice(start, end);
+/** Where a reason first decides a call, in the gate's own precedence order. */
+function rankOf(reason: string): number {
+  const entry = TOOL_CALL_GATE_RANKS.find((rank) => rank.reason === reason);
+  expect(entry, `the gate no longer has a ${reason} rank`).toBeDefined();
+  return entry!.rank;
+}
+
+/** Everything the gate module pulls in, as written. */
+function gateModuleImports(): string {
+  const body = GATE_MODULE.slice(0, GATE_MODULE.indexOf('export const TOOL_CALL_GATE_REASONS'));
+  return [...body.matchAll(/^import[\s\S]*?from '[^']+';$/gmu)].map((match) => match[0]).join('\n');
 }
 
 /**
@@ -94,14 +99,10 @@ describe('Q-2 · "A Block is absolute" and does not hide the tool', () => {
     expect(AGENT_PERMISSIONS).toContain('it does not hide the tool from the');
   });
 
-  it('is the first branch of the gate, so nothing downstream can reverse it', () => {
-    const gate = toolCallGateSource();
-    const denyAt = gate.indexOf('blocked_by_user_permission');
-    const allowAt = gate.indexOf("'always_allow'");
-    const autoAt = gate.indexOf("'auto_approval_mode'");
-    expect(denyAt).toBeGreaterThan(-1);
-    expect(denyAt).toBeLessThan(allowAt);
-    expect(denyAt).toBeLessThan(autoAt);
+  it('is the first rank of the gate, so nothing downstream can reverse it', () => {
+    expect(rankOf('blocked_by_user_permission')).toBe(TOOL_CALL_GATE_RANKS[0]!.rank);
+    expect(rankOf('blocked_by_user_permission')).toBeLessThan(rankOf('always_allow'));
+    expect(rankOf('blocked_by_user_permission')).toBeLessThan(rankOf('auto_approval_mode'));
   });
 
   it('is re-checked when an approval is resumed, not only during the stream', () => {
@@ -110,7 +111,19 @@ describe('Q-2 · "A Block is absolute" and does not hide the tool', () => {
 
   it('leaves the blocked tool in the list handed to the model', () => {
     expect(TOOL_LOOP).toContain('const stepMcpTools = offeredMcpToolDefs().map(toOpenAiToolDef);');
-    expect(toolCallGateSource()).not.toContain('mcpTools');
+    // The gate decides one call at a time and can reach no catalog to filter.
+    const imports = gateModuleImports();
+    expect(imports.length).toBeGreaterThan(0);
+    for (const loader of [
+      'user-connector-tools',
+      'loadUserConnectorToolDefs',
+      'loadUserConnectorToolCatalog',
+      'loadMcpToolDefs',
+      'offeredMcpToolDefs',
+    ]) {
+      expect(imports, `the gate now reaches ${loader}`).not.toContain(loader);
+    }
+    expect(GATE_MODULE).not.toContain('mcpTools');
   });
 });
 
@@ -120,12 +133,8 @@ describe('Q-3 · a saved "ask" verdict outranks automatic mode', () => {
   });
 
   it('is decided before the approval mode is consulted', () => {
-    const gate = toolCallGateSource();
-    const savedAskAt = gate.indexOf("saved === 'ask'");
-    const modeAt = gate.indexOf("approvalMode === 'manual'");
-    expect(savedAskAt).toBeGreaterThan(-1);
-    expect(modeAt).toBeGreaterThan(-1);
-    expect(savedAskAt).toBeLessThan(modeAt);
+    expect(rankOf('user_requires_approval')).toBeLessThan(rankOf('account_default_read_only'));
+    expect(rankOf('user_requires_approval')).toBeLessThan(rankOf('manual_approval_mode'));
   });
 });
 

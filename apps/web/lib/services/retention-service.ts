@@ -4,57 +4,37 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { retentionEnforcement } from '@/lib/server/retention/enforcement';
 import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
+import {
+  HOLD_COLUMNS,
+  countActiveLegalHolds,
+  countHeldRows,
+  countHoldsCovering,
+  countUnheldRows,
+  formatHold,
+  legalHoldExclusion,
+  type HoldRow,
+  type LegalHold,
+  type LegalHoldResourceType,
+  type LegalHoldScope,
+} from './legal-hold-gate';
 
-export type LegalHoldScope = 'organization' | 'member' | 'custodian';
+export {
+  HOLD_COLUMNS,
+  LEGAL_HOLD_RESOURCE_TYPES,
+  countActiveLegalHolds,
+  formatHold,
+  heldSubjects,
+  holdCovers,
+  isLegalHoldResourceType,
+  listLegalHolds,
+  type HoldRow,
+  type LegalHold,
+  type LegalHoldResourceType,
+  type LegalHoldScope,
+} from './legal-hold-gate';
 
-/**
- * The stores a hold can name, shared with the eDiscovery export so a hold and
- * the export of what it holds cannot disagree about what a "file" is.
- */
-export const LEGAL_HOLD_RESOURCE_TYPES = [
-  'conversation',
-  'message',
-  'project',
-  'project_file',
-  'file',
-  'artifact',
-  'work_run',
-] as const;
-
-export type LegalHoldResourceType = (typeof LEGAL_HOLD_RESOURCE_TYPES)[number];
-
-export function isLegalHoldResourceType(value: string): value is LegalHoldResourceType {
-  return (LEGAL_HOLD_RESOURCE_TYPES as readonly string[]).includes(value);
-}
-
-export interface LegalHold {
-  id: string;
-  organizationId: string;
-  name: string;
-  reason: string | null;
-  scope: LegalHoldScope;
-  subjectUserId: string | null;
-  /** Empty for organization and member scopes; the held people for custodian scope. */
-  custodianUserIds: string[];
-  /** null preserves every store, which is what a hold placed before 0261 meant. */
-  resourceTypes: LegalHoldResourceType[] | null;
-  createdByUserId: string;
-  releasedAt: string | null;
-  releasedByUserId: string | null;
-  createdAt: string;
-}
-
-/** Everyone a hold preserves, whichever shape it was placed in. */
-export function heldSubjects(hold: LegalHold): string[] {
-  if (hold.scope === 'member') return hold.subjectUserId ? [hold.subjectUserId] : [];
-  if (hold.scope === 'custodian') return hold.custodianUserIds;
-  return [];
-}
-
-/** A hold with no resource_types covers every store; a narrowed one covers what it names. */
-export function holdCovers(hold: LegalHold, resourceType: LegalHoldResourceType): boolean {
-  return hold.resourceTypes === null || hold.resourceTypes.includes(resourceType);
-}
+/** The store the workspace retention sweep deletes from. */
+const SWEPT_RESOURCE: LegalHoldResourceType = 'conversation';
 
 export type RetentionSweepOutcome = 'deleted' | 'nothing_due' | 'held' | 'aborted' | 'failed';
 
@@ -96,88 +76,12 @@ export const RETENTION_SWEEP_BATCH = 500;
  */
 export const RETENTION_SWEEP_MAX_BATCHES = 10;
 
-export interface HoldRow {
-  id: string;
-  organization_id: string;
-  name: string;
-  reason: string | null;
-  scope: LegalHoldScope;
-  subject_user_id: string | null;
-  resource_types: string[] | null;
-  custodian_user_ids: string[] | null;
-  created_by_user_id: string;
-  released_at: string | Date | null;
-  released_by_user_id: string | null;
-  created_at: string | Date;
-}
-
-/**
- * Custodians come back as an aggregate rather than a second round trip: the
- * sweep reads holds on the path that decides whether to delete, and a hold whose
- * custodian list failed to load separately would silently preserve nobody.
- */
-export const HOLD_COLUMNS = `h.id, h.organization_id, h.name, h.reason, h.scope, h.subject_user_id,
-  h.resource_types, h.created_by_user_id, h.released_at, h.released_by_user_id, h.created_at,
-  coalesce(array(select c.user_id from public.legal_hold_custodians c
-                  where c.hold_id = h.id order by c.user_id), array[]::text[]) as custodian_user_ids`;
-
 function toIso(value: string | Date | null): string | null {
   if (value === null) return null;
   return value instanceof Date ? value.toISOString() : value;
 }
 
-export function formatHold(row: HoldRow): LegalHold {
-  const resourceTypes = row.resource_types?.filter(isLegalHoldResourceType) ?? null;
-  return {
-    id: row.id,
-    organizationId: row.organization_id,
-    name: row.name,
-    reason: row.reason,
-    scope: row.scope,
-    subjectUserId: row.subject_user_id,
-    custodianUserIds: row.custodian_user_ids ?? [],
-    resourceTypes: resourceTypes && resourceTypes.length > 0 ? resourceTypes : null,
-    createdByUserId: row.created_by_user_id,
-    releasedAt: toIso(row.released_at),
-    releasedByUserId: row.released_by_user_id,
-    createdAt: toIso(row.created_at) ?? new Date(0).toISOString(),
-  };
-}
-
-export async function listLegalHolds(
-  db: DatabaseAdapter,
-  organizationId: string,
-  options: { includeReleased?: boolean } = {},
-): Promise<LegalHold[]> {
-  const rows = await db.query<HoldRow>(
-    `select ${HOLD_COLUMNS}
-       from public.legal_holds h
-      where h.organization_id = $1
-        ${options.includeReleased ? '' : 'and h.released_at is null'}
-      order by h.created_at desc
-      limit 200`,
-    [organizationId],
-  );
-  return rows.map(formatHold);
-}
-
-export async function countActiveLegalHolds(
-  db: DatabaseAdapter,
-  organizationId: string,
-): Promise<number> {
-  const rows = await db.query<{ count: number | string }>(
-    `select count(*)::int as count
-       from public.legal_holds
-      where organization_id = $1 and released_at is null`,
-    [organizationId],
-  );
-  return Number(rows[0]?.count ?? 0);
-}
-
-/**
- * A custodian-scoped hold with an empty list reads as a hold while preserving
- * nobody, so it is refused here as well as by 0261's constraint.
- */
+// A custodian hold with an empty list reads as a hold while preserving nobody.
 export async function createLegalHold(
   db: DatabaseAdapter,
   input: {
@@ -238,11 +142,8 @@ export async function createLegalHold(
   });
 }
 
-/**
- * Releases a hold. Returns null when the id does not belong to this
- * organization or is already released, so a caller cannot use the endpoint to
- * probe which hold ids exist elsewhere.
- */
+// Returns null for "not yours" and "already released" alike, so the endpoint
+// cannot be used to probe which hold ids exist elsewhere.
 export async function releaseLegalHold(
   db: DatabaseAdapter,
   organizationId: string,
@@ -292,25 +193,8 @@ async function recordSweep(db: DatabaseAdapter, result: RetentionSweepResult): P
   );
 }
 
-/**
- * Deletes workspace conversations past the organization's retention window.
- *
- * THE SAFETY PROPERTY, stated once so it is not diluted by the code below:
- * this function fails CLOSED. If the hold set cannot be established, nothing is
- * deleted and the refusal is recorded as `aborted`. A missed sweep costs a day
- * of retention drift and is corrected on the next run. A sweep that deletes
- * records under legal hold destroys evidence, cannot be undone, and is the kind
- * of failure that ends an enterprise relationship. The asymmetry is total, so
- * every uncertain path here declines to delete.
- *
- * Retention runs from `updated_at`, not `created_at`: an old conversation
- * someone is still working in has not been dormant for the retention window,
- * and deleting it would read as data loss rather than as policy.
- *
- * Requires a privileged connection. The application role has SELECT only on the
- * hold and sweep tables by design (0138), an organization must not be able to
- * edit the record of what was held or what was deleted.
- */
+// Fails closed: an unreadable hold set deletes nothing and records `aborted`.
+// The hold also rides inside the DELETE, so a hold placed mid-sweep still wins.
 export async function sweepOrganizationRetention(
   db: DatabaseAdapter,
   organizationId: string,
@@ -327,9 +211,8 @@ export async function sweepOrganizationRetention(
     [organizationId],
   );
 
-  // No policy row means ungoverned, not governed-by-defaults. A recorded window
-  // on a plan that sells enterprise controls is a commitment rather than an
-  // owner's preference, so it is swept whether or not anyone opted in.
+  // A recorded window on a plan that sells enterprise controls is a commitment
+  // rather than an owner's preference, so it is swept either way.
   const enforcement = retentionEnforcement({
     plan: policy ? await resolveOrganizationEntitlementPlan(organizationId) : null,
     retentionDays: policy?.retention_days ?? null,
@@ -340,6 +223,8 @@ export async function sweepOrganizationRetention(
   }
 
   const retentionDays = policy.retention_days;
+  // Retention runs from updated_at: a conversation somebody is still working in
+  // has not been dormant, and deleting it would read as data loss.
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
 
   const base = {
@@ -353,9 +238,16 @@ export async function sweepOrganizationRetention(
     error: null as string | null,
   };
 
-  let holds: LegalHold[];
+  const due = `candidate.organization_id = $1 and candidate.updated_at < $2`;
+  const dueParams = [organizationId, cutoff];
+
+  let activeHolds: number;
+  let organizationHolds: number;
   try {
-    holds = await listLegalHolds(db, organizationId);
+    activeHolds = await countActiveLegalHolds(db, organizationId);
+    organizationHolds = await countHoldsCovering(db, organizationId, SWEPT_RESOURCE, {
+      scope: 'organization',
+    });
   } catch (error) {
     const result: RetentionSweepResult = {
       ...base,
@@ -364,23 +256,15 @@ export async function sweepOrganizationRetention(
         error instanceof Error ? error.message : String(error)
       }`,
     };
-    // Best effort: if even the evidence write fails there is nothing further to
-    // do but surface the refusal to the caller, which is the important half.
     await recordSweep(db, result).catch(() => undefined);
     return result;
   }
 
-  // The sweep deletes conversations, so only a hold that names the conversation
-  // store suspends it. A hold narrowed to files does not keep chat alive.
-  const conversationHolds = holds.filter((hold) => holdCovers(hold, 'conversation'));
-  const organizationHold = conversationHolds.some((hold) => hold.scope === 'organization');
-  const heldUserIds = Array.from(new Set(conversationHolds.flatMap(heldSubjects)));
-
-  if (organizationHold) {
+  if (organizationHolds > 0) {
     const result: RetentionSweepResult = {
       ...base,
       outcome: 'held',
-      activeHolds: holds.length,
+      activeHolds,
       error: 'An organization-wide legal hold is active. No conversation was deleted.',
     };
     await recordSweep(db, result);
@@ -388,57 +272,53 @@ export async function sweepOrganizationRetention(
   }
 
   try {
-    const heldCountRows = await db.query<{ count: number }>(
-      `select count(*)::int as count
-         from public.web_conversations
-        where organization_id = $1
-          and updated_at < $2
-          and user_id = any($3::text[])`,
-      [organizationId, cutoff, heldUserIds],
-    );
-    const conversationsHeld = heldCountRows[0]?.count ?? 0;
+    const conversationsHeld = await countHeldRows(db, SWEPT_RESOURCE, {
+      table: 'web_conversations',
+      alias: 'candidate',
+      where: due,
+      params: dueParams,
+    });
 
     if (dryRun) {
-      const dueRows = await db.query<{ count: number }>(
-        `select count(*)::int as count
-           from public.web_conversations
-          where organization_id = $1
-            and updated_at < $2
-            and not (user_id = any($3::text[]))`,
-        [organizationId, cutoff, heldUserIds],
-      );
-      const due = dueRows[0]?.count ?? 0;
+      const pending = await countUnheldRows(db, SWEPT_RESOURCE, {
+        table: 'web_conversations',
+        alias: 'candidate',
+        where: due,
+        params: dueParams,
+      });
       const result: RetentionSweepResult = {
         ...base,
-        outcome: due > 0 ? 'deleted' : 'nothing_due',
+        outcome: pending > 0 ? 'deleted' : 'nothing_due',
         conversationsHeld,
-        activeHolds: holds.length,
+        activeHolds,
         // A dry run reports what it WOULD remove; the table constraint keeps
         // that out of the deleted column so the evidence stays honest.
-        error: `Dry run: ${due} conversation(s) would be deleted, ${conversationsHeld} withheld by legal hold.`,
+        error: `Dry run: ${pending} conversation(s) would be deleted, ${conversationsHeld} withheld by legal hold.`,
       };
       await recordSweep(db, result);
       return result;
     }
 
-    // Batched rather than one unbounded DELETE: the statement stays small
-    // enough not to hold locks on the table that serves live chat, and the loop
-    // stops as soon as a batch comes back short, so a quiet workspace costs one
-    // query rather than ten.
+    // Batched so one statement never holds locks on the table serving live
+    // chat, and the loop stops as soon as a batch comes back short.
+    const exclusion = legalHoldExclusion(SWEPT_RESOURCE, {
+      alias: 'candidate',
+      nextParamIndex: 3,
+    });
     let totalDeleted = 0;
     let remaining = false;
     for (let batch = 0; batch < RETENTION_SWEEP_MAX_BATCHES; batch++) {
       const deleted = await db.query<{ id: string }>(
         `delete from public.web_conversations
           where id in (
-            select id from public.web_conversations
-             where organization_id = $1
-               and updated_at < $2
-               and not (user_id = any($3::text[]))
+            select candidate.id from public.web_conversations candidate
+             where candidate.organization_id = $1
+               and candidate.updated_at < $2
+               and ${exclusion.sql}
              limit $4
           )
           returning id`,
-        [organizationId, cutoff, heldUserIds, RETENTION_SWEEP_BATCH],
+        [...dueParams, ...exclusion.params, RETENTION_SWEEP_BATCH],
       );
       totalDeleted += deleted.length;
       if (deleted.length < RETENTION_SWEEP_BATCH) break;
@@ -450,7 +330,7 @@ export async function sweepOrganizationRetention(
       outcome: totalDeleted > 0 ? 'deleted' : 'nothing_due',
       conversationsDeleted: totalDeleted,
       conversationsHeld,
-      activeHolds: holds.length,
+      activeHolds,
       // Said out loud so a workspace clearing a large backlog can see it is
       // still working through it rather than assuming retention has caught up.
       error: remaining
@@ -463,7 +343,7 @@ export async function sweepOrganizationRetention(
     const result: RetentionSweepResult = {
       ...base,
       outcome: 'failed',
-      activeHolds: holds.length,
+      activeHolds,
       error: error instanceof Error ? error.message : String(error),
     };
     await recordSweep(db, result).catch(() => undefined);
@@ -471,17 +351,8 @@ export async function sweepOrganizationRetention(
   }
 }
 
-/**
- * Least-recently-swept organization first, not lowest id first.
- *
- * The caller takes a fixed prefix of this list. Ordered by `organization_id`,
- * the same head was swept every night forever and nothing past the cap was ever
- * deleted, while the cron reported success, so the retention promise was
- * quietly untrue for every workspace behind it. The evidence table already
- * records every real sweep, so it is the ordering key; dry runs are excluded
- * because a manual `?dryRun=1` must not push a workspace to the back of the
- * queue without deleting anything.
- */
+// Least-recently-swept first: ordered by id, the same head was swept nightly
+// and nothing past the caller's cap was ever deleted.
 export async function listOrganizationsWithRetentionEnforced(
   db: DatabaseAdapter,
 ): Promise<string[]> {
@@ -516,16 +387,8 @@ export interface RetentionBacklog {
 
 const RETENTION_SWEEP_CEILING = RETENTION_SWEEP_MAX_BATCHES * RETENTION_SWEEP_BATCH;
 
-/**
- * The sweep already knows it stopped short of the cutoff; until now only its
- * own log said so. An administrator who switched retention on and is waiting
- * for it to take effect needs the size of what is left and when it clears.
- *
- * The estimate is built from the interval between this workspace's own last two
- * real sweeps, not from the cron's schedule: the schedule is configuration this
- * service cannot read, and an observed cadence is also the one that survives a
- * run being skipped.
- */
+// The estimate uses this workspace's own last two real sweeps: the cron's
+// schedule is configuration this service cannot read.
 export async function readRetentionBacklog(
   db: DatabaseAdapter,
   organizationId: string,
@@ -557,25 +420,16 @@ export async function readRetentionBacklog(
   const retentionDays = policy.retention_days;
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
 
-  const holds = (await listLegalHolds(db, organizationId)).filter((hold) =>
-    holdCovers(hold, 'conversation'),
-  );
-  const organizationHold = holds.some((hold) => hold.scope === 'organization');
-  const heldUserIds = Array.from(new Set(holds.flatMap(heldSubjects)));
-
-  const [counts] = await db.query<{ pending: string | number; held: string | number }>(
-    `select count(*) filter (where not (user_id = any($3::text[])))::int as pending,
-            count(*) filter (where user_id = any($3::text[]))::int as held
-       from public.web_conversations
-      where organization_id = $1
-        and updated_at < $2`,
-    [organizationId, cutoff, heldUserIds],
-  );
-
-  const due = Number(counts?.pending ?? 0);
-  const memberHeld = Number(counts?.held ?? 0);
-  const pendingDeletions = organizationHold ? 0 : due;
-  const heldFromDeletion = organizationHold ? due + memberHeld : memberHeld;
+  // Counted through the same predicate the sweep excludes on, never from a
+  // capped list of holds.
+  const scope = {
+    table: 'web_conversations',
+    alias: 'candidate',
+    where: `candidate.organization_id = $1 and candidate.updated_at < $2`,
+    params: [organizationId, cutoff],
+  };
+  const pendingDeletions = await countUnheldRows(db, SWEPT_RESOURCE, scope);
+  const heldFromDeletion = await countHeldRows(db, SWEPT_RESOURCE, scope);
 
   const sweeps = await db.query<{ created_at: string | Date }>(
     `select created_at

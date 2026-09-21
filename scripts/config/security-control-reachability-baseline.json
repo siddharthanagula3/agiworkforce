@@ -1,0 +1,10 @@
+{
+  "unreachable": [
+    {
+      "module": "apps/web/lib/server/retention/enforcement.ts",
+      "name": "assertNoMandatoryWorkspaceDropped",
+      "control": "a retention run that leaves a mandatory workspace unaccounted for fails, rather than reporting a shorter run as a successful one",
+      "owner": "apps/web/app/api/cron/enforce-workspace-retention/route.ts"
+    }
+  ]
+}

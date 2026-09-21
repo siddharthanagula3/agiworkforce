@@ -11,6 +11,7 @@ import {
 } from './account-erasure';
 import { getIdentityProvider } from './identity';
 import { getNeonDb } from './neon-db';
+import { invalidateAccountStatusCache } from './request-context-cache';
 
 export type ScheduledErasureStage = 'tombstone' | 'erasure' | 'identity';
 
@@ -88,6 +89,8 @@ async function profileExists(userId: string): Promise<boolean> {
  */
 async function erase(userId: string): Promise<void> {
   const tombstone = await openErasureTombstone(userId);
+  // The gate caches the effective status for five minutes; an erased account must stop at once.
+  await invalidateAccountStatusCache(userId);
   if (!tombstone.recorded && !tombstone.skipped) {
     throw new ScheduledErasureError(
       'tombstone',
@@ -143,6 +146,7 @@ export async function reEraseTombstonedAccount(userId: string): Promise<Schedule
       await erase(userId);
     } else {
       const tombstone = await openErasureTombstone(userId);
+      await invalidateAccountStatusCache(userId);
       if (!tombstone.recorded && !tombstone.skipped) {
         throw new ScheduledErasureError(
           'tombstone',

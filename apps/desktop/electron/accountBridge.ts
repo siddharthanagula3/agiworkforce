@@ -1,3 +1,5 @@
+import { app } from 'electron';
+import { platformRequestHeaders } from '../src/lib/platformHeaders';
 import { CLOUD_APP_ORIGIN, isAllowedApiBaseUrl } from './config';
 import { executeClerkNativeRequest } from './clerkProxy';
 import { clearSecrets, getSecret, isSecretKey, setSecret, type SecretKey } from './secretStore';
@@ -28,6 +30,11 @@ export async function resolveApiBase(): Promise<string> {
   return CLOUD_APP_ORIGIN;
 }
 
+/** The main process's half: the version the installer put on disk. */
+export function shellRequestHeaders(): Record<string, string> {
+  return platformRequestHeaders(app.getVersion());
+}
+
 async function executeDeviceAuthorizationRequest(
   path: string,
   body: unknown,
@@ -41,7 +48,7 @@ async function executeDeviceAuthorizationRequest(
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'X-AGI-Surface': 'desktop',
+        ...shellRequestHeaders(),
         ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
       },
       body: JSON.stringify(body),

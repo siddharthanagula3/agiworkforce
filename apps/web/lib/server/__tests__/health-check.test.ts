@@ -21,7 +21,8 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
 vi.mock('@/lib/server/stripe-client', () => ({ getStripeClientOrNull: vi.fn(() => null) }));
 vi.mock('@/lib/price-tier-mapping', () => ({ getConfiguredStripePriceIds: vi.fn(() => []) }));
-vi.mock('@agiworkforce/types', () => ({
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
   getDefaultModelFor: mocks.getDefaultModelFor,
   getModelMetadataById: mocks.getModelMetadataById,
   isModelLive: mocks.isModelLive,

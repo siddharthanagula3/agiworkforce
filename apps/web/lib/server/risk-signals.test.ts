@@ -4,9 +4,13 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/ip-hash', () => ({
-  hashIpAddress: (ip: string) => `${ip.length}`.padStart(64, 'f'),
-}));
+vi.mock('@/lib/server/ip-hash', async () => {
+  const { createHash } = await import('node:crypto');
+  return {
+    hashIpAddress: (value: string, domain: string) =>
+      createHash('sha256').update(`${domain}\0${value}`).digest('hex'),
+  };
+});
 vi.mock('@/lib/security-audit', () => ({
   getClientIp: (request: Request) => request.headers.get('x-real-ip') ?? undefined,
 }));
@@ -32,6 +36,7 @@ function observation(overrides: Partial<Observation> = {}): Observation {
     latitude: 37.77,
     longitude: -122.42,
     deviceRef: 'device-known',
+    userAgentRef: 'client-known',
     surface: 'web',
     observedAt: BASE,
     ...overrides,
@@ -144,6 +149,53 @@ describe('assessRisk', () => {
     );
   });
 
+  it('separates a new browser on a known machine from a new machine', () => {
+    const history = [observation({ observedAt: minutesBefore(600) })];
+
+    const assessment = assessRisk(history, observation({ userAgentRef: 'client-unseen' }));
+
+    expect(assessment.signals).toEqual(['new_browser']);
+    expect(assessment.level).toBe('elevated');
+  });
+
+  it('does not call a browser new when the observation carries none', () => {
+    const history = [observation({ observedAt: minutesBefore(600) })];
+
+    expect(assessRisk(history, observation({ userAgentRef: null })).signals).toEqual([]);
+  });
+
+  it('treats one address failing against several other accounts as a compromise', () => {
+    const assessment = assessRisk([], observation(), { otherAccountsFailedFromAddress: 3 });
+
+    expect(assessment.signals).toContain('credential_stuffing');
+    expect(assessment.level).toBe('compromise');
+  });
+
+  it('leaves an address that has failed against one other account alone', () => {
+    expect(assessRisk([], observation(), { otherAccountsFailedFromAddress: 1 }).signals).toEqual(
+      [],
+    );
+  });
+
+  it('raises a recovery attempt on the event itself', () => {
+    const assessment = assessRisk([], observation({ eventKey: 'recovery_requested' }));
+
+    expect(assessment.signals).toEqual(['recovery_attempt']);
+    expect(assessment.level).toBe('elevated');
+  });
+
+  it('treats a new device arriving just after a recovery attempt as a compromise', () => {
+    const history = [
+      observation({ eventKey: 'recovery_requested', observedAt: minutesBefore(20) }),
+      observation({ observedAt: minutesBefore(600) }),
+    ];
+
+    const assessment = assessRisk(history, observation({ deviceRef: 'device-unseen' }));
+
+    expect(assessment.signals).toContain('new_device_with_factor_change');
+    expect(assessment.level).toBe('compromise');
+  });
+
   it('measures distance between two known cities', () => {
     const km = distanceKm(
       { latitude: 37.77, longitude: -122.42 },
@@ -170,6 +222,19 @@ describe('observationFromRequest', () => {
     expect(result.ipHash).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(result)).not.toContain('203.0.113.7');
     expect(result).toMatchObject({ country: 'DE', latitude: 52.52, longitude: 13.4 });
+  });
+
+  it('stores the client only as a digest, in a namespace of its own', () => {
+    const shared = '203.0.113.7';
+    const request = new Request('https://app.example.com/api/auth/callback', {
+      headers: { 'x-real-ip': shared, 'user-agent': shared },
+    });
+
+    const result = observationFromRequest({ userId: 'user-1', eventKey: 'new_sign_in', request });
+
+    expect(result.userAgentRef).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.userAgentRef).not.toBe(result.ipHash);
+    expect(JSON.stringify(result)).not.toContain(shared);
   });
 
   it('drops a location the edge did not supply', () => {
@@ -219,6 +284,38 @@ describe('recordIdentityObservation', () => {
       expect.stringContaining('insert into public.identity_risk_observations'),
       expect.arrayContaining(['user-1', 'new_sign_in', 'success', null, null]),
     );
+  });
+
+  it('asks how many other accounts the address has failed against', async () => {
+    query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ accounts: '4' }]);
+
+    const assessment = await recordIdentityObservation(db, {
+      userId: 'user-1',
+      eventKey: 'new_sign_in',
+      request: new Request('https://app.example.com/api/auth/callback', {
+        headers: { 'x-real-ip': '203.0.113.7' },
+      }),
+    });
+
+    expect(assessment.signals).toContain('credential_stuffing');
+    const [sql, params] = query.mock.calls[1] as [string, unknown[]];
+    expect(sql).toContain('count(distinct user_id)');
+    expect(params[1]).toBe('user-1');
+  });
+
+  it('assesses without the cross-account count when that query fails', async () => {
+    query.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('index missing'));
+
+    const assessment = await recordIdentityObservation(db, {
+      userId: 'user-1',
+      eventKey: 'new_sign_in',
+      request: new Request('https://app.example.com/api/auth/callback', {
+        headers: { 'x-real-ip': '203.0.113.7' },
+      }),
+    });
+
+    expect(assessment.signals).not.toContain('credential_stuffing');
+    expect(execute).toHaveBeenCalled();
   });
 
   it('still assesses when the history read fails', async () => {

@@ -13,6 +13,11 @@ import {
 import { logger } from '@/lib/logger';
 import { recordNotificationDeliveries } from '@/lib/services/infrastructure-cost';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  createDeadline,
+  credentialedFetch,
+  type CredentialedRefusal,
+} from '@/lib/url-fetch/guarded-fetch';
 import type { PushDeliveryResult, PushMessage } from './push-notification-service';
 
 const WEB_PUSH_PROVIDER = 'web_push';
@@ -269,15 +274,33 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 
 type DeliveryOutcome = 'sent' | 'gone' | 'failed';
 
+// Refusals that belong to the stored URL, not to one attempt: a retry would be refused again.
+const UNUSABLE_ENDPOINT_REFUSALS: ReadonlySet<CredentialedRefusal> = new Set([
+  'malformed_url',
+  'unsupported_scheme',
+  'embedded_credentials',
+  'blocked_host',
+]);
+
 async function deliverOne(
   subscription: WebPushSubscription,
   body: Buffer,
   vapid: VapidCredentials,
 ): Promise<DeliveryOutcome> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let target: URL;
   try {
-    const response = await fetch(subscription.endpoint, {
+    target = new URL(subscription.endpoint);
+  } catch {
+    return 'gone';
+  }
+
+  const deadline = createDeadline(REQUEST_TIMEOUT_MS);
+  try {
+    // The endpoint is whichever URL a browser handed us, so the host is resolved
+    // and refused here, and the VAPID header never follows a redirect.
+    const outcome = await credentialedFetch(target, {
+      deadline,
+      redirects: 'refuse',
       method: 'POST',
       headers: {
         Authorization: vapidAuthorization(subscription.endpoint, vapid),
@@ -287,13 +310,21 @@ async function deliverOne(
         Urgency: URGENCY,
       },
       body: new Uint8Array(body),
-      signal: controller.signal,
     });
 
-    if (response.ok) return 'sent';
-    if (GONE_STATUSES.has(response.status)) return 'gone';
+    if (!outcome.ok) {
+      if (UNUSABLE_ENDPOINT_REFUSALS.has(outcome.refusal)) return 'gone';
+      logger.warn(
+        { refusal: outcome.refusal, host: target.host },
+        '[web-push] push endpoint could not be reached',
+      );
+      return 'failed';
+    }
+
+    if (outcome.response.ok) return 'sent';
+    if (GONE_STATUSES.has(outcome.response.status)) return 'gone';
     logger.warn(
-      { status: response.status, origin: new URL(subscription.endpoint).origin },
+      { status: outcome.response.status, host: target.host },
       '[web-push] push service rejected the notification',
     );
     return 'failed';
@@ -301,7 +332,7 @@ async function deliverOne(
     logger.warn({ error }, '[web-push] send failed');
     return 'failed';
   } finally {
-    clearTimeout(timeout);
+    deadline.release();
   }
 }
 

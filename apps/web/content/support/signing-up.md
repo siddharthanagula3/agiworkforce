@@ -4,7 +4,7 @@ title: Create an account and send your first message
 path: /get-started
 category: getting-started
 tags: sign up, signup, create account, register, new account, google, github, oauth, verification code, terms, first message, first chat
-updated: 2026-09-17
+updated: 2026-09-20
 scope: public
 ---
 
@@ -22,9 +22,10 @@ sign-up is the agreement.
 
 ## What you can do immediately
 
-Managed cloud is open by default. A new account can open the chat surface and
-send a message straight away: there is no waitlist for managed cloud and no
-invite code to redeem. Team and Enterprise tiers are the waitlisted ones.
+The Free plan is open by default. A new account can open the chat surface and
+send a message straight away: it has no waitlist and no invite code to redeem.
+Paid upgrades are opening in stages, so every self-serve paid plan needs an
+access code, and without one you join the upgrade waitlist.
 
 ## Send the first message
 

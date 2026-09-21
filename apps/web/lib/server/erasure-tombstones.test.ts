@@ -158,6 +158,67 @@ describe('syncErasureLedger', () => {
 
     expect(parseErasureLedger(backup.read() as string)).toEqual([entry('ann')]);
   });
+
+  it('re-arms the tombstone a restore rolled back, on the cron the sync already runs on', async () => {
+    const backup = bucket(serializeErasureLedger([entry('ann')]));
+    const { db, inserts } = database([]);
+
+    const report = await syncErasureLedger(db, { target: backup.target });
+
+    expect(report.reArmed).toEqual(['ann']);
+    expect(inserts).toContainEqual(['ann', '2026-07-01T00:00:00.000Z']);
+  });
+
+  it('records the re-arming as evidence that the database had lost tombstones', async () => {
+    const backup = bucket(serializeErasureLedger([entry('ann')]));
+    const { db } = database([]);
+
+    const report = await syncErasureLedger(db, {
+      target: backup.target,
+      performedBy: 'restore-drill',
+    });
+
+    expect(report.replayId).toBe('replay-1');
+    const recorded = vi
+      .mocked(db.query)
+      .mock.calls.find(([sql]) => /insert into public\.erasure_ledger_replays/.test(String(sql)));
+    expect(recorded?.[1]).toEqual([
+      null,
+      'restore-drill',
+      1,
+      erasureLedgerDigest([entry('ann')]),
+      1,
+      0,
+      0,
+      JSON.stringify({ reArmed: ['ann'], pending: [], unledgered: [] }),
+    ]);
+  });
+
+  it('writes no replay row on an ordinary run where nothing was lost', async () => {
+    const backup = bucket(serializeErasureLedger([entry('ann')]));
+    const { db } = database([{ user_id: 'ann', erased_at: '2026-08-01T00:00:00.000Z' }]);
+
+    const report = await syncErasureLedger(db, { target: backup.target });
+
+    expect(report.reArmed).toEqual([]);
+    expect(report.replayId).toBeNull();
+    expect(
+      vi
+        .mocked(db.query)
+        .mock.calls.some(([sql]) => /insert into public\.erasure_ledger_replays/.test(String(sql))),
+    ).toBe(false);
+  });
+
+  it('does not re-arm a subject whose erasure this very run recorded', async () => {
+    const backup = bucket(serializeErasureLedger([]));
+    const { db, inserts } = database([{ user_id: 'new', erased_at: null }]);
+
+    const report = await syncErasureLedger(db, { target: backup.target });
+
+    expect(report.added).toEqual(['new']);
+    expect(report.reArmed).toEqual([]);
+    expect(inserts).toEqual([]);
+  });
 });
 
 describe('replayErasureTombstones', () => {

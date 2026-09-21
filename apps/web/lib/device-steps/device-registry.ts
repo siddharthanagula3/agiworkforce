@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   DEVICE_HEARTBEAT_INTERVAL_MS,
+  advertisedDeviceCapability,
   devicePresence,
   type DeviceCapabilities,
   type DevicePresence,
@@ -11,9 +12,10 @@ import {
 import {
   deviceStepCapability,
   offeredDeviceStepTools,
+  type DesktopCapability,
   type DesktopHostDeclaration,
-  type DeviceStepTool,
 } from '@agiworkforce/local-runtime-contract';
+import type { PlatformCapability } from '@agiworkforce/types';
 import { isRegistryMissing } from '@/app/api/settings/devices/schema-state';
 
 /**
@@ -210,15 +212,89 @@ export async function propagateDeviceRevocation(
   }
 }
 
+/**
+ * Where the answer about one capability came from: the device's own heartbeat,
+ * or the surface the request arrived on, which is a guess the registry replaces
+ * as soon as the device starts sending the field.
+ */
+export type DeviceCapabilitySource = 'advertised' | 'inferred';
+
 export type DeviceStepClearance =
-  | { decision: 'ready'; deviceId: string }
+  | { decision: 'ready'; deviceId: string; capabilitySource: DeviceCapabilitySource }
   | { decision: 'wait'; reason: string; retryInMs: number; presence: DevicePresence }
-  | { decision: 'withdrawn'; reason: string };
+  | {
+      decision: 'withdrawn';
+      reason: string;
+      capabilitySource?: DeviceCapabilitySource;
+    };
 
 export const DEVICE_PRESENCE_RETRY_MS = DEVICE_HEARTBEAT_INTERVAL_MS;
 
-function requiresComputerUse(tools: readonly DeviceStepTool[]): boolean {
-  return tools.some((tool) => deviceStepCapability(tool) === 'computer.use');
+/** Which advertised capability answers for a step's local-runtime permission. */
+export const STEP_CAPABILITY_ADVERTISEMENTS: Readonly<
+  Partial<Record<DesktopCapability, PlatformCapability>>
+> = Object.freeze({
+  'filesystem.read': 'canUseFileSystem',
+  'filesystem.write': 'canUseFileSystem',
+  'shell.execute': 'canUseTerminal',
+  'computer.use': 'canUseDesktopAutomation',
+  'screen.capture': 'canTakeScreenshot',
+  'clipboard.read': 'canUseClipboard',
+  'mcp.local': 'canUseLocalMcp',
+  'local.inference': 'canUseLocalModels',
+});
+
+const STEP_CAPABILITY_LABELS: Readonly<Partial<Record<DesktopCapability, string>>> = Object.freeze({
+  'filesystem.read': 'access to its files',
+  'filesystem.write': 'permission to write its files',
+  'shell.execute': 'a terminal',
+  'computer.use': 'screen control',
+  'screen.capture': 'screen capture',
+  'clipboard.read': 'access to its clipboard',
+  'mcp.local': 'its local tool servers',
+  'local.inference': 'its local models',
+});
+
+interface RefusedDeviceCapability {
+  capability: DesktopCapability;
+  label: string;
+}
+
+/**
+ * The first offered step the device itself says it will not carry out.
+ *
+ * The heartbeat wins wherever the device sent the field; where it did not, the
+ * declaration the request arrived with stands, which is what offered the step
+ * in the first place. Silence is never read as consent.
+ */
+function refusedCapability(
+  declaration: DesktopHostDeclaration,
+  capabilities: DeviceCapabilities,
+): RefusedDeviceCapability | null {
+  for (const tool of offeredDeviceStepTools(declaration)) {
+    const capability = deviceStepCapability(tool);
+    const platform = STEP_CAPABILITY_ADVERTISEMENTS[capability];
+    if (platform === undefined) continue;
+    if (advertisedDeviceCapability(capabilities, platform) !== false) continue;
+    return { capability, label: STEP_CAPABILITY_LABELS[capability] ?? capability };
+  }
+  return null;
+}
+
+function capabilitySourceFor(
+  declaration: DesktopHostDeclaration,
+  capabilities: DeviceCapabilities,
+): DeviceCapabilitySource {
+  const offered = offeredDeviceStepTools(declaration);
+  if (offered.length === 0) return 'advertised';
+  return offered.every((tool) => {
+    const platform = STEP_CAPABILITY_ADVERTISEMENTS[deviceStepCapability(tool)];
+    return (
+      platform !== undefined && advertisedDeviceCapability(capabilities, platform) !== undefined
+    );
+  })
+    ? 'advertised'
+    : 'inferred';
 }
 
 /**
@@ -250,13 +326,12 @@ export function clearDeviceForRemoteSteps(
       reason: `"${declaration.deviceName}" has remote work switched off, so no step was sent to it.`,
     };
   }
-  if (
-    requiresComputerUse(offeredDeviceStepTools(declaration)) &&
-    !device.capabilities.computerUse
-  ) {
+  const refused = refusedCapability(declaration, device.capabilities);
+  if (refused) {
     return {
       decision: 'withdrawn',
-      reason: `"${declaration.deviceName}" no longer reports screen control, so no step was sent to it.`,
+      reason: `"${declaration.deviceName}" no longer reports ${refused.label}, so no step was sent to it.`,
+      capabilitySource: 'advertised',
     };
   }
   if (device.presence !== 'online') {
@@ -267,5 +342,9 @@ export function clearDeviceForRemoteSteps(
       presence: device.presence,
     };
   }
-  return { decision: 'ready', deviceId: device.id };
+  return {
+    decision: 'ready',
+    deviceId: device.id,
+    capabilitySource: capabilitySourceFor(declaration, device.capabilities),
+  };
 }

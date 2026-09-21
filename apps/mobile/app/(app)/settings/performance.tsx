@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Cpu,
@@ -19,6 +18,7 @@ import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
 import {
@@ -296,7 +296,6 @@ function StatChip({ label, value, color }: { label: string; value: string; color
 
 export default function PerformanceScreen() {
   const c = useThemeColors();
-  const router = useRouter();
 
   const [showPerfChip, setShowPerfChip] = useState(() => readBool(PERF_CHIP_SHOW_KEY, true));
 
@@ -339,9 +338,7 @@ export default function PerformanceScreen() {
     };
   }, []);
 
-  const handleBack = useCallback(() => {
-    router.navigate('/(app)/settings/general' as Parameters<typeof router.navigate>[0]);
-  }, [router]);
+  const handleBack = useGoBack('/(app)/settings/general');
 
   const handleChipToggle = useCallback((v: boolean) => {
     setShowPerfChip(v);

@@ -143,10 +143,13 @@ describe('reading a project memory posture', () => {
 });
 
 import { persistManagedAutoMemoryFacts } from '../managed-memory-context-service';
+import { answerMemoryPolicyQuery } from './memory-policy-stub';
 
 describe('memories learned inside a project are tagged with it', () => {
   function writeDb(settingsRow: unknown = { memory: {} }) {
     const query = vi.fn(async (sql: string) => {
+      const policy = answerMemoryPolicyQuery(sql);
+      if (policy) return policy;
       if (sql.includes('user_settings')) return [settingsRow];
       return [{ id: 'm1' }];
     });

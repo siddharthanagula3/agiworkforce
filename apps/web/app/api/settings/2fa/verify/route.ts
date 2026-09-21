@@ -11,7 +11,8 @@ import { logger } from '@/lib/logger';
 import { verifyTOTPCode } from '@/features/settings/services/user-preferences';
 import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
-import { logAuthFailure, recordAuditEvent } from '@/lib/security-audit';
+import { logAuthFailure } from '@/lib/security-audit';
+import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
 
 interface TwoFactorRow {
   totp_secret_enc: string;
@@ -22,7 +23,7 @@ async function handleVerify2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -69,11 +70,12 @@ async function handleVerify2FA(request: NextRequest) {
 
   logger.info({ userId }, '2FA enabled successfully');
 
-  await recordAuditEvent({
+  await announceTwoFactorChange({
     userId,
-    eventType: 'two_factor_enabled',
+    event: 'two_factor_enabled',
     request,
-    detail: { resourceType: 'two_factor', source: 'totp_code' },
+    organizationId,
+    detail: { source: 'totp_code' },
   });
 
   return NextResponse.json({ success: true });

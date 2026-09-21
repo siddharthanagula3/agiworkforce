@@ -113,7 +113,7 @@ async function handleGet(
           const bytes = encoder.encode(
             chunk.records.map((record) => JSON.stringify(record)).join('\n') + '\n',
           );
-          manifest.add(chunk.resourceType, chunk.records.length, bytes);
+          manifest.add(chunk.resourceType, chunk.records.length, bytes, chunk.referenceOnly);
           controller.enqueue(bytes);
         }
 

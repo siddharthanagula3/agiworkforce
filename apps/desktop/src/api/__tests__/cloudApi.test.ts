@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { getModelsForProvider, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import {
@@ -510,7 +511,7 @@ describe('cloudApi', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           'Idempotency-Key': 'agi.chat.desktop.send.0190a000-0000-7000-8000-000000000001',
-          'X-AGI-Surface': 'desktop',
+          [SURFACE_REQUEST_HEADER]: 'desktop',
         }),
         body: JSON.stringify({
           model: FIXTURE_MODEL_ID,

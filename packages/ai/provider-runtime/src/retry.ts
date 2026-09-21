@@ -181,6 +181,11 @@ export async function withRetry<T>(
         throw new CannotRetryError(err, classified);
       }
 
+      if (retryAfterExceedsCeiling(classified.retryAfterSeconds, maxBackoff)) {
+        onEvent({ type: 'give-up', attempt, classified });
+        throw new CannotRetryError(err, classified);
+      }
+
       const delay = computeDelay(attempt, classified.retryAfterSeconds, baseDelay, maxBackoff);
       onEvent({ type: 'delay', attempt, delayMs: delay, classified });
       await sleep(delay, ctx.signal);
@@ -199,6 +204,24 @@ export async function withRetry<T>(
   );
 }
 
+/**
+ * A wait the provider asked for that no request can afford to take.
+ *
+ * `Retry-After` is the upstream's own number and the only honest thing to do
+ * with it is wait it out, but a provider that says 3600 is saying it will not
+ * serve this credential for an hour, and sleeping on that inside a live request
+ * holds the connection open for an hour rather than failing over in seconds.
+ * Past the ceiling the wait stops being a retry, so `withRetry` gives up and
+ * lets the layer above rotate to a route that can answer.
+ */
+export function retryAfterExceedsCeiling(
+  retryAfterSeconds: number | undefined,
+  maxBackoff = MAX_BACKOFF_MS,
+): boolean {
+  if (typeof retryAfterSeconds !== 'number' || retryAfterSeconds < 0) return false;
+  return retryAfterSeconds * 1000 > maxBackoff;
+}
+
 export function computeDelay(
   attempt: number,
   retryAfterSeconds: number | undefined,
@@ -206,8 +229,12 @@ export function computeDelay(
   maxBackoff = MAX_BACKOFF_MS,
   rand: () => number = Math.random,
 ): number {
+  // Jitter is additive here, never subtractive: every client behind one
+  // credential reads the SAME number off the same 429, so this is the branch
+  // where waking in lockstep is guaranteed rather than merely possible, and
+  // waking even a millisecond early is a request the provider already refused.
   if (typeof retryAfterSeconds === 'number' && retryAfterSeconds >= 0) {
-    return retryAfterSeconds * 1000;
+    return Math.floor(retryAfterSeconds * 1000 + rand() * 0.25 * baseDelay);
   }
   const exp = Math.min(baseDelay * Math.pow(2, attempt - 1), maxBackoff);
   return Math.floor(exp + rand() * 0.25 * baseDelay);

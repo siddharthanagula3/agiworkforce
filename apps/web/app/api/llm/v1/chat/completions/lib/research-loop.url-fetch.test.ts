@@ -274,6 +274,45 @@ describe('research loop url_fetch integration', () => {
     }
   });
 
+  it('stops a page read already in flight when the caller cancels the turn', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        toolCallsTurn([{ id: 'call_1', name: 'url_fetch', args: { url: 'https://example.com/' } }]),
+      )
+      .mockResolvedValueOnce(notesTurn('Nothing was read.'))
+      .mockResolvedValueOnce(sseStream([contentEvent('Report.'), finishEvent()]));
+
+    const controller = new AbortController();
+    // The turn is cancelled while the page request is open, which is the only
+    // moment the loop's own pre-turn checks cannot cover.
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      controller.abort();
+      if (init?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      return new Response(PAGE_HTML, {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const raw = await collectRaw(
+        runResearchLoop(
+          makeProcessed(),
+          { userId: 'user-1', token: 't' },
+          { signal: controller.signal },
+        ),
+      );
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(raw).toContain('Fetch failed (cancelled)');
+      expect(raw).not.toContain('"title":"Example Domain"');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('caps fetches per round and returns a budget error for excess calls', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream())

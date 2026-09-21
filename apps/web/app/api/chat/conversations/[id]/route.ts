@@ -36,9 +36,16 @@ function isUndefinedColumn(error: unknown): boolean {
   );
 }
 
+// The cached compaction summary is model-facing text written from this
+// conversation, so it goes when the conversation does rather than waiting for a
+// restore to hand it back.
 const DELETE_CONVERSATION_SQL = `
   update web_conversations
-     set deleted_at = now(), updated_at = now()
+     set deleted_at = now(),
+         updated_at = now(),
+         compaction_summary = null,
+         compaction_summary_through_message_id = null,
+         compaction_summary_digest = null
    where id = $1
      and user_id = $2
      and organization_id is not distinct from $3
@@ -130,13 +137,14 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
           select id, parent_id, role, content, model, provider, input_tokens, output_tokens, created_at, metadata
           from web_messages
           where conversation_id = $1
+            and deleted_at is null
           order by created_at asc
           limit $2 offset $3
         `,
         [id, limit, offset],
       ),
       db.query<{ total: string }>(
-        'select count(*)::text as total from web_messages where conversation_id = $1',
+        'select count(*)::text as total from web_messages where conversation_id = $1 and deleted_at is null',
         [id],
       ),
     ]);
@@ -276,6 +284,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
            join web_conversations conversation on conversation.id = message.conversation_id
           where message.id = $1
             and message.conversation_id = $2
+            and message.deleted_at is null
             and conversation.user_id = $3
             and conversation.organization_id is not distinct from $4
             and conversation.deleted_at is null

@@ -7,6 +7,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { expirePendingInvitations } from '@/lib/services/organization-invitation-service';
 
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 const PG_UNDEFINED_TABLE = '42P01';
 

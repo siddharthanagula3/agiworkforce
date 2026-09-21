@@ -1,12 +1,12 @@
-import type { ContextSource, ContextSourceClass } from '@agiworkforce/context';
+import {
+  contextSourceClassPolicy,
+  type ContextPolicyFlag,
+  type ContextSource,
+  type ContextSourceClass,
+} from '@agiworkforce/context';
 import type { ContextActor, ContextExclusionReason } from './types';
 
-export interface OrganizationContextPolicy {
-  readonly allowMemory: boolean;
-  readonly allowPastChats: boolean;
-  readonly allowConnectorResults: boolean;
-  readonly allowWebResults: boolean;
-}
+export type OrganizationContextPolicy = { readonly [K in ContextPolicyFlag]: boolean };
 
 export const OPEN_ORGANIZATION_CONTEXT_POLICY: OrganizationContextPolicy = {
   allowMemory: true,
@@ -31,14 +31,6 @@ const ALLOWED: ContextCheck = { allowed: true };
 function denied(reason: ContextExclusionReason, detail: string): ContextCheck {
   return { allowed: false, reason, detail };
 }
-
-const POLICY_FLAG: Partial<Record<ContextSourceClass, keyof OrganizationContextPolicy>> = {
-  account_memory: 'allowMemory',
-  past_chat: 'allowPastChats',
-  project_sibling_chat: 'allowPastChats',
-  connector_result: 'allowConnectorResults',
-  web_result: 'allowWebResults',
-};
 
 /**
  * One ownership check for every class, so a loader cannot ship its own weaker
@@ -72,13 +64,13 @@ export function policyCheck(
   source: ContextSource,
   policy: OrganizationContextPolicy,
 ): ContextCheck {
-  const flag = POLICY_FLAG[source.sourceClass];
-  if (flag === undefined || policy[flag]) return ALLOWED;
+  const flag = contextSourceClassPolicyFlag(source.sourceClass);
+  if (flag === null || policy[flag]) return ALLOWED;
   return denied('policy_denied', `this workspace does not allow ${source.sourceClass} context`);
 }
 
 export function contextSourceClassPolicyFlag(
   sourceClass: ContextSourceClass,
-): keyof OrganizationContextPolicy | null {
-  return POLICY_FLAG[sourceClass] ?? null;
+): ContextPolicyFlag | null {
+  return contextSourceClassPolicy(sourceClass).policyFlag;
 }

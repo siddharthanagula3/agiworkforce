@@ -13,7 +13,9 @@ import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-re
 import {
   imageJobDeliveredImages,
   isImageJobAttemptDue,
+  isImageJobCancellationPending,
   publicImageJobSnapshot,
+  reconcileCancelledImageGenerationJob,
   reservationForImageJob,
   runImageGenerationJobAttempt,
 } from '../lib/image-job-executor';
@@ -61,11 +63,18 @@ async function handleImageStatus(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const job = await getImageGenerationJob(scoped.db, jobId, userId);
-  if (!job) {
+  const found = await getImageGenerationJob(scoped.db, jobId, userId);
+  if (!found) {
     logger.warn({ jobId, requestingUser: userId }, 'Durable image job ownership denied');
     throw createError.forbidden('You do not have permission to check this job');
   }
+
+  // A cancellation whose attempt never came back leaves the job open with
+  // nothing running it. This poll is one of the two places that can still see
+  // that and finish it; the other is the queued drive.
+  const job = isImageJobCancellationPending(found, Date.now())
+    ? ((await reconcileCancelledImageGenerationJob({ db: scoped.db, job: found })) ?? found)
+    : found;
 
   if (isImageJobAttemptDue(job, Date.now())) {
     after(async () => {

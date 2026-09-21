@@ -1,0 +1,1586 @@
+{
+  "$comment": "Every factual sentence a help-centre article states about the product, and the executable assertion that would fail if it were untrue. Articles carrying a sha256 rather than \"indexed\": true are pinned: the next edit to one fails scripts/check-support-claims.mjs until its claims are indexed here.",
+  "articles": [
+    {
+      "doc": "account-security",
+      "indexed": true
+    },
+    {
+      "doc": "accounts-and-sign-in",
+      "sha256": "0e618e9978e34f7869cd112bd1b2b011e82ea1a4d118bfc1ef4df74362f70f67"
+    },
+    {
+      "doc": "agi-work",
+      "sha256": "1211267113d1ff79ddc54eda68750c0f7e2e91cfbf96439c38b28c3bd036b576"
+    },
+    {
+      "doc": "artifacts",
+      "sha256": "f027420ae888447ab12281917a6a8b31c06e4d0889a06d515a4a44b723cec64b"
+    },
+    {
+      "doc": "billing-and-plans",
+      "sha256": "5650375078425d9a9c1976daa41453aaaf3906bec205cb5ceed3ad1343294592"
+    },
+    {
+      "doc": "byok-provider-keys",
+      "sha256": "ab8cf305e2ad1dc76ead79de2471c17515dcd935e17b802653d61fb139e1bdd7"
+    },
+    {
+      "doc": "chat-basics",
+      "indexed": true
+    },
+    {
+      "doc": "chrome-extension",
+      "sha256": "3b64c6301c03621200d1ab1cf7f58519d6b98d6e4c55e101219f740a5f98ddce"
+    },
+    {
+      "doc": "connectors-and-mcp",
+      "indexed": true
+    },
+    {
+      "doc": "delete-your-account",
+      "indexed": true
+    },
+    {
+      "doc": "desktop-and-cli",
+      "sha256": "14d9790a0e4c2ed5016ada09a4579d53b7880082ecc6ab7b5aa08b41344e374d"
+    },
+    {
+      "doc": "enterprise-security",
+      "sha256": "8d6b0bf8c9dc2dfba75157a305a2db1c0562cddff9aa69ad2c15f4e9185729ea"
+    },
+    {
+      "doc": "export-your-data",
+      "indexed": true
+    },
+    {
+      "doc": "files-and-attachments",
+      "sha256": "3a24078968a9ed87be4c6a8f4f94128084762a03c012494cece3fe4eaa0a018a"
+    },
+    {
+      "doc": "getting-started",
+      "sha256": "3e362cf7da6b69e67077b95bfdb056186a6cf439ec4fcf99ba3ac3aeb838adb2"
+    },
+    {
+      "doc": "glossary",
+      "sha256": "32390510755b75153eb4599251a2b80dfdc011690a7b25f09845d309eb9cda31"
+    },
+    {
+      "doc": "install-desktop-and-mobile",
+      "sha256": "5e0d84c95097b65260cdeb0dbdd988ff021164408a37f829dad02ccb4bc1442e"
+    },
+    {
+      "doc": "install-the-cli",
+      "sha256": "347ece7a0d2d5ae4cc8a21f0ba5a12e70bc59935339fda6b39771ab367f19cb0"
+    },
+    {
+      "doc": "keyboard-shortcuts",
+      "sha256": "26df3b7f65fc1cb8ac8ce2f297747ff8c75286e60556c24451550afedac9ac78"
+    },
+    {
+      "doc": "library",
+      "indexed": true
+    },
+    {
+      "doc": "local-mode",
+      "sha256": "9313c1cfab5c7bbe0861bc1eb53ef07c36ed6f2fc0b8c0cbf9e581a1d42efffe"
+    },
+    {
+      "doc": "managed-cloud",
+      "sha256": "c012f2e38f659c3b85d5589691d6716303eb275cc610dd1153ba90ff99b7202c"
+    },
+    {
+      "doc": "mcp-connections",
+      "sha256": "ad4720c4abd3e00c786d481101da15b96995d36504b1bb383c651ccb5c3bc18d"
+    },
+    {
+      "doc": "memory",
+      "indexed": true
+    },
+    {
+      "doc": "models-and-reasoning",
+      "sha256": "59f50aa03dea5e6f8a7bdc2224ddc19de8670e6ad24472baa31e313dc325775e"
+    },
+    {
+      "doc": "privacy-controls",
+      "indexed": true
+    },
+    {
+      "doc": "projects",
+      "sha256": "33c4a8637d5c60feeeb8b5418ab094bc5def74b4476a083cdb2659a4ae4ce1aa"
+    },
+    {
+      "doc": "providers-and-models",
+      "sha256": "7c55d0ba8dfb8237b04f433bec7d545d37a0e8bc4d7df8f7024ca1d1520f3eae"
+    },
+    {
+      "doc": "schedules-and-triggers",
+      "sha256": "0da2ba8467806fa161089c4438856b1d73ec7c30db534ced4b92e6675aa4da38"
+    },
+    {
+      "doc": "search",
+      "sha256": "419f9da94eddf0b6f121834f1a97355a70392af4407ada1765b1ea612bef9c50"
+    },
+    {
+      "doc": "sharing-conversations",
+      "indexed": true
+    },
+    {
+      "doc": "signing-up",
+      "sha256": "2d593218b37eb74eed810da6c6018d59f7cd0278b03e5694757ba1b95361b4d0"
+    },
+    {
+      "doc": "temporary-chats",
+      "indexed": true
+    },
+    {
+      "doc": "tool-approvals",
+      "indexed": true
+    },
+    {
+      "doc": "troubleshooting",
+      "sha256": "34a2187b96bdbbf0600c58340fabc8176c7ac1390fcd963c619c589565273f8b"
+    },
+    {
+      "doc": "usage-and-credits",
+      "sha256": "08fd98882972dfe448d48d8b6241d502ec247f43c527d57fc1219c92874a0d98"
+    },
+    {
+      "doc": "voice",
+      "sha256": "ac1a896d88b238077b3f6cbabec163c61ad1e0a192282f32f09f527f8035694b"
+    },
+    {
+      "doc": "vscode-extension",
+      "sha256": "807efea976a2292e7ae31409d0ca5bff86c742ad3521a790f1722887cfbbc664"
+    },
+    {
+      "doc": "workspace-administration",
+      "sha256": "9219b9eef4586ca704fe7e35b5e2c944d349d2257f73c68e9857d05420023bff"
+    },
+    {
+      "doc": "workspace-policy",
+      "indexed": true
+    },
+    {
+      "doc": "workspace-roles-and-groups",
+      "sha256": "110f4d6032a6dbd15cd28826e2077ff2728304b193a0e1573b4885e0736b807a"
+    }
+  ],
+  "claims": [
+    {
+      "id": "approvals-ask-is-the-fail-closed-default",
+      "doc": "tool-approvals",
+      "section": "The account-wide default",
+      "kind": "prose",
+      "sentence": "**Ask before every action.** Every connector, plugin and tool action waits for your approval, including actions that only read data.",
+      "implementation": [
+        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "asks for approval on a read-only tool when the account keeps the fail-closed default"
+        }
+      ]
+    },
+    {
+      "id": "approvals-default-is-ask",
+      "doc": "tool-approvals",
+      "section": "The account-wide default",
+      "kind": "prose",
+      "sentence": "This is the default.",
+      "implementation": [
+        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/tool-approval-policy.test.ts",
+          "name": "keeps asking as the default a never-configured account lands on"
+        }
+      ]
+    },
+    {
+      "id": "approvals-read-only-auto-runs-reads",
+      "doc": "tool-approvals",
+      "section": "The account-wide default",
+      "kind": "prose",
+      "sentence": "**Run read-only actions without asking.** Actions that only read data, search the web, fetch a page, or run code in the AGI sandbox run on their own.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "runs a declared read-only tool without asking when the account opts into read-only auto-approval"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "runs a web search without asking under the read-only policy"
+        }
+      ]
+    },
+    {
+      "id": "approvals-writes-and-unknown-tools-still-ask",
+      "doc": "tool-approvals",
+      "section": "The account-wide default",
+      "kind": "prose",
+      "sentence": "Anything that writes, deletes, sends, buys, changes credentials, or runs on your own machine still asks, and so does every connector tool AGI does not know.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "still asks for an undeclared connector tool under read-only auto-approval"
+        }
+      ]
+    },
+    {
+      "id": "approvals-per-tool-panel-overrides",
+      "doc": "tool-approvals",
+      "section": "Per-tool permissions",
+      "kind": "prose",
+      "sentence": "Each connector has a **Tool Permissions** panel that overrides the default for one tool at a time: **Always run without asking**, **Needs approval each time**, or **Never run this tool**.",
+      "implementation": ["apps/web/features/connectors/components/ToolPermissionsPanel.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ToolPermissionsPanel.test.tsx",
+          "name": "writes the chosen level and marks the pressed verdict"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "keeps a per-tool Ask verdict ahead of read-only auto-approval"
+        }
+      ]
+    },
+    {
+      "id": "approvals-reset-all-confirms",
+      "doc": "tool-approvals",
+      "section": "Per-tool permissions",
+      "kind": "prose",
+      "sentence": "**Reset all to default** clears every override for that connector and asks first.",
+      "implementation": ["apps/web/features/connectors/components/ToolPermissionsPanel.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ToolPermissionsPanel.test.tsx",
+          "name": "asks for confirmation before resetting every verdict, and does nothing if cancelled"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ToolPermissionsPanel.test.tsx",
+          "name": "revokes on the server once the reset is confirmed"
+        }
+      ]
+    },
+    {
+      "id": "approvals-always-allow-is-remembered",
+      "doc": "tool-approvals",
+      "section": "Approving in the moment",
+      "kind": "prose",
+      "sentence": "Choosing **Always allow** saves that verdict so the same tool can run without prompting again.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts#loadConnectorToolPermissions"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ToolPermissionsPanel.test.tsx",
+          "name": "writes the chosen level and marks the pressed verdict"
+        }
+      ]
+    },
+    {
+      "id": "approvals-temporary-chat-ignores-always-allow",
+      "doc": "tool-approvals",
+      "section": "Approving in the moment",
+      "kind": "prose",
+      "sentence": "A temporary chat ignores saved \"Always allow\" verdicts and asks every time.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts#withoutStandingApprovals"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/temporary-chat-policy.ts",
+          "text": "a connector asks before every call even where you saved Always allow"
+        }
+      ]
+    },
+    {
+      "id": "approvals-call-log-names-an-unused-connector",
+      "doc": "tool-approvals",
+      "section": "Checking what ran",
+      "kind": "prose",
+      "sentence": "A connector that has never been called says so rather than showing an empty table that could be read as a failure.",
+      "implementation": ["apps/web/features/connectors/components/ConnectorCallLog.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ConnectorCallLog.test.tsx",
+          "name": "says an unused connector has nothing to show, rather than staying blank"
+        }
+      ]
+    },
+    {
+      "id": "approvals-disconnect-clears-verdicts",
+      "doc": "tool-approvals",
+      "section": "Removing a connector clears its approvals",
+      "kind": "prose",
+      "sentence": "Removing a connector deactivates it and clears its saved \"Always allow\" tool permissions at the same time, so a later reconnect starts from a clean approval state.",
+      "implementation": ["apps/web/app/api/connectors/route.ts#clearConnectorToolPermissions"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "clear"
+        }
+      ]
+    },
+    {
+      "id": "approvals-disconnect-revokes-every-account",
+      "doc": "tool-approvals",
+      "section": "Removing a connector clears its approvals",
+      "kind": "prose",
+      "sentence": "It also asks the provider to revoke every account you connected through that connector, not only the one AGI treated as the default, and deletes the credentials AGI held for them.",
+      "implementation": [
+        "apps/web/lib/connectors/oauth-access.ts#listRevocableConnectorTokens",
+        "apps/web/lib/connectors/oauth-access.ts#disconnectConnectorOAuthGrant"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "hands back every connected account credential, not only the default one"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "revokes only the named account when one is given"
+        }
+      ]
+    },
+    {
+      "id": "connectors-scoped-to-the-account",
+      "doc": "connectors-and-mcp",
+      "section": "What connectors do",
+      "kind": "prose",
+      "sentence": "Every connector is scoped to your own account.",
+      "implementation": ["apps/web/lib/connectors/oauth-access.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "reports not-connected when the user never authorized"
+        }
+      ]
+    },
+    {
+      "id": "connectors-always-allow-is-remembered",
+      "doc": "connectors-and-mcp",
+      "section": "Tool permissions",
+      "kind": "prose",
+      "sentence": "Choosing \"Always allow\" saves that verdict so the same tool can run without prompting again.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts#loadConnectorToolPermissions"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ToolPermissionsPanel.test.tsx",
+          "name": "writes the chosen level and marks the pressed verdict"
+        }
+      ]
+    },
+    {
+      "id": "connectors-removal-clears-verdicts",
+      "doc": "connectors-and-mcp",
+      "section": "Removing a connector",
+      "kind": "prose",
+      "sentence": "Removing a connector deactivates it and clears the saved \"Always allow\" tool permissions at the same time, so a later reconnect starts from a clean approval state.",
+      "implementation": ["apps/web/app/api/connectors/route.ts#clearConnectorToolPermissions"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/connectors/route.test.ts",
+          "name": "clear"
+        }
+      ]
+    },
+    {
+      "id": "connectors-removal-revokes-every-account",
+      "doc": "connectors-and-mcp",
+      "section": "Removing a connector",
+      "kind": "prose",
+      "sentence": "AGI asks the provider to revoke every account you connected through it, not only the one AGI treated as the default, and deletes the credentials it held for them.",
+      "implementation": ["apps/web/lib/connectors/oauth-access.ts#listRevocableConnectorTokens"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "hands back every connected account credential, not only the default one"
+        }
+      ]
+    },
+    {
+      "id": "memory-off-carries-nothing-forward",
+      "doc": "memory",
+      "section": "The three memory switches",
+      "kind": "prose",
+      "sentence": "**Persistent memory**: \"Allow AGI to remember details across conversations.\" With it off, nothing is carried from one conversation to the next.",
+      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "does not load or inject account memory when the per-chat Memory toggle is off"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+          "name": "writes nothing and names the reason when the workspace has memory off"
+        }
+      ]
+    },
+    {
+      "id": "memory-search-past-chats-never-in-temporary",
+      "doc": "memory",
+      "section": "The three memory switches",
+      "kind": "prose",
+      "sentence": "It is never used in temporary chats.",
+      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "recalls nothing for a Temporary Chat"
+        }
+      ]
+    },
+    {
+      "id": "memory-forget-everything-confirms",
+      "doc": "memory",
+      "section": "Clearing memory",
+      "kind": "prose",
+      "sentence": "It asks first, because the facts cannot be recovered afterwards.",
+      "implementation": ["apps/web/features/settings/sections/MemorySection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/MemorySection.test.tsx",
+          "name": "asks for confirmation before clearing all memories, then clears the store"
+        }
+      ]
+    },
+    {
+      "id": "memory-project-scope-on",
+      "doc": "memory",
+      "section": "Memory inside a project",
+      "kind": "prose",
+      "sentence": "With \"Use memories from outside this project\" on, chats there use what has been remembered account-wide and anything learned there stays in that project.",
+      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
+          "name": "separates a project’s standing context from an ordinary project fact"
+        }
+      ]
+    },
+    {
+      "id": "memory-project-scope-off",
+      "doc": "memory",
+      "section": "Memory inside a project",
+      "kind": "prose",
+      "sentence": "With it off, chats there use only that project's memories and nothing from your other chats is included.",
+      "implementation": ["apps/web/lib/services/managed-memory-context-service.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-memory-isolation.mjs"
+        }
+      ]
+    },
+    {
+      "id": "temporary-stays-out-of-history-memory-library",
+      "doc": "temporary-chats",
+      "section": "What a temporary chat does",
+      "kind": "prose",
+      "sentence": "A temporary chat stays out of your history, your memory and your Library.",
+      "implementation": [
+        "apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_PRIVACY_EXPLANATION"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "does not load or inject account memory for Temporary Chats"
+        }
+      ]
+    },
+    {
+      "id": "temporary-writes-no-message-row",
+      "doc": "temporary-chats",
+      "section": "What a temporary chat does",
+      "kind": "prose",
+      "sentence": "It is never written to your conversation history, nothing said in it is remembered across conversations, files you attach do not land in your Library, and a connector asks before every call even where you saved \"Always allow\".",
+      "implementation": ["apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_RETENTION_NOTE"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "extracts conservative facts only for enabled non-API, non-temporary turns"
+        }
+      ]
+    },
+    {
+      "id": "temporary-record-and-files-expire-at-thirty-days",
+      "doc": "temporary-chats",
+      "section": "What a temporary chat does",
+      "kind": "prose",
+      "sentence": "The conversation record itself, and any file you attach, are held for up to 30 days and then removed, which is what keeps an in-flight chat working and an attachment readable while you are still in it.",
+      "implementation": ["apps/web/app/api/cron/purge-temporary-chats/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
+          "name": "retires the files a temporary chat received on the same clock as the chat"
+        }
+      ]
+    },
+    {
+      "id": "temporary-legal-hold-outlives-the-window",
+      "doc": "temporary-chats",
+      "section": "What a temporary chat does",
+      "kind": "prose",
+      "sentence": "A legal hold placed on your workspace keeps that material past the 30 days until the hold is released.",
+      "implementation": [
+        "apps/web/app/api/cron/purge-temporary-chats/route.ts#legalHoldExclusion",
+        "apps/web/lib/services/legal-hold-gate.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/legal-hold-gate.test.ts",
+          "name": "stops preserving once the hold is released"
+        },
+        {
+          "kind": "guard",
+          "file": "scripts/check-legal-hold-coverage.mjs"
+        }
+      ]
+    },
+    {
+      "id": "temporary-by-default-switch-exists",
+      "doc": "temporary-chats",
+      "section": "Turning it on",
+      "kind": "prose",
+      "sentence": "To make every new conversation temporary, turn on \"Start new chats as temporary\" in Settings, Privacy.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/temporary-by-default.test.ts",
+          "name": "Start new chats as temporary"
+        }
+      ]
+    },
+    {
+      "id": "temporary-end-confirmation-names-the-consequence",
+      "doc": "temporary-chats",
+      "section": "Ending one",
+      "kind": "prose",
+      "sentence": "The confirmation states the consequence plainly: a temporary chat is never written to your history, so ending it is the end of it, every message goes on this device and any other, and nobody can reopen or restore it.",
+      "implementation": ["apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_END_CONFIRMATION"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/temporary-chat-policy.ts",
+          "text": "so ending it is the end of it"
+        }
+      ]
+    },
+    {
+      "id": "temporary-cannot-be-shared",
+      "doc": "temporary-chats",
+      "section": "What you cannot do with one",
+      "kind": "prose",
+      "sentence": "A temporary chat cannot be shared.",
+      "implementation": ["apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_SHARE_REFUSAL"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/temporary-chat-policy.ts",
+          "text": "A temporary chat cannot be shared."
+        }
+      ]
+    },
+    {
+      "id": "temporary-share-refusal-copy",
+      "doc": "temporary-chats",
+      "section": "What you cannot do with one",
+      "kind": "prose",
+      "sentence": "The share control refuses with \"A temporary chat cannot be shared. Turn off temporary chat to keep it, then share it.\" Turn the control off first, which starts saving the conversation, and then share it.",
+      "implementation": ["apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_SHARE_REFUSAL"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/temporary-chat-policy.ts",
+          "text": "A temporary chat cannot be shared. Turn off temporary chat to keep it, then share it."
+        }
+      ]
+    },
+    {
+      "id": "library-holds-uploads-and-artifacts",
+      "doc": "library",
+      "section": "What the Library holds",
+      "kind": "prose",
+      "sentence": "Everything you uploaded and everything AGI generated for you: documents, generated files and artifacts, in one list.",
+      "implementation": ["apps/web/lib/resources/deletion-policies.ts#RESOURCE_DELETION_POLICIES"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/resources/__tests__/deletion-semantics.test.ts",
+          "name": "registers a deletion policy for every soft-deletable table"
+        }
+      ]
+    },
+    {
+      "id": "library-recently-deleted-is-restorable",
+      "doc": "library",
+      "section": "Deleting and restoring",
+      "kind": "prose",
+      "sentence": "Deleting moves an item to **Recently deleted**, where it stays restorable.",
+      "implementation": ["apps/web/lib/resources/deletion-policies.ts#softDeleteColumn"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/resources/__tests__/deletion-semantics.test.ts",
+          "name": "gives every policy a bounded recovery window"
+        }
+      ]
+    },
+    {
+      "id": "library-files-are-purged-at-thirty-days",
+      "doc": "library",
+      "section": "Deleting and restoring",
+      "kind": "prose",
+      "sentence": "For an uploaded or generated file, that window is 30 days: after it the stored bytes are removed for good.",
+      "implementation": [
+        "apps/web/app/api/cron/purge-deleted-media/route.ts#RECOVERY_WINDOW_DAYS",
+        "apps/web/lib/resources/deletion-policies.ts#RESOURCE_RECOVERY_WINDOW_DAYS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/media-assets.restore.test.ts",
+          "name": "un-deletes only within the 30-day window, owner-scoped, and returns true on a hit"
+        }
+      ]
+    },
+    {
+      "id": "library-other-items-are-not-purged-yet",
+      "doc": "library",
+      "section": "Deleting and restoring",
+      "kind": "prose",
+      "sentence": "Other items stay in **Recently deleted** until you restore them or delete them yourself.",
+      "implementation": [
+        "apps/web/app/api/cron/purge-soft-deleted-resources/route.ts#purgeEnabled"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-soft-deleted-resources/route.test.ts",
+          "name": "destroys nothing until an operator turns the purge on"
+        }
+      ]
+    },
+    {
+      "id": "library-legal-hold-outlives-both-windows",
+      "doc": "library",
+      "section": "Deleting and restoring",
+      "kind": "prose",
+      "sentence": "A legal hold on your workspace keeps held material past either window until the hold is released.",
+      "implementation": ["apps/web/lib/services/legal-hold-gate.ts#legalHoldExclusion"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-soft-deleted-resources/route.test.ts",
+          "name": "purges and reports what a legal hold preserved once it is on"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/resources/__tests__/deletion-semantics.test.ts",
+          "name": "refuses to build a purge of a holdable store without the hold predicate"
+        }
+      ]
+    },
+    {
+      "id": "library-delete-permanently-erases-now",
+      "doc": "library",
+      "section": "Deleting and restoring",
+      "kind": "prose",
+      "sentence": "**Delete permanently** erases the stored bytes now: nothing restores the file afterwards and anything linking to it stops resolving, so it asks first and says so.",
+      "implementation": ["apps/web/lib/server/media-assets.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/media-assets.permanent-delete.test.ts",
+          "name": "locks the owner-scoped trashed row, deletes bytes, then removes the row"
+        }
+      ]
+    },
+    {
+      "id": "library-temporary-attachments-never-enter",
+      "doc": "library",
+      "section": "If something is missing",
+      "kind": "prose",
+      "sentence": "Files attached in a temporary chat never enter the Library by design.",
+      "implementation": ["apps/web/app/api/uploads/chat-attachment/complete/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
+          "name": "retires the files a temporary chat received on the same clock as the chat"
+        }
+      ]
+    },
+    {
+      "id": "chat-conversation-starts-on-first-message",
+      "doc": "chat-basics",
+      "section": "Start a new chat",
+      "kind": "prose",
+      "sentence": "A new conversation begins with the first message you send; nothing is created before that.",
+      "implementation": ["apps/web/app/api/chat/conversations/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/chat/conversations/__tests__/route.session-label.test.ts",
+          "name": "still returns 201 with the unchanged conversation response shape (additive)"
+        }
+      ]
+    },
+    {
+      "id": "chat-surface-gated-slash-commands",
+      "doc": "chat-basics",
+      "section": "Attach files and tools",
+      "kind": "prose",
+      "sentence": "`/browser`, `/terminal` and `/database` appear only on surfaces whose capabilities allow them.",
+      "implementation": ["packages/contracts/types/src/surface-capability-manifest.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/surface-capability-manifest.test.ts",
+          "name": "keeps a capability the server allows and the host cannot run unavailable"
+        }
+      ]
+    },
+    {
+      "id": "chat-deleted-chat-is-not-purged",
+      "doc": "chat-basics",
+      "section": "Rename, archive and delete",
+      "kind": "prose",
+      "sentence": "A deleted chat stays there until you restore it; the product does not currently offer permanent chat deletion separately from deleting your account.",
+      "implementation": [
+        "apps/web/app/api/cron/purge-soft-deleted-resources/route.ts#purgeEnabled"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-soft-deleted-resources/route.test.ts",
+          "name": "destroys nothing until an operator turns the purge on"
+        }
+      ]
+    },
+    {
+      "id": "chat-messages-survive-a-render-failure",
+      "doc": "chat-basics",
+      "section": "When a chat will not load",
+      "kind": "prose",
+      "sentence": "In both cases your messages are already saved, so retrying or opening a different conversation loses nothing.",
+      "implementation": ["apps/web/app/api/chat/conversations/[id]/messages/route.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-lifecycle-semantics.mjs"
+        }
+      ]
+    },
+    {
+      "id": "policy-features-default-on",
+      "doc": "workspace-policy",
+      "section": "What policy controls",
+      "kind": "prose",
+      "sentence": "All are on by default.",
+      "implementation": [
+        "packages/contracts/types/src/enterprise/workspace-controls.ts#DEFAULT_WORKSPACE_FEATURE_ACCESS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "returns the workspace defaults when nothing overrides them"
+        }
+      ]
+    },
+    {
+      "id": "policy-unset-reasoning-has-no-ceiling",
+      "doc": "workspace-policy",
+      "section": "What policy controls",
+      "kind": "prose",
+      "sentence": "Left unset, there is no reasoning limit.",
+      "implementation": [
+        "packages/contracts/types/src/enterprise/workspace-controls.ts#clampReasoningEffort"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "lowers an effort above the workspace maximum and leaves one below it alone"
+        }
+      ]
+    },
+    {
+      "id": "policy-exceptions-scope-to-role-group-or-person",
+      "doc": "workspace-policy",
+      "section": "Exceptions",
+      "kind": "prose",
+      "sentence": "Policy can be overridden for a role, a directory group, or a single user, so one team can keep a capability the rest of the workspace does not have.",
+      "implementation": ["packages/contracts/types/src/enterprise/workspace-controls.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "applies group overrides over role overrides"
+        }
+      ]
+    },
+    {
+      "id": "policy-most-restrictive-wins",
+      "doc": "workspace-policy",
+      "section": "Exceptions",
+      "kind": "prose",
+      "sentence": "Where several overrides apply to the same person, the most restrictive value wins: an exception cannot be used to widen access past what the workspace itself allows.",
+      "implementation": ["packages/contracts/types/src/enterprise/workspace-controls.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "refuses to let a user exception re-enable what a group or the workspace denied"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "never raises a reasoning cap, widens a country list or adds a surface"
+        }
+      ]
+    },
+    {
+      "id": "policy-retention-and-holds-live-on-the-data-page",
+      "doc": "workspace-policy",
+      "section": "Retention and legal holds",
+      "kind": "prose",
+      "sentence": "The data page carries retention settings per domain and the record of what retention has already deleted, plus legal holds that suspend deletion for material under investigation.",
+      "implementation": ["apps/web/lib/services/domain-retention-service.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/domain-retention-service.test.ts",
+          "name": "retention"
+        }
+      ]
+    },
+    {
+      "id": "policy-hold-beats-retention",
+      "doc": "workspace-policy",
+      "section": "Retention and legal holds",
+      "kind": "prose",
+      "sentence": "A hold takes precedence over a retention window.",
+      "implementation": ["apps/web/lib/services/legal-hold-gate.ts#legalHoldExclusion"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/legal-hold-gate.test.ts",
+          "name": "preserves the subject of a member-scoped hold and nobody else"
+        },
+        {
+          "kind": "guard",
+          "file": "scripts/check-legal-hold-coverage.mjs"
+        }
+      ]
+    },
+    {
+      "id": "policy-member-meets-the-policy-not-the-console",
+      "doc": "workspace-policy",
+      "section": "What members see",
+      "kind": "prose",
+      "sentence": "A member does not see the console, but they do meet the policy: a feature turned off is absent rather than failing, and a model the workspace does not permit does not appear in the picker.",
+      "implementation": ["packages/contracts/types/src/enterprise/workspace-controls.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.workspace-controls.test.ts",
+          "name": "workspace"
+        }
+      ]
+    },
+    {
+      "id": "sessions-are-listed-with-their-own-fields",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "Settings, Account lists every signed-in session with its device, browser, location, when it was created and when it was last active, and marks the one you are using.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "gives the screen every field a session row shows, and no field it must not"
+        }
+      ]
+    },
+    {
+      "id": "sessions-revoke-ends-that-device",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "**Revoke** signs that device out immediately; it has to sign in again to regain access.",
+      "implementation": ["apps/web/app/api/settings/sessions/[sessionId]/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "revokes other devices before ending the current session"
+        }
+      ]
+    },
+    {
+      "id": "sessions-log-out-everywhere-ends-this-one-too",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "**Log out of all devices** ends every session including this one, so you will need to sign in again.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "tells the account holder every session was ended, and counts what ended"
+        }
+      ]
+    },
+    {
+      "id": "sessions-absolute-lifetime-ends-a-session-in-use",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "A session also ends on its own once it reaches its maximum age, counted from when you signed in rather than from your last request, so a session that is in constant use still ends and asks you to sign in again.",
+      "implementation": ["apps/web/lib/auth/session-policy.ts#hasOutlivedAbsoluteLifetime"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/sessions/route.test.ts",
+          "name": "ends a session that has outlived the absolute lifetime and never returns it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/auth/__tests__/session-policy.test.ts",
+          "name": "names the absolute cap for a session older than policy allows"
+        }
+      ]
+    },
+    {
+      "id": "sessions-default-cap-is-thirty-days",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "The maximum is 30 days.",
+      "implementation": ["apps/web/lib/auth/session-policy.ts#sessionAbsoluteLifetimeMs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/auth/__tests__/session-policy.test.ts",
+          "name": "caps a session at thirty days when nothing is configured"
+        }
+      ]
+    },
+    {
+      "id": "password-common-check-refuses",
+      "doc": "account-security",
+      "section": "Password",
+      "kind": "prose",
+      "sentence": "A password that fails the common-password check is refused with \"That password is too common.\" A forgotten password is reset from the sign-in screen with **Forgot password?**.",
+      "implementation": ["apps/web/features/auth/AuthNewPasswordStep.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/auth/__tests__/AuthNewPasswordStep.test.tsx",
+          "text": "That password is too common."
+        }
+      ]
+    },
+    {
+      "id": "privacy-local-conversations-are-never-uploaded",
+      "doc": "privacy-controls",
+      "section": "What is stored where",
+      "kind": "prose",
+      "sentence": "In Local mode on the CLI, conversations stay on your device and are never uploaded.",
+      "implementation": ["crates/agiworkforce-llm/src/lib.rs"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-rust-egress-boundary.mjs"
+        }
+      ]
+    },
+    {
+      "id": "privacy-managed-surfaces-take-no-provider-key",
+      "doc": "privacy-controls",
+      "section": "What is stored where",
+      "kind": "prose",
+      "sentence": "Web, Mobile, Desktop and Chrome use managed cloud and do not accept provider keys.",
+      "implementation": ["packages/contracts/types/src/surface-capability-manifest.ts"],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-capability-boundaries.mjs"
+        }
+      ]
+    },
+    {
+      "id": "privacy-no-sale-and-no-training",
+      "doc": "privacy-controls",
+      "section": "What is stored where",
+      "kind": "prose",
+      "sentence": "AGI does not sell your data, and does not use customer conversation content to train AGI-owned models.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
+          "name": "states that no training opt-in exists"
+        }
+      ]
+    },
+    {
+      "id": "privacy-diagnostics-are-off-until-opted-in",
+      "doc": "privacy-controls",
+      "section": "Diagnostics",
+      "kind": "prose",
+      "sentence": "They are disabled by default and can be turned on or off in Settings, Privacy.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
+          "name": "does not enable telemetry until opt-in is saved and sends only one write in StrictMode"
+        }
+      ]
+    },
+    {
+      "id": "privacy-temporary-by-default-switch",
+      "doc": "privacy-controls",
+      "section": "Temporary chats",
+      "kind": "prose",
+      "sentence": "\"Start new chats as temporary\" makes every new conversation temporary: no message written to your history, no memory, and attachments kept out of the Library.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/temporary-by-default.test.ts",
+          "name": "Start new chats as temporary"
+        }
+      ]
+    },
+    {
+      "id": "privacy-temporary-record-expires-at-thirty-days",
+      "doc": "privacy-controls",
+      "section": "Temporary chats",
+      "kind": "prose",
+      "sentence": "The conversation record and any attachment are held for up to 30 days and then removed.",
+      "implementation": ["apps/web/app/api/cron/purge-temporary-chats/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
+          "name": "retires the files a temporary chat received on the same clock as the chat"
+        }
+      ]
+    },
+    {
+      "id": "export-account-deletion-ends-the-export",
+      "doc": "export-your-data",
+      "section": "Before you delete your account",
+      "kind": "prose",
+      "sentence": "Account deletion erases conversations and account data, and the export cannot be run afterwards.",
+      "implementation": [
+        "apps/web/lib/server/account-erasure.ts#USER_SCOPED_TABLES",
+        "apps/web/app/api/user/export/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/deletion-manifest.test.ts",
+          "name": "erases every conversation store with its subject"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/deletion-manifest.test.ts",
+          "name": "gives every customer-content table a deletion path"
+        }
+      ]
+    },
+    {
+      "id": "delete-typed-confirmation",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\" Confirming requires typing `DELETE` into the dialog.",
+      "implementation": ["apps/web/features/settings/sections/AccountSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/AccountSection.tsx",
+          "text": "deleteConfirmInput !== 'DELETE'"
+        }
+      ]
+    },
+    {
+      "id": "delete-runs-24-hours-after-confirming",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "The dialog states what happens: your account and all associated data are permanently deleted, you are signed out now, and erasure runs 24 hours after you confirm.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion when the update touches the profile row"
+        }
+      ]
+    },
+    {
+      "id": "delete-deadline-is-the-earliest-moment",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "After you confirm, the dialog shows the date and time the 24 hours are up, and you are signed out when you continue.",
+      "implementation": [
+        "apps/web/features/settings/sections/AccountSection.tsx",
+        "apps/web/app/api/cron/purge-deleted-accounts/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/cron/purge-deleted-accounts/route.ts",
+          "text": "deletion_scheduled_for <= now()"
+        }
+      ]
+    },
+    {
+      "id": "delete-cancellation-window-is-real",
+      "doc": "delete-your-account",
+      "section": "Changing your mind",
+      "kind": "prose",
+      "sentence": "The 24 hours are a real cancellation window, not a formality.",
+      "implementation": ["apps/web/app/api/user/delete-account/cancel/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "cancels a deletion inside the grace window and records it symmetrically with scheduling"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "refuses to cancel once the grace window has closed, and does not touch the columns"
+        }
+      ]
+    },
+    {
+      "id": "delete-cancelling-removes-nothing",
+      "doc": "delete-your-account",
+      "section": "Changing your mind",
+      "kind": "prose",
+      "sentence": "Cancelling keeps the account active and removes nothing.",
+      "implementation": ["apps/web/app/api/user/delete-account/cancel/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "is a clean no-op when nothing is pending, not a 500"
+        }
+      ]
+    },
+    {
+      "id": "delete-sole-owner-is-refused",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "If you are the only owner of a workspace, the request is refused and nothing is scheduled.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "refuses while the account is the only owner of a workspace, and deletes nothing"
+        }
+      ]
+    },
+    {
+      "id": "delete-sole-owner-message-names-each-workspace",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "The message names every workspace you own alone, so hand each one to another owner or delete it first, then try again.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "names every workspace the account owns alone, so the user knows what to hand over"
+        }
+      ]
+    },
+    {
+      "id": "delete-bulk-chat-actions-confirm-and-scope",
+      "doc": "delete-your-account",
+      "section": "Deleting conversations without deleting the account",
+      "kind": "prose",
+      "sentence": "Both ask first and name the current-workspace scope.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+          "text": "Delete all chats in this workspace?"
+        }
+      ]
+    },
+    {
+      "id": "share-dialog-names-the-audience",
+      "doc": "sharing-conversations",
+      "section": "Create a share link",
+      "kind": "prose",
+      "sentence": "Once the link exists the dialog confirms the audience: \"Anyone with the link can open this now\", or \"Only your workspace can open this now\".",
+      "implementation": ["apps/web/features/chat/components/share/ShareConversationDialog.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+          "text": "Only your workspace can open this now"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+          "text": "Anyone with the link can open this now"
+        }
+      ]
+    },
+    {
+      "id": "share-audience-change-asks-first",
+      "doc": "sharing-conversations",
+      "section": "Change or revoke a link",
+      "kind": "prose",
+      "sentence": "Switching the audience after the fact asks first, naming the change: \"Make this readable by anyone with the link?\" or \"Limit this to your workspace?\".",
+      "implementation": ["apps/web/features/chat/components/share/ShareConversationDialog.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "sends the audience change only after the confirmation is accepted"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "asks before closing the link, naming who loses access and who gains it"
+        }
+      ]
+    },
+    {
+      "id": "share-revoke-names-the-consequence",
+      "doc": "sharing-conversations",
+      "section": "Change or revoke a link",
+      "kind": "prose",
+      "sentence": "**Revoke share** removes access, and the confirmation says that anyone using the link will immediately lose access.",
+      "implementation": [
+        "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+        "apps/web/features/settings/sections/SharedLinksSection.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "revokes the exact link from the result state"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+          "text": "will immediately lose access"
+        }
+      ]
+    },
+    {
+      "id": "share-settings-lists-and-revokes-every-link",
+      "doc": "sharing-conversations",
+      "section": "Find every link you have created",
+      "kind": "prose",
+      "sentence": "Settings, **Shared links** lists the links created from web conversations, with the ones marked _Workspace only_ distinguished from public ones, and revokes any of them.",
+      "implementation": ["apps/web/features/settings/sections/SharedLinksSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+          "text": "Workspace only"
+        }
+      ]
+    },
+    {
+      "id": "share-no-spreadsheet-export-on-web",
+      "doc": "sharing-conversations",
+      "section": "Export instead of sharing",
+      "kind": "prose",
+      "sentence": "There is no spreadsheet export on web, so no xlsx option is offered rather than one that would fail after you picked it.",
+      "implementation": [
+        "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx#type ExportFormat"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+          "text": "type ExportFormat = 'markdown' | 'json' | 'html' | 'pdf' | 'docx';"
+        }
+      ]
+    },
+    {
+      "id": "share-temporary-chat-cannot-be-shared",
+      "doc": "sharing-conversations",
+      "section": "Chats you cannot share",
+      "kind": "prose",
+      "sentence": "A temporary chat cannot be shared while the control is on, because it is never saved.",
+      "implementation": [
+        "apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_SHARE_REFUSAL",
+        "apps/web/features/chat/components/share/ShareConversationDialog.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "explains the refusal and offers no create control for a temporary chat"
+        }
+      ]
+    }
+  ],
+  "unproven": [
+    {
+      "id": "account-second-factors-offered",
+      "doc": "account-security",
+      "section": "Second factors",
+      "kind": "prose",
+      "sentence": "Hardware security keys, SMS MFA and trusted-device lists are not part of the current account contract, so they are not offered rather than silently ignored.",
+      "implementation": ["apps/web/features/auth"],
+      "reason": "Which second factors exist is decided at the identity provider, not in this repository, so nothing here can assert that a factor is absent. It stays unproven until the account contract enumerates the factors it accepts in code."
+    },
+    {
+      "id": "privacy-managed-encrypted-in-transit-and-at-rest",
+      "doc": "privacy-controls",
+      "section": "What is stored where",
+      "kind": "prose",
+      "sentence": "Managed cloud conversations are encrypted in transit and at rest.",
+      "implementation": ["apps/web/lib/server/neon-db.ts"],
+      "reason": "Encryption at rest is a property of the hosting provider's storage rather than of any statement this repository makes, so no assertion here can fail when it stops being true."
+    },
+    {
+      "id": "privacy-server-side-error-reporting",
+      "doc": "privacy-controls",
+      "section": "Diagnostics",
+      "kind": "prose",
+      "sentence": "Server-side operational error reporting can run when configured and is not controlled by the browser setting.",
+      "implementation": ["apps/web/lib/sentry-shared.ts"],
+      "reason": "The claim is about an operator's deployment configuration rather than about code behaviour, and the deployment is not readable from the repository."
+    },
+    {
+      "id": "connectors-mcp-count-follows-the-plan",
+      "doc": "connectors-and-mcp",
+      "section": "Custom MCP connections and plans",
+      "kind": "prose",
+      "sentence": "The number of custom MCP connections available depends on your plan.",
+      "implementation": ["packages/contracts/types/src/billing-catalog.ts"],
+      "reason": "The plan catalogue is founder-frozen for this program, so no assertion is added against it; the limit is read from the catalogue at runtime and the pricing page is its published source."
+    }
+  ],
+  "narrative": [
+    {
+      "id": "account-check-spam-folder",
+      "doc": "account-security",
+      "section": "Signing in",
+      "kind": "prose",
+      "sentence": "If a sign-in or verification email has not arrived, check the spam folder before requesting another.",
+      "implementation": ["apps/web/features/auth"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "account-revoke-what-you-do-not-recognise",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "Revoke anything you do not recognise.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "account-log-out-all-confirms",
+      "doc": "account-security",
+      "section": "Active sessions",
+      "kind": "prose",
+      "sentence": "It asks first and names that consequence.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "why": "editorial-rule"
+    },
+    {
+      "id": "account-identifiers-are-not-secrets",
+      "doc": "account-security",
+      "section": "Your identifiers",
+      "kind": "prose",
+      "sentence": "Support asks for these when investigating an issue; they identify the account, they are not secrets that grant access.",
+      "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
+      "why": "editorial-rule"
+    },
+    {
+      "id": "privacy-byok-surface-availability",
+      "doc": "privacy-controls",
+      "section": "What is stored where",
+      "kind": "prose",
+      "sentence": "CLI BYOK sends requests directly to the provider you select; VS Code BYOK is coming soon.",
+      "implementation": ["packages/contracts/types/src/surface-capability-manifest.ts"],
+      "why": "roadmap-statement"
+    },
+    {
+      "id": "privacy-settings-gathers-the-controls",
+      "doc": "privacy-controls",
+      "section": "Your data in the product",
+      "kind": "prose",
+      "sentence": "Settings, Privacy gathers the controls in one place: shared links created from web conversations, archived chats, recently deleted chats, bulk archive and delete, the files and media you uploaded or AGI generated, memory preferences, the JSON export, and the privacy requests page for consent and rights requests.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "privacy-residency-roadmap",
+      "doc": "privacy-controls",
+      "section": "Where managed cloud data is hosted",
+      "kind": "prose",
+      "sentence": "EU and UK residency hosting is on the roadmap and is not available today.",
+      "implementation": ["apps/web/app/faq/page.tsx"],
+      "why": "roadmap-statement"
+    },
+    {
+      "id": "privacy-local-never-leaves",
+      "doc": "privacy-controls",
+      "section": "Where managed cloud data is hosted",
+      "kind": "prose",
+      "sentence": "Local conversations never leave your device in the first place.",
+      "implementation": ["crates/agiworkforce-llm/src/lib.rs"],
+      "why": "editorial-rule"
+    },
+    {
+      "id": "library-add-to-project",
+      "doc": "library",
+      "section": "Working with an item",
+      "kind": "prose",
+      "sentence": "Add it to a project, where it becomes project knowledge for every chat in that project.",
+      "implementation": ["apps/web/app/api/projects"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "library-empty-filter-is-not-an-empty-library",
+      "doc": "library",
+      "section": "If something is missing",
+      "kind": "prose",
+      "sentence": "\"Nothing here matches that name. Try a shorter search.\" means the filter, not the Library, is empty.",
+      "implementation": ["apps/web/features/library"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "library-clear-the-filter-first",
+      "doc": "library",
+      "section": "If something is missing",
+      "kind": "prose",
+      "sentence": "Clear the search and the filter before concluding a file is gone.",
+      "implementation": ["apps/web/features/library"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "privacy-diagnostics-masking",
+      "doc": "privacy-controls",
+      "section": "Diagnostics",
+      "kind": "prose",
+      "sentence": "Sensitive request fields are removed before error reports are sent; free-text diagnostic messages may remain after secrets are masked.",
+      "implementation": ["apps/web/lib/sentry-shared.ts"],
+      "why": "editorial-rule"
+    },
+    {
+      "id": "chat-response-style-control",
+      "doc": "chat-basics",
+      "section": "Choose how the answer is written",
+      "kind": "prose",
+      "sentence": "The composer carries a **Response style** control with Default, Concise, Detailed, Technical and Creative, plus a response-length control.",
+      "implementation": ["apps/web/features/chat/components/Composer"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "temporary-end-discards",
+      "doc": "temporary-chats",
+      "section": "Ending one",
+      "kind": "prose",
+      "sentence": "**End temporary chat** discards it.",
+      "implementation": ["apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_END_LABEL"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "approvals-setting-lives-in-settings",
+      "doc": "tool-approvals",
+      "section": "The account-wide default",
+      "kind": "prose",
+      "sentence": "Settings carries one **Default approval for tool actions** with two settings:",
+      "implementation": [
+        "packages/contracts/types/src/tool-approval-policy.ts#TOOL_APPROVAL_POLICY_OPTIONS"
+      ],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "policy-default-model-control",
+      "doc": "workspace-policy",
+      "section": "What policy controls",
+      "kind": "prose",
+      "sentence": "**Default model**: the model members start on.",
+      "implementation": ["packages/contracts/types/src/enterprise/workspace-controls.ts"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "export-settings-links-to-the-requests-page",
+      "doc": "export-your-data",
+      "section": "What else you can ask for",
+      "kind": "prose",
+      "sentence": "Settings links to it directly so you do not have to find it from a policy page.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "delete-export-cannot-run-after-the-account-is-gone",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "The export is a self-service download from Settings, Privacy, and it cannot be run once the account is gone.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "why": "reader-instruction"
+    }
+  ]
+}

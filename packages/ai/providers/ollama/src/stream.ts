@@ -9,10 +9,11 @@ function isOllamaChatStreamChunk(value: unknown): value is OllamaChatStreamChunk
   return true;
 }
 
-const PARSE_ERROR_SENTINEL: OllamaChatStreamChunk = {
-  done: true,
-  done_reason: 'stop',
-} as OllamaChatStreamChunk;
+// Recognised by identity in the translator below, which is the only consumer.
+const PARSE_ERROR_SENTINEL: OllamaChatStreamChunk = { done: false } as OllamaChatStreamChunk;
+
+const STREAM_PARSE_ERROR_CODE = 'stream_parse_error';
+const STREAM_PARSE_ERROR_MESSAGE = 'The response stream carried a frame that could not be read.';
 
 export async function* parseOllamaStream(
   body: ReadableStream<Uint8Array>,
@@ -65,15 +66,25 @@ export async function* parseOllamaStream(
   }
 }
 
+// `stop` is terminal: the first done frame closes the turn and nothing the
+// upstream sends afterwards reaches the consumer.
 export async function* translateOllamaStream(
   chunks: AsyncIterable<OllamaChatStreamChunk>,
 ): AsyncIterable<StreamChunk> {
   let toolUseCounter = 0;
-  let stopEmitted = false;
+  let finished = false;
+  let parseFailed = false;
+  let pendingUsage: StreamChunk | null = null;
+  let stopReason: Extract<StreamChunk, { type: 'stop' }>['reason'] = 'end_turn';
   let threw = false;
 
   try {
     for await (const chunk of chunks) {
+      if (finished) continue;
+      if (chunk === PARSE_ERROR_SENTINEL) {
+        parseFailed = true;
+        continue;
+      }
       const message = chunk.message;
       if (message?.thinking) {
         yield { type: 'thinking-delta', delta: message.thinking };
@@ -95,32 +106,32 @@ export async function* translateOllamaStream(
       }
 
       if (chunk.done) {
-        const usage: StreamChunk = {
+        finished = true;
+        pendingUsage = {
           type: 'usage',
           ...(chunk.prompt_eval_count !== undefined
             ? { inputTokens: chunk.prompt_eval_count }
             : {}),
           ...(chunk.eval_count !== undefined ? { outputTokens: chunk.eval_count } : {}),
         };
-        yield usage;
-        yield {
-          type: 'stop',
-          reason:
-            chunk.done_reason === 'length'
-              ? 'max_tokens'
-              : chunk.done_reason === 'stop'
-                ? 'end_turn'
-                : 'end_turn',
-        };
-        stopEmitted = true;
+        stopReason = chunk.done_reason === 'length' ? 'max_tokens' : 'end_turn';
       }
     }
   } catch (error) {
     threw = true;
     throw error;
   } finally {
-    if (!stopEmitted && !threw) {
-      yield { type: 'stop', reason: 'end_turn' };
+    if (!threw) {
+      if (parseFailed) {
+        yield {
+          type: 'error',
+          message: STREAM_PARSE_ERROR_MESSAGE,
+          code: STREAM_PARSE_ERROR_CODE,
+          retryable: true,
+        };
+      }
+      if (pendingUsage) yield pendingUsage;
+      yield { type: 'stop', reason: parseFailed ? 'error' : stopReason };
     }
   }
 }

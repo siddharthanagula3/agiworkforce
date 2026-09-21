@@ -9,9 +9,13 @@ const mocks = vi.hoisted(() => ({
   recorder: vi.fn(),
   continue: vi.fn(),
   gate: vi.fn(),
+  access: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mocks.auth() }));
+vi.mock('@/lib/auth/account-lifecycle', () => ({
+  accountAccessForSignIn: (userId: string) => mocks.access(userId),
+}));
 vi.mock('./StaleSessionRecovery', () => ({
   StaleSessionRecovery: (props: { loginUrl: string; alreadyRetried: boolean }) => (
     <div
@@ -49,12 +53,28 @@ vi.mock('../../signup/complete/RecordTermsAcceptance', () => ({
 }));
 
 import LoginCompletePage from './page';
+import {
+  accountAccessDecision,
+  ACCOUNT_DENIAL_NOTICE,
+  ACCOUNT_STATUSES,
+  type AccountAccessDenied,
+  type AccountStatus,
+} from '@/lib/auth/account-status';
+
+const DENIALS = ACCOUNT_STATUSES.map((status) => ({
+  status,
+  decision: accountAccessDecision(status),
+})).filter(
+  (entry): entry is { status: AccountStatus; decision: AccountAccessDenied } =>
+    !entry.decision.allowed,
+);
 
 describe('/login/complete', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.auth.mockResolvedValue({ userId: 'user-1' });
     mocks.accepted.mockResolvedValue(false);
+    mocks.access.mockResolvedValue({ allowed: true });
   });
 
   it('does not rewrite a current durable acceptance', async () => {
@@ -128,5 +148,46 @@ describe('/login/complete', () => {
     );
 
     expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/' });
+  });
+
+  it.each(DENIALS)(
+    'stops a $status account at the reason instead of at the next 403',
+    async ({ decision }) => {
+      mocks.access.mockResolvedValue(decision);
+      mocks.accepted.mockResolvedValue(true);
+
+      render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+      expect(screen.getByTestId('account-access-notice')).toHaveTextContent(decision.message);
+      expect(document.querySelector('[data-account-denial]')).toHaveAttribute(
+        'href',
+        decision.recoveryPath ?? '/login?redirectTo=%2Fchat',
+      );
+      expect(mocks.continue).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('terms-gate')).toBeNull();
+      expect(mocks.accepted).not.toHaveBeenCalled();
+    },
+  );
+
+  it('gives each reason its own heading and sentence, so a lockout never reads as a suspension', () => {
+    const reasons = new Set(DENIALS.map(({ decision }) => decision.reason));
+    const headings = new Set(
+      DENIALS.map(({ decision }) => ACCOUNT_DENIAL_NOTICE[decision.reason].title),
+    );
+    const messages = new Set(DENIALS.map(({ decision }) => decision.message));
+
+    expect(reasons.size).toBeGreaterThan(2);
+    expect(headings.size).toBe(reasons.size);
+    expect(messages.size).toBe(reasons.size);
+  });
+
+  it('lets a scheduled deletion sign in, because cancelling one is done signed in', async () => {
+    mocks.access.mockResolvedValue(accountAccessDecision('deletion_scheduled'));
+    mocks.accepted.mockResolvedValue(true);
+
+    render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
+
+    expect(screen.queryByTestId('account-access-notice')).toBeNull();
+    expect(mocks.continue).toHaveBeenCalledWith({ redirectTo: '/chat' });
   });
 });

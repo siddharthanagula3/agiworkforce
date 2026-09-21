@@ -2,11 +2,10 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 
+import { IDEMPOTENCY_KEY_HEADER } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { createError } from '@/lib/errors';
-
-export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 
 const MIN_KEY_LENGTH = 8;
 const MAX_KEY_LENGTH = 255;

@@ -43,13 +43,24 @@ async function handleMemoryCommand(request: NextRequest): Promise<Response> {
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
 
+  // Read from the conversation, never from the caller: a client that omitted
+  // the flag must not be able to turn a temporary chat into a durable memory.
+  const conversationId = parsed.data.conversationId ?? null;
+  const [conversation] = conversationId
+    ? await db.query<{ is_temporary: boolean }>(
+        `select is_temporary from web_conversations where id = $1::uuid and user_id = $2 and deleted_at is null limit 1`,
+        [conversationId, userId],
+      )
+    : [];
+
   const result = await runMemoryCommand(
     db,
     {
       userId,
       organizationId,
       projectId: parsed.data.projectId ?? null,
-      conversationId: parsed.data.conversationId ?? null,
+      conversationId,
+      temporaryChat: conversation?.is_temporary === true,
     },
     { message: parsed.data.message, confirmed: parsed.data.confirmed ?? false },
   );

@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { generateKeyPairSync, sign as signPayload } from 'node:crypto';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
+
+import { pluginSignaturePayload } from '@agiworkforce/client-runtime/plugins';
+import { PLUGIN_SIGNING_PUBLIC_KEYS_ENV } from '@/lib/services/plugin-marketplace-service';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -18,6 +22,38 @@ import {
 
 const PLUGIN_ID = 'research-pack';
 const ADMIN = 'user_admin';
+const ARTIFACT_DIGEST = 'd'.repeat(64);
+
+const publisher = generateKeyPairSync('ed25519');
+const previousKeys = process.env[PLUGIN_SIGNING_PUBLIC_KEYS_ENV];
+process.env[PLUGIN_SIGNING_PUBLIC_KEYS_ENV] = publisher.publicKey
+  .export({ type: 'spki', format: 'pem' })
+  .toString();
+
+afterAll(() => {
+  if (previousKeys === undefined) delete process.env[PLUGIN_SIGNING_PUBLIC_KEYS_ENV];
+  else process.env[PLUGIN_SIGNING_PUBLIC_KEYS_ENV] = previousKeys;
+});
+
+function signatureFor(version: string): string {
+  return signPayload(
+    null,
+    Buffer.from(
+      pluginSignaturePayload({ pluginId: PLUGIN_ID, version, sha256: ARTIFACT_DIGEST }),
+      'utf8',
+    ),
+    publisher.privateKey,
+  ).toString('base64');
+}
+
+const PASSING_SCAN = {
+  content_hash: ARTIFACT_DIGEST,
+  plugin_key: PLUGIN_ID,
+  verdict: 'pass',
+  rules_version: 1,
+  findings: [],
+  scanned_at: '2026-09-01T00:00:00.000Z',
+};
 
 interface VersionFixture {
   version: string;
@@ -42,7 +78,9 @@ function versionRow(fixture: VersionFixture) {
     version: fixture.version,
     status: fixture.status,
     manifest_url: null,
-    sha256: null,
+    sha256: ARTIFACT_DIGEST,
+    signature: signatureFor(fixture.version),
+    signature_algorithm: 'ed25519',
     declared_skills: fixture.declaredSkills ?? [],
     permissions: fixture.permissions ?? [],
     changelog: fixture.changelog ?? '',
@@ -265,6 +303,8 @@ describe('the update flow shows what changes before it applies', () => {
       status: 'published',
       manifestUrl: null,
       sha256: null,
+      signature: null,
+      signatureAlgorithm: null,
       declaredSkills: [],
       permissions: [],
       changelog: '',
@@ -351,13 +391,20 @@ describe('applying an update moves one installation and nothing else', () => {
   function updateWorld(
     installedVersion: string,
     versions: Record<string, VersionFixture>,
+    approved: string[] = ['network'],
   ): { db: DatabaseAdapter; writes: unknown[][] } {
     const writes: unknown[][] = [];
     const db = {
       query: vi.fn(async (sql: string, params: unknown[] = []) => {
-        if (sql.includes('select installed_version from public.plugin_installations')) {
-          return installedVersion ? [{ installed_version: installedVersion }] : [];
+        if (sql.includes('select installed_version, approved_permissions')) {
+          return installedVersion
+            ? [{ installed_version: installedVersion, approved_permissions: approved }]
+            : [];
         }
+        if (sql.includes('select source, publisher_kind')) {
+          return [{ source: 'marketplace', publisher_kind: 'first-party' }];
+        }
+        if (sql.includes('from public.plugin_package_scans')) return [PASSING_SCAN];
         if (sql.includes('and version = $2')) {
           const found = versions[String(params[1])];
           return found ? [versionRow(found)] : [];
@@ -395,7 +442,7 @@ describe('applying an update moves one installation and nothing else', () => {
 
     expect(applied).toMatchObject({ fromVersion: '1.0.0', toVersion: '1.1.0', reEnabled: false });
     expect(writes).toHaveLength(1);
-    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', false]);
+    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', false, '["network"]']);
   });
 
   it('refuses a version that adds a permission the member has not approved', async () => {
@@ -440,7 +487,7 @@ describe('applying an update moves one installation and nothing else', () => {
     });
 
     expect(applied.reEnabled).toBe(true);
-    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', true]);
+    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', true, '[]']);
   });
 
   it('refuses to move onto a version that is not published', async () => {

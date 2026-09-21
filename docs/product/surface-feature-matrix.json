@@ -1,0 +1,2194 @@
+{
+  "why": "Seven surfaces ship one product, and until this file existed nobody could answer 'is Projects in the CLI' without reading the CLI. A cell says where that feature's code is on that surface and names the two files that show it is reached: the entry point and whatever imports, declares or routes to it. It says nothing about whether a user can get it. A generous cell is worse than an empty one, so a cell the tree does not settle is unverified and says what would settle it.",
+  "surfacesFrom": {
+    "file": "packages/contracts/types/src/concept-registry.json",
+    "field": "originSurfaces"
+  },
+  "statesFrom": {
+    "file": "packages/contracts/types/src/model-catalog.ts",
+    "symbol": "FEATURE_MATURITIES",
+    "plus": ["unverified", "absent"]
+  },
+  "featureRegistry": "packages/contracts/types/src/feature-registry.json",
+  "surfaceNotes": {
+    "web": "The Next.js application. Its API routes are a separate surface below.",
+    "desktop": "The Electron and Tauri shell with its own renderer under apps/desktop/src.",
+    "mobile": "The React Native application under apps/mobile.",
+    "cli": "The Rust binary under apps/cli.",
+    "vscode": "The editor extension under apps/extension-vscode.",
+    "chrome": "The browser extension under apps/extension.",
+    "api": "The HTTP surface under apps/web/app/api that the other six and third parties call."
+  },
+  "releaseWorkflows": {
+    "web": ".github/workflows/deploy-production.yml",
+    "desktop": ".github/workflows/release-desktop.yml",
+    "mobile": ".github/workflows/release-mobile.yml",
+    "cli": ".github/workflows/release-cli.yml",
+    "vscode": ".github/workflows/release-vscode-extension.yml",
+    "chrome": ".github/workflows/release-chrome-extension.yml",
+    "api": ".github/workflows/deploy-production.yml"
+  },
+  "groups": [
+    {
+      "id": "core-consumer",
+      "title": "Core consumer"
+    },
+    {
+      "id": "advanced-ai",
+      "title": "Advanced AI"
+    },
+    {
+      "id": "integrations",
+      "title": "Integrations"
+    },
+    {
+      "id": "developer",
+      "title": "Developer"
+    },
+    {
+      "id": "native",
+      "title": "Native"
+    },
+    {
+      "id": "enterprise",
+      "title": "Enterprise"
+    }
+  ],
+  "features": [
+    {
+      "id": "chat",
+      "label": "Chat",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "unverified",
+          "settledBy": "apps/web/features/chat/pages/WebChatPage.tsx exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/DesktopShellV3.tsx",
+          "mount": "apps/desktop/src/features/v3/index.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/chat/[id].tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/tui/tui_app.rs",
+          "mount": "apps/cli/src/tui/mod.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts",
+          "mount": "apps/extension-vscode/src/providers/chatEditorPanel.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/side-panel/chat-state.ts",
+          "mount": "apps/extension/src/side_panel.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/llm/v1/chat/completions/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "history",
+      "label": "History",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/settings/sections/ArchivedChatsSection.tsx",
+          "mount": "apps/web/features/settings/components/WebSettingsModal.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/ConversationRow.tsx",
+          "mount": "apps/desktop/src/features/v3/Sidebar.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/chats/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/conversations.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/trees/conversationTreeProvider.ts",
+          "mount": "apps/extension-vscode/src/features/trees/index.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/background/conversation-history.ts",
+          "mount": "apps/extension/src/side_panel.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/chat/conversations/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "projects",
+      "label": "Projects",
+      "group": "core-consumer",
+      "featureId": "projects",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/chat/projects/page.tsx",
+          "mount": "apps/web/app/chat/projects/layout.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/AgiWorkProjects.tsx",
+          "mount": "apps/desktop/src/features/v3/index.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/(tabs)/projects.tsx",
+          "mount": "apps/mobile/app/(app)/(tabs)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/cloud/projects.rs",
+          "mount": "apps/cli/src/cloud/mod.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/projects/projectsTree.ts",
+          "mount": "apps/extension-vscode/src/features/projects/index.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/side-panel/projectsDrawer.ts",
+          "mount": "apps/extension/src/side_panel.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/projects/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "files",
+      "label": "Files and artifacts",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/chat/stores/artifacts-store.ts",
+          "mount": "apps/web/app/gallery/GalleryClient.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/AgiWorkArtifacts.tsx",
+          "mount": "apps/desktop/src/features/v3/index.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/artifacts/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/cloud/artifacts.rs",
+          "mount": "apps/cli/src/cloud/mod.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/artifacts/artifactsTree.ts",
+          "mount": "apps/extension-vscode/src/features/artifacts/index.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/side-panel/artifactsDrawer.ts",
+          "mount": "apps/extension/src/side_panel.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/artifacts/index/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "library",
+      "label": "Library",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "unverified",
+          "settledBy": "apps/web/features/library/components/LibraryView.tsx exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/library/DesktopLibrary.tsx",
+          "mount": "apps/desktop/src/features/v3/DesktopShellV3.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/library/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "absent",
+          "why": "The CLI has no library browser; a terminal session reaches generated files through the filesystem it already runs in."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "The editor shows artifacts in its own tree; nothing in apps/extension-vscode/src reads the library collection."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "The side panel shows artifacts for the open conversation; nothing under apps/extension/src reads the library collection."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/library/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "memory",
+      "label": "Memory",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/memory-write-service.ts",
+          "mount": "apps/web/app/api/memory/route.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/api/cloudMemory.ts",
+          "mount": "apps/desktop/src/features/settings/tabs/Memory.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/settings/memory.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/cloud/memory.rs",
+          "mount": "apps/cli/src/cloud/mod.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/memory/accountMemoryStore.ts",
+          "mount": "apps/extension-vscode/src/core/chatSetup.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/cloud-bridge/memoryClient.ts",
+          "mount": "apps/extension/src/side_panel.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/memory/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "search",
+      "label": "Search",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "unverified",
+          "settledBy": "packages/ui/unified-chat/src/lib/slashCommands.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "A desktop entry point that selects the search interaction mode. packages/ui/unified-chat/src/lib/slashCommands.ts is shared, but nothing under apps/desktop/src was found importing it; a desktop composer test that sends work_mode search would settle it."
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "A mobile composer path that sends the search work mode. Nothing under apps/mobile was found naming the mode."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/tool_search.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "An editor path that selects the search interaction mode. apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts carries a browse-the-web affordance, which is the page tool rather than the mode."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "A side-panel path that selects the search mode rather than the page tools. apps/extension/src/features/browser-tools reads the open page, which is a different capability."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/search/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "work",
+      "label": "Work",
+      "group": "core-consumer",
+      "featureId": "work",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/agi-work/page.tsx",
+          "mount": "apps/web/app/layout.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/tasks/DesktopTasks.tsx",
+          "mount": "apps/desktop/src/features/v3/DesktopShellV3.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/tasks.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/agents.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+          "mount": "apps/extension-vscode/src/features/cloud-tasks/index.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/background/scheduled-task-runs.ts",
+          "mount": "apps/extension/src/background.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/llm/v1/chat/completions/runs/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "settings",
+      "label": "Settings",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/settings/page.tsx",
+          "mount": "apps/web/app/settings/layout.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/settings/SkillsPluginsSettings.tsx",
+          "mount": "apps/desktop/src/features/settings/tabs/Plugins/index.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/settings/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/config.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "apps/extension-vscode/src/features/settings is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "apps/extension/src/options.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/settings/preferences/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "plan-status",
+      "label": "Plan status",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/billing/page.tsx",
+          "mount": "apps/web/app/billing/layout.tsx"
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "apps/desktop/src/features/subscription is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/settings/cloud-billing.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/usage_summary.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/integrations/tierResolver.ts",
+          "mount": "apps/extension-vscode/src/extension.ts"
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "A side-panel element that shows the plan or the remaining quota. apps/extension/src/features/cloud-bridge reaches the account, but nothing was found rendering its plan."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/usage/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "help",
+      "label": "Help",
+      "group": "core-consumer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/support/help-articles.ts",
+          "mount": "apps/web/app/help/collections.ts"
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "A desktop entry point that opens help. apps/desktop/src-tauri/src/sys/support_bundle.rs collects diagnostics, which is not the help centre."
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "A mobile screen that opens help. apps/mobile/app/(app)/feedback.tsx sends feedback, which is a different affordance."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/doctor.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "apps/extension-vscode/src/features/onboarding is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src opens help; the side panel links out to the web application for it."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/support/ask/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "deep-research",
+      "label": "Deep Research",
+      "group": "advanced-ai",
+      "featureId": "research",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/chat/stores/research-panel-store.ts",
+          "mount": "apps/web/features/chat/utils/research-sources.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/research/ResearchReport.tsx",
+          "mount": "apps/desktop/src/features/research/index.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/reports/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src runs or reads a research report; the CLI is a coding surface."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src runs or reads a research report."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src runs or reads a research report."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts",
+          "mount": "apps/web/app/api/llm/v1/chat/completions/route.ts"
+        }
+      }
+    },
+    {
+      "id": "study",
+      "label": "Study",
+      "group": "advanced-ai",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/study/components/StudyPage.tsx",
+          "mount": "apps/web/features/study/index.ts"
+        },
+        "desktop": {
+          "state": "absent",
+          "why": "Nothing under apps/desktop/src implements the study mode."
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Nothing under apps/mobile implements the study mode."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src implements the study mode."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src implements the study mode."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src implements the study mode."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/study/server/study-session-store.ts",
+          "mount": "apps/web/app/api/study/sessions/route.ts"
+        }
+      }
+    },
+    {
+      "id": "analyze",
+      "label": "Analyze",
+      "group": "advanced-ai",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "unverified",
+          "settledBy": "An entry point that names an analyze mode. The checklist names it as a feature; the interaction-mode registry has no analyze member, so either the registry is missing one or the row names a capability that was folded into chat."
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "The same registry answer as web. apps/desktop/src/features/analytics is product analytics, which is a different thing."
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "The same registry answer as web."
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "The same registry answer as web."
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "The same registry answer as web."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "The same registry answer as web."
+        },
+        "api": {
+          "state": "unverified",
+          "settledBy": "The same registry answer as web."
+        }
+      }
+    },
+    {
+      "id": "image-generation",
+      "label": "Image generation",
+      "group": "advanced-ai",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/chat/lib/imageGenerationOptions.ts",
+          "mount": "apps/web/features/chat/pages/WebChatPage.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/desktop/src-tauri/src/integrations/api_integrations/image_gen.rs",
+          "mount": "apps/desktop/src-tauri/src/integrations/api_integrations/mod.rs"
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "A mobile composer path that requests an image. Nothing under apps/mobile was found naming the image work mode."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/cloud/image.rs",
+          "mount": "apps/cli/src/cloud/mod.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src requests an image."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src requests an image."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/media/image/generate/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "video-generation",
+      "label": "Video generation",
+      "group": "advanced-ai",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/server/video-generation-jobs.ts",
+          "mount": "apps/web/app/api/media/video/cancel/route.ts"
+        },
+        "desktop": {
+          "state": "absent",
+          "why": "Nothing under apps/desktop requests a video; the desktop composer does not carry the mode."
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Nothing under apps/mobile requests a video."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src requests a video."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src requests a video."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src requests a video."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/media/video/generate/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "voice",
+      "label": "Voice",
+      "group": "advanced-ai",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/chat/components/Composer/VoiceEntryButton.tsx",
+          "mount": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/electron/voiceDictation.ts",
+          "mount": "apps/desktop/electron/main.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/voice.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/voice.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "A VS Code webview has no microphone, so the editor cannot record audio at all."
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/side-panel/voice.ts",
+          "mount": "apps/extension/src/side_panel.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/voice/live/sessions/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "camera",
+      "label": "Camera",
+      "group": "advanced-ai",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "unverified",
+          "settledBy": "packages/ui/unified-chat/src/components/AttachmentMenu.tsx exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "A desktop entry point that opens a camera. The shared attachment menu carries the control and the capability table says desktop has a camera, but nothing under apps/desktop/src was found opening one."
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/camera.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "absent",
+          "why": "A terminal has no camera."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "A VS Code webview cannot open a camera."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src opens a camera."
+        },
+        "api": {
+          "state": "absent",
+          "why": "A camera is a device capability; the HTTP surface receives the image as an upload rather than opening one."
+        }
+      }
+    },
+    {
+      "id": "screen-sharing",
+      "label": "Screen sharing",
+      "group": "advanced-ai",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "Nothing under apps/web captures the screen; the capability table records canTakeScreenshot false for web."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/screen-capture/ScreenCaptureButton.tsx",
+          "mount": "apps/desktop/src/features/quick-query/index.tsx"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canTakeScreenshot false for mobile and nothing under apps/mobile captures the screen."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src captures the screen."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src captures the screen."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "A file under apps/extension/src that captures the screen or a tab. apps/extension/src/features/computer-use/browserControlConsent.ts is consent for driving the page, which is a different capability from sharing a screen."
+        },
+        "api": {
+          "state": "absent",
+          "why": "Capturing a screen is a device capability; the HTTP surface receives the capture as an upload."
+        }
+      }
+    },
+    {
+      "id": "connectors",
+      "label": "Connectors",
+      "group": "integrations",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/connectors/page.tsx",
+          "mount": "apps/web/app/connectors/layout.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/connectors/ConnectorGallery.tsx",
+          "mount": "apps/desktop/src/features/settings/tabs/Connectors/index.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/connectors/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src lists or authorizes a connector; the CLI reaches third parties through MCP instead."
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/connectors/connectorsTree.ts",
+          "mount": "apps/extension-vscode/src/features/connectors/index.ts"
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src lists or authorizes a connector."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/connectors/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "skills",
+      "label": "Skills",
+      "group": "integrations",
+      "featureId": "skills",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/skill-catalog-service.ts",
+          "mount": "apps/web/app/api/skills/route.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/api/cloudSkills.ts",
+          "mount": "apps/desktop/src/features/v3/DesktopShellV3.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/skills/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/skills.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src installs or runs a skill."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src installs or runs a skill."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/skills/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "plugins",
+      "label": "Plugins",
+      "group": "integrations",
+      "featureId": "plugins",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/plugin-lifecycle.ts",
+          "mount": "apps/web/app/plugins/[id]/page.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/settings/cloud/CloudPluginsSection.tsx",
+          "mount": "apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canUsePlugins false for mobile and nothing under apps/mobile installs a plugin."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/features/plugins/plugins.rs",
+          "mount": "apps/cli/src/features/plugins/mod.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src installs a plugin."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src installs a plugin."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/plugins/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "mcp",
+      "label": "MCP",
+      "group": "integrations",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/mcp-tool-executor.ts",
+          "mount": "apps/web/lib/user-connector-tools.ts"
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "apps/desktop/src/services/mcp.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canUseLocalMcp false for mobile and nothing under apps/mobile dials an MCP server."
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "apps/cli/src/mcp/mod.rs exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "An editor path that dials an MCP server of its own. apps/extension-vscode/src/integrations/localRuntimeClient.ts reaches the CLI runtime, which owns the MCP connection; whether the editor is a client in its own right is not decidable from the tree."
+        },
+        "chrome": {
+          "state": "partial",
+          "via": "import",
+          "entry": "apps/extension/src/webmcp.ts",
+          "mount": "apps/extension/src/content.ts",
+          "missing": "the server connection lifecycle. apps/extension/src/webmcp.ts exposes the open page to a model as tools; nothing under apps/extension/src dials, authorizes or lists an MCP server, which is what the other surfaces mean by MCP."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/settings/organization/mcp/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "approvals",
+      "label": "Tool approvals",
+      "group": "integrations",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/chat/components/approvals/ApprovalInbox.tsx",
+          "mount": "apps/web/features/chat/pages/WebChatPage.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/services/approvalResolution.ts",
+          "mount": "apps/desktop/src/services/coworkDispatch.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/settings/auto-approve.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "apps/cli/src/safety/approval.rs exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/permissions/approvalScope.ts",
+          "mount": "apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/computer-use/approvalPolicy.ts",
+          "mount": "apps/extension/src/background.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts",
+          "mount": "apps/web/app/api/settings/preferences/route.ts"
+        }
+      }
+    },
+    {
+      "id": "code-sessions",
+      "label": "Code sessions",
+      "group": "developer",
+      "featureId": "code",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/cloud-code-session-service.ts",
+          "mount": "apps/web/app/api/code/sessions/route.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/electron/runtime/developerSessionService.ts",
+          "mount": "apps/desktop/electron/main.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/companion/code/[threadId].tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/sessions.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/integrations/developerSessionHandoff.ts",
+          "mount": "apps/extension-vscode/src/core/commandSetup.ts"
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src opens a code session; the extension hands context off instead."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/code/sessions/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "repo-context",
+      "label": "Repository context",
+      "group": "developer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "unverified",
+          "settledBy": "A web path that reads a repository tree. apps/web/lib/github-app.ts reaches GitHub for pull requests, which is not the same as carrying repository context into a turn."
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "apps/desktop/src/features/context-handoff is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Nothing under apps/mobile reads a repository; the capability table records canUseWorkingDirectory false for mobile."
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "apps/cli/src/repo is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "apps/extension-vscode/src/features/context-handoff is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "A browser extension has no working directory."
+        },
+        "api": {
+          "state": "unverified",
+          "settledBy": "Whether a request may carry repository context to the HTTP surface at all, which the chat request schema would answer."
+        }
+      }
+    },
+    {
+      "id": "terminal",
+      "label": "Terminal",
+      "group": "developer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "The capability table records canUseTerminal false for web."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/terminal/Terminal.tsx",
+          "mount": "apps/desktop/src/features/terminal/TerminalWorkspace.tsx"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canUseTerminal false for mobile."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/tui/tui_app.rs",
+          "mount": "apps/cli/src/tui/mod.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/providers/terminalProvider.ts",
+          "mount": "apps/extension-vscode/src/core/providerSetup.ts"
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "A browser extension has no terminal."
+        },
+        "api": {
+          "state": "absent",
+          "why": "A terminal is a device capability; the HTTP surface runs commands in a sandbox instead."
+        }
+      }
+    },
+    {
+      "id": "git",
+      "label": "Git",
+      "group": "developer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "Nothing under apps/web runs git; the web surface reads pull requests through the GitHub application instead."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/electron/runtime/gitService.ts",
+          "mount": "apps/desktop/electron/runtime/dispatcher.ts"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Nothing under apps/mobile runs git."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/platform/runtime/git.rs",
+          "mount": "apps/cli/src/platform/runtime/mod.rs"
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "An editor path that runs git itself. The editor shows diffs through its own decoration provider and delegates the repository to the local runtime, so whether it is a git client is not decidable from the tree."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "A browser extension has no repository."
+        },
+        "api": {
+          "state": "absent",
+          "why": "Git runs where the checkout is; the HTTP surface never has one."
+        }
+      }
+    },
+    {
+      "id": "diffs",
+      "label": "Diffs",
+      "group": "developer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/code/code-diff.ts",
+          "mount": "apps/web/features/code/components/CodeChangesPanel.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/code/DiffViewer.tsx",
+          "mount": "apps/desktop/src/features/code/CodeWorkspace.tsx"
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "A mobile screen that renders a diff. apps/mobile/app/(app)/companion/code/[threadId].tsx shows a code thread; whether it renders the patch is not decidable from the file list."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/tui/widgets/diff_review.rs",
+          "mount": "apps/cli/src/tui/widgets/mod.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/providers/diffDecorationProvider.ts",
+          "mount": "apps/extension-vscode/src/core/chatSetup.ts"
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src renders a diff."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/code-review/diff.ts",
+          "mount": "apps/web/lib/code-review/pipeline.ts"
+        }
+      }
+    },
+    {
+      "id": "browser-verification",
+      "label": "Browser verification",
+      "group": "developer",
+      "featureId": "browser",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/desktop-host/components/BrowserToolsDialog.tsx",
+          "mount": "apps/web/features/desktop-host/index.ts"
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "apps/desktop/src/lib/browserAutomation.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canUseBrowserAutomation false for mobile."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/browser_bridge.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src drives a browser."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "apps/extension/src/features/browser-tools is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "api": {
+          "state": "unverified",
+          "settledBy": "Whether the HTTP surface exposes browser tools to a third party, which the tool registry would answer."
+        }
+      }
+    },
+    {
+      "id": "cloud-tasks",
+      "label": "Cloud tasks",
+      "group": "developer",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/tasks/services/cloud-tasks-client.ts",
+          "mount": "apps/web/features/tasks/index.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/useCloudTaskBadge.ts",
+          "mount": "apps/desktop/src/features/v3/Sidebar.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/companion/agent/[id].tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "apps/cli/src/cloud is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/cloud-tasks/cloudTasksTree.ts",
+          "mount": "apps/extension-vscode/src/features/cloud-tasks/index.ts"
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src opens a cloud task."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/cloud-agent-run-service.ts",
+          "mount": "apps/web/app/api/mobile/agent-status/route.ts"
+        }
+      }
+    },
+    {
+      "id": "local-runtime",
+      "label": "Local runtime",
+      "group": "native",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "A browser cannot start a local process; the capability table records canRunLocalCode false for web."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/settings/tabs/ModelsKeys/LocalRuntimeSettings.tsx",
+          "mount": "apps/desktop/src/features/settings/tabs/ModelsKeys/index.tsx"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canRunLocalCode false for mobile."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/app_server.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/integrations/localRuntimePool.ts",
+          "mount": "apps/extension-vscode/src/extension.ts"
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "apps/extension/src/features/native-bridge is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "api": {
+          "state": "absent",
+          "why": "The HTTP surface is the cloud side of the boundary; a local runtime is by definition not on it."
+        }
+      }
+    },
+    {
+      "id": "byok",
+      "label": "BYOK",
+      "group": "native",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/byok-providers.ts",
+          "mount": "apps/web/app/byok/page.tsx"
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "apps/desktop/src/lib/byok-vault.ts exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "A mobile screen that stores a provider key. apps/mobile/app/(app)/settings/cloud-privacy.tsx names the trust boundary; whether it accepts a key is not decidable from the file list."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/auth.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/integrations/providerSwitchGuard.ts",
+          "mount": "apps/extension-vscode/src/core/commandSetup.ts"
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src stores a provider key; the extension uses the managed account."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/settings/api-keys/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "global-voice",
+      "label": "Global voice",
+      "group": "native",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "A global hotkey needs a host process; a browser tab has none."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/hooks/useVoiceHotkey.ts",
+          "mount": "apps/desktop/src/App.tsx"
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "Whether apps/mobile/app/(app)/widget-setup.tsx reaches voice from outside the application, which the widget target would answer."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/voice.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "A VS Code webview has no microphone."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src binds a global voice hotkey."
+        },
+        "api": {
+          "state": "absent",
+          "why": "A global hotkey is a device capability; the HTTP surface has no keyboard."
+        }
+      }
+    },
+    {
+      "id": "computer-use",
+      "label": "Computer use",
+      "group": "native",
+      "featureId": "computer_use",
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "The capability table records canUseDesktopAutomation false for web."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/electron/runtime/computerUseService.ts",
+          "mount": "apps/desktop/electron/main.ts"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canUseDesktopAutomation false for mobile."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src drives the desktop; the CLI runs commands instead."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src drives the desktop."
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/computer-use/approvalPolicy.ts",
+          "mount": "apps/extension/src/background.ts"
+        },
+        "api": {
+          "state": "absent",
+          "why": "Driving a computer happens on the device; the HTTP surface carries the instruction, not the action."
+        }
+      }
+    },
+    {
+      "id": "filesystem",
+      "label": "Filesystem",
+      "group": "native",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "The capability table records canUseFileSystem false for web."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/electron/runtime/filesystemService.ts",
+          "mount": "apps/desktop/electron/runtime/dispatcher.ts"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canUseFileSystem false for mobile."
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "apps/cli/src/safety/filesystem_effect.rs exists, and nothing under this surface's roots was found importing it or declaring it as a module. The file that mounts it, or a spec that reaches it through the shell, would settle this."
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "apps/extension-vscode/src/features/editor-utilities is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "A browser extension has no filesystem."
+        },
+        "api": {
+          "state": "absent",
+          "why": "The HTTP surface writes to storage, not to a user's filesystem."
+        }
+      }
+    },
+    {
+      "id": "updater",
+      "label": "Updater",
+      "group": "native",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "A web deployment updates itself; there is nothing for a user to update."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/updates/useUpdater.ts",
+          "mount": "apps/desktop/src/features/updates/UpdatePill.tsx"
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "Whether the store build takes an over-the-air update, which apps/mobile/eas.json would answer."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/update_check.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "The marketplace updates the extension; nothing under apps/extension-vscode/src does."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "The Chrome Web Store updates the extension; nothing under apps/extension/src does."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/releases/[target]/[version]/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "schedules",
+      "label": "Scheduled tasks",
+      "group": "native",
+      "featureId": "schedules",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/chat/schedules/page.tsx",
+          "mount": "apps/web/app/chat/layout.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/AgiWorkScheduled.tsx",
+          "mount": "apps/desktop/src/features/v3/index.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/schedules/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/schedules.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/schedules/schedulesTree.ts",
+          "mount": "apps/extension-vscode/src/features/schedules/index.ts"
+        },
+        "chrome": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension/src/features/side-panel/schedulesSection.ts",
+          "mount": "apps/extension/src/features/side-panel/cloudRunsPanel.ts"
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/schedule-service.ts",
+          "mount": "apps/web/app/api/schedules/route.ts"
+        }
+      }
+    },
+    {
+      "id": "hooks",
+      "label": "Hooks",
+      "group": "native",
+      "featureId": "hooks",
+      "cells": {
+        "web": {
+          "state": "absent",
+          "why": "A hook runs a local program; the capability table records canRunLocalCode false for web."
+        },
+        "desktop": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/desktop/src-tauri/src/sys/commands/hooks.rs",
+          "mount": "apps/desktop/src-tauri/src/sys/commands/mod.rs"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "The capability table records canRunLocalCode false for mobile."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/features/hooks/hooks.rs",
+          "mount": "apps/cli/src/features/hooks/mod.rs"
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "Whether the editor runs hooks itself or inherits them from the local runtime it starts, which apps/extension-vscode/src/integrations/localRuntimePool.ts would answer."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "A browser extension cannot run a local program."
+        },
+        "api": {
+          "state": "absent",
+          "why": "A hook is a local program; the HTTP surface never runs one."
+        }
+      }
+    },
+    {
+      "id": "remote-control",
+      "label": "Remote control",
+      "group": "native",
+      "featureId": "remote_control",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/features/desktop-host/components/RemoteControlSection.tsx",
+          "mount": "apps/web/features/desktop-host/index.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/electron/remote/remoteControlHost.ts",
+          "mount": "apps/desktop/electron/runtime/dispatcher.ts"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/companion/index.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src is a remote-control host or client."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src is a remote-control host or client."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src is a remote-control host or client."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/devices/heartbeat/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "event-triggers",
+      "label": "Event triggers",
+      "group": "native",
+      "featureId": "event_triggers",
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/triggers/trigger-fire.ts",
+          "mount": "apps/web/lib/jobs/job-handlers.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/stores/triggerStore.ts",
+          "mount": "apps/desktop/src/features/workflows/AutomationBuilder.tsx"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Nothing under apps/mobile declares or fires a trigger."
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "Whether apps/cli/src/agent_events.rs is a trigger source or only a transcript of a run, which its consumers would answer."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src declares or fires a trigger."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src declares or fires a trigger."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/app/api/github/webhook/webhook-router.ts",
+          "mount": "apps/web/app/api/github/webhook/route.ts"
+        }
+      }
+    },
+    {
+      "id": "sso",
+      "label": "SSO",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/server/sso/sso-access.ts",
+          "mount": "apps/web/lib/server/sso/sso-route-guard.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/services/desktopSocialSignIn.ts",
+          "mount": "apps/desktop/src/features/auth/NativeSignInCard.tsx"
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "Whether the mobile sign-in screen offers an organization's identity provider, which apps/mobile/app/(auth)/login.tsx would answer."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/oauth.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "apps/extension-vscode/src/features/account-auth is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "apps/extension/src/features/auth is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/server/sso/sso-route-guard.ts",
+          "mount": "apps/web/app/api/admin/sso/route.ts"
+        }
+      }
+    },
+    {
+      "id": "policy-effects",
+      "label": "Policy effects",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/feature-flags/capability-gate.ts",
+          "mount": "apps/web/app/api/me/route.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/useWorkspacePolicy.ts",
+          "mount": "apps/desktop/src/features/v3/Sidebar.tsx"
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "A mobile path that reads the workspace policy and withholds a control. apps/mobile/app/(app)/settings/workspace.tsx names the workspace; whether it enforces its policy is not decidable from the file list."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/permissions.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "apps/extension-vscode/src/features/config is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "apps/extension/src/features/site-policy is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/connector-policy-gate.ts",
+          "mount": "apps/web/app/api/plugins/uploads/route.ts"
+        }
+      }
+    },
+    {
+      "id": "model-restrictions",
+      "label": "Model restrictions",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/model-policy-gate.ts",
+          "mount": "apps/web/lib/managed-compute-gate.ts"
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "A desktop path that withholds a model the workspace disallows. apps/desktop/src/features/v3/useWorkspacePolicy.ts reads the policy; whether the model picker consumes it is not decidable from the file list."
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "Whether apps/mobile/app/(app)/models.tsx filters by the workspace's allowed models."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/model_reachability.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/model-picker/reachability.ts",
+          "mount": "apps/extension-vscode/src/core/commandSetup.ts"
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "Whether the side panel offers a model choice at all, and if so whether it filters it."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+          "mount": "apps/web/lib/voice/live-voice-tools.ts"
+        }
+      }
+    },
+    {
+      "id": "connector-restrictions",
+      "label": "Connector restrictions",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/connector-policy-gate.ts",
+          "mount": "apps/web/app/api/plugins/uploads/route.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/services/desktopCloudConnectorInstall.ts",
+          "mount": "apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx"
+        },
+        "mobile": {
+          "state": "unverified",
+          "settledBy": "Whether apps/mobile/services/connectors.ts refuses a connector the workspace disallows rather than only listing what the server returns."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "The CLI has no connectors, so it has nothing to restrict."
+        },
+        "vscode": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/extension-vscode/src/features/connectors/connectorsClient.ts",
+          "mount": "apps/extension-vscode/src/features/connectors/index.ts"
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "The extension has no connectors, so it has nothing to restrict."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts",
+          "mount": "apps/web/app/api/llm/v1/chat/completions/route.ts"
+        }
+      }
+    },
+    {
+      "id": "sharing-restrictions",
+      "label": "Sharing restrictions",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/share/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        },
+        "desktop": {
+          "state": "unverified",
+          "settledBy": "A desktop path that creates or refuses a share link. Nothing under apps/desktop/src was found doing either."
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/settings/shared-links.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Nothing under apps/cli/src creates a share link."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src creates a share link."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src creates a share link."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/share/[token]/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    },
+    {
+      "id": "audit-visibility",
+      "label": "Audit visibility",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/workspace-audit.ts",
+          "mount": "apps/web/app/api/skills/route.ts"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/governance/AuditLog.tsx",
+          "mount": "apps/desktop/src/features/governance/GovernanceDashboard.tsx"
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Nothing under apps/mobile reads the audit log; administration happens on the web surface."
+        },
+        "cli": {
+          "state": "present",
+          "via": "module",
+          "entry": "apps/cli/src/approval_audit.rs",
+          "mount": "apps/cli/src/lib.rs"
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Nothing under apps/extension-vscode/src reads the audit log."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Nothing under apps/extension/src reads the audit log."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/services/audit-streaming-proxy.ts",
+          "mount": "apps/web/lib/services/audit-streaming-service.ts"
+        }
+      }
+    },
+    {
+      "id": "managed-compute-restrictions",
+      "label": "Managed-compute restrictions",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/runtime/memory-capability.ts",
+          "mount": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx"
+        },
+        "desktop": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/desktop/src/features/v3/LocalCloudToggle.tsx",
+          "mount": "apps/desktop/src/features/v3/Sidebar.tsx"
+        },
+        "mobile": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/mobile/app/(app)/settings/cloud-privacy.tsx",
+          "mount": "apps/mobile/app/(app)/_layout.tsx"
+        },
+        "cli": {
+          "state": "unverified",
+          "settledBy": "apps/cli/src/trust is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "vscode": {
+          "state": "unverified",
+          "settledBy": "apps/extension-vscode/src/features/config is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "chrome": {
+          "state": "unverified",
+          "settledBy": "apps/extension/src/features/privacy is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both."
+        },
+        "api": {
+          "state": "present",
+          "via": "import",
+          "entry": "apps/web/lib/feature-flags/capability-gate.ts",
+          "mount": "apps/web/app/api/me/route.ts"
+        }
+      }
+    },
+    {
+      "id": "admin",
+      "label": "Administration",
+      "group": "enterprise",
+      "featureId": null,
+      "cells": {
+        "web": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/admin/page.tsx",
+          "mount": "apps/web/app/admin/layout.tsx"
+        },
+        "desktop": {
+          "state": "absent",
+          "why": "Administration is a web surface; nothing under apps/desktop/src reaches an administrative route."
+        },
+        "mobile": {
+          "state": "absent",
+          "why": "Administration is a web surface; nothing under apps/mobile reaches an administrative route."
+        },
+        "cli": {
+          "state": "absent",
+          "why": "Administration is a web surface; nothing under apps/cli/src reaches an administrative route."
+        },
+        "vscode": {
+          "state": "absent",
+          "why": "Administration is a web surface; nothing under apps/extension-vscode/src reaches an administrative route."
+        },
+        "chrome": {
+          "state": "absent",
+          "why": "Administration is a web surface; nothing under apps/extension/src reaches an administrative route."
+        },
+        "api": {
+          "state": "present",
+          "via": "route",
+          "entry": "apps/web/app/api/admin/observability/route.ts",
+          "mount": "apps/web/app/layout.tsx"
+        }
+      }
+    }
+  ]
+}

@@ -615,16 +615,18 @@ function applySlotPreference(
   return [...promoted, ...orderedSlots.filter((slotId) => !promotedSet.has(slotId))];
 }
 
+// Basic is a priced plan with its own slots: folded into free it would lose
+// every model its subscription buys, now that free holds only zero-priced slots.
 function normalizeTier(
   tier: string | null | undefined,
-): 'free' | 'pro' | 'max' | 'enterprise' | 'byok' {
+): 'free' | 'basic' | 'pro' | 'max' | 'enterprise' | 'byok' {
   switch ((tier ?? '').toLowerCase()) {
     case 'pro':
     case 'team':
       return 'pro';
     case 'basic':
     case 'hobby':
-      return 'free';
+      return 'basic';
     case 'max':
     case 'max_15x':
     case 'max-15x':
@@ -1139,11 +1141,19 @@ function rankRoutes(
   return [preferred, ...ordered.filter((entry) => entry !== preferred)];
 }
 
+// A tier that is not granted the policy fallback slot falls back to its own
+// first slot instead of ending every unmatched request in no_eligible_route.
+function resolveFallbackSlot(policy: AutoPolicy, tierSlotOrder: readonly string[]): string {
+  if (tierSlotOrder.includes(policy.fallbackSlot)) return policy.fallbackSlot;
+  return tierSlotOrder.find((slotId) => policy.slots[slotId]?.modelKey) ?? policy.fallbackSlot;
+}
+
 interface RoutingLane {
   tier: ReturnType<typeof normalizeTier>;
   requestedProfile: RoutingProfile;
   effectiveProfile: RoutingProfile;
   tierSlotOrder: readonly string[];
+  fallbackSlot: string;
   allowedSlots: ReadonlySet<string>;
   preferredSlots: readonly string[];
   taskFamilyDecision: TaskFamilyStageDecision;
@@ -1165,6 +1175,7 @@ function resolveRoutingLane(
   const effectiveProfile = clampProfile(requestedProfile, maximumProfile, policy.profileOrder);
   const tierSlotOrder = policy.tierAllowedSlots[tier] ?? [policy.fallbackSlot];
   const allowedSlots = new Set(tierSlotOrder);
+  const fallbackSlot = resolveFallbackSlot(policy, tierSlotOrder);
   const preferredSlots = task.preferredSlots[effectiveProfile] ?? [];
 
   const taskFamilyDecision = resolveTaskFamilyOrdering({
@@ -1190,6 +1201,7 @@ function resolveRoutingLane(
     requestedProfile,
     effectiveProfile,
     tierSlotOrder,
+    fallbackSlot,
     allowedSlots,
     preferredSlots,
     taskFamilyDecision,
@@ -1457,7 +1469,7 @@ function sameModelFallbackPlan(
  * Every slot a fallback may draw on, best first, one entry per slot.
  *
  * The request's own ordering leads, then the task's slots at every other
- * profile in the policy's profile order, then the policy fallback slot, then
+ * profile in the policy's profile order, then the tier's fallback slot, then
  * the tier's allowed slots in their authored order, restricted to slots some
  * task policy already names. A slot no task lists is reachable only through a
  * caller preference (the free lane), and a failover must not open that door.
@@ -1470,12 +1482,13 @@ function fallbackCandidateSlots(
   task: AutoTaskPolicy,
   orderedSlots: readonly string[],
   tierSlotOrder: readonly string[],
+  fallbackSlot: string,
 ): readonly string[] {
   return [
     ...new Set([
       ...orderedSlots,
       ...policy.profileOrder.flatMap((profile) => task.preferredSlots[profile] ?? []),
-      policy.fallbackSlot,
+      fallbackSlot,
       ...tierSlotOrder.filter((slotId) => policyReachableSlots.has(slotId)),
     ]),
   ];
@@ -1496,6 +1509,7 @@ function buildProviderFallbacks(
   allowedSlots: ReadonlySet<string>,
   orderedSlots: readonly string[],
   tierSlotOrder: readonly string[],
+  fallbackSlot: string,
   selectedModelKey: string,
   selectedProvider: string,
   selectedModelRoutes: readonly RankedRoute[] = [],
@@ -1509,7 +1523,13 @@ function buildProviderFallbacks(
     MAX_SAME_MODEL_FALLBACKS_BEFORE_SUBSTITUTION,
   );
 
-  for (const slotId of fallbackCandidateSlots(policy, task, orderedSlots, tierSlotOrder)) {
+  for (const slotId of fallbackCandidateSlots(
+    policy,
+    task,
+    orderedSlots,
+    tierSlotOrder,
+    fallbackSlot,
+  )) {
     if (!allowedSlots.has(slotId)) continue;
     const modelKey = policy.slots[slotId]?.modelKey;
     if (!modelKey || seenModels.has(modelKey)) continue;
@@ -1661,6 +1681,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     requestedProfile,
     effectiveProfile,
     tierSlotOrder,
+    fallbackSlot,
     allowedSlots,
     preferredSlots,
     taskFamilyDecision,
@@ -1711,6 +1732,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
         allowedSlots,
         orderedSlots,
         tierSlotOrder,
+        fallbackSlot,
         request.currentModelKey,
         eligibility.route.provider,
         eligibility.rankedRoutes,
@@ -1752,6 +1774,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
       allowedSlots,
       orderedSlots,
       tierSlotOrder,
+      fallbackSlot,
       modelKey,
       route.provider,
       eligibility.rankedRoutes,
@@ -1805,7 +1828,7 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     if (canary) return canary;
     const eligibility = evaluateEligibility(modelKey, task, request);
     if (eligibility.route) {
-      if (slotId !== policy.fallbackSlot && !isAffordable(modelKey, request)) {
+      if (slotId !== fallbackSlot && !isAffordable(modelKey, request)) {
         reasons.push(`model ${modelKey} exceeds the remaining usage budget`);
         continue;
       }
@@ -1819,17 +1842,17 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     reasons.push(...eligibility.reasons);
   }
 
-  if (!preferredSlots.includes(policy.fallbackSlot) && allowedSlots.has(policy.fallbackSlot)) {
-    const fallbackModelKey = policy.slots[policy.fallbackSlot]?.modelKey;
+  if (!preferredSlots.includes(fallbackSlot) && allowedSlots.has(fallbackSlot)) {
+    const fallbackModelKey = policy.slots[fallbackSlot]?.modelKey;
     if (fallbackModelKey) {
-      const canary = canarySelection(policy.fallbackSlot);
+      const canary = canarySelection(fallbackSlot);
       if (canary) return canary;
       const eligibility = evaluateEligibility(fallbackModelKey, task, request);
       if (eligibility.route) {
         if (!isDispatchableNow(eligibility.rankedRoutes[0])) {
           parked.push({ modelKey: fallbackModelKey, eligibility, reason: 'fallback_slot' });
         } else {
-          return selectSlot(fallbackModelKey, eligibility, 'fallback_slot', policy.fallbackSlot);
+          return selectSlot(fallbackModelKey, eligibility, 'fallback_slot', fallbackSlot);
         }
       } else {
         reasons.push(...eligibility.reasons);
@@ -1840,14 +1863,20 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   const parkedPick = parked[0];
   if (parkedPick) {
     const considered = new Set(parked.map((entry) => entry.modelKey));
-    for (const slotId of fallbackCandidateSlots(policy, task, orderedSlots, tierSlotOrder)) {
+    for (const slotId of fallbackCandidateSlots(
+      policy,
+      task,
+      orderedSlots,
+      tierSlotOrder,
+      fallbackSlot,
+    )) {
       if (!allowedSlots.has(slotId)) continue;
       const modelKey = policy.slots[slotId]?.modelKey;
       if (!modelKey || considered.has(modelKey)) continue;
       considered.add(modelKey);
       const eligibility = evaluateEligibility(modelKey, task, request);
       if (!eligibility.route || !isDispatchableNow(eligibility.rankedRoutes[0])) continue;
-      if (slotId !== policy.fallbackSlot && !isAffordable(modelKey, request)) continue;
+      if (slotId !== fallbackSlot && !isAffordable(modelKey, request)) continue;
       return selectSlot(modelKey, eligibility, 'health_fallback', slotId);
     }
     return selectSlot(parkedPick.modelKey, parkedPick.eligibility, parkedPick.reason);
@@ -2063,7 +2092,7 @@ export function previewAutoRoute(request: AutoRoutingRequest): AutoRoutePreview 
   }
 
   const lane = resolveRoutingLane(effectiveRequest, task, alias);
-  const { effectiveProfile, allowedSlots, tierSlotOrder, orderedSlots, tier } = lane;
+  const { effectiveProfile, allowedSlots, tierSlotOrder, fallbackSlot, orderedSlots, tier } = lane;
 
   if (effectiveRequest.currentModelKey) {
     record(effectiveRequest.currentModelKey, effectiveProfile, PREVIEW_PRIMARY_TASK_FIT);
@@ -2085,27 +2114,23 @@ export function previewAutoRoute(request: AutoRoutingRequest): AutoRoutePreview 
     record(modelKey, effectiveProfile, taskFit, slotId);
   });
 
-  if (allowedSlots.has(policy.fallbackSlot)) {
-    const fallbackSlot = policy.slots[policy.fallbackSlot];
-    if (fallbackSlot?.modelKey) {
-      if (fallbackSlot.canary) {
-        record(
-          fallbackSlot.canary.modelKey,
-          effectiveProfile,
-          PREVIEW_NEUTRAL_TASK_FIT,
-          policy.fallbackSlot,
-        );
+  if (allowedSlots.has(fallbackSlot)) {
+    const slot = policy.slots[fallbackSlot];
+    if (slot?.modelKey) {
+      if (slot.canary) {
+        record(slot.canary.modelKey, effectiveProfile, PREVIEW_NEUTRAL_TASK_FIT, fallbackSlot);
       }
-      record(
-        fallbackSlot.modelKey,
-        effectiveProfile,
-        PREVIEW_NEUTRAL_TASK_FIT,
-        policy.fallbackSlot,
-      );
+      record(slot.modelKey, effectiveProfile, PREVIEW_NEUTRAL_TASK_FIT, fallbackSlot);
     }
   }
 
-  for (const slotId of fallbackCandidateSlots(policy, task, orderedSlots, tierSlotOrder)) {
+  for (const slotId of fallbackCandidateSlots(
+    policy,
+    task,
+    orderedSlots,
+    tierSlotOrder,
+    fallbackSlot,
+  )) {
     if (!allowedSlots.has(slotId)) continue;
     const modelKey = policy.slots[slotId]?.modelKey;
     if (modelKey) record(modelKey, effectiveProfile, PREVIEW_NEUTRAL_TASK_FIT, slotId);

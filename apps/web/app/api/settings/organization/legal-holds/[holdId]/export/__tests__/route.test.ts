@@ -26,6 +26,8 @@ vi.mock('@/lib/server/compliance-caller', () => ({
   resolveComplianceCaller: mocks.resolveCaller,
 }));
 
+import { LEGAL_HOLD_RESOURCE_TYPES } from '@/lib/services/retention-service';
+
 import { GET } from '../route';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -142,6 +144,7 @@ describe('GET legal hold eDiscovery export', () => {
       bytes: number;
       sha256: string;
       entries: Array<{ resourceType: string; records: number; sha256: string }>;
+      referenceOnly: number;
     };
 
     // The digest has to cover exactly the record bytes the caller received, so
@@ -154,11 +157,15 @@ describe('GET legal hold eDiscovery export', () => {
     expect(manifest.sha256).toBe(createHash('sha256').update(recordBytes).digest('hex'));
     expect(manifest.bytes).toBe(Buffer.byteLength(recordBytes));
     expect(manifest.records).toBe(3);
+    // Every store the hold puts in scope has an entry, so a store that yielded
+    // nothing says zero rather than vanishing from the manifest.
     expect(manifest.entries.map((entry) => entry.resourceType)).toEqual([
       'hold',
-      'conversation',
-      'message',
+      ...LEGAL_HOLD_RESOURCE_TYPES,
     ]);
+    expect(
+      manifest.entries.filter((entry) => entry.records > 0).map((entry) => entry.resourceType),
+    ).toEqual(['hold', 'conversation', 'message']);
 
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'ediscovery_export', severity: 'critical' }),

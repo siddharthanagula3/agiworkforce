@@ -109,6 +109,8 @@ async function persistTurnCandidates(
       candidates: [...candidates],
       projectId: conversationRow?.project_id ?? null,
       organizationId: params.processed.organizationId ?? null,
+      sourceConversationId: conversationId ?? null,
+      sourceTurnId: params.processed.requestId,
     });
     logger.info(
       {

@@ -17,6 +17,12 @@ import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
 } from '@/lib/server/subscription-billing-owner';
+import {
+  hasBillingWaitlistAccess,
+  hasPaidBillingHistory,
+  waitlistAccessRequiredResponse,
+} from '@/lib/server/billing-waitlist-access';
+import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
 
 if (!process.env['STRIPE_SECRET_KEY']) {
   logger.warn(
@@ -115,6 +121,34 @@ function resolveFlow(value: unknown): 'cancel' | null {
   return value === 'cancel' ? 'cancel' : null;
 }
 
+// Whether Stripe holds a subscription for this customer in any state, which
+// separates an account that has bought before from one that never has.
+async function customerHoldsStripeSubscription(
+  client: Stripe,
+  customerId: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const page = await client.subscriptions.list({
+      customer: customerId,
+      status: 'all',
+      limit: 1,
+    });
+    return page.data.length > 0;
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return false;
+    logger.error(
+      { error, userId, customerId },
+      'Failed to verify Stripe billing history before opening the portal',
+    );
+    throw createError
+      .serviceUnavailable(
+        'Billing history could not be verified. No billing session was opened; please retry.',
+      )
+      .asUserSafe();
+  }
+}
+
 function isCancellationDisabled(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const record = error as Record<string, unknown>;
@@ -177,6 +211,34 @@ async function handlePortal(request: NextRequest) {
   }
   const subscription = subRows[0] ?? null;
   const ownerPolicy = getSubscriptionBillingOwnerPolicy(subscription);
+
+  // An account that has bought before keeps its portal whatever the gate says;
+  // only one that never has must hold upgrade access to open a billing session.
+  const paidBefore = hasPaidBillingHistory(subscription);
+  let upgradeAccess = true;
+  if (!paidBefore) {
+    try {
+      upgradeAccess = await hasBillingWaitlistAccess(db, userId);
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to verify paid upgrade access');
+      throw createError
+        .serviceUnavailable(
+          'Upgrade access could not be verified. No billing session was opened; please retry.',
+        )
+        .asUserSafe();
+    }
+  }
+  const gateApplies = !paidBefore && !upgradeAccess;
+
+  if (subscription && gateApplies) {
+    const linkedCustomer = subscription.stripe_customer_id;
+    if (
+      !isStripeCustomerId(linkedCustomer) ||
+      !(await customerHoldsStripeSubscription(stripe, linkedCustomer, userId))
+    ) {
+      return waitlistAccessRequiredResponse();
+    }
+  }
 
   if (subscription && !ownerPolicy.canOpenStripePortal) {
     throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'portal'));
@@ -282,6 +344,11 @@ async function handlePortal(request: NextRequest) {
       if (!customerId) {
         throw createError.internal('No Stripe customer found for this account');
       }
+
+      if (gateApplies && !(await customerHoldsStripeSubscription(stripe, customerId, userId))) {
+        return waitlistAccessRequiredResponse();
+      }
+
       const origin = getValidatedOrigin(request);
       const session = await stripe.billingPortal.sessions.create({
         customer: customerId,

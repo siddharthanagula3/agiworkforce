@@ -12,11 +12,21 @@ import {
   managedFileFromGeneratedWire,
   managedFileFromLocalDocument,
   managedFileFromUpload,
+  IngestionFailure,
+  INGESTION_FAILURE_REASONS,
+  ingestionFailureMessage,
+  isTerminalParseStatus,
+  libraryEntryCursor,
+  listLibraryPage,
+  deletableByOwner,
+  readableByOwner,
+  DOCUMENT_CLASSES,
   MAX_INGESTED_TEXT_CHARS,
   nextFileVersion,
   type GeneratedFileWireLike,
   type ManagedFile,
 } from '../index';
+import { createManagedFile } from '@agiworkforce/types';
 
 const WIRE: GeneratedFileWireLike = {
   id: 'asset-1',
@@ -192,16 +202,174 @@ describe('ingestion', () => {
       }),
     );
     expect(result.file.parseStatus).toBe('pending');
-    expect(result.error).toBeNull();
+    expect(result.failure).toBeNull();
   });
 
   it('reports an extractor failure on the file itself', async () => {
     const result = await createIngestionPipeline({
       pdf: async () => {
-        throw new Error('encrypted');
+        throw new Error('ENOENT: /var/tmp/parser-7 offset 0x41');
       },
     }).ingest(webFile);
     expect(result.file.parseStatus).toBe('failed');
-    expect(result.error).toBe('encrypted');
+    expect(result.failure?.reason).toBe('corrupt');
+    expect(result.failure?.message).not.toContain('/var/tmp');
+  });
+});
+
+describe('ingestion states', () => {
+  const file = (name: string, mimeType: string, byteCount = 10) =>
+    managedFileFromUpload({ id: `u-${name}`, name, mimeType, byteCount, url: `/u/${name}` });
+
+  it('settles every declared class in exactly one terminal state', async () => {
+    const pipeline = createIngestionPipeline({
+      text: async () => 'read',
+      office: async () => 'read',
+      pdf: async () => 'read',
+    });
+    for (const documentClass of DOCUMENT_CLASSES) {
+      const extension = documentClass.extensions[0] ?? documentClass.id;
+      const result = await pipeline.ingest(
+        file(`sample.${extension}`, documentClass.mediaTypes[0] ?? 'application/octet-stream'),
+      );
+      expect(result.route).toBe(documentClass.extractor);
+      expect(isTerminalParseStatus(result.file.parseStatus)).toBe(true);
+      expect(result.file.parseStatus).toBe('parsed');
+    }
+  });
+
+  it('reaches the same terminal state and the same text when a retry repeats it', async () => {
+    let calls = 0;
+    const pipeline = createIngestionPipeline({
+      text: async () => {
+        calls += 1;
+        return 'stable text';
+      },
+    });
+    const first = await pipeline.ingest(file('notes.md', 'text/markdown'));
+    const second = await pipeline.ingest(first.file);
+    expect(calls).toBe(2);
+    expect(second.file.parseStatus).toBe(first.file.parseStatus);
+    expect(second.text).toBe(first.text);
+  });
+
+  it('leaves no partial text behind when an extractor fails halfway', async () => {
+    const result = await createIngestionPipeline({
+      text: async () => {
+        throw new IngestionFailure('encrypted');
+      },
+    }).ingest(file('locked.csv', 'text/csv'));
+    expect(result.text).toBeNull();
+    expect(result.truncated).toBe(false);
+    expect(result.file.parseStatus).toBe('failed');
+    expect(result.failure?.reason).toBe('encrypted');
+  });
+
+  it('refuses bytes past the memory cap without opening them', async () => {
+    let opened = false;
+    const result = await createIngestionPipeline(
+      {
+        text: async () => {
+          opened = true;
+          return 'x';
+        },
+      },
+      { maxBytes: 16 },
+    ).ingest(file('huge.csv', 'text/csv', 64));
+    expect(opened).toBe(false);
+    expect(result.failure?.reason).toBe('too_large');
+  });
+
+  it('stops an extractor that never returns rather than hanging the file', async () => {
+    const result = await createIngestionPipeline(
+      { text: () => new Promise<string>(() => {}) },
+      { timeoutMs: 5 },
+    ).ingest(file('slow.csv', 'text/csv'));
+    expect(result.failure?.reason).toBe('timeout');
+    expect(result.file.parseStatus).toBe('failed');
+  });
+
+  it('gives every failure reason a message a reader can act on', () => {
+    for (const reason of INGESTION_FAILURE_REASONS) {
+      const message = ingestionFailureMessage(reason);
+      expect(message.length).toBeGreaterThan(20);
+      expect(message).not.toContain(reason);
+    }
+  });
+});
+
+describe('the Library lists one owner at a time', () => {
+  const owned = (id: string, owner: { workspaceId?: string; userId?: string }, createdAt: string) =>
+    createManagedFile({
+      id,
+      name: `${id}.csv`,
+      mediaType: 'text/csv',
+      byteCount: 10,
+      uri: `/api/files/${id}`,
+      origin: 'upload',
+      owner,
+      createdAt,
+    });
+
+  const mine = owned('mine-a', { workspaceId: 'ws-1' }, '2026-09-01T00:00:00Z');
+  const alsoMine = owned('mine-b', { workspaceId: 'ws-1' }, '2026-09-02T00:00:00Z');
+  const theirs = owned('theirs', { workspaceId: 'ws-2' }, '2026-09-03T00:00:00Z');
+  const orphan = createManagedFile({
+    id: 'orphan',
+    name: 'orphan.csv',
+    mediaType: 'text/csv',
+    byteCount: 10,
+    uri: '/api/files/orphan',
+    origin: 'upload',
+  });
+  const all = [mine, alsoMine, theirs, orphan];
+
+  it('hides rows another tenant owns and rows that name no tenant', () => {
+    expect(readableByOwner(all, { workspaceId: 'ws-1' }).map((f) => f.id)).toEqual([
+      'mine-a',
+      'mine-b',
+    ]);
+  });
+
+  it('refuses to hand a delete a row the caller does not own', () => {
+    expect(
+      deletableByOwner(all, { workspaceId: 'ws-1' }, ['mine-a', 'theirs', 'orphan']).map(
+        (f) => f.id,
+      ),
+    ).toEqual(['mine-a']);
+  });
+
+  it('pages by cursor without repeating or skipping a row when one is added', () => {
+    const first = listLibraryPage(all, { reader: { workspaceId: 'ws-1' }, limit: 1 });
+    expect(first.entries.map((e) => e.file.id)).toEqual(['mine-b']);
+    expect(first.hasMore).toBe(true);
+
+    const inserted = owned('mine-c', { workspaceId: 'ws-1' }, '2026-09-04T00:00:00Z');
+    const second = listLibraryPage([...all, inserted], {
+      reader: { workspaceId: 'ws-1' },
+      limit: 1,
+      cursor: first.nextCursor,
+    });
+    expect(second.entries.map((e) => e.file.id)).toEqual(['mine-a']);
+    expect(second.hasMore).toBe(false);
+  });
+
+  it('filters to a declared document class', () => {
+    const page = listLibraryPage(all, {
+      reader: { workspaceId: 'ws-1' },
+      documentClassIds: ['json'],
+    });
+    expect(page.entries).toEqual([]);
+    expect(
+      listLibraryPage(all, { reader: { workspaceId: 'ws-1' }, documentClassIds: ['csv'] }).entries,
+    ).toHaveLength(2);
+  });
+
+  it('orders newest first and carries the cursor it paged from', () => {
+    const page = listLibraryPage(all, { reader: { workspaceId: 'ws-1' } });
+    expect(page.entries.map((e) => libraryEntryCursor(e))).toEqual([
+      '2026-09-02T00:00:00Z|mine-b',
+      '2026-09-01T00:00:00Z|mine-a',
+    ]);
   });
 });

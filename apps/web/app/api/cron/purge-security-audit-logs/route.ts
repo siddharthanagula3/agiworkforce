@@ -6,6 +6,7 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { purgeExpiredSecurityAuditLogs } from '@/lib/server/security-log-retention';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!verifyCronRequest(request)) {

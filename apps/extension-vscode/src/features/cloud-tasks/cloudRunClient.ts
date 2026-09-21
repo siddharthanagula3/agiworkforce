@@ -4,12 +4,10 @@ import {
   type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
-import { getExtensionUserAgent } from '../../platform/version';
-import { SOURCE_SURFACE } from '../../platform/surface';
+import { platformRequestHeaders } from '../../platform/platformHeaders';
 
 export type CloudAgentRunClientResolution =
-  | { status: 'ready'; client: ManagedCloudAgentRunClient }
-  | { status: 'signed-out' };
+  { status: 'ready'; client: ManagedCloudAgentRunClient } | { status: 'signed-out' };
 
 export function createExtensionCloudAgentRunClient(token: string): ManagedCloudAgentRunClient {
   return createManagedCloudAgentRunClient({
@@ -20,9 +18,7 @@ export function createExtensionCloudAgentRunClient(token: string): ManagedCloudA
         ...init,
         headers: {
           ...(init?.headers as Record<string, string> | undefined),
-          'User-Agent': getExtensionUserAgent(),
-          'X-Client': 'vscode-extension',
-          'X-AGI-Surface': SOURCE_SURFACE,
+          ...platformRequestHeaders(),
         },
       }),
   });
