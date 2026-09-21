@@ -561,7 +561,7 @@ impl AgentSession {
         ) {
             Ok(selection) => selection,
             Err(error) => {
-                self.emit_auto_route_notice(format!(
+                self.emit_turn_notice(format!(
                     "Auto routing kept {} (re-resolution failed: {error})",
                     self.model
                 ));
@@ -602,7 +602,7 @@ impl AgentSession {
         }
 
         if self.model != model_before {
-            self.emit_auto_route_notice(format!(
+            self.emit_turn_notice(format!(
                 "Auto route: {:?} -> {}/{}",
                 task_type, selection.upstream_provider, selection.provider_model_id
             ));
@@ -616,7 +616,7 @@ impl AgentSession {
         }));
     }
 
-    fn emit_auto_route_notice(&self, notice: String) {
+    fn emit_turn_notice(&self, notice: String) {
         if crate::tui::tui_active() {
             crate::tui::push_tui_notice(notice);
         } else if !self.quiet {
@@ -797,6 +797,15 @@ impl AgentSession {
                     (usage.used_fraction * 100.0) as u32
                 ))
             );
+        }
+
+        if let Some(root) = self.workspace_root() {
+            if self.refresh_instructions_in(&root) {
+                self.emit_turn_notice(
+                    "Project instructions changed since they were last read; this turn uses the files as they are now."
+                        .to_string(),
+                );
+            }
         }
 
         // Add user message, prepending plan-mode prefix if applicable.

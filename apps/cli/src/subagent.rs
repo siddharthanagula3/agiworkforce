@@ -1043,6 +1043,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_spawn_past_the_concurrency_cap_is_refused() {
+        let manager = root_manager();
+        for index in 0..manager.max_concurrent {
+            seed_entry(
+                &manager,
+                &format!("subagent_running_{index}"),
+                SubagentStatus::Running,
+            )
+            .await;
+        }
+
+        let err = manager
+            .spawn("one too many", "do work")
+            .await
+            .expect_err("a spawn past the cap must be refused");
+        assert!(
+            err.to_string()
+                .contains("Maximum concurrent subagents reached"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(
+            manager.list().await.len(),
+            manager.max_concurrent,
+            "the refused spawn left an entry behind"
+        );
+    }
+
+    #[tokio::test]
     async fn a_failed_delegation_is_retryable_and_a_deliberate_stop_is_not() {
         assert_eq!(MAX_SUBAGENT_ATTEMPTS, 2);
         let manager = root_manager();

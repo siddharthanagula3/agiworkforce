@@ -468,7 +468,8 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "command": {"type": "string", "description": "The shell command to execute"}
+                    "command": {"type": "string", "description": "The shell command to execute"},
+                    "working_dir": {"type": "string", "description": "Directory inside the workspace to run the command in. Defaults to the workspace root."}
                 },
                 "required": ["command"]
             }),
@@ -1561,6 +1562,7 @@ mod tests {
                 "git_status",
                 "git_show",
                 "git_log",
+                "git_diff",
                 "git_branches",
                 "git_worktrees",
                 "git_stash_list",
@@ -1862,6 +1864,7 @@ mod tests {
                 "advisor",
                 "cron_list",
                 "git_branches",
+                "git_diff",
                 "git_log",
                 "git_show",
                 "git_stash_list",
