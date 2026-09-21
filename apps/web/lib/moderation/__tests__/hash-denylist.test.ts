@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const loggerMock = vi.hoisted(() => ({
   info: vi.fn(),
@@ -9,7 +12,12 @@ const loggerMock = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/logger', () => ({ logger: loggerMock }));
 
-import { matchDenylistedUpload, sha256Hex } from '../hash-denylist';
+import {
+  matchDenylistedSha256,
+  matchDenylistedUpload,
+  sha256Hex,
+  sha256HexFromFile,
+} from '../hash-denylist';
 
 const BYTES = new TextEncoder().encode('known-illegal-media-stand-in');
 const DIGEST = createHash('sha256').update(BYTES).digest('hex');
@@ -69,8 +77,58 @@ describe('matchDenylistedUpload', () => {
   });
 });
 
+describe('matchDenylistedSha256', () => {
+  it('reads the same list as the upload matcher and normalises the digest it is given', () => {
+    process.env['MODERATION_HASH_DENYLIST'] = `ncmec:${DIGEST}`;
+    expect(matchDenylistedSha256(DIGEST.toUpperCase())).toEqual({
+      sha256: DIGEST,
+      matched: true,
+      listLabel: 'ncmec',
+    });
+    expect(matchDenylistedSha256('b'.repeat(64))).toEqual({
+      sha256: 'b'.repeat(64),
+      matched: false,
+    });
+  });
+});
+
 describe('sha256Hex', () => {
   it('agrees with node crypto', () => {
     expect(sha256Hex(BYTES)).toBe(DIGEST);
+  });
+});
+
+describe('sha256HexFromFile', () => {
+  let directory: string;
+
+  beforeEach(async () => {
+    directory = await mkdtemp(path.join(tmpdir(), 'agi-denylist-'));
+  });
+
+  afterEach(async () => {
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  it('digests a file spanning many read buffers, chunk boundaries included', async () => {
+    const readBuffer = 64 * 1024;
+    const large = Buffer.alloc(readBuffer * 16 + 7, 0x7a);
+    large.write('staged-video-stand-in', readBuffer + 1);
+    large.write('tail', large.byteLength - 4);
+    const filePath = path.join(directory, 'staged-output');
+    await writeFile(filePath, large);
+
+    const digest = await sha256HexFromFile(filePath);
+
+    expect(digest).toBe(createHash('sha256').update(large).digest('hex'));
+  });
+
+  it('agrees with the in-memory digest of the same bytes', async () => {
+    const filePath = path.join(directory, 'small-output');
+    await writeFile(filePath, BYTES);
+    expect(await sha256HexFromFile(filePath)).toBe(DIGEST);
+  });
+
+  it('rejects rather than returning a digest when the staged file is gone', async () => {
+    await expect(sha256HexFromFile(path.join(directory, 'missing'))).rejects.toThrow();
   });
 });

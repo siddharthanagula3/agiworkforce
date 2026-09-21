@@ -3,7 +3,7 @@ import 'server-only';
 import type { ProviderMessage, StreamChunk } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
-import { matchDenylistedUpload, sha256Hex } from './hash-denylist';
+import { matchDenylistedSha256, sha256Hex, sha256HexFromFile } from './hash-denylist';
 import { inspectImageBytes, type ImageStructureRejection } from './image-structure';
 import { recordModerationEvent } from './reporting';
 import { resolveOutputClassifierModel } from './output-classifier-model';
@@ -17,18 +17,26 @@ export const UPLOADED_IMAGE_REFUSAL =
 
 export type GeneratedMediaKind = 'image' | 'video';
 
-export type OutputModerationReason = 'output_hash_denylist' | 'output_classifier';
+export type OutputModerationReason =
+  'output_hash_denylist' | 'output_classifier' | 'output_provider_safety';
 
-export interface GeneratedMediaModerationInput {
+interface GeneratedMediaModerationSubject {
   userId: string;
   media: GeneratedMediaKind;
   operation: string;
-  bytes: Uint8Array;
   mimeType?: string | undefined;
   prompt?: string | undefined;
   storageKey?: string | undefined;
   signal?: AbortSignal | undefined;
 }
+
+/**
+ * Bytes in hand or a staged file. A result too large to hold in memory is
+ * screened from its path, which is why the denylist half of the floor applies
+ * to a provider video as well as to an image.
+ */
+export type GeneratedMediaModerationInput = GeneratedMediaModerationSubject &
+  ({ bytes: Uint8Array } | { filePath: string });
 
 export type GeneratedMediaModeration =
   | { allowed: true; contentSha256: string }
@@ -75,9 +83,10 @@ export function moderateUploadedImage(bytes: Uint8Array): UploadedImageModeratio
 export async function moderateGeneratedMedia(
   input: GeneratedMediaModerationInput,
 ): Promise<GeneratedMediaModeration> {
-  const contentSha256 = sha256Hex(input.bytes);
+  const contentSha256 =
+    'bytes' in input ? sha256Hex(input.bytes) : await sha256HexFromFile(input.filePath);
 
-  const hashMatch = matchDenylistedUpload(input.bytes);
+  const hashMatch = matchDenylistedSha256(contentSha256);
   if (hashMatch.matched) {
     return refuse(input, {
       reason: 'output_hash_denylist',
@@ -132,15 +141,48 @@ function refuse(
   };
 }
 
+/**
+ * A provider that refused its own output on safety grounds has screened it for
+ * us. Nothing was delivered, so the user reads the same sentence a locally
+ * refused result produces and the audit trail carries the provider's code.
+ */
+export function recordGeneratedMediaProviderRefusal(input: {
+  userId: string;
+  media: GeneratedMediaKind;
+  operation: string;
+  providerFailureCode?: string | undefined;
+  prompt?: string | undefined;
+}): string {
+  recordModerationEvent({
+    surface: 'generated-output',
+    action: 'block',
+    categories: ['provider_safety'],
+    ruleIds: [
+      `managed-${input.media}.output.provider-safety`,
+      `operation:${input.operation}`,
+      ...(input.providerFailureCode ? [`providerFailureCode:${input.providerFailureCode}`] : []),
+    ],
+    userId: input.userId,
+    ...(input.prompt !== undefined ? { text: input.prompt } : {}),
+  });
+  return GENERATED_OUTPUT_REFUSAL;
+}
+
 interface ClassifierVerdict {
   verdict: 'allow' | 'block';
   categories: ModerationCategory[];
 }
 
+/**
+ * The classifier reads one still image. A video is never sent to it and is
+ * never reported as classified: the denylist is the whole of the output floor
+ * a generated video gets until a frame of it can be rendered here.
+ */
 async function classifyGeneratedImage(
   input: GeneratedMediaModerationInput,
 ): Promise<ClassifierVerdict | null> {
   if (input.media !== 'image') return null;
+  if (!('bytes' in input)) return null;
   if (input.bytes.length > CLASSIFIER_MAX_BYTES) return null;
 
   const model = resolveOutputClassifierModel();
