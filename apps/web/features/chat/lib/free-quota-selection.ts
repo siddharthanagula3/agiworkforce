@@ -1,7 +1,7 @@
 import { getProviderOffering } from '@agiworkforce/types';
 
 export function freeQuotaSelection(id: string | null | undefined) {
-  if (!id || process.env.NODE_ENV === 'production') return null;
+  if (!id) return null;
   const offering = getProviderOffering(id);
   return offering?.identityStatus === 'exact' && offering.quotaProbeProtocol ? offering : null;
 }

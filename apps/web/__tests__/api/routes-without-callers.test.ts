@@ -89,6 +89,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     url: '/api/admin/support-access',
     why: 'two-operator break-glass procedure called from the production-access runbook',
   },
+  {
+    url: '/api/models/free-quota/attestation',
+    why: 'platform-admin record of the QwenCloud free-quota-only console check, which the provider exposes to no API',
+  },
 
   // Authenticated protocol endpoints support API and cross-surface clients.
   // A first-party web screen is not their only valid consumer.

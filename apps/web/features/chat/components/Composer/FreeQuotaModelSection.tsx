@@ -26,9 +26,8 @@ export function FreeQuotaModelSection({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('chat');
   const [attempt, setAttempt] = useState(0);
-  const quotaExperimentEnabled = enabled && process.env.NODE_ENV !== 'production';
   useEffect(() => {
-    if (!quotaExperimentEnabled) return;
+    if (!enabled) return;
     const controller = new AbortController();
     setStatus('loading');
     void fetch('/api/models/free-quota', { signal: controller.signal, cache: 'no-store' })
@@ -46,8 +45,8 @@ export function FreeQuotaModelSection({
         if (!controller.signal.aborted) setStatus('error');
       });
     return () => controller.abort();
-  }, [attempt, quotaExperimentEnabled]);
-  if (!children && (!quotaExperimentEnabled || status === 'hidden')) return null;
+  }, [attempt, enabled]);
+  if (!children && (!enabled || status === 'hidden')) return null;
   const models =
     catalogue?.models.filter(
       (model) =>
@@ -71,8 +70,8 @@ export function FreeQuotaModelSection({
             Free models and available promotional quota.
           </p>
           {children}
-          {quotaExperimentEnabled && status === 'loading' && <Spinner size="sm" />}
-          {quotaExperimentEnabled && status === 'error' && (
+          {enabled && status === 'loading' && <Spinner size="sm" />}
+          {enabled && status === 'error' && (
             <button
               type="button"
               className="px-1 text-sm text-foreground underline"
@@ -81,7 +80,7 @@ export function FreeQuotaModelSection({
               Retry loading free models
             </button>
           )}
-          {quotaExperimentEnabled && catalogue && status === 'ready' && (
+          {enabled && catalogue && status === 'ready' && (
             <>
               <select
                 aria-label="Free model category"
@@ -105,8 +104,7 @@ export function FreeQuotaModelSection({
               />
               <div className="max-h-60 overflow-y-auto" aria-label="Free models">
                 {models.map((model) => {
-                  const selectable =
-                    model.status === 'ready' || model.status === 'account_check_required';
+                  const selectable = model.status === 'ready';
                   return (
                     <button
                       key={model.key}

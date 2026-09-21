@@ -99,7 +99,7 @@ export function evaluateModelCompatibility(
               {
                 code: 'no_vision' as const,
                 message:
-                  'Free-quota testing accepts text prompts only. Remove attached images before sending.',
+                  'QwenCloud free models accept text only. Remove attached images before sending.',
               },
             ]
           : []),
@@ -107,7 +107,7 @@ export function evaluateModelCompatibility(
           ? [
               {
                 code: 'no_tools' as const,
-                message: 'Turn off tools for this free-quota experiment.',
+                message: 'Turn off tools to use a QwenCloud free model.',
               },
             ]
           : []),
