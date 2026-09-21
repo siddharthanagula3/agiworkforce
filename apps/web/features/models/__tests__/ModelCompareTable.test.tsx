@@ -1,6 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { CREDITS_PER_USD } from '@agiworkforce/types';
 
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import { ModelCompareTable } from '../components/ModelCompareTable';
@@ -19,8 +18,6 @@ function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntr
     openWeight: false,
     contextTokens: 128_000,
     maxOutputTokens: 8_192,
-    inputPerMillion: 1,
-    outputPerMillion: 2,
     priceBand: null,
     capabilities: {},
     admitted: true,
@@ -63,11 +60,10 @@ describe('the comparison table reads the catalogue, not a second copy of it', ()
     expect(within(row('Access')).getByText('Max 5x and above')).toBeTruthy();
   });
 
-  it('prices in credits at the shared conversion rate', () => {
-    render(<ModelCompareTable planLabel="Free" entries={[entry({ inputPerMillion: 10 })]} />);
-    expect(
-      within(row('Input per million')).getByText(`${10 * CREDITS_PER_USD} credits`),
-    ).toBeTruthy();
+  it('shows no per million price, so a plan allowance cannot be worked back into tokens', () => {
+    render(<ModelCompareTable planLabel="Free" entries={[entry()]} />);
+    expect(screen.queryByText(/per million/i)).toBeNull();
+    expect(screen.queryByText(/credits/i)).toBeNull();
   });
 
   it('marks a capability the model does not have instead of leaving it blank', () => {
