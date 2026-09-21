@@ -1,4 +1,6 @@
 import {
+  AUTOMATION_OUTCOME_MAX_BATCH,
+  AUTOMATION_OUTCOME_MAX_REASON_CHARS,
   settleAutomationAttempt,
   type AutomationAttempt,
   type AutomationOutcome,
@@ -19,8 +21,8 @@ export const AUTOMATION_AUDIT_OUTBOX_KEY = 'agi_automation_audit_outbox';
  * caps the array and the reason string itself, so a report that exceeds either
  * is rejected whole rather than truncated server side.
  */
-export const AUTOMATION_AUDIT_BATCH_SIZE = 200;
-const REASON_MAX_CHARS = 300;
+export const AUTOMATION_AUDIT_BATCH_SIZE = AUTOMATION_OUTCOME_MAX_BATCH;
+const REASON_MAX_CHARS = AUTOMATION_OUTCOME_MAX_REASON_CHARS;
 
 /**
  * A receipt survives a service-worker restart because it is queued in
