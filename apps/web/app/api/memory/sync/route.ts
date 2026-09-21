@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   MemorySyncPushRequestSchema,
+  SYNC_PROTOCOL_VERSION,
   ServerVersionSchema,
+  resolveSyncProtocolVersion,
+  syncProtocolRefusalMessage,
   type MemoryWireDelta,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -128,9 +131,7 @@ async function handlePost(request: NextRequest) {
     }
   }
 
-  if (!hasSyncProtocolV2(rawBody)) {
-    return syncProtocolUpgradeRequired();
-  }
+  assertReadableSyncProtocol(rawBody);
   const parsed = MemorySyncPushRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     throw createError.validation('Invalid memory sync payload', parsed.error);
@@ -256,7 +257,7 @@ async function handlePost(request: NextRequest) {
     );
     const cursor = maxServerVersion('0', applied, conflictRows);
     return NextResponse.json({
-      protocolVersion: 2,
+      protocolVersion: SYNC_PROTOCOL_VERSION,
       applied,
       conflicts,
       rejected: refused,
@@ -274,26 +275,18 @@ function hasMemoriesKey(value: unknown): boolean {
   );
 }
 
-function hasSyncProtocolV2(value: unknown): boolean {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    (value as Record<string, unknown>)['protocolVersion'] === 2,
-  );
-}
-
-function syncProtocolUpgradeRequired(): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        code: 'SYNC_PROTOCOL_UPGRADE_REQUIRED',
-        message: 'Upgrade this client before pushing Managed Cloud memory changes.',
-      },
-      requiredProtocolVersion: 2,
-    },
-    { status: 409 },
-  );
+/**
+ * The floor the shared contract defines, applied before the batch is parsed so
+ * a caller below it reads a sentence naming the remedy rather than a list of
+ * fields it has never heard of.
+ */
+function assertReadableSyncProtocol(value: unknown): void {
+  const body = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const decision = resolveSyncProtocolVersion((body as Record<string, unknown>)['protocolVersion']);
+  if (decision.compatibility === 'readable') return;
+  const message = syncProtocolRefusalMessage(decision, 'memory sync');
+  if (decision.compatibility === 'too_new') throw createError.validation(message);
+  throw createError.clientUpdateRequired(message);
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   ATTR_HTTP_RESPONSE_STATUS_CODE,
   ATTR_URL_PATH,
 } from '@opentelemetry/semantic-conventions';
+import { REQUEST_ID_HEADER, isWellFormedRequestId } from '@agiworkforce/cloud-contracts';
 import { DenialErrorCode } from '@agiworkforce/types';
 import { AppError, createError } from './errors';
 import {
@@ -232,11 +233,12 @@ export function withErrorHandler<T extends unknown[]>(
   return async (...args: T): Promise<NextResponse | Response> => {
     const inbound = parseTraceparent(readHeader(args[0], 'traceparent'));
     const serverSpan = startBridgedSpan(HTTP_SERVER_SPAN, HTTP_SERVER_SPAN_KIND, inbound);
-    const inboundRequestId = readHeader(args[0], 'x-request-id');
-    const requestId =
-      inboundRequestId && /^[A-Za-z0-9._~-]{1,128}$/u.test(inboundRequestId)
-        ? inboundRequestId
-        : serverSpan.traceId;
+    // A caller's own id is honoured when it is one this server can put in a log
+    // line unchanged; anything else is replaced rather than repaired.
+    const inboundRequestId = readHeader(args[0], REQUEST_ID_HEADER);
+    const requestId = isWellFormedRequestId(inboundRequestId)
+      ? inboundRequestId
+      : serverSpan.traceId;
     const context: TraceContext = {
       traceId: serverSpan.traceId,
       spanId: serverSpan.spanId,
@@ -333,7 +335,7 @@ export function withErrorHandler<T extends unknown[]>(
 
         try {
           applySensitiveNoStore(args[0], response);
-          response.headers.set('x-request-id', requestId);
+          response.headers.set(REQUEST_ID_HEADER, requestId);
           response.headers.set('traceparent', formatTraceparent(context));
           response.headers.set(API_VERSION_RESPONSE_HEADER, API_CONTRACT_VERSION);
           response.headers.set(

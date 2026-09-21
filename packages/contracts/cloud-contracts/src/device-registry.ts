@@ -1,3 +1,4 @@
+import type { PlatformCapability } from '@agiworkforce/types';
 import { z } from 'zod';
 
 export const DEVICE_HEARTBEAT_PATH = '/api/devices/heartbeat';
@@ -30,6 +31,9 @@ export type DevicePresence = (typeof DEVICE_PRESENCE_STATES)[number];
 
 export const DEVICE_NAME_MAX_LENGTH = 120;
 
+// The five below default to off, so a build that predates a field cannot claim
+// it by omission. The rest are optional: absent means the device said nothing,
+// which a server must tell apart from a device that said no.
 export const DeviceCapabilitiesSchema = z
   .object({
     browser: z.boolean().default(false),
@@ -37,9 +41,55 @@ export const DeviceCapabilitiesSchema = z
     localModels: z.boolean().default(false),
     localMcp: z.boolean().default(false),
     remoteControl: z.boolean().default(false),
+    workingDirectory: z.boolean().optional(),
+    filesystem: z.boolean().optional(),
+    localExecution: z.boolean().optional(),
+    terminal: z.boolean().optional(),
+    localDatabase: z.boolean().optional(),
+    screenCapture: z.boolean().optional(),
+    clipboard: z.boolean().optional(),
+    nativeIntegrations: z.boolean().optional(),
+    photos: z.boolean().optional(),
+    notifications: z.boolean().optional(),
   })
   .strict();
 export type DeviceCapabilities = z.infer<typeof DeviceCapabilitiesSchema>;
+
+/**
+ * Which advertised boolean answers which platform capability. The matrix owns
+ * the vocabulary; this names the field a device sends to claim one of its rows.
+ */
+export const DEVICE_CAPABILITY_FIELDS: Readonly<
+  Partial<Record<PlatformCapability, keyof DeviceCapabilities>>
+> = Object.freeze({
+  canUseBrowserAutomation: 'browser',
+  canUseDesktopAutomation: 'computerUse',
+  canUseLocalModels: 'localModels',
+  canUseLocalMcp: 'localMcp',
+  canUseWorkingDirectory: 'workingDirectory',
+  canUseFileSystem: 'filesystem',
+  canRunLocalCode: 'localExecution',
+  canUseTerminal: 'terminal',
+  canUseLocalDatabase: 'localDatabase',
+  canTakeScreenshot: 'screenCapture',
+  canUseClipboard: 'clipboard',
+  canUseNativeIntegrations: 'nativeIntegrations',
+  canUsePhotos: 'photos',
+  canUseNotifications: 'notifications',
+});
+
+/**
+ * What a device said about one capability: `true`, `false`, or nothing at all.
+ * A caller that cannot tell the third apart falls back on the surface name.
+ */
+export function advertisedDeviceCapability(
+  capabilities: DeviceCapabilities | null | undefined,
+  capability: PlatformCapability,
+): boolean | undefined {
+  const field = DEVICE_CAPABILITY_FIELDS[capability];
+  if (field === undefined || !capabilities) return undefined;
+  return capabilities[field];
+}
 
 export const DeviceHeartbeatRequestSchema = z
   .object({

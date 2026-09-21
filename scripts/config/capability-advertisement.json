@@ -1,61 +1,20 @@
 {
-  "why": "DeviceCapabilitiesSchema is strict, so a capability with no field there is one a device physically cannot tell the server about. Ten of the fourteen capabilities a machine has and a browser does not are in that position today. Each is recorded with the reason and the owner who closes it; closing one without moving it into \"advertises\" fails, so this file cannot become a list of things nobody intends to fix.",
+  "why": "DeviceCapabilitiesSchema is strict, so a capability with no field there is one a device physically cannot tell the server about. Every capability a machine has and a browser does not now has a field, and each is recorded with the field that carries it; a capability the matrix adds with no field here fails, so the list is measured rather than maintained.",
   "advertises": {
     "canUseBrowserAutomation": "browser",
     "canUseDesktopAutomation": "computerUse",
     "canUseLocalModels": "localModels",
-    "canUseLocalMcp": "localMcp"
+    "canUseLocalMcp": "localMcp",
+    "canUseWorkingDirectory": "workingDirectory",
+    "canUseFileSystem": "filesystem",
+    "canRunLocalCode": "localExecution",
+    "canUseTerminal": "terminal",
+    "canUseLocalDatabase": "localDatabase",
+    "canTakeScreenshot": "screenCapture",
+    "canUseClipboard": "clipboard",
+    "canUseNativeIntegrations": "nativeIntegrations",
+    "canUsePhotos": "photos",
+    "canUseNotifications": "notifications"
   },
-  "gaps": {
-    "canUseWorkingDirectory": {
-      "field": "workingDirectory",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "A device that has opened a folder and one that has not are the same row to the server, so a task that needs a checkout cannot be offered to the right machine."
-    },
-    "canUseFileSystem": {
-      "field": "filesystem",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "The checklist requires filesystem access in the advertisement and the schema has no field for it. A server routing a file-writing task has to assume it from the surface name."
-    },
-    "canRunLocalCode": {
-      "field": "localExecution",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "Whether this build may run a local program is a policy answer as much as a platform one, and the heartbeat carries neither, so a hook or a skill is offered to a device that will refuse it."
-    },
-    "canUseTerminal": {
-      "field": "terminal",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "A terminal is the capability a code session most depends on and the one the heartbeat is most often asked about, and it is not there."
-    },
-    "canUseLocalDatabase": {
-      "field": "localDatabase",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "The desktop keeps a local store the cloud can hand work to; nothing on the wire says a given device has one."
-    },
-    "canTakeScreenshot": {
-      "field": "screenCapture",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "Screen capture is granted per operating system and can be refused after install, so it is exactly the kind of answer that cannot be inferred from the surface name."
-    },
-    "canUseClipboard": {
-      "field": "clipboard",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "Reading the clipboard is a separate permission on every platform and the heartbeat has no field for it."
-    },
-    "canUseNativeIntegrations": {
-      "field": "nativeIntegrations",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "Native integrations differ by operating system and by install, so a single boolean derived from the surface is wrong for most devices."
-    },
-    "canUsePhotos": {
-      "field": "photos",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "The photo library is a mobile permission the user grants or refuses after install, and the heartbeat reports neither."
-    },
-    "canUseNotifications": {
-      "field": "notifications",
-      "owner": "packages/contracts/cloud-contracts/src/device-registry.ts",
-      "why": "A device that cannot show a notification still reads as notifiable, so a completed run is announced to a machine that will not show it."
-    }
-  }
+  "gaps": {}
 }
