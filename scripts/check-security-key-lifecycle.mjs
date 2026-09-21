@@ -24,7 +24,10 @@ const rootIndex = process.argv.indexOf('--root');
 const scanRoot = rootIndex >= 0 ? path.resolve(process.argv[rootIndex + 1]) : repoRoot;
 
 const BASELINE_PATH = 'scripts/config/security-key-lifecycle-baseline.json';
-const SCAN_ROOTS = ['apps/web', 'packages'];
+const REGISTRY_PATH = 'apps/web/lib/crypto/connector-secret-reseal.ts';
+const WORKSPACE_RING_CALL = 'organizationKeyRing(';
+const SEAL_CALL = 'sealEnvelope(';
+const SCAN_ROOTS = ['apps/web', 'packages', 'scripts'];
 const CRYPTO_DIR = 'apps/web/lib/crypto/';
 const SKIPPED_DIRS = new Set([
   'node_modules',
@@ -112,6 +115,72 @@ export function handlesKeyMaterial(rel, source) {
   return rel.startsWith(CRYPTO_DIR) || KEY_MATERIAL_IMPORT.test(source);
 }
 
+/**
+ * The registry a rotation walks, read back from the module that declares it
+ * rather than restated here.
+ */
+export function readWorkspaceSealedStores(source) {
+  const block =
+    /WORKSPACE_SEALED_STORES:\s*readonly WorkspaceSealedStore\[\]\s*=\s*\[([\s\S]*?)\n\];/.exec(
+      source,
+    );
+  if (block === null) return [];
+  const stores = [];
+  for (const entry of block[1].split(/\}\s*,/)) {
+    const module = /module:\s*'([^']+)'/.exec(entry);
+    const table = /table:\s*'([^']+)'/.exec(entry);
+    const column = /column:\s*'([^']+)'/.exec(entry);
+    const contextPrefix = /contextPrefix:\s*'([^']+)'/.exec(entry);
+    if (!module || !table || !column || !contextPrefix) continue;
+    stores.push({
+      module: module[1],
+      table: table[1],
+      column: column[1],
+      contextPrefix: contextPrefix[1],
+    });
+  }
+  return stores;
+}
+
+/**
+ * A column sealed under a workspace's ring that the registry does not name
+ * stays sealed under a version the retirement then drops. So the modules are
+ * enumerated from the tree and the registry has to account for every one.
+ */
+function workspaceSealFailures(sealingModules, stores, sourceOf) {
+  const failures = [];
+  const named = new Set(stores.map((store) => store.module));
+  for (const rel of sealingModules) {
+    if (named.has(rel)) continue;
+    failures.push(
+      `${rel} seals a value under a workspace key ring and no entry in ${REGISTRY_PATH} names ` +
+        `it. A rotation would leave that column sealed under the version it then retires.`,
+    );
+  }
+  for (const store of stores) {
+    const source = sourceOf(store.module);
+    if (source === null || !sealingModules.includes(store.module)) {
+      failures.push(
+        `${REGISTRY_PATH} names ${store.module}, which no longer seals under a workspace key ` +
+          `ring. Remove the entry or restore the module.`,
+      );
+      continue;
+    }
+    for (const [label, literal] of [
+      ['table', store.table],
+      ['column', store.column],
+      ['context', store.contextPrefix],
+    ]) {
+      if (source.includes(literal)) continue;
+      failures.push(
+        `${REGISTRY_PATH} gives ${store.module} the ${label} "${literal}", which does not ` +
+          `appear in it. The rewrap would walk a column nothing writes.`,
+      );
+    }
+  }
+  return failures;
+}
+
 function main() {
   const files = SCAN_ROOTS.flatMap((root) => sourceFiles(path.join(scanRoot, root)));
   const production = files.filter((file) => !isTestPath(file));
@@ -179,10 +248,29 @@ function main() {
     );
   }
 
+  const byPath = new Map(production.map((file) => [relative(file), file]));
+  const sourceOf = (rel) => {
+    const file = byPath.get(rel);
+    return file ? read(file) : null;
+  };
+  // A workspace ring is resolved in the running app, so a guard or a job that
+  // only names the symbols is not one of its sealing modules.
+  const sealingModules = [...byPath.keys()].filter((rel) => {
+    if (rel === REGISTRY_PATH || rel.startsWith(CRYPTO_DIR) || rel.startsWith('scripts/')) {
+      return false;
+    }
+    const source = sourceOf(rel);
+    return source.includes(WORKSPACE_RING_CALL) && source.includes(SEAL_CALL);
+  });
+  const registrySource = sourceOf(REGISTRY_PATH);
+  const stores = registrySource === null ? [] : readWorkspaceSealedStores(registrySource);
+  failures.push(...workspaceSealFailures(sealingModules, stores, sourceOf));
+
   if (failures.length === 0) {
     console.log(
       `check-security-key-lifecycle: ${subjects} modules handle key material, ${operations} ` +
-        `lifecycle operations, ${excused.size} awaiting a caller, none new.`,
+        `lifecycle operations, ${excused.size} awaiting a caller, none new; ` +
+        `${stores.length} workspace-sealed column(s) in ${sealingModules.length} module(s).`,
     );
     process.exit(0);
   }

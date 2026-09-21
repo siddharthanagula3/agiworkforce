@@ -15,8 +15,10 @@ vi.mock('@/lib/security-audit', () => ({
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { createLocalCmekProvider, type CmekKeyDescriptor } from '@/lib/crypto/cmek';
+import { WORKSPACE_SEALED_STORES } from '@/lib/crypto/connector-secret-reseal';
 import {
   buildCmekProviderRegistry,
+  countPlatformSealedRows,
   provisionOrganizationKey,
   readKeyRewrapRun,
   readOrganizationKeyRecord,
@@ -42,6 +44,8 @@ const DESCRIPTOR: CmekKeyDescriptor = {
 const REGION_ENV = {
   DATABASE_URL: 'postgres://user:pass@localhost:5432/test',
   AGI_DATA_REGION_US_KMS_REGION: 'us-east-1',
+  // The platform ring every workspace without a key of its own is derived from.
+  CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY: 'cd'.repeat(32),
 };
 
 function row(over: Record<string, unknown> = {}) {
@@ -66,6 +70,8 @@ function harness(rows: Record<string, unknown>[] = []) {
   return { db: { query, execute } as unknown as DatabaseAdapter, query, execute };
 }
 
+const EVERY_SEALED_STORE = WORKSPACE_SEALED_STORES.map((store) => `${store.table}.${store.column}`);
+
 function rewrapRow(over: Record<string, unknown> = {}) {
   return {
     organization_id: ORG,
@@ -76,6 +82,7 @@ function rewrapRow(over: Record<string, unknown> = {}) {
     resealed: 4,
     remaining: 0,
     failure_count: 0,
+    covered_stores: EVERY_SEALED_STORE,
     last_error: null,
     started_at: '2026-09-17T00:00:00.000Z',
     completed_at: '2026-09-17T00:05:00.000Z',
@@ -210,7 +217,7 @@ describe('status, without throwing at an administrator', () => {
 describe('provisioning, rotation and revocation are audited', () => {
   it('records the provider and version on provisioning, never the key material', async () => {
     const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
-    const h = harness([]);
+    const h = routed({ keyRow: null });
 
     await provisionOrganizationKey({
       db: h.db,
@@ -230,6 +237,39 @@ describe('provisioning, rotation and revocation are audited', () => {
     expect(detail['keyVersion']).toBe('1');
     const wrapped = (h.execute.mock.calls[0] as unknown as [string, unknown[]])[1][5];
     expect(JSON.stringify(event)).not.toContain(String(wrapped));
+  });
+
+  it('refuses enrolment while rows are still sealed under the platform ring', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql);
+      if (/from public\.organizations\b/i.test(text)) {
+        return [{ data_region: null, data_region_requested: null, data_region_requested_at: null }];
+      }
+      if (/count\(\*\)::int as sealed/i.test(text)) return [{ sealed: 3 }];
+      return [];
+    });
+    const execute = vi.fn(async () => undefined);
+    const db = { query, execute } as unknown as DatabaseAdapter;
+
+    await expect(
+      provisionOrganizationKey({
+        db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        descriptor: DESCRIPTOR,
+        provider,
+        keyVersion: '1',
+        env: REGION_ENV,
+      }),
+    ).rejects.toThrow(/3 row\(s\) in .* sealed under the platform key/);
+    expect(execute).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('counts nothing to strand for a workspace that has sealed nothing yet', async () => {
+    const h = routed({ keyRow: null });
+    await expect(countPlatformSealedRows(h.db, ORG, REGION_ENV)).resolves.toEqual([]);
   });
 
   it('retires the previous version on rotation so older ciphertext still opens', async () => {
@@ -474,6 +514,39 @@ describe('a key version cannot be dropped out of the ring on an assurance', () =
         reason: 'housekeeping',
       }),
     ).rejects.toThrow(/is the active one/i);
+  });
+
+  it('refuses a run that walked only some of the stores sealed under the version', async () => {
+    const h = routed({
+      keyRow: ringRow,
+      rewrap: rewrapRow({ covered_stores: ['public.other.col'] }),
+    });
+
+    await expect(
+      retireOrganizationKeyVersion({
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        keyVersion: '1',
+        reason: 'housekeeping',
+      }),
+    ).rejects.toThrow(new RegExp(`never walked ${EVERY_SEALED_STORE[0]?.replace(/\./g, '\\.')}`));
+    expect(h.execute).not.toHaveBeenCalled();
+  });
+
+  it('refuses a run filed before the store it never knew about was declared', async () => {
+    const h = routed({ keyRow: ringRow, rewrap: rewrapRow({ covered_stores: [] }) });
+
+    await expect(
+      retireOrganizationKeyVersion({
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        keyVersion: '1',
+        reason: 'housekeeping',
+      }),
+    ).rejects.toThrow(/unreadable for good/);
+    expect(h.execute).not.toHaveBeenCalled();
   });
 
   it('drops it once a complete rewrap onto the current key says so, and records it as critical', async () => {

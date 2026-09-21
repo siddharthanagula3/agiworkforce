@@ -190,6 +190,21 @@
       "file": "apps/web/lib/services/plugin-lifecycle.ts",
       "migration": 288,
       "reason": "Reads and writes the per-version signature columns this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration."
+    },
+    {
+      "file": "apps/web/lib/server/organization-encryption-keys.ts",
+      "migration": 289,
+      "reason": "Reads and writes the covered-stores column this migration adds to the rewrap run row. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 287,
+      "reason": "Deletes from and classifies the table this migration creates. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the table exists."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 287,
+      "reason": "Deletes from and classifies the table this migration creates. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the table exists."
     }
   ]
 }

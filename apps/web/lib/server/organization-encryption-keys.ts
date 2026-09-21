@@ -33,6 +33,10 @@ import {
 } from '@/lib/crypto/cmek-lifecycle';
 import { createKmsProviderRegistry } from '@/lib/crypto/kms-providers';
 import {
+  WORKSPACE_SEALED_STORES,
+  workspaceRewrapStores,
+} from '@/lib/crypto/connector-secret-reseal';
+import {
   assertCustomerKeyRegion,
   keyManagementRegions,
   readOrganizationRegion,
@@ -356,10 +360,51 @@ async function assertKeyRegionAdmitted(
   assertCustomerKeyRegion(region.effective, descriptor.region, env);
 }
 
+export interface PlatformSealedCount {
+  store: string;
+  rows: number;
+}
+
+/**
+ * What this workspace has sealed under the platform-derived ring. Enrolling a
+ * key of its own moves every read onto that key, and nothing opens these rows
+ * again, so the count is a gate on enrolment rather than a report.
+ */
+export async function countPlatformSealedRows(
+  db: DatabaseAdapter,
+  organizationId: string,
+  env?: Record<string, string | undefined>,
+): Promise<readonly PlatformSealedCount[]> {
+  const ring = platformTenantKeyRing(
+    PLATFORM_TENANT_KEY_ENV,
+    organizationId,
+    env ? { env } : undefined,
+  );
+  const versions = [ring.active.id, ...ring.retired.map((key) => key.id)];
+  const counts: PlatformSealedCount[] = [];
+  for (const store of workspaceRewrapStores(db, organizationId)) {
+    let rows = 0;
+    for (const version of versions) rows += await store.countSealedUnder(version);
+    if (rows > 0) counts.push({ store: store.name, rows });
+  }
+  return counts;
+}
+
 export async function provisionOrganizationKey(
   input: ProvisionOrganizationKeyInput,
 ): Promise<{ keyVersion: string }> {
   await assertKeyRegionAdmitted(input.db, input.organizationId, input.descriptor, input.env);
+  // Enrolment switches every read onto the customer ring. Rows still sealed
+  // under the platform ring have no path across, so they are the gate.
+  const stranded = await countPlatformSealedRows(input.db, input.organizationId, input.env);
+  if (stranded.length > 0) {
+    throw new Error(
+      `Workspace ${input.organizationId} still holds ` +
+        `${stranded.map((entry) => `${entry.rows} row(s) in ${entry.store}`).join(', ')} sealed ` +
+        'under the platform key. Enrolling a key of its own moves every read onto that key and ' +
+        'those rows would never open again, so the association is refused until they are cleared.',
+    );
+  }
   const { wrapped } = await input.provider.generateDataKey(input.descriptor);
   await input.db.execute(
     `insert into public.organization_encryption_keys
@@ -523,6 +568,8 @@ export interface KeyRewrapRun {
   resealed: number;
   remaining: number;
   failureCount: number;
+  /** The sealed stores the run walked, which is what it is evidence for. */
+  coveredStores: readonly string[];
   lastError: string | null;
   startedAt: string | null;
   completedAt: string | null;
@@ -537,6 +584,7 @@ interface RewrapRunRow {
   resealed: number | string;
   remaining: number | string;
   failure_count: number | string;
+  covered_stores: unknown;
   last_error: string | null;
   started_at: string | Date | null;
   completed_at: string | Date | null;
@@ -562,6 +610,9 @@ function toRewrapRun(row: RewrapRunRow): KeyRewrapRun {
     resealed: Number(row.resealed),
     remaining: Number(row.remaining),
     failureCount: Number(row.failure_count),
+    coveredStores: Array.isArray(row.covered_stores)
+      ? row.covered_stores.filter((entry): entry is string => typeof entry === 'string')
+      : [],
     lastError: row.last_error,
     startedAt: toIso(row.started_at),
     completedAt: toIso(row.completed_at),
@@ -575,7 +626,7 @@ export async function readKeyRewrapRun(
 ): Promise<KeyRewrapRun | null> {
   const rows = await db.query<RewrapRunRow>(
     `select organization_id, from_key_version, to_key_version, state, scanned, resealed,
-            remaining, failure_count, last_error, started_at, completed_at
+            remaining, failure_count, covered_stores, last_error, started_at, completed_at
        from public.organization_key_rewrap_runs
       where organization_id = $1
         and from_key_version = $2
@@ -592,7 +643,8 @@ export interface RunOrganizationKeyRewrapInput {
   organizationId: string;
   actorUserId: string;
   fromVersion: string;
-  stores: readonly RewrapStore[];
+  /** Defaults to every store the sealed-store registry declares. */
+  stores?: readonly RewrapStore[];
   registry?: CmekProviderRegistry;
   env?: Record<string, string | undefined>;
 }
@@ -617,18 +669,22 @@ export async function runOrganizationKeyRewrap(
   const registry = input.registry ?? buildCmekProviderRegistry(input.env);
   const ring = await customerRingResolver(registry)(record);
   const toVersion = record.active.version;
+  const stores = input.stores ?? workspaceRewrapStores(input.db, input.organizationId);
+  const coveredStores = stores.map((store) => store.name);
 
   await input.db.execute(
     `insert into public.organization_key_rewrap_runs
-       (organization_id, from_key_version, to_key_version, state, started_by_user_id)
-     values ($1, $2, $3, 'running', $4)
+       (organization_id, from_key_version, to_key_version, state, started_by_user_id,
+        covered_stores)
+     values ($1, $2, $3, 'running', $4, $5::text[])
      on conflict (organization_id, from_key_version, to_key_version) do update
        set state = 'running',
            last_error = null,
            completed_at = null,
            started_at = now(),
-           started_by_user_id = excluded.started_by_user_id`,
-    [input.organizationId, input.fromVersion, toVersion, input.actorUserId],
+           started_by_user_id = excluded.started_by_user_id,
+           covered_stores = excluded.covered_stores`,
+    [input.organizationId, input.fromVersion, toVersion, input.actorUserId, coveredStores],
   );
 
   let outcome: RewrapOutcome;
@@ -636,7 +692,7 @@ export async function runOrganizationKeyRewrap(
     outcome = await runKeyRewrap({
       ring,
       fromVersion: input.fromVersion,
-      stores: input.stores,
+      stores,
     });
   } catch (error) {
     await input.db.execute(
@@ -739,6 +795,16 @@ export async function retireOrganizationKeyVersion(
     throw new Error(
       `The rewrap off "${input.keyVersion}" targeted "${run.toVersion}" and the active version ` +
         `is now "${record.active.version}". Rewrap onto the current key before retiring.`,
+    );
+  }
+  const uncovered = WORKSPACE_SEALED_STORES.map((store) => `${store.table}.${store.column}`).filter(
+    (name) => !run.coveredStores.includes(name),
+  );
+  if (uncovered.length > 0) {
+    throw new Error(
+      `The rewrap off "${input.keyVersion}" never walked ${uncovered.join(', ')}, so nothing ` +
+        'establishes that those rows moved. Run the rewrap over every sealed store before ' +
+        'retiring the version, or what is still on it becomes unreadable for good.',
     );
   }
   assertRewrapComplete({

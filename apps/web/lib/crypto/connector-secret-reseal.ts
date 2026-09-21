@@ -2,7 +2,8 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-import { openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
+import type { RewrapEntry, RewrapStore } from '@/lib/crypto/cmek-lifecycle';
+import { ENVELOPE_VERSION, openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
 
 /**
  * What a connector secret is for. The purpose is the associated data its
@@ -66,6 +67,100 @@ export const CONNECTOR_SECRET_COLUMNS: readonly ConnectorSecretColumn[] = [
     purpose: 'oauth-refresh-token',
   },
 ];
+
+export interface WorkspaceSealedStore {
+  /** The module that seals this column, so the guard can read its literals back. */
+  readonly module: string;
+  readonly table: string;
+  readonly column: string;
+  readonly keyColumn: string;
+  readonly organizationColumn: string;
+  /** The associated data the module binds, minus the workspace id it appends. */
+  readonly contextPrefix: string;
+}
+
+/**
+ * Every column sealed under a workspace's own key ring, which is the set a
+ * rotation has to move before the old version can be retired. A column missing
+ * from here would stay sealed under a version the retirement then drops, so the
+ * guard enumerates the modules that resolve a workspace ring and fails on one
+ * that is not named below.
+ */
+export const WORKSPACE_SEALED_STORES: readonly WorkspaceSealedStore[] = [
+  {
+    module: 'apps/web/lib/services/audit-streaming-service.ts',
+    table: 'public.organization_audit_destinations',
+    column: 'secret_ciphertext',
+    keyColumn: 'organization_id',
+    organizationColumn: 'organization_id',
+    contextPrefix: 'organization-audit-destination:',
+  },
+];
+
+/**
+ * Turns the registry into the stores a rewrap walks. The write is a
+ * compare-and-swap on the version prefix, so a row somebody re-sealed while the
+ * run was in flight keeps their value instead of this run's stale copy.
+ */
+export function workspaceRewrapStores(
+  db: DatabaseAdapter,
+  organizationId: string,
+  stores: readonly WorkspaceSealedStore[] = WORKSPACE_SEALED_STORES,
+): readonly RewrapStore[] {
+  return stores.map((store) => {
+    const prefixFor = (keyVersion: string) => `${ENVELOPE_VERSION}.${keyVersion}.`;
+    let sealedUnder: string | null = null;
+
+    return {
+      name: `${store.table}.${store.column}`,
+      async countSealedUnder(keyVersion: string): Promise<number> {
+        const rows = await db.query<{ sealed: string | number }>(
+          `select count(*)::int as sealed
+             from ${store.table}
+            where ${store.organizationColumn} = $1
+              and left(${store.column}, length($2)) = $2`,
+          [organizationId, prefixFor(keyVersion)],
+        );
+        return Number(rows[0]?.sealed ?? 0);
+      },
+      async readSealedUnder(keyVersion: string, limit: number): Promise<readonly RewrapEntry[]> {
+        sealedUnder = keyVersion;
+        const rows = await db.query<{ key: string; sealed: string }>(
+          `select ${store.keyColumn}::text as key, ${store.column} as sealed
+             from ${store.table}
+            where ${store.organizationColumn} = $1
+              and left(${store.column}, length($2)) = $2
+            order by ${store.keyColumn}
+            limit $3`,
+          [organizationId, prefixFor(keyVersion), limit],
+        );
+        return rows.map((row) => ({
+          id: row.key,
+          sealed: row.sealed,
+          context: `${store.contextPrefix}${organizationId}`,
+        }));
+      },
+      async writeResealed(entries: readonly RewrapEntry[]): Promise<void> {
+        if (sealedUnder === null) {
+          throw new Error(
+            `${store.table}.${store.column} was asked to write a re-seal before anything was ` +
+              'read, so the version it would be replacing is unknown.',
+          );
+        }
+        for (const entry of entries) {
+          await db.execute(
+            `update ${store.table}
+                set ${store.column} = $1
+              where ${store.keyColumn}::text = $2
+                and ${store.organizationColumn} = $3
+                and left(${store.column}, length($4)) = $4`,
+            [entry.sealed, entry.id, organizationId, prefixFor(sealedUnder)],
+          );
+        }
+      },
+    };
+  });
+}
 
 export interface OpenedConnectorSecret {
   plaintext: string;

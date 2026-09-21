@@ -464,6 +464,21 @@ export const rateLimitConfigs = {
     window: '1 h', // irreversible once the grace window passes
     failClosed: true,
   },
+  'settings-org-keys-write': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'settings-org-keys-revoke': {
+    limit: 3,
+    window: '1 h', // everything the workspace sealed stops opening
+    failClosed: true,
+  },
+  'settings-org-keys-rewrap': {
+    limit: 5,
+    window: '1 h', // each run walks every sealed store
+    failClosed: true,
+  },
   'settings-org-delete-cancel': {
     limit: 10,
     window: '1 h',

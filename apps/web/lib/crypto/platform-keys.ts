@@ -198,15 +198,64 @@ function service(): PlatformKeyService {
 }
 
 /**
- * Wires the process's platform key service to the KMS clients this deployment
- * holds credentials for, and unseals the platform data key once. Safe to call
- * more than once; the second call re-reads the environment.
+ * The clients to unseal with, or a thunk that builds them. Under the `env`
+ * provider the thunk is never called, so startup builds no vendor client.
  */
-export async function preloadPlatformKeys(
-  registry: CmekProviderRegistry,
+export type PlatformKeyRegistrySource =
+  CmekProviderRegistry | (() => CmekProviderRegistry | Promise<CmekProviderRegistry>);
+
+let startup: Promise<PlatformKeyPosture> | null = null;
+
+/**
+ * Names the provider and the kind of failure, never the key uri, the wrapped
+ * key or the vendor's own message, any of which can carry material.
+ */
+function unsealFailure(
+  provider: PlatformKeyProviderId,
+  error: unknown,
+): PlatformKeyProviderUnavailableError {
+  const kind = error instanceof Error ? error.name : typeof error;
+  return new PlatformKeyProviderUnavailableError(
+    `The platform data key sealed under the "${provider}" key provider could not be unsealed ` +
+      `(${kind}). Every platform secret this process holds is ciphertext it cannot open, so it ` +
+      'refuses to become ready rather than failing each request that needs one.',
+  );
+}
+
+async function unsealPlatformDataKey(
+  source: PlatformKeyRegistrySource,
 ): Promise<PlatformKeyPosture> {
-  defaultService = createPlatformKeyService({ registry });
-  return defaultService.preload();
+  const provider = platformKeyProviderId();
+  if (provider === 'env') return platformKeyPosture();
+  const registry = typeof source === 'function' ? await source() : source;
+  const unsealed = createPlatformKeyService({ registry });
+  let posture: PlatformKeyPosture;
+  try {
+    posture = await unsealed.preload();
+  } catch (error) {
+    if (error instanceof PlatformKeyProviderUnavailableError) throw error;
+    throw unsealFailure(provider, error);
+  }
+  defaultService = unsealed;
+  return posture;
+}
+
+/**
+ * Wires the process's platform key service to the KMS clients this deployment
+ * holds credentials for, and unseals the platform data key once per process.
+ * A repeat call returns the first answer rather than paying the KMS again; a
+ * failed one is forgotten, so a retry is a real retry.
+ */
+export function preloadPlatformKeys(
+  registry: PlatformKeyRegistrySource,
+): Promise<PlatformKeyPosture> {
+  if (!startup) {
+    startup = unsealPlatformDataKey(registry).catch((error: unknown) => {
+      startup = null;
+      throw error;
+    });
+  }
+  return startup;
 }
 
 export function platformKeyRing(envName: string, options?: LoadKeyRingOptions): KeyRing {
