@@ -59,7 +59,7 @@
       "id": "chat",
       "label": "Chat",
       "group": "core-consumer",
-      "featureId": null,
+      "featureId": "chat",
       "cells": {
         "web": {
           "state": "unverified",
@@ -107,7 +107,7 @@
       "id": "history",
       "label": "History",
       "group": "core-consumer",
-      "featureId": null,
+      "featureId": "history",
       "cells": {
         "web": {
           "state": "present",
@@ -207,7 +207,7 @@
       "id": "files",
       "label": "Files and artifacts",
       "group": "core-consumer",
-      "featureId": null,
+      "featureId": "files",
       "cells": {
         "web": {
           "state": "present",
@@ -257,7 +257,7 @@
       "id": "library",
       "label": "Library",
       "group": "core-consumer",
-      "featureId": null,
+      "featureId": "library",
       "cells": {
         "web": {
           "state": "unverified",
@@ -349,7 +349,7 @@
       "id": "search",
       "label": "Search",
       "group": "core-consumer",
-      "featureId": null,
+      "featureId": "search",
       "cells": {
         "web": {
           "state": "unverified",
@@ -617,7 +617,7 @@
       "id": "study",
       "label": "Study",
       "group": "advanced-ai",
-      "featureId": null,
+      "featureId": "study",
       "cells": {
         "web": {
           "state": "present",
@@ -693,7 +693,7 @@
       "id": "image-generation",
       "label": "Image generation",
       "group": "advanced-ai",
-      "featureId": null,
+      "featureId": "image_generation",
       "cells": {
         "web": {
           "state": "present",
@@ -737,7 +737,7 @@
       "id": "video-generation",
       "label": "Video generation",
       "group": "advanced-ai",
-      "featureId": null,
+      "featureId": "video_generation",
       "cells": {
         "web": {
           "state": "present",
@@ -777,7 +777,7 @@
       "id": "voice",
       "label": "Voice",
       "group": "advanced-ai",
-      "featureId": null,
+      "featureId": "voice",
       "cells": {
         "web": {
           "state": "present",
@@ -901,7 +901,7 @@
       "id": "connectors",
       "label": "Connectors",
       "group": "integrations",
-      "featureId": null,
+      "featureId": "connectors",
       "cells": {
         "web": {
           "state": "present",
@@ -1037,7 +1037,7 @@
       "id": "mcp",
       "label": "MCP",
       "group": "integrations",
-      "featureId": null,
+      "featureId": "mcp",
       "cells": {
         "web": {
           "state": "present",
@@ -1080,7 +1080,7 @@
       "id": "approvals",
       "label": "Tool approvals",
       "group": "integrations",
-      "featureId": null,
+      "featureId": "approvals",
       "cells": {
         "web": {
           "state": "present",
@@ -1212,7 +1212,7 @@
       "id": "terminal",
       "label": "Terminal",
       "group": "developer",
-      "featureId": null,
+      "featureId": "terminal",
       "cells": {
         "web": {
           "state": "absent",
@@ -1254,7 +1254,7 @@
       "id": "git",
       "label": "Git",
       "group": "developer",
-      "featureId": null,
+      "featureId": "git",
       "cells": {
         "web": {
           "state": "absent",
@@ -1294,7 +1294,7 @@
       "id": "diffs",
       "label": "Diffs",
       "group": "developer",
-      "featureId": null,
+      "featureId": "diffs",
       "cells": {
         "web": {
           "state": "present",
@@ -1380,7 +1380,7 @@
       "id": "cloud-tasks",
       "label": "Cloud tasks",
       "group": "developer",
-      "featureId": null,
+      "featureId": "cloud_tasks",
       "cells": {
         "web": {
           "state": "present",
@@ -1512,7 +1512,7 @@
       "id": "global-voice",
       "label": "Global voice",
       "group": "native",
-      "featureId": null,
+      "featureId": "global_voice",
       "cells": {
         "web": {
           "state": "absent",
@@ -1592,7 +1592,7 @@
       "id": "filesystem",
       "label": "Filesystem",
       "group": "native",
-      "featureId": null,
+      "featureId": "filesystem",
       "cells": {
         "web": {
           "state": "absent",
