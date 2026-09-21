@@ -44,11 +44,7 @@ export function isIncompleteTurn(message: ChatMessage | undefined | null): boole
 }
 
 export type IncompleteTurnCause =
-  | 'rateLimit'
-  | 'providerOutage'
-  | 'timeout'
-  | 'modelRestriction'
-  | 'emptyResponse';
+  'rateLimit' | 'providerOutage' | 'timeout' | 'modelRestriction' | 'emptyResponse';
 
 export const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, IncompleteTurnCause>> = {
   provider_rate_limited: 'rateLimit',
@@ -68,9 +64,9 @@ export const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, Incomp
 
 const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>> = {
   rateLimit:
-    'This model is receiving too many requests right now. Wait a moment and retry, or choose Auto to use another available model.',
+    'This model is receiving too many requests right now. Wait a moment and retry, or switch to another model if your plan has one.',
   providerOutage:
-    'The model provider is temporarily unreachable. Retry, or choose Auto to use another available model.',
+    'The model provider is temporarily unreachable. Retry, or switch to another model if your plan has one.',
   timeout:
     'The model took too long to respond. Retry, or pick a faster model from the model picker.',
   modelRestriction:
