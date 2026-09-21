@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-09-01",
+  "lastUpdated": "2026-09-20",
   "rule": "Non-Markdown artifacts must be operational contracts, active verification outputs, or explicitly marked rebuild-required. There is no archive directory; historical evidence lives in git history.",
   "keepActive": [
     {
@@ -50,6 +50,18 @@
       "status": "live-evidence",
       "owner": "Repository maintainers",
       "reason": "Screenshot corpus from the 2026-09-01 live parity audit, referenced by the frontend transition workstream; superseded and deletable once the post-transition browser re-measure is appended to docs/research/chat-ui-parity-2026-08-30.md."
+    },
+    {
+      "path": "docs/security/security-claims.json",
+      "status": "machine-contract",
+      "owner": "Security lead",
+      "reason": "Index of every assertive sentence in docs/security/security.md with the test or guard that proves it; read by scripts/check-security-claims.mjs."
+    },
+    {
+      "path": "docs/product/surface-feature-matrix.json",
+      "status": "machine-contract",
+      "owner": "Cross-surface parity",
+      "reason": "Source data for docs/product/surface-feature-matrix.md: per-surface code presence with the two files that evidence each cell; read and rendered by scripts/check-surface-feature-matrix.mjs."
     }
   ],
   "rebuildRequired": [

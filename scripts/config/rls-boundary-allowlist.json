@@ -202,6 +202,10 @@
       "reason": "verifyKey resolves the presented credential by its key_prefix before any session exists, so the key is the subject and there is no caller to bind; every other method takes the caller connection"
     },
     {
+      "path": "apps/web/lib/services/cogs-ledger-service.ts",
+      "reason": "operator cost reconciliation, deliberately cross-account: it reads settled managed_usage_requests rows for every account in a time window to compare them with provider cost events, so there is no single owner to bind a policy role to"
+    },
+    {
       "path": "apps/web/lib/services/entitlement-resolution.ts",
       "reason": "a seat member's entitlement resolves from the OWNER subscription row, which a member scoped connection cannot see, the same precedent as org-entitlements.ts; both statements bind explicit user ids and read no row the caller's own membership does not already reach"
     },
