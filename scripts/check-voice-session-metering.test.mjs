@@ -21,6 +21,8 @@ function write(root, relativePath, contents) {
   writeFileSync(absolute, contents);
 }
 
+// The fixture is source text, so its own placeholders are spelled through OPEN.
+const OPEN = '$' + '{';
 const QUOTA_SOURCE = `
 const TRANSCRIPTION_OPERATION = 'transcription';
 const LIVE_VOICE_SESSION_OPERATION = 'voice_live_session';
@@ -29,9 +31,9 @@ const CONSUMPTION_QUERIES = Object.freeze({
   voice_minutes: {
     sql: \`select coalesce(sum(
               case
-                when usage->>'operation' = '\${TRANSCRIPTION_OPERATION}'
+                when usage->>'operation' = '${OPEN}TRANSCRIPTION_OPERATION}'
                 then (usage->>'estimatedAudioSeconds')::double precision
-                when usage->>'operation' = '\${LIVE_VOICE_SESSION_OPERATION}'
+                when usage->>'operation' = '${OPEN}LIVE_VOICE_SESSION_OPERATION}'
                 then (usage->>'billedSeconds')::double precision
                 else 0 end
             ), 0) as consumed\`,

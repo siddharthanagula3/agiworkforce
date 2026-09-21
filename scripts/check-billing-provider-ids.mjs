@@ -57,7 +57,10 @@ function storeProductPattern(repoRoot) {
   const keys = mobileIapProductKeys(repoRoot)
     .map((key) => key.replace(/_/g, '[._]'))
     .join('|');
-  return new RegExp(`${MOBILE_BUNDLE_ID.replace(/\./g, '\\.')}[._](?:${keys})\\b`, 'g');
+  return new RegExp(
+    `${MOBILE_BUNDLE_ID.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[._](?:${keys})\\b`,
+    'g',
+  );
 }
 
 /**

@@ -530,7 +530,9 @@ describe('a key version cannot be dropped out of the ring on an assurance', () =
         keyVersion: '1',
         reason: 'housekeeping',
       }),
-    ).rejects.toThrow(new RegExp(`never walked ${EVERY_SEALED_STORE[0]?.replace(/\./g, '\\.')}`));
+    ).rejects.toThrow(
+      new RegExp(`never walked ${EVERY_SEALED_STORE[0]?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+    );
     expect(h.execute).not.toHaveBeenCalled();
   });
 

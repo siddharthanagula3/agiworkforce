@@ -331,7 +331,11 @@ function checkScriptInjection({ workflows, contract, errors }) {
       for (const step of steps(job)) {
         if (typeof step.run !== 'string') continue;
         for (const expression of INJECTABLE_EXPRESSIONS) {
-          if (new RegExp(`\\$\\{\\{\\s*${expression.replace(/\./g, '\\.')}`).test(step.run)) {
+          if (
+            new RegExp(`\\$\\{\\{\\s*${expression.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(
+              step.run,
+            )
+          ) {
             found.add(`${file}:${name}: ${expression}`);
           }
         }
