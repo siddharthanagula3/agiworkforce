@@ -2497,7 +2497,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -2537,7 +2537,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: 'chat', epoch: 0 };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -4950,6 +4961,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     // ── Messages from extension ───────────────────────────────────────────────
     window.addEventListener('message', (event) => {
       const msg = event.data;
+
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
 
       if (msg.type === 'turnStarted') {
         removeTyping();
@@ -8623,7 +8639,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -8663,7 +8679,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: 'chat', epoch: 0 };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -11076,6 +11103,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     // ── Messages from extension ───────────────────────────────────────────────
     window.addEventListener('message', (event) => {
       const msg = event.data;
+
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
 
       if (msg.type === 'turnStarted') {
         removeTyping();
@@ -14749,7 +14781,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -14789,7 +14821,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: 'chat', epoch: 0 };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -17202,6 +17245,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     // ── Messages from extension ───────────────────────────────────────────────
     window.addEventListener('message', (event) => {
       const msg = event.data;
+
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
 
       if (msg.type === 'turnStarted') {
         removeTyping();

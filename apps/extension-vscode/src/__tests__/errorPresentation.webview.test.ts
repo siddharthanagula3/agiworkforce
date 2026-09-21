@@ -355,6 +355,8 @@ describe('the chat webview error block', () => {
     postMessage.mockClear();
     button?.click();
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'resolveTurnFailure',
       payload: { kind: 'sign-in-provider', provider: 'deepseek' },
     });

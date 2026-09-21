@@ -190,7 +190,7 @@ describe('credit balance in the VS Code meter', () => {
     expect(topUp?.textContent).toBe('Add credits');
     topUp?.click();
 
-    expect(postedMessages).toContainEqual({ type: 'manageBilling' });
+    expect(postedMessages).toContainEqual({ origin: 'chat', epoch: 0, type: 'manageBilling' });
   });
 
   it('publishes neither a balance nor an allowance figure on Free', async () => {

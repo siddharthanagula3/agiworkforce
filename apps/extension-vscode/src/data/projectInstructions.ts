@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 
 const MAX_FILE_BYTES = 8_192;
 const INSTRUCTION_FILES = ['AGENTS.md', 'CLAUDE.md', '.agiworkforce/instructions.md'] as const;
@@ -39,20 +38,4 @@ export async function loadProjectInstructionSources(): Promise<ProjectInstructio
   }
 
   return sources;
-}
-
-export async function loadProjectInstructions(): Promise<string> {
-  const sources = await loadProjectInstructionSources();
-  const sections = sources.map(
-    (source) => `### ${path.basename(source.fileName)}\n${source.content}`,
-  );
-
-  if (sections.length === 0) return '';
-
-  return (
-    '## Project instructions\n' +
-    'The following files define project-level conventions and AI instructions. ' +
-    'Follow them when they are relevant to the current task.\n\n' +
-    sections.join('\n\n')
-  );
 }
