@@ -9,7 +9,7 @@ import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-hel
 import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { extractJsonObject, wantsJsonObject } from './json-object-mode';
+import { settleJsonObjectCompletion, wantsJsonObject } from './json-object-mode';
 import { mapClassifiedUpstreamError, type UpstreamErrorShape } from './upstream-error-copy';
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
@@ -243,27 +243,35 @@ export async function buildNonStreamResponse(
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
 
   if (wantsJsonObject(chatRequest.response_format)) {
-    const extraction = extractJsonObject(llmResponse.content ?? '');
-    if (!extraction.ok) {
+    const settlement = settleJsonObjectCompletion(
+      llmResponse.content ?? '',
+      llmResponse.finishReason ?? null,
+    );
+    if (!settlement.ok) {
       logger.warn(
-        { requestId, model: responseModel, reason: extraction.reason },
+        {
+          requestId,
+          model: responseModel,
+          state: settlement.state,
+          finishReason: llmResponse.finishReason ?? null,
+        },
         'json_object mode: model output was not a JSON object',
       );
       return NextResponse.json(
         {
           error: {
-            message: `${extraction.reason} Retry, or use \`tools\` with \`tool_choice\` for a schema-shaped payload.`,
-            type: 'invalid_response_error',
-            code: 'json_object_not_satisfied',
+            message: settlement.message,
+            type: settlement.type,
+            code: settlement.code,
           },
         },
         {
-          status: 502,
+          status: settlement.status,
           headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
         },
       );
     }
-    llmResponse.content = extraction.content ?? llmResponse.content;
+    llmResponse.content = settlement.content;
   }
 
   if (canPersistAssistantTurn(processed)) {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { extractJsonObject, wantsJsonObject } from './json-object-mode';
+import { extractJsonObject, settleJsonObjectCompletion, wantsJsonObject } from './json-object-mode';
 
 describe('wantsJsonObject', () => {
   it('is true only for json_object', () => {
@@ -85,5 +85,45 @@ describe('extractJsonObject, rejects', () => {
 
   it('two objects concatenated', () => {
     expect(extractJsonObject('{"a":1}\n{"b":2}').ok).toBe(false);
+  });
+});
+
+describe('settleJsonObjectCompletion', () => {
+  it('passes a complete object through whatever the stop reason', () => {
+    expect(settleJsonObjectCompletion('{"a":1}', 'stop')).toEqual({ ok: true, content: '{"a":1}' });
+    expect(settleJsonObjectCompletion('{"a":1}', 'length')).toEqual({
+      ok: true,
+      content: '{"a":1}',
+    });
+  });
+
+  it('names a blocked stop as a refusal before looking at the text', () => {
+    for (const finishReason of ['refusal', 'content_filter']) {
+      expect(settleJsonObjectCompletion('{"a":1}', finishReason)).toMatchObject({
+        ok: false,
+        state: 'refused',
+        code: 'json_object_refused',
+      });
+    }
+  });
+
+  it('names unparseable output at the output cap as incomplete', () => {
+    for (const finishReason of ['length', 'max_tokens']) {
+      expect(settleJsonObjectCompletion('{"a": [1, 2', finishReason)).toMatchObject({
+        ok: false,
+        state: 'incomplete',
+        code: 'json_object_incomplete',
+      });
+    }
+  });
+
+  it('names unparseable output from a finished or unknown turn as invalid', () => {
+    for (const finishReason of ['stop', null]) {
+      expect(settleJsonObjectCompletion('no json here', finishReason)).toMatchObject({
+        ok: false,
+        state: 'invalid',
+        code: 'json_object_not_satisfied',
+      });
+    }
   });
 });
