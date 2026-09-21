@@ -132,7 +132,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     activeVersion: record?.active.version ?? null,
     retiredVersions,
     rewrapRuns,
-    canRevoke: await mayRevokeKey(access),
+    canRevoke: await mayRevokeKey({ db, userId, organizationId }),
   };
   return NextResponse.json(payload);
 }
