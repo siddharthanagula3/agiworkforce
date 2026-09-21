@@ -35,11 +35,30 @@ function isRetryable(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
+export const NON_PRODUCTION_EMAIL_OPT_IN = 'AGI_ALLOW_NON_PRODUCTION_EMAIL';
+
+/**
+ * A preview deployment can run against a restored copy of production, whose
+ * rows hold real addresses. It mails nobody unless its operator opts in.
+ */
+export function emailBlockedOnThisDeployment(env: NodeJS.ProcessEnv = process.env): boolean {
+  const vercelEnv = env['VERCEL_ENV'];
+  const nonProduction = vercelEnv === 'preview' || vercelEnv === 'development';
+  return nonProduction && env[NON_PRODUCTION_EMAIL_OPT_IN] !== '1';
+}
+
 async function postOnce(
   apiKey: string,
   payload: Record<string, unknown>,
   idempotencyKey?: string,
 ): Promise<{ ok: true; id: string | null } | { ok: false; retryable: boolean; detail: string }> {
+  if (emailBlockedOnThisDeployment()) {
+    return {
+      ok: false,
+      retryable: false,
+      detail: `email is off on non production deployments; set ${NON_PRODUCTION_EMAIL_OPT_IN}=1 to send`,
+    };
+  }
   try {
     const response = await fetch(RESEND_ENDPOINT, {
       method: 'POST',
