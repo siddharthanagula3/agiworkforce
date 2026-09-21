@@ -4,12 +4,13 @@
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{mpsc, OnceLock};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use windows::core::{Interface, BSTR, VARIANT};
 use windows::Win32::System::Com::{
-    CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CLSCTX_INPROC_SERVER,
-    COINIT_APARTMENTTHREADED, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IDENTIFY,
+    CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CoUninitialize, CLSCTX_INPROC_SERVER,
+    COINIT_MULTITHREADED, EOAC_NONE, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IDENTIFY,
     SAFEARRAY,
 };
 use windows::Win32::System::Ole::{
@@ -31,7 +32,7 @@ pub use crate::automation::types::{BoundingRectangle, ElementQuery, UIElementInf
 pub use patterns::PatternCapabilities;
 pub use wait::WaitConfig;
 
-static COM_INITIALIZED: OnceLock<()> = OnceLock::new();
+static COM_SECURITY_INITIALIZED: OnceLock<()> = OnceLock::new();
 
 #[derive(Clone)]
 struct CachedElement {
@@ -39,74 +40,20 @@ struct CachedElement {
     cached_at: Instant,
 }
 
-/// Thread-safe UI Automation service for Windows.
-///
-/// # Safety
-///
-/// The `IUIAutomation` COM interface is wrapped in a `Mutex` to ensure
-/// serialized access from any thread. While Windows COM objects created in STA
-/// (Single-Threaded Apartment) mode ideally should be accessed from their creating
-/// thread, wrapping in a Mutex ensures:
-///
-/// 1. No concurrent access to the COM interface occurs
-/// 2. All operations are serialized through the mutex
-/// 3. The service can safely be shared across Tauri's async runtime
-///
-/// The `IUIAutomation` interface is documented as "thread-agile" by Microsoft,
-/// meaning it can be called from any thread as long as COM is initialized on that
-/// thread. The mutex provides additional safety by preventing any concurrent access.
-///
-/// Reference: <https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/>
-pub struct UIAutomationService {
-    /// The UI Automation COM interface, wrapped in Mutex for thread safety.
-    /// All access must go through `with_automation()` to ensure proper synchronization.
+struct UIAutomationState {
     automation: Mutex<IUIAutomation>,
-    /// Cache of discovered UI elements, keyed by runtime ID.
-    /// Uses parking_lot::Mutex for better performance than std::sync::Mutex.
     cache: Mutex<HashMap<String, CachedElement>>,
-    /// Time-to-live for cached elements.
     cache_ttl: Duration,
 }
 
-// SAFETY: UIAutomationService is safe to Send and Sync because:
-//
-// 1. The `IUIAutomation` COM interface is wrapped in `Mutex` ensuring:
-//    - No concurrent access (mutex serializes all operations)
-//    - Exclusive access pattern matches COM STA requirements
-//
-// 2. Microsoft documents IUIAutomation as "thread-agile", meaning it can be
-//    called from any thread as long as COM is initialized on that thread.
-//    See: https://learn.microsoft.com/en-us/windows/win32/api/uiautomationclient/
-//
-// 3. All access goes through `with_automation()` which holds the lock for
-//    the duration of any COM operation, preventing data races.
-//
-// 4. The cache uses parking_lot::Mutex which is inherently Send + Sync.
-//
-// The unsafe impls are required because IUIAutomation is a raw COM pointer
-// that doesn't implement Send/Sync in the windows crate. The Mutex wrapper
-// provides the synchronization that makes these impls sound.
+struct ComApartment;
 
-// SAFETY: The Mutex ensures exclusive access to the COM interface.
-// IUIAutomation is thread-agile per Microsoft documentation.
-unsafe impl Send for UIAutomationService {}
-
-// SAFETY: The Mutex serializes all access to the COM interface.
-// No concurrent access to IUIAutomation can occur.
-unsafe impl Sync for UIAutomationService {}
-
-impl UIAutomationService {
-    /// Creates a new UI Automation service.
-    ///
-    /// Initializes COM in apartment-threaded mode and creates the IUIAutomation
-    /// interface. The interface is wrapped in a mutex for thread-safe access.
-    pub fn new() -> Result<Self> {
-        COM_INITIALIZED.get_or_init(|| unsafe {
-            if let Err(err) = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok() {
-                tracing::error!("CoInitializeEx failed: {:?}", err);
-                return;
-            }
-
+impl ComApartment {
+    fn initialize() -> Result<Self> {
+        unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }
+            .ok()
+            .map_err(|error| anyhow!("Failed to initialize UI Automation apartment: {error}"))?;
+        COM_SECURITY_INITIALIZED.get_or_init(|| unsafe {
             let _ = CoInitializeSecurity(
                 None,
                 -1,
@@ -120,12 +67,209 @@ impl UIAutomationService {
             )
             .ok();
         });
+        Ok(Self)
+    }
+}
 
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        unsafe { CoUninitialize() };
+    }
+}
+
+type AutomationTask = Box<dyn FnOnce(&UIAutomationState) + Send>;
+
+pub struct UIAutomationService {
+    sender: Option<mpsc::SyncSender<AutomationTask>>,
+    worker: Option<JoinHandle<()>>,
+}
+
+impl UIAutomationService {
+    pub fn new() -> Result<Self> {
+        let (sender, receiver) = mpsc::sync_channel::<AutomationTask>(0);
+        let (ready_sender, ready_receiver) = mpsc::sync_channel(0);
+        let worker = std::thread::Builder::new()
+            .name("windows-ui-automation".into())
+            .spawn(move || {
+                let apartment = ComApartment::initialize();
+                let _apartment = match apartment {
+                    Ok(apartment) => apartment,
+                    Err(error) => {
+                        let _ = ready_sender.send(Err(error));
+                        return;
+                    }
+                };
+                // Native interfaces must be released before the apartment shuts down.
+                let state = match UIAutomationState::new() {
+                    Ok(state) => state,
+                    Err(error) => {
+                        let _ = ready_sender.send(Err(error));
+                        return;
+                    }
+                };
+                if ready_sender.send(Ok(())).is_err() {
+                    return;
+                }
+                for task in receiver {
+                    task(&state);
+                }
+            })?;
+        let ready = ready_receiver
+            .recv()
+            .map_err(|error| anyhow!("UI Automation worker failed during initialization: {error}"))
+            .and_then(|result| result);
+        if let Err(error) = ready {
+            drop(sender);
+            let _ = worker.join();
+            return Err(error);
+        }
+        Ok(Self {
+            sender: Some(sender),
+            worker: Some(worker),
+        })
+    }
+
+    fn call<R: Send + 'static>(
+        &self,
+        operation: impl FnOnce(&UIAutomationState) -> Result<R> + Send + 'static,
+    ) -> Result<R> {
+        let (sender, receiver) = mpsc::sync_channel(0);
+        self.sender
+            .as_ref()
+            .ok_or_else(|| anyhow!("UI Automation worker is stopped"))?
+            .send(Box::new(move |state| {
+                let _ = sender.send(operation(state));
+            }))
+            .map_err(|_| anyhow!("UI Automation worker is unavailable"))?;
+        receiver
+            .recv()
+            .map_err(|_| anyhow!("UI Automation worker stopped before responding"))?
+    }
+
+    pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
+        self.call(UIAutomationState::list_windows)
+    }
+
+    pub fn find_elements(
+        &self,
+        parent_id: Option<String>,
+        query: &ElementQuery,
+    ) -> Result<Vec<UIElementInfo>> {
+        let query = query.clone();
+        self.call(move |state| state.find_elements(parent_id, &query))
+    }
+
+    fn is_element_enabled(&self, element_id: &str) -> Result<bool> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| {
+            let element = state.get_element(&element_id)?;
+            unsafe { element.CurrentIsEnabled() }
+                .map(|value| value.as_bool())
+                .map_err(|error| anyhow!("CurrentIsEnabled failed: {error}"))
+        })
+    }
+    pub fn check_patterns(&self, element_id: &str) -> Result<PatternCapabilities> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.check_patterns(&element_id))
+    }
+
+    pub fn invoke(&self, element_id: &str) -> Result<()> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.invoke(&element_id))
+    }
+
+    pub fn get_value(&self, element_id: &str) -> Result<String> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.get_value(&element_id))
+    }
+
+    pub fn toggle(&self, element_id: &str) -> Result<()> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.toggle(&element_id))
+    }
+
+    pub fn bounding_rect(&self, element_id: &str) -> Result<Option<BoundingRectangle>> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.bounding_rect(&element_id))
+    }
+
+    pub fn set_focus(&self, element_id: &str) -> Result<()> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.set_focus(&element_id))
+    }
+
+    pub fn focus_window(&self, element_id: &str) -> Result<()> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.focus_window(&element_id))
+    }
+
+    pub fn scroll_to_element(&self, element_id: &str) -> Result<()> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.scroll_to_element(&element_id))
+    }
+
+    pub fn get_grid_row_count(&self, element_id: &str) -> Result<i32> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.get_grid_row_count(&element_id))
+    }
+
+    pub fn get_grid_column_count(&self, element_id: &str) -> Result<i32> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.get_grid_column_count(&element_id))
+    }
+
+    pub fn set_value(&self, element_id: &str, value: &str) -> Result<()> {
+        let element_id = element_id.to_owned();
+        let value = value.to_owned();
+        self.call(move |state| state.set_value(&element_id, &value))
+    }
+
+    pub fn get_table_cell(&self, element_id: &str, row: i32, column: i32) -> Result<String> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.get_table_cell(&element_id, row, column))
+    }
+
+    pub fn expand_tree_node(&self, element_id: &str, expand: bool) -> Result<()> {
+        let element_id = element_id.to_owned();
+        self.call(move |state| state.expand_tree_node(&element_id, expand))
+    }
+
+    pub fn clear_expired_cache(&self) {
+        if let Err(error) = self.call(|state| {
+            state.clear_expired_cache();
+            Ok(())
+        }) {
+            tracing::warn!(%error, "Unable to expire UI Automation cache");
+        }
+    }
+
+    pub fn clear_cache(&self) {
+        if let Err(error) = self.call(|state| {
+            state.clear_cache();
+            Ok(())
+        }) {
+            tracing::warn!(%error, "Unable to clear UI Automation cache");
+        }
+    }
+}
+
+impl Drop for UIAutomationService {
+    fn drop(&mut self) {
+        drop(self.sender.take());
+        if let Some(worker) = self.worker.take() {
+            if worker.join().is_err() {
+                tracing::warn!("UI Automation worker terminated unexpectedly");
+            }
+        }
+    }
+}
+
+impl UIAutomationState {
+    fn new() -> Result<Self> {
         let automation: IUIAutomation = unsafe {
             CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
                 .map_err(|err| anyhow!("Failed to create CUIAutomation: {err:?}"))?
         };
-
         Ok(Self {
             automation: Mutex::new(automation),
             cache: Mutex::new(HashMap::new()),

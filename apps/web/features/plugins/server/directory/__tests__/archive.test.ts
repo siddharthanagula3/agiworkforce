@@ -31,12 +31,13 @@ function skillFile(name: string, description: string, body: string): string {
 async function zipOf(
   files: Record<string, string | Uint8Array>,
   options: Record<string, JSZip.JSZipFileOptions> = {},
+  compression: 'DEFLATE' | 'STORE' = 'DEFLATE',
 ): Promise<Uint8Array> {
   const zip = new JSZip();
   for (const [path, content] of Object.entries(files)) {
     zip.file(path, content, options[path]);
   }
-  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', platform: 'UNIX' });
+  return zip.generateAsync({ type: 'uint8array', compression, platform: 'UNIX' });
 }
 
 function rewriteStoredPath(archive: Uint8Array, from: string, to: string): Uint8Array {
@@ -175,7 +176,7 @@ describe('readPluginArchive rejections', () => {
     const member = 'x'.repeat(PLUGIN_MARKETPLACE_MAX_MANIFEST_BYTES);
     const files: Record<string, string> = {};
     for (let index = 0; index < 11; index += 1) files[`skills/s${index}/SKILL.md`] = member;
-    const error = await rejectionOf(await zipOf(files));
+    const error = await rejectionOf(await zipOf(files, {}, 'STORE'));
     expect(error.message).toBe(UPLOAD_EXPANDS_TOO_FAR_MESSAGE);
   });
 

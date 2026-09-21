@@ -1066,6 +1066,9 @@ importers:
       '@agiworkforce/providers-factory':
         specifier: workspace:*
         version: link:../../packages/ai/providers/factory
+      '@agiworkforce/providers-vercel-gateway':
+        specifier: workspace:^
+        version: link:../../packages/ai/providers/vercel-gateway
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../packages/ai/routing

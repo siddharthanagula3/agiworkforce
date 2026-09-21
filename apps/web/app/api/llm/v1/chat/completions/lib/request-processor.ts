@@ -109,6 +109,7 @@ import {
   CLOUD_WORK_MODES,
   getEconomyFallbackModels,
   getModelMetadataById,
+  getModelRegistryFacts,
   getMinimumRequiredTier,
   getModelReasoning,
   clampEffortToEntitlement,
@@ -142,6 +143,7 @@ import {
   isCredentialUnfunded,
   isRoutePolicyExcluded,
   observedRouteHealthFromSnapshots,
+  planResponseBudget,
   buildRoutingDecisionTrace,
   resolveAutoRoute,
   taskFamilyRoutingStageEnabled,
@@ -152,6 +154,7 @@ import type {
   RoutingAttachment,
   RoutingRuntimeState,
   RoutingTaskType,
+  ResponseBudgetPlan,
   TaskFamily,
   TaskFamilySignals,
 } from '@agiworkforce/routing';
@@ -170,6 +173,7 @@ import {
   resolveWithObservedCapabilities,
   type WebCloudRolloutInputs,
 } from '@/lib/services/model-rollout/rollout-routing-inputs';
+import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
@@ -827,6 +831,7 @@ export type ProcessedRequest = {
   estimatedCostCents: number;
   estimatedPromptTokens: number;
   maxTokens: number;
+  responseBudget?: ResponseBudgetPlan;
   usedFallback: boolean;
   fallbackReason: string | undefined;
   originalModel: string;
@@ -2279,6 +2284,8 @@ export async function processRequest(
   scopedDbPromise.catch(() => {});
 
   const requestedModel = chatRequest.model;
+  const adaptiveResponseBudgetEnabled =
+    isAutoModeModelId(requestedModel) || getModelRegistryFacts(requestedModel)?.isRouter === true;
   const freeTrialEnabled = isFreeTrialRequest({
     requestedModel,
     planTier: subscription.plan_tier,
@@ -2925,6 +2932,16 @@ export async function processRequest(
     planTier: subscription.plan_tier,
   });
   resolvedTaskType = resolveToolAwareTaskType(resolvedTaskType, chatRequest);
+  const requestedMaxOutputTokens = chatRequest.max_tokens ?? chatRequest.max_completion_tokens;
+  const initialResponseBudget =
+    chatSurface === 'api' || !adaptiveResponseBudgetEnabled
+      ? null
+      : planResponseBudget({
+          message: lastUserText,
+          taskType: resolvedTaskType,
+          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          requestedMaxOutputTokens,
+        });
   const routeSelection =
     resolvedTaskType === classifierResult.type
       ? demoteLowConfidencePremiumSelection(
@@ -2992,11 +3009,14 @@ export async function processRequest(
       ).family
     : null;
 
-  const routeUsage = {
+  const baseRouteUsage = {
     ...(routeBudgetRemainingCents !== undefined
       ? { budgetRemainingCents: routeBudgetRemainingCents }
       : {}),
     estimatedInputTokens: routeEstimatedInputTokens,
+    ...(initialResponseBudget
+      ? { estimatedOutputTokens: initialResponseBudget.outputTokenBudget }
+      : {}),
     taskFamily: routeTaskFamily,
   };
 
@@ -3057,6 +3077,44 @@ export async function processRequest(
   // region is already served from it, and `EXCLUDED_ROUTE_HOSTS` is that
   // region's own answer about which transports may carry its traffic.
   const residencyRegion = resolveResidencyRegion(workspaceRegion?.effective, rolloutInputs.region);
+  const scopedForAssessment = await scopedDbPromise;
+  const semanticResponseAssessment = await timePhase(CHAT_TURN_PHASE.responseAssessment, () =>
+    assessSemanticResponseBudget({
+      requestId,
+      requestedModel,
+      surface: chatSurface,
+      isFreePlan: isFreePlanTier(subscription.plan_tier),
+      hasMedia: (routingAttachments?.length ?? 0) > 0,
+      initialBudget: initialResponseBudget,
+      zeroDataRetentionOnly,
+      residencyRegion,
+      workspaceModelPolicy,
+      enableResponseAssessment: rolloutInputs.enableResponseAssessment,
+      applyResponseAssessment: rolloutInputs.applyResponseAssessment,
+      message: lastUserText,
+      taskType: resolvedTaskType,
+      userId,
+      organizationId: scopedForAssessment.organizationId,
+      promptVariants: rolloutInputs.promptVariants,
+      signal: request.signal,
+    }),
+  );
+  const routingResponseBudget =
+    chatSurface === 'api' || !adaptiveResponseBudgetEnabled
+      ? null
+      : planResponseBudget({
+          message: lastUserText,
+          taskType: resolvedTaskType,
+          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          requestedMaxOutputTokens,
+          semanticAssessment: semanticResponseAssessment.assessment,
+        });
+  const routeUsage = {
+    ...baseRouteUsage,
+    ...(routingResponseBudget
+      ? { estimatedOutputTokens: routingResponseBudget.outputTokenBudget }
+      : {}),
+  };
 
   const { decision: baseRouteDecision, routingRequest: baseRoutingRequest } =
     await resolveWithObservedCapabilities(
@@ -3135,7 +3193,17 @@ export async function processRequest(
   const freeLanePlan = freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.plan : null;
   const routeDecision: AutoRouteDecision =
     freeLaneOutcome.kind === 'dispatch' ? freeLaneOutcome.routeDecision : baseRouteDecision;
-  const routingTrace = buildRoutingDecisionTrace(baseRoutingRequest, routeDecision);
+  const routingTrace = buildRoutingDecisionTrace(
+    baseRoutingRequest,
+    routeDecision,
+    semanticResponseAssessment.trace,
+  );
+  const routingPromptIds = [
+    ...turnPromptStamps(chatRequest, rolloutInputs.promptVariants),
+    ...(semanticResponseAssessment.trace.promptStamp
+      ? [semanticResponseAssessment.trace.promptStamp]
+      : []),
+  ];
   persistRoutingDecision({
     trace: routingTrace,
     requestId,
@@ -3144,7 +3212,7 @@ export async function processRequest(
     surface: chatSurface,
     kind: 'served',
     flagVariants: rolloutInputs.flagVariants,
-    promptIds: turnPromptStamps(chatRequest, rolloutInputs.promptVariants),
+    promptIds: routingPromptIds,
   });
 
   if (routeDecision.status === 'unavailable') {
@@ -3732,9 +3800,20 @@ export async function processRequest(
     };
   }
 
+  const responseBudget =
+    chatSurface === 'api' || !adaptiveResponseBudgetEnabled
+      ? null
+      : planResponseBudget({
+          message: lastUserText,
+          taskType: resolvedTaskType,
+          apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
+          requestedMaxOutputTokens,
+          modelMaxOutputTokens: resolveMaxOutputTokens(chatRequest.model),
+          semanticAssessment: semanticResponseAssessment.assessment,
+        });
   let maxTokens =
-    chatRequest.max_tokens ||
-    chatRequest.max_completion_tokens ||
+    responseBudget?.outputTokenBudget ??
+    requestedMaxOutputTokens ??
     resolveMaxOutputTokens(chatRequest.model);
   if (
     providerLower === 'anthropic' &&
@@ -3742,7 +3821,25 @@ export async function processRequest(
     typeof thinkingConfig.budget_tokens === 'number' &&
     thinkingConfig.budget_tokens >= maxTokens
   ) {
-    maxTokens = Math.min(64000, thinkingConfig.budget_tokens + 1024);
+    maxTokens = Math.min(
+      64000,
+      thinkingConfig.budget_tokens +
+        (responseBudget?.outputTokenBudget ?? requestedMaxOutputTokens ?? 1024),
+    );
+  }
+  if (responseBudget) {
+    logger.info(
+      {
+        requestId,
+        depth: responseBudget.depth,
+        format: responseBudget.format,
+        source: responseBudget.source,
+        outputTokenBudget: responseBudget.outputTokenBudget,
+        explanationRequired: responseBudget.explanationRequired,
+        clarification: responseBudget.clarification,
+      },
+      'Response budget planned',
+    );
   }
 
   let estimatedCostMicrousd =
@@ -3992,6 +4089,9 @@ export async function processRequest(
     .map((block) => block.text)
     .filter((text) => text.length > 0)
     .join('\n\n');
+  const dynamicTurnInstruction = [dynamicSkillMemoryText, responseBudget?.instruction ?? '']
+    .filter((text) => text.length > 0)
+    .join('\n\n');
 
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
   if (chatRequest.web_search) {
@@ -4122,7 +4222,7 @@ export async function processRequest(
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
-      dynamicSystemAddition: dynamicSkillMemoryText,
+      dynamicSystemAddition: dynamicTurnInstruction,
     });
     const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
     const stablePreambleBlock = preambleSplit ? preambleSplit.stablePrefix : preamble;
@@ -4153,10 +4253,10 @@ export async function processRequest(
         tool_call_id: undefined,
       });
     }
-  } else if (dynamicSkillMemoryText) {
+  } else if (dynamicTurnInstruction) {
     internalMessages.unshift({
       role: 'system',
-      content: dynamicSkillMemoryText,
+      content: dynamicTurnInstruction,
       multimodal_content: undefined,
       tool_calls: undefined,
       tool_call_id: undefined,
@@ -4310,6 +4410,7 @@ export async function processRequest(
     estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
     estimatedPromptTokens,
     maxTokens,
+    ...(responseBudget ? { responseBudget } : {}),
     usedFallback,
     fallbackReason,
     originalModel,

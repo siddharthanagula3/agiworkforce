@@ -13,7 +13,7 @@ use crate::automation::types::{
     UIElementInfo,
 };
 
-use super::{read_bstr, UIAutomationService};
+use super::{read_bstr, UIAutomationService, UIAutomationState};
 
 pub struct InspectorService {
     native: UIAutomationService,
@@ -25,7 +25,13 @@ impl InspectorService {
             native: UIAutomationService::new()?,
         })
     }
+}
 
+struct InspectorState<'a> {
+    native: &'a UIAutomationState,
+}
+
+impl InspectorState<'_> {
     fn get_detailed_info(&self, element: &IUIAutomationElement) -> Result<DetailedElementInfo> {
         let id = self.native.register_element(element)?;
 
@@ -155,7 +161,7 @@ impl InspectorService {
     }
 }
 
-impl UIInspector for InspectorService {
+impl InspectorState<'_> {
     fn inspect_element_at_point(&self, x: i32, y: i32) -> Result<DetailedElementInfo> {
         let point = POINT { x, y };
 
@@ -281,5 +287,48 @@ impl UIInspector for InspectorService {
         let children = self.get_children(&element).unwrap_or_default();
 
         Ok((parent, children))
+    }
+}
+
+impl UIInspector for InspectorService {
+    fn inspect_element_at_point(&self, x: i32, y: i32) -> Result<DetailedElementInfo> {
+        self.native
+            .call(move |native| InspectorState { native }.inspect_element_at_point(x, y))
+    }
+    fn inspect_element_by_id(&self, element_id: &str) -> Result<DetailedElementInfo> {
+        let element_id = element_id.to_owned();
+        self.native
+            .call(move |native| InspectorState { native }.inspect_element_by_id(&element_id))
+    }
+    fn get_focused_element(&self) -> Result<DetailedElementInfo> {
+        self.native
+            .call(move |native| InspectorState { native }.get_focused_element())
+    }
+    fn find_elements(
+        &self,
+        parent_id: Option<String>,
+        query: &ElementQuery,
+    ) -> Result<Vec<UIElementInfo>> {
+        let query = query.clone();
+        self.native
+            .call(move |native| InspectorState { native }.find_elements(parent_id, &query))
+    }
+    fn find_element_by_selector(&self, selector: &ElementSelector) -> Result<Option<String>> {
+        let selector = selector.clone();
+        self.native
+            .call(move |native| InspectorState { native }.find_element_by_selector(&selector))
+    }
+    fn generate_selector(&self, element_id: &str) -> Result<Vec<ElementSelector>> {
+        let element_id = element_id.to_owned();
+        self.native
+            .call(move |native| InspectorState { native }.generate_selector(&element_id))
+    }
+    fn get_element_tree(
+        &self,
+        element_id: &str,
+    ) -> Result<(Option<BasicElementInfo>, Vec<BasicElementInfo>)> {
+        let element_id = element_id.to_owned();
+        self.native
+            .call(move |native| InspectorState { native }.get_element_tree(&element_id))
     }
 }
