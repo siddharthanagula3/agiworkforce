@@ -18,6 +18,8 @@ export interface FlagSubject {
   country: string | null;
   surface: string | null;
   clientVersion: string | null;
+  /** Staff of this deployment. Absent means unestablished, which is not staff. */
+  internalStaff?: boolean;
 }
 
 export type FlagEvaluationReason =
@@ -71,8 +73,17 @@ function clientVersionMatches(
   return true;
 }
 
+/**
+ * Staff targeting narrows: a rule that asks for staff matches nobody the
+ * request has not established as staff, so an unresolved subject is a customer.
+ */
+function staffMatches(conditions: FlagConditions, subject: FlagSubject): boolean {
+  return conditions.internalStaffOnly !== true || subject.internalStaff === true;
+}
+
 export function conditionsMatch(conditions: FlagConditions, subject: FlagSubject): boolean {
   return (
+    staffMatches(conditions, subject) &&
     includesValue(conditions.userIds, subject.userId) &&
     includesValue(conditions.workspaceIds, subject.workspaceId) &&
     includesValue(conditions.roles, subject.role) &&
