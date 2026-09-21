@@ -1030,8 +1030,13 @@ fn build_provider_fallbacks(
     selected_provider: &str,
     selected_model_routes: &[RankedRoute<'_>],
 ) -> Vec<AutoFallbackRoute> {
-    let candidate_slots =
-        fallback_candidate_slots(policy, task, preferred_slots, tier_slot_order, fallback_slot);
+    let candidate_slots = fallback_candidate_slots(
+        policy,
+        task,
+        preferred_slots,
+        tier_slot_order,
+        fallback_slot,
+    );
 
     let mut seen_models = HashSet::from([selected_model_key.to_owned()]);
     let mut seen_providers = HashSet::from([selected_provider.to_owned()]);
@@ -1333,7 +1338,9 @@ fn resolve_against(registry: &Registry, request: &AutoRoutingRequest<'_>) -> Aut
         reasons.extend(eligibility.reasons);
     }
 
-    if !preferred_slots.iter().any(|slot_id| slot_id == fallback_slot)
+    if !preferred_slots
+        .iter()
+        .any(|slot_id| slot_id == fallback_slot)
         && allowed_slots.contains(fallback_slot)
         && let Some(model_key) = policy
             .slots

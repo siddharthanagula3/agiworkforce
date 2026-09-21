@@ -9,6 +9,7 @@ import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { getMobileIapCatalogState } from '@/lib/server/mobile-iap-catalog';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
 import {
   WAITLIST_ACCESS_REQUIRED_CODE,
@@ -72,14 +73,16 @@ async function handleCatalog(
   >;
   let purchaseAllowed: boolean;
   try {
-    const subRows = await db.query<SubRow>(
+    const { db: ownRows } = await getUserScopedDb(request, { resolveOrganization: false });
+    const subRows = await ownRows.query<SubRow>(
       `select plan_tier, status, stripe_subscription_id,
               apple_original_transaction_id, google_purchase_token
          from subscriptions where user_id = $1 limit 1`,
       [userId],
     );
     purchaseAllowed =
-      hasPaidBillingHistory(subRows[0] ?? null) || (await hasBillingWaitlistAccess(db, userId));
+      hasPaidBillingHistory(subRows[0] ?? null) ||
+      (await hasBillingWaitlistAccess(ownRows, userId));
   } catch (error) {
     logger.error(
       { error, userId },
