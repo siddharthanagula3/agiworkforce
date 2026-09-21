@@ -51,8 +51,8 @@ describe('free quota state shared between server instances', () => {
 
   it('treats unreadable shared records as the stricter answer', async () => {
     const store = createMemoryKeyValueStore();
-    const module = await freshInstance();
-    await module.recordFreeQuotaHold(store, {
+    const instance = await freshInstance();
+    await instance.recordFreeQuotaHold(store, {
       apiKey: API_KEY,
       offeringKey: 'offering-a',
       cause: 'exhausted',
@@ -61,7 +61,7 @@ describe('free quota state shared between server instances', () => {
     const [holdsKey] = (await store.scan('0', { match: 'agi-fquota:holds:*', count: 10 })).keys;
     await store.hashSet(holdsKey!, { 'offering-b': 'not a record' });
     await store.set(holdsKey!.replace(':holds:', ':suspended:'), 'not a record');
-    const state = await module.readFreeQuotaState(store, {
+    const state = await instance.readFreeQuotaState(store, {
       apiKey: API_KEY,
       observedOn: OBSERVED_ON,
       offeringKeys: [],
@@ -102,8 +102,8 @@ describe('free quota state shared between server instances', () => {
 
   it('reads an unreadable allowance counter as spent', async () => {
     const store = createMemoryKeyValueStore();
-    const module = await freshInstance();
-    const held = await module.reserveFreeQuotaAllowance(store, {
+    const instance = await freshInstance();
+    const held = await instance.reserveFreeQuotaAllowance(store, {
       apiKey: API_KEY,
       observedOn: OBSERVED_ON,
       offeringKey: 'offering-a',
@@ -113,7 +113,7 @@ describe('free quota state shared between server instances', () => {
       nowMs: NOW,
     });
     await store.set(held!.key, 'not a number');
-    const state = await module.readFreeQuotaState(store, {
+    const state = await instance.readFreeQuotaState(store, {
       apiKey: API_KEY,
       observedOn: OBSERVED_ON,
       offeringKeys: ['offering-a'],
@@ -123,8 +123,8 @@ describe('free quota state shared between server instances', () => {
 
   it('keeps the whole reservation when the provider never reported what it used', async () => {
     const store = createMemoryKeyValueStore();
-    const module = await freshInstance();
-    const held = await module.reserveFreeQuotaAllowance(store, {
+    const instance = await freshInstance();
+    const held = await instance.reserveFreeQuotaAllowance(store, {
       apiKey: API_KEY,
       observedOn: OBSERVED_ON,
       offeringKey: 'offering-a',
@@ -133,8 +133,8 @@ describe('free quota state shared between server instances', () => {
       usable: 1_000,
       nowMs: NOW,
     });
-    await module.settleFreeQuotaAllowance(store, held!, null);
-    const state = await module.readFreeQuotaState(store, {
+    await instance.settleFreeQuotaAllowance(store, held!, null);
+    const state = await instance.readFreeQuotaState(store, {
       apiKey: API_KEY,
       observedOn: OBSERVED_ON,
       offeringKeys: ['offering-a'],
