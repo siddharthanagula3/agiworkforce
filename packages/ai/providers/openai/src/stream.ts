@@ -1,3 +1,4 @@
+import { EmptyStreamError } from '@agiworkforce/provider-runtime';
 import type { StreamChunk } from '@agiworkforce/types';
 
 import type { OpenAIChatCompletionChunk } from './types';
@@ -8,12 +9,17 @@ interface ToolCallState {
   emittedStart: boolean;
 }
 
+// OpenRouter's terminal value for a generation its upstream failed to produce;
+// read as `stop`, a failed generation reached the reader as a finished answer.
+const UPSTREAM_FAILURE_FINISH_REASON = 'error';
+
 function mapFinishReason(
   reason: OpenAIChatCompletionChunk['choices'][number]['finish_reason'],
+  refused: boolean,
 ): 'end_turn' | 'max_tokens' | 'tool_use' | 'stop_sequence' | 'refusal' | 'error' | 'cancel' {
   switch (reason) {
     case 'stop':
-      return 'end_turn';
+      return refused ? 'refusal' : 'end_turn';
     case 'length':
       return 'max_tokens';
     case 'tool_calls':
@@ -52,6 +58,7 @@ export async function* translateOpenAIStream(
   let lastUsage: OpenAIChatCompletionChunk['usage'] | undefined;
   let stopEmitted = false;
   let metaEmitted = false;
+  let refused = false;
 
   for await (const chunk of chunks) {
     if (!metaEmitted) {
@@ -83,6 +90,9 @@ export async function* translateOpenAIStream(
     if (delta.reasoning_content) {
       yield { type: 'thinking-delta', delta: delta.reasoning_content };
     }
+    if (typeof (delta as { refusal?: unknown }).refusal === 'string') {
+      refused = true;
+    }
     if (delta.tool_calls) {
       for (const tc of delta.tool_calls) {
         let state = toolCalls.get(tc.index);
@@ -108,6 +118,7 @@ export async function* translateOpenAIStream(
     }
 
     if (choice.finish_reason && !stopEmitted) {
+      if ((choice.finish_reason as string) === UPSTREAM_FAILURE_FINISH_REASON) break;
       for (const state of toolCalls.values()) {
         if (state.emittedStart) {
           yield { type: 'tool-use-end', toolUseId: state.id };
@@ -120,11 +131,15 @@ export async function* translateOpenAIStream(
         lastUsage = undefined;
       }
 
-      yield { type: 'stop', reason: mapFinishReason(choice.finish_reason) };
+      yield { type: 'stop', reason: mapFinishReason(choice.finish_reason, refused) };
       stopEmitted = true;
     }
   }
 
   if (lastUsage) yield usageChunk(lastUsage);
-  if (!stopEmitted) yield { type: 'stop', reason: 'end_turn' };
+  // No terminal signal means the stream was interrupted, not finished. The
+  // caller's catch classifies it and keeps whatever text had arrived.
+  if (!stopEmitted) {
+    throw new EmptyStreamError(metaEmitted ? 'started_but_no_completion' : 'no_message_start');
+  }
 }
