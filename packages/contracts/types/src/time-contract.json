@@ -1,0 +1,20 @@
+{
+  "naiveTypeMatch": "^timestamp( without time zone)?$|^time$",
+  "recurrenceColumnMatch": "^(cron_expression|recurrence_rule|rrule|schedule_expression)$",
+  "zoneColumnMatch": "^(timezone|time_zone|tz)$",
+  "serverStampedColumnMatch": "^(created_at|occurred_at|recorded_at)$",
+  "serverDefaultMatch": "default\\s+(now\\(\\)|current_timestamp|timezone\\s*\\(|clock_timestamp)",
+  "zonedTime": {
+    "module": "apps/web/lib/schedules/zoned-time.ts",
+    "evidence": ["Intl.DateTimeFormat", "timeZone"],
+    "consumers": ["apps/web/lib/schedules/schedule-time.ts"]
+  },
+  "readerZone": {
+    "module": "apps/web/lib/schedules/schedule-time.ts",
+    "evidence": ["timeZone", "validateTimeZone"],
+    "forbidden": ["timeZone: 'UTC'"]
+  },
+  "naiveTimeExemptions": [],
+  "zonelessScheduleExemptions": [],
+  "callerStampedExemptions": []
+}

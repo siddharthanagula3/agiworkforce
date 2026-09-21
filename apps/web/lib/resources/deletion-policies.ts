@@ -1,4 +1,4 @@
-import type { ResourceChildDisposition } from '@agiworkforce/types';
+import { holdableResourceForTable, type ResourceChildDisposition } from '@agiworkforce/types';
 
 /**
  * The recoverable-until-purge window. Thirty days is what the library already
@@ -258,30 +258,49 @@ export interface ResourcePurgeStatement {
   readonly params: readonly unknown[];
 }
 
-/**
- * The hard delete that ends the recovery window. Bounded per run so one sweep
- * cannot hold a lock over the whole table, and ordered oldest-first so a
- * bounded run always makes progress.
- */
-export function resourcePurgeStatement(policy: ResourceDeletionPolicy): ResourcePurgeStatement {
+// Rendered by the caller so this module stays free of a server-only import.
+// null is only correct for a table no hold can name, and that is checked.
+export interface PurgeHoldExclusion {
+  readonly sql: string;
+  readonly params: readonly unknown[];
+}
+
+// Bounded and oldest-first so a run always makes progress. The predicate is
+// part of the statement, never a query the caller runs first.
+export function resourcePurgeStatement(
+  policy: ResourceDeletionPolicy,
+  holdExclusion: PurgeHoldExclusion | null,
+): ResourcePurgeStatement {
   const table = assertIdentifier(policy.table, 'table');
   const key = assertIdentifier(policy.keyColumn, 'key column');
   const deletedAt = assertIdentifier(policy.softDeleteColumn, 'soft-delete column');
 
+  if (holdExclusion === null && holdableResourceForTable(policy.table) !== null) {
+    throw new Error(
+      `${policy.table} can be placed under legal hold and this purge was built without the hold ` +
+        'predicate, so it would destroy preserved records.',
+    );
+  }
+
+  const held = holdExclusion === null ? '' : `\n        and ${holdExclusion.sql}`;
   return {
     sql: `with due as (
      select ${key} as purge_key
-       from public.${table}
-      where ${deletedAt} is not null
-        and ${deletedAt} < now() - $1::interval
-      order by ${deletedAt} asc
+       from public.${table} as candidate
+      where candidate.${deletedAt} is not null
+        and candidate.${deletedAt} < now() - $1::interval${held}
+      order by candidate.${deletedAt} asc
       limit $2
    )
    delete from public.${table} as target
     using due
     where target.${key} = due.purge_key
    returning target.${key} as purge_key`,
-    params: [`${policy.recoveryWindowDays} days`, MAX_PURGE_ROWS_PER_TABLE_PER_RUN],
+    params: [
+      `${policy.recoveryWindowDays} days`,
+      MAX_PURGE_ROWS_PER_TABLE_PER_RUN,
+      ...(holdExclusion?.params ?? []),
+    ],
   };
 }
 

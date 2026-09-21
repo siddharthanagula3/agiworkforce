@@ -1,10 +1,6 @@
 import 'server-only';
 
-import {
-  assertResolvedPublicHostname,
-  EgressPolicyError,
-  pinnedPublicFetch,
-} from '@/lib/egress-policy';
+import { createDeadline, guardedFetch, readBodyTruncated } from '@/lib/url-fetch/guarded-fetch';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
   extractPageDescription,
@@ -619,34 +615,6 @@ function setCachedPageMetadata(url: string, metadata: PageMetadata): void {
   metadataCache.set(url, { metadata, expiresAt: Date.now() + TITLE_ENRICHMENT_CACHE_TTL_MS });
 }
 
-async function readBodyTruncated(response: Response, maxBytes: number): Promise<Uint8Array> {
-  const body = response.body;
-  if (!body) return new Uint8Array(0);
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (total < maxBytes) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      const remaining = maxBytes - total;
-      const chunk = value.byteLength > remaining ? value.subarray(0, remaining) : value;
-      chunks.push(chunk);
-      total += chunk.byteLength;
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
-}
-
 export interface TitleEnrichmentOverrides {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -654,36 +622,35 @@ export interface TitleEnrichmentOverrides {
   maxConcurrency?: number;
 }
 
+export const PAGE_METADATA_MAX_REDIRECTS = 3;
+
 async function fetchPageMetadata(
   url: string,
-  fetchImpl: typeof fetch,
+  fetchImpl: typeof fetch | undefined,
   timeoutMs: number,
   maxResponseBytes: number,
 ): Promise<PageMetadata> {
+  let target: URL;
   try {
-    await assertResolvedPublicHostname(url);
-  } catch (guardErr) {
-    if (guardErr instanceof EgressPolicyError) return {};
-    throw guardErr;
+    target = new URL(url);
+  } catch {
+    return {};
   }
 
-  const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), timeoutMs);
+  const deadline = createDeadline(timeoutMs);
   try {
-    let response: Response;
-    try {
-      response = await fetchImpl(url, {
-        method: 'GET',
-        redirect: 'follow',
-        signal: controller.signal,
-        headers: {
-          Accept: 'text/html',
-          'User-Agent': 'AGIWorkforce-TitleEnrichment/1.0 (+https://agiworkforce.com)',
-        },
-      });
-    } catch {
-      return {};
-    }
+    const hop = await guardedFetch(target, {
+      deadline,
+      maxRedirects: PAGE_METADATA_MAX_REDIRECTS,
+      ...(fetchImpl ? { fetchImpl } : {}),
+      headers: {
+        Accept: 'text/html',
+        'User-Agent': 'AGIWorkforce-TitleEnrichment/1.0 (+https://agiworkforce.com)',
+      },
+    });
+    if (!hop.ok || hop.kind !== 'response') return {};
+
+    const response = hop.response;
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined);
       return {};
@@ -707,7 +674,7 @@ async function fetchPageMetadata(
   } catch {
     return {};
   } finally {
-    clearTimeout(deadline);
+    deadline.release();
   }
 }
 
@@ -744,7 +711,7 @@ export async function enrichWebSearchResultTitles<
     .filter(({ result }) => isHttpUrl(result.url) && !result.title);
   if (candidates.length === 0) return results;
 
-  const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
+  const fetchImpl = overrides.fetchImpl;
   const timeoutMs = overrides.timeoutMs ?? TITLE_ENRICHMENT_TIMEOUT_MS;
   const maxResponseBytes = overrides.maxResponseBytes ?? TITLE_ENRICHMENT_MAX_RESPONSE_BYTES;
   const maxConcurrency = Math.max(1, overrides.maxConcurrency ?? TITLE_ENRICHMENT_MAX_CONCURRENCY);
@@ -839,51 +806,35 @@ export function isRoutingRedirectUrl(url: string): boolean {
  */
 async function resolveRedirectTarget(
   url: string,
-  fetchImpl: typeof fetch,
+  fetchImpl: typeof fetch | undefined,
   timeoutMs: number,
 ): Promise<string | null> {
-  const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), timeoutMs);
+  let target: URL;
   try {
-    let current = url;
-    for (let hop = 0; hop < REDIRECT_RESOLUTION_MAX_HOPS; hop += 1) {
-      try {
-        await assertResolvedPublicHostname(current);
-      } catch (guardErr) {
-        if (guardErr instanceof EgressPolicyError) return null;
-        throw guardErr;
-      }
-
-      let response: Response;
-      try {
-        response = await fetchImpl(current, {
-          method: 'GET',
-          redirect: 'manual',
-          signal: controller.signal,
-          headers: { 'User-Agent': 'AGIWorkforce-CitationResolution/1.0' },
-        });
-      } catch {
-        return null;
-      }
-      await response.body?.cancel().catch(() => undefined);
-
-      const location = response.headers.get('location');
-      if (!location) return null;
-      let next: string;
-      try {
-        next = new URL(location, current).toString();
-      } catch {
-        return null;
-      }
-      if (!isHttpUrl(next)) return null;
-      if (!isRoutingRedirectUrl(next)) return next;
-      current = next;
-    }
+    target = new URL(url);
+  } catch {
     return null;
+  }
+
+  const deadline = createDeadline(timeoutMs);
+  try {
+    const hop = await guardedFetch(target, {
+      deadline,
+      maxRedirects: REDIRECT_RESOLUTION_MAX_HOPS,
+      ...(fetchImpl ? { fetchImpl } : {}),
+      headers: { 'User-Agent': 'AGIWorkforce-CitationResolution/1.0' },
+      followRedirect: (next) => isRoutingRedirectUrl(next.href),
+    });
+    if (!hop.ok) return null;
+    if (hop.kind === 'response') {
+      await hop.response.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    return hop.url.toString();
   } catch {
     return null;
   } finally {
-    clearTimeout(deadline);
+    deadline.release();
   }
 }
 
@@ -916,7 +867,7 @@ export async function resolveRoutingRedirectUrls<T extends { url: string }>(
     .filter(({ result }) => isHttpUrl(result.url) && isRoutingRedirectUrl(result.url));
   if (candidates.length === 0) return results;
 
-  const fetchImpl = overrides.fetchImpl ?? pinnedPublicFetch;
+  const fetchImpl = overrides.fetchImpl;
   const timeoutMs = overrides.timeoutMs ?? REDIRECT_RESOLUTION_TIMEOUT_MS;
   const maxConcurrency = Math.max(1, overrides.maxConcurrency ?? TITLE_ENRICHMENT_MAX_CONCURRENCY);
 

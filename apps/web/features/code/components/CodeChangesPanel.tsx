@@ -309,7 +309,7 @@ export function CodeChangesPanel({
                 className={`${styles['chip']} ${styles['chipSet']}`}
                 href={session.pullRequestUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
                 <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
                 <span>{`${CODE_COPY.pullRequestChipPrefix} #${session.pullRequestNumber ?? ''}`}</span>

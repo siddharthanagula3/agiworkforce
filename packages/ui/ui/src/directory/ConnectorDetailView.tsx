@@ -444,7 +444,7 @@ export function ConnectorDetailView({
           <a
             href={detail.termsHref}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className={cn('text-foreground underline underline-offset-4', DIRECTORY_FOCUS_RING)}
           >
             {CONNECTOR_TERMS_LINK_LABEL}

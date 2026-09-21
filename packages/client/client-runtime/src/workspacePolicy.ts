@@ -1,6 +1,10 @@
 import {
+  WORKSPACE_CODE_TOGGLE_KEYS,
   WORKSPACE_FEATURES,
+  isCodeHostAllowed,
+  type EffectiveWorkspaceCodeControls,
   type EffectiveWorkspacePolicyResponse,
+  type WorkspaceCodeToggleKey,
   type WorkspaceFeature,
 } from '@agiworkforce/types';
 
@@ -49,6 +53,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * A server that has not shipped the Code controls yet sends nothing here, and
+ * nothing means no rule rather than deny everything, so an older deployment
+ * keeps behaving exactly as it did.
+ */
+function parseCodeControls(value: unknown): EffectiveWorkspaceCodeControls | null {
+  if (!isRecord(value)) return null;
+  for (const key of WORKSPACE_CODE_TOGGLE_KEYS) {
+    if (typeof value[key] !== 'boolean') return null;
+  }
+  for (const key of ['allowedMcpServers', 'allowedEgressHosts'] as const) {
+    const list = value[key];
+    if (!Array.isArray(list) || list.some((entry) => typeof entry !== 'string')) return null;
+  }
+  const retention = value['sessionRetentionDays'];
+  if (retention !== null && typeof retention !== 'number') return null;
+  return value as unknown as EffectiveWorkspaceCodeControls;
+}
+
 export function parseEffectiveWorkspacePolicy(
   value: unknown,
 ): EffectiveWorkspacePolicyResponse | null {
@@ -56,15 +79,16 @@ export function parseEffectiveWorkspacePolicy(
   const { organizationId, governed, revision, controls } = value;
   if (organizationId !== null && typeof organizationId !== 'string') return null;
   if (typeof governed !== 'boolean' || typeof revision !== 'number') return null;
+  const code = parseCodeControls(value['code']);
   if (controls === null) {
-    return governed ? null : { organizationId, governed, revision, controls: null };
+    return governed ? null : { organizationId, governed, revision, controls: null, code };
   }
   if (!isRecord(controls) || !isRecord(controls['featureAccess'])) return null;
   const featureAccess = controls['featureAccess'];
   if (!WORKSPACE_FEATURES.every((feature) => typeof featureAccess[feature] === 'boolean')) {
     return null;
   }
-  return value as unknown as EffectiveWorkspacePolicyResponse;
+  return { ...(value as unknown as EffectiveWorkspacePolicyResponse), code };
 }
 
 function readCache(cache: WorkspacePolicyCache | null | undefined): CachedPolicy | null {
@@ -220,4 +244,26 @@ export function localStorageWorkspacePolicyCache(key: string): WorkspacePolicyCa
       else localStorage.setItem(key, value);
     },
   };
+}
+
+/** What the workspace permits this Code surface, as the server answered it. */
+export function isWorkspaceCodeConnectionAllowed(
+  policy: EffectiveWorkspacePolicyResponse | null,
+  key: WorkspaceCodeToggleKey,
+): boolean {
+  return policy?.code ? policy.code[key] : true;
+}
+
+export function isWorkspaceCodeHostAllowed(
+  policy: EffectiveWorkspacePolicyResponse | null,
+  host: string | null | undefined,
+): boolean {
+  const allowed = policy?.code?.allowedEgressHosts;
+  return allowed ? isCodeHostAllowed(allowed, host) : true;
+}
+
+export function workspaceCodeSessionRetentionDays(
+  policy: EffectiveWorkspacePolicyResponse | null,
+): number | null {
+  return policy?.code?.sessionRetentionDays ?? null;
 }

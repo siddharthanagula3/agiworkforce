@@ -226,8 +226,8 @@ export default function AcceptableUsePage() {
                   </h2>
                   <Ledger caption="Summary" rows={SUMMARY} />
                   <Prose size="sm">
-                    The precise default authority for every tool (what runs without asking, what
-                    always asks, and how to revoke) is on{' '}
+                    The precise default authority for every tool (what asks, which settings let a
+                    tool run without asking, and how to revoke) is on{' '}
                     <Link href="/agent-permissions" className="agi-ds-link">
                       /agent-permissions
                     </Link>

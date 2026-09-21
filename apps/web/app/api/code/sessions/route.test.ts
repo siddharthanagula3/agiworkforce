@@ -19,6 +19,8 @@ const {
   mockHasServerProviderKey: vi.fn(),
 }));
 
+const hoisted = vi.hoisted(() => ({ codeGate: vi.fn(async () => null as Response | null) }));
+const mockCodeGate = hoisted.codeGate;
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -31,6 +33,10 @@ vi.mock('@/lib/e2b/gate', () => ({
 }));
 vi.mock('@/lib/managed-compute-gate', () => ({
   isManagedComputePrivateBetaEnabled: mockBetaEnabled,
+  buildWorkspaceFeatureGateResponse: vi.fn(async () => null),
+}));
+vi.mock('@/lib/services/organization-policy-code-gate', () => ({
+  buildWorkspaceCodeGateResponse: hoisted.codeGate,
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -310,5 +316,43 @@ describe('POST /api/code/sessions, the managed-credential availability guard', (
     expect(body.error.code).toBe('harness_credential_unavailable');
     expect(body.error.message).toContain('Codex');
     expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/code/sessions, the workspace Code policy', () => {
+  beforeEach(() => {
+    mockCodeGate.mockResolvedValue(null);
+  });
+
+  it('asks about opening a cloud session, naming the surface it came from', async () => {
+    await POST(postRequest({ networkAccess: 'isolated' }));
+
+    expect(mockCodeGate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({ act: 'open_cloud_session' }),
+      expect.anything(),
+    );
+  });
+
+  it('asks about every extra egress host the caller requested', async () => {
+    await POST(postRequest({ networkAccess: 'trusted', extraHosts: ['a.example.com'] }));
+
+    expect(mockCodeGate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      { act: 'reach_host', host: 'a.example.com' },
+      expect.anything(),
+    );
+  });
+
+  it('returns the refusal and creates nothing when the workspace says no', async () => {
+    mockCodeGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'code_control_disabled' } }), { status: 403 }),
+    );
+
+    const response = await POST(postRequest({ networkAccess: 'isolated' }));
+
+    expect(response.status).toBe(403);
   });
 });

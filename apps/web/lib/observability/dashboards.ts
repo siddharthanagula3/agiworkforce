@@ -1,4 +1,5 @@
 import { OBSERVABILITY_ATTRIBUTE } from './attributes';
+import { LOCAL_METRIC_LABEL } from './cardinality';
 import { MEDIA_ATTRIBUTE } from './media-telemetry';
 import { METRIC_NAME } from './metrics';
 
@@ -165,6 +166,33 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         aggregation: 'p95',
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion)],
       },
+      // A rollout is judged on the arm, not the release: two cohorts share one
+      // build, and a canary that is worse is invisible in any per-release read.
+      {
+        id: 'turn-failure-ratio-by-cohort',
+        title: 'Failed share of turns, by cohort',
+        metric: METRIC_NAME.turns,
+        aggregation: 'ratio',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+        ],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.turnOutcome)]: 'failed' },
+      },
+      {
+        id: 'turn-latency-p95-by-cohort',
+        title: 'Turn wall time p95, by cohort',
+        metric: METRIC_NAME.turnDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort)],
+      },
+      {
+        id: 'turn-latency-p99-by-cohort',
+        title: 'Turn wall time p99, by cohort',
+        metric: METRIC_NAME.turnDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.routingCohort)],
+      },
       {
         id: 'latency-p99-by-release',
         title: 'Request latency p99 by release',
@@ -202,6 +230,33 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         aggregation: 'max',
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
       },
+      // Age says the front of the queue is old; depth says how much is behind
+      // it. A queue draining steadily under a burst and one that has stopped
+      // look the same on age alone.
+      {
+        id: 'queue-depth',
+        title: 'Queue depth by status',
+        metric: METRIC_NAME.queueDepth,
+        aggregation: 'max',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.queueName),
+          attributeKey(LOCAL_METRIC_LABEL.queueStatus),
+        ],
+      },
+      {
+        id: 'queue-wait-p95',
+        title: 'Wait before a job is claimed, p95',
+        metric: METRIC_NAME.queueWait,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
+      },
+      {
+        id: 'queue-wait-p99',
+        title: 'Wait before a job is claimed, p99',
+        metric: METRIC_NAME.queueWait,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.queueName)],
+      },
     ],
   },
   {
@@ -235,6 +290,23 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         metric: METRIC_NAME.spanDuration,
         aggregation: 'p99',
         groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.providerName)],
+      },
+      // The denominator of every latency read above, and the only place a
+      // domain that has stopped being traced at all becomes visible.
+      {
+        id: 'span-rate-by-domain',
+        title: 'Spans by domain',
+        metric: METRIC_NAME.spanCount,
+        aggregation: 'rate',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.spanDomain)],
+      },
+      {
+        id: 'span-error-ratio-by-domain',
+        title: 'Failed share of spans, by domain',
+        metric: METRIC_NAME.spanCount,
+        aggregation: 'ratio',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.spanDomain)],
+        match: { [attributeKey(LOCAL_METRIC_LABEL.spanStatus)]: 'error' },
       },
     ],
   },
@@ -320,6 +392,390 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
         aggregation: 'rate',
         groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.outcome)],
       },
+      // A generation that succeeds on its third try is a success in the rate
+      // above and three times the cost and latency underneath it.
+      {
+        id: 'media-attempt-rate',
+        title: 'Attempts per generation, by outcome',
+        metric: METRIC_NAME.mediaAttempts,
+        aggregation: 'rate',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.attempt)],
+      },
+      {
+        id: 'media-attempt-latency-p95',
+        title: 'Attempt latency p95',
+        metric: METRIC_NAME.mediaAttemptDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.provider)],
+      },
+      {
+        id: 'media-attempt-latency-p99',
+        title: 'Attempt latency p99',
+        metric: METRIC_NAME.mediaAttemptDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.provider)],
+      },
+      {
+        id: 'media-safety-rate',
+        title: 'Safety decisions by kind',
+        metric: METRIC_NAME.mediaSafety,
+        aggregation: 'rate',
+        groupBy: [attributeKey(MEDIA_ATTRIBUTE.kind), attributeKey(MEDIA_ATTRIBUTE.decision)],
+      },
+    ],
+  },
+  {
+    id: 'security-and-identity',
+    title: 'Security and identity',
+    panels: [
+      // An authentication outage and a workspace locking itself out look the
+      // same in the request rate and different here: one is a 5xx, the other a
+      // policy layer doing its job.
+      {
+        id: 'auth-error-rate',
+        title: 'Authentication error rate',
+        metric: METRIC_NAME.failures,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.errorType)],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.failureKind)]: 'api' },
+      },
+      {
+        id: 'policy-denial-rate',
+        title: 'Policy and entitlement denials',
+        metric: METRIC_NAME.denials,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.denialReason)],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.denialLayer)]: 'policy|entitlement' },
+      },
+      {
+        id: 'identity-configuration-state',
+        title: 'Identity configuration state',
+        metric: METRIC_NAME.configurationState,
+        aggregation: 'max',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.configurationComponent)],
+      },
+      {
+        id: 'identity-latency-p95',
+        title: 'Identity request latency p95',
+        metric: METRIC_NAME.httpDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.surface)],
+      },
+    ],
+  },
+  {
+    id: 'connector-health',
+    title: 'Connector and extension health',
+    panels: [
+      {
+        id: 'connector-failure-rate',
+        title: 'Connector failures',
+        metric: METRIC_NAME.failures,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.errorType)],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.failureKind)]: 'connector|mcp' },
+      },
+      {
+        id: 'connector-call-rate',
+        title: 'Connector calls by category and status',
+        metric: METRIC_NAME.toolCalls,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.toolCategory),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.toolStatus),
+        ],
+      },
+      {
+        id: 'connector-latency-p95',
+        title: 'Connector latency p95',
+        metric: METRIC_NAME.toolDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.toolCategory)],
+      },
+      {
+        id: 'connector-denial-rate',
+        title: 'Connector calls refused by a capability gate',
+        metric: METRIC_NAME.denials,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.denialReason)],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.denialLayer)]: 'capability' },
+      },
+    ],
+  },
+  {
+    id: 'foundation-traffic',
+    title: 'Foundation traffic',
+    panels: [
+      {
+        id: 'requests-by-surface',
+        title: 'Requests by surface',
+        metric: METRIC_NAME.httpRequests,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.surface)],
+      },
+      {
+        id: 'client-version-distribution',
+        title: 'Client-version distribution',
+        metric: METRIC_NAME.httpRequests,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.clientVersion)],
+      },
+      {
+        id: 'protocol-version-distribution',
+        title: 'Protocol-version distribution',
+        metric: METRIC_NAME.httpRequests,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.protocolVersion)],
+      },
+      {
+        id: 'turns-by-mode',
+        title: 'Turns by mode and trust mode',
+        metric: METRIC_NAME.turns,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestMode),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.trustMode),
+        ],
+      },
+      {
+        id: 'turns-by-workspace-kind',
+        title: 'Turns by workspace kind',
+        metric: METRIC_NAME.turns,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.workspaceKind),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.surface),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'refusals-and-rejections',
+    title: 'Refusals and rejections',
+    panels: [
+      {
+        id: 'denial-rate-by-layer',
+        title: 'Denials by layer and reason',
+        metric: METRIC_NAME.denials,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.denialLayer),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.denialReason),
+        ],
+      },
+      {
+        id: 'denial-rate-by-surface',
+        title: 'Denials by surface',
+        metric: METRIC_NAME.denials,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.surface),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.denialLayer),
+        ],
+      },
+      {
+        id: 'unsupported-surface-attempts',
+        title: 'Attempts on a surface that does not support the feature',
+        metric: METRIC_NAME.denials,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.surface)],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.denialLayer)]: 'surface' },
+      },
+      {
+        id: 'rejection-rate-by-kind',
+        title: 'Rejections by kind',
+        metric: METRIC_NAME.rejections,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.rejectionKind),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.surface),
+        ],
+      },
+      // A decoding failure that only one build sees is a contract the release
+      // broke, not a bug in the request: the client version is the first cut.
+      {
+        id: 'rejection-rate-by-client-version',
+        title: 'Rejections by client version',
+        metric: METRIC_NAME.rejections,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.clientVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.rejectionKind),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'turn-latency-and-cost',
+    title: 'Turn latency and cost',
+    panels: [
+      {
+        id: 'ttft-p50',
+        title: 'Time to first token p50',
+        metric: METRIC_NAME.turnTimeToFirstToken,
+        aggregation: 'p50',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+      },
+      {
+        id: 'ttft-p95',
+        title: 'Time to first token p95',
+        metric: METRIC_NAME.turnTimeToFirstToken,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+      },
+      {
+        id: 'ttft-p99',
+        title: 'Time to first token p99',
+        metric: METRIC_NAME.turnTimeToFirstToken,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+      },
+      {
+        id: 'turn-wall-time-p95',
+        title: 'Turn wall time p95',
+        metric: METRIC_NAME.turnDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+      },
+      {
+        id: 'turn-wall-time-p99',
+        title: 'Turn wall time p99',
+        metric: METRIC_NAME.turnDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+      },
+      {
+        id: 'turn-cost-p50',
+        title: 'Cost per turn p50',
+        metric: METRIC_NAME.turnCost,
+        aggregation: 'p50',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+      },
+      {
+        id: 'turn-cost-p99',
+        title: 'Cost per turn p99',
+        metric: METRIC_NAME.turnCost,
+        aggregation: 'p99',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+      },
+      // A cache that stops being read does not fail anything: the only place it
+      // shows is the hit share, and after it the cost per turn.
+      {
+        id: 'prompt-cache-hit-ratio',
+        title: 'Prompt cache hit share',
+        metric: METRIC_NAME.turns,
+        aggregation: 'ratio',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel)],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.cacheOutcome)]: 'hit' },
+        of: { [attributeKey(OBSERVABILITY_ATTRIBUTE.cacheOutcome)]: 'hit|miss' },
+      },
+      {
+        id: 'turn-retry-rate',
+        title: 'Retries per turn',
+        metric: METRIC_NAME.turnRetries,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.providerName),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
+        ],
+      },
+      {
+        id: 'turn-failure-ratio',
+        title: 'Failed share of turns',
+        metric: METRIC_NAME.turns,
+        aggregation: 'ratio',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.providerName),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
+        ],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.turnOutcome)]: 'failed' },
+      },
+    ],
+  },
+  {
+    id: 'model-regression',
+    title: 'Model regression',
+    panels: [
+      {
+        id: 'ttft-p95-by-release',
+        title: 'Time to first token p95 by release and model',
+        metric: METRIC_NAME.turnTimeToFirstToken,
+        aggregation: 'p95',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
+        ],
+      },
+      {
+        id: 'turn-cost-p50-by-release',
+        title: 'Cost per turn p50 by release and model',
+        metric: METRIC_NAME.turnCost,
+        aggregation: 'p50',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
+        ],
+      },
+      // False success is the quality proxy that needs no rater: the product
+      // said Done over a call that did not produce what it owed.
+      {
+        id: 'false-success-by-release',
+        title: 'Completions reported as success that were not, by release',
+        metric: METRIC_NAME.falseSuccess,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.completionKind),
+        ],
+      },
+      {
+        id: 'turn-failure-ratio-by-release',
+        title: 'Failed share of turns by release',
+        metric: METRIC_NAME.turns,
+        aggregation: 'ratio',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.requestModel),
+        ],
+        match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.turnOutcome)]: 'failed' },
+      },
+    ],
+  },
+  {
+    id: 'database-health',
+    title: 'Database health',
+    panels: [
+      {
+        id: 'database-operation-rate',
+        title: 'Queries by operation',
+        metric: METRIC_NAME.databaseOperations,
+        aggregation: 'rate',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
+      },
+      {
+        id: 'database-error-ratio',
+        title: 'Failed share of queries',
+        metric: METRIC_NAME.databaseOperations,
+        aggregation: 'ratio',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
+        match: { [attributeKey(LOCAL_METRIC_LABEL.databaseOutcome)]: 'error' },
+      },
+      // A saturated pool shows as latency long before it shows as an error, so
+      // the tail is the reading that moves first.
+      {
+        id: 'database-latency-p95',
+        title: 'Query latency p95',
+        metric: METRIC_NAME.databaseDuration,
+        aggregation: 'p95',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
+      },
+      {
+        id: 'database-latency-p99',
+        title: 'Query latency p99',
+        metric: METRIC_NAME.databaseDuration,
+        aggregation: 'p99',
+        groupBy: [attributeKey(LOCAL_METRIC_LABEL.databaseOperation)],
+      },
     ],
   },
   {
@@ -346,6 +802,75 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
           attributeKey(OBSERVABILITY_ATTRIBUTE.dataRegion),
         ],
         match: { [attributeKey(OBSERVABILITY_ATTRIBUTE.routingStatus)]: 'unavailable' },
+      },
+    ],
+  },
+  {
+    id: 'agi-work',
+    title: 'AGI Work plans',
+    panels: [
+      {
+        id: 'work-plan-size',
+        title: 'Steps per plan',
+        metric: METRIC_NAME.workPlanSteps,
+        aggregation: 'max',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.workPlanShape),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.workPlanMeasure),
+        ],
+      },
+      // A plan the agent revises is a plan that did not survive contact; the
+      // planned and revised series diverging is the reading of that.
+      {
+        id: 'work-planning-latency-p95',
+        title: 'Planning latency p95',
+        metric: METRIC_NAME.spanDuration,
+        aggregation: 'p95',
+        groupBy: ['span_name'],
+        match: { span_domain: 'task' },
+      },
+      {
+        id: 'work-planning-latency-p99',
+        title: 'Planning latency p99',
+        metric: METRIC_NAME.spanDuration,
+        aggregation: 'p99',
+        groupBy: ['span_name'],
+        match: { span_domain: 'task' },
+      },
+    ],
+  },
+  {
+    id: 'client-health',
+    title: 'Client health',
+    panels: [
+      {
+        id: 'client-failure-rate',
+        title: 'Client failures by class',
+        metric: METRIC_NAME.clientFailures,
+        aggregation: 'rate',
+        groupBy: [attributeKey(OBSERVABILITY_ATTRIBUTE.clientFailureClass)],
+      },
+      // A render fault that only one build produces is a regression; the same
+      // fault on every build is a document the renderer never handled.
+      {
+        id: 'client-failure-rate-by-release',
+        title: 'Client failures by release',
+        metric: METRIC_NAME.clientFailures,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.serviceVersion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.clientFailureClass),
+        ],
+      },
+      {
+        id: 'client-failure-rate-by-surface',
+        title: 'Client failures by surface',
+        metric: METRIC_NAME.clientFailures,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.surface),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.clientFailureDetail),
+        ],
       },
     ],
   },

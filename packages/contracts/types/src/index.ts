@@ -54,6 +54,8 @@ export { default as modelsCatalogJson } from './models.json' with { type: 'json'
 
 export * from './runtime';
 
+export * from './interaction-modes';
+
 export * from './artifacts';
 
 export * from './artifact-csp';
@@ -158,19 +160,32 @@ export {
   CONCEPT_REGISTRY,
   ORIGIN_SURFACES,
   RESOURCE_COLUMN_CONTRACT,
+  conceptByAlias,
   conceptForTable,
   getConcept,
   isConceptName,
   isOriginSurface,
   resourceColumn,
+  tableDisposition,
+  type ConceptAccessRule,
+  type ConceptDataClass,
   type ConceptRecord,
   type ConceptRegistry,
+  type ConceptRetention,
+  type ConceptStorageScope,
   type OriginSurface,
   type ResourceColumnContract,
   type ResourceColumnRole,
+  type TableDisposition,
+  type TableDispositionRecord,
 } from './concept-registry';
 
 export * from './resource-lifecycle';
+
+export * from './client-capability-manifest';
+export * from './experiment-registry';
+export * from './feature-release';
+export * from './request-identity';
 
 export * from './file-reference';
 export * from './file-model';

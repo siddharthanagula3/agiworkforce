@@ -2,14 +2,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockQuery, mockRateLimit, mockCsrf } = vi.hoisted(() => ({
+const { mockAuth, mockOptionalUser, mockQuery, mockRateLimit, mockCsrf } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
+  mockOptionalUser: vi.fn(async (): Promise<{ userId: string } | null> => null),
   mockQuery: vi.fn(),
   mockRateLimit: vi.fn(async () => null),
   mockCsrf: vi.fn(async () => null),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mockAuth }));
+vi.mock('@/lib/api-auth', () => ({
+  getOptionalAuthUser: mockOptionalUser,
+  getClerkAuthUser: vi.fn(),
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(() => []),
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mockQuery }) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
@@ -39,6 +46,7 @@ const VALID = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAuth.mockResolvedValue({ userId: null });
+  mockOptionalUser.mockResolvedValue(null);
   mockRateLimit.mockResolvedValue(null);
   mockCsrf.mockResolvedValue(null);
   mockQuery.mockResolvedValue([{ status: 'pending' }]);
@@ -109,7 +117,7 @@ describe('beta application intake', () => {
   });
 
   it('links the application to the account when the applicant is signed in', async () => {
-    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 
     await POST(post(VALID));
 

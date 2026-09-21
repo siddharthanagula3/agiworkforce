@@ -291,7 +291,11 @@ pub fn validate_workspace_path_with_cwd(
         return Ok(canonical);
     }
 
-    let mut existing_parent = absolute.as_path();
+    // A path with nothing at it yet is judged by where a write to it would land:
+    // through any dangling link, with the `..` in the unresolved tail applied.
+    let landing = lexically_normalized(&resolve_for_denylist(&absolute));
+
+    let mut existing_parent = landing.as_path();
     while !existing_parent.exists() {
         existing_parent = existing_parent
             .parent()
@@ -301,15 +305,36 @@ pub fn validate_workspace_path_with_cwd(
     let canonical_parent = existing_parent
         .canonicalize()
         .map_err(|e| format!("Cannot resolve parent path: {}", e))?;
-    if !is_under_allowed_root(&canonical_parent, &allowed_roots) {
+    if !is_under_allowed_root(&canonical_parent, &allowed_roots)
+        || !is_under_allowed_root(&landing, &allowed_roots)
+    {
         return Err(format!(
-            "Path escapes project directory and additional roots: {} (parent resolved to {})",
+            "Path escapes project directory and additional roots: {} (resolved to {})",
             path_str,
-            canonical_parent.display()
+            landing.display()
         ));
     }
 
     Ok(absolute)
+}
+
+/// Collapse `.` and `..` textually. Applied only after the existing prefix is
+/// canonical, so no component being removed can be a symlink.
+fn lexically_normalized(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !normalized.pop() {
+                    normalized.push("..");
+                }
+            }
+            other => normalized.push(other),
+        }
+    }
+    normalized
 }
 
 fn allowed_workspace_roots(cwd: &Path) -> Vec<PathBuf> {
@@ -426,6 +451,76 @@ mod tests {
             result.is_err(),
             "parent traversal outside workspace should be rejected"
         );
+    }
+
+    /// A link whose target does not exist yet is absent to `exists` and to
+    /// `canonicalize`, so the ancestor walk hands back the innocent spelling
+    /// while `fs::write` follows the link and materialises the target.
+    #[cfg(unix)]
+    #[test]
+    fn validate_workspace_path_rejects_a_dangling_link_pointing_out_of_the_workspace() {
+        let _guard = lock_roots();
+        clear_additional_workspace_roots_for_tests();
+        let tmp = tempfile::tempdir().expect("root tempdir");
+        let root = tmp.path().canonicalize().expect("canonical root");
+        let workspace = root.join("workspace");
+        let outside = root.join("outside");
+        std::fs::create_dir(&workspace).expect("create workspace");
+        std::fs::create_dir(&outside).expect("create outside");
+
+        let link = workspace.join("NOTES.md");
+        std::os::unix::fs::symlink(outside.join("captured.txt"), &link).expect("create link");
+        assert!(!link.exists(), "fixture must be a DANGLING link");
+
+        let result = validate_workspace_path_with_cwd("NOTES.md", &workspace);
+
+        assert!(
+            result.is_err(),
+            "a link out of the workspace must be refused even with nothing at its target"
+        );
+    }
+
+    /// `write_file` creates the parent chain, and the kernel resolves each `..`
+    /// against the directory it has just made, so a tail that climbs is a write
+    /// outside the workspace rather than a failure.
+    #[test]
+    fn validate_workspace_path_rejects_a_new_path_whose_tail_climbs_out() {
+        let _guard = lock_roots();
+        clear_additional_workspace_roots_for_tests();
+        let tmp = tempfile::tempdir().expect("root tempdir");
+        let root = tmp.path().canonicalize().expect("canonical root");
+        let workspace = root.join("workspace");
+        std::fs::create_dir(&workspace).expect("create workspace");
+
+        let mut climbing = PathBuf::from("fresh");
+        climbing.push("..");
+        climbing.push("..");
+        climbing.push("outside");
+        climbing.push("captured.txt");
+
+        let result = validate_workspace_path_with_cwd(&climbing.to_string_lossy(), &workspace);
+
+        assert!(
+            result.is_err(),
+            "a not-yet-created path that resolves above the workspace must be refused"
+        );
+    }
+
+    #[test]
+    fn validate_workspace_path_allows_a_new_path_whose_tail_stays_inside() {
+        let _guard = lock_roots();
+        clear_additional_workspace_roots_for_tests();
+        let tmp = tempfile::tempdir().expect("workspace tempdir");
+        let workspace = tmp.path().canonicalize().expect("canonical workspace");
+        std::fs::create_dir(workspace.join("docs")).expect("create docs");
+
+        let mut inside = PathBuf::from("docs");
+        inside.push("..");
+        inside.push("docs");
+        inside.push("new.md");
+
+        validate_workspace_path_with_cwd(&inside.to_string_lossy(), &workspace)
+            .expect("a tail that stays inside the workspace is allowed");
     }
 
     #[test]

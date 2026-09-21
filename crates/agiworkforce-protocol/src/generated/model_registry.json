@@ -336,13 +336,11 @@
         "license": "proprietary",
         "aliases": [
           "google/gemini-3.5-flash-lite",
-          "google/gemma-4-26b-a4b-it:free",
           "groq-llama-3.1-8b",
           "groq-llama-3.3-70b",
           "nvidia/llama-3.3-70b-instruct",
           "nvidia/nemotron-3-nano-30b-a3b",
           "nvidia/nemotron-3-super-120b-a12b",
-          "nvidia/nemotron-3-super-120b-a12b:free",
           "nvidia/nemotron-3-ultra-550b-a55b"
         ],
         "family": "gemini-flash-lite",
@@ -1591,7 +1589,11 @@
         "role": "router",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": ["openrouter/free"],
+        "aliases": [
+          "google/gemma-4-26b-a4b-it:free",
+          "nvidia/nemotron-3-super-120b-a12b:free",
+          "openrouter/free"
+        ],
         "family": null,
         "version": null
       },
@@ -40200,20 +40202,15 @@
       },
       "tierMaximumProfiles": {
         "free": "economy",
+        "basic": "economy",
         "pro": "balanced",
         "max": "premium",
         "enterprise": "premium",
         "byok": "premium"
       },
       "tierAllowedSlots": {
-        "free": [
-          "free_workhorse",
-          "free_workhorse_fast",
-          "workhorse_general",
-          "reasoning_economy",
-          "coding_fast",
-          "router_zero_cost"
-        ],
+        "free": ["free_workhorse", "free_workhorse_fast", "router_zero_cost"],
+        "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "router_zero_cost"],
         "pro": [
           "workhorse_general",
           "general_balanced",
@@ -40303,7 +40300,8 @@
           "label": "Auto",
           "description": "Automatically routes each message to the best model for the task, your plan, and cost",
           "selectable": true,
-          "computeProfile": true
+          "computeProfile": true,
+          "tierPolicy": { "minTier": "basic" }
         },
         "auto-economy": {
           "profile": "economy",

@@ -1,0 +1,10 @@
+{
+  "_description": "Guards that nothing executes. Every entry names why and the line that removes it. The guard refuses an undeclared unwired guard, and refuses an entry for a guard that has since been wired, so this list only shrinks.",
+  "unwired": [
+    {
+      "guard": "check-audit-progress.mjs",
+      "reason": "It reads docs/work/audit-remediation-ledger.md, which is kept out of the repository (git-excluded in the founder's checkout), so in CI it can only fail on a missing file. It is a local tool, not a gate.",
+      "owed": "Either commit the ledger it reads or move the script out of scripts/check-*.mjs so it stops reading as a guard."
+    }
+  ]
+}

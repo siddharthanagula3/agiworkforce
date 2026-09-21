@@ -1,0 +1,11 @@
+{
+  "ungated": [
+    {
+      "file": "apps/web/lib/services/retrieval-index-service.ts",
+      "table": "retrieval_documents",
+      "owner": "apps/web/lib/services/retrieval-index-service.ts",
+      "reason": "The indexer claims documents by (user_id, organization_id) with neither gate, so a removed member's documents keep being indexed into the workspace they left. Whether that is wrong is a judgement this lane could not make: the document belongs to the workspace and a current index is the workspace's interest, not the departed member's, but the row still names a person and the index is rebuilt in their name. Whoever owns retrieval decides, and until they do the exposure is an index entry rather than a run that spends.",
+      "sql": "and ${ownerMayRunUnattendedSql('retrieval_documents.user_id', 3)} and ${ownerIsActiveWorkspaceMemberSql('retrieval_documents.user_id', 'retrieval_documents.organization_id', 4)} inside the inner select that takes the lease, with UNATTENDED_RUN_DENIED_STATUSES and MEMBERSHIP_STATUSES_THAT_MAY_ACT bound as $3 and $4"
+    }
+  ]
+}

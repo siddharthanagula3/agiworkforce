@@ -211,6 +211,25 @@ describe('moving ciphertext off a key version before it is disabled', () => {
     expect(() => assertRewrapComplete(outcome)).not.toThrow();
   });
 
+  it('binds a row sealed before its context existed, so it stops opening under any other', async () => {
+    const { current, previous } = ringPair();
+    const store = memoryStore('secrets', [
+      { id: 'a', sealed: sealEnvelope(previous, 'legacy secret'), context: 'tenant:a' },
+    ]);
+
+    await runKeyRewrap({ ring: current, fromVersion: '1', stores: [store] });
+
+    const sealed = store.rows[0]?.sealed ?? '';
+    const bound = { value: 'tenant:a', acceptUnbound: false };
+    expect(openEnvelope(current, sealed, 'hex-triple', bound)).toMatchObject({
+      plaintext: 'legacy secret',
+      contextBound: true,
+    });
+    expect(() =>
+      openEnvelope(current, sealed, 'hex-triple', { value: 'tenant:b', acceptUnbound: true }),
+    ).toThrow();
+  });
+
   it('carries the plaintext across unchanged, which is the only thing that matters', async () => {
     const { current, previous } = ringPair();
     const store = memoryStore('secrets', [{ id: 'a', sealed: sealEnvelope(previous, 'a secret') }]);

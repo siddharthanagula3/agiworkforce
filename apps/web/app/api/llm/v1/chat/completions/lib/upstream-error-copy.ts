@@ -3,7 +3,7 @@ import {
   SPENDING_CAP_PROVIDER_HINT,
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
-import { isAutoModeModelId } from '@agiworkforce/types';
+import { getRoutingSlotModel, isAutoModeModelId, normalizeModelId } from '@agiworkforce/types';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import { logger } from '@/lib/logger';
 import { getTraceContext } from '@/lib/observability/trace-context';
@@ -31,6 +31,17 @@ export interface UpstreamErrorContext {
 }
 
 const PICK_A_MODEL = 'pick a specific model from the model picker';
+
+// The free plan has one model and no Auto, so its copy names the only move left.
+const FREE_ROUTER_RETRY =
+  'Free models share upstream capacity, so this happens at busy times. Try again in a moment.';
+
+function isFreeRouter(requestedModel: string | undefined): boolean {
+  if (!requestedModel) return false;
+  return (
+    (normalizeModelId(requestedModel) ?? requestedModel) === getRoutingSlotModel('router_zero_cost')
+  );
+}
 
 /**
  * The boundary a thrown provider failure crosses to become text a reader sees.
@@ -83,6 +94,7 @@ export function mapClassifiedUpstreamError(
 ): UpstreamErrorShape {
   logProviderRejection(classified, provider);
   const onAuto = isAutoModeModelId(context?.requestedModel);
+  const onFreeRouter = isFreeRouter(context?.requestedModel);
   switch (classified.category) {
     case 'aborted':
       return {
@@ -107,9 +119,11 @@ export function mapClassifiedUpstreamError(
         status: 429,
         type: 'rate_limit_error',
         code: 'provider_rate_limited',
-        message: onAuto
-          ? `${providerLabel} is temporarily at capacity. Try again shortly, or ${PICK_A_MODEL}.`
-          : `${providerLabel} is temporarily at capacity. Try again shortly, or choose Auto to use another available model.`,
+        message: onFreeRouter
+          ? `The free model is temporarily at capacity. ${FREE_ROUTER_RETRY}`
+          : onAuto
+            ? `${providerLabel} is temporarily at capacity. Try again shortly, or ${PICK_A_MODEL}.`
+            : `${providerLabel} is temporarily at capacity. Try again shortly, or choose Auto to use another available model.`,
       };
     }
 
@@ -120,9 +134,11 @@ export function mapClassifiedUpstreamError(
         status: 503,
         type: 'service_unavailable',
         code: 'provider_overloaded',
-        message: onAuto
-          ? `This model is overloaded right now. Try again in a moment, or ${PICK_A_MODEL}.`
-          : 'This model is overloaded right now. Try again in a moment, or choose Auto to use another available model.',
+        message: onFreeRouter
+          ? `The free model is overloaded right now. ${FREE_ROUTER_RETRY}`
+          : onAuto
+            ? `This model is overloaded right now. Try again in a moment, or ${PICK_A_MODEL}.`
+            : 'This model is overloaded right now. Try again in a moment, or choose Auto to use another available model.',
       };
 
     case 'context_overflow':
@@ -168,9 +184,11 @@ export function mapClassifiedUpstreamError(
         status: 502,
         type: 'upstream_error',
         code: 'empty_response',
-        message: onAuto
-          ? `The model finished without returning a response. Try again, or ${PICK_A_MODEL}.`
-          : 'The model finished without returning a response. Try again, or choose Auto to use another available model.',
+        message: onFreeRouter
+          ? 'The model finished without returning a response. Try again in a moment.'
+          : onAuto
+            ? `The model finished without returning a response. Try again, or ${PICK_A_MODEL}.`
+            : 'The model finished without returning a response. Try again, or choose Auto to use another available model.',
       };
 
     case 'media_too_large':
@@ -196,9 +214,11 @@ export function mapClassifiedUpstreamError(
         status: 404,
         type: 'not_found',
         code: 'model_not_found',
-        message: onAuto
-          ? `The model Auto selected is not available. Try again, or ${PICK_A_MODEL}.`
-          : 'The selected model is not available. Choose another model, or switch to Auto.',
+        message: onFreeRouter
+          ? 'The free model is not available right now. Try again in a moment.'
+          : onAuto
+            ? `The model Auto selected is not available. Try again, or ${PICK_A_MODEL}.`
+            : 'The selected model is not available. Choose another model, or switch to Auto.',
       };
 
     case 'invalid_input':
@@ -259,9 +279,11 @@ export function mapClassifiedUpstreamError(
       const message =
         classified.providerHint === SPENDING_CAP_PROVIDER_HINT
           ? `${providerLabel}'s spending cap for this project is exceeded, so this model is unavailable right now. Pick another model or try later.`
-          : onAuto
-            ? `${providerLabel} capacity for this model is exhausted for now. Try again later, or ${PICK_A_MODEL}.`
-            : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.`;
+          : onFreeRouter
+            ? 'Free model capacity is exhausted for now. Try again later.'
+            : onAuto
+              ? `${providerLabel} capacity for this model is exhausted for now. Try again later, or ${PICK_A_MODEL}.`
+              : `${providerLabel} capacity for this model is exhausted for now. Choose Auto to use another available model, or try again later.`;
       return {
         status: 429,
         type: 'rate_limit_error',
@@ -275,9 +297,11 @@ export function mapClassifiedUpstreamError(
         status: 502,
         type: 'upstream_error',
         code: 'provider_unreachable',
-        message: onAuto
-          ? `The model could not be reached. Try again, or ${PICK_A_MODEL}.`
-          : 'The model could not be reached. Try again, or choose Auto to use another available model.',
+        message: onFreeRouter
+          ? 'The model could not be reached. Try again in a moment.'
+          : onAuto
+            ? `The model could not be reached. Try again, or ${PICK_A_MODEL}.`
+            : 'The model could not be reached. Try again, or choose Auto to use another available model.',
       };
 
     case 'pause_turn':
@@ -302,9 +326,11 @@ export function mapClassifiedUpstreamError(
         status: 502,
         type: 'upstream_error',
         code: 'provider_error',
-        message: onAuto
-          ? `The model failed to produce a response. Try again, or ${PICK_A_MODEL}.`
-          : 'The model failed to produce a response. Try again, or choose Auto to use another available model.',
+        message: onFreeRouter
+          ? 'The model failed to produce a response. Try again in a moment.'
+          : onAuto
+            ? `The model failed to produce a response. Try again, or ${PICK_A_MODEL}.`
+            : 'The model failed to produce a response. Try again, or choose Auto to use another available model.',
       };
   }
 }

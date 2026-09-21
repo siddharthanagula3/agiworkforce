@@ -62,6 +62,7 @@ function verifiedTopUp() {
 function harness(options: {
   existingReceiptUser?: string;
   subscription?: Record<string, unknown>;
+  noSubscription?: boolean;
 }) {
   const execute = vi.fn(async () => undefined);
   const query = vi.fn(async (sql: string) => {
@@ -74,6 +75,7 @@ function harness(options: {
         : [];
     }
     if (sql.includes('from public.subscriptions')) {
+      if (options.noSubscription) return [];
       return [
         {
           id: 'sub-1',
@@ -165,6 +167,43 @@ describe('POST /api/mobile/iap/verify', () => {
     expect(h.execute).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO security_audit_logs'),
       expect.arrayContaining(['user-1', 'mobile_purchase_verified']),
+    );
+  });
+
+  // The store has already taken the money, so the upgrade gate that stops new
+  // checkouts must never be consulted here.
+  it('honours a receipt from an account with no subscription and no upgrade access', async () => {
+    const h = harness({ noSubscription: true });
+    mockVerifyStorePurchase.mockResolvedValue({
+      ...verifiedTopUp(),
+      product: {
+        key: 'subscription_pro_monthly',
+        kind: 'subscription',
+        planTier: 'pro',
+        interval: 'monthly',
+        intendedPriceUsd: 20,
+        productId: SUBSCRIPTION_PRODUCT_ID,
+      },
+      expiresAt: new Date('2026-10-01T00:00:00.000Z'),
+    });
+
+    const response = await POST(
+      request({
+        platform: 'android',
+        productId: SUBSCRIPTION_PRODUCT_ID,
+        purchaseToken: PURCHASE_TOKEN,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      kind: 'subscription',
+      status: 'active',
+      planTier: 'pro',
+    });
+    expect(h.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('beta_redemptions'),
+      expect.anything(),
     );
   });
 

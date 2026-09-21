@@ -2,9 +2,17 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
 import { evaluateFieldConditions } from '@/lib/automation/field-conditions';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { logger } from '@/lib/logger';
+import {
+  MEMBERSHIP_STATUSES_THAT_MAY_ACT,
+  ownerIsActiveWorkspaceMemberSql,
+} from '@/lib/server/workspace-scope';
 
 import { mapTrigger, type TriggerRow } from './trigger-service';
 import { hashVerificationCode } from './trigger-signatures';
@@ -26,9 +34,15 @@ function boundedEventData(data: Record<string, unknown>): Record<string, unknown
   return { truncated: true, preview: encoded.slice(0, MAX_EVENT_DATA_BYTES) };
 }
 
-async function matchingTriggers(db: DatabaseAdapter, event: TriggerEvent): Promise<EventTrigger[]> {
-  const rows = await db.query<TriggerRow>(
-    `select trigger.*
+const OWNER_ACCOUNT_MAY_ACT = ownerMayRunUnattendedSql('trigger.user_id', 7);
+const OWNER_IS_A_MEMBER = ownerIsActiveWorkspaceMemberSql(
+  'trigger.user_id',
+  'trigger.organization_id',
+  8,
+);
+
+function triggerMatchStatement(membershipNegation: '' | 'not '): string {
+  return `select trigger.*
        from event_triggers as trigger
        join scheduled_tasks as task
          on task.id = trigger.task_id and task.user_id = trigger.user_id
@@ -47,17 +61,50 @@ async function matchingTriggers(db: DatabaseAdapter, event: TriggerEvent): Promi
                and installation.user_id = trigger.user_id
           )
         )
+        and ${OWNER_ACCOUNT_MAY_ACT}
+        and ${membershipNegation}${OWNER_IS_A_MEMBER}
       order by trigger.created_at asc
-      limit $6`,
-    [
-      event.source,
-      event.account,
-      event.triggerId,
-      eventTypeMatchCandidates(event.type),
-      event.installationId,
-      MAX_TRIGGERS_PER_EVENT,
-    ],
+      limit $6`;
+}
+
+function triggerMatchParams(event: TriggerEvent): unknown[] {
+  return [
+    event.source,
+    event.account,
+    event.triggerId,
+    eventTypeMatchCandidates(event.type),
+    event.installationId,
+    MAX_TRIGGERS_PER_EVENT,
+    UNATTENDED_RUN_DENIED_STATUSES,
+    MEMBERSHIP_STATUSES_THAT_MAY_ACT,
+  ];
+}
+
+// An event that matched a trigger whose owner has left the workspace fires
+// nothing, so the reason is named rather than read as a delivery that went missing.
+async function reportTriggersLeftByDepartedMembers(
+  db: DatabaseAdapter,
+  event: TriggerEvent,
+): Promise<void> {
+  const skipped = await db.query<{ id: string }>(
+    triggerMatchStatement('not '),
+    triggerMatchParams(event),
   );
+  if (skipped.length === 0) return;
+  logger.warn(
+    {
+      skipped: 'owner_not_a_member',
+      count: skipped.length,
+      triggerIds: skipped.map((row) => row.id),
+      source: event.source,
+    },
+    'Event triggers did not fire: their owner is no longer an active member of the workspace',
+  );
+}
+
+async function matchingTriggers(db: DatabaseAdapter, event: TriggerEvent): Promise<EventTrigger[]> {
+  const rows = await db.query<TriggerRow>(triggerMatchStatement(''), triggerMatchParams(event));
+  if (rows.length === 0) await reportTriggersLeftByDepartedMembers(db, event);
   return rows.map(mapTrigger);
 }
 

@@ -57,6 +57,8 @@ vi.mock('@/lib/egress-policy', async (importOriginal) => ({
   ...(await importOriginal()),
   assertResolvedPublicHostname: vi.fn(async () => undefined),
   EgressPolicyError: class EgressPolicyError extends Error {},
+  pinnedPublicFetch: (input: unknown, init?: unknown) =>
+    (globalThis.fetch as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init),
 }));
 
 vi.mock('@agiworkforce/mcp', () => {
@@ -245,6 +247,14 @@ vi.mock('@/lib/server/neon-db', () => {
       row['granted_scopes'] = scopes;
       row['access_token_expires_at'] = expiresAt;
       return [];
+    }
+    // Disconnect first lists every live credential of the connector so each is revoked upstream.
+    if (q.startsWith('select access_token_enc, refresh_token_enc,')) {
+      const [userId, connectorId] = params as [string, string];
+      return mocks.grants.filter(
+        (g) =>
+          g['user_id'] === userId && g['connector_id'] === connectorId && g['revoked_at'] === null,
+      );
     }
     if (q.startsWith('select connector_id, access_token_enc')) {
       const [userId, connectorId] = params as [string, string];

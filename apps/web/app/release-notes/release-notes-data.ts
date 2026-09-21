@@ -23,6 +23,7 @@ interface ReleaseState {
  * published does not make every capability in that release generally available.
  */
 const RELEASE_STATE: Readonly<Record<string, ReleaseState>> = Object.freeze({
+  '2026-09-20': { maturity: 'ga', surfaces: ['web'] },
   '2026-09-15': { maturity: 'beta', surfaces: ['desktop'] },
   '2026-09-05': { maturity: 'ga', surfaces: ['web'] },
   '2026-07-31': { maturity: 'ga', surfaces: ['cli', 'desktop', 'web'] },

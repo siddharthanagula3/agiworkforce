@@ -1,5 +1,14 @@
 import 'server-only';
 
+import {
+  PERSISTED_CONTRACT_STATES,
+  resolveContractForce,
+  type ContractChangeKind,
+  type ContractForce,
+  type ContractLifecycleState,
+  type ContractTermWindow,
+} from '@agiworkforce/types';
+
 import type { BillingCadence } from '@/lib/server/neon-types';
 
 import type { EnterprisePaymentMethodPolicy } from './payment-methods';
@@ -32,11 +41,16 @@ export interface CommercialAgreementContact {
 export interface CommercialAgreementTerms {
   customerLegalEntity: string;
   committedSeats: number;
+  seatUnitPriceCents: number | null;
   billingCadence: BillingCadence;
+  billingCurrency: string;
   contractTermStart: string;
   contractTermEnd: string;
+  expiryGraceDays: number;
   paymentTermsDays: number;
   paymentMethodPolicy: EnterprisePaymentMethodPolicy;
+  purchaseOrderRequired: boolean;
+  invoiceRecipientEmails: string[];
   includedUsageCentsPerPeriod: number;
   committedUsageBlockCents: number;
   minimumAnnualSpendCents: number;
@@ -62,11 +76,15 @@ export interface CommercialAgreement {
   organizationId: string;
   version: number;
   status: CommercialAgreementStatus;
+  changeKind: ContractChangeKind;
+  supersedesVersion: number | null;
   terms: CommercialAgreementTerms;
   signature: CommercialAgreementSignature | null;
   amendmentReason: string | null;
   authoredBy: string | null;
   supersededAt: string | null;
+  terminatedAt: string | null;
+  terminationReason: string | null;
   createdAt: string;
 }
 
@@ -79,6 +97,41 @@ export function isExecutedAgreement(
   agreement: CommercialAgreement | null | undefined,
 ): agreement is ExecutedCommercialAgreement {
   return agreement?.status === 'executed' && agreement.signature !== null;
+}
+
+export function agreementTermWindow(terms: CommercialAgreementTerms): ContractTermWindow {
+  return {
+    termStart: terms.contractTermStart,
+    termEnd: terms.contractTermEnd,
+    expiryGraceDays: terms.expiryGraceDays,
+  };
+}
+
+/**
+ * Where a stored agreement sits in the lifecycle. An ending is a date on the
+ * row, so the state is read from the dates rather than from a status a sweep
+ * would have had to write.
+ */
+export function agreementLifecycleState(agreement: CommercialAgreement): ContractLifecycleState {
+  if (agreement.supersededAt !== null || agreement.status === 'superseded') return 'superseded';
+  if (agreement.terminatedAt !== null) return 'terminated';
+  return agreement.status;
+}
+
+export function agreementForce(agreement: CommercialAgreement, asOfDate: string): ContractForce {
+  return resolveContractForce({
+    state: agreementLifecycleState(agreement),
+    window: agreementTermWindow(agreement.terms),
+    asOfDate,
+  });
+}
+
+export function isPersistedAgreementStatus(value: unknown): value is CommercialAgreementStatus {
+  return (
+    typeof value === 'string' &&
+    PERSISTED_CONTRACT_STATES.includes(value as ContractLifecycleState) &&
+    COMMERCIAL_AGREEMENT_STATUSES.includes(value as CommercialAgreementStatus)
+  );
 }
 
 export const ACTIVATION_BLOCKED_REASONS = [

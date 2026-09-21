@@ -30,6 +30,10 @@ const FIRST_FACTOR_METHODS: Readonly<Record<string, AuthMethodId>> = {
   passkey: 'passkey',
 };
 
+// An address an enterprise connection covers is the organization's to
+// authenticate, so that connection outranks any personal factor on the account.
+const ENTERPRISE_SSO_STRATEGY = 'enterprise_sso';
+
 const SECOND_FACTOR_KINDS: Readonly<Record<string, AuthSecondFactorKind>> = {
   totp: 'authenticator',
   phone_code: 'text_message',
@@ -163,15 +167,34 @@ export function useIdentityAuthClient(
     [],
   );
 
+  const firstFactors = useCallback(
+    (): readonly VendorFactor[] =>
+      (signInRef.current.supportedFirstFactors ?? []) as VendorFactor[],
+    [],
+  );
+
   const availableMethods = useCallback((): readonly AuthMethodId[] => {
-    const factors = (signInRef.current.supportedFirstFactors ?? []) as VendorFactor[];
     const found = new Set<AuthMethodId>();
-    for (const factor of factors) {
+    for (const factor of firstFactors()) {
       const method = FIRST_FACTOR_METHODS[factor.strategy];
       if (method) found.add(method);
     }
     return [...found];
-  }, []);
+  }, [firstFactors]);
+
+  const startEnterpriseSso = useCallback(
+    async (email: string): Promise<AuthResult> => {
+      const { completeUrl, ssoCallbackUrl } = redirectsRef.current;
+      const { error } = await signInRef.current.sso({
+        identifier: email,
+        strategy: ENTERPRISE_SSO_STRATEGY,
+        redirectUrl: completeUrl,
+        redirectCallbackUrl: ssoCallbackUrl,
+      });
+      return error ? fail(error) : { status: 'redirecting', phase: 'enterprise_redirecting' };
+    },
+    [fail],
+  );
 
   const finalizeSignIn = useCallback(async (): Promise<AuthResult> => {
     const { error } = await signInRef.current.finalize({
@@ -241,6 +264,10 @@ export function useIdentityAuthClient(
         };
       }
 
+      if (firstFactors().some((factor) => factor.strategy === ENTERPRISE_SSO_STRATEGY)) {
+        return startEnterpriseSso(email);
+      }
+
       const methods = availableMethods();
       if (methods.includes('password')) {
         return { status: 'next', step: { kind: 'password', email, methods } };
@@ -251,9 +278,11 @@ export function useIdentityAuthClient(
     [
       availableMethods,
       finalizeSignIn,
+      firstFactors,
       orderedSecondFactors,
       prepareSecondFactor,
       sendSignInEmailCode,
+      startEnterpriseSso,
       unexpected,
     ],
   );

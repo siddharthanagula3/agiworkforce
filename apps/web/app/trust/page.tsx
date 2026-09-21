@@ -105,7 +105,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 93 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-19.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 95 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-19.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 173 of 268 database-backed hosted API route files. Counted against the 268 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 95 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
+      'Partial: 173 of 274 database-backed hosted API route files. Counted against the 274 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
   },
   {
     label: 'Authentication and CSRF',
@@ -384,7 +384,17 @@ export default function TrustPage() {
                       {
                         label: '2026-09-20',
                         value:
-                          'Re-measured after the billing waitlist access route moved onto the caller-scoped connection. The row-level-isolation count is 173 of 268 database-backed routes and the owner-connection remainder is 95. The number of hosted routes that touch no database is 115. Each figure is derived from the deciding route source by a test, not maintained independently from the implementation.',
+                          'Re-measured after the sign-in methods route, the legal hold preservation count, the soft-deleted resource purge and the client failure ingest shipped, after connecting GitHub began checking the workspace policy, which makes that route read the database, and after the two workspace encryption key routes arrived, which need the owner connection because the key tables grant the policy-bound role read access only. The database-backed total moved from 267 to 274 and the owner-connection remainder from 95 to 101; the row-level-isolation count moved from 172 to 173. The number of hosted routes that touch no database ends the day where it began, at 115.',
+                      },
+                      {
+                        label: '2026-09-20',
+                        value:
+                          'Re-measured after the deletion graph was closed over the database schema instead of a hand-kept list. Two stores had kept an erased account\u2019s identifiers: referrals and device installations. Both joined the enumerated erasure list, which grew from 93 user-scoped tables to 95.',
+                      },
+                      {
+                        label: '2026-09-20',
+                        value:
+                          'The billing waitlist access route moved onto the caller-scoped connection, which is the route that took the row-level-isolation count from 172 to 173. Each figure on this page is derived from the deciding route source by a test, not maintained independently from the implementation.',
                       },
                       {
                         label: '2026-09-18',

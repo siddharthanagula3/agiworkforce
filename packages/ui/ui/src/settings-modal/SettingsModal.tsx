@@ -544,7 +544,7 @@ function AddCustomConnectorForm({
             <a
               href="/docs"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className={cn('text-foreground underline underline-offset-2', FOCUS_RING)}
             >
               Learn more

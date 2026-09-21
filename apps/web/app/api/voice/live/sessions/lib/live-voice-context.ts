@@ -88,11 +88,13 @@ export async function loadLiveVoiceTranscript(
              select m.id, m.parent_id, m.role, m.content, 0 as depth
                from web_messages m
               where m.id = $1::uuid and m.conversation_id = $2::uuid
+                and m.deleted_at is null
              union all
              select p.id, p.parent_id, p.role, p.content, chain.depth + 1
                from web_messages p
                join chain on p.id = chain.parent_id
               where p.conversation_id = $2::uuid and chain.depth < $3
+                and p.deleted_at is null
            )
            select role, content, depth from chain order by depth asc`,
           [params.activeLeafMessageId, params.conversationId, limit],
@@ -103,6 +105,7 @@ export async function loadLiveVoiceTranscript(
           `select role, content
              from web_messages
             where conversation_id = $1::uuid
+              and deleted_at is null
             order by created_at desc, id desc
             limit $2`,
           [params.conversationId, limit],

@@ -67,7 +67,30 @@ function harness(fixture: Fixture = {}) {
           ? [fixture.policy]
           : [];
     }
-    if (/from public\.legal_holds/i.test(text)) {
+    if (/count\(\*\)/i.test(text) && /from public\.web_conversations candidate/i.test(text)) {
+      return [
+        { count: /and not exists/.test(text) ? (fixture.dueCount ?? 3) : (fixture.heldCount ?? 0) },
+      ];
+    }
+    if (/^\s*select count/i.test(text) && /from public\.legal_holds/i.test(text)) {
+      if (fixture.holdsThrow) throw new Error('connection reset');
+      const holds = fixture.holds ?? [];
+      const covering = holds.filter(
+        (entry) =>
+          entry['resource_types'] == null ||
+          (entry['resource_types'] as string[]).includes('conversation'),
+      );
+      // The sweep asks twice: every active hold, then the organization-wide
+      // ones that cover conversations.
+      return [
+        {
+          count: /h\.scope = \$3/.test(text)
+            ? covering.filter((entry) => entry['scope'] === 'organization').length
+            : holds.length,
+        },
+      ];
+    }
+    if (/custodian_user_ids/.test(text)) {
       if (fixture.holdsThrow) throw new Error('connection reset');
       return fixture.holds ?? [];
     }
@@ -79,15 +102,6 @@ function harness(fixture: Fixture = {}) {
       if (fixture.deleteThrows) throw new Error('deadlock detected');
       deletes.push(text);
       return fixture.deleted ?? [{ id: 'c1' }, { id: 'c2' }];
-    }
-    if (/count\(\*\)/i.test(text) && /user_id = any/i.test(text)) {
-      return [
-        {
-          count: /not \(user_id = any/i.test(text)
-            ? (fixture.dueCount ?? 3)
-            : (fixture.heldCount ?? 0),
-        },
-      ];
     }
     return [];
   });
@@ -201,12 +215,13 @@ describe('sweepOrganizationRetention', () => {
 
     expect(isSwept(result) && result.outcome).toBe('deleted');
     expect(isSwept(result) && result.conversationsHeld).toBe(4);
-    expect(h.deletes[0]).toMatch(/not \(user_id = any/);
+    expect(h.deletes[0]).toMatch(/not exists/);
+    expect(h.deletes[0]).toMatch(/legal_hold_custodians/);
 
-    const heldParam = h.query.mock.calls
-      .map((call) => call[1] as unknown[])
-      .find((params) => Array.isArray(params?.[2]));
-    expect(heldParam?.[2]).toEqual(['user-held']);
+    const deleteParams = h.query.mock.calls
+      .filter(([sql]) => /delete from public\.web_conversations/i.test(String(sql)))
+      .map((call) => call[1] as unknown[]);
+    expect(deleteParams[0]?.[2]).toBe('conversation');
   });
 
   it('holds every custodian a custodian-scoped hold names', async () => {
@@ -217,10 +232,9 @@ describe('sweepOrganizationRetention', () => {
     });
     await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
-    const heldParam = h.query.mock.calls
-      .map((call) => call[1] as unknown[])
-      .find((params) => Array.isArray(params?.[2]));
-    expect(heldParam?.[2]).toEqual(['ann', 'bo']);
+    // No list of people to get wrong: the statement reads the custodian table.
+    expect(h.deletes[0]).toMatch(/h\.scope = 'custodian' and c\.user_id/);
+    expect(h.deletes[0]).toMatch(/legal_hold_custodians/);
   });
 
   it('does not suspend the conversation sweep for a hold narrowed to files', async () => {
@@ -229,11 +243,10 @@ describe('sweepOrganizationRetention', () => {
     });
     const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
+    // The store is bound, so the database decides that a file-only hold does
+    // not cover conversations.
     expect(isSwept(result) && result.outcome).toBe('deleted');
-    const heldParam = h.query.mock.calls
-      .map((call) => call[1] as unknown[])
-      .find((params) => Array.isArray(params?.[2]));
-    expect(heldParam?.[2]).toEqual([]);
+    expect(h.deletes[0]).toMatch(/resource_types is null or \$3 = any/);
   });
 
   it('suspends the conversation sweep for a hold that names conversations', async () => {
@@ -475,10 +488,19 @@ function backlogHarness(fixture: BacklogFixture = {}) {
           ? [fixture.policy]
           : [];
     }
-    if (/from public\.legal_holds/i.test(text)) return fixture.holds ?? [];
-    if (/from public\.web_conversations/i.test(text)) {
-      return [{ pending: fixture.pending ?? 0, held: fixture.held ?? 0 }];
+    // Two counts through the same predicate: the pending one excludes holds,
+    // the held one selects them.
+    if (/from public\.web_conversations candidate/i.test(text)) {
+      const organizationHold = (fixture.holds ?? []).some(
+        (entry) => entry['scope'] === 'organization',
+      );
+      const pending = organizationHold ? 0 : (fixture.pending ?? 0);
+      const held = organizationHold
+        ? (fixture.pending ?? 0) + (fixture.held ?? 0)
+        : (fixture.held ?? 0);
+      return [{ count: /and not exists/.test(text) ? pending : held }];
     }
+    if (/custodian_user_ids/.test(text)) return fixture.holds ?? [];
     if (/from public\.organization_retention_sweeps/i.test(text)) return fixture.sweeps ?? [];
     return [];
   });

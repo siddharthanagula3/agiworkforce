@@ -38,6 +38,14 @@ import {
   type ScheduleCondition,
   type ScheduleConditionState,
 } from '@/lib/schedules/schedule-condition';
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
+import {
+  MEMBERSHIP_STATUSES_THAT_MAY_ACT,
+  ownerIsActiveWorkspaceMemberSql,
+} from '@/lib/server/workspace-scope';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { executeScheduledAgent } from './scheduled-agent-executor';
@@ -48,6 +56,8 @@ const MAX_BATCH_SIZE = 100;
 const MAX_PAGE_SIZE = 100;
 const MAX_ERROR_LENGTH = 2_000;
 const SCHEDULE_WORKER_NAME = 'scheduled-task';
+
+export { UNATTENDED_RUN_DENIED_STATUSES } from '@/lib/auth/account-lifecycle';
 const MISSED_EXECUTION_GRACE_MS = 2 * SWEEP_INTERVAL_MS;
 const MAX_RETRY_ATTEMPTS = 5;
 const MIN_RETRY_BACKOFF_SECONDS = 60;
@@ -977,6 +987,32 @@ export async function deleteSchedule(
   });
 }
 
+// The predicate leaves these tasks due for ever, so the sweep says why rather
+// than letting a workspace admin watch a schedule silently stop.
+async function reportWorkLeftByDepartedMembers(db: DatabaseAdapter, limit: number): Promise<void> {
+  const skipped = await db.query<{ id: string }>(
+    `select id from scheduled_tasks
+      where is_enabled = true
+        and status = 'active'
+        and next_execution_at <= now()
+        and (expires_at is null or expires_at > now())
+        and ${ownerMayRunUnattendedSql('scheduled_tasks.user_id', 3)}
+        and not ${ownerIsActiveWorkspaceMemberSql('scheduled_tasks.user_id', 'scheduled_tasks.organization_id', 2)}
+      order by next_execution_at asc, id asc
+      limit $1`,
+    [limit, MEMBERSHIP_STATUSES_THAT_MAY_ACT, UNATTENDED_RUN_DENIED_STATUSES],
+  );
+  if (skipped.length === 0) return;
+  logger.warn(
+    {
+      skipped: 'owner_not_a_member',
+      count: skipped.length,
+      taskIds: skipped.map((row) => row.id),
+    },
+    'Scheduled tasks were not claimed: their owner is no longer an active member of the workspace',
+  );
+}
+
 export async function claimDueScheduleRuns(
   db: DatabaseAdapter,
   options: { limit: number; leaseSeconds?: number },
@@ -1008,6 +1044,8 @@ export async function claimDueScheduleRuns(
          and next_execution_at <= now()
          and (expires_at is null or expires_at > now())
          and (max_executions is null or execution_count < max_executions or retry_attempt > 0)
+         and ${ownerMayRunUnattendedSql('scheduled_tasks.user_id', 3)}
+         and ${ownerIsActiveWorkspaceMemberSql('scheduled_tasks.user_id', 'scheduled_tasks.organization_id', 4)}
        order by next_execution_at asc, id asc
        for update skip locked
        limit $1
@@ -1041,8 +1079,9 @@ export async function claimDueScheduleRuns(
      from claimed
      join inserted on inserted.task_id = claimed.id
      order by claimed.scheduled_for asc, claimed.id asc`,
-    [limit, leaseSeconds],
+    [limit, leaseSeconds, UNATTENDED_RUN_DENIED_STATUSES, MEMBERSHIP_STATUSES_THAT_MAY_ACT],
   );
+  await reportWorkLeftByDepartedMembers(db, limit);
   return rows.map(mapClaim);
 }
 

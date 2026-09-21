@@ -1,22 +1,34 @@
 import { createHash } from 'node:crypto';
-import type { ContextSourceClass } from '@agiworkforce/context';
+import {
+  CONTEXT_BUDGET_PRIORITY,
+  CONTEXT_SOURCE_PRECEDENCE,
+  contextSourceClassPolicy,
+  contextTrustLevel,
+  type ContextInvalidationTrigger,
+  type ContextSourceClass,
+} from '@agiworkforce/context';
 import {
   permissionCheck,
   policyCheck,
   type ContextCheck,
   type OrganizationContextPolicy,
 } from './permissions';
-import type {
-  ContextActor,
-  ContextCandidate,
-  ContextExclusionCount,
-  ContextExclusionReason,
-  ContextManifest,
-  ContextManifestEntry,
-  ContextManifestStore,
-  ContextScope,
-  ContextSourceLoader,
-  ResolvedContextItem,
+import {
+  CONTEXT_ASSEMBLER_VERSION,
+  UNVERSIONED_CONTEXT,
+  contextInputCeiling,
+  type ContextActor,
+  type ContextCandidate,
+  type ContextExclusionCount,
+  type ContextExclusionReason,
+  type ContextManifest,
+  type ContextManifestEntry,
+  type ContextManifestStore,
+  type ContextScope,
+  type ContextSourceLoader,
+  type ContextTokenBudget,
+  type ContextVersions,
+  type ResolvedContextItem,
 } from './types';
 
 export interface ContextResolution {
@@ -32,6 +44,11 @@ export interface ResolveContextInput {
   readonly loaders: readonly ContextSourceLoader[];
   readonly store?: ContextManifestStore;
   readonly nowMs?: number;
+  readonly temporaryChat?: boolean;
+  /** Toggle keys the user has turned off, as the taxonomy names them. */
+  readonly disabledToggles?: readonly string[];
+  readonly budget?: ContextTokenBudget;
+  readonly versions?: ContextVersions;
   onLoaderError?: (sourceClass: ContextSourceClass, error: unknown) => void;
 }
 
@@ -41,6 +58,67 @@ export function factKey(text: string): string {
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
+}
+
+export function contextPrecedenceRank(sourceClass: ContextSourceClass): number {
+  return CONTEXT_SOURCE_PRECEDENCE.indexOf(sourceClass);
+}
+
+/** Who keeps the budget when the turn does not fit, which is not who is read first. */
+export function contextBudgetRank(sourceClass: ContextSourceClass): number {
+  return CONTEXT_BUDGET_PRIORITY.indexOf(sourceClass);
+}
+
+function stableSortBy<T>(values: readonly T[], rank: (value: T) => number): T[] {
+  return values
+    .map((value, index) => ({ value, index }))
+    .sort((left, right) => rank(left.value) - rank(right.value) || left.index - right.index)
+    .map((entry) => entry.value);
+}
+
+/**
+ * One order on every surface and for every model, so the same sources assembled
+ * for the same turn produce the same prompt wherever the turn was started.
+ */
+export function orderContextLoaders(
+  loaders: readonly ContextSourceLoader[],
+): readonly ContextSourceLoader[] {
+  return stableSortBy(loaders, (loader) => contextPrecedenceRank(loader.sourceClass));
+}
+
+/**
+ * The order the budget is spent in. A source read last can still be the one the
+ * question is about, so it is not enough to walk the assembly order backwards.
+ */
+export function orderLoadersByBudgetPriority(
+  loaders: readonly ContextSourceLoader[],
+): readonly ContextSourceLoader[] {
+  return stableSortBy(loaders, (loader) => contextBudgetRank(loader.sourceClass));
+}
+
+export function contextClassesInvalidatedBy(
+  trigger: ContextInvalidationTrigger,
+): readonly ContextSourceClass[] {
+  return CONTEXT_SOURCE_PRECEDENCE.filter((sourceClass) =>
+    contextSourceClassPolicy(sourceClass).invalidatedBy.includes(trigger),
+  );
+}
+
+/** Which of a manifest's entries a newer version vector has already outdated. */
+export function staleManifestClasses(
+  manifest: ContextManifest,
+  versions: ContextVersions,
+): readonly ContextSourceClass[] {
+  const changed = new Set<ContextInvalidationTrigger>();
+  if (manifest.versions.policy !== versions.policy) changed.add('policy_changed');
+  if (manifest.versions.memory !== versions.memory) changed.add('memory_changed');
+  if (manifest.versions.project !== versions.project) changed.add('project_changed');
+  if (manifest.versions.retrieval !== versions.retrieval) changed.add('conversation_changed');
+  return manifest.entries
+    .map((entry) => entry.sourceClass)
+    .filter((sourceClass) =>
+      contextSourceClassPolicy(sourceClass).invalidatedBy.some((trigger) => changed.has(trigger)),
+    );
 }
 
 function scopeOf(actor: ContextActor, candidates: readonly ContextCandidate[]): ContextScope {
@@ -66,6 +144,29 @@ function countExclusions(
   return [...counts.entries()].map(([reason, count]) => ({ reason, count }));
 }
 
+/**
+ * Whether the class may enter this turn at all, before any single candidate is
+ * looked at: the user's own switch, the temporary boundary, the shared project.
+ */
+function classAdmission(
+  sourceClass: ContextSourceClass,
+  input: ResolveContextInput,
+): ContextExclusionReason | null {
+  const policy = contextSourceClassPolicy(sourceClass);
+  const toggle = policy.enabledBy;
+  if (
+    (toggle.kind === 'user_setting' ||
+      toggle.kind === 'project_setting' ||
+      toggle.kind === 'device_setting') &&
+    input.disabledToggles?.includes(toggle.key)
+  ) {
+    return 'source_disabled';
+  }
+  if (input.temporaryChat && policy.excludedFromTemporaryChat) return 'temporary_chat';
+  if (input.actor.sharedProject && policy.sensitivity === 'personal') return 'personal_scope';
+  return null;
+}
+
 async function loadCandidates(
   loader: ContextSourceLoader,
   input: ResolveContextInput,
@@ -78,26 +179,54 @@ async function loadCandidates(
   }
 }
 
+function charsForTokens(budget: ContextTokenBudget, tokens: number): number {
+  let low = 0;
+  let high = tokens * 8 + 8;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (budget.estimate('x'.repeat(middle)) <= tokens) low = middle;
+    else high = middle - 1;
+  }
+  return low;
+}
+
 /**
- * Every context source a turn can carry passes through here: the permission and
- * policy checks are the engine's, not each loader's, and what survived is
- * recorded as a manifest the turn can be explained from afterwards.
+ * Every context source a turn can carry passes through here: the permission,
+ * policy and budget checks are the engine's, not each loader's, and what
+ * survived is recorded as a manifest the turn can be explained from afterwards.
  */
 export async function resolveContext(input: ResolveContextInput): Promise<ContextResolution> {
   const nowMs = input.nowMs ?? Date.now();
   const seenFacts = new Set<string>();
   const items: ResolvedContextItem[] = [];
   const entries: ContextManifestEntry[] = [];
+  const ceiling = input.budget ? contextInputCeiling(input.budget) : null;
+  let tokensSpent = 0;
+  let overBudget = false;
 
-  for (const loader of input.loaders) {
+  // Spend in budget priority, then assemble in authority order: what survives
+  // a tight turn and what the model reads first are different questions.
+  for (const loader of orderLoadersByBudgetPriority(input.loaders)) {
     const { candidates, failed } = await loadCandidates(loader, input);
+    const classPolicy = contextSourceClassPolicy(loader.sourceClass);
+    const refusedClass = classAdmission(loader.sourceClass, input);
     const excluded: ContextExclusionReason[] = [];
+    const eligibleSourceIds: string[] = [];
     const sourceIds: string[] = [];
+    const excludedSourceIds: string[] = [];
+    const compactedSourceIds: string[] = [];
     let budgetUsedChars = 0;
+    let tokenEstimate = 0;
     let includedCount = 0;
     let staleCount = 0;
 
     for (const candidate of candidates) {
+      if (refusedClass) {
+        excluded.push(refusedClass);
+        excludedSourceIds.push(candidate.source.id);
+        continue;
+      }
+
       const checks: ContextCheck[] = [
         permissionCheck(candidate.source, input.actor),
         policyCheck(candidate.source, input.policy),
@@ -107,63 +236,145 @@ export async function resolveContext(input: ResolveContextInput): Promise<Contex
       });
       if (refused) {
         excluded.push(refused.reason);
+        excludedSourceIds.push(candidate.source.id);
         continue;
       }
+      eligibleSourceIds.push(candidate.source.id);
 
       const stale = isStale(candidate, loader, nowMs);
       if (stale && loader.dropStale) {
         excluded.push('stale');
+        excludedSourceIds.push(candidate.source.id);
         continue;
       }
 
       const key = factKey(candidate.text);
       if (key && seenFacts.has(key)) {
         excluded.push('duplicate_fact');
+        excludedSourceIds.push(candidate.source.id);
         continue;
       }
       if (budgetUsedChars + candidate.text.length > loader.budgetChars) {
         excluded.push('budget_exhausted');
+        excludedSourceIds.push(candidate.source.id);
         continue;
       }
 
+      let text = candidate.text;
+      let compacted = false;
+      if (input.budget && ceiling !== null) {
+        const remaining = ceiling - tokensSpent;
+        let tokens = input.budget.estimate(text);
+        if (tokens > remaining && !classPolicy.isInstruction) {
+          if (!loader.compactable || remaining <= 0) {
+            excluded.push('budget_exhausted');
+            excludedSourceIds.push(candidate.source.id);
+            continue;
+          }
+          text = text.slice(0, charsForTokens(input.budget, remaining));
+          tokens = input.budget.estimate(text);
+          compacted = true;
+          if (!text) {
+            excluded.push('budget_exhausted');
+            excludedSourceIds.push(candidate.source.id);
+            continue;
+          }
+        }
+        tokensSpent += tokens;
+        tokenEstimate += tokens;
+        if (tokensSpent > ceiling) overBudget = true;
+      }
+
       if (key) seenFacts.add(key);
-      budgetUsedChars += candidate.text.length;
+      budgetUsedChars += text.length;
       includedCount += 1;
       if (stale) staleCount += 1;
+      if (compacted) compactedSourceIds.push(candidate.source.id);
       sourceIds.push(candidate.source.id);
-      items.push({ ...candidate, stale });
+      items.push({ ...candidate, text, stale, compacted });
     }
 
     entries.push({
       sourceClass: loader.sourceClass,
       scope: scopeOf(input.actor, candidates),
+      trust: contextTrustLevel(classPolicy),
+      sensitivity: classPolicy.sensitivity,
+      retention: classPolicy.retention,
+      explanation: classPolicy.explanation,
       candidateCount: candidates.length,
       includedCount,
       staleCount,
       budgetChars: loader.budgetChars,
       budgetUsedChars,
+      tokenEstimate,
       excluded: countExclusions(excluded),
+      eligibleSourceIds,
       sourceIds,
+      excludedSourceIds,
+      compactedSourceIds,
       failed,
     });
   }
 
+  const orderedEntries = stableSortBy(entries, (entry) => contextPrecedenceRank(entry.sourceClass));
+  const orderedItems = stableSortBy(items, (item) =>
+    contextPrecedenceRank(item.source.sourceClass),
+  );
+
+  const contentDigest = contextContentDigest(orderedItems);
+  const createdAt = new Date(nowMs).toISOString();
   const manifest: ContextManifest = {
+    manifestId: contextManifestId({
+      turnId: input.turnId,
+      userId: input.actor.userId,
+      createdAt,
+      contentDigest,
+    }),
     turnId: input.turnId,
-    createdAt: new Date(nowMs).toISOString(),
+    assemblerVersion: CONTEXT_ASSEMBLER_VERSION,
+    createdAt,
     actor: input.actor,
-    entries,
-    includedCount: items.length,
-    budgetUsedChars: entries.reduce((total, entry) => total + entry.budgetUsedChars, 0),
-    contentDigest: contextContentDigest(items),
+    versions: input.versions ?? UNVERSIONED_CONTEXT,
+    temporaryChat: input.temporaryChat === true,
+    entries: orderedEntries,
+    includedCount: orderedItems.length,
+    budgetUsedChars: orderedEntries.reduce((total, entry) => total + entry.budgetUsedChars, 0),
+    tokenEstimate: orderedEntries.reduce((total, entry) => total + entry.tokenEstimate, 0),
+    actualTokenCount: null,
+    budgetTokens: ceiling,
+    reservedOutputTokens: input.budget ? Math.floor(input.budget.reservedOutputTokens) : null,
+    overBudget,
+    contentDigest,
   };
   await input.store?.write(manifest);
 
   return {
     manifest,
-    items,
-    itemsOf: (sourceClass) => items.filter((item) => item.source.sourceClass === sourceClass),
+    items: orderedItems,
+    itemsOf: (sourceClass) =>
+      orderedItems.filter((item) => item.source.sourceClass === sourceClass),
   };
+}
+
+/** The count the provider reported, recorded against the estimate that drove the turn. */
+export function withActualTokenCount(
+  manifest: ContextManifest,
+  actualTokenCount: number,
+): ContextManifest {
+  return { ...manifest, actualTokenCount: Math.max(0, Math.floor(actualTokenCount)) };
+}
+
+/** Derived, not random, so a replay of one turn lands on the same manifest id. */
+export function contextManifestId(input: {
+  turnId: string;
+  userId: string;
+  createdAt: string;
+  contentDigest: string;
+}): string {
+  return createHash('sha256')
+    .update(`${input.turnId}\0${input.userId}\0${input.createdAt}\0${input.contentDigest}`)
+    .digest('hex')
+    .slice(0, 32);
 }
 
 /** Proves a replay assembled the same text without the manifest holding any. */

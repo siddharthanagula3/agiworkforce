@@ -390,6 +390,24 @@
       ]
     },
     {
+      "name": "purge-soft-deleted-resources",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the purge is bounded per table per run and resumes from the same predicate. A row an active legal hold preserves is left for the first run after the hold is released.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-20",
+          "change": "Registered as a deployable component; it is the only job that ends the recovery window for conversations, messages and artifacts."
+        }
+      ]
+    },
+    {
       "name": "purge-temporary-chats",
       "role": "cleanup",
       "version": "1.0.0",

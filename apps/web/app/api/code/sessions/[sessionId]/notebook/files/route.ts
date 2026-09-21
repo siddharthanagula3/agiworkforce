@@ -5,6 +5,7 @@ import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -31,6 +32,7 @@ export const maxDuration = 600;
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
 const MAX_NOTEBOOK_UPLOAD_BYTES = 10 * 1024 * 1024;
+const NOTEBOOK_UPLOAD_MIME = 'application/octet-stream';
 
 function rethrowCloudCodeError(error: unknown): never {
   if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
@@ -124,7 +126,13 @@ async function handleUpload(request: NextRequest, context: RouteContext) {
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;
   const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
-  const base64Content = Buffer.from(await file.arrayBuffer()).toString('base64');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const fileName = 'name' in file && typeof file.name === 'string' ? file.name : path;
+  await refuseUnsafeUpload(bytes, file.type || NOTEBOOK_UPLOAD_MIME, {
+    leadsObject: true,
+    filename: fileName,
+  });
+  const base64Content = Buffer.from(bytes).toString('base64');
   try {
     return NextResponse.json(
       await writeCloudCodeNotebookFile(

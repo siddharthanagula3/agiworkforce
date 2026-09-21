@@ -21,6 +21,18 @@ export {
   toUserMessage,
   toUserMessageWithStatus,
 } from './lib/network-error';
+export {
+  CLIENT_FAILURE_CLASSES,
+  CLIENT_FAILURE_DETAILS,
+  reportClientFailure,
+  setClientFailureSink,
+} from './lib/client-failures';
+export type {
+  ClientFailureClass,
+  ClientFailureDetail,
+  ClientFailureReport,
+  ClientFailureSink,
+} from './lib/client-failures';
 export type {
   ArtifactRenderPayload,
   ArtifactSandboxKind,

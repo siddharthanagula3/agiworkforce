@@ -36,6 +36,7 @@ const mockMemoryRow = {
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { GET, POST } from '@/app/api/memory/route';
+import { answerMemoryPolicyQuery } from '@/lib/services/__tests__/memory-policy-stub';
 
 describe('Memory API', () => {
   beforeEach(() => {
@@ -45,7 +46,9 @@ describe('Memory API', () => {
       userId: 'user-123',
       organizationId: null,
     });
-    mockQuery.mockResolvedValue([mockMemoryRow]);
+    mockQuery.mockImplementation(
+      async (sql: unknown) => answerMemoryPolicyQuery(sql) ?? [mockMemoryRow],
+    );
   });
 
   describe('GET /api/memory', () => {
@@ -70,7 +73,7 @@ describe('Memory API', () => {
     });
 
     it('should return 200 with empty array when user has no memories', async () => {
-      mockQuery.mockResolvedValueOnce([]);
+      mockQuery.mockImplementation(async (sql: unknown) => answerMemoryPolicyQuery(sql) ?? []);
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
@@ -84,7 +87,7 @@ describe('Memory API', () => {
     });
 
     it('should return 200 with empty array when data is empty', async () => {
-      mockQuery.mockResolvedValueOnce([]);
+      mockQuery.mockImplementation(async (sql: unknown) => answerMemoryPolicyQuery(sql) ?? []);
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',

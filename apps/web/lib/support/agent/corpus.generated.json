@@ -25,7 +25,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -54,7 +54,7 @@
           "ordinal": 3,
           "heading": "Active sessions",
           "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
-          "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
+          "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
         },
         {
           "id": "account-security#4",
@@ -535,7 +535,7 @@
         "permissions",
         "always allow"
       ],
-      "updated": "2026-08-05",
+      "updated": "2026-09-20",
       "source": "content/support/connectors-and-mcp.md",
       "chunks": [
         {
@@ -564,7 +564,7 @@
           "ordinal": 3,
           "heading": "Removing a connector",
           "headingPath": "Connectors and MCP › Removing a connector",
-          "text": "Removing a connector deactivates it and clears the saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate."
+          "text": "Removing a connector deactivates it and clears the saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate. AGI asks the provider to revoke every account you connected through it,\nnot only the one AGI treated as the default, and deletes the credentials it held\nfor them."
         },
         {
           "id": "connectors-and-mcp#4",
@@ -599,7 +599,7 @@
           "ordinal": 0,
           "heading": "How deletion works",
           "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
-          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nAfter you confirm, the dialog shows the exact date and time your data is erased,\nand you are signed out when you continue."
+          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes."
         },
         {
           "id": "delete-your-account#1",
@@ -613,7 +613,7 @@
           "ordinal": 2,
           "heading": "Before you confirm",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
-          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf a paid subscription is attached, cancel or let it lapse separately; billing\nis handled in the billing portal, not by the deletion flow."
+          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf a paid subscription is attached, cancel or let it lapse separately; billing\nis handled in the billing portal, not by the deletion flow.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
         },
         {
           "id": "delete-your-account#3",
@@ -866,7 +866,7 @@
         "onboarding",
         "install"
       ],
-      "updated": "2026-09-19",
+      "updated": "2026-09-20",
       "source": "content/support/getting-started.md",
       "chunks": [
         {
@@ -874,7 +874,7 @@
           "ordinal": 0,
           "heading": "Create an account and start a chat",
           "headingPath": "Getting started with AGI › Create an account and start a chat",
-          "text": "Sign up at agiworkforce.com, then open the chat surface and send your first message.\nA new account can use AGI managed cloud straight away: managed cloud is open by\ndefault, so there is no waitlist and no invite code to redeem."
+          "text": "Sign up at agiworkforce.com, then open the chat surface and send your first message.\nA new account can use AGI managed cloud straight away on the Free plan, which is\nopen by default with no waitlist and no invite code to redeem. Paid upgrades are\nopening in stages and need an access code; without one you join the upgrade\nwaitlist."
         },
         {
           "id": "getting-started#1",
@@ -1198,7 +1198,7 @@
         "list view",
         "search files"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/library.md",
       "chunks": [
         {
@@ -1220,7 +1220,7 @@
           "ordinal": 2,
           "heading": "Deleting and restoring",
           "headingPath": "Find your files and artifacts in the Library › Deleting and restoring",
-          "text": "Deleting moves an item to **Recently deleted**, where it stays restorable for 30\ndays before it is removed for good. **Delete permanently** erases the stored\nbytes now: nothing restores the file afterwards and anything linking to it stops\nresolving, so it asks first and says so."
+          "text": "Deleting moves an item to **Recently deleted**, where it stays restorable. For\nan uploaded or generated file, that window is 30 days: after it the stored bytes\nare removed for good. Other items stay in **Recently deleted** until you restore\nthem or delete them yourself. A legal hold on your workspace keeps held material\npast either window until the hold is released.\n\n**Delete permanently** erases the stored bytes now: nothing restores the file\nafterwards and anything linking to it stops resolving, so it asks first and says\nso."
         },
         {
           "id": "library#3",
@@ -1305,7 +1305,7 @@
         "quota",
         "limit"
       ],
-      "updated": "2026-09-01",
+      "updated": "2026-09-20",
       "source": "content/support/managed-cloud.md",
       "chunks": [
         {
@@ -1313,7 +1313,7 @@
           "ordinal": 0,
           "heading": "Open by default",
           "headingPath": "AGI managed cloud › Open by default",
-          "text": "AGI managed cloud is open by default. Sign in and start: there is no waitlist for\nmanaged cloud and no invite code. Team and Enterprise tiers, with organization\nseats, SSO, and admin controls, are the only waitlisted tiers."
+          "text": "The Free plan on AGI managed cloud is open by default. Sign in and start: it has no\nwaitlist and needs no invite code. Paid upgrades are opening in stages, so every\nself-serve paid plan needs an access code, and without one you join the upgrade\nwaitlist. Team and Enterprise tiers, with organization seats, SSO, and admin\ncontrols, are a contract conversation rather than a self-serve checkout."
         },
         {
           "id": "managed-cloud#1",
@@ -1558,7 +1558,7 @@
         "sell data",
         "anonymized usage"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/privacy-controls.md",
       "chunks": [
         {
@@ -1580,7 +1580,7 @@
           "ordinal": 2,
           "heading": "Temporary chats",
           "headingPath": "Privacy controls in Settings › Temporary chats",
-          "text": "\"Start new chats as temporary\" makes every new conversation temporary: not saved\nto your account or history, no memory, and attachments kept out of the Library.\nAn individual conversation can still be switched."
+          "text": "\"Start new chats as temporary\" makes every new conversation temporary: no\nmessage written to your history, no memory, and attachments kept out of the\nLibrary. The conversation record and any attachment are held for up to 30 days\nand then removed. An individual conversation can still be switched."
         },
         {
           "id": "privacy-controls#3",
@@ -1919,7 +1919,7 @@
         "first message",
         "first chat"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/signing-up.md",
       "chunks": [
         {
@@ -1934,7 +1934,7 @@
           "ordinal": 1,
           "heading": "What you can do immediately",
           "headingPath": "Create an account and send your first message › What you can do immediately",
-          "text": "Managed cloud is open by default. A new account can open the chat surface and\nsend a message straight away: there is no waitlist for managed cloud and no\ninvite code to redeem. Team and Enterprise tiers are the waitlisted ones."
+          "text": "The Free plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem.\nPaid upgrades are opening in stages, so every self-serve paid plan needs an\naccess code, and without one you join the upgrade waitlist."
         },
         {
           "id": "signing-up#2",
@@ -1967,7 +1967,7 @@
         "end temporary chat",
         "ephemeral"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/temporary-chats.md",
       "chunks": [
         {
@@ -1975,7 +1975,7 @@
           "ordinal": 0,
           "heading": "What a temporary chat does",
           "headingPath": "Temporary chats › What a temporary chat does",
-          "text": "A temporary chat stays out of your history, your memory and your Library. It is\nnever written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary means AGI stores nothing, not that the outside world forgets."
+          "text": "A temporary chat stays out of your history, your memory and your Library. It is\nnever written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary is about what AGI keeps, not about what the outside world\nforgets.\n\nWhat AGI does keep is narrow and bounded. No message of a temporary chat is\nwritten to your conversation history. The conversation record itself, and any\nfile you attach, are held for up to 30 days and then removed, which is what\nkeeps an in-flight chat working and an attachment readable while you are still\nin it. A legal hold placed on your workspace keeps that material past the 30\ndays until the hold is released."
         },
         {
           "id": "temporary-chats#1",
@@ -2018,7 +2018,7 @@
         "call log",
         "reset permissions"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-20",
       "source": "content/support/tool-approvals.md",
       "chunks": [
         {
@@ -2054,7 +2054,7 @@
           "ordinal": 4,
           "heading": "Removing a connector clears its approvals",
           "headingPath": "Approvals: what a tool may do without asking › Removing a connector clears its approvals",
-          "text": "Removing a connector deactivates it and clears its saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate."
+          "text": "Removing a connector deactivates it and clears its saved \"Always allow\" tool\npermissions at the same time, so a later reconnect starts from a clean approval\nstate. It also asks the provider to revoke every account you connected through\nthat connector, not only the one AGI treated as the default, and deletes the\ncredentials AGI held for them."
         }
       ]
     },

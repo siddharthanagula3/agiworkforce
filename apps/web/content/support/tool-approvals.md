@@ -4,7 +4,7 @@ title: Approvals: what a tool may do without asking
 path: /agent-permissions
 category: connectors
 tags: approval, approvals, permission, always allow, ask every time, auto approve, read only, tool permissions, deny tool, call log, reset permissions
-updated: 2026-09-17
+updated: 2026-09-20
 scope: public
 ---
 
@@ -45,4 +45,6 @@ that could be read as a failure.
 
 Removing a connector deactivates it and clears its saved "Always allow" tool
 permissions at the same time, so a later reconnect starts from a clean approval
-state.
+state. It also asks the provider to revoke every account you connected through
+that connector, not only the one AGI treated as the default, and deletes the
+credentials AGI held for them.

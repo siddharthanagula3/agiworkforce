@@ -106,6 +106,7 @@ import {
   syncDeveloperAccounts,
 } from './developerSessionService';
 import { reportShellIdentity } from '../shellIdentity';
+import { readShellLayout, writeShellLayout } from '../shellWindowStore';
 import { PathRefused } from './pathGuard';
 import {
   consumeSingleUse,
@@ -695,6 +696,10 @@ async function execute(
       return readShellPolicy();
     case 'shell_policy_write':
       return writeShellPolicy(requirePolicy(args));
+    case 'window_layout_read':
+      return readShellLayout();
+    case 'window_layout_write':
+      return writeShellLayout(args ?? {});
     case 'app_open_path':
       return openWithDefaultApplication(resolveRoot(args), requireString(args, 'path'));
     case 'app_reveal_path':

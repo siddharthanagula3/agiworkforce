@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     getGrant: vi.fn(),
     updateTokens: vi.fn(),
     revokeGrant: vi.fn(),
+    listRevocable: vi.fn(),
     refresh: vi.fn(),
     refreshDiscovered: vi.fn(),
     record: vi.fn(),
@@ -47,6 +48,7 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   getConnectorOAuthGrant: (...a: unknown[]) => mocks.getGrant(...a),
   updateConnectorOAuthGrantTokens: (...a: unknown[]) => mocks.updateTokens(...a),
   revokeConnectorOAuthGrant: (...a: unknown[]) => mocks.revokeGrant(...a),
+  listRevocableConnectorTokens: (...a: unknown[]) => mocks.listRevocable(...a),
   createPendingAuthorization: vi.fn(),
   upsertConnectorOAuthGrant: vi.fn(),
 }));
@@ -98,6 +100,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getProvider.mockReturnValue(PROVIDER);
   mocks.revokeGrant.mockResolvedValue(true);
+  mocks.listRevocable.mockResolvedValue([]);
   mocks.updateTokens.mockResolvedValue(undefined);
   mocks.record.mockResolvedValue({ recorded: true });
 });
@@ -291,7 +294,7 @@ describe('disconnectConnectorOAuthGrant', () => {
 
     await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toBe(true);
     expect(mocks.revokeAtProvider).not.toHaveBeenCalled();
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
   });
 
   it('revokes at the provider first, preferring the refresh token', async () => {
@@ -299,7 +302,9 @@ describe('disconnectConnectorOAuthGrant', () => {
       ...PROVIDER,
       revocationUrl: 'https://auth.example.com/revoke',
     });
-    mocks.getGrant.mockResolvedValue(grant());
+    mocks.listRevocable.mockResolvedValue([
+      { accountKey: 'default', token: 'live-refresh', tokenTypeHint: 'refresh_token' },
+    ]);
     mocks.revokeAtProvider.mockResolvedValue(true);
 
     await disconnectConnectorOAuthGrant('u1', 'linear');
@@ -309,7 +314,44 @@ describe('disconnectConnectorOAuthGrant', () => {
       'live-refresh',
       'refresh_token',
     );
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
+  });
+
+  it('hands back every connected account credential, not only the default one', async () => {
+    mocks.getProvider.mockReturnValue({
+      ...PROVIDER,
+      revocationUrl: 'https://auth.example.com/revoke',
+    });
+    mocks.listRevocable.mockResolvedValue([
+      { accountKey: 'work', token: 'work-refresh', tokenTypeHint: 'refresh_token' },
+      { accountKey: 'personal', token: 'personal-access', tokenTypeHint: 'access_token' },
+    ]);
+    mocks.revokeAtProvider.mockResolvedValue(true);
+
+    await disconnectConnectorOAuthGrant('u1', 'linear');
+
+    expect(mocks.listRevocable).toHaveBeenCalledWith('u1', 'linear', undefined);
+    expect(mocks.revokeAtProvider.mock.calls.map((call) => call[1])).toEqual([
+      'work-refresh',
+      'personal-access',
+    ]);
+  });
+
+  it('revokes only the named account when one is given', async () => {
+    mocks.getProvider.mockReturnValue({
+      ...PROVIDER,
+      revocationUrl: 'https://auth.example.com/revoke',
+    });
+    mocks.listRevocable.mockResolvedValue([
+      { accountKey: 'work', token: 'work-refresh', tokenTypeHint: 'refresh_token' },
+    ]);
+    mocks.revokeAtProvider.mockResolvedValue(true);
+
+    await disconnectConnectorOAuthGrant('u1', 'linear', 'work');
+
+    expect(mocks.listRevocable).toHaveBeenCalledWith('u1', 'linear', 'work');
+    expect(mocks.revokeAtProvider).toHaveBeenCalledTimes(1);
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', 'work');
   });
 
   it('still revokes locally when provider revocation throws', async () => {
@@ -317,9 +359,9 @@ describe('disconnectConnectorOAuthGrant', () => {
       ...PROVIDER,
       revocationUrl: 'https://auth.example.com/revoke',
     });
-    mocks.getGrant.mockRejectedValue(new Error('database down'));
+    mocks.listRevocable.mockRejectedValue(new Error('database down'));
 
     await expect(disconnectConnectorOAuthGrant('u1', 'linear')).resolves.toBe(true);
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', undefined);
   });
 });

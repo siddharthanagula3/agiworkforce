@@ -299,6 +299,98 @@ describe('shadow mirroring', () => {
   });
 });
 
+/**
+ * A mirror is a second copy of the caller's prompt sent to a model they did not
+ * ask for. Every constraint that decides where their prompt may go has to hold
+ * on that copy too, and the served route staying resolved in each case is what
+ * makes the absent mirror a refusal rather than a refused request.
+ */
+describe('shadow mirroring under a workspace privacy constraint', () => {
+  const PINNED_REGION = 'shadow-canary-test-region';
+
+  /** The promoted model's own routes, found rather than assumed. */
+  function servedRouteIds(registry: RoutingRegistryView): string[] {
+    return Object.keys(registry.routes).filter(
+      (id) => registry.routes[id].modelKey === PROMOTED_MODEL_KEY,
+    );
+  }
+
+  function servedAndMirrored(decision: AutoRouteDecision): {
+    modelKey: string;
+    mirrored: string | undefined;
+  } {
+    if (decision.status !== 'selected') {
+      throw new Error(`expected a selected route, got ${decision.status}`);
+    }
+    return { modelKey: decision.modelKey, mirrored: decision.shadow?.modelKey };
+  }
+
+  it('mirrors when the workspace pins nothing, which is what the refusals below are measured against', async () => {
+    const decision = await resolve({ requestId: OUTSIDE_ID, enableCanary: true });
+
+    expect(servedAndMirrored(decision)).toEqual({
+      modelKey: PROMOTED_MODEL_KEY,
+      mirrored: SHADOW_MODEL_KEY,
+    });
+  });
+
+  it('sends no mirror for a zero-retention workspace when the candidate keeps data', async () => {
+    const decision = await resolve(
+      { requestId: OUTSIDE_ID, enableCanary: true, zeroDataRetentionOnly: true },
+      (registry) => {
+        for (const id of servedRouteIds(registry)) {
+          registry.routes[id].dataRetention = 'zero_retention';
+        }
+        registry.routes[routeId(SHADOW_MODEL_KEY)].dataRetention = 'provider_default';
+      },
+    );
+
+    expect(servedAndMirrored(decision)).toEqual({
+      modelKey: PROMOTED_MODEL_KEY,
+      mirrored: undefined,
+    });
+  });
+
+  it('sends no mirror to a candidate that publishes no residency answer for a pinned workspace', async () => {
+    const decision = await resolve(
+      { requestId: OUTSIDE_ID, enableCanary: true, residencyRegion: PINNED_REGION },
+      (registry) => {
+        const governance: NonNullable<RoutingRegistryView['governance']> = {
+          ...registry.governance,
+        };
+        for (const id of servedRouteIds(registry)) {
+          governance[registry.routes[id].provider] = { residencyRegions: [PINNED_REGION] };
+        }
+        registry.governance = governance;
+        registry.models[PROMOTED_MODEL_KEY].residencyRegions = [PINNED_REGION];
+      },
+    );
+
+    expect(servedAndMirrored(decision)).toEqual({
+      modelKey: PROMOTED_MODEL_KEY,
+      mirrored: undefined,
+    });
+  });
+
+  it('sends no mirror to a model the workspace model policy blocks', async () => {
+    const decision = await resolve({
+      requestId: OUTSIDE_ID,
+      enableCanary: true,
+      organizationPolicy: {
+        allowedProviders: [],
+        blockedProviders: [],
+        allowedModels: [],
+        blockedModels: [SHADOW_MODEL_KEY],
+      },
+    });
+
+    expect(servedAndMirrored(decision)).toEqual({
+      modelKey: PROMOTED_MODEL_KEY,
+      mirrored: undefined,
+    });
+  });
+});
+
 describe('flag-driven canary cohorts', () => {
   it('serves the canary to a request the cohort includes, whatever its hash', async () => {
     const decision = await resolve({

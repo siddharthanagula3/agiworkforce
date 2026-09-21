@@ -3,6 +3,13 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 
+// Below the embeddings route ceiling, so a provider that stops answering fails
+// as the typed error both callers already branch on rather than as a dead wait.
+const EMBEDDING_REQUEST_TIMEOUT_MS = 30_000;
+
+// What an upstream that never answered looks like to a caller reading `status`.
+const GATEWAY_TIMEOUT = 504;
+
 interface GoogleEmbeddingResponse {
   embeddings?: Array<{ values?: number[] }>;
 }
@@ -23,20 +30,36 @@ export async function embedTextsWithGoogle(input: {
   inputs: readonly string[];
   dimensions?: number;
 }): Promise<number[][]> {
-  const response = await fetch(
-    providerApiUrl('google', `models/${input.providerModelId}:batchEmbedContents`),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': input.apiKey },
-      body: JSON.stringify({
-        requests: input.inputs.map((text) => ({
-          model: `models/${input.providerModelId}`,
-          content: { parts: [{ text }] },
-          ...(input.dimensions !== undefined ? { outputDimensionality: input.dimensions } : {}),
-        })),
-      }),
-    },
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      providerApiUrl('google', `models/${input.providerModelId}:batchEmbedContents`),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': input.apiKey },
+        signal: AbortSignal.timeout(EMBEDDING_REQUEST_TIMEOUT_MS),
+        body: JSON.stringify({
+          requests: input.inputs.map((text) => ({
+            model: `models/${input.providerModelId}`,
+            content: { parts: [{ text }] },
+            ...(input.dimensions !== undefined ? { outputDimensionality: input.dimensions } : {}),
+          })),
+        }),
+      },
+    );
+  } catch (cause) {
+    const timedOut =
+      cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError');
+    if (!timedOut) throw cause;
+    logger.error(
+      { timeoutMs: EMBEDDING_REQUEST_TIMEOUT_MS, model: input.providerModelId },
+      'Embedding provider did not answer within the deadline',
+    );
+    throw new GoogleEmbeddingError(
+      'The embedding provider did not answer within the deadline.',
+      GATEWAY_TIMEOUT,
+    );
+  }
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');

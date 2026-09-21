@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
+import { reportClientFailure } from '../../lib/client-failures';
 import { highlightToLines, readHighlightCache, type HighlightedLine } from './shikiHighlighter';
 
 const LINE_BREAK = '\n';
@@ -36,7 +37,9 @@ export const HighlightedCode: React.FC<HighlightedCodeProps> = ({
       .then((next) => {
         if (!cancelled && next) setLines(next);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        reportClientFailure({ failure: 'markdown_render', detail: 'render' });
+      });
 
     return () => {
       cancelled = true;

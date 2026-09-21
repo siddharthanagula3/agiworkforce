@@ -123,6 +123,7 @@ describe('captureWorkerFailure', () => {
       'agi.failure.kind': 'worker',
       'worker.name': 'cloud-agent-turn',
       'worker.job_id': 'run-42',
+      'agi.error.fingerprint': expect.stringMatching(/\S/),
     });
   });
 

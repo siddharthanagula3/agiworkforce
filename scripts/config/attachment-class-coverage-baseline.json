@@ -1,0 +1,78 @@
+{
+  "unclassed": {
+    "extension:css": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:go": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:js": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:jsx": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:py": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:rb": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:rs": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:sh": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:toml": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:ts": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:tsx": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "media-type:text/css": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "media-type:text/javascript": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "media-type:text/typescript": {
+      "reason": "Admitted by the composer and read as text through the text/plain fallback in resolveChatAttachmentMimeType, but declared as no class, so the Library labels it as nothing and no extractor is named for it. One code class with extractor text closes the whole group.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "extension:ipynb": {
+      "reason": "A notebook is admitted and read as text/plain, so its cells and outputs arrive as raw JSON with no class to say so. Declare a notebook class with extractor text.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    },
+    "media-type:application/x-ipynb+json": {
+      "reason": "A notebook is admitted and read as text/plain, so its cells and outputs arrive as raw JSON with no class to say so. Declare a notebook class with extractor text.",
+      "declareIn": "packages/contracts/types/src/file-model.ts"
+    }
+  },
+  "unreachable": {
+    "class:jsonl": {
+      "reason": "JSONL is declared with a text extractor and a Library label, but neither application/jsonl nor the .jsonl and .ndjson extensions are on the accept list, so no upload can produce one. Admit them or drop the class.",
+      "declareIn": "packages/contracts/cloud-contracts/src/chat-attachments.ts"
+    },
+    "class:tsv": {
+      "reason": "TSV is declared with a text extractor and a Library label, but neither text/tab-separated-values nor the .tsv extension is on the accept list, so no upload can produce one. Admit them or drop the class.",
+      "declareIn": "packages/contracts/cloud-contracts/src/chat-attachments.ts"
+    }
+  }
+}

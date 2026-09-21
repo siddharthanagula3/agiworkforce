@@ -99,8 +99,15 @@ export interface SidebarProps extends SessionItemHandlers {
 
 const DEFAULT_EXPANDED: SidebarTemporalGroup[] = ['today', 'yesterday', 'thisWeek'];
 const COLLAPSED_RAIL_WIDTH = 52;
-const TOOLTIP_DELAY_MS = 200;
 const ROW_FOCUSABLE_SELECTOR = 'a, button';
+
+// Long enough not to flash on a sweep across the rail, short enough to read.
+export const SIDEBAR_TOOLTIP_DELAY_MS = 200;
+
+// Every control gets the ring: an unlabelled rail icon with no ring is
+// indistinguishable from its neighbours under keyboard focus.
+const FOCUS_RING =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]';
 
 // Not Cmd/Ctrl+K: the command palette claims that in the capture phase, so it
 // never reaches search. Exported so the key binding and this badge cannot drift.
@@ -432,7 +439,7 @@ export function Sidebar(props: SidebarProps) {
         aria-current={item.isActive ? 'page' : undefined}
         className={cn(
           'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]',
+          FOCUS_RING,
           item.isActive
             ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
             : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
@@ -452,10 +459,10 @@ export function Sidebar(props: SidebarProps) {
   if (collapsed) {
     const toggleLabel = t('sidebar.toggleSidebar', 'Toggle sidebar');
     return (
-      <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+      <TooltipProvider delayDuration={SIDEBAR_TOOLTIP_DELAY_MS}>
         <nav
           aria-label={t('sidebar.navLabel', 'Chat history')}
-          className="flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-all duration-300 ease-in-out"
+          className="flex flex-col border-r border-[var(--chat-border-subtle)] bg-[var(--chat-sidebar-bg)] transition-[width] duration-300 ease-in-out"
           style={{ width: COLLAPSED_RAIL_WIDTH }}
         >
           <div data-sidebar-region="rail" className="flex flex-col items-center gap-0 py-2">
@@ -525,7 +532,10 @@ export function Sidebar(props: SidebarProps) {
               type="button"
               onClick={onToggleCollapse}
               aria-label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]"
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+                FOCUS_RING,
+              )}
             >
               <PanelLeft className="h-4 w-4" />
             </button>
@@ -534,20 +544,26 @@ export function Sidebar(props: SidebarProps) {
                 type="button"
                 onClick={onNewChat}
                 aria-label={t('sidebar.newChatAction', 'New chat')}
-                className="flex items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
+                className={cn(
+                  'flex items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-1.5 text-sm font-medium text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]',
+                  FOCUS_RING,
+                )}
               >
                 <SquarePen className="h-4 w-4" />
                 {t('newChat', 'New Chat')}
               </button>
               {onOpenCode && (
-                <TooltipProvider delayDuration={TOOLTIP_DELAY_MS}>
+                <TooltipProvider delayDuration={SIDEBAR_TOOLTIP_DELAY_MS}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         onClick={onOpenCode}
                         aria-label={codeLabel}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
+                        className={cn(
+                          'flex h-8 w-8 items-center justify-center rounded-lg bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]',
+                          FOCUS_RING,
+                        )}
                       >
                         <TerminalSquare className="h-4 w-4" />
                       </button>
@@ -561,7 +577,10 @@ export function Sidebar(props: SidebarProps) {
           <button
             type="button"
             onClick={onOpenSearch}
-            className="flex w-full items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg bg-[hsl(var(--muted))] px-3 py-2 text-sm text-[hsl(var(--foreground))] transition-colors hover:bg-[hsl(var(--accent))]',
+              FOCUS_RING,
+            )}
           >
             <Search className="h-4 w-4" />
             <span>{tCommon('search', 'Search')}</span>
@@ -606,6 +625,7 @@ export function Sidebar(props: SidebarProps) {
                 }
                 className={cn(
                   'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                  FOCUS_RING,
                   // --chat-* rather than --warning-*: this component renders on
                   // desktop too, which loads chat.css but not foundation.css.
                   // Measured on the sidebar surface: 6.55:1 light, 8.34:1 dark.
@@ -637,7 +657,10 @@ export function Sidebar(props: SidebarProps) {
                           ? t('sidebar.expandProjects', 'Expand projects')
                           : t('sidebar.collapseProjects', 'Collapse projects')
                       }
-                      className="flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+                      className={cn(
+                        'flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors',
+                        FOCUS_RING,
+                      )}
                     >
                       <span>{t('sidebar.projects', 'Projects')}</span>
                       <ChevronRight
@@ -668,7 +691,10 @@ export function Sidebar(props: SidebarProps) {
                             e.stopPropagation();
                             onProjectCreate();
                           }}
-                          className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
+                          className={cn(
+                            'flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                            FOCUS_RING,
+                          )}
                         >
                           <Plus className="h-3 w-3" aria-hidden="true" />
                         </button>
@@ -686,7 +712,10 @@ export function Sidebar(props: SidebarProps) {
                               e.stopPropagation();
                               toggle();
                             }}
-                            className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
+                            className={cn(
+                              'flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                              FOCUS_RING,
+                            )}
                           >
                             <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
                           </button>
@@ -788,7 +817,10 @@ export function Sidebar(props: SidebarProps) {
                         <button
                           type="button"
                           onClick={() => setShowAllProjects(true)}
-                          className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                          className={cn(
+                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]',
+                            FOCUS_RING,
+                          )}
                         >
                           {t('showMore', 'Show more')}
                         </button>
@@ -797,7 +829,10 @@ export function Sidebar(props: SidebarProps) {
                         <button
                           type="button"
                           onClick={() => setShowAllProjects(false)}
-                          className="mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                          className={cn(
+                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]',
+                            FOCUS_RING,
+                          )}
                         >
                           {t('showLess', 'Show less')}
                         </button>
@@ -831,7 +866,10 @@ export function Sidebar(props: SidebarProps) {
                       type="button"
                       onClick={() => toggleGroup(group)}
                       aria-expanded={isExpanded}
-                      className="flex w-full items-center gap-2 px-2 py-1 text-xs font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]"
+                      className={cn(
+                        'flex w-full items-center gap-2 px-2 py-1 text-xs font-medium text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--foreground))]',
+                        FOCUS_RING,
+                      )}
                     >
                       <ChevronRight
                         className={cn('h-3 w-3 transition-transform', isExpanded && 'rotate-90')}
@@ -860,7 +898,10 @@ export function Sidebar(props: SidebarProps) {
                     type="button"
                     onClick={onLoadMoreSessions}
                     disabled={isLoadingMoreSessions}
-                    className="inline-flex min-h-6 items-center gap-1.5 px-1 text-xs text-[hsl(var(--primary))] hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-70"
+                    className={cn(
+                      'inline-flex min-h-6 items-center gap-1.5 px-1 text-xs text-[hsl(var(--primary))] hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-70',
+                      FOCUS_RING,
+                    )}
                   >
                     {isLoadingMoreSessions && <Spinner size="sm" />}
                     {isLoadingMoreSessions
@@ -900,7 +941,10 @@ export function Sidebar(props: SidebarProps) {
                     <button
                       type="button"
                       onClick={onRetryLoad}
-                      className="mt-2 inline-flex min-h-6 items-center px-1 text-xs text-[hsl(var(--primary))] hover:underline"
+                      className={cn(
+                        'mt-2 inline-flex min-h-6 items-center px-1 text-xs text-[hsl(var(--primary))] hover:underline',
+                        FOCUS_RING,
+                      )}
                     >
                       {tCommon('retry', 'Retry')}
                     </button>
@@ -920,7 +964,10 @@ export function Sidebar(props: SidebarProps) {
                     <button
                       type="button"
                       onClick={onNewChat}
-                      className="mt-2 inline-flex min-h-6 items-center px-1 text-xs text-[hsl(var(--primary))] hover:underline"
+                      className={cn(
+                        'mt-2 inline-flex min-h-6 items-center px-1 text-xs text-[hsl(var(--primary))] hover:underline',
+                        FOCUS_RING,
+                      )}
                     >
                       {t('sidebar.startNewChat', 'Start a new chat')}
                     </button>
@@ -946,7 +993,10 @@ export function Sidebar(props: SidebarProps) {
               aria-label={t('sidebar.budgetUsed', '{{percent}}% of token budget used', {
                 percent: Math.round(budgetPercent),
               })}
-              className="group flex min-h-6 w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-[hsl(var(--accent))]"
+              className={cn(
+                'group flex min-h-6 w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-[hsl(var(--accent))]',
+                FOCUS_RING,
+              )}
             >
               {/* `--muted` is 1.03:1 against the light sidebar, so at 0% the meter
                   rendered as nothing at all. The border token is the lightest
@@ -1030,6 +1080,7 @@ function RailButton({
           aria-current={isActive ? 'page' : undefined}
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+            FOCUS_RING,
             isActive
               ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
               : 'text-[hsl(var(--muted-foreground))]',
@@ -1146,7 +1197,7 @@ function ProjectRow({
         {/* Folder icon + project name, clicking toggles expand */}
         <button
           type="button"
-          className="flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left"
+          className={cn('flex min-h-6 min-w-0 flex-1 items-center gap-2 text-left', FOCUS_RING)}
           onClick={toggleExpand}
           aria-label={
             isExpanded
@@ -1194,7 +1245,10 @@ function ProjectRow({
                 e.stopPropagation();
                 onNewChat(project.id);
               }}
-              className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
+              className={cn(
+                'flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                FOCUS_RING,
+              )}
             >
               <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
@@ -1215,7 +1269,10 @@ function ProjectRow({
                   e.stopPropagation();
                   toggle();
                 }}
-                className="flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9"
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                  FOCUS_RING,
+                )}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
@@ -1275,6 +1332,9 @@ function ProjectRow({
                         : t('sidebar.pinProject', 'Pin project')}
                     </MenuItem>
                   )}
+                  {onDelete && (onShare || onRename || onSettings || onOpen || onPin) && (
+                    <MenuSeparator />
+                  )}
                   {onDelete && (
                     <MenuItem
                       close={handleClose}
@@ -1306,6 +1366,7 @@ function ProjectRow({
                 const href = getSessionHref?.(session);
                 const rowClassName = cn(
                   'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left transition-colors',
+                  FOCUS_RING,
                   isActive
                     ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
                     : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
@@ -1370,7 +1431,10 @@ function ProjectRow({
                       return next;
                     })
                   }
-                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--muted-foreground))]"
+                  className={cn(
+                    'w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--muted-foreground))]',
+                    FOCUS_RING,
+                  )}
                 >
                   {t('showMore', 'Show more')}
                 </button>
@@ -1385,7 +1449,10 @@ function ProjectRow({
                       return next;
                     })
                   }
-                  className="w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--muted-foreground))]"
+                  className={cn(
+                    'w-full rounded-md px-3 py-1 text-left text-xs text-[hsl(var(--muted-foreground))] transition-colors hover:text-[hsl(var(--muted-foreground))]',
+                    FOCUS_RING,
+                  )}
                 >
                   {t('showLess', 'Show less')}
                 </button>

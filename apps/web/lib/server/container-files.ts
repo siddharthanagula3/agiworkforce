@@ -56,19 +56,40 @@ function anthropicHeaders(apiKey: string): Record<string, string> {
   };
 }
 
+// A provider file download sits inside a turn, so it fails in seconds as the
+// error the tool loop already reports rather than holding the invocation.
+const CONTAINER_FILE_TIMEOUT_MS = 30_000;
+
+function providerTimeout(cause: unknown, provider: string): Error | null {
+  const aborted =
+    cause instanceof Error && (cause.name === 'TimeoutError' || cause.name === 'AbortError');
+  if (!aborted) return null;
+  return new Error(`${provider} did not answer within ${CONTAINER_FILE_TIMEOUT_MS}ms`);
+}
+
 async function fetchOpenAIContainerFile(
   containerId: string,
   fileId: string,
 ): Promise<{ data: Buffer; contentType: string }> {
   const apiKey = process.env['OPENAI_API_KEY'];
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
-  const res = await fetch(
-    providerApiUrl(
-      'openai',
-      `containers/${encodeURIComponent(containerId)}/files/${encodeURIComponent(fileId)}/content`,
-    ),
-    { headers: { Authorization: `Bearer ${apiKey}` } },
-  );
+  let res: Response;
+  try {
+    res = await fetch(
+      providerApiUrl(
+        'openai',
+        `containers/${encodeURIComponent(containerId)}/files/${encodeURIComponent(fileId)}/content`,
+      ),
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(CONTAINER_FILE_TIMEOUT_MS),
+      },
+    );
+  } catch (cause) {
+    const timeout = providerTimeout(cause, 'OpenAI container file fetch');
+    if (timeout) throw timeout;
+    throw cause;
+  }
   if (!res.ok) throw new Error(`OpenAI container file fetch failed (HTTP ${res.status})`);
   const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
   return { data: Buffer.from(await res.arrayBuffer()), contentType };
@@ -77,10 +98,17 @@ async function fetchOpenAIContainerFile(
 async function fetchAnthropicFile(fileId: string): Promise<{ data: Buffer; contentType: string }> {
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not configured');
-  const res = await fetch(
-    providerApiUrl('anthropic', `files/${encodeURIComponent(fileId)}/content`),
-    { headers: anthropicHeaders(apiKey) },
-  );
+  let res: Response;
+  try {
+    res = await fetch(providerApiUrl('anthropic', `files/${encodeURIComponent(fileId)}/content`), {
+      headers: anthropicHeaders(apiKey),
+      signal: AbortSignal.timeout(CONTAINER_FILE_TIMEOUT_MS),
+    });
+  } catch (cause) {
+    const timeout = providerTimeout(cause, 'Anthropic file fetch');
+    if (timeout) throw timeout;
+    throw cause;
+  }
   if (!res.ok) throw new Error(`Anthropic file fetch failed (HTTP ${res.status})`);
   const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
   return { data: Buffer.from(await res.arrayBuffer()), contentType };
@@ -92,6 +120,7 @@ async function fetchAnthropicFilename(fileId: string): Promise<string> {
     if (!apiKey) return fileId;
     const res = await fetch(providerApiUrl('anthropic', `files/${encodeURIComponent(fileId)}`), {
       headers: anthropicHeaders(apiKey),
+      signal: AbortSignal.timeout(CONTAINER_FILE_TIMEOUT_MS),
     });
     if (!res.ok) return fileId;
     const body = (await res.json()) as { filename?: unknown };

@@ -39,6 +39,7 @@ import {
 } from '@/app/api/memory/[id]/route';
 import { GET as searchMemories } from '@/app/api/memory/search/route';
 import { GET as syncMemories } from '@/app/api/memory/sync/route';
+import { answerMemoryPolicyQuery } from '@/lib/services/__tests__/memory-policy-stub';
 
 type Call = [string, unknown[]];
 
@@ -80,7 +81,7 @@ const POLICY = { allow_memory: true, retention_days: null, retention_enforced: f
 function answer(sql: string, memoryRow: unknown) {
   if (sql.includes("settings -> 'memory'")) return [];
   if (sql.includes('organization_admin_policies')) return [POLICY];
-  return [memoryRow];
+  return answerMemoryPolicyQuery(sql) ?? [memoryRow];
 }
 
 beforeEach(() => {

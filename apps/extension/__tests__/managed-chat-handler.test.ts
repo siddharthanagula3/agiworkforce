@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   getModelEffortOptions,
   getPickerModels,
+  getRoutingSlotModel,
   resolveModelEffort,
   type Effort,
   AGENT_EVENT_SCHEMA_VERSION,
@@ -20,6 +21,8 @@ import {
 } from '../src/features/cloud-bridge/freeTrialClient';
 
 const ADMITTED_MANAGED_MODEL_IDS = getPickerModels().map((model) => model.id);
+// What a paid plan's economy Auto resolves to; the free plan's model is FREE_TRIAL_MODEL.
+const PAID_ECONOMY_MODEL = getRoutingSlotModel('workhorse_general');
 
 function stream(...chunks: FreeTrialChunk[]): AsyncGenerator<FreeTrialChunk> {
   return (async function* () {
@@ -398,13 +401,16 @@ describe('executeChromeManagedChat', () => {
     expect(result).toMatchObject({ status: 'error', code: 'quota_exceeded' });
   });
 
-  it.each(['free', 'basic'])(
+  it.each([
+    ['free', FREE_TRIAL_MODEL],
+    ['basic', PAID_ECONOMY_MODEL],
+  ])(
     'admits the %s plan to the shared Managed Cloud chat capability',
-    async (subscriptionTier) => {
+    async (subscriptionTier, planModel) => {
       const deps = dependencies({
         getModelAccess: vi.fn(async () => ({
           subscriptionTier,
-          modelIds: [FREE_TRIAL_MODEL],
+          modelIds: [planModel],
           allowedAutoModes: ['auto', 'auto-economy'],
         })),
       });
@@ -451,7 +457,7 @@ describe('executeChromeManagedChat', () => {
     const deps = dependencies({
       getModelAccess: vi.fn(async () => ({
         subscriptionTier: 'pro',
-        modelIds: [FREE_TRIAL_MODEL],
+        modelIds: [PAID_ECONOMY_MODEL],
         allowedAutoModes: ['auto-economy'],
       })),
     });
@@ -468,7 +474,7 @@ describe('executeChromeManagedChat', () => {
     expect(result.status).toBe('success');
     expect(deps.streamChat).toHaveBeenCalledTimes(1);
     const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
-    expect(options.model).toBe(FREE_TRIAL_MODEL);
+    expect(options.model).toBe(PAID_ECONOMY_MODEL);
   });
 
   it('rejects malformed history at the privileged boundary', async () => {

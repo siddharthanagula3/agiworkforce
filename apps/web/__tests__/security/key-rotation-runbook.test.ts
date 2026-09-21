@@ -14,7 +14,6 @@ const KEY_ENVS = [
   'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
   'GITHUB_TOKEN_ENCRYPTION_KEY',
   'TOTP_ENCRYPTION_KEY',
-  'DEVICE_TOKEN_ENCRYPTION_KEY',
 ];
 
 function section(heading: string): string {

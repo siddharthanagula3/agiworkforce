@@ -298,7 +298,10 @@ export async function extractProjectKnowledgeFile(
     );
   }
 
-  const scan = await scanUploadBytes(object.data, declaredMimeType, input.fileName);
+  const scan = await scanUploadBytes(object.data, declaredMimeType, {
+    leadsObject: true,
+    filename: input.fileName,
+  });
   if (!scan.ok) {
     throw new ProjectKnowledgeExtractionError(
       'content_rejected',

@@ -87,6 +87,11 @@ jest.mock('@/services/api', () => ({ apiFetch: (...args: unknown[]) => mockApiFe
 
 jest.mock('react-native', () => ({ NativeModules: { WebRTCModule: {} } }));
 
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { version: '1.2.0' } },
+}));
+
 import {
   LIVE_VOICE_SESSION_PATH,
   LiveVoiceSession,

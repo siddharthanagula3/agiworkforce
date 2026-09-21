@@ -1,18 +1,32 @@
-import { CONCEPT_NAMES, DEVELOPER_SESSION_EVENT_KINDS } from '@agiworkforce/types';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
+import {
+  AUDIT_RETENTION_CLASSES,
+  CONCEPT_NAMES,
+  DEVELOPER_SESSION_EVENT_KINDS,
+} from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 
 import {
   CONCEPTS_WITHOUT_DOMAIN_EVENTS,
   DOMAIN_EVENTS,
+  DOMAIN_EVENT_CONSUMERS,
+  DOMAIN_EVENT_DATA_CLASSES,
   DOMAIN_EVENT_NAMES,
   DOMAIN_EVENT_SCHEMA_VERSION,
   DOMAIN_EVENT_VERBS,
   DomainEventEnvelopeSchema,
+  assertDomainEventUnchanged,
+  createDomainEventEnvelope,
+  domainEventFingerprint,
   domainEventName,
   domainEventsForConcept,
   findDomainEvent,
   isDomainEventName,
 } from '../domain-events';
+
+const REPO_ROOT = path.resolve(__dirname, '../../../../..');
 
 /**
  * The developer-session namespace predates the convention. Each member listed
@@ -107,6 +121,9 @@ describe('the envelope', () => {
     operationRef: '1:req_a:op_b:att_c',
     subject: { concept: 'conversation' as const, id: 'conv_1' },
     actor: { userId: 'usr_1', organizationId: null },
+    retentionClass: 'security' as const,
+    dataClass: 'none' as const,
+    dedupeKey: 'evt_1',
   };
 
   it('accepts a complete event and one that starts a chain', () => {
@@ -133,6 +150,125 @@ describe('the envelope', () => {
 
   it('refuses an envelope from a version it does not know', () => {
     expect(DomainEventEnvelopeSchema.safeParse({ ...valid, schemaVersion: 2 }).success).toBe(false);
+  });
+
+  it('refuses an envelope with no retention class, classification or dedupe key', () => {
+    for (const field of ['retentionClass', 'dataClass', 'dedupeKey'] as const) {
+      const { [field]: _dropped, ...without } = valid;
+      expect(DomainEventEnvelopeSchema.safeParse(without).success, field).toBe(false);
+    }
+  });
+});
+
+describe('minting an envelope', () => {
+  const base = {
+    eventId: 'evt_2',
+    name: 'identity.session.started',
+    occurredAt: '2026-09-18T00:00:00.000Z',
+    subject: { concept: 'audit-event' as const, id: 'ses_1' },
+  };
+
+  it('takes retention and classification from the catalog rather than the producer', () => {
+    const envelope = createDomainEventEnvelope(base);
+
+    const definition = findDomainEvent(base.name)!;
+    expect(envelope.retentionClass).toBe(definition.retentionClass);
+    expect(envelope.dataClass).toBe(definition.dataClass);
+    expect(envelope.dedupeKey).toBe(base.eventId);
+  });
+
+  it('refuses to mint an event the catalog does not name', () => {
+    expect(() =>
+      createDomainEventEnvelope({ ...base, name: 'chat.conversation.created' }),
+    ).not.toThrow();
+    expect(() => createDomainEventEnvelope({ ...base, name: 'ghost.thing.created' })).toThrow(
+      /not in the catalog/,
+    );
+  });
+
+  it('lets a producer that may re-raise an event say so, without reusing the id', () => {
+    const envelope = createDomainEventEnvelope({ ...base, dedupeKey: 'session:ses_1:started' });
+    expect(envelope.dedupeKey).toBe('session:ses_1:started');
+    expect(envelope.eventId).toBe('evt_2');
+  });
+});
+
+describe('an event is written once', () => {
+  const envelope = createDomainEventEnvelope({
+    eventId: 'evt_3',
+    name: 'workspace.policy.changed',
+    occurredAt: '2026-09-18T00:00:00.000Z',
+    subject: { concept: 'workspace', id: 'ws_1' },
+    payload: { setting: 'egress', from: 'open', to: 'restricted' },
+  });
+
+  it('fingerprints the same content the same way whatever order it was built in', () => {
+    const reordered = {
+      ...envelope,
+      payload: { to: 'restricted', from: 'open', setting: 'egress' },
+    };
+    expect(domainEventFingerprint(reordered)).toBe(domainEventFingerprint(envelope));
+    expect(() => assertDomainEventUnchanged(envelope, reordered)).not.toThrow();
+  });
+
+  it('refuses a second write of the same id that changed what the event says', () => {
+    const rewritten = { ...envelope, payload: { setting: 'egress', from: 'open', to: 'open' } };
+    expect(() => assertDomainEventUnchanged(envelope, rewritten)).toThrow(/different content/);
+  });
+
+  it('refuses to compare two different events at all', () => {
+    const other = { ...envelope, eventId: 'evt_4' };
+    expect(() => assertDomainEventUnchanged(envelope, other)).toThrow(/different ids/);
+  });
+});
+
+describe('every event says who owns it, who reads it and what it carries', () => {
+  it('names an owner that is a directory in this repository', () => {
+    const missing = DOMAIN_EVENTS.filter(
+      (event) => !existsSync(path.join(REPO_ROOT, event.owner)),
+    ).map((event) => `${event.name} is owned by ${event.owner}, which is not a directory`);
+    expect(missing).toEqual([]);
+  });
+
+  it('draws every consumer and every class from the closed vocabulary', () => {
+    for (const event of DOMAIN_EVENTS) {
+      expect(event.consumers.length, event.name).toBeGreaterThan(0);
+      for (const consumer of event.consumers) {
+        expect(DOMAIN_EVENT_CONSUMERS, event.name).toContain(consumer);
+      }
+      expect(DOMAIN_EVENT_DATA_CLASSES, event.name).toContain(event.dataClass);
+      expect(AUDIT_RETENTION_CLASSES, event.name).toContain(event.retentionClass);
+    }
+  });
+
+  it('sends every consequential event to the audit log', () => {
+    for (const event of DOMAIN_EVENTS.filter((candidate) => candidate.consequential)) {
+      expect(event.consumers, event.name).toContain('audit-log');
+      expect(event.retentionClass, event.name).not.toBe('operational');
+    }
+  });
+
+  // A class is a promise about the payload; without the fields it is a label.
+  it('names the personal fields of anything classified above operational data', () => {
+    for (const event of DOMAIN_EVENTS) {
+      if (event.dataClass === 'none' || event.dataClass === 'account') continue;
+      expect(event.piiFields.length, event.name).toBeGreaterThan(0);
+    }
+    for (const event of DOMAIN_EVENTS.filter((candidate) => candidate.dataClass === 'none')) {
+      expect(event.piiFields, event.name).toEqual([]);
+    }
+  });
+
+  it('is documented in full, so the contract and the document cannot drift', () => {
+    const doc = readFileSync(path.join(REPO_ROOT, 'docs/standards/domain-events.md'), 'utf8');
+    const undocumented = DOMAIN_EVENTS.filter((event) => !doc.includes(event.name)).map(
+      (event) => event.name,
+    );
+    expect(undocumented).toEqual([]);
+    for (const term of [...DOMAIN_EVENT_DATA_CLASSES, ...DOMAIN_EVENT_CONSUMERS]) {
+      expect(doc, term).toContain(term);
+    }
+    expect(doc).toContain(`DOMAIN_EVENT_SCHEMA_VERSION`);
   });
 });
 

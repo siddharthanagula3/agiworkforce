@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   verifyCronRequest: vi.fn(),
   evaluateBurnRates: vi.fn(),
+  evaluateAnomalies: vi.fn(),
   notifyIncident: vi.fn(),
   error: vi.fn(),
   warn: vi.fn(),
@@ -11,6 +12,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
 vi.mock('@/lib/server/slo/attainment', () => ({ evaluateBurnRates: mocks.evaluateBurnRates }));
+vi.mock('@/lib/server/slo/anomaly', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/slo/anomaly')>()),
+  evaluateAnomalies: mocks.evaluateAnomalies,
+}));
 vi.mock('@/lib/server/incident/dispatch', () => ({ notifyIncident: mocks.notifyIncident }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: mocks.warn, error: mocks.error, debug: vi.fn() },
@@ -38,10 +43,27 @@ const FAST_BURN = {
   severity: 'critical' as const,
 };
 
+const COST_ANOMALY = {
+  id: 'turn-cost' as const,
+  sloId: 'billing-usage',
+  unit: 'uUSD' as const,
+  statement: 'What a served turn costs the platform.',
+  severity: 'critical' as const,
+  recent: 2_400,
+  baseline: 1_000,
+  ratio: 2.4,
+  threshold: 2,
+  samples: 500,
+  baselineSamples: 9_000,
+  dedupeKey: 'slo-anomaly:turn-cost:critical',
+  owner: null,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyCronRequest.mockReturnValue(true);
   mocks.evaluateBurnRates.mockResolvedValue([]);
+  mocks.evaluateAnomalies.mockResolvedValue([]);
   mocks.notifyIncident.mockResolvedValue({
     level: 1,
     notified: ['primary'],
@@ -65,8 +87,43 @@ describe(`GET ${ROUTE}`, () => {
     const response = await GET(request());
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ burning: 0, paged: 'not_needed' });
+    await expect(response.json()).resolves.toEqual({
+      burning: 0,
+      paged: 'not_needed',
+      anomalies: { detected: 0 },
+    });
     expect(mocks.notifyIncident).not.toHaveBeenCalled();
+  });
+
+  it('pages on a cost spike no objective can burn for, as its own incident', async () => {
+    mocks.evaluateAnomalies.mockResolvedValue([COST_ANOMALY]);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    expect(mocks.notifyIncident).toHaveBeenCalledTimes(1);
+    expect(mocks.notifyIncident).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'slo-anomaly:critical',
+        severity: 'critical',
+        source: 'slo-anomaly',
+        text: expect.stringContaining('2.40x'),
+      }),
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      burning: 0,
+      anomalies: { detected: 1, severity: 'critical', series: ['turn-cost'] },
+    });
+  });
+
+  it('keeps answering the scheduler when the anomaly read itself fails', async () => {
+    mocks.evaluateAnomalies.mockRejectedValue(new Error('connection terminated'));
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ anomalies: { detected: 0 } });
+    expect(mocks.error).toHaveBeenCalled();
   });
 
   it('raises an incident naming the burning domain when a fast burn fires', async () => {

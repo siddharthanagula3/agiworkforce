@@ -22,6 +22,7 @@ export const FIELDS_NEVER_LOGGED = [
   'apiKey',
   'apiKeys',
   'credentials',
+  'fingerprint',
   'secret',
   'secrets',
   'accessToken',

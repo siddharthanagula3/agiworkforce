@@ -24,6 +24,9 @@ import {
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
+export const runtime = 'nodejs';
+export const maxDuration = 300;
+
 /**
  * The SQL ceiling, not the default of 100.
  *

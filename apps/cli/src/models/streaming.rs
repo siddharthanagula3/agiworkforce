@@ -241,14 +241,17 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
         // surface, and refuses one with no idempotency key. The key is minted
         // per spec, and a spec is built per request, so a retry of one request
         // reuses its key while two turns never share one.
-        extra_headers: vec![
-            ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
-            ("X-AGI-Surface".to_string(), "cli".to_string()),
-            (
-                "Idempotency-Key".to_string(),
-                format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
-            ),
-        ],
+        extra_headers: crate::cloud::handshake::headers()
+            .into_iter()
+            .map(|(name, value)| (name.to_string(), value.to_string()))
+            .chain([
+                ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
+                (
+                    "Idempotency-Key".to_string(),
+                    format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
+                ),
+            ])
+            .collect(),
     })
 }
 
@@ -732,16 +735,20 @@ mod tests {
     }
 
     #[test]
-    fn managed_cloud_requests_name_the_cli_surface() {
+    fn managed_cloud_requests_name_the_surface_the_build_and_the_contract() {
+        use crate::cloud::handshake;
+
         let spec = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
             .expect("a trusted host resolves");
-        assert!(
-            spec.extra_headers
-                .iter()
-                .any(|(name, value)| name == "X-AGI-Surface" && value == "cli"),
-            "Managed Cloud rejects a request that does not name its surface: {:?}",
-            spec.extra_headers
-        );
+        for (name, value) in handshake::headers() {
+            assert!(
+                spec.extra_headers
+                    .iter()
+                    .any(|(sent, carried)| sent == name && carried == value),
+                "Managed Cloud refuses a request that does not identify its build: {:?}",
+                spec.extra_headers
+            );
+        }
     }
 
     #[test]
@@ -955,9 +962,16 @@ mod tests {
     }
 
     #[test]
-    fn non_paywall_exit_code_is_1() {
+    fn a_rate_limit_exits_as_a_failure_the_same_command_may_survive() {
         let err = crate::errors::CliError::rate_limited("anthropic", None);
-        assert_eq!(err.exit_code(), 1);
+        assert_eq!(
+            err.exit_code(),
+            crate::errors::ExitClass::TemporaryFailure.code()
+        );
+        assert_ne!(
+            err.exit_code(),
+            crate::errors::CliError::paywall("chat", "pro", "quota").exit_code()
+        );
     }
 
     // -- Spec mapping --

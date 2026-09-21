@@ -40,6 +40,7 @@ export {
 export {
   withRetry,
   computeDelay,
+  retryAfterExceedsCeiling,
   sleep,
   createRetryContext,
   DEFAULT_MAX_RETRIES,

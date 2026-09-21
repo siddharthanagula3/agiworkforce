@@ -1,8 +1,11 @@
 pub mod advisor;
 pub mod git;
+pub mod git_tools;
 pub mod session;
 pub mod session_activity;
 pub mod session_control;
+pub mod session_handoff;
 pub mod tool_catalog;
+pub mod validation_run;
 pub mod worktree;
 pub mod writer_lease;

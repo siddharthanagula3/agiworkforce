@@ -90,10 +90,17 @@ export function AuthFlow({
       clearMessages();
       lastAction.current = { action, phase: nextPhase };
       setPhase(nextPhase);
+      let handingOff = false;
       try {
-        apply(await action());
+        const result = await action();
+        if (result.status === 'redirecting') {
+          handingOff = true;
+          setPhase(result.phase ?? 'redirecting');
+        } else {
+          apply(result);
+        }
       } finally {
-        setPhase('idle');
+        if (!handingOff) setPhase('idle');
       }
     },
     [apply, busy, clearMessages, client.isReady],

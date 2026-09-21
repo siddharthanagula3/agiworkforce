@@ -28,6 +28,7 @@ import {
   setApiKey,
   clearAccountToken,
   clearApiKey,
+  AgiWorkforceClientUpdateRequiredError,
 } from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
@@ -233,6 +234,41 @@ describe('AGI Cloud silent reauthentication', () => {
 });
 
 describe('cloud completion error envelopes', () => {
+  it('tells the user to update when the deployment no longer answers this build', () => {
+    const error = parseCloudCompletionError(
+      426,
+      JSON.stringify({
+        error: {
+          code: 'CLIENT_UPDATE_REQUIRED',
+          message:
+            'This version speaks API contract 2020-01-01, and AGI Workforce now needs 2026-09-17 or newer. Update to continue.',
+        },
+      }),
+      { 'x-agi-api-version-minimum': '2026-09-17' },
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforceClientUpdateRequiredError);
+    expect(error.message).toContain('Update to continue');
+    expect(error).toMatchObject({ minimumApiVersion: '2026-09-17' });
+  });
+
+  it('still names the answer when the server sends no body to read', () => {
+    const error = parseCloudCompletionError(426, '<html>gateway</html>');
+
+    expect(error).toBeInstanceOf(AgiWorkforceClientUpdateRequiredError);
+    expect(error.message).toMatch(/Update the extension/);
+    expect(error).toMatchObject({ minimumApiVersion: undefined });
+  });
+
+  it('does not mistake a plan gate for an out-of-date build', () => {
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({ error: { code: 'plan_upgrade_required', message: 'Upgrade your plan.' } }),
+    );
+
+    expect(error).not.toBeInstanceOf(AgiWorkforceClientUpdateRequiredError);
+  });
+
   it('maps a structured quota refusal to an upgrade paywall', () => {
     const error = parseCloudCompletionError(
       429,

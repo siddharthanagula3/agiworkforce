@@ -138,7 +138,7 @@ async function handleUnlink(
     return {
       kind: device.kind,
       name: device.name,
-      revokedCredentials: revoked,
+      revokedCredentialCount: revoked,
       compromiseRecorded,
       credentialsRevocable,
       identitySessionId: registered?.identitySessionId ?? null,
@@ -161,7 +161,7 @@ async function handleUnlink(
     {
       userId,
       kind: result.kind,
-      revokedCredentials: result.revokedCredentials,
+      revokedCredentialCount: result.revokedCredentialCount,
       lost: options.lost,
       logoutAll: options.logoutAll,
     },
@@ -201,7 +201,7 @@ async function handleUnlink(
         resourceId: deviceId,
         source,
         reason: 'device_lost',
-        count: result.revokedCredentials,
+        count: result.revokedCredentialCount,
       },
     });
   }
@@ -214,13 +214,15 @@ async function handleUnlink(
       resourceType: `device:${result.kind}`,
       source,
       count:
-        result.revokedCredentials + (sessionRevoked ? 1 : 0) + (loggedOutEverywhere?.ended ?? 0),
+        result.revokedCredentialCount +
+        (sessionRevoked ? 1 : 0) +
+        (loggedOutEverywhere?.ended ?? 0),
     },
   });
 
   return NextResponse.json({
     message: options.lost ? 'Device reported lost and unlinked' : 'Device unlinked',
-    revokedCredentials: result.revokedCredentials + (sessionRevoked ? 1 : 0),
+    revokedCredentials: result.revokedCredentialCount + (sessionRevoked ? 1 : 0),
     credentialsRevoked: result.credentialsRevocable,
     credentialFamilyCompromised: result.compromiseRecorded,
     remoteControlRevoked,

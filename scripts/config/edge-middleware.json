@@ -1,0 +1,45 @@
+{
+  "$comment": "What every request that reaches the web app is owed, measured by scripts/check-edge-middleware.mjs against apps/web/proxy.ts and the shared route contract.",
+  "middleware": "apps/web/proxy.ts",
+  "routeContract": "packages/contracts/types/src/product-routes.ts",
+  "requiredHeader": "Content-Security-Policy",
+  "coveredPrefixContracts": ["PRODUCT_ROUTE_PREFIXES", "SESSION_AUTH_ROUTE_PREFIXES"],
+  "headerExempt": [],
+  "untrustedRedirectParameters": [
+    "next",
+    "returnTo",
+    "return_to",
+    "redirect",
+    "redirect_url",
+    "redirect_uri",
+    "continue",
+    "url",
+    "callback"
+  ],
+  "deliberatelyOutsideMatcher": [
+    {
+      "path": "/api/stripe-webhook",
+      "reason": "Stripe signs the raw body, and anything that rewrites the request breaks the signature."
+    },
+    {
+      "path": "/api/media/video/openrouter-webhook",
+      "reason": "The provider signs the raw body for the same reason."
+    },
+    {
+      "path": "/api/mobile/iap/apple-notifications",
+      "reason": "Apple signs the raw notification payload."
+    },
+    {
+      "path": "/api/mobile/iap/google-notifications",
+      "reason": "Google signs the raw notification payload."
+    },
+    {
+      "path": "/_next/static/chunk.js",
+      "reason": "Build output is immutable and needs no per-request identity."
+    },
+    {
+      "path": "/favicon.ico",
+      "reason": "A static asset with no identity and no page to protect."
+    }
+  ]
+}

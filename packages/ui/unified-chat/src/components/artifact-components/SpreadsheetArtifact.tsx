@@ -13,6 +13,13 @@ export interface SpreadsheetArtifactProps {
 
 export const SPREADSHEET_ROW_CAP = 500;
 
+const ARROW_STEPS: Record<string, [number, number] | undefined> = {
+  ArrowUp: [-1, 0],
+  ArrowDown: [1, 0],
+  ArrowLeft: [0, -1],
+  ArrowRight: [0, 1],
+};
+
 type SortState = { column: number; direction: 'asc' | 'desc' } | null;
 
 export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifactProps) {
@@ -67,6 +74,26 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
     }
   }, [selected, visibleRows]);
 
+  const moveSelection = useCallback(
+    (rowStep: number, columnStep: number, toEdge: boolean) => {
+      if (!data) return;
+      const lastRow = Math.min(sortedRows.length, SPREADSHEET_ROW_CAP) - 1;
+      const lastColumn = data.columns.length - 1;
+      if (lastRow < 0 || lastColumn < 0) return;
+      setSelected((prev) => {
+        if (!prev) return { r: 0, c: 0 };
+        const r = toEdge && rowStep !== 0 ? (rowStep > 0 ? lastRow : 0) : prev.r + rowStep;
+        const c =
+          toEdge && columnStep !== 0 ? (columnStep > 0 ? lastColumn : 0) : prev.c + columnStep;
+        return {
+          r: Math.max(0, Math.min(lastRow, r)),
+          c: Math.max(0, Math.min(lastColumn, c)),
+        };
+      });
+    },
+    [data, sortedRows.length],
+  );
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -76,9 +103,21 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && selected) {
         e.preventDefault();
         void copySelected();
+        return;
+      }
+      const toEdge = e.metaKey || e.ctrlKey;
+      const step = ARROW_STEPS[e.key];
+      if (step) {
+        e.preventDefault();
+        moveSelection(step[0], step[1], toEdge);
+        return;
+      }
+      if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        moveSelection(toEdge ? (e.key === 'Home' ? -1 : 1) : 0, e.key === 'Home' ? -1 : 1, true);
       }
     },
-    [selected, copySelected],
+    [selected, copySelected, moveSelection],
   );
 
   if (!data) {
@@ -133,10 +172,17 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
         role="group"
         aria-label={artifact.title || 'Spreadsheet'}
       >
-        <table className="w-full border-collapse text-sm" data-testid="spreadsheet-table">
+        <table
+          role="grid"
+          className="w-full border-collapse text-sm"
+          data-testid="spreadsheet-table"
+        >
           <thead className="sticky top-0 z-10 shadow-sm ring-1 ring-border">
-            <tr>
-              <th className="w-10 border-r border-b border-border bg-muted p-1 text-center text-[12px] text-muted-foreground font-medium select-none">
+            <tr role="row">
+              <th
+                role="columnheader"
+                className="w-10 border-r border-b border-border bg-muted p-1 text-center text-[12px] text-muted-foreground font-medium select-none"
+              >
                 #
               </th>
               {data.columns.map((col, colIdx) => {
@@ -145,6 +191,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                 return (
                   <th
                     key={`${col}-${colIdx}`}
+                    role="columnheader"
                     aria-sort={
                       isSorted ? (sort!.direction === 'asc' ? 'ascending' : 'descending') : 'none'
                     }
@@ -186,8 +233,11 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
               </tr>
             ) : (
               visibleRows.map((row, rowIndex) => (
-                <tr key={rowIndex} className="group">
-                  <td className="border-r border-b border-border bg-muted/30 p-1 text-center text-[12px] text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors">
+                <tr key={rowIndex} role="row" className="group">
+                  <td
+                    role="rowheader"
+                    className="border-r border-b border-border bg-muted/30 p-1 text-center text-[12px] text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors"
+                  >
                     {rowIndex + 1}
                   </td>
                   {row.map((value, colIdx) => {
@@ -196,6 +246,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                     return (
                       <td
                         key={colIdx}
+                        role="gridcell"
                         onClick={() => setSelected(isSelected ? null : { r: rowIndex, c: colIdx })}
                         aria-selected={isSelected || undefined}
                         className={cn(

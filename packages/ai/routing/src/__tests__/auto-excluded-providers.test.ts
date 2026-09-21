@@ -140,9 +140,10 @@ describe('transports excluded from routing', () => {
   it('still serves the model, through another host', () => {
     // The point of separating the axes. Excluding the transport must not
     // remove the model, or this is just the owner exclusion wearing a
-    // different name.
+    // different name. Basic is the cheapest tier granted the economy reasoning
+    // slot; free carries only zero-priced slots and never reaches this model.
     const decision = resolveAutoRoute(
-      withoutVendorHosts({ taskType: 'reasoning', subscriptionTier: 'free', selection: 'auto' }),
+      withoutVendorHosts({ taskType: 'reasoning', subscriptionTier: 'basic', selection: 'auto' }),
     );
     expect(decision.status).toBe('selected');
     if (decision.status === 'selected') {

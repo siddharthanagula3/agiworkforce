@@ -32,6 +32,14 @@ const SCOPE = { userId: 'user-1', organizationId: null };
 
 function db(rows: Record<string, unknown[]> = {}) {
   const query = vi.fn(async (sql: string) => {
+    if (sql.includes("settings -> 'capabilities'")) {
+      return rows['capabilities'] ?? [{ capabilities: { memory: true } }];
+    }
+    if (sql.includes('organization_admin_policies')) {
+      return (
+        rows['policy'] ?? [{ allow_memory: true, retention_days: null, retention_enforced: false }]
+      );
+    }
     if (sql.includes('update user_memories')) return rows['remove'] ?? [];
     if (sql.includes('select id::text as id, content')) return rows['find'] ?? [];
     return [];
@@ -77,15 +85,11 @@ describe('runMemoryCommand', () => {
   });
 
   it('refuses the write when the workspace has memory off, and says so', async () => {
-    mocks.loadOrganizationMemoryPolicy.mockResolvedValue({
-      allowMemory: false,
-      retentionDays: null,
-      retentionEnforced: false,
-    });
-
-    const result = await runMemoryCommand(db(), SCOPE, {
-      message: 'Remember that I use TypeScript',
-    });
+    const result = await runMemoryCommand(
+      db({ policy: [{ allow_memory: false, retention_days: null, retention_enforced: false }] }),
+      { userId: 'user-1', organizationId: '0190a000-0000-7000-8000-00000000e001' },
+      { message: 'Remember that I use TypeScript' },
+    );
 
     expect(result?.outcome.status).toBe('refused');
     expect(result?.outcome.message).toContain('memory turned off');

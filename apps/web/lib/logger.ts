@@ -6,6 +6,30 @@ import { redactLogRecord, redactSecrets } from '@/lib/redaction';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+export const PINO_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const;
+
+export type PinoLevel = (typeof PINO_LEVELS)[number];
+
+const MINIMUM_DEPLOYED_LEVEL: PinoLevel = 'info';
+
+function isPinoLevel(value: string): value is PinoLevel {
+  return (PINO_LEVELS as readonly string[]).includes(value);
+}
+
+// A deployed runtime refuses trace and debug however LOG_LEVEL is set: those
+// levels carry request bodies and prompts that redaction only masks by key.
+export function resolveLogLevel(requested: string | undefined, development: boolean): PinoLevel {
+  const normalised = requested?.trim().toLowerCase() ?? '';
+  const level = isPinoLevel(normalised)
+    ? normalised
+    : development
+      ? 'debug'
+      : MINIMUM_DEPLOYED_LEVEL;
+  if (development) return level;
+  const floor = PINO_LEVELS.indexOf(MINIMUM_DEPLOYED_LEVEL);
+  return PINO_LEVELS.indexOf(level) < floor ? MINIMUM_DEPLOYED_LEVEL : level;
+}
+
 function deploymentBase(): Record<string, string> {
   const region = deployRegion();
   const version = releaseSha();
@@ -19,7 +43,7 @@ function deploymentBase(): Record<string, string> {
 }
 
 export const loggerOptions: LoggerOptions = {
-  level: process.env['LOG_LEVEL'] || (isDevelopment ? 'debug' : 'info'),
+  level: resolveLogLevel(process.env['LOG_LEVEL'], isDevelopment),
   mixin: traceLogFields,
   formatters: {
     log: redactLogRecord,

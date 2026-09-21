@@ -1,0 +1,4 @@
+{
+  "note": "Key lifecycle operations that exist, are tested, and have no production caller. Each one is a control the product offers and cannot perform, not a waiver. The guard refuses a new entry and refuses an entry that has since been wired, so this list can only shrink.",
+  "unreachable": []
+}

@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
+  UPLOAD_REJECTED_MESSAGE,
   inspectUploadBytes,
+  refuseUnsafeUpload,
   scanUploadBytes,
   scanUploadForCredentials,
   uploadScannerStatus,
@@ -140,7 +142,9 @@ describe('scanUploadBytes, external scanner requirement', () => {
     vi.stubEnv('UPLOAD_SCAN_REQUIRED', 'true');
     try {
       const { scanUploadBytes } = await import('./upload-scan');
-      const result = await scanUploadBytes(utf8('just some notes'), 'text/plain');
+      const result = await scanUploadBytes(utf8('just some notes'), 'text/plain', {
+        leadsObject: true,
+      });
       expect(result.ok).toBe(false);
       expect(result.findings.map((finding) => finding.code)).toEqual(['external_scanner']);
     } finally {
@@ -154,7 +158,9 @@ describe('scanUploadBytes, external scanner requirement', () => {
     try {
       const { scanUploadBytes, uploadScannerStatus } = await import('./upload-scan');
       expect(uploadScannerStatus()).toEqual({ configured: false, required: false });
-      expect((await scanUploadBytes(utf8('just some notes'), 'text/plain')).ok).toBe(true);
+      expect(
+        (await scanUploadBytes(utf8('just some notes'), 'text/plain', { leadsObject: true })).ok,
+      ).toBe(true);
     } finally {
       vi.unstubAllEnvs();
     }
@@ -172,7 +178,7 @@ describe('scanUploadBytes, external scanner requirement', () => {
     vi.stubGlobal('fetch', fetchMock);
     try {
       const { scanUploadBytes } = await import('./upload-scan');
-      const result = await scanUploadBytes(utf8('X5O!P%@AP'), 'text/plain');
+      const result = await scanUploadBytes(utf8('X5O!P%@AP'), 'text/plain', { leadsObject: true });
       expect(fetchMock).toHaveBeenCalledOnce();
       expect(result.findings).toEqual([
         { code: 'external_scanner', detail: 'Eicar test signature' },
@@ -184,6 +190,53 @@ describe('scanUploadBytes, external scanner requirement', () => {
   });
 });
 
+describe('the external scanner opt-out', () => {
+  async function scanWithWebhook(position: { leadsObject: boolean; externalScan?: boolean }) {
+    vi.stubEnv('UPLOAD_SCAN_WEBHOOK_URL', 'https://scanner.example.test/scan');
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ safe: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { scanUploadBytes } = await import('./upload-scan');
+      const result = await scanUploadBytes(utf8('just some notes'), 'text/plain', position);
+      return { fetchMock, result };
+    } finally {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    }
+  }
+
+  it('calls the configured scanner when nothing opts out', async () => {
+    const { fetchMock } = await scanWithWebhook({ leadsObject: true });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('skips the round trip when the call site opts out', async () => {
+    const { fetchMock, result } = await scanWithWebhook({ leadsObject: true, externalScan: false });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+  });
+
+  it('keeps the structural check when the round trip is skipped', async () => {
+    const executable = bytes(0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00);
+
+    const result = await scanUploadBytes(executable, 'audio/mpeg', {
+      leadsObject: true,
+      externalScan: false,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('executable');
+  });
+});
+
 describe('credential material in an upload', () => {
   const bytesOf = (text: string) => new TextEncoder().encode(text);
 
@@ -191,7 +244,7 @@ describe('credential material in an upload', () => {
     const result = await scanUploadBytes(
       bytesOf(`STRIPE_SECRET_KEY=sk_live_${'EXAMPLE'.repeat(4)}\n`),
       'text/plain',
-      'notes.txt',
+      { leadsObject: true, filename: 'notes.txt' },
     );
 
     expect(result.ok).toBe(false);
@@ -199,18 +252,20 @@ describe('credential material in an upload', () => {
   });
 
   it('rejects a file whose name is itself a credential file', async () => {
-    const result = await scanUploadBytes(
-      bytesOf('nothing to see'),
-      'text/plain',
-      '.env.production',
-    );
+    const result = await scanUploadBytes(bytesOf('nothing to see'), 'text/plain', {
+      leadsObject: true,
+      filename: '.env.production',
+    });
 
     expect(result.ok).toBe(false);
     expect(result.findings.map((finding) => finding.code)).toContain('sensitive_filename');
   });
 
   it('rejects terraform state by name, because its contents are provider secrets', async () => {
-    const result = await scanUploadBytes(bytesOf('{}'), 'application/json', 'terraform.tfstate');
+    const result = await scanUploadBytes(bytesOf('{}'), 'application/json', {
+      leadsObject: true,
+      filename: 'terraform.tfstate',
+    });
 
     expect(result.findings.map((finding) => finding.code)).toContain('sensitive_filename');
     expect(result.ok).toBe(false);
@@ -220,7 +275,7 @@ describe('credential material in an upload', () => {
     const result = await scanUploadBytes(
       bytesOf('value = "Xk7pQ2vLm9RtZa4YbW3CnH8sJfE6dU1gOiPy5N0qBx"\n'),
       'text/plain',
-      'config.txt',
+      { leadsObject: true, filename: 'config.txt' },
     );
 
     expect(result.ok).toBe(true);
@@ -228,11 +283,10 @@ describe('credential material in an upload', () => {
   });
 
   it('leaves a clean text upload alone', async () => {
-    const result = await scanUploadBytes(
-      bytesOf('a perfectly ordinary note\n'),
-      'text/plain',
-      'a.txt',
-    );
+    const result = await scanUploadBytes(bytesOf('a perfectly ordinary note\n'), 'text/plain', {
+      leadsObject: true,
+      filename: 'a.txt',
+    });
 
     expect(result).toEqual({ ok: true, findings: [] });
   });
@@ -246,14 +300,20 @@ describe('credential material in an upload', () => {
 
 describe('a file name that carries a path', () => {
   it('rejects the upload rather than storing it under a rewritten name', async () => {
-    const result = await scanUploadBytes(utf8('notes'), 'text/plain', '../../etc/passwd');
+    const result = await scanUploadBytes(utf8('notes'), 'text/plain', {
+      leadsObject: true,
+      filename: '../../etc/passwd',
+    });
 
     expect(result.ok).toBe(false);
     expect(result.findings.map((finding) => finding.code)).toContain('unsafe_filename');
   });
 
   it('matches a credential file name through the traversal that hid it', async () => {
-    const result = await scanUploadBytes(utf8('nothing'), 'text/plain', 'a/b/../.env.production');
+    const result = await scanUploadBytes(utf8('nothing'), 'text/plain', {
+      leadsObject: true,
+      filename: 'a/b/../.env.production',
+    });
 
     expect(result.findings.map((finding) => finding.code)).toContain('sensitive_filename');
     expect(result.ok).toBe(false);
@@ -267,7 +327,10 @@ describe('external scanner requirement', () => {
     vi.stubEnv('UPLOAD_SCAN_REQUIRED', '');
 
     expect(uploadScannerStatus()).toEqual({ configured: false, required: true });
-    const result = await scanUploadBytes(utf8('ordinary note'), 'text/plain', 'a.txt');
+    const result = await scanUploadBytes(utf8('ordinary note'), 'text/plain', {
+      leadsObject: true,
+      filename: 'a.txt',
+    });
     expect(result.ok).toBe(false);
     expect(result.findings.map((finding) => finding.code)).toContain('external_scanner');
 
@@ -280,7 +343,14 @@ describe('external scanner requirement', () => {
     vi.stubEnv('UPLOAD_SCAN_REQUIRED', 'false');
 
     expect(uploadScannerStatus()).toEqual({ configured: false, required: false });
-    expect((await scanUploadBytes(utf8('ordinary note'), 'text/plain', 'a.txt')).ok).toBe(true);
+    expect(
+      (
+        await scanUploadBytes(utf8('ordinary note'), 'text/plain', {
+          leadsObject: true,
+          filename: 'a.txt',
+        })
+      ).ok,
+    ).toBe(true);
 
     vi.unstubAllEnvs();
   });
@@ -293,5 +363,92 @@ describe('external scanner requirement', () => {
     expect(uploadScannerStatus()).toEqual({ configured: false, required: false });
 
     vi.unstubAllEnvs();
+  });
+});
+
+describe('refuseUnsafeUpload, the gate the single-request routes call', () => {
+  it('returns the scan when the bytes are what they claim to be', async () => {
+    await expect(
+      refuseUnsafeUpload(PNG, 'image/png', { leadsObject: true, filename: 'logo.png' }),
+    ).resolves.toMatchObject({
+      ok: true,
+    });
+  });
+
+  it('refuses an executable wearing an image name', async () => {
+    const executable = bytes(0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00);
+
+    const refusal = await refuseUnsafeUpload(executable, 'image/png', {
+      leadsObject: true,
+      filename: 'avatar.png',
+    }).catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(Error);
+    expect((refusal as Error).message).toBe(UPLOAD_REJECTED_MESSAGE);
+  });
+
+  it('refuses a bundle carrying a live key and never names the key back', async () => {
+    const bundle = utf8('---\nname: helper\n---\nuse AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE\n');
+
+    const refusal = await refuseUnsafeUpload(bundle, 'text/markdown', {
+      leadsObject: true,
+      filename: 'skill.md',
+    }).catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(Error);
+    expect((refusal as Error).message).toBe(UPLOAD_REJECTED_MESSAGE);
+    expect((refusal as Error).message).not.toContain('AKIA');
+  });
+});
+
+describe('where the bytes sit in the object', () => {
+  const MZ = bytes(0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00);
+  // Interior bytes of a real file: no signature leads them, which is the whole
+  // point of the distinction.
+  const CONTINUATION = bytes(0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x62, 0x00);
+
+  it('refuses a leading part whose bytes contradict the declared type', async () => {
+    const result = await scanUploadBytes(CONTINUATION, 'image/png', { leadsObject: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('type_confusion');
+  });
+
+  it('accepts the same bytes as a continuation, so a multi-part upload survives', async () => {
+    const result = await scanUploadBytes(CONTINUATION, 'image/png', { leadsObject: false });
+
+    expect(result).toEqual({ ok: true, findings: [] });
+  });
+
+  it('accepts a continuation that happens to begin with the executable signature', async () => {
+    expect((await scanUploadBytes(MZ, 'video/mp4', { leadsObject: false })).ok).toBe(true);
+    expect((await scanUploadBytes(MZ, 'video/mp4', { leadsObject: true })).ok).toBe(false);
+  });
+
+  it('still reads a continuation for credentials, because a secret sits anywhere', async () => {
+    const leaked = utf8('AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE\n');
+
+    const result = await scanUploadBytes(leaked, 'text/plain', { leadsObject: false });
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toContain('credential_material');
+  });
+
+  it('catches a secret that only exists once the parts are joined', async () => {
+    const key = `sk_live_${'EXAMPLE'.repeat(4)}`;
+    const head = utf8(`STRIPE_SECRET_KEY=${key.slice(0, 12)}`);
+    const tail = utf8(`${key.slice(12)}\n`);
+
+    const asParts = await Promise.all([
+      scanUploadBytes(head, 'text/plain', { leadsObject: true }),
+      scanUploadBytes(tail, 'text/plain', { leadsObject: false }),
+    ]);
+    const assembled = await scanUploadBytes(Uint8Array.from([...head, ...tail]), 'text/plain', {
+      leadsObject: true,
+    });
+
+    expect(asParts.every((part) => part.ok)).toBe(true);
+    expect(assembled.ok).toBe(false);
+    expect(assembled.findings.map((finding) => finding.code)).toContain('credential_material');
   });
 });

@@ -8,6 +8,7 @@ import {
 import type { InteractiveCard } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
 import { sameManagedCloudOwner, type ManagedCloudOwner } from './managedCloudAuthority';
+import { platformRequestHeaders } from '../../platformHeaders';
 
 export class ManagedCloudOwnerChangedError extends Error {
   constructor(message = 'The Managed Cloud account changed while this request was in progress.') {
@@ -39,7 +40,7 @@ export function createExtensionCloudChatClient(
     decorateMutationHeaders: (headers) => ({
       ...headers,
       'X-Requested-With': 'XMLHttpRequest',
-      'X-AGI-Surface': 'chrome',
+      ...platformRequestHeaders(),
     }),
     fetchImpl: (input, init) => fetch(input, init),
   });

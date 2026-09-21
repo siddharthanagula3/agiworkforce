@@ -777,6 +777,10 @@ mod tests {
         config.insert("core.bare".to_string(), "false".to_string());
         let layout = crate::repo::RepositoryLayout {
             root: PathBuf::from("/work/inner"),
+            opened_at: PathBuf::from("/work/inner"),
+            vcs: crate::repo::VersionControl::Git,
+            shallow: false,
+            submodules: Vec::new(),
             git_dir: PathBuf::from("/work/inner/.git"),
             common_dir: PathBuf::from("/work/inner/.git"),
             bare: false,

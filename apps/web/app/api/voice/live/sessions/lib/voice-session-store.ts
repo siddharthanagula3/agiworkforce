@@ -229,6 +229,52 @@ export async function closeVoiceSession(input: {
   return row ? toRecord(row) : null;
 }
 
+/**
+ * A session that outlived the block it could be billed for is over, whatever
+ * the tab that opened it managed to report. Closing it here is what stops a
+ * reconnect being handed a provider session that stopped existing hours ago.
+ */
+export async function closeExpiredVoiceSessions(input: {
+  db: VoiceSessionDb;
+  userId: string;
+  maxOpenSeconds: number;
+  reason?: string;
+}): Promise<number> {
+  const rows = await input.db.query<{ id: string }>(
+    `update public.voice_sessions
+        set status = 'closed', close_reason = $3, closed_at = now(), last_seen_at = now()
+      where user_id = $1
+        and status = 'active'
+        and started_at <= now() - make_interval(secs => $2)
+      returning id`,
+    [
+      input.userId,
+      Math.max(1, Math.trunc(input.maxOpenSeconds)),
+      (input.reason ?? 'expired').slice(0, 64),
+    ],
+  );
+  return rows.length;
+}
+
+/**
+ * What the session is billed for. The client's report is a hint its tab can
+ * lose: a dropped connection settles with whatever usage event last arrived,
+ * which is none at all when the drop came first, so the record's own span is
+ * what the account is answerable for.
+ */
+export function meteredVoiceSessionSeconds(
+  record: Pick<VoiceSessionRecord, 'startedAt' | 'closedAt'>,
+  reportedSeconds: number,
+  nowMs: number,
+): number {
+  const startedAt = Date.parse(record.startedAt);
+  if (!Number.isFinite(startedAt)) return reportedSeconds;
+  const closedAt = record.closedAt ? Date.parse(record.closedAt) : Number.NaN;
+  const endedAt = Number.isFinite(closedAt) ? closedAt : nowMs;
+  const elapsed = Math.ceil(Math.max(0, endedAt - startedAt) / 1_000);
+  return Math.max(elapsed, reportedSeconds);
+}
+
 export async function closeVoiceSessionsForConversation(input: {
   db: VoiceSessionDb;
   userId: string;

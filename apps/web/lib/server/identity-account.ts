@@ -126,11 +126,14 @@ function writeCache(provider: string, subject: string, value: CachedIdentity): v
  * An erasure must call this: without it a stale provider callback keeps
  * authenticating for the rest of the cache window.
  */
-export async function invalidateIdentityAccountCache(subject: string): Promise<void> {
+export async function invalidateIdentityAccountCache(
+  subject: string,
+  provider?: string,
+): Promise<void> {
   const store = resolveStore();
   if (!store) return;
   try {
-    await store.delete(cacheKey(getIdentityProvider().name, subject));
+    await store.delete(cacheKey(provider ?? getIdentityProvider().name, subject));
   } catch (err) {
     logger.debug({ err }, '[identity-account] cache invalidation failed');
   }

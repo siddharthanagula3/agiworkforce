@@ -144,7 +144,9 @@ describe('legal holds', () => {
       if (/from public\.organization_admin_policies/i.test(text)) {
         return [{ retention_days: 30, retention_enforced: true }];
       }
-      if (/from public\.web_conversations/i.test(text)) return [{ pending: 900, held: 4 }];
+      if (/from public\.web_conversations candidate/i.test(text)) {
+        return [{ count: /and not exists/.test(text) ? 900 : 4 }];
+      }
       if (/from public\.organization_retention_sweeps/i.test(text)) {
         return [
           { created_at: '2026-09-16T00:00:00.000Z' },

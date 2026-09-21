@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   listConnectorAccounts: vi.fn(),
   setDefaultConnectorAccount: vi.fn(),
   revokeConnectorOAuthGrant: vi.fn(),
+  disconnectConnectorOAuthGrant: vi.fn(),
   recordAuditEvent: vi.fn(),
   evictConnectorOAuthCaches: vi.fn(),
 }));
@@ -33,9 +34,18 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   listConnectorAccounts: (...args: unknown[]) => mocks.listConnectorAccounts(...args),
   setDefaultConnectorAccount: (...args: unknown[]) => mocks.setDefaultConnectorAccount(...args),
   revokeConnectorOAuthGrant: (...args: unknown[]) => mocks.revokeConnectorOAuthGrant(...args),
+  listRevocableConnectorTokens: vi.fn(async () => []),
+  getConnectorOAuthGrant: vi.fn(async () => null),
+  updateConnectorOAuthGrantTokens: vi.fn(),
+  ConnectorGrantDecryptionError: class extends Error {},
+}));
+vi.mock('@/lib/connectors/oauth-access', () => ({
+  disconnectConnectorOAuthGrant: (...args: unknown[]) =>
+    mocks.disconnectConnectorOAuthGrant(...args),
+  resolveConnectorAccessToken: vi.fn(async () => ({ status: 'not-connected' })),
 }));
 
-import { GET, PATCH } from './route';
+import { DELETE, GET, PATCH } from './route';
 
 const USER = 'user-1';
 const context = { params: Promise.resolve({ connectorId: 'gmail' }) };
@@ -56,6 +66,7 @@ beforeEach(() => {
     { accountKey: 'a', label: 'First', isDefault: true, kind: 'user' },
   ]);
   mocks.setDefaultConnectorAccount.mockResolvedValue(true);
+  mocks.disconnectConnectorOAuthGrant.mockResolvedValue(true);
 });
 
 describe('GET /api/connectors/[connectorId]/accounts', () => {
@@ -98,5 +109,35 @@ describe('PATCH /api/connectors/[connectorId]/accounts', () => {
     const response = await PATCH(patch({}), context);
     expect(response.status).toBe(400);
     expect(mocks.setDefaultConnectorAccount).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/connectors/[connectorId]/accounts', () => {
+  function del(query: string): NextRequest {
+    return new NextRequest(`https://agiworkforce.com/api/connectors/gmail/accounts${query}`, {
+      method: 'DELETE',
+    });
+  }
+
+  it('hands the credential back to the provider, not only to the local row', async () => {
+    const response = await DELETE(del('?accountKey=work'), context);
+
+    expect(response.status).toBe(200);
+    expect(mocks.disconnectConnectorOAuthGrant).toHaveBeenCalledWith(USER, 'gmail', 'work');
+    expect(mocks.revokeConnectorOAuthGrant).not.toHaveBeenCalled();
+    expect(mocks.evictConnectorOAuthCaches).toHaveBeenCalledWith(USER, 'gmail');
+  });
+
+  it('answers 404 when the account is not one of the caller own', async () => {
+    mocks.disconnectConnectorOAuthGrant.mockResolvedValue(false);
+    const response = await DELETE(del('?accountKey=nope'), context);
+    expect(response.status).toBe(404);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a request without an account key', async () => {
+    const response = await DELETE(del(''), context);
+    expect(response.status).toBe(400);
+    expect(mocks.disconnectConnectorOAuthGrant).not.toHaveBeenCalled();
   });
 });

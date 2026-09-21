@@ -133,12 +133,15 @@ export function isMobileIapProductKey(value: string): value is MobileIapProductK
 
 export type MobileIapCatalogProduct = MobileIapProductDefinition & { productId: string };
 
+export type MobileIapUnavailableCode = 'waitlist_access_required';
+
 export interface MobileIapCatalogResponse {
   enabled: boolean;
   platform: MobileIapPlatform | null;
   appAccountToken: string | null;
   products: MobileIapCatalogProduct[];
   unavailableReason: string | null;
+  unavailableCode: MobileIapUnavailableCode | null;
 }
 
 export interface MobileIapVerifyRequest {

@@ -1683,7 +1683,7 @@ if (__AgiApp) {
             <a
               href={publishedUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="min-w-0 flex-1 truncate text-xs text-primary underline-offset-2 hover:underline"
             >
               {publishedUrl}

@@ -71,6 +71,15 @@ const membership = <Union extends string>(values: readonly Union[]) => {
   return (value: unknown): value is Union => typeof value === 'string' && allowed.has(value);
 };
 
+/**
+ * The shape a tool declaration is written against. The primitive itself is
+ * generated from the Rust protocol; this is the version of the envelope a
+ * surface stores and replays.
+ */
+export const TOOL_SCHEMA_VERSION = 1;
+
+export const TOOL_MIN_SCHEMA_VERSION = 1;
+
 export const TOOL_ACTION_CLASSES = listing<ToolActionClass>()([
   'read',
   'write',

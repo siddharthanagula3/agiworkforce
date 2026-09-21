@@ -13,8 +13,21 @@ import {
   labelBound,
   resetLabelCardinality,
 } from '../cardinality';
+import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
+import { MINIMUM_SUPPORTED_RUNTIME_VERSION, PRODUCT_ANALYTICS_SURFACES } from '@agiworkforce/types';
+
+import { API_VERSION_REQUEST_HEADER } from '@/lib/api-gateway-policy';
+
+import { CLIENT_VERSION_LABELS, UNKNOWN_CLIENT_VERSION_LABEL } from '../client-versions';
 import { attributeKey, dashboardPanels } from '../dashboards';
 import { MEDIA_ATTRIBUTE } from '../media-telemetry';
+import {
+  SURFACE_REQUEST_HEADER,
+  UNKNOWN_PROTOCOL_LABEL,
+  UNSUPPORTED_PROTOCOL_LABEL,
+  httpRequestLabels,
+  type HttpRequestLabels,
+} from '../request-labels';
 
 beforeEach(() => {
   resetLabelCardinality();
@@ -119,5 +132,103 @@ describe('dashboard grouping cardinality', () => {
         expect(boundsByKey.has(key), `${panel.id} selects on undeclared ${key}`).toBe(true);
       }
     }
+  });
+});
+
+describe('a label a caller writes names the closed set it is checked against', () => {
+  type LabelField = keyof HttpRequestLabels;
+
+  function labelsFor(header: string, value: string): HttpRequestLabels {
+    return httpRequestLabels((name) => (name === header ? value : null));
+  }
+
+  function produced(header: string, values: readonly string[], field: LabelField): Set<string> {
+    const seen = new Set<string>();
+    for (const value of values) {
+      const label = labelsFor(header, value)[field];
+      if (label !== undefined) seen.add(label);
+    }
+    return seen;
+  }
+
+  // A pattern is not a vocabulary: it accepts a value nobody shipped, and each
+  // one that reaches a metric is a series that never closes.
+  it('answers a header nobody shipped with a member of a closed set, or nothing', () => {
+    const invented = Array.from({ length: 200 }, (_, index) => index);
+
+    expect([
+      ...produced(
+        SURFACE_REQUEST_HEADER,
+        invented.map((n) => `surface-${n}`),
+        'surface',
+      ),
+    ]).toEqual([]);
+    expect([
+      ...produced(
+        CLIENT_VERSION_HEADER,
+        invented.map((n) => `${n + 4000}.${n}.${n}`),
+        'clientVersion',
+      ),
+    ]).toEqual([UNKNOWN_CLIENT_VERSION_LABEL]);
+    const protocols = produced(
+      API_VERSION_REQUEST_HEADER,
+      invented.map((n) => `v${n}`),
+      'protocolVersion',
+    );
+    expect([...protocols]).toEqual([UNSUPPORTED_PROTOCOL_LABEL]);
+  });
+
+  it('keeps every value it does admit inside the vocabulary that owns it', () => {
+    for (const surface of PRODUCT_ANALYTICS_SURFACES) {
+      expect(labelsFor(SURFACE_REQUEST_HEADER, surface).surface).toBe(surface);
+    }
+    for (const series of CLIENT_VERSION_LABELS) {
+      const admitted = labelsFor(CLIENT_VERSION_HEADER, `${series}.9`).clientVersion;
+      expect(admitted === UNKNOWN_CLIENT_VERSION_LABEL || admitted === series, series).toBe(true);
+    }
+  });
+
+  it('counts a well-formed client version no release series admits, without opening one', () => {
+    for (const invented of ['999.4.1', '0.1.0', '1.0.0', '4000.0.0', '2026.44.1']) {
+      expect(labelsFor(CLIENT_VERSION_HEADER, invented).clientVersion, invented).toBe(
+        UNKNOWN_CLIENT_VERSION_LABEL,
+      );
+    }
+  });
+
+  it('counts a build that names no version rather than leaving it out of the split', () => {
+    const labels = httpRequestLabels(() => null);
+
+    expect(labels.clientVersion).toBe(UNKNOWN_CLIENT_VERSION_LABEL);
+    expect(labels.protocolVersion).toBe(UNKNOWN_PROTOCOL_LABEL);
+    expect(CLIENT_VERSION_LABELS).toContain(UNKNOWN_CLIENT_VERSION_LABEL);
+  });
+
+  it('admits the runtime line from the registry floor and the calendar line the apps ship', () => {
+    expect(CLIENT_VERSION_LABELS[0]).toBe(
+      MINIMUM_SUPPORTED_RUNTIME_VERSION.split('.').slice(0, 2).join('.'),
+    );
+    const thisYear = new Date().getUTCFullYear();
+    expect(CLIENT_VERSION_LABELS).toContain(`${thisYear}.9`);
+    expect(CLIENT_VERSION_LABELS).not.toContain(`${thisYear + 5}.9`);
+  });
+
+  it('holds a runtime-line version to the floor and lets the calendar line through', () => {
+    expect(labelsFor(CLIENT_VERSION_HEADER, '1.0.0').clientVersion).toBe(
+      UNKNOWN_CLIENT_VERSION_LABEL,
+    );
+    expect(
+      labelsFor(CLIENT_VERSION_HEADER, `${new Date().getUTCFullYear()}.9.1`).clientVersion,
+    ).toBe(`${new Date().getUTCFullYear()}.9`);
+  });
+
+  it('opens at most one series for a version that reaches a recorder unchecked', () => {
+    resetLabelCardinality();
+    const bounded = new Set(
+      ['5.1.2', '6.3.4', '7.7.7'].map((version) =>
+        boundLabelValue(OBSERVABILITY_ATTRIBUTE.clientVersion, version),
+      ),
+    );
+    expect([...bounded]).toEqual([UNCLASSIFIED_LABEL]);
   });
 });

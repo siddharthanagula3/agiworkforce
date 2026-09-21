@@ -2,7 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const feedbackRouteMocks = vi.hoisted(() => ({
   auth: vi.fn(),
+  optionalUser: vi.fn(),
   query: vi.fn(),
+}));
+
+vi.mock('@/lib/api-auth', () => ({
+  getOptionalAuthUser: feedbackRouteMocks.optionalUser,
+  getClerkAuthUser: vi.fn(),
+  assertAccountActive: vi.fn(),
+  getClerkAuthorizedParties: vi.fn(() => []),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -38,7 +46,7 @@ function request(body: unknown) {
 describe('POST /api/feedback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    feedbackRouteMocks.auth.mockResolvedValue({ userId: 'user-web' });
+    feedbackRouteMocks.optionalUser.mockResolvedValue({ userId: 'user-web' });
     feedbackRouteMocks.query.mockResolvedValue([]);
   });
 
@@ -234,7 +242,7 @@ describe('response ratings', () => {
 describe('task feedback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    feedbackRouteMocks.auth.mockResolvedValue({ userId: 'user-web' });
+    feedbackRouteMocks.optionalUser.mockResolvedValue({ userId: 'user-web' });
     feedbackRouteMocks.query.mockResolvedValue([]);
   });
 

@@ -63,6 +63,20 @@ pub enum ApprovalRequestKind {
         tool_name: String,
         destination: String,
     },
+    /// A typed git operation that changes the repository. `target` is what it
+    /// acts on: the ref, the paths, or the remote.
+    Git {
+        tool_name: String,
+        target: String,
+    },
+    /// A push, which is the only operation that can put work somewhere the
+    /// user cannot take it back from. Answered through
+    /// `safety::push_consent::request_push_consent` and nowhere else.
+    GitPush {
+        remote: String,
+        branch: String,
+        force: bool,
+    },
 }
 
 /// A single approval prompt waiting for the user.

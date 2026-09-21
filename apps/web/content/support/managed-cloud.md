@@ -4,15 +4,17 @@ title: AGI managed cloud
 path: /docs
 category: managed-cloud
 tags: managed cloud, hosted, open by default, waitlist, usage, metered, capacity, quota, limit
-updated: 2026-09-01
+updated: 2026-09-20
 scope: public
 ---
 
 ## Open by default
 
-AGI managed cloud is open by default. Sign in and start: there is no waitlist for
-managed cloud and no invite code. Team and Enterprise tiers, with organization
-seats, SSO, and admin controls, are the only waitlisted tiers.
+The Free plan on AGI managed cloud is open by default. Sign in and start: it has no
+waitlist and needs no invite code. Paid upgrades are opening in stages, so every
+self-serve paid plan needs an access code, and without one you join the upgrade
+waitlist. Team and Enterprise tiers, with organization seats, SSO, and admin
+controls, are a contract conversation rather than a self-serve checkout.
 
 ## How usage works
 

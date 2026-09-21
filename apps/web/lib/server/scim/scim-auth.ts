@@ -8,6 +8,7 @@ import {
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 import type { BillingPlanTier } from '@agiworkforce/types';
+import { isTenantLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -32,6 +33,15 @@ export function extractBearerToken(request: Request): string | null {
 
 const UNAUTHORIZED_DETAIL = 'A valid SCIM bearer token is required';
 
+/**
+ * A SCIM token acts for one workspace, so a workspace held off during an
+ * incident has to hold its directory sync off too; otherwise the identity
+ * provider keeps provisioning, updating and deprovisioning its accounts
+ * through a door the lockdown never reached.
+ */
+const LOCKED_DOWN_DETAIL =
+  'This workspace is locked down while an incident is investigated. Contact support.';
+
 export async function authenticateScimRequest(request: Request): Promise<ScimRequestContext> {
   const rawToken = extractBearerToken(request);
   if (!rawToken) {
@@ -49,6 +59,14 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
     connectionId: verified.connectionId,
     organizationId: verified.organizationId,
   };
+
+  if (await isTenantLockedDown(verified.organizationId)) {
+    await recordSyncEvent(db, ctx, {
+      eventType: 'sync.denied',
+      error: 'The workspace is locked down while an incident is investigated',
+    });
+    throw new ScimError(403, LOCKED_DOWN_DETAIL);
+  }
 
   const connections = await db.query<
     Pick<DirectorySyncConnectionRow, 'id' | 'provider' | 'is_active'>

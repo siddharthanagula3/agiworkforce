@@ -8,6 +8,7 @@ import { ArrowLeft, Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { api } from '@/services/api';
 import { useTheme } from '@/src/ui/theme';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -57,9 +58,7 @@ export default function FeedbackScreen() {
     }
   }, [type, message, router, returnTo]);
 
-  const handleBack = useCallback(() => {
-    router.replace(returnTo);
-  }, [returnTo, router]);
+  const handleBack = useGoBack(returnTo);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>

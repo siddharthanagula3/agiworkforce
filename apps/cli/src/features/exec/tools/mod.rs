@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::future::Future;
+use std::io::IsTerminal;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -41,7 +42,9 @@ use file_ops::{
     execute_apply_patch, execute_multiedit, execute_read_file, execute_read_many_files,
     execute_write_file,
 };
-use git::{execute_enter_worktree, execute_exit_worktree, execute_list_worktrees};
+use git::{
+    execute_enter_worktree, execute_exit_worktree, execute_git_tool, execute_list_worktrees,
+};
 use task_registry::{
     execute_advisor, execute_ask_user, execute_cron_create, execute_cron_delete, execute_cron_list,
     execute_lsp_completion, execute_lsp_definition, execute_lsp_diagnostics,
@@ -235,6 +238,10 @@ pub struct ToolExecOptions {
     /// This is carried per invocation for the same reason as `privacy_mode`:
     /// the app-server can host a workspace that is not the process cwd.
     pub workspace_root: Option<std::path::PathBuf>,
+    /// The session's connected MCP tools, for `tool_search` to load a schema
+    /// the initial list deferred. Per invocation, like the two fields above:
+    /// concurrent sessions connect to different servers.
+    pub mcp_tool_definitions: Option<std::sync::Arc<Vec<crate::models::ToolDefinition>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -369,6 +376,7 @@ pub fn build_read_only_registry() -> registry::ToolRegistry {
 #[allow(dead_code)]
 pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result<ToolResult> {
     let opts = ToolExecOptions {
+        mcp_tool_definitions: None,
         require_confirmation,
         auto_approve_safe: false,
         auto_approve_edits: false,
@@ -570,7 +578,14 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
             )
             .await
         }
-        "tool_search" => execute_tool_search(&call.args).await,
+        "tool_search" => {
+            let mcp_tools = opts
+                .mcp_tool_definitions
+                .as_deref()
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            execute_tool_search(&call.args, mcp_tools).await
+        }
         "agent" => {
             let action = call.args.get("action").map(String::as_str).unwrap_or("");
             if action == "list" {
@@ -628,6 +643,20 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "lsp_completion" => execute_lsp_completion(&call.args).await,
         "lsp_document_symbols" => execute_lsp_document_symbols(&call.args).await,
         "lsp_format" => execute_lsp_format(&call.args).await,
+        // The typed Git API: one tool per operation, dispatched from the same
+        // spec table the catalog is built from, so a tool cannot be advertised
+        // without reaching an operation.
+        name if crate::runtime::git_tools::is_git_tool(name) => {
+            execute_git_tool(
+                name,
+                &call.args,
+                opts.workspace_root.as_deref(),
+                require_confirm,
+                std::io::stdin().is_terminal(),
+                opts.approval_callback.as_ref(),
+            )
+            .await
+        }
         _ => Ok(unknown_tool_result(&call.name)),
     };
 
@@ -1014,6 +1043,18 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
             tool_name: _,
             destination,
         } => ("network", serde_json::json!({ "destination": destination })),
+        ApprovalRequestKind::Git {
+            tool_name: _,
+            target,
+        } => ("git", serde_json::json!({ "target": target })),
+        ApprovalRequestKind::GitPush {
+            remote,
+            branch,
+            force,
+        } => (
+            "git_push",
+            serde_json::json!({ "remote": remote, "branch": branch, "force": force }),
+        ),
     }
 }
 
@@ -1027,6 +1068,7 @@ pub(crate) async fn permission_request_hook_denial(
         ApprovalRequestKind::McpTool { tool_name, .. } => tool_name.clone(),
         ApprovalRequestKind::ComputerUse { action, .. } => action.clone(),
         ApprovalRequestKind::Network { tool_name, .. } => tool_name.clone(),
+        ApprovalRequestKind::Git { tool_name, .. } => tool_name.clone(),
         _ => fallback_name.to_string(),
     };
     let results = crate::hooks::run_hooks(
@@ -1652,6 +1694,7 @@ mod tests {
 
     fn byok_options(callback: ApprovalCallback, auto_approve_safe: bool) -> ToolExecOptions {
         ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: true,
             auto_approve_safe,
             auto_approve_edits: false,
@@ -1789,6 +1832,7 @@ mod tests {
     #[tokio::test]
     async fn local_mode_blocks_builtin_network_tools_before_dispatch() {
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -1840,6 +1884,7 @@ reason = "regression test"
             args: HashMap::from([("command".to_string(), "printf policy-denied".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -1890,6 +1935,7 @@ decision = "ask"
             )]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -1931,6 +1977,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf unsafe".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -2044,6 +2091,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
@@ -2093,6 +2141,7 @@ decision = "deny"
             args: HashMap::from([("command".to_string(), "printf untrusted".to_string())]),
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -2148,6 +2197,14 @@ decision = "deny"
         // Read-only tools dispatch through the C1 Tool-trait registry rather than a
         // source match arm, so include the registry's names as dispatched too.
         dispatched_names.extend(super::build_read_only_registry().names().map(String::from));
+        // The git family dispatches off its spec table rather than one arm per
+        // name. `every_git_tool_in_the_catalog_reaches_the_git_executor` is what
+        // proves each of them actually arrives somewhere.
+        dispatched_names.extend(
+            crate::runtime::git_tools::git_tool_specs()
+                .iter()
+                .map(|spec| spec.name.to_string()),
+        );
         let agent_runtime_tools = BTreeSet::from(["task".to_string(), "update_plan".to_string()]);
 
         for dispatched_name in &dispatched_names {
@@ -2162,6 +2219,41 @@ decision = "deny"
                 dispatched_names.contains(catalog_name)
                     || agent_runtime_tools.contains(catalog_name),
                 "{catalog_name} has a tool catalog entry but no runtime dispatcher"
+            );
+        }
+    }
+
+    /// Every git tool the catalog advertises reaches the git executor. A name
+    /// the dispatch does not recognise comes back as the unknown-tool reply,
+    /// which is what this would catch.
+    #[tokio::test]
+    async fn every_git_tool_in_the_catalog_reaches_the_git_executor() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
+            require_confirmation: false,
+            auto_approve_safe: false,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: Some(workspace.path().to_path_buf()),
+        };
+
+        for spec in crate::runtime::git_tools::git_tool_specs() {
+            let call = ToolCall {
+                name: spec.name.to_string(),
+                args: HashMap::new(),
+            };
+            let result = execute_tool_with_opts(&call, &opts)
+                .await
+                .unwrap_or_else(|error| panic!("{} dispatch: {error}", spec.name));
+            assert_eq!(result.tool_name, spec.name);
+            assert!(
+                !result.output.contains("Unknown tool"),
+                "{} has a catalog entry that reaches nothing: {}",
+                spec.name,
+                result.output
             );
         }
     }
@@ -2274,6 +2366,7 @@ decision = "deny"
             args,
         };
         let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
