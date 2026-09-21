@@ -36,20 +36,20 @@ Seven surfaces ship one product, and until this file existed nobody could answer
 `Unverified` means the tree does not settle it, and says what would.
 
 `Declared maturity` is the feature registry's answer for the whole feature, not for one surface.
-Most rows read "not in the feature registry": the registry holds 12 features
+Most rows read "not in the feature registry": the registry holds 30 features
 and this matrix holds more, so there is no declared maturity to show for the rest.
 
 ## Core consumer
 
 | Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Chat | not in the feature registry | Unverified | Present | Present | Present | Present | Present | Present |
-| History | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
+| Chat | general_availability | Unverified | Present | Present | Present | Present | Present | Present |
+| History | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Projects | general_availability | Present | Present | Present | Present | Present | Present | Present |
-| Files and artifacts | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
-| Library | not in the feature registry | Unverified | Present | Present | Absent | Absent | Absent | Present |
+| Files and artifacts | general_availability | Present | Present | Present | Present | Present | Present | Present |
+| Library | general_availability | Unverified | Present | Present | Absent | Absent | Absent | Present |
 | Memory | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
-| Search | not in the feature registry | Unverified | Unverified | Unverified | Present | Unverified | Unverified | Present |
+| Search | general_availability | Unverified | Unverified | Unverified | Present | Unverified | Unverified | Present |
 | Work | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Settings | not in the feature registry | Present | Present | Present | Present | Unverified | Unverified | Present |
 | Plan status | not in the feature registry | Present | Unverified | Present | Present | Present | Unverified | Present |
@@ -60,11 +60,11 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Deep Research | general_availability | Present | Present | Present | Absent | Absent | Absent | Present |
-| Study | not in the feature registry | Present | Absent | Absent | Absent | Absent | Absent | Present |
+| Study | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
 | Analyze | not in the feature registry | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified |
-| Image generation | not in the feature registry | Present | Present | Unverified | Present | Absent | Absent | Present |
-| Video generation | not in the feature registry | Present | Absent | Absent | Absent | Absent | Absent | Present |
-| Voice | not in the feature registry | Present | Present | Present | Present | Absent | Present | Present |
+| Image generation | general_availability | Present | Present | Unverified | Present | Absent | Absent | Present |
+| Video generation | general_availability | Present | Absent | Absent | Absent | Absent | Absent | Present |
+| Voice | general_availability | Present | Present | Present | Present | Absent | Present | Present |
 | Camera | not in the feature registry | Unverified | Unverified | Present | Absent | Absent | Absent | Absent |
 | Screen sharing | not in the feature registry | Absent | Present | Absent | Absent | Absent | Unverified | Absent |
 
@@ -72,11 +72,11 @@ and this matrix holds more, so there is no declared maturity to show for the res
 
 | Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Connectors | not in the feature registry | Present | Present | Present | Absent | Present | Absent | Present |
+| Connectors | general_availability | Present | Present | Present | Absent | Present | Absent | Present |
 | Skills | general_availability | Present | Present | Present | Present | Absent | Absent | Present |
 | Plugins | beta | Present | Present | Absent | Present | Absent | Absent | Present |
-| MCP | not in the feature registry | Present | Unverified | Absent | Unverified | Unverified | Partial | Present |
-| Tool approvals | not in the feature registry | Present | Present | Present | Unverified | Present | Present | Present |
+| MCP | beta | Present | Unverified | Absent | Unverified | Unverified | Partial | Present |
+| Tool approvals | general_availability | Present | Present | Present | Unverified | Present | Present | Present |
 
 ## Developer
 
@@ -84,11 +84,11 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Code sessions | general_availability | Present | Present | Present | Present | Present | Absent | Present |
 | Repository context | not in the feature registry | Unverified | Unverified | Absent | Unverified | Unverified | Absent | Unverified |
-| Terminal | not in the feature registry | Absent | Present | Absent | Present | Present | Absent | Absent |
-| Git | not in the feature registry | Absent | Present | Absent | Present | Unverified | Absent | Absent |
-| Diffs | not in the feature registry | Present | Present | Unverified | Present | Present | Absent | Present |
+| Terminal | general_availability | Absent | Present | Absent | Present | Present | Absent | Absent |
+| Git | general_availability | Absent | Present | Absent | Present | Unverified | Absent | Absent |
+| Diffs | general_availability | Present | Present | Unverified | Present | Present | Absent | Present |
 | Browser verification | beta | Present | Unverified | Absent | Present | Absent | Unverified | Unverified |
-| Cloud tasks | not in the feature registry | Present | Present | Present | Unverified | Present | Absent | Present |
+| Cloud tasks | general_availability | Present | Present | Present | Unverified | Present | Absent | Present |
 
 ## Native
 
@@ -96,9 +96,9 @@ and this matrix holds more, so there is no declared maturity to show for the res
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Local runtime | not in the feature registry | Absent | Present | Absent | Present | Present | Unverified | Absent |
 | BYOK | not in the feature registry | Present | Unverified | Unverified | Present | Present | Absent | Present |
-| Global voice | not in the feature registry | Absent | Present | Unverified | Present | Absent | Absent | Absent |
+| Global voice | general_availability | Absent | Present | Unverified | Present | Absent | Absent | Absent |
 | Computer use | experimental | Absent | Present | Absent | Absent | Absent | Present | Absent |
-| Filesystem | not in the feature registry | Absent | Present | Absent | Unverified | Unverified | Absent | Absent |
+| Filesystem | general_availability | Absent | Present | Absent | Unverified | Unverified | Absent | Absent |
 | Updater | not in the feature registry | Absent | Present | Unverified | Present | Absent | Absent | Present |
 | Scheduled tasks | general_availability | Present | Present | Present | Present | Present | Present | Present |
 | Hooks | beta | Absent | Present | Absent | Present | Unverified | Absent | Absent |
@@ -120,39 +120,21 @@ and this matrix holds more, so there is no declared maturity to show for the res
 
 ## Features with no declared maturity
 
-37 of 49 rows name no feature in
+19 of 49 rows name no feature in
 `packages/contracts/types/src/feature-registry.json`, so nothing in the tree declares how finished they are, who owns
 them, or what would take them out of an unfinished state. That is a gap in the registry, not in
 this document.
 
-- Chat
-- History
-- Files and artifacts
-- Library
 - Memory
-- Search
 - Settings
 - Plan status
 - Help
-- Study
 - Analyze
-- Image generation
-- Video generation
-- Voice
 - Camera
 - Screen sharing
-- Connectors
-- MCP
-- Tool approvals
 - Repository context
-- Terminal
-- Git
-- Diffs
-- Cloud tasks
 - Local runtime
 - BYOK
-- Global voice
-- Filesystem
 - Updater
 - SSO
 - Policy effects
