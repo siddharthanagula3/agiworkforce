@@ -46,6 +46,8 @@ import Link from 'next/link';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
+import { MicrophonePrivacyNotice } from '@features/chat/components/MicrophonePrivacyNotice';
+import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 import {
   fetchPreferenceNamespace,
@@ -1080,6 +1082,18 @@ export function CodeComposer({
       if (next.trim()) onSubmit(next.trim());
     },
   });
+  // The first capture on an account waits for the notice that says where the audio goes.
+  const microphoneOwner = useId();
+  const askForMicrophone = useMicrophoneNoticeStore((state) => state.askForMicrophone);
+  const withdrawMicrophoneRequest = useMicrophoneNoticeStore((state) => state.withdraw);
+  const startDictation = useCallback(
+    () => askForMicrophone(microphoneOwner, dictation.start),
+    [askForMicrophone, microphoneOwner, dictation.start],
+  );
+  useEffect(
+    () => () => withdrawMicrophoneRequest(microphoneOwner),
+    [withdrawMicrophoneRequest, microphoneOwner],
+  );
 
   const sendable = value.trim().length > 0 && !disabled && !busy;
 
@@ -1092,6 +1106,7 @@ export function CodeComposer({
   return (
     <div className={styles['composerArea']} data-testid="code-composer-area">
       <div className={styles['center']}>
+        <MicrophonePrivacyNotice />
         {showChips && (
           <div className={styles['chipRow']}>
             <EnvironmentChip
@@ -1199,7 +1214,7 @@ export function CodeComposer({
                   className={styles['controlIconButton']}
                   aria-label={CODE_COPY.startDictation}
                   disabled={disabled}
-                  onClick={dictation.start}
+                  onClick={startDictation}
                 >
                   <Mic size={CONTROL_GLYPH_SIZE} aria-hidden="true" />
                 </button>

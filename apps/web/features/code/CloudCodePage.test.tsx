@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -24,6 +24,7 @@ import {
   type CloudCodeAgentTurn,
   type CloudCodeApi,
 } from './services/cloud-code-api';
+import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 
 const push = vi.fn();
 const replace = vi.fn();
@@ -134,18 +135,23 @@ beforeEach(() => {
   pickWorkspaceRoot.mockClear();
 });
 
-vi.mock('@shared/stores/web-auth-store', () => ({
-  useBillingStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      user: {
-        id: 'user-1',
-        email: 'person@example.com',
-        name: 'Ada Lovelace',
-        profile: { display_name: 'Ada Lovelace', preferred_name: 'Ada' },
-      },
-      subscription: { display_name: 'Pro' },
-    }),
-}));
+vi.mock('@shared/stores/web-auth-store', () => {
+  const state = {
+    user: {
+      id: 'user-1',
+      email: 'person@example.com',
+      name: 'Ada Lovelace',
+      profile: { display_name: 'Ada Lovelace', preferred_name: 'Ada' },
+    },
+    subscription: { display_name: 'Pro' },
+  };
+  return {
+    useBillingStore: Object.assign(
+      (selector: (value: Record<string, unknown>) => unknown) => selector(state),
+      { getState: () => state },
+    ),
+  };
+});
 
 const session: CloudCodeSession = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -310,6 +316,22 @@ describe('CloudCodePage', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Build in an isolated cloud workspace/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Managed Code/i)).not.toBeInTheDocument();
+  });
+
+  it('does not open the microphone for Code until the reader was told where the audio goes', async () => {
+    const getUserMedia = vi.fn(() => new Promise<MediaStream>(() => undefined));
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+    window.localStorage.clear();
+    useMicrophoneNoticeStore.setState({ request: null, acknowledgedThisSession: null });
+
+    render(<CloudCodePage api={createApi()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Start voice input' }));
+
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(screen.getByRole('note', { name: 'Where your voice goes' })).toBeInTheDocument();
   });
 
   it('renders inside the shared app shell and keeps the rail destinations as links', async () => {
