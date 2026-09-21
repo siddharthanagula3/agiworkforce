@@ -41,6 +41,9 @@ RUN pnpm --filter @agiworkforce/web build
 
 FROM ${NODE_RUNTIME_IMAGE} AS runner
 
+RUN rm -rf /usr/local/lib/node_modules/npm && \
+    rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
