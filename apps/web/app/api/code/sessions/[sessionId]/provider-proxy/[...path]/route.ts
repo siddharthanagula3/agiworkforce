@@ -56,6 +56,15 @@ import {
 
 export const runtime = 'nodejs';
 
+// One model generation, the same ceiling the chat completions route and the
+// sibling agent route declare, and what the platform applied here implicitly.
+export const maxDuration = 300;
+
+// An upstream that accepts the connection and then says nothing holds a
+// reservation nothing settles. Well under any platform ceiling, and cleared as
+// soon as headers arrive so a long generation still streams.
+const PROVIDER_CONNECT_TIMEOUT_MS = 30_000;
+
 type RouteContext = { params: Promise<{ sessionId: string; path: string[] }> };
 
 const FLAGSHIP_SLOTS: ReadonlySet<string> = new Set([
@@ -690,10 +699,18 @@ async function handleProxy(
   }
 
   let upstreamResponse: Response;
+  // Bounds the connect phase only. The timer is cleared the moment headers
+  // arrive, because a generation streams for minutes and a deadline that
+  // outlived the connect would cut off every long answer.
+  const connect = new AbortController();
+  const connectDeadline = setTimeout(() => {
+    connect.abort(new Error(`upstream sent no response within ${PROVIDER_CONNECT_TIMEOUT_MS}ms`));
+  }, PROVIDER_CONNECT_TIMEOUT_MS);
   try {
     upstreamResponse = await fetch(validated.url, {
       method,
       headers: forwardHeaders,
+      signal: connect.signal,
       ...(meteredBody !== null
         ? { body: meteredBody }
         : forwardsBody
@@ -708,6 +725,8 @@ async function handleProxy(
       'provider_proxy_unavailable',
       'The upstream provider could not be reached.',
     );
+  } finally {
+    clearTimeout(connectDeadline);
   }
 
   logger.info(

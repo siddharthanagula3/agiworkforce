@@ -1,0 +1,143 @@
+{
+  "$comment": "Log call sites scripts/check-log-redaction.mjs found on 2026-09-20, each in a file this lane may not edit. Every entry names why the field is wrong today and the exact change that removes it. The guard refuses a new one and refuses an entry that no longer occurs, so this list only shrinks.",
+  "known": [
+    {
+      "file": "apps/web/app/api/github/webhook/route.ts",
+      "field": "signature",
+      "reason": "the webhook signature header is logged whole when verification fails; it is a credential, so the redactor replaces it and the line says only that something failed",
+      "fix": "replace { signature } with { signaturePresent: Boolean(signature), deliveryId } so the line separates a missing header from a wrong one"
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/audio/transcriptions/route.ts",
+      "field": "body",
+      "reason": "the provider's error body can carry the transcript it refused, so redaction is right and the field is dead weight",
+      "fix": "replace { body: responseText } with { bodyBytes: responseText.length, providerErrorCode } read from the parsed provider error"
+    },
+    {
+      "file": "apps/web/app/api/portal/route.ts",
+      "field": "email",
+      "reason": "the billing portal logs the signed-in address on the deprecated Stripe lookup path; userId is already on the same line",
+      "fix": "replace email: userEmail with emailPseudonym: pseudonymizeEmail(userEmail) from @/lib/server/email-pseudonym, or drop the field since userId identifies the account"
+    },
+    {
+      "file": "apps/web/app/api/settings/devices/[deviceId]/route.ts",
+      "field": "revokedCredentials",
+      "reason": "the name contains \"credential\" so the count of revoked credentials is redacted, and the line cannot say how much was revoked",
+      "fix": "rename to revokedCredentialCount"
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "field": "email",
+      "reason": "four webhook reconciliation lines log the Stripe customer address, including two marked SECURITY and CRITICAL",
+      "fix": "replace email: customer.email with emailPseudonym: pseudonymizeEmail(customer.email) from @/lib/server/email-pseudonym; the pseudonym is stable, so the duplicate-account case is still visible"
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "field": "stripeCustomerEmail",
+      "reason": "the profile mismatch line logs both the stored address and the Stripe one",
+      "fix": "log emailPseudonym for each, or a single emailsMatch boolean, which is the whole question the line asks"
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "field": "customerEmail",
+      "reason": "the fallback lookup logs the address it is searching by",
+      "fix": "replace with emailPseudonym: pseudonymizeEmail(customerEmail)"
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/handlers.ts",
+      "field": "email",
+      "reason": "the dispute handler logs the account address beside the dispute id",
+      "fix": "drop the field; profile.id is on the same line and resolves to the account"
+    },
+    {
+      "file": "apps/web/lib/connectors/oauth-registry.ts",
+      "field": "describedButUncredentialed",
+      "reason": "the name contains \"credential\" so the count of connectors described without credentials is redacted at startup, which is the one number that line exists to report",
+      "fix": "rename to describedWithoutCredentialCount, or to uncredentialedConnectors"
+    },
+    {
+      "file": "apps/web/lib/rate-limit.ts",
+      "field": "key",
+      "reason": "the rate limit bucket key embeds a caller identifier, so redacting it is right; identifier is already logged beside it on the lines that need it",
+      "fix": "delete the key field from the six log calls; where the bucket matters, log policyName instead"
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "field": "key",
+      "reason": "a failed backup deletion during an erasure leaves a copy of erased data, and the only field naming the copy is a bare key, which the redactor throws away",
+      "fix": "rename to objectKey, which the field policy classifies as an identifier"
+    },
+    {
+      "file": "apps/web/lib/server/google-embeddings.ts",
+      "field": "body",
+      "reason": "the embedding provider's error body can echo the text it was given, so redaction is right and the field is dead weight",
+      "fix": "replace { body: body.slice(0, 500) } with { bodyBytes: body.length } and the provider's error code"
+    },
+    {
+      "file": "apps/web/lib/server/incident/dispatch.ts",
+      "field": "key",
+      "reason": "the line that says an incident alert reached no human names the alert with a bare key, which the redactor throws away",
+      "fix": "rename to notificationKey, which the field policy classifies as an identifier"
+    },
+    {
+      "file": "apps/web/lib/server/object-backup.ts",
+      "field": "key",
+      "reason": "the object that exceeded the copy limit is named by a bare key, so the operator cannot find it",
+      "fix": "rename to objectKey"
+    },
+    {
+      "file": "apps/web/lib/services/subscription-service.ts",
+      "field": "email",
+      "reason": "three subscription reconciliation lines log the account address",
+      "fix": "replace with emailPseudonym: pseudonymizeEmail(email) from @/lib/server/email-pseudonym"
+    },
+    {
+      "file": "apps/web/app/api/copyright-notice/route.ts",
+      "field": "token",
+      "reason": "the operator notification token is logged whole when the alert is undeliverable; it is a credential, so the redactor replaces it",
+      "fix": "replace token: target.token with tokenConfigured: Boolean(target.token); kind and reference already say which target failed"
+    },
+    {
+      "file": "apps/web/app/api/cron/evaluate-model-rollout/route.ts",
+      "field": "key",
+      "reason": "the alert dedup key is a bare key, so the line that says paging went ahead without dedup cannot say which alert",
+      "fix": "rename to dedupeKey, which the field policy classifies as an identifier"
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/managed-failover.ts",
+      "field": "credentialRejectedProviders",
+      "reason": "the name contains credential, so the list of providers that rejected their credential is redacted on both failover lines",
+      "fix": "rename to rejectedProviders"
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "field": "profileEmail",
+      "reason": "the profile mismatch line logs the stored address beside the Stripe one",
+      "fix": "replace with emailsMatch: pseudonymizeEmail(storedProfile.email) === pseudonymizeEmail(customerEmail), which is the whole question the line asks"
+    },
+    {
+      "file": "apps/web/app/api/voice/live/sessions/route.ts",
+      "field": "body",
+      "reason": "the live voice provider error body can echo the instructions it refused, so redaction is right and the field is dead weight",
+      "fix": "replace body: responseText with bodyBytes: responseText.length; upstreamCode is already on the line"
+    },
+    {
+      "file": "apps/web/lib/services/enterprise-billing-service.ts",
+      "field": "key",
+      "reason": "the malformed contract metadata line names the offending field with a bare key, so an operator cannot tell which metadata value is wrong",
+      "fix": "rename to metadataField"
+    },
+    {
+      "file": "apps/web/lib/services/free-lane/runtime-state-service.ts",
+      "field": "key",
+      "reason": "the free lane route health key is a bare key, so the line that says health was not recorded cannot say for which route",
+      "fix": "rename to cacheKey, which the field policy classifies as an identifier"
+    },
+    {
+      "file": "apps/web/lib/services/provider-availability-service.ts",
+      "field": "providerKey",
+      "reason": "the provider identifier is named providerKey, which reads as a provider credential, so the degraded mark and read failures name no provider",
+      "fix": "rename to providerId, the vocabulary the rest of the routing code uses"
+    }
+  ]
+}

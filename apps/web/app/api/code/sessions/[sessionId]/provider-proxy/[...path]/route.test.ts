@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 process.env['CSRF_SECRET'] ||= 'a'.repeat(40);
@@ -776,6 +776,75 @@ describe('provider-proxy route', () => {
       expect(mockReserve).not.toHaveBeenCalled();
 
       vi.unstubAllGlobals();
+    });
+  });
+
+  describe('an upstream that accepts the connection and then says nothing', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Accepts the request, answers never, and rejects only when aborted. */
+    const silentUpstream = () =>
+      vi.fn(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(init.signal?.reason ?? new Error('aborted'));
+            });
+          }),
+      );
+
+    it('gives up on its own deadline and releases the reservation exactly once', async () => {
+      vi.useFakeTimers();
+      mockCalculateListCostMicrousd.mockReturnValue(180_000);
+      const fetchMock = silentUpstream();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { req, context } = request({
+        headers: { 'x-api-key': token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, max_tokens: 512, messages: [{ role: 'user' }] }),
+      });
+      const pending = POST(req, context);
+
+      await vi.advanceTimersByTimeAsync(31_000);
+      const response = await pending;
+
+      expect(response.status).toBe(502);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'provider_proxy_unavailable' },
+      });
+      expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+      expect(mockFinalize).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not cut off a response that arrives before the deadline', async () => {
+      vi.useFakeTimers();
+      mockCalculateCostMicrousd.mockReturnValue(120_000);
+      mockCalculateListCostMicrousd.mockReturnValue(180_000);
+      let capturedSignal: AbortSignal | undefined;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (_input: unknown, init?: RequestInit) => {
+          capturedSignal = init?.signal ?? undefined;
+          return new Response(JSON.stringify({ model: MODEL, usage: {} }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }),
+      );
+
+      const { req, context } = request({
+        headers: { 'x-api-key': token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, max_tokens: 512, messages: [{ role: 'user' }] }),
+      });
+      const response = await POST(req, context);
+      expect(response.status).toBe(200);
+
+      // The connect timer is cleared once headers arrive, so a generation that
+      // streams for longer than the connect deadline is never aborted.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(capturedSignal?.aborted).toBe(false);
     });
   });
 

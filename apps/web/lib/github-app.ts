@@ -1300,6 +1300,7 @@ export async function getPrDiff(
         Accept: 'application/vnd.github.diff',
         'X-GitHub-Api-Version': '2022-11-28',
       },
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
 
@@ -1363,6 +1364,7 @@ export async function postPrReview(
             }
           : {}),
       }),
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
   if (!res.ok) {
@@ -1401,6 +1403,7 @@ export async function listPrReviewCommentBodies(
           Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
         },
+        signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
       },
     );
     if (!res.ok) throw new Error(`Failed to list PR review comments: ${res.status}`);
@@ -1464,6 +1467,7 @@ export async function postIssueComment(
         'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({ body }),
+      signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
     },
   );
   if (!res.ok) {
