@@ -123,6 +123,47 @@ so a published number can be chosen against it rather than invented.
 | Object RTO   | not stated       | Unmeasured. The replica exists; no drill reads from it                              |
 | Serving RTO  | not stated       | A rollback resolves in one workflow run; the drill resolves without acting          |
 
+## Backup behaviour by synced object
+
+One row per type in `SYNC_OBJECT_TYPES`
+(`packages/contracts/types/src/sync/object-semantics.ts`), the registry that
+decides where each type's bytes may live and how its deletion travels. The
+`Bytes` and `Deletion` cells repeat that registry's `payload` and `deletion`
+values, and `scripts/check-dr-recovery-table.mjs` fails when a type has no row,
+when a row names a type the registry does not declare, or when either cell
+disagrees with the registry, so this table cannot describe a type the code has
+since moved.
+
+Every row of every type is a Postgres row, so every type is recovered by the
+same mechanism: Neon point-in-time restore inside the project's history window.
+What differs is what a restore cannot reach, and what it does to a deletion made
+after the recovery point.
+
+| type               | Bytes             | Deletion           | What a restore cannot reach                                                 | A deletion made after the recovery point                                                      |
+| ------------------ | ----------------- | ------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `conversation`     | `cloud`           | `tombstone`        | Nothing beyond the database; attached files are replicated objects          | Comes back live; an erased account's conversations are re-erased by the erasure ledger replay |
+| `message`          | `cloud`           | `tombstone`        | Nothing beyond the database; attached files are replicated objects          | Comes back live; an erased account's messages are re-erased by the erasure ledger replay      |
+| `artifact`         | `cloud-or-device` | `tombstone`        | A copy held only on a device; the product copies device bytes nowhere       | Comes back live; an erased account's artifacts are re-erased by the erasure ledger replay     |
+| `project`          | `cloud`           | `tombstone`        | Nothing beyond the database; knowledge files are replicated objects         | Comes back live; an erased account's projects are re-erased by the erasure ledger replay      |
+| `project-metadata` | `cloud`           | `tombstone`        | Nothing beyond the database                                                 | Comes back live with its project                                                              |
+| `memory`           | `cloud`           | `tombstone`        | Nothing beyond the database                                                 | Comes back live; an erased account's memories are re-erased by the erasure ledger replay      |
+| `memory-controls`  | `cloud`           | `document-replace` | Nothing beyond the database                                                 | The document returns to its state at the recovery point                                       |
+| `settings`         | `cloud`           | `document-replace` | Nothing beyond the database                                                 | The document returns to its state at the recovery point                                       |
+| `task`             | `cloud`           | `tombstone`        | Nothing beyond the database                                                 | Comes back live                                                                               |
+| `notification`     | `cloud`           | `server-expiry`    | Nothing beyond the database                                                 | Comes back until the server expires it again                                                  |
+| `connector`        | `cloud`           | `hard-delete`      | The grant at the provider, which may have been revoked since                | The connection comes back; a revoked grant fails on use and the reader is told to reconnect   |
+| `skill`            | `cloud-or-device` | `tombstone`        | A skill installed only on a device; the product copies device bytes nowhere | Comes back live                                                                               |
+| `device`           | `cloud`           | `server-expiry`    | The device itself, which is not in the database                             | Comes back until the server expires it again                                                  |
+
+Two things follow from the last column and are stated rather than covered.
+A deletion a reader made after the recovery point is undone by a restore for
+every `tombstone` type: the only deletions replayed after a restore are account
+erasures, through `replayErasureTombstones`
+(`apps/web/lib/server/erasure-tombstones.ts`), because the erasure ledger is the
+only deletion record kept outside the Postgres timeline. And bytes that live
+only on a device are outside every mechanism in this document; recovering them
+is recovering that device.
+
 ## Vendor recovery is not product recovery
 
 Every vendor in the table above publishes its own durability and availability

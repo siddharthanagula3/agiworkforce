@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The recovery table in the continuity runbook covers every production
-// dependency the code declares, and claims a drill only where one exists.
+// dependency the code declares, and claims a drill only where one exists. The
+// backup table beside it covers every synced object type the same way.
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -17,6 +18,11 @@ export const SECTION = '## Recovery by dependency';
 const NON_DEPENDENCY_ROWS = new Set(['Serving']);
 
 export const NO_DRILL = 'no recorded drill';
+
+export const SYNC_REGISTRY = 'packages/contracts/types/src/sync/object-semantics.ts';
+export const BACKUP_SECTION = '## Backup behaviour by synced object';
+
+const BACKUP_CELLS = 5;
 
 const REQUIRED_CELLS = 6;
 
@@ -150,10 +156,93 @@ export function runRecoveryTableCheck(root) {
   return failures;
 }
 
+/** Each synced type with the payload location and deletion mode it declares. */
+export function declaredSyncSemantics(source) {
+  const start = source.indexOf('SYNC_OBJECT_SEMANTICS');
+  if (start < 0) return null;
+  const end = source.indexOf('\n};', start);
+  if (end < 0) return null;
+  const entries = new Map();
+  for (const match of source
+    .slice(start, end)
+    .matchAll(/type: '([a-z-]+)',[^}]*?deletion: '([a-z-]+)',[^}]*?payload: '([a-z-]+)',/g)) {
+    entries.set(match[1], { deletion: match[2], payload: match[3] });
+  }
+  return entries;
+}
+
+function unquoted(cell) {
+  return (cell ?? '').replace(/^`|`$/g, '');
+}
+
+export function runBackupBehaviourCheck(root) {
+  const failures = [];
+  const documentPath = path.join(root, DOCUMENT);
+  const registryPath = path.join(root, SYNC_REGISTRY);
+
+  if (!fs.existsSync(documentPath)) return [`${DOCUMENT} does not exist`];
+  if (!fs.existsSync(registryPath)) return [`${SYNC_REGISTRY} does not exist`];
+
+  const declared = declaredSyncSemantics(fs.readFileSync(registryPath, 'utf8'));
+  if (declared === null || declared.size === 0) {
+    return [`${SYNC_REGISTRY}: SYNC_OBJECT_SEMANTICS could not be read, so nothing can be checked`];
+  }
+
+  const body = sectionBody(fs.readFileSync(documentPath, 'utf8'), BACKUP_SECTION);
+  if (body === null) return [`${DOCUMENT} has no "${BACKUP_SECTION}" section`];
+
+  const documented = new Set();
+  for (const cells of tableRows(body).filter((row) => rowLabel(row) !== 'type')) {
+    const type = rowLabel(cells);
+    const semantics = declared.get(type);
+    if (!semantics) {
+      failures.push(
+        `${DOCUMENT}: backup row "${type}" is not a type ${SYNC_REGISTRY} declares; remove it or add it there`,
+      );
+      continue;
+    }
+    if (documented.has(type)) {
+      failures.push(`${DOCUMENT}: "${type}" has more than one backup row`);
+      continue;
+    }
+    documented.add(type);
+    if (cells.length !== BACKUP_CELLS) {
+      failures.push(
+        `${DOCUMENT}: backup row "${type}" has ${cells.length} cells, expected ${BACKUP_CELLS}`,
+      );
+      continue;
+    }
+    for (const [index, cell] of cells.entries()) {
+      if (cell === '') {
+        failures.push(`${DOCUMENT}: backup row "${type}" leaves column ${index + 1} blank`);
+      }
+    }
+    if (unquoted(cells[1]) !== semantics.payload) {
+      failures.push(
+        `${DOCUMENT}: backup row "${type}" says its bytes are "${unquoted(cells[1])}" and the registry says "${semantics.payload}"`,
+      );
+    }
+    if (unquoted(cells[2]) !== semantics.deletion) {
+      failures.push(
+        `${DOCUMENT}: backup row "${type}" says its deletion is "${unquoted(cells[2])}" and the registry says "${semantics.deletion}"`,
+      );
+    }
+  }
+
+  for (const type of declared.keys()) {
+    if (!documented.has(type)) {
+      failures.push(
+        `${DOCUMENT}: ${SYNC_REGISTRY} declares "${type}" and the backup table has no row for it`,
+      );
+    }
+  }
+  return failures;
+}
+
 function main() {
   const flag = process.argv.indexOf('--root');
   const root = flag >= 0 ? path.resolve(process.argv[flag + 1]) : repoRoot;
-  const failures = runRecoveryTableCheck(root);
+  const failures = [...runRecoveryTableCheck(root), ...runBackupBehaviourCheck(root)];
   if (failures.length > 0) {
     console.error(
       'The disaster-recovery table does not match the dependencies the code declares:\n',
@@ -162,7 +251,9 @@ function main() {
     console.error(`\n${failures.length} problem(s).`);
     process.exit(1);
   }
-  console.log('check-dr-recovery-table: every production dependency has a recovery row.');
+  console.log(
+    'check-dr-recovery-table: every production dependency has a recovery row, and every synced type a backup row.',
+  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

@@ -4,7 +4,12 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('./object-backup', () => ({ resolveObjectBackupTarget: () => null }));
+const requeueReplicasAfterRestore = vi.hoisted(() => vi.fn(async () => 3));
+vi.mock('./object-backup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./object-backup')>()),
+  resolveObjectBackupTarget: () => null,
+  requeueReplicasAfterRestore,
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -192,6 +197,26 @@ describe('syncErasureLedger', () => {
       0,
       JSON.stringify({ reArmed: ['ann'], pending: [], unledgered: [] }),
     ]);
+  });
+
+  it('marks every backup replica due again when the database had lost tombstones', async () => {
+    const backup = bucket(serializeErasureLedger([entry('ann')]));
+    const { db } = database([]);
+
+    const report = await syncErasureLedger(db, { target: backup.target });
+
+    expect(requeueReplicasAfterRestore).toHaveBeenCalledTimes(1);
+    expect(report.replicasRequeued).toBe(3);
+  });
+
+  it('leaves the replica record alone on a run that found nothing restored', async () => {
+    const backup = bucket(serializeErasureLedger([entry('ann')]));
+    const { db } = database([{ user_id: 'ann', erased_at: '2026-08-01T00:00:00.000Z' }]);
+
+    const report = await syncErasureLedger(db, { target: backup.target });
+
+    expect(requeueReplicasAfterRestore).not.toHaveBeenCalled();
+    expect(report.replicasRequeued).toBe(0);
   });
 
   it('writes no replay row on an ordinary run where nothing was lost', async () => {
