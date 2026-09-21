@@ -599,7 +599,7 @@
           "ordinal": 0,
           "heading": "How deletion works",
           "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
-          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nAfter you confirm, the dialog shows the exact date and time your data is erased,\nand you are signed out when you continue."
+          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes."
         },
         {
           "id": "delete-your-account#1",
@@ -613,7 +613,7 @@
           "ordinal": 2,
           "heading": "Before you confirm",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
-          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf a paid subscription is attached, cancel or let it lapse separately; billing\nis handled in the billing portal, not by the deletion flow."
+          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf a paid subscription is attached, cancel or let it lapse separately; billing\nis handled in the billing portal, not by the deletion flow.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
         },
         {
           "id": "delete-your-account#3",
