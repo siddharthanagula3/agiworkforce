@@ -415,6 +415,29 @@ fn segment_argv(segment: &str) -> Option<Vec<String>> {
     shlex::split(segment).filter(|tokens| !tokens.is_empty())
 }
 
+/// How deep a wrapper chain (`sh -c 'sh -c ...'`) is followed.
+const MAX_WRAPPER_DEPTH: usize = 8;
+
+/// `sh -c "rm -rf /"` is one argv to the policy and a different command to the
+/// machine. Every command line a wrapper carries is checked alongside it.
+fn with_wrapped_commands(segments: &[String], depth: usize) -> Vec<String> {
+    let mut expanded = Vec::with_capacity(segments.len());
+    for segment in segments {
+        expanded.push(segment.clone());
+        if depth >= MAX_WRAPPER_DEPTH {
+            continue;
+        }
+        let Some(payload) = crate::safety::program::wrapped_payload(segment) else {
+            continue;
+        };
+        match shell_segments(&payload) {
+            Some(inner) => expanded.extend(with_wrapped_commands(&inner, depth + 1)),
+            None => expanded.push(payload),
+        }
+    }
+    expanded
+}
+
 /// Evaluate a shell command string against the policy and return the aggregate
 /// [`Decision`] across every command it would run.
 pub fn evaluate(policy: &Policy, command: &str) -> Decision {
@@ -436,6 +459,7 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
             every_segment_matched_rule: false,
         };
     }
+    let segments = with_wrapped_commands(&segments, 0);
 
     let fallback = |_: &[String]| heuristic_decision(command);
     let mut decision = Decision::Allow;
@@ -621,6 +645,27 @@ mod tests {
             evaluate(&policy, "echo \"$(dd if=/dev/zero of=/dev/sda)\""),
             Decision::Forbidden
         );
+    }
+
+    #[test]
+    fn a_catastrophic_command_stays_forbidden_when_a_wrapper_runs_it() {
+        let policy = default_policy();
+        for command in [
+            "sh -c 'rm -rf /'",
+            "bash -c \"rm -rf /\"",
+            "env PATH=/bin rm -rf /",
+            "sudo rm -rf /",
+            "nice -n 10 rm -rf /",
+            "timeout 30 rm -rf /",
+            "nohup dd if=/dev/zero of=/dev/sda",
+            "sh -c 'echo ok && rm -rf /'",
+        ] {
+            assert_eq!(
+                evaluate(&policy, command),
+                Decision::Forbidden,
+                "`{command}` must stay forbidden"
+            );
+        }
     }
 
     #[test]
