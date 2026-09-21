@@ -2476,8 +2476,26 @@ impl TurnHost for TurnHostAdapter<'_> {
                         status
                     );
                 }
+                let mut noticed = Vec::new();
                 if let Ok(mut activity) = self.session.session_activity.lock() {
-                    activity.tool_finished(id, *ok);
+                    for change in activity.tool_finished(id, *ok) {
+                        let Some(reason) = change.reason.as_ref() else {
+                            continue;
+                        };
+                        for notice in &reason.notices {
+                            noticed.push((change.path.clone(), *notice));
+                        }
+                    }
+                }
+                if !self.session.quiet {
+                    for (path, notice) in &noticed {
+                        narrate!(
+                            "  {} {}: {}",
+                            "!".dimmed(),
+                            ts::code(path.display().to_string()),
+                            crate::agent::prompt::notice_advisory(*notice).dimmed()
+                        );
+                    }
                 }
                 if self.session.json_events {
                     crate::agent_events::AgentEvent::ToolResult {

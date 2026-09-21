@@ -1745,6 +1745,7 @@ fn handoff_record(to: HandoffEnvironment) -> DeveloperSessionHandoff {
         },
         objective: Some("Finish the migration".to_string()),
         decisions: Vec::new(),
+        architecture: None,
         plan: Vec::new(),
         modified_files: Vec::new(),
         validations: Vec::new(),
