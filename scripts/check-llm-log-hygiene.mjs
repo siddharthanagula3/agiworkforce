@@ -20,12 +20,20 @@ import {
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Trees whose log calls carry model input or provider credentials. */
-export const SCANNED_ROOTS = Object.freeze([
-  'apps/web/app/api/llm',
-  'apps/web/lib/observability',
-  'packages/ai/providers',
-]);
+/**
+ * Every tree that logs. Three directories used to be named here, the ones where
+ * model input was expected to appear, and a log call anywhere else was outside
+ * the guard entirely. Where a secret ends up in a log is not where anyone
+ * expected it, so the scope is the server and the model packages, whole.
+ */
+export const SCANNED_ROOTS = Object.freeze(['apps/web/app', 'apps/web/lib', 'packages/ai']);
+
+/** Reading a size off a value is the count the rule asks for, not the value. */
+const MEASUREMENT = /\b([\w$]+)\.(?:length|size|byteLength)\b/g;
+
+export function withoutMeasurements(callText) {
+  return callText.replace(MEASUREMENT, 'measured');
+}
 
 const EXCLUDED_DIRECTORY = /^(__tests__|__mocks__|__fixtures__|node_modules|dist|build|coverage)$/;
 
@@ -68,7 +76,7 @@ export function logHygieneViolations(repoRoot = REPO_ROOT) {
       const source = readFileSync(file, 'utf8');
       for (const site of logCallSites(source)) {
         sites += 1;
-        const hits = rawContentReferences(site.text);
+        const hits = rawContentReferences(withoutMeasurements(site.text));
         if (hits.length === 0) continue;
         violations.push(
           `${path.relative(repoRoot, file)}:${site.line} logs ${hits.join(', ')}. ` +

@@ -17,10 +17,70 @@ import {
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const guard = path.join(repoRoot, 'scripts/check-security-egress-inventory.mjs');
 
-function withTree(files, run) {
+const SHARED_TRANSPORT = `
+import { assertResolvedPublicHostname, pinnedPublicFetch } from '@/lib/egress-policy';
+
+export async function guardedFetch(target, options) {
+  const fetchImpl = options.fetchImpl ?? pinnedPublicFetch;
+  let current = target;
+  for (let hop = 0; hop <= options.maxRedirects; hop += 1) {
+    await assertResolvedPublicHostname(current.href);
+    const response = await fetchImpl(current.href, { method: 'GET', redirect: 'manual' });
+    if (response.status < 300 || response.status >= 400) return { ok: true, response };
+    current = new URL(response.headers.get('location'), current);
+  }
+  return { ok: false };
+}
+`;
+
+const FETCH_TOOL = `
+import { guardedFetch } from '@/lib/url-fetch/guarded-fetch';
+
+export async function executeUrlFetch(args) {
+  return guardedFetch(new URL(args.url), { maxRedirects: 5, headers: {} });
+}
+`;
+
+const SEARCH_TOOL = `
+import { guardedFetch } from '@/lib/url-fetch/guarded-fetch';
+
+const VENDOR_ORIGIN = 'https://api.vendor.example';
+const VENDOR_SEARCH_URL = \`\${VENDOR_ORIGIN}/search\`;
+
+export async function vendorSearch(request) {
+  return fetch(VENDOR_SEARCH_URL, { method: 'POST', body: request.body });
+}
+
+export async function fetchPageMetadata(url) {
+  return guardedFetch(new URL(url), { maxRedirects: 3, headers: {} });
+}
+`;
+
+const MCP_POLICY = `
+import type { McpEgressPolicy } from '@agiworkforce/mcp';
+import { credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
+import { assertResolvedPublicHostname } from './egress-policy';
+
+export const MCP_EGRESS_POLICY: McpEgressPolicy = {
+  assertAllowedUrl: (url) => assertResolvedPublicHostname(url),
+  fetch: (input, init) => credentialedFetch(new URL(String(input)), { redirects: 'same-origin' }),
+};
+`;
+
+/** The surfaces the guard asserts on every run, so a tree without them is never the subject. */
+const BASE_TREE = {
+  'apps/web/lib/url-fetch/guarded-fetch.ts': SHARED_TRANSPORT,
+  'apps/web/lib/url-fetch/url-fetch-tool.ts': FETCH_TOOL,
+  'apps/web/lib/web-search/web-search-tool.ts': SEARCH_TOOL,
+  'apps/web/lib/mcp-egress-policy.ts': MCP_POLICY,
+};
+
+function withTree(files, run, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'egress-inventory-'));
   try {
-    for (const [name, contents] of Object.entries(files)) {
+    const tree = options.bare ? files : { ...BASE_TREE, ...files };
+    for (const [name, contents] of Object.entries(tree)) {
+      if (contents === null) continue;
       const full = path.join(root, name);
       fs.mkdirSync(path.dirname(full), { recursive: true });
       fs.writeFileSync(full, contents);
@@ -161,19 +221,106 @@ export async function save(target: string) {
 });
 
 test('an empty tree fails rather than reporting success', () => {
-  withTree({ 'README.md': 'nothing here' }, (root) => {
+  withTree(
+    { 'README.md': 'nothing here' },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /no source file was found/);
+    },
+    { bare: true },
+  );
+});
+
+test('a module under a feature server directory is inspected too', () => {
+  withTree(
+    {
+      'apps/web/features/plugins/server/registry.ts': `
+export async function read(location: { url: string }) {
+  return fetch(location.url, { method: 'GET' });
+}
+`,
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /features\/plugins\/server\/registry\.ts::read/);
+    },
+  );
+});
+
+test('a tool surface that dials a caller-chosen URL itself fails', () => {
+  withTree(
+    {
+      'apps/web/lib/web-search/web-search-tool.ts': SEARCH_TOOL.replace(
+        'return guardedFetch(new URL(url), { maxRedirects: 3, headers: {} });',
+        "return fetch(url, { redirect: 'manual' });",
+      ),
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /fetchPageMetadata calls fetch\(\) directly/);
+    },
+  );
+});
+
+test('a literal vendor endpoint on a tool surface is not a caller-chosen URL', () => {
+  withTree({}, (root) => assert.equal(runGuard(root).code, 0));
+});
+
+test('a tool surface that stops using the shared transport fails', () => {
+  withTree(
+    {
+      'apps/web/lib/web-search/web-search-tool.ts': 'export const nothing = 1;\n',
+      'apps/web/lib/url-fetch/url-fetch-tool.ts': 'export const other = 2;\n',
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /never calls guardedFetch/);
+    },
+  );
+});
+
+test('the shared transport going missing fails on its own', () => {
+  withTree({ 'apps/web/lib/url-fetch/guarded-fetch.ts': null }, (root) => {
     const { code, output } = runGuard(root);
     assert.equal(code, 1);
-    assert.match(output, /no source file was found/);
+    assert.match(output, /there is no one place that vets a hop/);
   });
 });
 
+test('an MCP policy that hands the client a fetch of its own fails', () => {
+  withTree(
+    {
+      'apps/web/lib/mcp-egress-policy.ts': MCP_POLICY.replace(
+        "fetch: (input, init) => credentialedFetch(new URL(String(input)), { redirects: 'same-origin' }),",
+        'fetch: (input, init) => pinnedPublicFetch(input, init),',
+      ).replace("import { credentialedFetch } from '@/lib/url-fetch/guarded-fetch';\n", ''),
+    },
+    (root) => {
+      const { code, output } = runGuard(root);
+      assert.equal(code, 1);
+      assert.match(output, /hands the MCP client a fetch of its own/);
+    },
+  );
+});
+
 test('expressionRoots reads through a template to each interpolation', () => {
-  assert.deepEqual(expressionRoots('`${base}/x/${id}`'), ['base', 'id']);
+  assert.deepEqual(expressionRoots('`${base}/x/${id}`'), ['base']);
   assert.deepEqual(expressionRoots('`https://fixed.example/x/${id}`'), []);
   assert.deepEqual(expressionRoots('row.endpoint'), ['row']);
   assert.deepEqual(expressionRoots('new URL(target)'), ['URL']);
   assert.deepEqual(expressionRoots("'https://fixed.example'"), []);
+});
+
+test('only the interpolations that can still name a host count', () => {
+  assert.deepEqual(expressionRoots('`/api/items/${id}`'), []);
+  assert.deepEqual(expressionRoots('`${scheme}://${host}/path/${id}`'), ['scheme', 'host']);
+  assert.deepEqual(expressionRoots('`https://${host}/path/${id}`'), ['host']);
+  assert.deepEqual(expressionRoots('`//${host}/path`'), ['host']);
+  assert.deepEqual(expressionRoots('`${BASE}/repos/${encodeURIComponent(ref)}`'), ['BASE']);
 });
 
 test('moduleScopeNames collects declarations and every import form', () => {
