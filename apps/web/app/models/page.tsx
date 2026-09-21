@@ -5,7 +5,7 @@ import { ModelsPage } from '@/features/models';
 
 export const metadata: Metadata = {
   title: 'Models',
-  description: 'Every model your plan can reach, with capabilities, context and price in credits.',
+  description: 'Every model your plan can reach, with its capabilities and context.',
   robots: { index: false, follow: false },
 };
 
