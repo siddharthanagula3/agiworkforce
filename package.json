@@ -243,7 +243,7 @@
     "check:ui-motion": "node --test scripts/check-ui-motion.test.mjs && node scripts/check-ui-motion.mjs",
     "check:ui-theme-tokens": "node --test scripts/check-ui-theme-tokens.test.mjs && node scripts/check-ui-theme-tokens.mjs",
     "check:ui-typography": "node --test scripts/check-ui-typography.test.mjs && node scripts/check-ui-typography.mjs",
-    "check:security-key-lifecycle": "node --test scripts/check-security-key-lifecycle.test.mjs && node scripts/check-security-key-lifecycle.mjs",
+    "check:security-key-lifecycle": "node --test scripts/check-security-key-lifecycle.test.mjs scripts/reseal-connector-secrets.test.mjs && node scripts/check-security-key-lifecycle.mjs",
     "check:security-response-headers": "node --test scripts/check-security-response-headers.test.mjs && node scripts/check-security-response-headers.mjs",
     "check:money-paths": "node --test scripts/check-money-paths.test.mjs && node scripts/check-money-paths.mjs",
     "check:plugin-install-gate": "node --test scripts/check-plugin-install-gate.test.mjs && node scripts/check-plugin-install-gate.mjs",
