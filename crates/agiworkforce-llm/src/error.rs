@@ -9,6 +9,43 @@
 
 use std::time::Duration;
 
+/// What a gateway's in-stream error frame says beyond its sentence. Each is
+/// the sender's own statement; an absent field stays absent, never guessed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StreamFailureDetail {
+    /// The gateway's closed failure code, e.g. `provider_rate_limited`.
+    pub code: Option<String>,
+    /// Seconds the provider itself said to wait.
+    pub retry_after: Option<u64>,
+    /// The reference a reader quotes to support.
+    pub request_id: Option<String>,
+}
+
+/// A wait outside this range is a fault in the sender, not a fact to show.
+const MAX_STATED_WAIT_SECS: u64 = 86_400;
+
+impl StreamFailureDetail {
+    /// Read the optional fields of an `x_stream_error` frame.
+    pub fn from_frame(frame: &serde_json::Value) -> Self {
+        let text = |key: &str| {
+            frame
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+        };
+        Self {
+            code: text("code"),
+            retry_after: frame
+                .get("retryAfterSeconds")
+                .and_then(serde_json::Value::as_u64)
+                .filter(|secs| (1..=MAX_STATED_WAIT_SECS).contains(secs)),
+            request_id: text("requestId"),
+        }
+    }
+}
+
 /// Structured error from provider request/stream mechanics.
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
@@ -29,6 +66,7 @@ pub enum LlmError {
         provider: String,
         message: String,
         retryable: bool,
+        detail: StreamFailureDetail,
     },
     /// Rate limiting from the provider (`Retry-After` seconds when sent).
     #[error("[{provider}] Rate limited{}", retry_after.map(|s| format!(", retry after {s}s")).unwrap_or_default())]
@@ -92,10 +130,11 @@ impl LlmError {
         }
     }
 
-    /// Provider-suggested retry delay (rate limits only).
+    /// The wait the provider itself stated, when it stated one.
     pub fn retry_after(&self) -> Option<u64> {
         match self {
             LlmError::RateLimited { retry_after, .. } => *retry_after,
+            LlmError::StreamError { detail, .. } => detail.retry_after,
             _ => None,
         }
     }
