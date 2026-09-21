@@ -1,8 +1,24 @@
-
 import { isPrivateTrustBoundary } from '../stores/privacyBoundary';
 import { OUR_CLOUD_HOSTS, isOurCloudHost } from '@agiworkforce/trust-boundaries';
 
 export { OUR_CLOUD_HOSTS, isOurCloudHost };
+
+/**
+ * A request the workspace's trust boundary refused before it was made.
+ *
+ * Typed rather than a bare Error so a caller can say what happened in its own
+ * words: the message below names an internal chokepoint and belongs in a log,
+ * never on a screen.
+ */
+export class EgressBlockedError extends Error {
+  readonly host: string;
+
+  constructor(host: string) {
+    super(`[egress-guard] blocked our-cloud egress in Local mode: ${host}`);
+    this.name = 'EgressBlockedError';
+    this.host = host;
+  }
+}
 
 function isLocalMode(): boolean {
   return isPrivateTrustBoundary();
@@ -44,7 +60,7 @@ export async function guardedFetch(
   if (isLocalMode()) {
     const host = extractHost(input);
     if (isOurCloudHost(host)) {
-      throw new Error(`[egress-guard] blocked our-cloud egress in Local mode: ${host}`);
+      throw new EgressBlockedError(host ?? '');
     }
   }
   return fetch(input, init);

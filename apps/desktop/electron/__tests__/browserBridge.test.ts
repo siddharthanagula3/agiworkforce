@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createHmac } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  BROWSER_BRIDGE_ROUTES,
   BROWSER_COMMAND_PROTOCOL_VERSION,
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
@@ -185,6 +186,35 @@ describe('loopback pairing bridge', () => {
     return `http://127.0.0.1:${context.port}${route}`;
   }
 
+  it('stands down rather than fighting another app for the bridge port', async () => {
+    const taken = context.port;
+    const second = await (async () => {
+      vi.resetModules();
+      const bridge = await import('../browser/bridgeServer');
+      bridge.resetBridgeForTests();
+      return bridge;
+    })();
+
+    const secondHome = await fs.mkdtemp(path.join(os.tmpdir(), 'agi-bridge-second-'));
+    await expect(
+      second.startBrowserBridge({
+        onStateChanged: () => undefined,
+        onPairRequest: () => undefined,
+        port: taken,
+        home: secondHome,
+      }),
+    ).rejects.toThrow(/already using the browser bridge on port/);
+
+    // The app that lost keeps its hands off the file the running one published,
+    // which is the only thing a local client reads to find the bridge.
+    await expect(
+      fs.stat(path.join(secondHome, '.agiworkforce', 'desktop-bridge.json')),
+    ).rejects.toThrow();
+    // And the one that had the port is untouched.
+    expect(context.bridge.pairingState().bridgeListening).toBe(true);
+    await fs.rm(secondHome, { recursive: true, force: true });
+  });
+
   it('binds loopback only', () => {
     expect(context.bridge.isLoopbackAddress('127.0.0.1')).toBe(true);
     expect(context.bridge.isLoopbackAddress('::ffff:127.0.0.1')).toBe(true);
@@ -233,6 +263,53 @@ describe('loopback pairing bridge', () => {
     expect(String(issued['token'])).toMatch(/^[a-f0-9]{64}$/);
     expect(context.bridge.pairingState().paired).toBe(true);
     expect(context.bridge.pairingState().hostInstalled).toBe(true);
+  });
+
+  /**
+   * The routes come from the contract, not from a list here, so a route added
+   * later is checked the day it exists. Two of them are the pairing handshake
+   * itself, which cannot present a token because issuing one is what it does;
+   * they are held to the code the user reads off their own screen instead,
+   * which the case above proves, and neither one acts on the browser.
+   */
+  const ISSUES_THE_GRANT: readonly string[] = [
+    BROWSER_BRIDGE_ROUTES.pairRequest,
+    BROWSER_BRIDGE_ROUTES.pairConfirm,
+  ];
+
+  it('refuses every route that acts on the browser to a caller holding no grant', async () => {
+    const routes = Object.values(BROWSER_BRIDGE_ROUTES);
+    expect(routes.length).toBeGreaterThan(0);
+
+    const privileged = routes.filter((route) => !ISSUES_THE_GRANT.includes(route));
+    expect(privileged).toHaveLength(routes.length - ISSUES_THE_GRANT.length);
+
+    for (const route of privileged) {
+      const response = await fetch(url(route), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version: 1,
+          extensionId: EXTENSION_ID,
+          message: { type: 'ping' },
+          command: 'browser_read_page',
+          args: {},
+          client: { name: 'agi' },
+        }),
+      });
+      expect(response.status, route).toBe(401);
+    }
+  });
+
+  it('refuses every route to a caller that is not on this machine', async () => {
+    for (const route of Object.values(BROWSER_BRIDGE_ROUTES)) {
+      const response = await fetch(url(route), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' },
+        body: JSON.stringify({ extensionId: EXTENSION_ID }),
+      });
+      expect(response.status, route).toBe(403);
+    }
   });
 
   it('refuses a native message without the host token', async () => {
@@ -417,6 +494,51 @@ describe('local client routes', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('refuses a command from a client on another revision, without running it', async () => {
+    pairBrowser();
+
+    for (const [version, expected] of [
+      [2, /This app is older/],
+      [0, /older than the app/],
+    ] as const) {
+      const response = await post('/client/command', {
+        version,
+        command: 'browser_read_page',
+        args: {},
+        client: { name: 'agi' },
+      });
+
+      expect(response.status, String(version)).toBe(409);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body['ok']).toBe(false);
+      expect(String(body['error'])).toMatch(expected);
+      // The shell says which revision it speaks, so the other side can name
+      // the version to install rather than guess.
+      expect(body['version']).toBe(1);
+      // Nothing about the mismatch reads as a pairing problem, which is what
+      // sent a user to re-pair a browser that was fine.
+      expect(String(body['error'])).not.toMatch(/pair/i);
+      expect(body['code']).toBeUndefined();
+    }
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('refuses a command that names no revision at all', async () => {
+    pairBrowser();
+    const response = await post('/client/command', {
+      command: 'browser_read_page',
+      args: {},
+      client: { name: 'agi' },
+    });
+
+    expect(response.status).toBe(409);
+    expect(String(((await response.json()) as Record<string, unknown>)['error'])).toMatch(
+      /did not say which version/,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
   it('runs a command through the shell gate, naming who asked', async () => {
     pairBrowser();
     const response = await post('/client/command', {
@@ -469,10 +591,12 @@ describe('local client routes', () => {
     expect(calls).toHaveLength(0);
   });
 
+  // A revision this app does not speak is answered separately, above: it is a
+  // different problem from a command this app has no such thing as, and
+  // reporting both as malformed is what sent a user hunting for a typo.
   it('refuses a malformed command before it reaches the gate', async () => {
     pairBrowser();
     for (const body of [
-      { version: 2, command: 'browser_read_page', args: {}, client: { name: 'agi' } },
       { version: 1, command: 'browser_teleport', args: {}, client: { name: 'agi' } },
       { version: 1, command: 'browser_read_page', args: {}, client: { name: '  ' } },
       { version: 1, command: 'browser_read_page', args: {} },

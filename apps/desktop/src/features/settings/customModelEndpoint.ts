@@ -1,3 +1,5 @@
+import { isOurCloudHost } from '../../lib/egressGuard';
+
 export interface EndpointValidation {
   valid: boolean;
   normalized?: string;
@@ -85,6 +87,13 @@ export function validateCustomModelEndpoint(raw: string): EndpointValidation {
     return {
       valid: false,
       error: 'This address is inside a private network and is not a provider endpoint.',
+    };
+  }
+  if (isOurCloudHost(host)) {
+    return {
+      valid: false,
+      error:
+        'A custom model is a provider of your own. This address belongs to AGI Workforce, which a workspace that keeps your work on this device never calls.',
     };
   }
 

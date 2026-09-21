@@ -34,9 +34,18 @@ import {
   type HostPreferences,
   type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
-import { BrowserBridgeError, startBrowserBridge, stopBrowserBridge } from './browser/bridgeServer';
+import {
+  BrowserBridgeError,
+  pairingState,
+  startBrowserBridge,
+  stopBrowserBridge,
+} from './browser/bridgeServer';
 import { handleBridgeCommand } from './accountBridge';
-import { dispatch as dispatchDesktopRuntime, runBrowserCommand } from './runtime/dispatcher';
+import {
+  configureWindowOpening,
+  dispatch as dispatchDesktopRuntime,
+  runBrowserCommand,
+} from './runtime/dispatcher';
 import { cancelAllShellRuns } from './runtime/shellService';
 import {
   configureDeveloperSessions,
@@ -89,7 +98,7 @@ import {
 import { createTray, destroyTray } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
 import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
-import { pageBackgroundColor, titleBarChrome } from './windowChrome';
+import { pageBackgroundColor, paintWindows, titleBarChrome } from './windowChrome';
 import {
   NEW_CHAT_ROUTE,
   accountFingerprint,
@@ -103,6 +112,15 @@ import {
   type WindowRestore,
 } from './windowState';
 import { patchShellWindowState, readShellWindowState } from './shellWindowStore';
+import {
+  broadcastRuntimeEvent,
+  cascadeBounds,
+  conversationIdFromRoute,
+  planSignOut,
+  planWindowOpen,
+  resolveNavigationConflict,
+  type OpenWindow,
+} from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
 import {
   isTrustedCloudRendererOrigin,
@@ -110,8 +128,39 @@ import {
   shouldGrantCloudPermissionRequest,
 } from './permissionPolicy';
 
+interface ShellWindowEntry {
+  win: BrowserWindow;
+  primary: boolean;
+  route: string;
+  /** Set while the shell is putting a window back after a conversation clash. */
+  returningTo: string | null;
+}
+
+const shellWindows = new Map<number, ShellWindowEntry>();
+
 let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink: string | null = null;
+
+function liveWindows(): ShellWindowEntry[] {
+  return [...shellWindows.values()].filter((entry) => !entry.win.isDestroyed());
+}
+
+function openWindows(): OpenWindow[] {
+  return liveWindows().map((entry) => ({
+    id: entry.win.id,
+    primary: entry.primary,
+    route: entry.route,
+    bounds: entry.win.getBounds(),
+  }));
+}
+
+function focusWindow(id: number): void {
+  const entry = shellWindows.get(id);
+  if (!entry || entry.win.isDestroyed()) return;
+  if (entry.win.isMinimized()) entry.win.restore();
+  entry.win.show();
+  entry.win.focus();
+}
 
 function installedMacArchitecture(): DesktopCloudMacArchitecture {
   if (process.arch === 'arm64' || process.arch === 'x64') return process.arch;
@@ -225,8 +274,11 @@ function isTrustedSender(event: Electron.IpcMainInvokeEvent): boolean {
 }
 
 function sendRuntimeEvent(event: unknown): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, event);
+  broadcastRuntimeEvent(
+    liveWindows().map((entry) => entry.win.webContents),
+    DESKTOP_RUNTIME_EVENT_CHANNEL,
+    event,
+  );
 }
 
 /**
@@ -281,7 +333,20 @@ async function startPairingBridge(): Promise<void> {
       ...(extraDirectories.length > 0 ? { extraManifestDirectories: extraDirectories } : {}),
     });
   } catch (error) {
+    // The bridge is the one part of the shell another app on this machine can
+    // take from it, so the refusal names that rather than reading as a fault
+    // here. The state event carries it to the Capabilities panel, which would
+    // otherwise show a bridge that is simply not listening, with nothing
+    // anywhere saying why.
     console.warn('[browser-bridge] could not start the pairing bridge:', error);
+    sendRuntimeEvent({
+      kind: 'browser-pairing-changed',
+      state: pairingState(),
+      unavailable:
+        error instanceof BrowserBridgeError
+          ? error.message
+          : 'This app could not open the browser bridge on this computer. Reopen it to try again.',
+    });
   }
 }
 
@@ -293,7 +358,10 @@ function registerIpcHandlers(): void {
       args && typeof args === 'object' && !Array.isArray(args)
         ? (args as Record<string, unknown>)
         : undefined;
-    return dispatchDesktopRuntime(mainWindow, command, safeArgs);
+    // The window that asked, so an approval sheet opens on the window the user
+    // is looking at rather than on whichever one was created first.
+    const caller = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    return dispatchDesktopRuntime(caller, command, safeArgs);
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.invokeBridge, async (event, command, args) => {
@@ -604,19 +672,8 @@ function offlineScreenUrl(targetUrl: string, detail: string): string {
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
-/**
- * Repaints every open window for the current appearance.
- *
- * `nativeTheme.themeSource` already reaches each renderer's
- * `prefers-color-scheme` live, but the window's own background is a main-process
- * property: without this the Quick Ask panel and any second window keep the
- * ground colour they were created with until they are closed and reopened.
- */
 function paintWindowsForTheme(): void {
-  const background = pageBackgroundColor(nativeTheme.shouldUseDarkColors);
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.setBackgroundColor(background);
-  }
+  paintWindows(BrowserWindow.getAllWindows(), nativeTheme.shouldUseDarkColors);
 }
 
 /**
@@ -647,10 +704,28 @@ let signedInAccount: string | null = null;
 /**
  * The account switch that must not reopen the previous account's chat. The
  * route is dropped the moment a different account names itself.
+ *
+ * The session, the tokens and this fingerprint are all app-level, so an account
+ * change in one window is an account change for the app. Every other window is
+ * left showing a page the account behind it no longer owns, so they close and
+ * the one that is kept returns to the root rather than to a stale conversation.
  */
 function adoptReportedAccount(account: string | null): void {
+  const changed = account !== signedInAccount;
   signedInAccount = account;
   patchShellWindowState(adoptAccount(readShellWindowState(), account));
+  if (!changed) return;
+
+  const plan = planSignOut(openWindows());
+  for (const id of plan.close) {
+    const entry = shellWindows.get(id);
+    if (entry && !entry.win.isDestroyed()) entry.win.close();
+  }
+  const kept = plan.keep === null ? null : shellWindows.get(plan.keep);
+  if (kept && !kept.win.isDestroyed() && conversationIdFromRoute(kept.route) !== null) {
+    kept.route = NEW_CHAT_ROUTE;
+    void kept.win.loadURL(windowUrlFor(null));
+  }
 }
 
 /**
@@ -711,15 +786,50 @@ function followWindowFrame(win: BrowserWindow, restored: WindowRestore): () => v
   };
 }
 
-function createMainWindow(): void {
+/**
+ * The address a route is loaded from. Bundled serves the renderer's own bundle
+ * and falls back to `index.html` for any path it has no file for, so the same
+ * in-app route reaches the right screen in both modes.
+ */
+function windowUrlFor(route: string | null): string {
+  if (RENDERER_MODE === 'remote') {
+    return `${CLOUD_APP_ORIGIN}${route ?? NEW_CHAT_ROUTE}`;
+  }
+  return route === null || route === NEW_CHAT_ROUTE
+    ? `${RENDERER_ORIGIN}/index.html`
+    : `${RENDERER_ORIGIN}${route}`;
+}
+
+/**
+ * Where a second window opens: stepped off the window that asked for it, on
+ * that window's own display.
+ */
+function secondaryWindowBounds(): WindowFrame {
+  const windows = openWindows();
+  const anchor =
+    windows.find((window) => window.id === BrowserWindow.getFocusedWindow()?.id) ??
+    windows.find((window) => window.primary) ??
+    windows[0];
+  const base = anchor?.bounds ?? windowRestore().bounds;
+  const display = screen.getDisplayMatching(base);
+  const bounds = cascadeBounds(
+    base,
+    windows.map((window) => window.bounds),
+    display.workArea,
+  );
+  return { ...bounds, maximized: false };
+}
+
+function createShellWindow(options: { primary: boolean; route?: string | null }): BrowserWindow {
   const isRemote = RENDERER_MODE === 'remote';
   const restore = windowRestore();
+  const startBounds = options.primary ? restore.bounds : secondaryWindowBounds();
 
-  mainWindow = new BrowserWindow({
-    width: restore.bounds.width,
-    height: restore.bounds.height,
-    x: restore.bounds.x,
-    y: restore.bounds.y,
+  const win = new BrowserWindow({
+    width: startBounds.width,
+    height: startBounds.height,
+    x: startBounds.x,
+    y: startBounds.y,
     minWidth: MIN_WINDOW_WIDTH,
     minHeight: MIN_WINDOW_HEIGHT,
     show: false,
@@ -745,44 +855,59 @@ function createMainWindow(): void {
     },
   });
 
-  applyRemoteWindowPolicy(mainWindow);
+  applyRemoteWindowPolicy(win);
 
-  if (restore.maximized) mainWindow.maximize();
+  const entryRoute = options.primary ? (isRemote ? restore.route : null) : (options.route ?? null);
+  const entry: ShellWindowEntry = {
+    win,
+    primary: options.primary,
+    route: entryRoute ?? NEW_CHAT_ROUTE,
+    returningTo: null,
+  };
+  shellWindows.set(win.id, entry);
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+  // `windowState.ts` keeps one frame per display arrangement, so the primary is
+  // the only window that writes it. Letting every window write would leave the
+  // remembered position belonging to whichever one happened to move last.
+  if (options.primary) {
+    mainWindow = win;
+    if (restore.maximized) win.maximize();
+    const flushWindowFrame = followWindowFrame(win, restore);
+    win.on('close', flushWindowFrame);
+  }
+
+  win.once('ready-to-show', () => {
+    if (!win.isDestroyed()) win.show();
   });
 
-  const flushWindowFrame = followWindowFrame(mainWindow, restore);
-  mainWindow.on('close', flushWindowFrame);
-
-  mainWindow.webContents.once('did-finish-load', () => {
-    if (pendingDeepLink) {
-      const url = pendingDeepLink;
-      pendingDeepLink = null;
-      mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, url);
-    }
-  });
+  if (options.primary) {
+    win.webContents.once('did-finish-load', () => {
+      if (pendingDeepLink) {
+        const url = pendingDeepLink;
+        pendingDeepLink = null;
+        win.webContents.send(ELECTRON_IPC_CHANNELS.deepLink, url);
+      }
+    });
+  }
 
   // Chromium's zoom is per origin and per session, so it survives a navigation
   // but not a relaunch. Reapplying it on every load is what makes View > Zoom
   // In outlive quitting the app.
-  mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow?.webContents.setZoomLevel(getPreferences().zoomLevel);
+  win.webContents.on('did-finish-load', () => {
+    if (!win.isDestroyed()) win.webContents.setZoomLevel(getPreferences().zoomLevel);
   });
 
-  mainWindow.on('closed', () => {
+  win.on('closed', () => {
+    shellWindows.delete(win.id);
+    if (!options.primary) return;
     mainWindow = null;
     if (process.platform !== 'darwin') destroyQuickAsk();
   });
 
   paintWindowsForTheme();
 
-  const rootUrl = isRemote
-    ? `${CLOUD_APP_ORIGIN}${NEW_CHAT_ROUTE}`
-    : `${RENDERER_ORIGIN}/index.html`;
-  const restoredRoute = isRemote ? restore.route : null;
-  const entryUrl = restoredRoute ? `${CLOUD_APP_ORIGIN}${restoredRoute}` : rootUrl;
+  const rootUrl = windowUrlFor(null);
+  const entryUrl = windowUrlFor(entryRoute);
 
   if (isRemote) {
     const followRoute = (_event: unknown, url: string, httpStatusCode?: number) => {
@@ -790,34 +915,63 @@ function createMainWindow(): void {
       // app opens on, so a not-found answer sends the window to the root. The
       // root answering the same way is not something a second load can fix.
       if (shouldFallBackToRoot(httpStatusCode) && url !== rootUrl) {
-        patchShellWindowState(rememberRoute(readShellWindowState(), null, signedInAccount));
-        void mainWindow?.loadURL(rootUrl);
+        entry.route = NEW_CHAT_ROUTE;
+        if (options.primary) {
+          patchShellWindowState(rememberRoute(readShellWindowState(), null, signedInAccount));
+        }
+        void win.loadURL(rootUrl);
         return;
       }
       const route = routeFromUrl(url, CLOUD_APP_ORIGIN);
-      if (route) {
+      if (!route) return;
+
+      // The window the shell is putting back after a clash has already been
+      // decided; re-judging that navigation would send it back again forever.
+      if (entry.returningTo === route) {
+        entry.returningTo = null;
+        entry.route = route;
+        return;
+      }
+
+      const clash = resolveNavigationConflict(openWindows(), win.id, route);
+      if (clash) {
+        const previous = entry.route;
+        entry.returningTo = previous;
+        focusWindow(clash.focus);
+        void win.loadURL(windowUrlFor(previous));
+        return;
+      }
+
+      entry.route = route;
+      installMenu();
+      if (options.primary) {
         patchShellWindowState(rememberRoute(readShellWindowState(), route, signedInAccount));
       }
     };
-    mainWindow.webContents.on('did-navigate', followRoute);
-    mainWindow.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+    win.webContents.on('did-navigate', followRoute);
+    win.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
       if (isMainFrame) followRoute(_event, url);
     });
   }
 
-  mainWindow.webContents.on(
+  win.webContents.on(
     'did-fail-load',
     (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
       if (!isMainFrame) return;
       if (errorCode === -3) return;
       if (validatedURL.startsWith('data:')) return;
-      void mainWindow?.loadURL(
+      void win.loadURL(
         offlineScreenUrl(entryUrl, `${errorDescription || 'load failed'} (${errorCode})`),
       );
     },
   );
 
-  void mainWindow.loadURL(entryUrl);
+  void win.loadURL(entryUrl);
+  return win;
+}
+
+function createMainWindow(): void {
+  createShellWindow({ primary: true });
 }
 
 function showMainWindow(): void {
@@ -828,13 +982,53 @@ function showMainWindow(): void {
   focusMainWindow();
 }
 
+/**
+ * Opens a route in a window of its own, or raises the window already on it.
+ *
+ * Refusing an unopenable route rather than loading it is what keeps a
+ * `javascript:` or cross-origin string from becoming a window: the page asks
+ * for this over the runtime channel, and the shell decides.
+ */
+function openRouteInNewWindow(route: string): boolean {
+  const plan = planWindowOpen(openWindows(), route);
+  if (plan.action === 'refuse') return false;
+  if (plan.action === 'focus') {
+    focusWindow(plan.windowId);
+    return true;
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) createMainWindow();
+  createShellWindow({ primary: false, route: plan.route });
+  return true;
+}
+
+/** The conversation the front window is on, or null when it is not on one. */
+function focusedConversationRoute(): string | null {
+  const focused = BrowserWindow.getFocusedWindow();
+  const entry =
+    (focused ? shellWindows.get(focused.id) : null) ?? shellWindows.get(mainWindow?.id ?? -1);
+  if (!entry) return null;
+  return conversationIdFromRoute(entry.route) === null ? null : entry.route;
+}
+
 function openNewChat(): void {
   showMainWindow();
-  const target =
-    RENDERER_MODE === 'remote'
-      ? `${CLOUD_APP_ORIGIN}${NEW_CHAT_ROUTE}`
-      : `${RENDERER_ORIGIN}/index.html`;
-  void mainWindow?.loadURL(target);
+  void mainWindow?.loadURL(windowUrlFor(null));
+}
+
+function openNewWindow(): void {
+  createShellWindow({ primary: false, route: null });
+}
+
+function openFocusedConversationInNewWindow(): void {
+  const route = focusedConversationRoute();
+  if (route === null) return;
+  const focused = BrowserWindow.getFocusedWindow();
+  const entry = focused ? shellWindows.get(focused.id) : null;
+  if (entry) {
+    entry.route = NEW_CHAT_ROUTE;
+    void entry.win.loadURL(windowUrlFor(null));
+  }
+  createShellWindow({ primary: false, route });
 }
 
 function openSettings(): void {
@@ -930,31 +1124,52 @@ function openSupport(): void {
 }
 
 /**
+ * The window a menu command acts on: the one in front, and the primary only
+ * when nothing is. A menu bar belongs to the front window, so sending Back or
+ * Toggle Sidebar to the first window ever created would act on a surface the
+ * user is not looking at.
+ */
+function frontWindow(): BrowserWindow | null {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && shellWindows.has(focused.id) && !focused.isDestroyed()) return focused;
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+}
+
+/**
  * A menu item the page is the only thing that can carry out. The window is
  * raised first: choosing Toggle Sidebar from the menu bar while the window is
  * behind something else would otherwise change a surface the user cannot see.
  */
 function sendHostCommand(command: HostCommand): void {
-  showMainWindow();
-  mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+  const target = frontWindow();
+  if (!target) {
+    showMainWindow();
+    mainWindow?.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
+    return;
+  }
+  focusWindow(target.id);
+  target.webContents.send(ELECTRON_IPC_CHANNELS.hostCommand, command);
 }
 
 function goBack(): void {
-  const history = mainWindow?.webContents.navigationHistory;
+  const history = frontWindow()?.webContents.navigationHistory;
   if (history?.canGoBack()) history.goBack();
 }
 
 function goForward(): void {
-  const history = mainWindow?.webContents.navigationHistory;
+  const history = frontWindow()?.webContents.navigationHistory;
   if (history?.canGoForward()) history.goForward();
 }
 
+/**
+ * Zoom is a preference, not a property of one window: the stored level is what
+ * every window reapplies on load, so a window opened later is at the size the
+ * user chose rather than at the default.
+ */
 function applyZoomLevel(level: number): void {
   const clamped = clampZoomLevel(level);
   saveSettings({ zoomLevel: clamped });
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.setZoomLevel(clamped);
-  }
+  for (const entry of liveWindows()) entry.win.webContents.setZoomLevel(clamped);
 }
 
 function stepZoomLevel(steps: number): void {
@@ -1011,6 +1226,34 @@ async function checkForCloudUpdate(): Promise<void> {
   }
 }
 
+function installMenu(): void {
+  installAppMenu(
+    {
+      newChat: garnishHandlers.onNewChat,
+      newWindow: openNewWindow,
+      openConversationInNewWindow: openFocusedConversationInNewWindow,
+      hasFocusedConversation: () => focusedConversationRoute() !== null,
+      toggleQuickAsk: garnishHandlers.onQuickAsk,
+      captureScreenshot: garnishHandlers.onScreenshot,
+      openSettings,
+      openLogs: openLogsFolder,
+      openSupport,
+      checkForUpdates: garnishHandlers.onCheckForUpdates,
+      sendHostCommand,
+      goBack,
+      goForward,
+      setZoomLevel: applyZoomLevel,
+      stepZoomLevel,
+      takeOverScreen: () => void takeOverComputerUse(),
+      handBackScreen: () => void handBackComputerUse(),
+    },
+    {
+      quickAsk: getShortcuts().quickAskShortcut,
+      screenshot: getShortcuts().screenshotShortcut,
+    },
+  );
+}
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
@@ -1042,6 +1285,7 @@ if (!hasSingleInstanceLock) {
     // the other end of it. `isTrustedSender` is what decides who may call, not
     // which mode we booted in.
     registerIpcHandlers();
+    configureWindowOpening(openRouteInNewWindow);
     signedInAccount = readShellWindowState().lastAccount;
     onShellIdentityReported((identity) => adoptReportedAccount(accountFingerprint(identity)));
     nativeTheme.themeSource = getPreferences().appearance;
@@ -1056,28 +1300,11 @@ if (!hasSingleInstanceLock) {
     createMainWindow();
 
     if (getPreferences().showInMenuBar) createTray(garnishHandlers);
-    installAppMenu(
-      {
-        newChat: garnishHandlers.onNewChat,
-        toggleQuickAsk: garnishHandlers.onQuickAsk,
-        captureScreenshot: garnishHandlers.onScreenshot,
-        openSettings,
-        openLogs: openLogsFolder,
-        openSupport,
-        checkForUpdates: garnishHandlers.onCheckForUpdates,
-        sendHostCommand,
-        goBack,
-        goForward,
-        setZoomLevel: applyZoomLevel,
-        stepZoomLevel,
-        takeOverScreen: () => void takeOverComputerUse(),
-        handBackScreen: () => void handBackComputerUse(),
-      },
-      {
-        quickAsk: getShortcuts().quickAskShortcut,
-        screenshot: getShortcuts().screenshotShortcut,
-      },
-    );
+    installMenu();
+    // The Window menu says whether the front window is on a conversation, so it
+    // is rebuilt when the front window changes rather than once at launch.
+    app.on('browser-window-focus', installMenu);
+    app.on('browser-window-blur', installMenu);
     applyLaunchAtLogin();
     applyGarnishShortcuts();
 

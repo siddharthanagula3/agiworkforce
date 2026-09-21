@@ -98,6 +98,45 @@ describe('desktop cloud update contract', () => {
     ).rejects.toThrow(/incomplete release metadata/i);
   });
 
+  /**
+   * The update feed is the one thing in this app that talks to a server before
+   * the user has asked for anything. A feed that is down, slow or unreachable
+   * is a failed update check and nothing else: it says so in words a user can
+   * act on, it does not claim the app is current, and it leaves no promise of
+   * a download behind for the rest of the app to act on.
+   */
+  it('reports the outage rather than the app being up to date when the feed is unreachable', async () => {
+    const outages: [string, () => Promise<Response>, RegExp][] = [
+      [
+        'the network never answered',
+        () => Promise.reject(new TypeError('fetch failed')),
+        /could not reach the update service/,
+      ],
+      [
+        'the request timed out',
+        () => Promise.reject(new DOMException('The operation timed out.', 'TimeoutError')),
+        /could not reach the update service in time/,
+      ],
+      [
+        'the server is down',
+        async () => new Response(null, { status: 502 }),
+        /unavailable \(502\)/,
+      ],
+      [
+        'a proxy answered with a page',
+        async () => new Response('<html>offline</html>', { status: 200 }),
+        /invalid release response|incomplete release metadata/i,
+      ],
+    ];
+
+    for (const [name, fetchImpl, expected] of outages) {
+      await expect(
+        checkDesktopCloudUpdate('1.2.0', 'arm64', fetchImpl as unknown as typeof fetch),
+        name,
+      ).rejects.toThrow(expected);
+    }
+  });
+
   it('never offers an installer for the wrong Mac architecture', async () => {
     const armOnly = vi.fn(async () =>
       Response.json({

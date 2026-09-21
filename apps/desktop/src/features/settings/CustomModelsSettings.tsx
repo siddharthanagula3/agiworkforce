@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import type { CustomModelConfig } from '@agiworkforce/types';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { EgressBlockedError, guardedFetch } from '../../lib/egressGuard';
 import { validateCustomModelEndpoint } from './customModelEndpoint';
 import {
   AlertDialog,
@@ -74,30 +75,55 @@ interface VerifyResult {
   error?: string;
 }
 
+const VERIFY_TIMEOUT_MS = 8000;
+
+const CLOUD_ENDPOINT_REFUSED =
+  'This workspace keeps your work on this device, so it will not call an AGI Workforce address. Point the base URL at your own provider.';
+const ENDPOINT_UNREACHABLE = 'Could not reach that endpoint. Check the base URL, then try again.';
+const ENDPOINT_TIMED_OUT = 'That endpoint did not answer in time. Try again.';
+
+function describeVerifyFailure(error: unknown): string {
+  if (error instanceof EgressBlockedError) return CLOUD_ENDPOINT_REFUSED;
+  if (error instanceof DOMException && error.name === 'TimeoutError') return ENDPOINT_TIMED_OUT;
+  return ENDPOINT_UNREACHABLE;
+}
+
+/**
+ * The probe goes through the egress chokepoint like every other request this
+ * app makes: a base URL is whatever the user typed, and a workspace that keeps
+ * its work on this device must not dial our cloud because a settings field
+ * named it.
+ */
 async function verifyCustomModel(
   baseUrl: string,
   modelId: string,
   apiKey: string,
 ): Promise<VerifyResult> {
+  const start = Date.now();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (apiKey.trim()) {
+    headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+  }
+
   try {
-    const start = Date.now();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (apiKey.trim()) {
-      headers['Authorization'] = `Bearer ${apiKey.trim()}`;
+    const response = await guardedFetch(`${baseUrl}/models`, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (response.ok) {
+      return { connected: true, latencyMs: Date.now() - start };
     }
-    try {
-      const response = await fetch(`${baseUrl}/models`, {
-        method: 'GET',
-        headers,
-        signal: AbortSignal.timeout(8000),
-      });
-      if (response.ok) {
-        return { connected: true, latencyMs: Date.now() - start };
-      }
-    } catch {
-      // Fall through to chat completions fallback
+  } catch (error) {
+    // A listing endpoint many providers do not serve; only a refusal of the
+    // whole destination ends the check here.
+    if (error instanceof EgressBlockedError) {
+      return { connected: false, error: CLOUD_ENDPOINT_REFUSED };
     }
-    const chatResp = await fetch(`${baseUrl}/chat/completions`, {
+  }
+
+  try {
+    const chatResp = await guardedFetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -105,13 +131,13 @@ async function verifyCustomModel(
         messages: [{ role: 'user', content: 'hi' }],
         max_tokens: 1,
       }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
     });
     return chatResp.ok
       ? { connected: true, latencyMs: Date.now() - start }
-      : { connected: false, error: chatResp.statusText || `HTTP ${chatResp.status}` };
-  } catch (e) {
-    return { connected: false, error: e instanceof Error ? e.message : 'Connection failed' };
+      : { connected: false, error: `That endpoint answered ${chatResp.status}.` };
+  } catch (error) {
+    return { connected: false, error: describeVerifyFailure(error) };
   }
 }
 

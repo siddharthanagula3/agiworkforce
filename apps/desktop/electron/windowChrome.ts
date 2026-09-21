@@ -55,6 +55,31 @@ export function pageBackgroundColor(prefersDark: boolean): string {
   return prefersDark ? AGI_PAGE_BACKGROUND_DARK : AGI_PAGE_BACKGROUND_LIGHT;
 }
 
+export interface PaintableWindow {
+  isDestroyed(): boolean;
+  setBackgroundColor(color: string): void;
+}
+
+/**
+ * Repaints every open window for the current appearance.
+ *
+ * `nativeTheme.themeSource` already reaches each renderer's
+ * `prefers-color-scheme` live, but the window's own background is a main-process
+ * property: without this the Quick Ask panel and any second window keep the
+ * ground colour they were created with until they are closed and reopened.
+ * Returns how many were repainted.
+ */
+export function paintWindows(windows: Iterable<PaintableWindow>, prefersDark: boolean): number {
+  const background = pageBackgroundColor(prefersDark);
+  let painted = 0;
+  for (const win of windows) {
+    if (win.isDestroyed()) continue;
+    win.setBackgroundColor(background);
+    painted += 1;
+  }
+  return painted;
+}
+
 export function trafficLightPosition(stripHeight: number): { x: number; y: number } {
   return {
     x: MACOS_WINDOW_BUTTON_LEADING_INSET,

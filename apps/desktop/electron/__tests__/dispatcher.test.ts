@@ -140,7 +140,7 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   syncDeveloperAccounts,
 }));
 
-const { dispatch } = await import('../runtime/dispatcher');
+const { configureWindowOpening, dispatch } = await import('../runtime/dispatcher');
 
 const window = {
   isDestroyed: () => false,
@@ -286,6 +286,37 @@ describe('dispatch, the window layout the shell holds', () => {
     const response = await dispatch(window, 'window_layout_write', { sidebarCollapsed: false });
     expect(writeShellLayout).toHaveBeenCalledWith({ sidebarCollapsed: false });
     expect(response).toMatchObject({ ok: true, value: { sidebarCollapsed: false } });
+  });
+});
+
+describe('dispatch, a page asking for a window of its own', () => {
+  it('hands the route to the process that owns the windows', async () => {
+    const open = vi.fn(() => true);
+    configureWindowOpening(open);
+
+    const response = await dispatch(window, 'window_open', {
+      route: '/chat/library?surface=artifact',
+    });
+
+    expect(open).toHaveBeenCalledWith('/chat/library?surface=artifact');
+    expect(response).toEqual({ ok: true, value: true });
+  });
+
+  it('answers a refused route without loading it', async () => {
+    const open = vi.fn(() => false);
+    configureWindowOpening(open);
+
+    const response = await dispatch(window, 'window_open', { route: 'https://elsewhere.example' });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+  });
+
+  it('needs a route to open', async () => {
+    configureWindowOpening(vi.fn(() => true));
+
+    const response = await dispatch(window, 'window_open', {});
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
   });
 });
 

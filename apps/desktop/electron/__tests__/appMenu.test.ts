@@ -16,6 +16,9 @@ const { appMenuTemplate } = await import('../appMenu');
 function actions() {
   return {
     newChat: vi.fn(),
+    newWindow: vi.fn(),
+    openConversationInNewWindow: vi.fn(),
+    hasFocusedConversation: vi.fn(() => true),
     toggleQuickAsk: vi.fn(),
     captureScreenshot: vi.fn(),
     openSettings: vi.fn(),
@@ -194,5 +197,42 @@ describe('the application menu', () => {
 
     expect(close).toBeDefined();
     expect(close?.accelerator).toBe(contractAccelerator('host-close-window'));
+  });
+
+  it('opens a second window from the Window menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Window', 'New Window').click as () => void)();
+
+    expect(spies.newWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers moving the conversation out only while the front window is on one', () => {
+    const onConversation = actions();
+    const onSomethingElse = { ...actions(), hasFocusedConversation: vi.fn(() => false) };
+
+    expect(
+      item(
+        appMenuTemplate(onConversation, ACCELERATORS),
+        'Window',
+        'Move Conversation to New Window',
+      ).enabled,
+    ).toBe(true);
+    expect(
+      item(
+        appMenuTemplate(onSomethingElse, ACCELERATORS),
+        'Window',
+        'Move Conversation to New Window',
+      ).enabled,
+    ).toBe(false);
+
+    (
+      item(
+        appMenuTemplate(onConversation, ACCELERATORS),
+        'Window',
+        'Move Conversation to New Window',
+      ).click as () => void
+    )();
+    expect(onConversation.openConversationInNewWindow).toHaveBeenCalledTimes(1);
   });
 });
