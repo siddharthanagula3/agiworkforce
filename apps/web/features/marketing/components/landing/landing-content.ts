@@ -75,27 +75,12 @@ export const EXAMPLE_TURN = {
   cacheReadShare: 0.94,
 } as const;
 
-const perMillion = (tokens: number, usdPerMillion: number) => (tokens * usdPerMillion) / 1_000_000;
 const usd = (value: number) => {
   if (value === 0) return '$0.00';
   const digits = value < 0.001 ? 4 : 3;
   return `$${value.toFixed(digits)}`;
 };
 const tokens = (count: number) => count.toLocaleString('en-US');
-
-function turnCost(id: string, cached: boolean): number {
-  const model = catalogModels[id];
-  if (!model?.inputCost || !model.outputCost) return 0;
-  const cachedTokens = cached
-    ? Math.round(EXAMPLE_TURN.promptTokens * EXAMPLE_TURN.cacheReadShare)
-    : 0;
-  const freshTokens = EXAMPLE_TURN.promptTokens - cachedTokens;
-  return (
-    perMillion(freshTokens, model.inputCost) +
-    perMillion(cachedTokens, model.cached_input ?? model.inputCost) +
-    perMillion(EXAMPLE_TURN.completionTokens, model.outputCost)
-  );
-}
 
 const cachePercent = `${Math.round(EXAMPLE_TURN.cacheReadShare * 100)}%`;
 const LOCAL_RUNTIME_ID = 'ollama';
@@ -256,7 +241,7 @@ export const CONSOLE_LANES: readonly ConsoleLane[] = [
       ranOn: `${providerLabel(BYOK_PROVIDER_ID)}, on your account`,
       left: `Prompt and file, to ${providerLabel(BYOK_PROVIDER_ID)} only`,
       tokens: `${tokens(EXAMPLE_TURN.promptTokens)} in · ${tokens(EXAMPLE_TURN.completionTokens)} out`,
-      cost: `${usd(turnCost(BYOK_MODEL_ID, false))} on your ${providerLabel(BYOK_PROVIDER_ID)} bill`,
+      cost: `On your ${providerLabel(BYOK_PROVIDER_ID)} bill`,
       surfaces: listLiveSurfaces(LANE_SURFACES.byok),
     },
   },
@@ -272,7 +257,7 @@ export const CONSOLE_LANES: readonly ConsoleLane[] = [
       ranOn: `${CLOUD_NAME}, capacity we run`,
       left: 'Prompt and file, to the provider we route to',
       tokens: `${tokens(EXAMPLE_TURN.promptTokens)} in (${cachePercent} cached) · ${tokens(EXAMPLE_TURN.completionTokens)} out`,
-      cost: `${usd(turnCost(CLOUD_MODEL_ID, true))} metered on your plan`,
+      cost: 'Metered on your plan',
       surfaces: listLiveSurfaces(LANE_SURFACES.cloud),
     },
   },
