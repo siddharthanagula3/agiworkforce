@@ -27,6 +27,7 @@ export interface AppMenuActions {
   captureScreenshot: () => void;
   openSettings: () => void;
   openLogs: () => void;
+  copyDiagnostics: () => void;
   openSupport: () => void;
   checkForUpdates: () => void;
   sendHostCommand: (command: HostCommand) => void;
@@ -236,6 +237,7 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       },
       { type: 'separator' },
       { label: 'Open Logs', click: actions.openLogs },
+      { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
       { label: 'Check for Updates', click: actions.checkForUpdates },
     ],
   };
