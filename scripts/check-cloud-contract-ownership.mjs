@@ -45,6 +45,7 @@ const cloudModules = [
   'skills',
   'plugin-marketplaces',
   'device-registry',
+  'header-names',
 ];
 
 const cloudMovedFiles = [

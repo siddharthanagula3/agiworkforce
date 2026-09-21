@@ -4,7 +4,9 @@ vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { DesktopHostDeclaration } from '@agiworkforce/local-runtime-contract';
+import { DEVICE_STEP_TOOLS, deviceStepCapability } from '@agiworkforce/local-runtime-contract';
 import {
+  STEP_CAPABILITY_ADVERTISEMENTS,
   clearDeviceForRemoteSteps,
   readRegisteredDevice,
   stopRemoteWorkOnDevice,
@@ -162,6 +164,7 @@ describe('clearing a device for remote steps', () => {
     expect(clearDeviceForRemoteSteps(declaration(), registration())).toEqual({
       decision: 'ready',
       deviceId: '0190a000-0000-7000-8000-0000000000aa',
+      capabilitySource: 'advertised',
     });
   });
 
@@ -212,6 +215,64 @@ describe('clearing a device for remote steps', () => {
     expect(clearDeviceForRemoteSteps(declaration(['filesystem.read']), device).decision).toBe(
       'ready',
     );
+  });
+
+  it('believes the device over the header when it says it has no terminal', () => {
+    const device = registration({
+      capabilities: {
+        browser: true,
+        computerUse: true,
+        localModels: false,
+        localMcp: false,
+        remoteControl: true,
+        terminal: false,
+      },
+    });
+    const clearance = clearDeviceForRemoteSteps(declaration(['shell.execute']), device);
+
+    expect(clearance.decision).toBe('withdrawn');
+    expect(clearance).toMatchObject({
+      reason: expect.stringContaining('a terminal'),
+      capabilitySource: 'advertised',
+    });
+  });
+
+  it('falls back to the header only where the device advertised nothing, and says so', () => {
+    const clearance = clearDeviceForRemoteSteps(declaration(['shell.execute']), registration());
+
+    expect(clearance).toEqual({
+      decision: 'ready',
+      deviceId: DEVICE_ID,
+      capabilitySource: 'inferred',
+    });
+  });
+
+  it('reads an advertised yes as an advertised answer, not a fallback', () => {
+    const device = registration({
+      capabilities: {
+        browser: true,
+        computerUse: true,
+        localModels: false,
+        localMcp: false,
+        remoteControl: true,
+        terminal: true,
+      },
+    });
+
+    expect(clearDeviceForRemoteSteps(declaration(['shell.execute']), device)).toMatchObject({
+      decision: 'ready',
+      capabilitySource: 'advertised',
+    });
+  });
+
+  it('names an advertisement for every permission a device step can require', () => {
+    const required = [...new Set(DEVICE_STEP_TOOLS.map((tool) => deviceStepCapability(tool)))];
+    const unmapped = required.filter(
+      (capability) => STEP_CAPABILITY_ADVERTISEMENTS[capability] === undefined,
+    );
+
+    expect(required.length).toBeGreaterThan(0);
+    expect(unmapped).toEqual([]);
   });
 
   it('waits rather than withdrawing when the paired device is merely asleep', () => {

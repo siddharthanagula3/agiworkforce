@@ -22,9 +22,55 @@ export const SYNC_PROTOCOL_MIN_VERSION = 2;
 
 export const SyncProtocolVersionSchema = z.literal(SYNC_PROTOCOL_VERSION);
 
-export function syncProtocolCompatibility(peerVersion: number): 'readable' | 'too_old' | 'too_new' {
+export type SyncProtocolCompatibility = 'readable' | 'too_old' | 'too_new';
+
+export function syncProtocolCompatibility(peerVersion: number): SyncProtocolCompatibility {
   if (!Number.isInteger(peerVersion) || peerVersion < SYNC_PROTOCOL_MIN_VERSION) return 'too_old';
   return peerVersion > SYNC_PROTOCOL_VERSION ? 'too_new' : 'readable';
+}
+
+// A peer that names no version is a build from before the field existed, so it
+// resolves one step under the floor and can never be inside the window.
+export const UNVERSIONED_SYNC_PROTOCOL_VERSION = SYNC_PROTOCOL_MIN_VERSION - 1;
+
+export interface SyncProtocolDecision {
+  compatibility: SyncProtocolCompatibility;
+  version: number;
+  declared: boolean;
+}
+
+/**
+ * What one exchange's declared version means, from a body field or a header.
+ * Anything that is not a version at all reads as too old: the remedy for a
+ * caller the server cannot place is the same as for one it has outgrown.
+ */
+export function resolveSyncProtocolVersion(value: unknown): SyncProtocolDecision {
+  if (value === undefined || value === null) {
+    return {
+      compatibility: syncProtocolCompatibility(UNVERSIONED_SYNC_PROTOCOL_VERSION),
+      version: UNVERSIONED_SYNC_PROTOCOL_VERSION,
+      declared: false,
+    };
+  }
+  const version = typeof value === 'number' ? value : Number(String(value).trim());
+  return { compatibility: syncProtocolCompatibility(version), version, declared: true };
+}
+
+/**
+ * The sentence a refused caller is given. It names the version it sent and the
+ * one this deployment needs, because a client told only "no" retries forever.
+ */
+export function syncProtocolRefusalMessage(
+  decision: SyncProtocolDecision,
+  subject: string,
+): string {
+  const named = decision.declared && Number.isInteger(decision.version);
+  const spoken = named
+    ? `sync protocol ${decision.version}`
+    : 'no sync protocol this server can read';
+  return decision.compatibility === 'too_new'
+    ? `This version speaks ${spoken} and AGI Workforce ${subject} answers ${SYNC_PROTOCOL_VERSION}. Retry once the deployment catches up.`
+    : `This version speaks ${spoken}, and AGI Workforce ${subject} now needs ${SYNC_PROTOCOL_MIN_VERSION} or newer. Update to continue.`;
 }
 
 function rejectDuplicateIds(

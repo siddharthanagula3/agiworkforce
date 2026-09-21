@@ -4,6 +4,8 @@ import {
   API_CONTRACT_VERSION,
   API_VERSION_REQUEST_HEADER,
   CLIENT_VERSION_HEADER,
+  REQUEST_ID_HEADER,
+  isWellFormedRequestId,
 } from '@agiworkforce/cloud-contracts';
 
 import { addCsrfHeaders, clearCsrfToken, getCsrfToken } from './csrf';
@@ -99,6 +101,14 @@ describe('what every browser request tells the platform', () => {
 
     expect(headers[API_VERSION_REQUEST_HEADER]).toBe(API_CONTRACT_VERSION);
     expect(headers['Content-Type']).toBe('application/json');
+  });
+
+  it('carries an id for this request, so a reader report names the request that failed', async () => {
+    const first = (await addCsrfHeaders()) as Record<string, string>;
+    const second = (await addCsrfHeaders()) as Record<string, string>;
+
+    expect(isWellFormedRequestId(first[REQUEST_ID_HEADER])).toBe(true);
+    expect(second[REQUEST_ID_HEADER]).not.toBe(first[REQUEST_ID_HEADER]);
   });
 
   it('takes the build version from the bundle rather than a literal', async () => {

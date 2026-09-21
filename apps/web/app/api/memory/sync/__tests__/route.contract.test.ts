@@ -2,7 +2,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   MemorySyncPullResponseSchema,
   MemorySyncPushResponseSchema,
+  SYNC_PROTOCOL_MIN_VERSION,
+  SYNC_PROTOCOL_VERSION,
 } from '@agiworkforce/cloud-contracts';
+import { ERROR_CODE_TO_HTTP_STATUS, ErrorCode } from '@agiworkforce/types';
+
+const CLIENT_UPDATE_REQUIRED_STATUS = ERROR_CODE_TO_HTTP_STATUS[ErrorCode.CLIENT_UPDATE_REQUIRED];
+
+function makeMemoryPush(body: unknown) {
+  return new Request('http://localhost:3000/api/memory/sync', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as never;
+}
 
 vi.mock('server-only', () => ({}));
 
@@ -125,13 +138,30 @@ describe('POST /api/memory/sync { memories }, shared cloud contract', () => {
 
   it('explicitly rejects a legacy mutable push', async () => {
     const res = await POST(
-      new Request('http://localhost:3000/api/memory/sync', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ memories: [{ id: MEM_ID, content: 'x', updatedAt: '2999-01-01' }] }),
-      }) as never,
+      makeMemoryPush({ memories: [{ id: MEM_ID, content: 'x', updatedAt: '2999-01-01' }] }),
     );
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(CLIENT_UPDATE_REQUIRED_STATUS);
+    const body = await res.json();
+    expect(body).toMatchObject({ error: { code: 'CLIENT_UPDATE_REQUIRED' } });
+    expect(body.error.message).toContain(String(SYNC_PROTOCOL_MIN_VERSION));
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller below the floor with the remedy, not a field-by-field parse failure', async () => {
+    const res = await POST(makeMemoryPush({ protocolVersion: 1, memories: [] }));
+    expect(res.status).toBe(CLIENT_UPDATE_REQUIRED_STATUS);
+    expect(await res.json()).toMatchObject({ error: { code: 'CLIENT_UPDATE_REQUIRED' } });
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('does not tell a caller ahead of this deployment to update itself', async () => {
+    const res = await POST(
+      makeMemoryPush({ protocolVersion: SYNC_PROTOCOL_VERSION + 1, memories: [] }),
+    );
+    expect(res.status).not.toBe(CLIENT_UPDATE_REQUIRED_STATUS);
+    const body = await res.json();
+    expect(body.error.code).not.toBe('CLIENT_UPDATE_REQUIRED');
+    expect(body.error.message).toContain(String(SYNC_PROTOCOL_VERSION));
     expect(mockQuery).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import {
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
+  SYNC_PROTOCOL_VERSION,
   type ArtifactSyncPushItem,
   type ArtifactWireDelta,
   type ChatSyncPushResponse,
@@ -8,7 +9,6 @@ import {
 import { selectNextCursor } from '@agiworkforce/sync';
 
 const MAX_PULL_PAGES = 100;
-const SYNC_PROTOCOL_VERSION = 2;
 const CURSOR_REJECTED_STATUS = 400;
 const CURSOR_REJECTED_ERROR_CODE = 'VALIDATION_ERROR';
 

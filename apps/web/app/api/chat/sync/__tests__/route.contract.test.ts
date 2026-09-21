@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
+  SYNC_PROTOCOL_MIN_VERSION,
+  SYNC_PROTOCOL_VERSION,
 } from '@agiworkforce/cloud-contracts';
+import { ERROR_CODE_TO_HTTP_STATUS, ErrorCode } from '@agiworkforce/types';
+
+const CLIENT_UPDATE_REQUIRED_STATUS = ERROR_CODE_TO_HTTP_STATUS[ErrorCode.CLIENT_UPDATE_REQUIRED];
 
 vi.mock('server-only', () => ({}));
 
@@ -489,8 +494,28 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
         conversations: [{ id: CONV_ID, title: 'stale', updatedAt: '2999-01-01T00:00:00.000Z' }],
       }),
     );
-    expect(res.status).toBe(409);
-    expect(await res.json()).toMatchObject({ requiredProtocolVersion: 2 });
+    expect(res.status).toBe(CLIENT_UPDATE_REQUIRED_STATUS);
+    const body = await res.json();
+    expect(body).toMatchObject({ error: { code: 'CLIENT_UPDATE_REQUIRED' } });
+    expect(body.error.message).toContain(String(SYNC_PROTOCOL_MIN_VERSION));
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('refuses a caller below the floor with the remedy, not a field-by-field parse failure', async () => {
+    const res = await POST(makePost({ protocolVersion: 1, conversations: [] }));
+    expect(res.status).toBe(CLIENT_UPDATE_REQUIRED_STATUS);
+    expect(await res.json()).toMatchObject({ error: { code: 'CLIENT_UPDATE_REQUIRED' } });
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('does not tell a caller ahead of this deployment to update itself', async () => {
+    const res = await POST(
+      makePost({ protocolVersion: SYNC_PROTOCOL_VERSION + 1, conversations: [] }),
+    );
+    expect(res.status).not.toBe(CLIENT_UPDATE_REQUIRED_STATUS);
+    const body = await res.json();
+    expect(body.error.code).not.toBe('CLIENT_UPDATE_REQUIRED');
+    expect(body.error.message).toContain(String(SYNC_PROTOCOL_VERSION));
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
