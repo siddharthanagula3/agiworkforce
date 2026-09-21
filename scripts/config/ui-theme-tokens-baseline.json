@@ -1,0 +1,62 @@
+{
+  "generator": "scripts/check-ui-theme-tokens.mjs",
+  "entries": [
+    {
+      "key": "--font-jetbrains",
+      "reason": "next/font attaches this to <body> at runtime, which no stylesheet can declare"
+    },
+    {
+      "key": "--font-newsreader",
+      "reason": "next/font attaches this to <body> at runtime, which no stylesheet can declare"
+    },
+    {
+      "key": "--radix-accordion-content-height",
+      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
+    },
+    {
+      "key": "--font-geist-sans",
+      "reason": "next/font attaches this to <body> at runtime, which no stylesheet can declare"
+    },
+    {
+      "key": "--font-geist-mono",
+      "reason": "next/font attaches this to <body> at runtime, which no stylesheet can declare"
+    },
+    {
+      "key": "--x",
+      "reason": "a placeholder in a worked example inside a comment block, not a live declaration"
+    },
+    {
+      "key": "--shiki-light",
+      "reason": "Shiki writes this onto each highlighted token as an inline style"
+    },
+    {
+      "key": "--shiki-dark",
+      "reason": "Shiki writes this onto each highlighted token as an inline style"
+    },
+    {
+      "key": "--radix-popover-content-available-height",
+      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
+    },
+    {
+      "key": "--radix-dropdown-menu-content-available-height",
+      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
+    },
+    {
+      "key": "--radix-navigation-menu-viewport-height",
+      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
+    },
+    {
+      "key": "--radix-navigation-menu-viewport-width",
+      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
+    },
+    {
+      "key": "--radix-select-trigger-height",
+      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
+    },
+    {
+      "key": "--radix-select-trigger-width",
+      "reason": "Radix sets this on the element at open time; it exists only while the panel is mounted"
+    }
+  ],
+  "note": "Custom properties something outside the stylesheets provides at runtime. Every other var() in apps/web and packages/ui resolves to a declaration, and a new unresolved one fails."
+}
