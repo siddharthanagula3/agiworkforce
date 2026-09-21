@@ -143,7 +143,7 @@ test('the Auto slots resolve to model keys through the family catalog', () => {
 test('the repository passes every claim this check makes that is not held for a decision', () => {
   const baseline = {
     servedBelowThreshold: {
-      'deepseek-v4-flash': {
+      reasoning_premium: {
         suites: ['jailbreak', 'refusal'],
         reason: 'the one recorded entry, held for a founder decision on the Auto line-up',
         decidedBy: 'founder',

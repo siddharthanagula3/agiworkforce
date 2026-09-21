@@ -124,7 +124,7 @@ describe('a unit that is not a token', () => {
         resolveRetailCostCents({
           capability,
           provider: 'openai',
-          model: 'gpt-5.2',
+          model: 'fixture-model',
           usage,
           pricedAt: new Date('2026-09-21T00:00:00.000Z'),
         }),
@@ -133,7 +133,7 @@ describe('a unit that is not a token', () => {
         resolveTokenClassDimensions({
           capability,
           provider: 'openai',
-          model: 'gpt-5.2',
+          model: 'fixture-model',
           usage,
           pricedAt: new Date('2026-09-21T00:00:00.000Z'),
         }),
