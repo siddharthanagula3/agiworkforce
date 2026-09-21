@@ -19,8 +19,6 @@ function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntr
     openWeight: false,
     contextTokens: 128_000,
     maxOutputTokens: 8_192,
-    inputPerMillion: 1,
-    outputPerMillion: 2,
     priceBand: null,
     capabilities: {},
     admitted: true,

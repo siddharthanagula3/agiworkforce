@@ -6,7 +6,6 @@ import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import { entryCapabilities } from '../lib/model-filters';
 import {
   accessLabel,
-  creditsPerMillionLabel,
   isSelectable,
   modelSummary,
   retirementLabel,
@@ -109,14 +108,6 @@ export function ModelCard({
         <div>
           <dt className={META_LABEL_CLASS}>Max output</dt>
           <dd className={META_VALUE_CLASS}>{tokenCeilingLabel(entry.maxOutputTokens)}</dd>
-        </div>
-        <div>
-          <dt className={META_LABEL_CLASS}>Input per million</dt>
-          <dd className={META_VALUE_CLASS}>{creditsPerMillionLabel(entry.inputPerMillion)}</dd>
-        </div>
-        <div>
-          <dt className={META_LABEL_CLASS}>Output per million</dt>
-          <dd className={META_VALUE_CLASS}>{creditsPerMillionLabel(entry.outputPerMillion)}</dd>
         </div>
       </dl>
 
