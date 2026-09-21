@@ -20,7 +20,7 @@ describe('Free section in the composer', () => {
                 displayName: 'Example Flash',
                 category: 'chat',
                 expiresOn: '2026-11-25',
-                status: 'account_check_required',
+                status: 'ready',
               },
               {
                 key: 'fixture-exhausted',
@@ -35,10 +35,16 @@ describe('Free section in the composer', () => {
                 status: 'expired',
               },
               {
+                key: 'fixture-withheld',
+                displayName: 'Withheld Example',
+                category: 'chat',
+                status: 'unavailable',
+              },
+              {
                 key: 'fixture-media',
                 displayName: 'Example image',
                 category: 'image',
-                status: 'account_check_required',
+                status: 'ready',
               },
             ],
           }),
@@ -57,6 +63,9 @@ describe('Free section in the composer', () => {
       screen.getByRole('button', {
         name: /Exhausted Example Free quota exhausted · Choose another model/,
       }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /Withheld Example Not available right now/ }),
     ).toBeDisabled();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'image' } });
     fireEvent.click(screen.getByRole('button', { name: /Example image/ }));

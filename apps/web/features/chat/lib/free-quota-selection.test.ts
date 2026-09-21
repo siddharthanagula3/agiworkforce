@@ -16,7 +16,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe('free model selection to transport', () => {
   it('preserves the offering key through selection, hydration, and transcript validation', () => {
-    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('NODE_ENV', 'production');
     useModelStore.getState().setSelectedModelId(offeringKey);
     expect(useModelStore.getState().selectedModelId).toBe(offeringKey);
     expect(useModelStore.getState().getSelectedModel().name).toBe(
@@ -39,10 +39,9 @@ describe('free model selection to transport', () => {
       ([, entry]) => !entry.quotaProbeProtocol,
     )![0];
     expect(findSelectableModel(unsupported)).toBeNull();
+    expect(freeQuotaSelection(unsupported)).toBeNull();
+    expect(CreateConversationSchema.safeParse({ model: unsupported }).success).toBe(false);
     expect(chatCompletionEndpoint(unsupported)).toBe('/api/models/free-quota/completions');
-    vi.stubEnv('NODE_ENV', 'production');
-    expect(freeQuotaSelection(offeringKey)).toBeNull();
-    expect(CreateConversationSchema.safeParse({ model: offeringKey }).success).toBe(false);
     expect(chatCompletionEndpoint(offeringKey)).toBe('/api/models/free-quota/completions');
     expect(chatCompletionEndpoint('auto')).toBe('/api/llm/v1/chat/completions');
   });
