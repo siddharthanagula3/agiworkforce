@@ -76,8 +76,7 @@ describe('every provider client site carries a deadline', () => {
   const fetchInits = (source: string): string[] => {
     const inits: string[] = [];
     const call = /\bfetch\s*\(/g;
-    let match: RegExpExecArray | null;
-    while ((match = call.exec(source)) !== null) {
+    while (call.exec(source) !== null) {
       let index = call.lastIndex;
       let depth = 1;
       while (index < source.length && depth > 0) {
