@@ -133,7 +133,8 @@ describe('deleting an account', () => {
   });
 
   it('signs the device out once the server accepts the deletion', () => {
-    const accepted = ACCOUNT_SCREEN.slice(ACCOUNT_SCREEN.indexOf('api\n              .delete'));
+    // Found by shape, not by indentation, which the formatter owns.
+    const accepted = ACCOUNT_SCREEN.slice(ACCOUNT_SCREEN.search(/api\s*\.delete</));
 
     expect(accepted).toMatch(/await signOut\(\)/);
     expect(accepted.indexOf('await signOut()')).toBeLessThan(
