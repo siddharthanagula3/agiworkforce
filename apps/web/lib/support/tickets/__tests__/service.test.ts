@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -17,6 +17,11 @@ const store = vi.hoisted(() => ({
   startTicketForStaff: vi.fn(),
   insertEscalation: vi.fn(),
   listEscalationsForTicket: vi.fn(),
+  listStaffQueue: vi.fn(),
+  getStaffTicket: vi.fn(),
+  listStaffTicketReplies: vi.fn(),
+  insertStaffReply: vi.fn(),
+  moveTicketAsStaff: vi.fn(),
 }));
 vi.mock('../store', () => store);
 
@@ -55,10 +60,16 @@ function ticket(overrides: Record<string, unknown> = {}) {
 describe('openTicket', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('RESEND_API_KEY', '');
     priority.resolveSupportPriority.mockResolvedValue({ priority: 'normal', supportTier: null });
     store.insertTicket.mockImplementation(async (input: Record<string, unknown>) =>
       ticket({ priority: input['priority'], supportTier: input['supportTier'] }),
     );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it('gives a ticket the same priority the escalation queue would give it', async () => {
@@ -75,8 +86,8 @@ describe('openTicket', () => {
       message: 'My invoice is twice what it should be.',
     });
 
-    expect(created.priority).toBe('urgent');
-    expect(created.supportTier).toBe('platinum');
+    expect(created.ticket.priority).toBe('urgent');
+    expect(created.ticket.supportTier).toBe('platinum');
   });
 
   it('redacts a credential a user pasted into the ticket body', async () => {
@@ -104,6 +115,108 @@ describe('openTicket', () => {
 
     const written = store.insertTicket.mock.calls[0]?.[0] as { message: string };
     expect(written.message.length).toBeLessThanOrEqual(MAX_TICKET_MESSAGE_CHARS + 20);
+  });
+});
+
+describe('openTicket tells the support team', () => {
+  const resend = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', resend);
+    vi.stubEnv('RESEND_API_KEY', 're_test_key');
+    vi.stubEnv('AGI_SUPPORT_FROM_EMAIL', 'support@agiworkforce.com');
+    vi.stubEnv('AGI_SUPPORT_FALLBACK_EMAIL', 'queue@agiworkforce.com');
+    priority.resolveSupportPriority.mockResolvedValue({ priority: 'high', supportTier: 'gold' });
+    store.insertTicket.mockImplementation(async (input: Record<string, unknown>) =>
+      ticket({
+        subject: input['subject'],
+        message: input['message'],
+        priority: input['priority'],
+        supportTier: input['supportTier'],
+      }),
+    );
+    resend.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'msg-1' }),
+      text: async () => '',
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  function open(message = 'My invoice is twice what it should be.') {
+    return openTicket({
+      userId: 'user_1',
+      name: 'a@example.com',
+      email: 'a@example.com',
+      subject: 'Invoice doubled',
+      message,
+    });
+  }
+
+  function sentMail(): { to: string[]; subject: string; text: string } {
+    const init = resend.mock.calls[0]?.[1] as RequestInit;
+    return JSON.parse(String(init.body)) as { to: string[]; subject: string; text: string };
+  }
+
+  it('emails the support inbox with the ticket, its severity, the account and the queue link', async () => {
+    const opened = await open();
+
+    expect(opened.staffNotified).toBe(true);
+    expect(resend).toHaveBeenCalledTimes(1);
+    const mail = sentMail();
+    expect(mail.to).toEqual(['queue@agiworkforce.com']);
+    expect(mail.subject).toContain('P1');
+    expect(mail.subject).toContain('Invoice doubled');
+    expect(mail.text).toContain('Ticket: ticket-1');
+    expect(mail.text).toContain('Priority: high (p1)');
+    expect(mail.text).toContain('Account: user_1');
+    expect(mail.text).toContain('/operator#support');
+    expect(mail.text).not.toContain('a@example.com');
+  });
+
+  it('never mails a credential the customer pasted', async () => {
+    await open('It fails with Authorization: Bearer abcdefghijklmnopqrstuvwxyz0123');
+
+    expect(sentMail().text).not.toContain('abcdefghijklmnopqrstuvwxyz0123');
+  });
+
+  it('keeps the ticket and reports it unsent when email is not configured', async () => {
+    vi.stubEnv('RESEND_API_KEY', '');
+
+    const opened = await open();
+
+    expect(opened.ticket.id).toBe('ticket-1');
+    expect(opened.staffNotified).toBe(false);
+    expect(resend).not.toHaveBeenCalled();
+  });
+
+  it('keeps the ticket and reports it unsent when the mail provider refuses', async () => {
+    resend.mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({}),
+      text: async () => 'domain not verified',
+    });
+
+    const opened = await open();
+
+    expect(opened.ticket.id).toBe('ticket-1');
+    expect(opened.staffNotified).toBe(false);
+  });
+
+  it('keeps the ticket when the network drops the mail', async () => {
+    resend.mockRejectedValue(new Error('socket hang up'));
+
+    const opened = await open();
+
+    expect(opened.staffNotified).toBe(false);
+    expect(store.insertTicket).toHaveBeenCalledTimes(1);
   });
 });
 

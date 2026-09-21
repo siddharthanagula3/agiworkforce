@@ -1,5 +1,13 @@
 import 'server-only';
 
+import { redactSecrets } from '@/lib/security/secrets-audit';
+import { SITE_URL } from '@/lib/seo/site';
+import {
+  STAFF_QUEUE_PATH,
+  severityForPriority,
+  type SupportTicket,
+} from '@/lib/support/tickets/types';
+
 import type { HandoffSessionRow } from './store';
 import { sendSupportEmail, type SendEmailResult } from './resend-client';
 import { getHandoffConfig } from './config';
@@ -134,5 +142,72 @@ export async function sendEscalationEmail(
     text: content.text,
     html: content.html,
     replyTo: content.replyTo,
+  });
+}
+
+export interface TicketOpenedEmailInput {
+  ticket: SupportTicket;
+  userId: string;
+}
+
+export interface SupportInboxEmailContent {
+  subject: string;
+  text: string;
+  html: string;
+}
+
+function singleLine(value: string): string {
+  return value.replace(/\s+/gu, ' ').trim();
+}
+
+export function buildTicketOpenedEmail({
+  ticket,
+  userId,
+}: TicketOpenedEmailInput): SupportInboxEmailContent {
+  const severity = severityForPriority(ticket.priority);
+  const subjectLine = singleLine(redactSecrets(ticket.subject));
+  const queueUrl = `${SITE_URL}${STAFF_QUEUE_PATH}`;
+
+  const text = [
+    'A customer raised a support ticket in Settings, Help.',
+    '',
+    `Ticket: ${ticket.id}`,
+    `Subject: ${subjectLine}`,
+    `Priority: ${ticket.priority} (${severity})`,
+    `Support tier: ${ticket.supportTier ?? 'none on record'}`,
+    `Account: ${userId}`,
+    `Raised: ${formatAt(ticket.createdAt)}`,
+    `Answer it: ${queueUrl}`,
+    '',
+    'MESSAGE (credentials redacted)',
+    redactSecrets(ticket.message),
+  ].join('\n');
+
+  const html = [
+    '<div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5">',
+    `<h2 style="font-family:system-ui,sans-serif">${escapeHtml(subjectLine)}</h2>`,
+    `<p><a href="${escapeHtml(queueUrl)}">Open the support queue</a></p>`,
+    `<pre style="white-space:pre-wrap;word-break:break-word">${escapeHtml(text)}</pre>`,
+    '</div>',
+  ].join('');
+
+  return {
+    subject: `[AGI Support] New ticket ${severity.toUpperCase()} · ${subjectLine}`,
+    text,
+    html,
+  };
+}
+
+export async function sendTicketOpenedEmail(
+  input: TicketOpenedEmailInput,
+): Promise<SendEmailResult> {
+  const config = getHandoffConfig();
+  const content = buildTicketOpenedEmail(input);
+  return sendSupportEmail({
+    to: config.fallbackEmail,
+    subject: content.subject,
+    text: content.text,
+    html: content.html,
+    idempotencyKey: `support-ticket-opened-${input.ticket.id}`,
   });
 }
