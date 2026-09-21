@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import {
+  AUTOMATION_OUTCOME_MAX_BATCH,
+  AUTOMATION_OUTCOME_MAX_REASON_CHARS,
+  AUTOMATION_OUTCOME_MAX_TARGET_CHARS,
   AUTOMATION_SURFACES,
   BROWSER_SESSION_KINDS,
   settleAutomationAttempt,
@@ -27,9 +30,9 @@ import {
   type AutomationDiagnostics,
 } from '@/lib/observability/automation-telemetry';
 
-const MAX_BATCH = 200;
-const MAX_TEXT = 300;
-const MAX_TARGET = 300;
+const MAX_BATCH = AUTOMATION_OUTCOME_MAX_BATCH;
+const MAX_TEXT = AUTOMATION_OUTCOME_MAX_REASON_CHARS;
+const MAX_TARGET = AUTOMATION_OUTCOME_MAX_TARGET_CHARS;
 
 const VerificationSchema = z.object({
   check: z.string().min(1).max(MAX_TEXT),
