@@ -73,11 +73,16 @@ export default function SupportPage() {
               <Prose>
                 Tell us what you did, what you expected, and what happened instead. Screenshots and
                 exact error text make fixes faster. For service-wide issues, check the status page
-                first.
+                first. With an account, a ticket raised from Settings, Help attaches your build,
+                platform and the last errors your browser recorded, and the replies stay on the
+                ticket.
               </Prose>
             </div>
             <ButtonRow>
               <Button href={contactMailto()}>Email a bug report</Button>
+              <Button href="/settings/help" variant="secondary">
+                Raise a ticket
+              </Button>
               <Button href="/status" variant="secondary">
                 Check service status
               </Button>

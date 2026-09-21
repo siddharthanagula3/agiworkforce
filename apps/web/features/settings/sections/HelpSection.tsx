@@ -41,7 +41,7 @@ const HELP_LINKS: readonly HelpLink[] = [
     icon: FileText,
   },
   {
-    href: '/support?topic=bug',
+    href: '/support#bugs',
     label: 'Report a bug',
     description: 'Tell us what broke and how to reproduce it.',
     icon: Bug,

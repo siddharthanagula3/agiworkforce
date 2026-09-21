@@ -58,7 +58,7 @@ async function handleCreate(request: NextRequest) {
     throw createError.validation('Add an email address to your account so support can reply.');
   }
 
-  const ticket = await openTicket({
+  const { ticket, staffNotified } = await openTicket({
     userId,
     name: email,
     email,
@@ -74,7 +74,10 @@ async function handleCreate(request: NextRequest) {
     }),
   });
 
-  return NextResponse.json({ ticket }, { status: 201, headers: { 'cache-control': 'no-store' } });
+  return NextResponse.json(
+    { ticket, staffNotified },
+    { status: 201, headers: { 'cache-control': 'no-store' } },
+  );
 }
 
 export const GET = withErrorHandler(handleList);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
@@ -50,9 +51,12 @@ export default function ContactPage() {
           em="one human."
           lede={
             <>
-              Everything below is plain email. No hosted form, no ticket system. For sales
-              conversations, head to contact sales. For everything else, contact@agiworkforce.com
-              reaches a person who reads it.
+              Everything below is plain email. With an account, you can raise a support ticket from{' '}
+              <Link href="/settings/help" className="agi-ds-link">
+                Settings, Help
+              </Link>{' '}
+              instead, and the replies stay on the ticket. For sales conversations, head to contact
+              sales. For everything else, contact@agiworkforce.com reaches a person who reads it.
             </>
           }
           ctas={[

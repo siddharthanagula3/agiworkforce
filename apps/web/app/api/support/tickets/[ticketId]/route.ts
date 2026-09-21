@@ -19,12 +19,12 @@ import {
   readTicket,
   replyToTicket,
 } from '@/lib/support/tickets/service';
-import { TICKET_STATUSES } from '@/lib/support/tickets/types';
+import { CUSTOMER_SETTABLE_STATUSES } from '@/lib/support/tickets/types';
 
 export const runtime = 'nodejs';
 
 const PatchSchema = z.union([
-  z.object({ status: z.enum(TICKET_STATUSES) }).strict(),
+  z.object({ status: z.enum(CUSTOMER_SETTABLE_STATUSES) }).strict(),
   z.object({ reply: z.string().trim().min(1).max(MAX_TICKET_MESSAGE_CHARS) }).strict(),
 ]);
 
@@ -73,7 +73,10 @@ async function handlePatch(request: NextRequest, context: RouteContext) {
 
   const parsed = PatchSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
-    throw createError.validation('Send either a status or a reply, not both', parsed.error);
+    throw createError.validation(
+      'Send either a reply or a request to close the ticket.',
+      parsed.error,
+    );
   }
 
   try {

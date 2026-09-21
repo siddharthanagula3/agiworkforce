@@ -19,6 +19,13 @@ export const TICKET_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 export type TicketPriority = (typeof TICKET_PRIORITIES)[number];
 
+export const TICKET_STATUS_LABEL: Readonly<Record<TicketStatus, string>> = {
+  open: 'Open',
+  in_progress: 'In progress',
+  resolved: 'Resolved',
+  closed: 'Closed',
+};
+
 /** Statuses a ticket can still be replied to in. */
 export const OPEN_TICKET_STATUSES: readonly TicketStatus[] = ['open', 'in_progress', 'resolved'];
 
@@ -111,6 +118,36 @@ export interface SupportTicketReply {
   createdAt: string;
 }
 
+export const STAFF_QUEUE_PAGE_SIZE = 25;
+export const STAFF_QUEUE_PATH = '/operator#support';
+
+/** Statuses that are waiting on the support team rather than on the customer. */
+export const STAFF_QUEUE_STATUSES: readonly TicketStatus[] = ['open', 'in_progress'];
+
+export interface StaffSupportTicket extends SupportTicket {
+  userId: string;
+  email: string;
+}
+
+export interface StaffTicketPage {
+  tickets: StaffSupportTicket[];
+  nextOffset: number | null;
+}
+
+export interface StaffTicketThread {
+  ticket: StaffSupportTicket;
+  replies: SupportTicketReply[];
+}
+
+/**
+ * Where a staff reply leaves the ticket. Resolving is the support team saying
+ * "answered"; a reply without it only marks an open ticket as picked up.
+ */
+export function statusAfterStaffReply(from: TicketStatus, resolve: boolean): TicketStatus {
+  if (resolve) return 'resolved';
+  return from === 'open' ? 'in_progress' : from;
+}
+
 export interface CreateTicketInput {
   userId: string;
   name: string;
@@ -122,6 +159,9 @@ export interface CreateTicketInput {
   handoffSessionId: string | null;
   diagnostics: SupportDiagnostics | null;
 }
+
+/** The one status a customer sets themselves; every other move is the support team's. */
+export const CUSTOMER_SETTABLE_STATUSES = ['closed'] as const;
 
 /**
  * A closed ticket is closed. Reopening is a new ticket with a reference to the

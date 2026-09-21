@@ -18,13 +18,13 @@ entitlement from memory: it links the page that carries it.
 
 ## 1. Channels, and whether a person reads them
 
-| Channel                           | Who can use it              | Who reads it                                           | State today                                                                          |
-| --------------------------------- | --------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Help centre and its search        | Anyone                      | Nobody; it answers from the published articles         | Always on; keyword retrieval with no model call                                      |
-| Email, `contact@agiworkforce.com` | Anyone                      | A person                                               | The published channel on `/support` and `/contact`                                   |
-| Support assistant                 | Anyone, signed in or not    | Nobody; it answers from the help corpus with citations | Off unless `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED` is `1`                               |
-| Live handoff to a person          | Anyone the assistant serves | A platform operator who is online                      | Off unless `AGI_SUPPORT_LIVE_HANDOFF_ENABLED` is truthy; otherwise an email fallback |
-| Ticket, in Settings, Help         | Signed-in accounts          | **Nobody, today**                                      | Stored, listed back to the customer, never shown to staff                            |
+| Channel                           | Who can use it              | Who reads it                                           | State today                                                                             |
+| --------------------------------- | --------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Help centre and its search        | Anyone                      | Nobody; it answers from the published articles         | Always on; keyword retrieval with no model call                                         |
+| Email, `contact@agiworkforce.com` | Anyone                      | A person                                               | The published channel on `/support` and `/contact`                                      |
+| Support assistant                 | Anyone, signed in or not    | Nobody; it answers from the help corpus with citations | Off unless `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED` is `1`                                  |
+| Live handoff to a person          | Anyone the assistant serves | A platform operator who is online                      | Off unless `AGI_SUPPORT_LIVE_HANDOFF_ENABLED` is truthy; otherwise an email fallback    |
+| Ticket, in Settings, Help         | Signed-in accounts          | A platform operator, in /operator#support              | Stored; the support inbox is emailed when one is raised; replies show in Settings, Help |
 
 Sources: `apps/web/app/support/page.tsx`,
 `apps/web/features/support/components/SupportWidgetMount.tsx`,
@@ -32,16 +32,15 @@ Sources: `apps/web/app/support/page.tsx`,
 `apps/web/lib/support/handoff/presence-service.ts`,
 `apps/web/features/settings/sections/HelpSection.tsx`.
 
-**Tickets have no reader.** A ticket raised in Settings, Help is stored and the
-customer sees it as "Raised and waiting to be picked up", but nothing tells
-anyone it exists: `openTicket` writes the row and a log line and nothing else
-(`apps/web/lib/support/tickets/service.ts`). No route lists tickets to staff,
-and a staff reply cannot be stored, because `insertReply` only inserts for the
-ticket's own author (`apps/web/lib/support/tickets/store.ts`). A platform
-operator can escalate a ticket whose id they already have, and that is the only
-staff action on one. Until a staff queue exists, email is the only channel with
-a guaranteed reader, and a customer who mentions a ticket should be asked to
-email the same text.
+**How a ticket reaches a person.** Raising a ticket stores it and emails the
+support inbox with the ticket id, subject, priority, severity, the account id,
+the message with secrets redacted, and a link to /operator#support
+(`apps/web/lib/support/tickets/service.ts`). A platform operator lists open
+tickets there and replies; the reply is stored against the ticket and the
+customer reads it in Settings, Help. It is not emailed to the customer. If the
+notification email fails, the ticket is still stored and the customer is told
+the team was not emailed and given the contact address, so no one is told a
+ticket is waiting when nobody knows about it.
 
 **The fallback mailbox is not the published one.** When live handoff is on and
 no operator is available, the escalation is mailed to
@@ -217,7 +216,6 @@ Each answer names its authority. Change the authority first, then the answer.
 
 Stated so nobody promises it:
 
-- A staff inbox or reply path for in-product tickets (section 1).
 - An automated email from support to the customer: no ticket receipt, no
   handoff confirmation, no follow-up. The handoff fallback and the privacy
   request form mail the support mailbox, not the requester, so every mail a

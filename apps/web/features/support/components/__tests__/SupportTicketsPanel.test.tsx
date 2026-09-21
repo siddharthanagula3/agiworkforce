@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('@/lib/client/csrf', () => ({ addCsrfHeaders: async () => ({}) }));
 
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SupportTicketsPanel } from '../SupportTicketsPanel';
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
@@ -149,7 +150,7 @@ describe('SupportTicketsPanel', () => {
     const user = userEvent.setup();
     const fresh = { ...TICKET, id: 'ticket-2', subject: 'Billing looks wrong', status: 'open' };
     mocks.fetch.mockResolvedValueOnce(jsonResponse({ tickets: [] }));
-    mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: fresh }, 201));
+    mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: fresh, staffNotified: true }, 201));
     mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: fresh, replies: [] }));
     render(<SupportTicketsPanel />);
 
@@ -164,5 +165,68 @@ describe('SupportTicketsPanel', () => {
     const created = JSON.parse(String((mocks.fetch.mock.calls[1]?.[1] as RequestInit).body));
     expect(created.subject).toBe('Billing looks wrong');
     expect(created.diagnostics).toBeTruthy();
+  });
+
+  describe('what a new ticket says about who was told', () => {
+    const fresh = { ...TICKET, id: 'ticket-3', subject: 'Invoice doubled', status: 'open' };
+
+    async function raiseWith(staffNotified: boolean) {
+      const user = userEvent.setup();
+      mocks.fetch.mockResolvedValueOnce(jsonResponse({ tickets: [] }));
+      mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: fresh, staffNotified }, 201));
+      mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: fresh, replies: [] }));
+      render(<SupportTicketsPanel />);
+
+      await user.click(await screen.findByRole('button', { name: 'Raise a ticket' }));
+      await user.type(screen.getByRole('textbox', { name: 'Subject' }), 'Invoice doubled');
+      await user.type(screen.getByRole('textbox', { name: 'What happened' }), 'Twice.');
+      await user.click(screen.getByRole('button', { name: 'Raise ticket' }));
+      return screen.findByRole('status');
+    }
+
+    it('says the support team was emailed only when it was', async () => {
+      const notice = await raiseWith(true);
+
+      expect(notice).toHaveTextContent('the support team has been emailed about it');
+      expect(notice).not.toHaveTextContent('was not sent');
+    });
+
+    it('says the email was not sent, and where to write instead, when it was not', async () => {
+      const notice = await raiseWith(false);
+
+      expect(notice).toHaveTextContent(
+        'the email that tells the support team about it was not sent',
+      );
+      expect(notice).toHaveTextContent(CONTACT_EMAIL);
+      expect(notice).not.toHaveTextContent('has been emailed');
+    });
+
+    it('never promises a pickup or an email reply for an open ticket', async () => {
+      await raiseWith(false);
+
+      expect(screen.getByText('Raised. Nobody on the support team has replied yet.')).toBeVisible();
+      expect(screen.queryByText(/waiting to be picked up/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/You will get an email/)).not.toBeInTheDocument();
+    });
+
+    it('drops the notice once another ticket is opened', async () => {
+      const user = userEvent.setup();
+      mocks.fetch.mockResolvedValueOnce(jsonResponse({ tickets: [TICKET] }));
+      mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: fresh, staffNotified: true }, 201));
+      mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: fresh, replies: [] }));
+      mocks.fetch.mockResolvedValueOnce(jsonResponse({ ticket: TICKET, replies: [REPLY] }));
+      render(<SupportTicketsPanel />);
+
+      await user.click(await screen.findByRole('button', { name: 'Raise a ticket' }));
+      await user.type(screen.getByRole('textbox', { name: 'Subject' }), 'Invoice doubled');
+      await user.type(screen.getByRole('textbox', { name: 'What happened' }), 'Twice.');
+      await user.click(screen.getByRole('button', { name: 'Raise ticket' }));
+      await screen.findByRole('status');
+      await user.click(screen.getByRole('button', { name: 'Back to your tickets' }));
+      await user.click(await screen.findByRole('button', { name: /Export never arrives/ }));
+
+      expect(await screen.findByText(REPLY.message)).toBeInTheDocument();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
   });
 });
