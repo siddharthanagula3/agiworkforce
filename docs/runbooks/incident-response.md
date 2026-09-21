@@ -128,11 +128,16 @@ Publish nothing until the impact can be described accurately, then:
 | Probe severity | Overall status | What is broken                                                | Response                                                                        |
 | -------------- | -------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `CRITICAL`     | `unhealthy`    | database unreachable, or no Neon connection string configured | Page now. The platform cannot serve requests.                                   |
+| `CRITICAL`     | `unhealthy`    | the key-value store did not answer one read                   | Page now. Rate limiting and cached reads fail closed, so turns refuse.          |
 | `CRITICAL`     | `probe_failed` | the harness threw, or a dependency hung past the 8s budget    | Page now. Health is unknown, which is not the same as healthy.                  |
 | `WARNING`      | `degraded`     | Stripe unreachable; chat keeps working                        | Billing only. Handle in business hours unless a launch or renewal is in flight. |
+| `WARNING`      | `degraded`     | retrieval index or embedding index absent                     | Search over your own content is blind. Conversations are unaffected.            |
 
 The `degraded` split is deliberate and is asserted by a test: a Stripe outage
-must not page as a whole-platform outage.
+must not page as a whole-platform outage, and a retrieval outage must not
+either. The cache sits on the other side of that line for the opposite reason:
+the product's answer to losing it is to fail closed, so a turn cannot be served
+without it.
 
 ## When the bad thing is the release itself
 
@@ -160,6 +165,54 @@ the build, go to `docs/runbooks/database-backup-restore.md` instead.
    database.
 3. `/status` renders the same checks with a timeout, and is the fastest
    confirmation that the failure is real and not the probe's own network.
+
+### `cache: unhealthy`
+
+The probe read one constant key and the store did not answer within a second.
+The message is always `unavailable`, deliberately: this is a public payload, so
+no host, key name or vendor error text appears in it. The reason is on the log
+line, under `Cache health check failed`.
+
+Read that line first, because the two causes need opposite responses:
+
+- A quota or rate-limit refusal. The store accepted the connection and rejected
+  the command. Check the Upstash dashboard for the request limit before assuming
+  the network; this account has exhausted that quota before, and when it does,
+  chat fails closed with it.
+- A connection or timeout failure. Confirm `UPSTASH_REDIS_REST_URL` and
+  `UPSTASH_REDIS_REST_TOKEN` (or the `KV_REST_API_*` pair) are still set on the
+  Vercel project, then check the vendor's status.
+
+An absent key is not a fault. The probe asks whether the store answers, so an
+empty read is a pass and nothing writes the key.
+
+This pages as `unhealthy` on purpose. Rate limiting and cached reads fail closed,
+so while it is down a turn refuses rather than serving unmetered. Chat is
+affected even though the `chat` check can still read healthy: that check resolves
+a route, it does not serve a turn.
+
+If the store is not configured at all, `environment` reports the missing core
+dependency and the probe issues no command; `key_value` then reads `unconfigured`
+rather than `failing`, which is a deploy configuration failure, not an outage.
+
+### `search: unhealthy` and `vector: unhealthy`
+
+One catalogue query answers for both and they fail apart.
+
+- `index schema missing`: `retrieval_documents` or `retrieval_chunks` is absent.
+  The retrieval migration has not run against this database. Both checks report
+  it, because neither half exists.
+- `full text index missing`: the tables are there and the weighted `tsvector`
+  index is not, so keyword retrieval falls back to a sequential scan.
+- `extension missing`: the `vector` extension is not installed, so every semantic
+  query returns nothing. Full text keeps working, which is why this degrades
+  rather than pages.
+- `embedding index missing`: the extension is present and the cosine index is
+  not. Semantic queries still answer and get slower as the table grows.
+
+None of these blocks a conversation. Confirm against the database, then run the
+retrieval index migration through the normal migration path rather than creating
+an index by hand, so the next environment is not missing it too.
 
 ### `environment: unhealthy`
 

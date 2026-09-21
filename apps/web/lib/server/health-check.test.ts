@@ -33,13 +33,43 @@ import {
 import { PRODUCTION_DEPENDENCIES } from '@/lib/config/dependency-readiness';
 import { recordConfigurationState } from '@/lib/observability/metrics';
 
-import { runHealthChecks } from './health-check';
+import { DEPENDENCY_LIVE_CHECKS, runHealthChecks } from './health-check';
 function asKeyValueStore(client: unknown): KeyValueStore {
   return createUpstashKeyValueStore(client as UpstashRedisLike);
 }
 
 function fakeRedis() {
   return { get: mocks.redisGet, set: mocks.redisSet };
+}
+
+interface RetrievalCatalogueRow {
+  missing_relations: number;
+  full_text_index: boolean;
+  embedding_index: boolean;
+  vector_extension: boolean;
+}
+
+const RETRIEVAL_READY: RetrievalCatalogueRow = {
+  missing_relations: 0,
+  full_text_index: true,
+  embedding_index: true,
+  vector_extension: true,
+};
+
+function isRetrievalQuery(sql: string): boolean {
+  return sql.includes('missing_relations');
+}
+
+/**
+ * The default database is a healthy one: `select 1` answers, the retrieval
+ * catalogue is complete and the queue aggregate returns nothing. A case that
+ * wants a fault states only that fault.
+ */
+function respondingDatabase(overrides: Partial<RetrievalCatalogueRow> = {}) {
+  return async (sql: string) => {
+    if (isRetrievalQuery(sql)) return [{ ...RETRIEVAL_READY, ...overrides }];
+    return [{ '?column?': 1 }];
+  };
 }
 
 beforeEach(() => {
@@ -50,8 +80,10 @@ beforeEach(() => {
   process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_health';
   process.env['CLERK_SECRET_KEY'] = 'sk_test_health';
   delete process.env['STRIPE_SECRET_KEY'];
-  mocks.neonQuery.mockResolvedValue([{ '?column?': 1 }]);
-  mocks.getKeyValueStore.mockReturnValue(null);
+  mocks.neonQuery.mockImplementation(respondingDatabase());
+  mocks.redisSet.mockResolvedValue('OK');
+  mocks.redisGet.mockResolvedValue('2026-09-21T00:00:00.000Z');
+  mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
 });
 
 describe('runHealthChecks core dependency readiness', () => {
@@ -107,9 +139,6 @@ describe('runHealthChecks core dependency readiness', () => {
 
 describe('runHealthChecks database probe', () => {
   it('observes the database on every run, whatever an earlier run recorded', async () => {
-    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(Date.now());
-
     const result = await runHealthChecks();
 
     expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
@@ -117,11 +146,10 @@ describe('runHealthChecks database probe', () => {
   });
 
   it('reports the database unhealthy however recently a probe last succeeded', async () => {
-    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(Date.now());
     mocks.neonQuery.mockImplementation(async (sql: string) => {
       if (sql === 'select 1') throw new Error('ECONNREFUSED');
-      return [{ missing: 0 }];
+      if (isRetrievalQuery(sql)) return [RETRIEVAL_READY];
+      return [{ '?column?': 1 }];
     });
 
     const result = await runHealthChecks();
@@ -131,24 +159,24 @@ describe('runHealthChecks database probe', () => {
   });
 
   it('reports the search index from the index itself however recently it answered', async () => {
-    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(Date.now());
-    mocks.neonQuery.mockImplementation(async (sql: string) =>
-      sql.includes('to_regclass') ? [{ missing: 2 }] : [{ '?column?': 1 }],
-    );
+    mocks.neonQuery.mockImplementation(respondingDatabase({ missing_relations: 2 }));
 
     const result = await runHealthChecks();
 
     expect(result.checks.search).toEqual({ status: 'unhealthy', message: 'index schema missing' });
   });
 
-  it('leaves no stored verdict behind for a later run to answer from', async () => {
-    mocks.getKeyValueStore.mockReturnValue(asKeyValueStore(fakeRedis()));
-    mocks.redisGet.mockResolvedValue(null);
+  it('answers from the live catalogue rather than from anything it stored', async () => {
+    mocks.redisGet.mockResolvedValue('an older run said everything was fine');
 
-    await runHealthChecks();
+    const result = await runHealthChecks();
 
-    expect(mocks.redisSet).not.toHaveBeenCalled();
+    expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
+    expect(mocks.neonQuery).toHaveBeenCalledWith(
+      expect.stringContaining('missing_relations'),
+      expect.anything(),
+    );
+    expect(result.checks.search.status).toBe('healthy');
   });
 
   it('queries the queue table on the same run, so the probe adds no connection', async () => {
@@ -161,13 +189,185 @@ describe('runHealthChecks database probe', () => {
     expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
   });
 
-  it('probes when no key-value store is configured', async () => {
+  it('probes the database when no key-value store is configured', async () => {
     mocks.getKeyValueStore.mockReturnValue(null);
 
     const result = await runHealthChecks();
 
     expect(mocks.neonQuery).toHaveBeenCalledWith('select 1');
     expect(result.checks.database.status).toBe('healthy');
+  });
+});
+
+describe('runHealthChecks cache probe', () => {
+  it('spends one command on the store per run, and writes nothing', async () => {
+    const result = await runHealthChecks();
+
+    expect(mocks.redisGet).toHaveBeenCalledTimes(1);
+    expect(mocks.redisSet).not.toHaveBeenCalled();
+    expect(result.checks.cache.status).toBe('healthy');
+  });
+
+  it('counts an empty key as an answer, because an answer is what it measures', async () => {
+    mocks.redisGet.mockResolvedValue(null);
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.cache.status).toBe('healthy');
+  });
+
+  it('fails the platform when the store refuses the command, not only when it is unreachable', async () => {
+    mocks.redisGet.mockRejectedValue(new Error('max requests limit exceeded'));
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.cache).toEqual({ status: 'unhealthy', message: 'unavailable' });
+    expect(result.status).toBe('unhealthy');
+  });
+
+  it('gives up rather than holding the endpoint open when the store never answers', async () => {
+    mocks.redisGet.mockImplementation(() => new Promise(() => {}));
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.cache).toEqual({ status: 'unhealthy', message: 'unavailable' });
+  });
+
+  it('reports the core dependency failing rather than unobserved when the cache is down', async () => {
+    mocks.redisGet.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const result = await runHealthChecks();
+
+    expect(result.dependencies).toContainEqual(
+      expect.objectContaining({ id: 'key_value', criticality: 'core', observation: 'failing' }),
+    );
+  });
+
+  it('spends nothing and reports unconfigured when no store is configured', async () => {
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    delete process.env['KV_REST_API_URL'];
+    delete process.env['KV_REST_API_TOKEN'];
+    mocks.getKeyValueStore.mockReturnValue(null);
+
+    const result = await runHealthChecks();
+
+    expect(mocks.redisGet).not.toHaveBeenCalled();
+    expect(result.dependencies).toContainEqual(
+      expect.objectContaining({ id: 'key_value', observation: 'unconfigured' }),
+    );
+    expect(result.checks.cache).toEqual({ status: 'healthy', message: 'not configured' });
+  });
+
+  it('survives a store that throws on resolution rather than on the command', async () => {
+    mocks.getKeyValueStore.mockImplementation(() => {
+      throw new Error('no key-value runtime');
+    });
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.cache).toEqual({ status: 'unhealthy', message: 'unavailable' });
+    expect(result.checks.database.status).toBe('healthy');
+  });
+
+  it('names no key and no vendor response in the result a stranger can read', async () => {
+    mocks.redisGet.mockRejectedValue(new Error('max requests limit exceeded'));
+
+    const result = await runHealthChecks();
+
+    const body = JSON.stringify(result);
+    expect(body).not.toContain('health:probe');
+    expect(body).not.toContain('max requests limit exceeded');
+  });
+});
+
+describe('runHealthChecks retrieval probe', () => {
+  it('separates semantic retrieval from full text, which fail apart', async () => {
+    mocks.neonQuery.mockImplementation(respondingDatabase({ embedding_index: false }));
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.search.status).toBe('healthy');
+    expect(result.checks.vector).toEqual({
+      status: 'unhealthy',
+      message: 'embedding index missing',
+    });
+  });
+
+  it('reports the extension as its own fault, not as a missing index', async () => {
+    mocks.neonQuery.mockImplementation(respondingDatabase({ vector_extension: false }));
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.vector).toEqual({ status: 'unhealthy', message: 'extension missing' });
+  });
+
+  it('fails the core context engine when either half of retrieval is broken', async () => {
+    mocks.neonQuery.mockImplementation(respondingDatabase({ embedding_index: false }));
+
+    const result = await runHealthChecks();
+
+    expect(result.dependencies).toContainEqual(
+      expect.objectContaining({ id: 'context_engine', observation: 'failing' }),
+    );
+  });
+
+  it('degrades rather than pages when only retrieval is broken', async () => {
+    mocks.neonQuery.mockImplementation(respondingDatabase({ full_text_index: false }));
+
+    const result = await runHealthChecks();
+
+    expect(result.checks.database.status).toBe('healthy');
+    expect(result.status).toBe('degraded');
+  });
+});
+
+describe('what the health surface claims to probe', () => {
+  it('probes every dependency the registry says this endpoint probes', () => {
+    const claimed = PRODUCTION_DEPENDENCIES.filter(
+      (dependency) => dependency.liveProbe === 'api/health',
+    )
+      .map((dependency) => dependency.id)
+      .sort();
+    const implemented = Object.keys(DEPENDENCY_LIVE_CHECKS)
+      .filter(
+        (id) =>
+          PRODUCTION_DEPENDENCIES.find((dependency) => dependency.id === id)?.liveProbe ===
+          'api/health',
+      )
+      .sort();
+
+    expect(implemented).toEqual(claimed);
+  });
+
+  it('claims no dependency the registry says nothing probes', () => {
+    const contradicted = Object.keys(DEPENDENCY_LIVE_CHECKS).filter(
+      (id) =>
+        PRODUCTION_DEPENDENCIES.find((dependency) => dependency.id === id)?.liveProbe === null,
+    );
+
+    expect(contradicted).toEqual([]);
+  });
+
+  it('gives every dependency without a live check a stated reason', () => {
+    const unexplained = PRODUCTION_DEPENDENCIES.filter(
+      (dependency) =>
+        DEPENDENCY_LIVE_CHECKS[dependency.id] === undefined &&
+        (dependency.liveProbeGap ?? '').trim().length === 0,
+    ).map((dependency) => dependency.id);
+
+    expect(unexplained).toEqual([]);
+  });
+
+  it('names a check that exists for every dependency it maps', async () => {
+    const result = await runHealthChecks();
+
+    for (const [dependency, names] of Object.entries(DEPENDENCY_LIVE_CHECKS)) {
+      expect(PRODUCTION_DEPENDENCIES.map((entry) => entry.id)).toContain(dependency);
+      for (const name of names) {
+        expect(result.checks[name], `${dependency} -> ${name}`).toBeDefined();
+      }
+    }
   });
 });
 

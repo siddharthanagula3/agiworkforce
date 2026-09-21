@@ -93,10 +93,7 @@ export const PRODUCTION_DEPENDENCIES: readonly ProductionDependency[] = [
       any('UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_TOKEN'),
     ],
     criticality: 'core',
-    liveProbe: null,
-    liveProbeGap:
-      'the health probe writes its own failure streak to Redis, so a Redis outage is visible ' +
-      'in that route but is not reported as a named check by api/health',
+    liveProbe: 'api/health',
     region: 'multi-region',
     dataClass: 'customer-metadata',
     availability: 'the vendor plan is the only commitment; the product claims none of its own',
@@ -265,10 +262,7 @@ export const PRODUCTION_DEPENDENCIES: readonly ProductionDependency[] = [
     owner: 'context-engine',
     requires: [],
     criticality: 'core',
-    liveProbe: null,
-    liveProbeGap:
-      'it resolves context in process against the database it is handed, so it has no ' +
-      'configuration and no endpoint of its own to probe',
+    liveProbe: 'api/health',
     region: 'home-region',
     dataClass: 'customer-content',
     availability: 'in process; it is as available as the deployment itself',
