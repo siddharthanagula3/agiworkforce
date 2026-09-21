@@ -166,6 +166,31 @@ describe('a request that is already on Auto', () => {
   });
 });
 
+describe('a request on the free plan model', () => {
+  const FREE_ROUTER = modelRegistry.policies.auto.slots.router_zero_cost.modelKey;
+
+  it.each([
+    ['rate limit', Object.assign(new Error('rate limit exceeded'), { status: 429 })],
+    ['overload', Object.assign(new Error('{"type":"overloaded_error"}'), { status: 529 })],
+    ['unreachable', new Error('fetch failed: ECONNRESET')],
+    ['empty answer', Object.assign(new Error('server error'), { status: 500 })],
+    ['unknown model', Object.assign(new Error('model not found: nope'), { status: 404 })],
+  ])('never points at Auto or a picker the free plan lacks for %s', (_label, error) => {
+    const copy = upstreamFailureCopy(error, PROVIDER, { requestedModel: FREE_ROUTER });
+
+    expect(copy.message).not.toMatch(/Auto|model picker|another model/);
+    expect(copy.message).toMatch(/Try again/);
+  });
+
+  it('keeps the status and code a client branches on', () => {
+    const limited = Object.assign(new Error('rate limit exceeded'), { status: 429 });
+    const free = upstreamFailureCopy(limited, PROVIDER, { requestedModel: FREE_ROUTER });
+    const pinned = upstreamFailureCopy(limited, PROVIDER, { requestedModel: 'some-pinned-model' });
+
+    expect([free.status, free.code, free.type]).toEqual([pinned.status, pinned.code, pinned.type]);
+  });
+});
+
 describe('the chat degraded mode the status page publishes', () => {
   it('tells the reader what the policy says it will', () => {
     const policy = degradationFor('chat');
