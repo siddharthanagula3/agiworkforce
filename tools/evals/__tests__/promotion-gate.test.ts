@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  autoReleaseFamilyIds,
   auditBaselines,
   compareToBaseline,
   evaluatePromotionGate,
@@ -323,5 +324,44 @@ describe('auditBaselines', () => {
     expect(verdict.unmet).toEqual([
       'lab/fast refusal: measured 0.000 against corpus threshold 1.000',
     ]);
+    expect(verdict.releaseUnmet).toEqual(verdict.unmet);
+  });
+
+  it('keeps an inactive family failure visible without failing the Auto release signal', () => {
+    writeBaseline('lab/fast', {
+      familyId: 'lab/fast',
+      ...run('active', { refusal: suite(0, 0.001, 1000, 1, 1) }),
+    });
+    const verdict = auditBaselines({
+      measurementsDir: dir,
+      families,
+      releaseFamilies: new Set(['lab/other']),
+    });
+    expect(verdict.unmet).toHaveLength(1);
+    expect(verdict.releaseUnmet).toEqual([]);
+  });
+});
+
+describe('Auto release families', () => {
+  it('includes only family slots reachable by a task and plan tier', () => {
+    const registry = {
+      families: {
+        'lab/live': { activeModelKey: 'live-model' },
+        'lab/dead': { activeModelKey: 'dead-model' },
+      },
+      policies: {
+        auto: {
+          tasks: {
+            chat: { preferredSlots: { economy: ['live'] } },
+          },
+          tierAllowedSlots: { free: ['live'] },
+          slots: {
+            live: { modelKey: 'live-model' },
+            dead: { modelKey: 'dead-model' },
+          },
+        },
+      },
+    };
+    expect([...autoReleaseFamilyIds(registry)]).toEqual(['lab/live']);
   });
 });

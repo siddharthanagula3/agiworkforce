@@ -219,9 +219,9 @@ jobs:
 
   # The signal the staged-release gate reads. `harness` passing is not the same
   # reading: `--audit` exits 0 on a baseline whose suite scored under its own
-  # corpus threshold, and prints it as `unmet`. A channel advance may not stand
-  # on that, so the verdict here is "every committed baseline met every corpus
-  # threshold" and it is posted as a commit status on the sha it measured.
+  # corpus threshold. A channel advance may not stand on a failed baseline for
+  # a family Auto can serve. Measurements for manual or unreachable families
+  # remain visible as `inactive-unmet` without blocking the Auto release signal.
   # `.github/workflows/model-probe.yml` refuses a canary without it.
   quality-signal:
     name: Publish the eval quality signal for the staged-release gate
@@ -244,7 +244,7 @@ jobs:
         id: verdict
         run: |
           set +e
-          audit=$(node tools/evals/scripts/promotion-gate.mjs --audit 2>&1)
+          audit=$(node tools/evals/scripts/promotion-gate.mjs --audit --release-use 2>&1)
           code=$?
           set -e
           printf '%s\n' "$audit"
@@ -254,10 +254,10 @@ jobs:
             description="the committed eval baselines are malformed or orphaned"
           elif [ "$unmet" -ne 0 ]; then
             state=failure
-            description="$unmet eval suite(s) scored under their own corpus threshold"
+            description="$unmet active Auto eval suite(s) scored under their corpus threshold"
           else
             state=success
-            description="every committed baseline met every corpus threshold"
+            description="every active Auto baseline met every corpus threshold"
           fi
           echo "state=$state" >> "$GITHUB_OUTPUT"
           echo "description=$description" >> "$GITHUB_OUTPUT"
