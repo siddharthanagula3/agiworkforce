@@ -4,7 +4,7 @@ title: Start, steer and manage a chat
 path: /chat
 category: chat
 tags: chat, new chat, conversation, compose, send message, edit message, regenerate, retry, branch, variant, rename, archive, delete chat, thinking, response style
-updated: 2026-09-17
+updated: 2026-09-21
 scope: public
 ---
 
@@ -37,6 +37,19 @@ it again, copy a response, give a good or bad rating, and regenerate the answer.
 Shift+Cmd/Ctrl+R regenerates the last response and Shift+Cmd/Ctrl+C copies it.
 Regenerating keeps the earlier answer as a variant; the pager under the message
 steps between variants, and a variant can be deleted from there.
+
+## Branch a conversation
+
+Hover a message and choose **Branch conversation from here**. A new conversation
+opens holding everything up to and including that message, and the chat you
+branched from stays as it was. **Duplicate as branch** in the conversation title
+menu does the same from the last message, so it copies the whole thread.
+
+A message that has been branched shows a branch pager, which steps between the
+conversations that share it. While a branch is being created the control reads
+"Creating branch…" and cannot be pressed a second time. A message can hold only
+so many branches, and a conversation only so many branch points; past either
+limit the request is refused and the message says which.
 
 ## Rename, archive and delete
 

@@ -3,22 +3,28 @@ id: billing-and-plans
 title: Plans, upgrading, and cancelling
 path: /pricing
 category: billing
-tags: billing, plan, upgrade, downgrade, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
-updated: 2026-09-17
+tags: billing, plan, upgrade, downgrade, waitlist, access code, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
+updated: 2026-09-21
 scope: public
 ---
 
 ## Where billing lives
 
-Settings, Billing shows your current plan, when the period ends, your payment
-method, your invoices and your credit balance. **Manage billing** opens the
-billing portal where the card and the subscription itself are changed.
+Settings, Billing shows your current plan, when the period renews or ends, your
+payment method and your invoices. **Manage billing** opens the billing portal
+where the card and the subscription itself are changed.
 
 ## Upgrading
 
-**Upgrade plan** lists the plans available to you and starts checkout. Local
-mode and BYOK are free and need no plan at all. Managed cloud plans differ in
-usage capacity and in which features they include: projects, custom MCP
+**Upgrade plan** lists the plans available to you. Paid upgrades are opening in
+stages, so on the Free plan choosing one opens the upgrade waitlist rather than
+checkout: join the waitlist, or enter an access code to continue to checkout.
+Checkout is refused to an account that has neither. On a plan you already pay
+for the access step does not apply, and an upgrade shows what it will cost and
+waits for you to confirm before anything is charged.
+
+Local mode and BYOK are free and need no plan at all. Managed cloud plans differ
+in usage capacity and in which features they include: projects, custom MCP
 connections, concurrent responses, sandboxes, connector tools and scheduled
 tasks all scale with the plan. The pricing page carries the current prices,
 regional prices and per-plan limits.

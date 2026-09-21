@@ -19,7 +19,7 @@
     },
     {
       "doc": "billing-and-plans",
-      "sha256": "5650375078425d9a9c1976daa41453aaaf3906bec205cb5ceed3ad1343294592"
+      "indexed": true
     },
     {
       "doc": "byok-provider-keys",
@@ -139,7 +139,7 @@
     },
     {
       "doc": "troubleshooting",
-      "sha256": "34a2187b96bdbbf0600c58340fabc8176c7ac1390fcd963c619c589565273f8b"
+      "indexed": true
     },
     {
       "doc": "usage-and-credits",
@@ -155,7 +155,7 @@
     },
     {
       "doc": "workspace-administration",
-      "sha256": "9219b9eef4586ca704fe7e35b5e2c944d349d2257f73c68e9857d05420023bff"
+      "indexed": true
     },
     {
       "doc": "workspace-policy",
@@ -1377,6 +1377,1086 @@
           "name": "explains the refusal and offers no create control for a temporary chat"
         }
       ]
+    },
+    {
+      "id": "workspace-create-one-owned-workspace",
+      "doc": "workspace-administration",
+      "section": "Creating a workspace",
+      "kind": "prose",
+      "sentence": "A second attempt is refused with \"You already own a workspace. Switch to it from the account menu.\" Other workspaces are joined by invitation.",
+      "implementation": ["apps/web/app/api/settings/organization/route.ts#handleCreate"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.creation.test.ts",
+          "name": "refuses a second organization after the serialized membership check finds one"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/organization/route.ts",
+          "text": "You already own a workspace. Switch to it from the account menu."
+        }
+      ]
+    },
+    {
+      "id": "workspace-create-slug-taken",
+      "doc": "workspace-administration",
+      "section": "Creating a workspace",
+      "kind": "prose",
+      "sentence": "A slug another workspace already uses is refused with \"That organization slug is already taken\".",
+      "implementation": ["apps/web/app/api/settings/organization/route.ts#handleCreate"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/organization/route.ts",
+          "text": "That organization slug is already taken"
+        }
+      ]
+    },
+    {
+      "id": "workspace-create-seats-unreadable-creates-nothing",
+      "doc": "workspace-administration",
+      "section": "Creating a workspace",
+      "kind": "prose",
+      "sentence": "When the seat count cannot be read, nothing is created: \"Your purchased seats could not be verified. No organization was created; please try again.\" A workspace that is created opens straight away, and the app reloads inside it.",
+      "implementation": [
+        "apps/web/app/api/settings/organization/route.ts#handleCreate",
+        "apps/web/features/settings/hooks/use-settings-queries.ts#useCreateOrganization"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.creation-seats.test.ts",
+          "name": "refuses to create the organization when the paid seat count cannot be read"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.creation-seats.test.ts",
+          "name": "lands the seat count the buyer paid for, because the purchase precedes the organization"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/organization/route.ts",
+          "text": "persistProvenActiveWorkspaceSelection(tx, userId, created.id)"
+        }
+      ]
+    },
+    {
+      "id": "workspace-switch-lists-personal-and-roles",
+      "doc": "workspace-administration",
+      "section": "Switching between workspaces",
+      "kind": "prose",
+      "sentence": "The account menu lists **Personal**, marked \"Only you\", and under **Enterprise** every workspace you belong to, each with your role in it.",
+      "implementation": ["apps/web/features/workspaces/components/WorkspaceMenuItems.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/workspaces/components/WorkspaceMenuItems.test.tsx",
+          "name": "separates personal from enterprise scope and names the role in each"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/workspaces/components/WorkspaceMenuItems.test.tsx",
+          "name": "shows Personal as the selected durable scope and opens management"
+        }
+      ]
+    },
+    {
+      "id": "workspace-switch-only-memberships",
+      "doc": "workspace-administration",
+      "section": "Switching between workspaces",
+      "kind": "prose",
+      "sentence": "Only a workspace you are a member of can be selected; the server refuses any other.",
+      "implementation": [
+        "apps/web/app/api/settings/organization/active/route.ts",
+        "apps/web/lib/services/active-workspace-service.ts#persistActiveWorkspaceSelection"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/active/route.test.ts",
+          "name": "rejects a selection outside the authenticated account memberships"
+        }
+      ]
+    },
+    {
+      "id": "workspace-switch-reloads-and-drops-work",
+      "doc": "workspace-administration",
+      "section": "Switching between workspaces",
+      "kind": "prose",
+      "sentence": "Switching reloads the app inside the chosen workspace, and work in progress does not come with you.",
+      "implementation": [
+        "apps/web/features/workspaces/lib/workspace-switch-interruptions.ts#describeWorkspaceInterruptions",
+        "apps/web/features/workspaces/lib/workspace-cache-scope.ts#finalizeWorkspaceSwitch"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/workspaces/lib/workspace-switch-interruptions.test.ts",
+          "name": "keeps every kind reachable so none can be added without its own sentence"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/workspaces/components/WorkspaceMenuItems.test.tsx",
+          "name": "names the work a switch would end before it ends it"
+        }
+      ]
+    },
+    {
+      "id": "workspace-switch-anyway-or-stay",
+      "doc": "workspace-administration",
+      "section": "Switching between workspaces",
+      "kind": "prose",
+      "sentence": "**Switch anyway** goes ahead; **Stay in this workspace** changes nothing.",
+      "implementation": ["apps/web/features/workspaces/components/WorkspaceMenuItems.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/workspaces/components/WorkspaceMenuItems.test.tsx",
+          "name": "leaves the workspace unchanged when the interruption warning is declined"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/TeamSection.test.tsx",
+          "name": "names unsent work and waits for a decision before switching away from it"
+        }
+      ]
+    },
+    {
+      "id": "workspace-leave-owner-transfers-atomically",
+      "doc": "workspace-administration",
+      "section": "Leaving a workspace",
+      "kind": "prose",
+      "sentence": "**Transfer ownership and leave** makes that member the owner and removes you in one operation, so the workspace never has no owner.",
+      "implementation": [
+        "apps/web/lib/services/organization-membership-service.ts#leaveOrganization"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/organization-membership-service.test.ts",
+          "name": "transfers ownership and removes the departing owner in one transaction"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/TeamSection.test.tsx",
+          "name": "transfers ownership and leaves atomically from the owner UI"
+        }
+      ]
+    },
+    {
+      "id": "workspace-leave-sole-owner-refused",
+      "doc": "workspace-administration",
+      "section": "Leaving a workspace",
+      "kind": "prose",
+      "sentence": "An owner who is the only member cannot leave; the workspace has to be deleted instead.",
+      "implementation": [
+        "apps/web/lib/services/organization-membership-service.ts#leaveOrganization"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/organization-membership-service.test.ts",
+          "name": "points a sole owner at the workspace decommission flow instead of leaving"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-owner-only",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "Only the owner can delete a workspace.",
+      "implementation": ["apps/web/app/api/settings/organization/route.ts#handleDelete"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "refuses an admin who is not the owner"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "refuses a plain member"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/TeamSection.test.tsx",
+          "name": "does not offer deletion to an admin who does not own the workspace"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-typed-confirmation",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "A confirmation that matches neither schedules nothing.",
+      "implementation": ["apps/web/app/api/settings/organization/route.ts#handleDelete"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "rejects a confirmation that does not match the name or slug"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "schedules deletion for the owner when the confirmation matches the display name"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-nothing-erased-today",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "Nothing is erased on the day you ask.",
+      "implementation": [
+        "apps/web/app/api/settings/organization/route.ts#handleDelete",
+        "apps/web/lib/server/organization-deletion.ts#organizationDeletionScheduledFor"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "schedules deletion for the owner when the confirmation matches the slug"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-fourteen-day-window",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "Deletion is scheduled 14 days ahead, and the owner can cancel it from the same page until then; after the scheduled date a cancellation is refused.",
+      "implementation": [
+        "apps/web/lib/server/organization-deletion.ts#ORGANIZATION_DELETION_COOLING_PERIOD_DAYS = 14",
+        "apps/web/app/api/settings/organization/deletion/cancel/route.ts",
+        "apps/web/features/admin/pages/WorkspaceDeletionPage.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/deletion/cancel/__tests__/route.test.ts",
+          "name": "cancels a pending deletion for the owner"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/deletion/cancel/__tests__/route.test.ts",
+          "name": "refuses to cancel once the grace window has closed"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/organization-deletion.ts",
+          "text": "ORGANIZATION_DELETION_COOLING_PERIOD_DAYS = 14"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-daily-erasure",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "A daily job then erases the workspace's conversations, projects, files, connectors and API keys for every member.",
+      "implementation": [
+        "apps/web/app/api/cron/purge-deleted-organizations/route.ts",
+        "apps/web/lib/server/organization-erasure.ts#eraseOrganizationData"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-deleted-organizations/__tests__/route.test.ts",
+          "name": "purges every due workspace and records the completion audit event"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/organization-erasure.test.ts",
+          "name": "erases every scoped table, anonymizes billing history, and deletes the organization row"
+        },
+        {
+          "kind": "copy",
+          "file": "vercel.json",
+          "text": "/api/cron/purge-deleted-organizations"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-keeps-billing-and-audit",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "Two records are kept rather than erased: billing history is anonymised, and the workspace's audit trail stays with its reference to the workspace removed.",
+      "implementation": ["apps/web/lib/server/organization-erasure.ts#eraseOrganizationData"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/organization-erasure.test.ts",
+          "name": "retains the tenant audit trail, detaching only the organization reference"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/organization-erasure.test.ts",
+          "name": "erases every scoped table, anonymizes billing history, and deletes the organization row"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-refused-under-hold",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "A workspace under an active legal hold cannot be scheduled for deletion.",
+      "implementation": ["apps/web/app/api/settings/organization/route.ts#countActiveLegalHolds"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "refuses to schedule deletion while a legal hold is active, naming the hold count"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-hold-refusal-names-count",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "The request is refused and names how many holds are active, and each one has to be released first.",
+      "implementation": ["apps/web/app/api/settings/organization/route.ts#countActiveLegalHolds"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "refuses to schedule deletion while a legal hold is active, naming the hold count"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/__tests__/route.deletion.test.ts",
+          "name": "schedules deletion once every legal hold has been released"
+        }
+      ]
+    },
+    {
+      "id": "workspace-delete-late-hold-blocks-erasure",
+      "doc": "workspace-administration",
+      "section": "Deleting a workspace",
+      "kind": "prose",
+      "sentence": "A hold placed after deletion was scheduled stops the erasure too: the workspace stays scheduled and nothing is erased while the hold lasts.",
+      "implementation": [
+        "apps/web/lib/server/organization-erasure.ts#eraseOrganizationData",
+        "apps/web/app/api/cron/purge-deleted-organizations/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/purge-deleted-organizations/__tests__/route.test.ts",
+          "name": "leaves a legal-hold-blocked workspace scheduled and reports the block in the audit log"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/organization-erasure.test.ts",
+          "name": "blocks the whole purge when an active legal hold exists, and touches nothing"
+        }
+      ]
+    },
+    {
+      "id": "workspace-console-hidden-from-members",
+      "doc": "workspace-administration",
+      "section": "What members see",
+      "kind": "prose",
+      "sentence": "Members do not see the console.",
+      "implementation": [
+        "apps/web/app/workspace/layout.tsx",
+        "apps/web/features/workspace-console/components/WorkspaceConsoleShell.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/workspace-console/components/__tests__/WorkspaceConsoleShell.test.tsx",
+          "name": "tells a member they do not administer the workspace, and names their role"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/workspace-console/components/__tests__/WorkspaceConsoleShell.test.tsx",
+          "name": "never leaks console content into a denial state"
+        }
+      ]
+    },
+    {
+      "id": "workspace-member-billing-read-only",
+      "doc": "workspace-administration",
+      "section": "What members see",
+      "kind": "prose",
+      "sentence": "A member on a workspace-managed plan sees read-only billing in their own settings, saying the plan is managed by the organization and to contact an administrator to change it.",
+      "implementation": ["apps/web/features/settings/sections/BillingSection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "labels an operator-provisioned plan without inventing Stripe controls"
+        }
+      ]
+    },
+    {
+      "id": "workspace-usage-attribution",
+      "doc": "workspace-administration",
+      "section": "Audit and usage",
+      "kind": "prose",
+      "sentence": "Usage analytics attribute managed cloud spend to a member, a model and a provider, which is what you need to answer \"who spent this\" rather than only \"how much\".",
+      "implementation": [
+        "apps/web/lib/services/organization-usage-service.ts#readOrganizationUsage"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/organization-usage-service.test.ts",
+          "name": "ranks the heaviest spender first so an owner can see who is driving the bill"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/services/organization-usage-service.ts",
+          "text": "byProvider"
+        }
+      ]
+    },
+    {
+      "id": "billing-settings-shows-plan-period-payment-invoices",
+      "doc": "billing-and-plans",
+      "section": "Where billing lives",
+      "kind": "prose",
+      "sentence": "Settings, Billing shows your current plan, when the period renews or ends, your payment method and your invoices.",
+      "implementation": ["apps/web/features/settings/sections/BillingSection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "renders the plan, payment and invoices rows without a bordered card"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "distinguishes renewal from a scheduled cancellation"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "shows public relative usage copy without private ledger values"
+        }
+      ]
+    },
+    {
+      "id": "billing-free-upgrade-opens-waitlist",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "Paid upgrades are opening in stages, so on the Free plan choosing one opens the upgrade waitlist rather than checkout: join the waitlist, or enter an access code to continue to checkout.",
+      "implementation": [
+        "apps/web/features/billing/hooks/use-upgrade-plan-flow.tsx",
+        "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
+          "name": "joins the selected plan waitlist without opening checkout"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
+          "name": "opens the existing checkout only after a valid code is redeemed"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx",
+          "text": "Paid upgrades are opening in stages. Join the waitlist, or continue now with an access"
+        }
+      ]
+    },
+    {
+      "id": "billing-checkout-refused-without-access",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "Checkout is refused to an account that has neither.",
+      "implementation": [
+        "apps/web/app/api/checkout/route.ts",
+        "apps/web/lib/server/billing-waitlist-access.ts#hasBillingWaitlistAccess"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/checkout/route.test.ts",
+          "name": "requires redeemed waitlist access before a free account can open checkout"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeWaitlistDialog.test.tsx",
+          "name": "keeps checkout closed and shows the refusal when a code is invalid"
+        }
+      ]
+    },
+    {
+      "id": "billing-paid-upgrade-confirms-cost",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "On a plan you already pay for the access step does not apply, and an upgrade shows what it will cost and waits for you to confirm before anything is charged.",
+      "implementation": [
+        "apps/web/app/api/checkout/route.ts#holdsLivePaidSubscription",
+        "apps/web/features/billing/components/UpgradeConfirmDialog.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/checkout/route.test.ts",
+          "name": "never asks the gate about an account that still holds a live paid subscription"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/pricing/page.test.tsx",
+          "name": "sends an active paid subscriber to the order screen instead of charging from the card"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/billing/components/UpgradeConfirmDialog.test.tsx",
+          "name": "quotes the published catalog amount for the requested interval"
+        }
+      ]
+    },
+    {
+      "id": "billing-local-and-byok-free",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "Local mode and BYOK are free and need no plan at all.",
+      "implementation": ["packages/contracts/types/src/billing-catalog.ts#isFreeOfChargePlanTier"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/billing-catalog.test.ts",
+          "name": "reports the three tiers with no possible managed spend as free of charge"
+        }
+      ]
+    },
+    {
+      "id": "billing-pricing-page-carries-prices",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "The pricing page carries the current prices, regional prices and per-plan limits.",
+      "implementation": ["apps/web/app/pricing/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/pricing/page.test.tsx",
+          "name": "renders every public plan from the shared catalog, including Basic and both Max tiers"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/pricing/page.test.tsx",
+          "name": "renders trusted regional prices without exposing India pricing to other regions"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/pricing/page.test.tsx",
+          "name": "shows the enforceable project, MCP, media, and developer-surface plan differences"
+        }
+      ]
+    },
+    {
+      "id": "billing-store-subscriptions-not-changeable-here",
+      "doc": "billing-and-plans",
+      "section": "Subscriptions bought in an app store",
+      "kind": "prose",
+      "sentence": "If the subscription was bought through Apple or Google, AGI cannot change it.",
+      "implementation": [
+        "apps/web/features/settings/sections/BillingSection.tsx",
+        "apps/web/features/billing/lib/subscription-owner-presentation.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "sends an App Store-billed plan to Apple instead of the Stripe portal"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "sends a Play-billed plan to Google and says where receipts live"
+        }
+      ]
+    },
+    {
+      "id": "billing-workspace-managed-read-only",
+      "doc": "billing-and-plans",
+      "section": "Plans your organization pays for",
+      "kind": "prose",
+      "sentence": "On a workspace-managed plan the controls are read-only: \"This plan is managed by your organization. Contact an administrator to change it\", and invoices are provided by the organization rather than shown here.",
+      "implementation": ["apps/web/features/settings/sections/BillingSection.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "labels an operator-provisioned plan without inventing Stripe controls"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/BillingSection.tsx",
+          "text": "Invoices for this plan are provided by your organization and are not available here."
+        }
+      ]
+    },
+    {
+      "id": "billing-ownership-not-verified-copy",
+      "doc": "billing-and-plans",
+      "section": "When billing will not let you change plans",
+      "kind": "prose",
+      "sentence": "\"Billing ownership is not verified. Refresh your account before changing plans.\" Reload and sign in again.",
+      "implementation": ["apps/web/features/settings/sections/BillingSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/BillingSection.tsx",
+          "text": "Billing ownership is not verified. Refresh your account before changing plans."
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-states-are-distinct",
+      "doc": "troubleshooting",
+      "section": "Start here",
+      "kind": "prose",
+      "sentence": "Read the message before changing anything: AGI distinguishes \"this is switched off\", \"your plan does not include this\", \"this model cannot do this\" and \"this is broken\", and the fix is different for each.",
+      "implementation": [
+        "packages/contracts/types/src/reason-codes.ts",
+        "packages/contracts/types/src/surface-capability-manifest.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/surface-capability-manifest.test.ts",
+          "name": "covers availability and every reason a capability can be withheld"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/surface-capability-manifest.test.ts",
+          "name": "separates plan, region and seat from one another in the combined answer"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/surface-capability-manifest.test.ts",
+          "name": "gives every unavailable state an explanation, a code and a remediation"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-chat-failure-keeps-messages",
+      "doc": "troubleshooting",
+      "section": "A chat will not load",
+      "kind": "prose",
+      "sentence": "Either way your messages are already saved, so retrying or opening another conversation loses nothing.",
+      "implementation": ["apps/web/features/chat/components/ChatFailureNotice.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/chat/__tests__/error.test.tsx",
+          "name": "keeps the render wording for a genuine render failure"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/chat/__tests__/error.test.tsx",
+          "name": "names the server when the request failed while online"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/chat/__tests__/error.test.tsx",
+          "name": "offers a retry and a route back to chat in every case"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/ChatFailureNotice.tsx",
+          "text": "Your messages are saved, try again, or open a different conversation."
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-message-still-starting",
+      "doc": "troubleshooting",
+      "section": "A message will not send",
+      "kind": "prose",
+      "sentence": "\"Your previous message was still starting, so this one is back here. Send it again.\" Send it once more; nothing was lost.",
+      "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ChatComposerNew.tsx",
+          "text": "Your previous message was still starting, so this one is back here. Send it again."
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-file-refused-by-name-and-reason",
+      "doc": "troubleshooting",
+      "section": "A file was not attached",
+      "kind": "prose",
+      "sentence": "The composer refuses a file instead of sending your message without it, and names the file and the reason, such as too large, a type it cannot read, or too many files.",
+      "implementation": ["apps/web/features/chat/hooks/use-attachments.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/hooks/__tests__/use-attachments.refusals.test.tsx",
+          "name": "is reported by name and reason, not only as a toast"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/hooks/__tests__/use-attachments.refusals.test.tsx",
+          "name": "separates a file that is too large from one of the wrong type"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/hooks/use-attachments.ts",
+          "text": "reason: 'too_many'"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-default-waits-for-approval",
+      "doc": "troubleshooting",
+      "section": "A tool or connector did nothing",
+      "kind": "prose",
+      "sentence": "On the default approval setting every tool action waits for you, so a session that looks stalled may be waiting on an approval.",
+      "implementation": [
+        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "asks for approval on a read-only tool when the account keeps the fail-closed default"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-never-run-is-refused",
+      "doc": "troubleshooting",
+      "section": "A tool or connector did nothing",
+      "kind": "prose",
+      "sentence": "Check the approval prompt, the connector's **Recent calls** log, and its per-tool permissions: a tool set to **Never run this tool** is refused by your own setting.",
+      "implementation": [
+        "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.test.ts",
+          "name": "never lets a saved deny be reversed by anything below it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/connectors/components/__tests__/ConnectorCallLog.test.tsx",
+          "name": "names each call, what it did and whether it answered"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
+          "text": "Never run this tool"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-model-badges",
+      "doc": "troubleshooting",
+      "section": "A model is missing from the picker",
+      "kind": "prose",
+      "sentence": "The badge says which case it is: **Upgrade** (your plan), **Coming soon, not yet available** (not live yet), or **Unavailable right now** (live but not answering).",
+      "implementation": ["apps/web/features/chat/components/Composer/ComposerFooter.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "Coming soon, not yet available"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "Unavailable right now"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
+          "text": "planLockLabel ?? 'Upgrade'"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-model-policy-removes-models",
+      "doc": "troubleshooting",
+      "section": "A model is missing from the picker",
+      "kind": "prose",
+      "sentence": "A workspace model policy can also remove models entirely, in which case they do not appear at all.",
+      "implementation": ["apps/web/lib/services/model-policy-gate.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/model-policy-gate.test.ts",
+          "name": "denies a blocked model for a governed workspace"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-retired-model-says-so",
+      "doc": "troubleshooting",
+      "section": "A retired model",
+      "kind": "prose",
+      "sentence": "A conversation saved with a model that no longer exists says so in place and continues on a named replacement.",
+      "implementation": ["apps/web/features/chat/pages/WebChatPage.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/pages/__tests__/WebChatPage.retired-model.test.tsx",
+          "name": "tells the user the saved model was retired instead of swapping it silently"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-retired-model-loses-nothing",
+      "doc": "troubleshooting",
+      "section": "A retired model",
+      "kind": "prose",
+      "sentence": "Nothing is lost, and you can pick a different model.",
+      "implementation": ["apps/web/features/chat/pages/WebChatPage.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/pages/__tests__/WebChatPage.retired-model.test.tsx",
+          "name": "tells the user the saved model was retired instead of swapping it silently"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-voice-names-the-cause",
+      "doc": "troubleshooting",
+      "section": "Voice will not start",
+      "kind": "prose",
+      "sentence": "The message names the cause: microphone denied, no microphone available, the browser cannot open a voice connection, or the connection failed or dropped.",
+      "implementation": ["apps/web/features/chat/lib/live-voice-session.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/lib/live-voice-session.test.ts",
+          "name": "maps a denied microphone to the permission message and opens no connection"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/lib/live-voice-session.test.ts",
+          "name": "reports a drop before the session started as a failure, never as a reconnect"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "This browser cannot open a voice connection."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "No microphone is available in this browser."
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-conversation-search-failure",
+      "doc": "troubleshooting",
+      "section": "Search did not run",
+      "kind": "prose",
+      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search failed. Please try again.\" If the search window itself cannot open, it shows \"Search unavailable\" instead; close it and open it again.",
+      "implementation": ["apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+          "text": "toast.error('Search failed. Please try again.')"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
+          "text": "<DialogTitle>Search unavailable</DialogTitle>"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-help-search-unloadable-vs-empty",
+      "doc": "troubleshooting",
+      "section": "Search did not run",
+      "kind": "prose",
+      "sentence": "The help centre's search tells an index that could not be loaded apart from a query that matched nothing, so \"nothing matched\" really means nothing matched.",
+      "implementation": [
+        "apps/web/features/support/components/HelpSearch.tsx",
+        "apps/web/app/api/help/search/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/support/__tests__/HelpSearch.test.tsx",
+          "name": "distinguishes an unloadable index from a query that matched nothing"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/help/search/route.test.ts",
+          "name": "answers 503 when the corpus cannot load, not an empty result set"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-cli-device-code-expiry",
+      "doc": "troubleshooting",
+      "section": "The CLI will not sign in",
+      "kind": "prose",
+      "sentence": "If the wait stops with \"Device code expired. Please run /login again.\" or \"Authorization timed out\", the code was not approved in time: run `agi login` again for a fresh one.",
+      "implementation": ["apps/cli/src/oauth.rs#device_code_login"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/oauth.rs",
+          "text": "Device code expired. Please run /login again."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/oauth.rs",
+          "text": "Authorization timed out after"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-cli-auth-status",
+      "doc": "troubleshooting",
+      "section": "The CLI will not sign in",
+      "kind": "prose",
+      "sentence": "`agi auth-status` lists every credential the CLI holds and how each one authenticates; \"No authentication configured.\" means nothing is stored yet.",
+      "implementation": ["apps/cli/src/lib.rs", "apps/cli/src/auth.rs#auth_status"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/lib.rs",
+          "text": "No authentication configured."
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-cli-credential-store",
+      "doc": "troubleshooting",
+      "section": "The CLI will not sign in",
+      "kind": "prose",
+      "sentence": "The CLI keeps credentials in the operating system's credential store, and a credentials file that other accounts on the machine can read is refused, with the command that fixes it.",
+      "implementation": ["apps/cli/src/auth.rs#read_file_store"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/auth.rs",
+          "text": "holds credentials in the clear and is readable by other accounts on this machine"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/auth.rs",
+          "text": "const AUTH_INDEX_STORAGE: &str = \"os-keyring\";"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-extensions-unpublished",
+      "doc": "troubleshooting",
+      "section": "An extension will not connect",
+      "kind": "prose",
+      "sentence": "Neither the Chrome extension nor the VS Code extension is published yet, so there is no public build to connect.",
+      "implementation": [
+        "apps/web/app/chrome-extension/page.tsx",
+        "apps/web/app/vscode-extension/page.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/chrome-extension/page.tsx",
+          "text": "AGI in Chrome · coming soon"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/vscode-extension/page.tsx",
+          "text": "No VSIX has been published yet"
+        }
+      ]
+    },
+    {
+      "id": "account-backup-codes-regenerate-replaces",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "**Running low on backup codes.** Settings, Security generates a new set after you confirm your second factor again, and the new set replaces the old one, so codes you printed earlier stop working.",
+      "implementation": ["apps/web/app/api/settings/2fa/backup-codes/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/2fa/backup-codes/route.test.ts",
+          "name": "regenerates backup codes once the second factor has been re-verified"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/2fa/backup-codes/route.test.ts",
+          "name": "refuses a session that has not re-authenticated, and replaces nothing"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/2fa/backup-codes/route.ts",
+          "text": "backup_codes_generated_at = now()"
+        }
+      ]
+    },
+    {
+      "id": "chat-branch-single-flight",
+      "doc": "chat-basics",
+      "section": "Branch a conversation",
+      "kind": "prose",
+      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
+      "implementation": [
+        "apps/web/features/chat/components/messages/MessageBubble.tsx",
+        "apps/web/features/chat/hooks/use-conversation-branches.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/messages/MessageBubble.test.tsx",
+          "name": "disables duplicate branch creation while the request is in flight"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/messages/MessageBubble.test.tsx",
+          "name": "creates a branch from the persistent action row, not the overflow menu"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/chat/conversations/[id]/branches/route.test.ts",
+          "name": "validates the idempotent fork request and returns the created conversation"
+        }
+      ]
+    },
+    {
+      "id": "chat-branch-limits-refused",
+      "doc": "chat-basics",
+      "section": "Branch a conversation",
+      "kind": "prose",
+      "sentence": "A message can hold only so many branches, and a conversation only so many branch points; past either limit the request is refused and the message says which.",
+      "implementation": ["apps/web/lib/services/conversation-branch-service.ts#forkConversation"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/services/conversation-branch-service.ts",
+          "text": "This message already has the maximum number of branches"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/services/conversation-branch-service.ts",
+          "text": "This conversation already has the maximum number of forks"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -1415,6 +2495,15 @@
       "sentence": "The number of custom MCP connections available depends on your plan.",
       "implementation": ["packages/contracts/types/src/billing-catalog.ts"],
       "reason": "The plan catalogue is founder-frozen for this program, so no assertion is added against it; the limit is read from the catalogue at runtime and the pricing page is its published source."
+    },
+    {
+      "id": "account-lost-every-factor-has-no-screen",
+      "doc": "account-security",
+      "section": "If you cannot sign in",
+      "kind": "prose",
+      "sentence": "**Lost the authenticator and every backup code.** There is no self-serve way back in, and there is no screen from which support can remove a second factor.",
+      "implementation": ["apps/web/app/api/settings/2fa/route.ts"],
+      "reason": "No operator or support route touches user_two_factor: its writers are the holder's own routes under apps/web/app/api/settings/2fa, step-up verification and account erasure. Nothing in the repository asserts that absence, so it stays unproven until a guard enumerates every writer of that table."
     }
   ],
   "narrative": [

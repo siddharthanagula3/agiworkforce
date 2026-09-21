@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastUpdated": "2026-09-20",
+  "lastUpdated": "2026-09-21",
   "currentSourcesOfTruth": [
     "ACTIVE_ISSUES.md",
     "AGENTS.md",
@@ -26,7 +26,8 @@
     "docs/architecture/cache-rules.md",
     "docs/architecture/derived-state.md",
     "docs/architecture/release-architecture.md",
-    "docs/compliance/enterprise-operations.md"
+    "docs/compliance/enterprise-operations.md",
+    "docs/runbooks/support-operations.md"
   ],
   "currentEvidence": [],
   "supportingRules": [
