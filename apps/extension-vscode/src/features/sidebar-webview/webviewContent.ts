@@ -615,6 +615,23 @@ export function getWebviewContent(
       font-size: 12px;
       line-height: 1.5;
     }
+    .approval-card__verdict {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .approval-card__risk {
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-secondary);
+    }
+    .approval-card__risk--medium { color: var(--warning); border-color: var(--warning-border); }
+    .approval-card__risk--high { color: var(--error); border-color: var(--error-border); }
+    .approval-card__undo { color: var(--text-secondary); }
     .approval-card__detail {
       margin: 8px 0 0;
       padding: 8px 10px;
@@ -4576,6 +4593,32 @@ export function getWebviewContent(
       expired: 'The turn ended before this was answered.',
     };
 
+    // The host already decided how risky the call is and whether it can be
+    // taken back. Both are said in words: a reader who cannot see the colour
+    // of the chip, or is reading the card aloud, gets the same answer.
+    var APPROVAL_RISK_WORDS = {
+      low: 'Low risk',
+      medium: 'Medium risk',
+      high: 'High risk',
+    };
+
+    function describeApprovalVerdict(payload) {
+      var risk = APPROVAL_RISK_WORDS[payload.riskLevel];
+      var stated = typeof payload.reversible === 'boolean';
+      if (!risk && !stated) return null;
+      var undo = stated
+        ? payload.reversible
+          ? 'Can be undone'
+          : 'Cannot be undone'
+        : '';
+      var riskWords = risk || 'Risk not rated';
+      return {
+        risk: riskWords,
+        undo: undo,
+        spoken: undo ? riskWords + ', ' + undo + '.' : riskWords + '.',
+      };
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -4599,6 +4642,25 @@ export function getWebviewContent(
       summary.className = 'approval-card__summary';
       summary.textContent = payload.summary;
       card.appendChild(summary);
+
+      var verdict = describeApprovalVerdict(payload);
+      if (verdict) {
+        var verdictEl = document.createElement('div');
+        verdictEl.className = 'approval-card__verdict';
+        var riskEl = document.createElement('span');
+        riskEl.className =
+          'approval-card__risk approval-card__risk--' + (payload.riskLevel || 'unrated');
+        riskEl.textContent = verdict.risk;
+        verdictEl.appendChild(riskEl);
+        if (verdict.undo) {
+          var undoEl = document.createElement('span');
+          undoEl.className = 'approval-card__undo';
+          undoEl.textContent = verdict.undo;
+          verdictEl.appendChild(undoEl);
+        }
+        card.appendChild(verdictEl);
+        card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
 
       if (payload.detail) {
         var detail = document.createElement('pre');

@@ -229,6 +229,10 @@ export interface TurnFailureShape {
   retryable: boolean;
   action:
     'sign_in_provider' | 'sign_in_account' | 'upgrade_plan' | 'open_settings' | 'retry' | 'none';
+  /** Seconds, and only ever the figure a provider itself asked for. */
+  retryAfterSeconds?: number;
+  /** The id the host logged this failure under, shown so a reader can quote it. */
+  requestId?: string;
 }
 
 const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.freeze({
@@ -236,9 +240,14 @@ const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.fre
   provider_auth_invalid: 'sign-in',
   account_signed_out: 'sign-in',
   plan_excludes_model: 'subscription',
+  usage_limit_reached: 'subscription',
   provider_rate_limited: 'rate-limit',
+  free_allowance_exhausted: 'rate-limit',
   provider_unavailable: 'provider',
+  stream_interrupted: 'provider',
   context_window_exceeded: 'provider',
+  output_limit_reached: 'provider',
+  refused_by_safety: 'provider',
   network: 'network',
   tool_denied: 'permission',
   interrupted: 'unknown',
@@ -247,22 +256,73 @@ const FAILURE_CATEGORY: Readonly<Record<string, ChatErrorCategory>> = Object.fre
   unknown: 'unknown',
 });
 
+/**
+ * A day is the longest wait worth putting in a sentence; past that the figure
+ * is a provider's clock skew rather than a time to come back at. The host
+ * applies the same bound (`MAX_STATED_RETRY_AFTER_SECONDS` in
+ * crates/agiworkforce-protocol/src/developer_session.rs), so a figure that
+ * reaches here outside the range came from somewhere that did not.
+ */
+const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
+
+function counted(value: number, unit: string): string {
+  return `${value} ${unit}${value === 1 ? '' : 's'}`;
+}
+
+/**
+ * The wait in the words a reader reads, or nothing. There is no fallback: a
+ * reader who waits out a figure nobody sent, and fails again, stops believing
+ * the next one.
+ */
+export function statedWait(retryAfterSeconds: number | undefined): string | null {
+  if (typeof retryAfterSeconds !== 'number' || !Number.isFinite(retryAfterSeconds)) return null;
+  const seconds = Math.round(retryAfterSeconds);
+  if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return null;
+  if (seconds < 90) return `about ${counted(seconds, 'second')}`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `about ${counted(minutes, 'minute')}`;
+  return `about ${counted(Math.round(seconds / 3600), 'hour')}`;
+}
+
+/** The one string a reader hands to support, appended only when there is one. */
+export function withFailureReference(text: string, requestId: string | undefined): string {
+  const reference = requestId?.trim();
+  return reference ? `${text} Reference: ${reference}` : text;
+}
+
 function failureHeadline(failure: TurnFailureShape, provider: string): string {
+  const wait = statedWait(failure.retryAfterSeconds);
   switch (failure.code) {
     case 'account_signed_out':
       return 'Sign in to AGI to run this model on your plan.';
     case 'plan_excludes_model':
       return 'Your plan does not include this model.';
+    case 'usage_limit_reached':
+      return wait
+        ? `You have reached a usage limit on your account. It reopens in ${wait}.`
+        : 'You have reached a usage limit on your account. Check your usage to see when it resets.';
     case 'provider_auth_missing':
       return `AGI has no ${provider} key to run this with.`;
     case 'provider_auth_invalid':
       return `Your ${provider} key was rejected.`;
     case 'provider_rate_limited':
-      return `${provider} is rate limiting this account.`;
+      return wait
+        ? `${provider} is taking too many requests right now. Try again in ${wait}.`
+        : `${provider} is taking too many requests right now. Try again in a moment, or switch model.`;
+    case 'free_allowance_exhausted':
+      return wait
+        ? `The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. Try again in ${wait}.`
+        : "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. It resets on the provider's schedule.";
     case 'provider_unavailable':
       return `${provider} could not answer.`;
+    case 'stream_interrupted':
+      return `${provider} stopped replying part way through.`;
     case 'context_window_exceeded':
       return 'This conversation is longer than the model can read at once.';
+    case 'output_limit_reached':
+      return "The answer reached this model's maximum length and stopped there. Ask for a shorter answer, or split the request.";
+    case 'refused_by_safety':
+      return 'The safety system stopped this response. Rephrase the request, or try a different model.';
     case 'network':
       return 'This machine could not reach the provider.';
     case 'tool_denied':
@@ -304,16 +364,27 @@ export function turnFailureOffer(failure: {
   return undefined;
 }
 
+/**
+ * Another model is the move for every failure that belongs to this one route
+ * and would happen again on a retry, which is why a spent free allowance is
+ * here and a signed-out account is not.
+ */
+const SWITCH_MODEL_CODES: ReadonlySet<string> = new Set([
+  'provider_unavailable',
+  'provider_rate_limited',
+  'free_allowance_exhausted',
+  'stream_interrupted',
+  'refused_by_safety',
+]);
+
 function switchModelOffer(code: TurnFailureShape['code']): ChatErrorAction | undefined {
-  return code === 'provider_unavailable' || code === 'provider_rate_limited'
-    ? { kind: 'switch-model', label: 'Switch model' }
-    : undefined;
+  return SWITCH_MODEL_CODES.has(code) ? { kind: 'switch-model', label: 'Switch model' } : undefined;
 }
 
 export function presentTurnFailure(failure: TurnFailureShape): ChatErrorPresentation {
   const provider =
     failure.provider === undefined ? 'the provider' : providerDisplayLabel(failure.provider);
-  const headline = failureHeadline(failure, provider);
+  const headline = withFailureReference(failureHeadline(failure, provider), failure.requestId);
   const detail = failure.message.trim();
   const action = turnFailureOffer(failure) ?? switchModelOffer(failure.code);
   return {

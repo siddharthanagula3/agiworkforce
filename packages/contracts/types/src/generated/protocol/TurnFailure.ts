@@ -15,4 +15,17 @@ export type TurnFailure = {
   provider?: string;
   retryable: boolean;
   action: TurnFailureAction;
+  /**
+   * How long to wait before sending the turn again, in seconds, and only
+   * ever the figure a provider itself supplied. A surface states a wait
+   * when this is present and states none when it is not: a reader who waits
+   * out a number nobody sent, and fails again, stops believing the next one.
+   */
+  retryAfterSeconds?: number;
+  /**
+   * The id the host recorded this failure under, so a reader has one string
+   * to quote that finds the turn. Absent when the host recorded none, never
+   * a placeholder.
+   */
+  requestId?: string;
 };
