@@ -198,11 +198,6 @@
   },
   "unraisedCodes": [
     {
-      "code": "RESOURCE_DELETED",
-      "why": "a read of a soft-deleted row answers 404 today, so a reader cannot tell a row that was removed from one that never existed.",
-      "raisedBy": "the resource read paths that consult deleted_at: apps/web/lib/services and the routes that load a single resource."
-    },
-    {
       "code": "STORAGE_ERROR",
       "why": "blob failures reach the reader as INTERNAL_ERROR, so a transient store outage looks like a defect in the product.",
       "raisedBy": "apps/web/lib/storage and the upload routes."
