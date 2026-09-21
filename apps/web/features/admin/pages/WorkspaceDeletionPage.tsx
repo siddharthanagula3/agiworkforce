@@ -56,8 +56,9 @@ function deletionConsequence(workspace: WorkspaceSummary): string {
       ? 'You are the only member, so you are the only one who loses it.'
       : `All ${workspace.memberCount} members lose it, not only you: ${others} ${others === 1 ? 'colleague' : 'colleagues'} will be signed out of this workspace.`;
   return (
-    `Every chat, project, file, connector, API key and audit record in ${workspace.name} is ` +
-    `scheduled for permanent erasure. ${whoLosesAccess} Nothing is deleted today: you can ` +
+    `Every chat, project, file, connector and API key in ${workspace.name} is scheduled for ` +
+    `permanent erasure. The audit trail is kept without its link to the workspace. ` +
+    `${whoLosesAccess} Nothing is deleted today: you can ` +
     'cancel from this page until the scheduled date, and after it nobody can restore any of it.'
   );
 }

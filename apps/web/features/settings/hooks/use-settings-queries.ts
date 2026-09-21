@@ -989,10 +989,7 @@ export interface TeamInvitationsOverview {
 export interface TeamInvitationCredentialResult {
   invitation: TeamInvitation;
   inviteToken: string;
-  delivery: {
-    emailSent: false;
-    reason: string;
-  };
+  delivery: { emailSent: true } | { emailSent: false; reason: string };
 }
 
 const TeamInvitationSchema = z.object({
@@ -1027,10 +1024,11 @@ const TeamInvitationsOverviewSchema = z.object({
 const TeamInvitationCredentialResultSchema = z.object({
   invitation: TeamInvitationSchema,
   inviteToken: z.string().min(20).max(512),
-  delivery: z.object({
-    emailSent: z.literal(false),
-    reason: z.string(),
-  }),
+  // A configured email provider sends the invitation, so both answers are real.
+  delivery: z.discriminatedUnion('emailSent', [
+    z.object({ emailSent: z.literal(true) }),
+    z.object({ emailSent: z.literal(false), reason: z.string() }),
+  ]),
 });
 
 export function useTeamInvitations(
@@ -1190,7 +1188,7 @@ export function useLeaveOrganization(): UseMutationResult<
       await queryClient.cancelQueries();
       queryClient.clear();
       toast.success(
-        'You left the workspace. Your sessions, device tokens and API keys were revoked, so sign in again to continue in your personal account.',
+        'You left the workspace. The device tokens and API keys issued in it were revoked. If you are asked to sign in, do so to continue in your personal account.',
       );
       window.location.reload();
     },

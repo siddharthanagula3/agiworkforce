@@ -103,8 +103,9 @@ describe('scheduling a workspace deletion', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Schedule deletion' }));
 
+    expect(screen.getByText(/Every chat, project, file, connector and API key/)).toBeVisible();
     expect(
-      screen.getByText(/Every chat, project, file, connector, API key and audit record/),
+      screen.getByText(/The audit trail is kept without its link to the workspace/),
     ).toBeVisible();
     expect(screen.getByText(/All 12 members lose it/)).toBeVisible();
     expect(screen.getByText(/cancel from this page until the scheduled date/)).toBeVisible();

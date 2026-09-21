@@ -556,7 +556,7 @@ async function handleDelete(request: NextRequest) {
   });
 
   return NextResponse.json({
-    message: `Workspace deletion scheduled. Everything in this workspace will be permanently deleted in ${ORGANIZATION_DELETION_COOLING_PERIOD_DAYS} days. Cancel from Settings > Organization any time before then to keep it.`,
+    message: `Workspace deletion scheduled. Everything in this workspace will be permanently deleted in ${ORGANIZATION_DELETION_COOLING_PERIOD_DAYS} days. Cancel from the workspace deletion page, under Settings, Workspace, any time before then to keep it.`,
     scheduledFor: scheduledFor.toISOString(),
     coolingPeriodDays: ORGANIZATION_DELETION_COOLING_PERIOD_DAYS,
   });
