@@ -66,15 +66,15 @@ const DRIVERS: Readonly<Record<CodeAction, () => Promise<unknown>>> = {
  * with the refusal, in apps/web/lib/e2b/runtime.ts. Nothing else may join this
  * list, which is what the length assertion below holds.
  */
-const FAILURE_NOT_COUNTABLE: readonly CodeAction[] = ['sandbox_provision'];
+const FAILURE_NOT_COUNTABLE: readonly CodeAction[] = [];
 
 beforeEach(() => {
   emitted.length = 0;
 });
 
 describe('a Code action that fails is countable as that action failing', () => {
-  it('leaves exactly one action whose refusal is not yet a failed span', () => {
-    expect(FAILURE_NOT_COUNTABLE).toEqual(['sandbox_provision']);
+  it('leaves no action whose refusal closes as a success', () => {
+    expect(FAILURE_NOT_COUNTABLE).toEqual([]);
   });
 
   it('records the failure on every other action the registry declares', async () => {
