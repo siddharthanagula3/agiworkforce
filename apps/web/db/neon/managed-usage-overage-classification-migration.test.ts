@@ -13,7 +13,9 @@ const SOURCES = new Map(
   MIGRATIONS.map((name) => [name, fs.readFileSync(path.join(MIGRATION_DIR, name), 'utf8')]),
 );
 
-const ADDING_MIGRATION = '0279_managed_usage_overage_classification.sql';
+// Found by its descriptive name: migrations are renumbered when branches meet.
+const ADDING_MIGRATION =
+  MIGRATIONS.find((name) => name.endsWith('_managed_usage_overage_classification.sql')) ?? '';
 
 /**
  * The body of a function as the last migration to define it left it. Reading

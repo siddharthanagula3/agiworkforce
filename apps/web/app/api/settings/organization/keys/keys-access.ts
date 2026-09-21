@@ -67,7 +67,9 @@ export async function requireKeyOwner(request: NextRequest): Promise<KeyManageme
 }
 
 // The same decision the revoke handler makes, asked without refusing, so the two cannot disagree.
-export async function mayRevokeKey(access: KeyManagementAccess): Promise<boolean> {
+export async function mayRevokeKey(
+  access: Pick<KeyManagementAccess, 'db' | 'userId' | 'organizationId'>,
+): Promise<boolean> {
   try {
     await requireOrganizationOwner(
       access.db,

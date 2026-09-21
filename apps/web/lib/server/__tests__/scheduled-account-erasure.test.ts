@@ -21,7 +21,8 @@ vi.mock('../neon-db', () => ({
 vi.mock('../identity', () => ({
   getIdentityProvider: () => ({ deleteUser: (...args: unknown[]) => mocks.deleteUser(...args) }),
 }));
-vi.mock('../request-context-cache', () => ({
+vi.mock('../request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../request-context-cache')>()),
   invalidateAccountStatusCache: (...args: unknown[]) => mocks.invalidateAccountStatusCache(...args),
 }));
 vi.mock('../account-erasure', () => ({

@@ -312,7 +312,7 @@ describe('a served turn is measured where its decision was traced', () => {
       surface: 'web',
       kind,
       flagVariants,
-    } as Parameters<typeof persistRoutingDecision>[0];
+    } as unknown as Parameters<typeof persistRoutingDecision>[0];
   }
 
   it('records the cost and the latency of the turn against the route that served it', async () => {
