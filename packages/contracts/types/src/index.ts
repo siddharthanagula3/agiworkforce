@@ -193,6 +193,8 @@ export * from './file-model';
 export * from './browser-bridge';
 export * from './context-handoff-uri';
 export * from './capabilities';
+export * from './client-failures';
+export * from './network-state';
 
 export * from './tool-display';
 
@@ -249,6 +251,7 @@ export {
   UnsupportedFileInputError,
   UNSUPPORTED_FILE_INPUT_ERROR_NAME,
   type FileInputBlock,
+  type UnsupportedFileInputReason,
 } from './file-input';
 
 export {
@@ -331,6 +334,9 @@ export {
 } from './browser-permission-profile';
 
 export {
+  AUTOMATION_OUTCOME_MAX_BATCH,
+  AUTOMATION_OUTCOME_MAX_REASON_CHARS,
+  AUTOMATION_OUTCOME_MAX_TARGET_CHARS,
   AUTOMATION_OUTCOME_STATUSES,
   AUTOMATION_SURFACES,
   UNVERIFIED_SUCCESS_REASON,

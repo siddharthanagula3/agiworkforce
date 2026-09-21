@@ -25,6 +25,7 @@
 
 import {
   UNSUPPORTED_FILE_INPUT_ERROR_NAME,
+  type NetworkCondition,
   type StreamChunkErrorClassification,
 } from '@agiworkforce/types';
 
@@ -148,6 +149,11 @@ const ERROR_CATEGORY_MEMBERS: Readonly<Record<ErrorCategory, true>> = {
   unknown: true,
 };
 
+/** The union at run time, so a caller can walk it rather than restate it. */
+export const ERROR_CATEGORIES = Object.freeze(
+  Object.keys(ERROR_CATEGORY_MEMBERS) as ErrorCategory[],
+) as readonly ErrorCategory[];
+
 export function isErrorCategory(value: unknown): value is ErrorCategory {
   return (
     typeof value === 'string' && Object.prototype.hasOwnProperty.call(ERROR_CATEGORY_MEMBERS, value)
@@ -175,6 +181,50 @@ export function toStreamErrorClassification(
       : {}),
     ...(classified.providerHint !== undefined ? { providerHint: classified.providerHint } : {}),
   };
+}
+
+/**
+ * Which network condition a failed upstream call is evidence of, so a provider
+ * problem is reported in the one vocabulary every surface renders from.
+ *
+ * Only the provider's own reachability is observable here, never ours, so no
+ * category resolves to `backend_unreachable`. Most are evidence of nothing
+ * about a network at all: a refusal, a bad request or an exhausted plan each
+ * arrived over a connection that worked, and reporting them as a network
+ * condition is how a user's own limit ends up blamed on a provider. Those are
+ * `null`, and the caller keeps whatever condition it already observed.
+ *
+ * Typed total over the union so a new category has to answer this question.
+ */
+const ERROR_CATEGORY_NETWORK_CONDITIONS: Readonly<Record<ErrorCategory, NetworkCondition | null>> =
+  {
+    aborted: null,
+    api_timeout: 'provider_degraded',
+    rate_limit: null,
+    server_overload: 'provider_degraded',
+    capacity_off_switch: 'provider_degraded',
+    context_overflow: null,
+    max_output: null,
+    tool_validation: null,
+    invalid_model: null,
+    invalid_input: null,
+    unsupported_input: null,
+    media_too_large: null,
+    auth: null,
+    billing_exhausted: null,
+    quota_exhausted: null,
+    safety: null,
+    content_blocked: null,
+    empty_response: null,
+    connection: 'provider_degraded',
+    pause_turn: null,
+    server_error: 'provider_degraded',
+    client_error: null,
+    unknown: null,
+  };
+
+export function networkConditionForErrorCategory(category: ErrorCategory): NetworkCondition | null {
+  return ERROR_CATEGORY_NETWORK_CONDITIONS[category];
 }
 
 /**
