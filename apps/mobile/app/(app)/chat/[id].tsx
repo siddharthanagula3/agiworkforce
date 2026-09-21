@@ -99,6 +99,7 @@ import {
   imageAssetsToChatAttachments,
   pickImageAssetsFromLibrary,
 } from '@/src/features/media/photo-picker';
+import { PictureMetadataError } from '@/src/features/media/image-metadata';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
@@ -814,8 +815,13 @@ export default function ChatScreen() {
       if (assets.length > 0) {
         chatInputAttachRef.current?.addAttachments(imageAssetsToChatAttachments(assets, 'cam'));
       }
-    } catch {
-      Alert.alert('Camera', 'Could not open the camera. Please try again.');
+    } catch (error) {
+      Alert.alert(
+        'Camera',
+        error instanceof PictureMetadataError
+          ? error.message
+          : 'Could not open the camera. Please try again.',
+      );
     }
   }, []);
 
@@ -830,8 +836,13 @@ export default function ChatScreen() {
         const attachments = imageAssetsToChatAttachments(assets);
         chatInputAttachRef.current?.addAttachments(attachments);
       }
-    } catch {
-      Alert.alert('Photos', 'Could not open Photos. Please try again.');
+    } catch (error) {
+      Alert.alert(
+        'Photos',
+        error instanceof PictureMetadataError
+          ? error.message
+          : 'Could not open Photos. Please try again.',
+      );
     }
   }, []);
 
