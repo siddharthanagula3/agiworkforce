@@ -8,5 +8,5 @@ alter table public.organization_members drop column if exists updated_at;
 alter table public.mcp_response_cache drop column if exists created_at;
 alter table public.connector_tool_permissions drop column if exists created_at;
 
-delete from public.schema_migrations where filename = '0274_resource_row_timestamps.sql';
+delete from public.schema_migrations where filename = '0276_resource_row_timestamps.sql';
 commit;

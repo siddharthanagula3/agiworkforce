@@ -79,11 +79,11 @@ const FIXTURE_AVAILABLE_MODELS = vi.hoisted(
   () =>
     [
       {
-        id: 'fixture-economy-auto',
-        name: 'Economy Auto',
-        provider: 'AGI',
-        providerKey: 'managed_cloud',
-        description: 'Cheapest routed mode',
+        id: 'fixture-free-router',
+        name: 'Free Router',
+        provider: 'OpenRouter',
+        providerKey: 'open_router',
+        description: 'Free community models',
       },
       {
         id: 'fixture-premium-model',
@@ -104,14 +104,14 @@ vi.mock('@shared/stores/model-store', () => ({
     }) => unknown,
   ) =>
     selector({
-      selectedModelId: 'fixture-economy-auto',
+      selectedModelId: 'fixture-free-router',
       setSelectedModelId: vi.fn(),
       getSelectedModel: () => ({
-        id: 'fixture-economy-auto',
-        name: 'Economy Auto',
-        provider: 'AGI',
-        providerKey: 'managed_cloud',
-        description: 'Cheapest routed mode',
+        id: 'fixture-free-router',
+        name: 'Free Router',
+        provider: 'OpenRouter',
+        providerKey: 'open_router',
+        description: 'Free community models',
       }),
     }),
   AVAILABLE_MODELS: FIXTURE_AVAILABLE_MODELS,
@@ -123,7 +123,7 @@ vi.mock('@shared/stores/model-store', () => ({
 vi.mock('@shared/config/llm', async (importOriginal) => ({
   ...(await importOriginal()),
   getAllowedAutoModesForTier: () => ['fixture-economy-auto'],
-  getBestAutoModeForTier: () => 'fixture-economy-auto',
+  getBestAutoModeForTier: () => 'fixture-free-router',
   getModelMetadata: () => null,
   getModelReasoning: () => ({ capable: false, control: 'none' }),
   isModelAllowedForTier: (_modelId: string, tier: string) => tier !== 'free',
@@ -134,7 +134,7 @@ vi.mock('@shared/config/llm', async (importOriginal) => ({
 
 vi.mock('@/lib/free-trial-config', () => ({
   FREE_TRIAL_MODELS: [],
-  FREE_TRIAL_MODEL: 'fixture-economy-auto',
+  FREE_TRIAL_MODEL: 'fixture-free-router',
 }));
 
 vi.mock('../StyleSelector', () => ({
@@ -226,19 +226,23 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
     expect(premiumRowLabel()).toBe('Premium Model');
   });
 
-  it('applies free-tier locks for a signed-out visitor', () => {
+  it('shows only the expanded Free section for a signed-out visitor', () => {
     billingState.unauthenticated = true;
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toMatch(/^Premium Model - .+/);
+    expect(premiumRowLabel()).toBe('');
+    expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /Free Router/i })).toBeVisible();
   });
 
-  it('applies free-tier locks once the free plan is confirmed', () => {
+  it('shows only the expanded Free section once the free plan is confirmed', () => {
     billingState.subscription = { tier: 'free' };
 
     render(<ComposerFooter />);
 
-    expect(premiumRowLabel()).toMatch(/^Premium Model - .+/);
+    expect(premiumRowLabel()).toBe('');
+    expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /Free Router/i })).toBeVisible();
   });
 });

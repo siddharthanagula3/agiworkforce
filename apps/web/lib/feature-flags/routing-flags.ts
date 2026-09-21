@@ -8,6 +8,8 @@ export const ROUTING_FLAG_KEYS = {
   observedHealth: 'routing.observed_health',
   canary: 'routing.canary',
   shadow: 'routing.shadow',
+  responseAssessment: 'routing.response_assessment',
+  responseAssessmentApply: 'routing.response_assessment_apply',
 } as const;
 
 const CANARY_COHORT_FLAG_PREFIX = `${ROUTING_FLAG_KEYS.canary}.`;
@@ -20,6 +22,8 @@ export interface RoutingFlagInputs {
   enableObservedHealthRanking?: boolean;
   enableCanary?: boolean;
   enableShadow?: boolean;
+  enableResponseAssessment?: boolean;
+  applyResponseAssessment?: boolean;
   canaryCohorts?: Record<string, boolean>;
   flagVariants: Record<string, string>;
 }
@@ -36,9 +40,15 @@ export function routingFlagInputs(
   const observedHealth = stage(ROUTING_FLAG_KEYS.observedHealth);
   const canary = stage(ROUTING_FLAG_KEYS.canary);
   const shadow = stage(ROUTING_FLAG_KEYS.shadow);
+  const responseAssessment = stage(ROUTING_FLAG_KEYS.responseAssessment);
+  const responseAssessmentApply = stage(ROUTING_FLAG_KEYS.responseAssessmentApply);
   if (observedHealth !== undefined) inputs.enableObservedHealthRanking = observedHealth;
   if (canary !== undefined) inputs.enableCanary = canary;
   if (shadow !== undefined) inputs.enableShadow = shadow;
+  if (responseAssessment !== undefined) inputs.enableResponseAssessment = responseAssessment;
+  if (responseAssessmentApply !== undefined) {
+    inputs.applyResponseAssessment = responseAssessmentApply;
+  }
   for (const [key, evaluation] of Object.entries(evaluations)) {
     inputs.flagVariants[key] = evaluation.variant;
     if (!key.startsWith(CANARY_COHORT_FLAG_PREFIX)) continue;

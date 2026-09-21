@@ -344,12 +344,14 @@ async fn test_executor_hook_failure_blocking() {
 #[tokio::test]
 async fn test_executor_environment_variables() {
     let mut config = HooksConfig::new();
-    // Use printenv to verify environment variables are set
+    let command = if cfg!(windows) {
+        "echo EVENT=%AGI_HOOK_EVENT% TOOL=%AGI_HOOK_TOOL_NAME%"
+    } else {
+        "echo \"EVENT=$AGI_HOOK_EVENT TOOL=$AGI_HOOK_TOOL_NAME\""
+    };
     config.add_hook(
         HookEvent::PostToolUse,
-        HookEntry::new(vec![HookDefinition::new(
-            "echo \"EVENT=$AGI_HOOK_EVENT TOOL=$AGI_HOOK_TOOL_NAME\"",
-        )]),
+        HookEntry::new(vec![HookDefinition::new(command)]),
     );
 
     let executor = HookExecutor::new(config);

@@ -10,13 +10,31 @@ import {
 } from './auto';
 import { taskFamilyRoutingStageEnabled } from './task-family-routing';
 
-export const ROUTING_TRACE_SCHEMA_VERSION = 1;
+export const ROUTING_TRACE_SCHEMA_VERSION = 2;
 
 export type RoutingCohort = 'control' | 'canary';
 
 export interface RoutingTraceRoute {
   modelKey: string;
   routeId: string;
+}
+
+export interface RoutingResponseAssessmentTrace {
+  mode: 'off' | 'shadow' | 'active';
+  status: 'skipped' | 'failed' | 'assessed';
+  reason: string;
+  promptStamp: string | null;
+  model: string | null;
+  accepted: boolean;
+  confidence: number | null;
+  answerDepth: string | null;
+  answerFormat: string | null;
+  explanationRequired: boolean | null;
+  clarification: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  providerCostMicrousd: number | null;
+  durationMs: number | null;
 }
 
 export interface RoutingDecisionTrace {
@@ -65,6 +83,7 @@ export interface RoutingDecisionTrace {
     failureRate: number | null;
     latencyP50Ms: number | null;
   };
+  responseAssessment: RoutingResponseAssessmentTrace | null;
 }
 
 const MAX_TRACE_REASONS = 20;
@@ -116,6 +135,7 @@ function boundedReasons(reasons: readonly string[]): string[] {
 export function buildRoutingDecisionTrace(
   request: AutoRoutingRequest,
   decision: AutoRouteDecision,
+  responseAssessment: RoutingResponseAssessmentTrace | null = null,
 ): RoutingDecisionTrace {
   const observedEntries = Object.entries(request.observedRouteHealth ?? {});
   const selected = decision.status === 'selected' ? decision : null;
@@ -185,5 +205,6 @@ export function buildRoutingDecisionTrace(
       failureRate: selectedObservation?.failureRate ?? null,
       latencyP50Ms: selectedObservation?.latencyP50Ms ?? null,
     },
+    responseAssessment,
   };
 }

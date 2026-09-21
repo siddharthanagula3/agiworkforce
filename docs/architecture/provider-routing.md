@@ -104,12 +104,12 @@ route and expected microUSD, and the slot and route that were taken.
 
 ## Proposed semantic assessment for Auto
 
-The [Jev Auto routing proposal](../specs/jev-auto-routing/spec.md) describes a
-Managed evaluation step that supplies task requirements to this router. Its
-[architecture](../specs/jev-auto-routing/plan.md) preserves deterministic
-admission, registry ownership and explicit selections, and defines the Gateway
-evaluation transport, cost accounting and rollout evidence. This is a design
-proposal; the product does not currently call Jev for model selection.
+The [Jev Auto routing specification](../specs/jev-auto-routing/spec.md) now owns
+an implemented, off-by-default response-budget assessment for eligible Managed
+web Auto turns. It uses the Gateway evaluation transport to infer response
+shape, then deterministic policy sets the generation ceiling. It never changes
+a named model request. Jev-driven model selection remains a proposal in the
+[architecture](../specs/jev-auto-routing/plan.md).
 
 ## Rollout: observed health, region, canary, shadow and the decision trace
 

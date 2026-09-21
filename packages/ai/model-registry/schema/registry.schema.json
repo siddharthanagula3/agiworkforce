@@ -1347,6 +1347,7 @@
         "kind",
         "defaultAlias",
         "fallbackSlot",
+        "semanticResponseAssessment",
         "profileOrder",
         "tierMaximumProfiles",
         "tierAllowedSlots",
@@ -1365,6 +1366,78 @@
         },
         "fallbackSlot": {
           "$ref": "#/definitions/nonEmptyString"
+        },
+        "semanticResponseAssessment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "model",
+            "developer",
+            "transportProvider",
+            "upstreamProvider",
+            "harnessId",
+            "promptId",
+            "contextTokens",
+            "promotionEndsOn",
+            "pricing",
+            "limits",
+            "zeroDataRetentionVerified",
+            "residencyRegions"
+          ],
+          "properties": {
+            "model": { "$ref": "#/definitions/nonEmptyString" },
+            "developer": { "$ref": "#/definitions/nonEmptyString" },
+            "transportProvider": { "$ref": "#/definitions/nonEmptyString" },
+            "upstreamProvider": { "$ref": "#/definitions/nonEmptyString" },
+            "harnessId": { "$ref": "#/definitions/nonEmptyString" },
+            "promptId": { "$ref": "#/definitions/nonEmptyString" },
+            "contextTokens": { "type": "integer", "minimum": 1 },
+            "promotionEndsOn": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "pricing": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "inputPerMillion",
+                "outputPerMillion",
+                "currency",
+                "source",
+                "verifiedOn"
+              ],
+              "properties": {
+                "inputPerMillion": { "type": "number", "minimum": 0 },
+                "outputPerMillion": { "type": "number", "minimum": 0 },
+                "currency": { "const": "USD" },
+                "source": { "type": "string", "pattern": "^https://" },
+                "verifiedOn": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+              }
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "maxStateBytes",
+                "maxInputTokensPerRequest",
+                "timeoutMs",
+                "maxInFlight",
+                "dailyInputTokenCap",
+                "minimumSelectedProbability"
+              ],
+              "properties": {
+                "maxStateBytes": { "type": "integer", "minimum": 1 },
+                "maxInputTokensPerRequest": { "type": "integer", "minimum": 1 },
+                "timeoutMs": { "type": "integer", "minimum": 1 },
+                "maxInFlight": { "type": "integer", "minimum": 1 },
+                "dailyInputTokenCap": { "type": "integer", "minimum": 1 },
+                "minimumSelectedProbability": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            },
+            "zeroDataRetentionVerified": { "type": "boolean" },
+            "residencyRegions": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "$ref": "#/definitions/nonEmptyString" }
+            }
+          }
         },
         "autoProfileByTask": {
           "type": "object",

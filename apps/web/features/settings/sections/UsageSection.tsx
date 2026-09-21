@@ -9,8 +9,10 @@ import {
   formatUsageRemaining,
   formatUsageResetIn,
   getBillingPlanPricing,
+  getModelMetadataById,
   isBillingPlanTier,
   isContractPricedPlan,
+  isFreeBillingPlanTier,
   managedUsageBucketLabel,
   type ManagedUsageCreditWindow,
 } from '@agiworkforce/types';
@@ -19,8 +21,11 @@ import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
 import { normalizeUsagePercentage } from '@agiworkforce/types';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 
 const MINUTE_MS = 60 * 1000;
+const FREE_TRIAL_MODEL_NAME =
+  getModelMetadataById(FREE_TRIAL_MODEL)?.name ?? 'the included free router';
 
 function formatAbsolute(value: string): string {
   return new Date(value).toLocaleString(undefined, {
@@ -148,6 +153,7 @@ export function UsageSection() {
   );
 
   const credits = usage?.credits ?? null;
+  const isFreePlan = usage ? isFreeBillingPlanTier(usage.plan_tier) : false;
   const planAllowanceLine = useMemo(() => {
     if (!usage || !credits) return null;
     const tier = usage.plan_tier.trim().toLowerCase();
@@ -183,7 +189,9 @@ export function UsageSection() {
           Usage
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Your plan usage and reset schedule.
+          {isFreePlan
+            ? 'Use free models now, or join the waitlist for a paid plan.'
+            : 'Your plan usage and reset schedule.'}
         </p>
       </div>
 
@@ -218,14 +226,14 @@ export function UsageSection() {
           }}
         >
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
-            Plan usage limits
+            {isFreePlan ? 'Upgrade for higher capacity' : 'Plan usage limits'}
           </span>
-          {planAllowanceLine && (
+          {!isFreePlan && planAllowanceLine && (
             <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '4px 0 0' }}>
               {planAllowanceLine}
             </p>
           )}
-          {credits && credits.purchased.remaining !== null && (
+          {!isFreePlan && credits && credits.purchased.remaining !== null && (
             <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>
               {`Purchased credits: ${formatCredits(credits.purchased.remaining)} remaining, separate from your plan allowance.`}
             </p>
@@ -241,7 +249,20 @@ export function UsageSection() {
             here, "Current session" on mobile, "Token Budget Usage" on desktop.
             so the same limit was unrecognisable between surfaces.
           */}
-          {usage && isContractPricedPlan(usage.plan_tier) ? (
+          {isFreePlan ? (
+            <div className="space-y-3 text-sm text-[var(--text-2)]">
+              <p>
+                Free accounts can use {FREE_TRIAL_MODEL_NAME} and available QwenCloud promotional
+                quota. Paid plans add higher capacity and more model choices.
+              </p>
+              <SettingsPageLink
+                href="/pricing"
+                className="text-primary underline underline-offset-4"
+              >
+                Compare plans and join the upgrade waitlist
+              </SettingsPageLink>
+            </div>
+          ) : usage && isContractPricedPlan(usage.plan_tier) ? (
             <div className="space-y-3 text-sm text-[var(--text-2)]">
               <p>Your usage allowances and billing are set by your workspace contract.</p>
               <SettingsPageLink
@@ -301,45 +322,47 @@ export function UsageSection() {
           )}
         </div>
 
-        <div
-          style={{
-            padding: '12px 20px',
-            borderTop: '1px solid var(--settings-border)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-            Last updated: {lastUpdatedLabel}
-          </span>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={loading}
-            aria-label="Refresh usage data"
+        {!isFreePlan && (
+          <div
             style={{
+              padding: '12px 20px',
+              borderTop: '1px solid var(--settings-border)',
               display: 'flex',
               alignItems: 'center',
-              gap: 4,
-              padding: '4px 8px',
-              background: 'transparent',
-              border: '1px solid var(--settings-border)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--text-3)',
-              fontSize: 12,
-              cursor: loading ? 'default' : 'pointer',
-              opacity: loading ? 0.5 : 1,
+              justifyContent: 'space-between',
+              gap: 8,
             }}
           >
-            <RefreshCw
-              size={12}
-              style={{ animation: loading ? 'spin 0.6s linear infinite' : 'none' }}
-            />
-            Refresh
-          </button>
-        </div>
+            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              Last updated: {lastUpdatedLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={loading}
+              aria-label="Refresh usage data"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '4px 8px',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-3)',
+                fontSize: 12,
+                cursor: loading ? 'default' : 'pointer',
+                opacity: loading ? 0.5 : 1,
+              }}
+            >
+              <RefreshCw
+                size={12}
+                style={{ animation: loading ? 'spin 0.6s linear infinite' : 'none' }}
+              />
+              Refresh
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

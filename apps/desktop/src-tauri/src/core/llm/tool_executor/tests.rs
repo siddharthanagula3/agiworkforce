@@ -2190,7 +2190,7 @@ fn test_tilde_expansion() {
         .and_then(|v| v.as_str())
         .expect("path should be present");
     assert!(
-        expanded.starts_with('/'),
+        std::path::Path::new(expanded).is_absolute(),
         "expanded path should be absolute, got: {expanded}"
     );
     assert!(
