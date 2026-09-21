@@ -240,10 +240,13 @@ export default async function StatusPage() {
               </h2>
               <Prose>
                 This page is served by the same deployment it reports on, so an outage broad enough
-                to take the application down takes this page with it. A copy of the current state is
-                pushed to an origin we do not serve, and every incident alert is also sent on a
-                transport that shares no vendor with our email. Neither depends on the application
-                being able to answer a request.
+                to take the application down takes this page with it. Two fallbacks exist for that
+                case, and both are last resorts rather than a second live feed. When an incident
+                alert reaches nobody by email, pager or our own channel, it is retried on a
+                transport that shares no vendor with our email, and the incident headline is written
+                to an origin we do not serve. Neither runs while things are healthy, so the mirror
+                carries the last incident rather than the current state, and both are silent unless
+                configured in the serving environment.
               </Prose>
             </div>
             <Ledger

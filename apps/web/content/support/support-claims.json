@@ -39,7 +39,7 @@
     },
     {
       "doc": "delete-your-account",
-      "sha256": "1c05bcfd33f6e71ba43d121faee6397ae8457f30822fd817983e88697c16a28d"
+      "indexed": true
     },
     {
       "doc": "desktop-and-cli",
@@ -51,7 +51,7 @@
     },
     {
       "doc": "export-your-data",
-      "sha256": "a60da85773d1a2dfe5cce09e78c9e5f9a114b3ac0fa57171be72dc504bc97a44"
+      "indexed": true
     },
     {
       "doc": "files-and-attachments",
@@ -123,7 +123,7 @@
     },
     {
       "doc": "sharing-conversations",
-      "sha256": "0f8d652e0ca7845304708aaab7fec8001bdfbc48e7a005812f7ed649d8be675d"
+      "indexed": true
     },
     {
       "doc": "signing-up",
@@ -1113,6 +1113,270 @@
           "name": "retires the files a temporary chat received on the same clock as the chat"
         }
       ]
+    },
+    {
+      "id": "export-account-deletion-ends-the-export",
+      "doc": "export-your-data",
+      "section": "Before you delete your account",
+      "kind": "prose",
+      "sentence": "Account deletion erases conversations and account data, and the export cannot be run afterwards.",
+      "implementation": [
+        "apps/web/lib/server/account-erasure.ts#USER_SCOPED_TABLES",
+        "apps/web/app/api/user/export/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/deletion-manifest.test.ts",
+          "name": "erases every conversation store with its subject"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/deletion-manifest.test.ts",
+          "name": "gives every customer-content table a deletion path"
+        }
+      ]
+    },
+    {
+      "id": "delete-typed-confirmation",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\" Confirming requires typing `DELETE` into the dialog.",
+      "implementation": ["apps/web/features/settings/sections/AccountSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/AccountSection.tsx",
+          "text": "deleteConfirmInput !== 'DELETE'"
+        }
+      ]
+    },
+    {
+      "id": "delete-runs-24-hours-after-confirming",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "The dialog states what happens: your account and all associated data are permanently deleted, you are signed out now, and erasure runs 24 hours after you confirm.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion when the update touches the profile row"
+        }
+      ]
+    },
+    {
+      "id": "delete-deadline-is-the-earliest-moment",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "After you confirm, the dialog shows the date and time the 24 hours are up, and you are signed out when you continue.",
+      "implementation": [
+        "apps/web/features/settings/sections/AccountSection.tsx",
+        "apps/web/app/api/cron/purge-deleted-accounts/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/cron/purge-deleted-accounts/route.ts",
+          "text": "deletion_scheduled_for <= now()"
+        }
+      ]
+    },
+    {
+      "id": "delete-cancellation-window-is-real",
+      "doc": "delete-your-account",
+      "section": "Changing your mind",
+      "kind": "prose",
+      "sentence": "The 24 hours are a real cancellation window, not a formality.",
+      "implementation": ["apps/web/app/api/user/delete-account/cancel/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "cancels a deletion inside the grace window and records it symmetrically with scheduling"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "refuses to cancel once the grace window has closed, and does not touch the columns"
+        }
+      ]
+    },
+    {
+      "id": "delete-cancelling-removes-nothing",
+      "doc": "delete-your-account",
+      "section": "Changing your mind",
+      "kind": "prose",
+      "sentence": "Cancelling keeps the account active and removes nothing.",
+      "implementation": ["apps/web/app/api/user/delete-account/cancel/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "is a clean no-op when nothing is pending, not a 500"
+        }
+      ]
+    },
+    {
+      "id": "delete-sole-owner-is-refused",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "If you are the only owner of a workspace, the request is refused and nothing is scheduled.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "refuses while the account is the only owner of a workspace, and deletes nothing"
+        }
+      ]
+    },
+    {
+      "id": "delete-sole-owner-message-names-each-workspace",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "The message names every workspace you own alone, so hand each one to another owner or delete it first, then try again.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "names every workspace the account owns alone, so the user knows what to hand over"
+        }
+      ]
+    },
+    {
+      "id": "delete-bulk-chat-actions-confirm-and-scope",
+      "doc": "delete-your-account",
+      "section": "Deleting conversations without deleting the account",
+      "kind": "prose",
+      "sentence": "Both ask first and name the current-workspace scope.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+          "text": "Delete all chats in this workspace?"
+        }
+      ]
+    },
+    {
+      "id": "share-dialog-names-the-audience",
+      "doc": "sharing-conversations",
+      "section": "Create a share link",
+      "kind": "prose",
+      "sentence": "Once the link exists the dialog confirms the audience: \"Anyone with the link can open this now\", or \"Only your workspace can open this now\".",
+      "implementation": ["apps/web/features/chat/components/share/ShareConversationDialog.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+          "text": "Only your workspace can open this now"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+          "text": "Anyone with the link can open this now"
+        }
+      ]
+    },
+    {
+      "id": "share-audience-change-asks-first",
+      "doc": "sharing-conversations",
+      "section": "Change or revoke a link",
+      "kind": "prose",
+      "sentence": "Switching the audience after the fact asks first, naming the change: \"Make this readable by anyone with the link?\" or \"Limit this to your workspace?\".",
+      "implementation": ["apps/web/features/chat/components/share/ShareConversationDialog.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "sends the audience change only after the confirmation is accepted"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "asks before closing the link, naming who loses access and who gains it"
+        }
+      ]
+    },
+    {
+      "id": "share-revoke-names-the-consequence",
+      "doc": "sharing-conversations",
+      "section": "Change or revoke a link",
+      "kind": "prose",
+      "sentence": "**Revoke share** removes access, and the confirmation says that anyone using the link will immediately lose access.",
+      "implementation": [
+        "apps/web/features/chat/components/share/ShareConversationDialog.tsx",
+        "apps/web/features/settings/sections/SharedLinksSection.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "revokes the exact link from the result state"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+          "text": "will immediately lose access"
+        }
+      ]
+    },
+    {
+      "id": "share-settings-lists-and-revokes-every-link",
+      "doc": "sharing-conversations",
+      "section": "Find every link you have created",
+      "kind": "prose",
+      "sentence": "Settings, **Shared links** lists the links created from web conversations, with the ones marked _Workspace only_ distinguished from public ones, and revokes any of them.",
+      "implementation": ["apps/web/features/settings/sections/SharedLinksSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/SharedLinksSection.tsx",
+          "text": "Workspace only"
+        }
+      ]
+    },
+    {
+      "id": "share-no-spreadsheet-export-on-web",
+      "doc": "sharing-conversations",
+      "section": "Export instead of sharing",
+      "kind": "prose",
+      "sentence": "There is no spreadsheet export on web, so no xlsx option is offered rather than one that would fail after you picked it.",
+      "implementation": [
+        "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx#type ExportFormat"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/components/dialogs/EnhancedExportDialog.tsx",
+          "text": "type ExportFormat = 'markdown' | 'json' | 'html' | 'pdf' | 'docx';"
+        }
+      ]
+    },
+    {
+      "id": "share-temporary-chat-cannot-be-shared",
+      "doc": "sharing-conversations",
+      "section": "Chats you cannot share",
+      "kind": "prose",
+      "sentence": "A temporary chat cannot be shared while the control is on, because it is never saved.",
+      "implementation": [
+        "apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_SHARE_REFUSAL",
+        "apps/web/features/chat/components/share/ShareConversationDialog.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
+          "name": "explains the refusal and offers no create control for a temporary chat"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -1298,6 +1562,24 @@
       "kind": "prose",
       "sentence": "**Default model**: the model members start on.",
       "implementation": ["packages/contracts/types/src/enterprise/workspace-controls.ts"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "export-settings-links-to-the-requests-page",
+      "doc": "export-your-data",
+      "section": "What else you can ask for",
+      "kind": "prose",
+      "sentence": "Settings links to it directly so you do not have to find it from a policy page.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "why": "reader-instruction"
+    },
+    {
+      "id": "delete-export-cannot-run-after-the-account-is-gone",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "The export is a self-service download from Settings, Privacy, and it cannot be run once the account is gone.",
+      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
       "why": "reader-instruction"
     }
   ]

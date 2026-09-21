@@ -15,8 +15,10 @@ Confirming requires typing `DELETE` into the dialog. The dialog states what
 happens: your account and all associated data are permanently deleted, you are
 signed out now, and erasure runs 24 hours after you confirm.
 
-After you confirm, the dialog shows the exact date and time your data is erased,
-and you are signed out when you continue.
+After you confirm, the dialog shows the date and time the 24 hours are up, and
+you are signed out when you continue. That is the earliest moment erasure can
+begin, not the moment it finishes: the job that erases accounts runs once a day,
+so the work starts on the first daily run after that deadline passes.
 
 ## Changing your mind
 
@@ -35,6 +37,10 @@ Settings, Privacy, and it cannot be run once the account is gone.
 
 If a paid subscription is attached, cancel or let it lapse separately; billing
 is handled in the billing portal, not by the deletion flow.
+
+If you are the only owner of a workspace, the request is refused and nothing is
+scheduled. The message names every workspace you own alone, so hand each one to
+another owner or delete it first, then try again.
 
 ## Deleting conversations without deleting the account
 
