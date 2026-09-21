@@ -1,5 +1,7 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 
+import { modelsCatalog } from '@agiworkforce/types';
+
 import { signIn } from './qa-capability-harness';
 
 const RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -21,7 +23,11 @@ interface CatalogModel {
   category: string;
   capabilities: { tools: boolean };
   availability: { state: string };
-  pricing: { inputPerMillion: number; outputPerMillion: number };
+}
+
+function listRate(model: CatalogModel): number {
+  const entry = modelsCatalog.models[model.id];
+  return (entry?.inputCost ?? Infinity) + (entry?.outputCost ?? Infinity);
 }
 
 interface CloudAgentRunSnapshot {
@@ -49,12 +55,7 @@ async function cheapestReliableAgentModel(request: APIRequestContext): Promise<C
         model.category !== 'video' &&
         RELIABLE_LOCAL_PROVIDERS.has(model.provider),
     )
-    .sort(
-      (a, b) =>
-        a.pricing.inputPerMillion +
-        a.pricing.outputPerMillion -
-        (b.pricing.inputPerMillion + b.pricing.outputPerMillion),
-    );
+    .sort((a, b) => listRate(a) - listRate(b));
   expect(
     eligible.length,
     'no tool-capable configured model found in GET /api/models',

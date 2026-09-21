@@ -25,8 +25,6 @@ interface ProviderRow {
   label: string;
   defaultModel: string;
   modelCount: number;
-  inputPerMillion: number;
-  outputPerMillion: number;
 }
 
 const CATALOG_MODELS = Object.values(modelsCatalog.models);
@@ -40,8 +38,6 @@ const PROVIDER_ROWS: ProviderRow[] = BYOK_PROVIDER_IDS.flatMap((id) => {
       label: entry.label,
       defaultModel: entry.defaultModel ?? '',
       modelCount: CATALOG_MODELS.filter((model) => model.provider === id).length,
-      inputPerMillion: entry.defaultPricing?.inputPerMillion ?? 0,
-      outputPerMillion: entry.defaultPricing?.outputPerMillion ?? 0,
     },
   ];
 });
@@ -49,10 +45,6 @@ const PROVIDER_ROWS: ProviderRow[] = BYOK_PROVIDER_IDS.flatMap((id) => {
 const LOCAL_RUNTIMES = CLI_LOCAL_RUNTIMES.names;
 
 const CATALOGUED_MODEL_COUNT = PROVIDER_ROWS.reduce((total, row) => total + row.modelCount, 0);
-
-function formatPrice(usd: number): string {
-  return Number.isInteger(usd) ? `$${usd}` : `$${usd.toFixed(2)}`;
-}
 
 export const metadata = buildMetadata({
   title: 'Providers: the catalog AGI routes to',
@@ -62,19 +54,12 @@ export const metadata = buildMetadata({
 
 const GATEWAY_IDS = new Set(['open_router', 'vercel_gateway', 'workers_ai', 'nvidia_nim']);
 
-function providerPrice(row: ProviderRow): string {
-  const hasPrice = row.inputPerMillion > 0 || row.outputPerMillion > 0;
-  return hasPrice
-    ? `${formatPrice(row.inputPerMillion)} in · ${formatPrice(row.outputPerMillion)} out /MTok`
-    : 'Provider list price';
-}
-
 const PROVIDER_TILES: ProviderTile[] = PROVIDER_ROWS.map((row) => ({
   id: row.id,
   label: row.label,
   defaultModel: row.defaultModel,
   modelCount: row.modelCount,
-  price: providerPrice(row),
+  price: 'Provider rates',
   kind: GATEWAY_IDS.has(row.id) ? 'gateway' : 'cloud',
 }));
 
@@ -131,7 +116,7 @@ export default function ProvidersPage() {
           eyebrow="Provider catalog"
           title="Every provider, from the one catalogue the apps compile in."
           em="the apps compile in."
-          lede="A BYOK provider needs a key you own; a local runtime needs a URL you already run. The released CLI supports both. Every row reads its label, default model and list price from the shared catalog."
+          lede="A BYOK provider needs a key you own; a local runtime needs a URL you already run. The released CLI supports both. Every row reads its label and default model from the shared catalog."
           ctas={[
             { href: '/byok', label: 'Add a provider key' },
             { href: '/local', label: 'Point at a local runtime', variant: 'secondary' },
