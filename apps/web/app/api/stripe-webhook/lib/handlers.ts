@@ -175,9 +175,11 @@ export async function dispatchStripeEvent(
       const stripeSubId = subscription.id;
       logger.info({ stripeSubId }, 'Subscription deleted');
 
-      const canceledAt = subscription.canceled_at
-        ? new Date(subscription.canceled_at * 1000).toISOString()
-        : new Date().toISOString();
+      // The event's own time, never this server's: a redelivery must write the same row.
+      const canceledSeconds = subscription.canceled_at ?? event.created;
+      const canceledAt = (
+        Number.isFinite(canceledSeconds) ? new Date(canceledSeconds * 1000) : new Date()
+      ).toISOString();
 
       const [ownerRow] = await db.query<{ user_id: string | null; plan_tier: string | null }>(
         'select user_id, plan_tier from subscriptions where stripe_subscription_id = $1 limit 1',

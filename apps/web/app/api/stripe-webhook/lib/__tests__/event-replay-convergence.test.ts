@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
@@ -424,8 +424,13 @@ function entitlementOf(table: StoredSubscription[]): string[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers({ toFake: ['Date'] });
   creditAccount.remainingCents = 5_000;
   creditAccount.consumedKeys.clear();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('a second delivery of the same event changes nothing', () => {
@@ -441,6 +446,8 @@ describe('a second delivery of the same event changes nothing', () => {
         moves: [...balanceMoves],
       };
 
+      // A redelivery arrives later, so a handler that writes this server's clock diverges here.
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000);
       await dispatchStripeEvent(db, stripeStub, eventFor(eventType));
 
       expect(entitlementOf(table)).toEqual(afterFirst.entitlement);

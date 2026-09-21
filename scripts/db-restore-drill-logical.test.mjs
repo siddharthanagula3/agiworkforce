@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { seedDrillFixtures } from './lib/restore-drill-seed.mjs';
 import {
   MAX_SECONDS_ENV,
   PG_BIN_DIR_ENV,
@@ -484,4 +485,23 @@ test('loadConfigFromEnv reads the seed switch and the restore budget', () => {
   assert.equal(loadConfigFromEnv({ ...base, [SEED_ENV]: '1' }).seed, true);
   assert.equal(loadConfigFromEnv({ ...base, [MAX_SECONDS_ENV]: '120' }).maxSeconds, 120);
   assert.equal(loadConfigFromEnv({ ...base, [MAX_SECONDS_ENV]: 'nonsense' }).maxSeconds, 900);
+});
+
+test('every seed statement binds exactly the parameters it names, as Postgres requires', async () => {
+  const sent = [];
+  const seeded = await seedDrillFixtures(async (text, values) => {
+    sent.push({ text, values });
+    return [];
+  });
+
+  assert.equal(seeded, sent.length);
+  assert.ok(sent.length >= 5, 'every compared table gets a fixture row');
+  for (const { text, values } of sent) {
+    const named = [...text.matchAll(/\$(\d+)/g)].map((match) => Number(match[1]));
+    const highest = Math.max(...named);
+    assert.equal(values.length, highest, `binds ${values.length}, names $${highest}: ${text}`);
+    for (let position = 1; position <= highest; position += 1) {
+      assert.ok(named.includes(position), `$${position} is bound and never named: ${text}`);
+    }
+  }
 });

@@ -1506,6 +1506,7 @@ mod tests {
         run(&["init", "-q", "-b", "main"]);
         run(&["config", "user.email", "test@example.invalid"]);
         run(&["config", "user.name", "Test"]);
+        run(&["config", "core.autocrlf", "false"]);
         std::fs::write(dir.join("README.md"), "hello\n").unwrap();
         run(&["add", "README.md"]);
         run(&["commit", "-q", "-m", "init"]);
