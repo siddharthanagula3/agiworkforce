@@ -103,6 +103,7 @@ import {
   TOOL_CALLING_CAPABILITY,
 } from '@/lib/services/free-lane/capability-health-service';
 import {
+  FREE_USAGE_LIMIT_REACHED_MESSAGE,
   mapClassifiedUpstreamError,
   streamErrorFrame,
   toolFailureMessage,
@@ -4392,8 +4393,7 @@ export async function* runToolLoop(
           yield encoder.encode(
             eventStream.emit({
               type: 'error',
-              message:
-                'You have reached the current free usage limit. Upgrade your plan, or switch to Local or BYOK to keep going.',
+              message: FREE_USAGE_LIMIT_REACHED_MESSAGE,
               code: 'free_trial_token_budget_reached',
               retryable: false,
             }),
