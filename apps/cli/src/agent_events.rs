@@ -82,6 +82,16 @@ pub enum AgentEvent {
         message: String,
         hint: String,
     },
+    /// The turn produced a real answer that the provider cut short. The text
+    /// already streamed above is valid and kept; this states what is missing
+    /// and the one next move, so a reader is not left believing the answer
+    /// ended where the model meant it to.
+    TurnIncomplete {
+        session_id: String,
+        kind: &'static str,
+        message: String,
+        hint: String,
+    },
 }
 
 /// The session id for the machine event stream, when one is running.
@@ -131,6 +141,21 @@ pub fn emit_terminal_error(
 }
 
 impl AgentEvent {
+    /// Build an [`AgentEvent::TurnIncomplete`] for a delivered answer the
+    /// provider cut short. Reads its three strings from the cause, so the
+    /// event and the terminal notice cannot drift apart.
+    pub fn turn_incomplete(
+        session_id: impl Into<String>,
+        cause: crate::errors::IncompleteTurnCause,
+    ) -> Self {
+        Self::TurnIncomplete {
+            session_id: session_id.into(),
+            kind: cause.kind(),
+            message: cause.summary().to_string(),
+            hint: cause.next_move().to_string(),
+        }
+    }
+
     /// Build an [`AgentEvent::Error`] from a [`CliError`]. Keeps `kind` and
     /// `hint` consistent with the human-facing error text.
     pub fn from_error(session_id: impl Into<String>, err: &CliError) -> Self {
@@ -285,5 +310,39 @@ mod tests {
         drop(held);
         release_machine_stream();
         assert!(MACHINE_STREAM_SESSION.lock().expect("lock").is_none());
+    }
+
+    /// A delivered answer the provider cut short is its own event, not an
+    /// error: the text above it is real. It still carries the kind a runbook
+    /// matches on and the one next move.
+    #[test]
+    fn turn_incomplete_carries_the_kind_the_message_and_the_hint() {
+        let event = AgentEvent::turn_incomplete(
+            "s1",
+            crate::errors::IncompleteTurnCause::OutputLimitReached,
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&event).unwrap()).unwrap();
+        assert_eq!(json["event"], "turn_incomplete");
+        assert_eq!(json["session_id"], "s1");
+        assert_eq!(json["kind"], "output_limit_reached");
+        assert_eq!(
+            json["message"],
+            "The answer reached this model's maximum length and stopped there."
+        );
+        assert_eq!(
+            json["hint"],
+            "Ask for a shorter answer, or split the request."
+        );
+    }
+
+    #[test]
+    fn turn_incomplete_is_not_the_error_event() {
+        let incomplete = serde_json::to_string(&AgentEvent::turn_incomplete(
+            "s1",
+            crate::errors::IncompleteTurnCause::OutputLimitReached,
+        ))
+        .unwrap();
+        assert!(!incomplete.contains(r#""event":"error""#), "{incomplete}");
     }
 }
