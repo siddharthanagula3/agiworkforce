@@ -125,7 +125,7 @@ jobs:
               echo "Container exited before it became ready"
               exit 1
             fi
-            if curl -fsS "$DRILL_APP_ORIGIN/api/health" > /dev/null 2>&1; then
+            if curl -fsS "$DRILL_APP_ORIGIN/api/version" > /dev/null 2>&1; then
               echo "Container answered after $((attempt * 2))s"
               exit 0
             fi
@@ -150,7 +150,8 @@ jobs:
             fi
           }
 
-          assert_status "health route" 200 "$DRILL_APP_ORIGIN/api/health"
+          assert_status "health route without core platform services" 503 \
+            "$DRILL_APP_ORIGIN/api/health"
           assert_status "marketing home" 200 "$DRILL_APP_ORIGIN/"
           assert_status "protected route" 307 "$DRILL_APP_ORIGIN/settings"
 

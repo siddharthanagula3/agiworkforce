@@ -240,7 +240,7 @@ jobs:
               echo "Container exited before it became ready"
               exit 1
             fi
-            if curl -fsS "$SCAN_APP_ORIGIN/api/health" > /dev/null 2>&1; then
+            if curl -fsS "$SCAN_APP_ORIGIN/api/version" > /dev/null 2>&1; then
               echo "Container answered after $((attempt * 2))s"
               exit 0
             fi
