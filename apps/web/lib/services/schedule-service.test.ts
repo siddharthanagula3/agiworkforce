@@ -32,6 +32,7 @@ import {
   type ScheduledExecutionResult,
   type ScheduledTaskExecutor,
 } from './schedule-service';
+import { MEMBERSHIP_STATUSES_THAT_MAY_ACT } from '@/lib/server/workspace-scope';
 
 function createSchedule(
   db: DatabaseAdapter,
@@ -605,7 +606,13 @@ describe('schedule service persistence', () => {
     expect(sql).toMatch(/expired_candidates[\s\S]*for update skip locked[\s\S]*limit \$1/i);
     expect(sql).toMatch(/is_enabled = true/i);
     expect(sql).toMatch(/status = 'active'/i);
-    expect(params).toEqual([7, 45, UNATTENDED_RUN_DENIED_STATUSES]);
+    expect(params).toEqual([
+      7,
+      45,
+      UNATTENDED_RUN_DENIED_STATUSES,
+      MEMBERSHIP_STATUSES_THAT_MAY_ACT,
+    ]);
+    expect(sql).toMatch(/organization_members member/i);
     expect(claims[0]?.scope).toEqual({
       userId: 'user-1',
       organizationId: '11111111-1111-4111-8111-111111111111',

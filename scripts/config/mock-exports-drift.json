@@ -2,8 +2,8 @@
   "_description": "Per-surface ceiling on whole-module mock factories that drop an export. The number only falls.",
   "surfaces": {
     "apps/web": {
-      "count": 4319,
-      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added."
+      "count": 4331,
+      "reason": "Whole-module vi.mock factories that do not spread importOriginal and do not name every export their module declares. Each one returns undefined the day a caller starts importing the export it dropped. This is a ceiling, not an allowlist: one number per surface that refuses growth, so a new factory of this shape has to name the exports. Measured on 2026-09-20 when the check was added, and re-measured the same day when main's 11 commits joined the branch: 12 of main's new test factories have this shape."
     },
     "apps/desktop": {
       "count": 271,
