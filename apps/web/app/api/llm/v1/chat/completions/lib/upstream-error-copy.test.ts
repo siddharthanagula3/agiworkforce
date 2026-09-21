@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/provider-availability-service', () => ({
@@ -6,10 +7,22 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 
 import { modelRegistry } from '@agiworkforce/model-registry';
+import { getProviderDisplayLabel } from '@agiworkforce/types';
 import { degradationFor } from '@/lib/server/slo/degradation';
-import { upstreamFailureCopy } from './upstream-error-copy';
+import {
+  mapClassifiedUpstreamError,
+  streamErrorFrame,
+  toolFailureMessage,
+  upstreamFailureCopy,
+} from './upstream-error-copy';
 import { logger } from '@/lib/logger';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
+import {
+  installTraceStorage,
+  runWithTraceContext,
+  setRequestId,
+  type TraceContext,
+} from '@/lib/observability/trace-context';
 
 const PROVIDER = 'anthropic';
 
@@ -192,11 +205,298 @@ describe('a request on the free plan model', () => {
   });
 });
 
+describe('a spent free pool', () => {
+  const spentDay = () =>
+    Object.assign(new Error('Rate limit exceeded: free-models-per-day'), { status: 429 });
+
+  it('does not take the provider out of service for the plans that pay for it', () => {
+    vi.mocked(markProviderDegraded).mockClear();
+    const copy = upstreamFailureCopy(spentDay(), PROVIDER, { requestedModel: 'some-pinned-model' });
+
+    expect(copy.code).toBe('provider_quota_exhausted');
+    expect(markProviderDegraded).not.toHaveBeenCalled();
+  });
+
+  it('says whose allowance it is, whoever asked', () => {
+    const copy = upstreamFailureCopy(spentDay(), PROVIDER, { requestedModel: 'some-pinned-model' });
+
+    expect(copy.message).toMatch(/everyone on the Free plan shares/);
+    expect(copy.message).toMatch(/not a limit on your account/);
+  });
+
+  it('still marks the provider for a quota window that is the provider own', () => {
+    vi.mocked(markProviderDegraded).mockClear();
+    upstreamFailureCopy(
+      Object.assign(new Error('Quota exceeded for this project'), { status: 429 }),
+      PROVIDER,
+      { requestedModel: 'some-pinned-model' },
+    );
+
+    expect(markProviderDegraded).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('the chat degraded mode the status page publishes', () => {
   it('tells the reader what the policy says it will', () => {
     const policy = degradationFor('chat');
     expect(policy).toBeDefined();
     const overload = Object.assign(new Error('{"type":"overloaded_error"}'), { status: 529 });
     expect(upstreamFailureCopy(overload, PROVIDER).message).toContain(policy!.message);
+  });
+});
+
+const TRACE: TraceContext = {
+  traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+  spanId: '00f067aa0ba902b7',
+  sampled: true,
+};
+
+beforeAll(() => {
+  const storage = new AsyncLocalStorage<TraceContext>();
+  installTraceStorage({
+    getStore: () => storage.getStore(),
+    run: (store, fn) => storage.run(store, fn),
+  });
+});
+
+function rateLimited(retryAfterSeconds?: number): Error {
+  return Object.assign(new Error('rate limit exceeded'), {
+    status: 429,
+    ...(retryAfterSeconds !== undefined
+      ? { headers: { 'retry-after': String(retryAfterSeconds) } }
+      : {}),
+  });
+}
+
+function windowSpent(retryAfterSeconds?: number): Error {
+  return Object.assign(new Error('quota exceeded for this window'), {
+    status: 429,
+    ...(retryAfterSeconds !== undefined
+      ? { headers: { 'retry-after': String(retryAfterSeconds) } }
+      : {}),
+  });
+}
+
+const FREE_ROUTER_MODEL = modelRegistry.policies.auto.slots.router_zero_cost.modelKey;
+const FREE_PLAN = { requestedModel: FREE_ROUTER_MODEL };
+
+describe('the one model the free plan has', () => {
+  it('does not describe a momentary limit and a spent shared allowance the same way', () => {
+    const momentary = upstreamFailureCopy(rateLimited(), PROVIDER, FREE_PLAN);
+    const spent = upstreamFailureCopy(windowSpent(), PROVIDER, FREE_PLAN);
+
+    expect(momentary.message).not.toBe(spent.message);
+    expect(momentary.code).not.toBe(spent.code);
+  });
+
+  it('says a spent allowance is shared by the plan, not a limit on the reader', () => {
+    const spent = upstreamFailureCopy(windowSpent(), PROVIDER, FREE_PLAN);
+
+    expect(spent.message).toMatch(/shares?/i);
+    expect(spent.message).toMatch(/not a limit on your account/i);
+  });
+
+  it('never invents a reset the provider did not state', () => {
+    const spent = upstreamFailureCopy(windowSpent(), PROVIDER, FREE_PLAN);
+
+    expect(spent.message).not.toMatch(/\d/);
+    expect(spent.message).not.toMatch(/hours|minutes|tomorrow|later today/i);
+  });
+});
+
+describe('a wait the provider itself asked for', () => {
+  it('reaches the caller as data, in seconds', () => {
+    const shape = mapClassifiedUpstreamError(
+      {
+        category: 'rate_limit',
+        code: 'rate_limit_429',
+        retryable: true,
+        fallbackable: true,
+        retryAfterSeconds: 42,
+        message: 'slow down',
+      },
+      PROVIDER,
+    );
+
+    expect(shape.retryAfterSeconds).toBe(42);
+  });
+
+  it('is the wait the reader is told about, rather than a vague moment', () => {
+    const copy = upstreamFailureCopy(rateLimited(45), PROVIDER, FREE_PLAN);
+
+    expect(copy.message).toContain('45 seconds');
+  });
+
+  it('reads in minutes once seconds stop being useful', () => {
+    const copy = upstreamFailureCopy(rateLimited(600), PROVIDER);
+
+    expect(copy.message).toContain('10 minutes');
+  });
+
+  it('states no wait at all when the response carried none', () => {
+    const copy = upstreamFailureCopy(rateLimited(), PROVIDER);
+    const shape = mapClassifiedUpstreamError(
+      {
+        category: 'rate_limit',
+        code: 'rate_limit_429',
+        retryable: true,
+        fallbackable: true,
+        message: 'slow down',
+      },
+      PROVIDER,
+    );
+
+    expect(copy.message).not.toMatch(/\d/);
+    expect(shape.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('refuses a figure no honest message could carry', () => {
+    const shape = mapClassifiedUpstreamError(
+      {
+        category: 'rate_limit',
+        code: 'rate_limit_429',
+        retryable: true,
+        fallbackable: true,
+        retryAfterSeconds: 400_000,
+        message: 'slow down',
+      },
+      PROVIDER,
+    );
+
+    expect(shape.retryAfterSeconds).toBeUndefined();
+    expect(shape.message).not.toMatch(/\d/);
+  });
+});
+
+describe('the id a reader can quote to support', () => {
+  it('rides on the failure the same way it rides on the log line', () => {
+    const shape = runWithTraceContext({ ...TRACE }, () => {
+      setRequestId('req_abc123def456');
+      return mapClassifiedUpstreamError(
+        {
+          category: 'server_overload',
+          code: 'overloaded_529',
+          retryable: true,
+          fallbackable: true,
+          message: 'overloaded',
+        },
+        PROVIDER,
+      );
+    });
+
+    expect(shape.requestId).toBe('req_abc123def456');
+    expect(shape.message).not.toContain('req_abc123def456');
+  });
+
+  it('is absent rather than invented when nothing recorded one', () => {
+    const shape = mapClassifiedUpstreamError(
+      {
+        category: 'server_overload',
+        code: 'overloaded_529',
+        retryable: true,
+        fallbackable: true,
+        message: 'overloaded',
+      },
+      PROVIDER,
+    );
+
+    expect(shape.requestId).toBeUndefined();
+  });
+
+  it('travels on the mid-stream frame a client reads, with the wait beside it', () => {
+    const shape = runWithTraceContext({ ...TRACE }, () => {
+      setRequestId('req_abc123def456');
+      return mapClassifiedUpstreamError(
+        {
+          category: 'rate_limit',
+          code: 'rate_limit_429',
+          retryable: true,
+          fallbackable: true,
+          retryAfterSeconds: 30,
+          message: 'slow down',
+        },
+        PROVIDER,
+      );
+    });
+
+    expect(streamErrorFrame(shape, true)).toEqual({
+      message: shape.message,
+      code: 'provider_rate_limited',
+      retryable: true,
+      retryAfterSeconds: 30,
+      requestId: 'req_abc123def456',
+    });
+  });
+});
+
+describe('naming the provider a reader is waiting on', () => {
+  it('uses the name the picker shows, never the internal key', () => {
+    const copy = upstreamFailureCopy(windowSpent(), 'open_router');
+
+    expect(copy.message).toContain(getProviderDisplayLabel('open_router'));
+    expect(copy.message).not.toContain('open_router');
+  });
+
+  it('keeps a provider-side shortfall off the reader’s account', () => {
+    const copy = upstreamFailureCopy(Object.assign(new Error(''), { status: 402 }), PROVIDER);
+
+    // Our provider account ran short. Naming the reader's own is the implication to avoid.
+    expect(copy.message).toMatch(/on our side, not with your request/i);
+    expect(copy.message).not.toMatch(/your (credit|balance|account)/i);
+  });
+});
+
+describe('an attachment refusal carries the reader’s own filename', () => {
+  it('states the refusal on one line, whatever the file was called', () => {
+    const crafted = `report\n\n    at Object.<anonymous> (/Users/someone/secret/path.ts:4:11)`;
+    const copy = mapClassifiedUpstreamError(
+      {
+        category: 'unsupported_input',
+        code: 'unsupported_input',
+        retryable: false,
+        fallbackable: true,
+        message: `${crafted} is a application/zip file, which this model cannot read: documents. Choose a model that accepts documents, or attach the content as text.`,
+      },
+      PROVIDER,
+    );
+
+    expect(copy.message).not.toContain('\n');
+    expect(copy.message).not.toContain('/Users/someone');
+    expect(copy.message).toContain('which this model cannot read');
+  });
+});
+
+describe('a tool that threw on its way to the transcript', () => {
+  it('keeps the stack and the machine it ran on out of what the reader sees', () => {
+    const thrown = new Error('ENOENT: no such file or directory, open /Users/someone/.env.local');
+    thrown.stack = `${thrown.message}\n    at readFile (/Users/someone/app/node_modules/x/index.js:22:9)`;
+
+    const text = toolFailureMessage('read_file', thrown);
+
+    expect(text).not.toContain('/Users/someone');
+    expect(text).not.toContain('at readFile');
+    expect(text).toContain('read_file');
+  });
+
+  it('says something usable when the thrown value carried no words at all', () => {
+    expect(toolFailureMessage('web_search', {})).toContain('web_search');
+    expect(toolFailureMessage('web_search', {})).not.toContain('[object Object]');
+  });
+});
+
+describe('a provider the catalogue must stop offering', () => {
+  it.each([
+    [
+      'overloaded',
+      Object.assign(new Error('{"type":"overloaded_error"}'), { status: 529 }),
+      'server_overload',
+    ],
+    ['spent for the window', windowSpent(), 'quota_exhausted'],
+  ])('is marked degraded when it is %s', (_label, error, category) => {
+    vi.mocked(markProviderDegraded).mockClear();
+
+    upstreamFailureCopy(error, PROVIDER);
+
+    expect(markProviderDegraded).toHaveBeenCalledWith(PROVIDER, category);
   });
 });

@@ -102,7 +102,17 @@ import {
   recordCapabilityObservation,
   TOOL_CALLING_CAPABILITY,
 } from '@/lib/services/free-lane/capability-health-service';
-import { mapClassifiedUpstreamError } from './upstream-error-copy';
+import {
+  mapClassifiedUpstreamError,
+  streamErrorFrame,
+  toolFailureMessage,
+} from './upstream-error-copy';
+import {
+  classifyEmptyTurn,
+  isBlockedFinishReason,
+  isCancelledFinishReason,
+  isEmptyTurnOutput,
+} from './turn-completeness';
 import type { FailoverStepContext } from './managed-failover';
 import {
   buildServingRouteId,
@@ -816,24 +826,27 @@ function canonicalStopReason(finishReason: string | null): AgentEventStopReason 
   return 'end-turn';
 }
 
-const BLOCKED_FINISH_REASONS: ReadonlySet<string> = new Set(['refusal', 'content_filter']);
-const CANCELLED_FINISH_REASONS: ReadonlySet<string> = new Set(['cancelled', 'cancel']);
-
-function isBlockedFinishReason(finishReason: string | null): boolean {
-  return finishReason !== null && BLOCKED_FINISH_REASONS.has(finishReason);
-}
-
-function isCancelledFinishReason(finishReason: string | null): boolean {
-  return finishReason !== null && CANCELLED_FINISH_REASONS.has(finishReason);
+/**
+ * The answer with the thinking taken out. A model that spends a turn reasoning
+ * inside `<thinking>` tags and never writes an answer produced raw content but
+ * showed the reader nothing, and counting that as an answer passed it off as a
+ * finished turn.
+ */
+function publicTextOf(result: ToolLoopProviderStepResult): string {
+  const projector = createPublicTextDeltaProjector();
+  return projector.push(result.textContent) + projector.flush();
 }
 
 function isEmptyProviderStep(result: ToolLoopProviderStepResult): boolean {
-  return (
-    result.pendingToolCalls.length === 0 &&
-    result.textContent.trim().length === 0 &&
-    result.publicTextTail.trim().length === 0 &&
-    result.generatedFileRefs.length === 0
-  );
+  return isEmptyTurnOutput({
+    text: publicTextOf(result),
+    toolCalls: result.pendingToolCalls.length,
+    generatedFiles: result.generatedFileRefs.length,
+  });
+}
+
+function spentTheTurnThinking(result: ToolLoopProviderStepResult): boolean {
+  return result.textContent.trim().length > 0 && publicTextOf(result).trim().length === 0;
 }
 
 function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
@@ -1296,7 +1309,7 @@ export function withToolTimeout(
       (err: unknown) => {
         clearTimeout(timer);
         resolve({
-          content: `Tool ${toolName} failed: ${err instanceof Error ? err.message : String(err)}`,
+          content: toolFailureMessage(toolName, err),
           isError: true,
         });
       },
@@ -4530,11 +4543,7 @@ export async function* runToolLoop(
         const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
           requestedModel: processed.requestedModel,
         });
-        const streamError = {
-          message: mappedUpstream.message,
-          code: mappedUpstream.code,
-          retryable: classified.retryable,
-        };
+        const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
         logger.error(
           {
             provider: servingProcessed.provider,
@@ -4658,23 +4667,11 @@ export async function* runToolLoop(
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
         if (isEmptyProviderStep(providerStep) && !isCancelledFinishReason(finishReason)) {
           const blocked = isBlockedFinishReason(finishReason);
-          const classified: ClassifiedError = blocked
-            ? {
-                category: 'content_blocked',
-                code: 'content_blocked',
-                retryable: false,
-                fallbackable: true,
-                message: 'The model blocked this response before returning any content.',
-              }
-            : providerStep.providerError?.message
-              ? classifyError(new Error(providerStep.providerError.message))
-              : {
-                  category: 'empty_response',
-                  code: 'empty_response',
-                  retryable: false,
-                  fallbackable: true,
-                  message: 'The model finished without returning a response.',
-                };
+          const classified: ClassifiedError = classifyEmptyTurn({
+            finishReason,
+            providerError: providerStep.providerError,
+            reasoningReceived: spentTheTurnThinking(providerStep),
+          });
           logger.warn(
             {
               provider: servingProcessed.provider,
@@ -4688,11 +4685,7 @@ export async function* runToolLoop(
           const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
             requestedModel: processed.requestedModel,
           });
-          const streamError = {
-            message: mappedUpstream.message,
-            code: mappedUpstream.code,
-            retryable: classified.retryable,
-          };
+          const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
           yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
           yield encoder.encode(
             sseData({
@@ -4701,6 +4694,40 @@ export async function* runToolLoop(
             }),
           );
           yield* flushTerminal(blocked ? 'refusal' : 'error');
+          return;
+        }
+        // The step produced something to keep AND the stream reported a
+        // failure. The partial answer stays on the wire, but the turn is not a
+        // finished one: reporting only the answer let an interrupted
+        // generation read as complete.
+        if (providerStep.providerError && !isCancelledFinishReason(finishReason)) {
+          const classified = classifyEmptyTurn({
+            finishReason,
+            providerError: providerStep.providerError,
+            reasoningReceived: spentTheTurnThinking(providerStep),
+          });
+          const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
+            requestedModel: processed.requestedModel,
+          });
+          const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
+          logger.warn(
+            {
+              provider: servingProcessed.provider,
+              model: servingProcessed.llmRequest.model,
+              step,
+              finishReason,
+              code: classified.code,
+            },
+            '[tool-loop] provider step reported a failure after delivering part of the answer',
+          );
+          yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
+          yield encoder.encode(
+            sseData({
+              choices: [{ delta: { x_stream_error: streamError }, index: 0 }],
+              model: responseModel,
+            }),
+          );
+          yield* flushTerminal('error');
           return;
         }
         yield* flushTerminal(canonicalStopReason(finishReason));
