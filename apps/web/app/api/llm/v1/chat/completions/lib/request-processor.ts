@@ -124,6 +124,7 @@ import {
   isValidIanaTimeZone,
   resolveMaxOutputTokens,
   resolvePromptCachePrivacyClass,
+  getDefaultModelFor,
 } from '@agiworkforce/types';
 import type {
   ModelCapabilities,
@@ -1640,8 +1641,9 @@ export async function resolveRouteHealthRuntimeState(
 }
 
 const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';
-const AUTO_ROUTE_UNAVAILABLE_MESSAGE =
-  'Auto could not find a model for this request on your plan. Choose a model from the picker or upgrade your plan.';
+const UPGRADE_IS_INVITE_GATED =
+  'Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
+const AUTO_ROUTE_UNAVAILABLE_MESSAGE = `Auto could not find a model for this request on your plan. Choose a model from the picker. ${UPGRADE_IS_INVITE_GATED}`;
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
 
@@ -2161,6 +2163,16 @@ export function applyWorkspaceDefaultModel(
   if (isAutoModeModelId(chatRequest.model)) chatRequest.model = defaultModelId;
 }
 
+// The free plan has no Auto. A client that still sends it is served the plan's
+// own model rather than refused, and the resolver never sees a priced route.
+export function applyFreePlanDefaultModel(
+  chatRequest: Pick<ChatCompletionRequest, 'model'>,
+  planTier: string | null | undefined,
+): void {
+  if (!isFreePlanTier(planTier) || !isAutoModeModelId(chatRequest.model)) return;
+  chatRequest.model = getDefaultModelFor(planTier, 'chat');
+}
+
 export function withoutWorkspaceDisabledDeviceCapabilities(
   deviceHost: DesktopHostDeclaration | null,
   controls: ResolvedWorkspaceControls | null,
@@ -2305,6 +2317,7 @@ export async function processRequest(
   const scopedDbPromise = getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
+  applyFreePlanDefaultModel(chatRequest, subscription.plan_tier);
   const requestedModel = chatRequest.model;
   const adaptiveResponseBudgetEnabled =
     isAutoModeModelId(requestedModel) || getModelRegistryFacts(requestedModel)?.isRouter === true;
@@ -2788,8 +2801,7 @@ export async function processRequest(
       response: NextResponse.json(
         {
           error: {
-            message:
-              'Free managed cloud access currently supports Auto Economy only. Select Auto Economy, upgrade your plan, or use local/BYOK.',
+            message: `The Free plan includes the free model only. Select it in the model picker, or use your own provider key. ${UPGRADE_IS_INVITE_GATED}`,
             type: 'invalid_request_error',
             code: 'free_trial_model_only',
             ...(recovery ? { recovery } : {}),
@@ -3469,7 +3481,7 @@ export async function processRequest(
       response: NextResponse.json(
         {
           error: {
-            message: `Model ${chatRequest.model} requires ${requiredTier} subscription or higher.`,
+            message: `Model ${chatRequest.model} is on the ${requiredTier} plan, not yours. Choose a model your plan includes. ${UPGRADE_IS_INVITE_GATED}`,
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: requiredTierKey,

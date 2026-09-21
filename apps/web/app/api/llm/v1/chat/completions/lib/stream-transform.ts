@@ -25,7 +25,8 @@ import {
   isErrorCategory,
   type ClassifiedError,
 } from '@agiworkforce/provider-runtime';
-import { mapClassifiedUpstreamError } from './upstream-error-copy';
+import { mapClassifiedUpstreamError, streamErrorFrame } from './upstream-error-copy';
+import { isEmptyTurnOutput, isTurnTruncated } from './turn-completeness';
 import type { ProcessedRequest } from './request-processor';
 import {
   canPersistAssistantTurn,
@@ -828,7 +829,7 @@ function presentStreamError(
     },
     'Provider stream error presented as gateway copy',
   );
-  return { ...chunk, message: mapped.message, code: mapped.code, retryable: classified.retryable };
+  return { ...chunk, ...streamErrorFrame(mapped, classified.retryable) };
 }
 
 export async function buildAdapterStreamResponse(
@@ -856,6 +857,32 @@ export async function buildAdapterStreamResponse(
 
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
   const sourceCollector = new AssistantTurnSourceCollector();
+  let toolCallsSeen = 0;
+  let lastStopReason: string | null = null;
+
+  /**
+   * A turn the reader can keep. Tool calls, artifacts and grounded sources all
+   * count: the answer text is not the only thing a turn can deliver.
+   */
+  const turnDeliveredNothing = (): boolean =>
+    isEmptyTurnOutput({
+      text: assembler.canonicalText(),
+      toolCalls: toolCallsSeen,
+      generatedFiles: generatedFileRefs.size,
+      otherVisibleOutput: Boolean(
+        sourceCollector.snapshot() ||
+        sourceCollector.citationSnapshot() ||
+        sourceCollector.codeExecutionSnapshot() ||
+        sourceCollector.generatedFilesSnapshot(),
+      ),
+    });
+
+  const turnTruncated = (): boolean =>
+    isTurnTruncated({
+      reportedFailure: assembler.lastError !== null,
+      finishReason: lastStopReason,
+      emptyOutput: turnDeliveredNothing(),
+    });
 
   const assistantTurnPersistable = canPersistAssistantTurn(processed);
   let assistantTurnPersisted = false;
@@ -896,6 +923,8 @@ export async function buildAdapterStreamResponse(
           if (chunk.type === 'response-meta' && typeof chunk.provider === 'string') {
             upstreamProvider = chunk.provider;
           }
+          if (chunk.type === 'tool-use-start') toolCallsSeen += 1;
+          if (chunk.type === 'stop') lastStopReason = chunk.reason;
           try {
             collectGeneratedFileRefs(chunk, generatedFileRefs);
           } catch {
@@ -1104,7 +1133,8 @@ export async function buildAdapterStreamResponse(
         if (processed.managedUsage) throw reconciliationError;
       }
 
-      if (assembler.lastError === null) {
+      const truncated = turnTruncated();
+      if (!truncated) {
         recordDirectRouteSuccess({
           processed,
           provider: providerUsed,
@@ -1117,6 +1147,20 @@ export async function buildAdapterStreamResponse(
         await persistAssistantTurnSnapshot(false);
         await onSuccessfulTurn?.();
       } else {
+        if (assembler.lastError === null) {
+          logger.warn(
+            {
+              event: 'llm_stream_ended_incomplete',
+              requestId,
+              userId,
+              provider: providerUsed,
+              model: modelUsed,
+              stopReason: lastStopReason,
+              emptyOutput: turnDeliveredNothing(),
+            },
+            'Provider stream ended without an answer the reader could keep',
+          );
+        }
         await persistAssistantTurnSnapshot(true);
       }
 
