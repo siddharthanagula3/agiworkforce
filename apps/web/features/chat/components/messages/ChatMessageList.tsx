@@ -57,6 +57,7 @@ import {
   INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE,
   isRefusalFinish,
   isStoppedTurn,
+  withTurnErrorReference,
   type IncompleteTurnCause,
 } from '../../lib/turn-error-notice';
 
@@ -76,6 +77,15 @@ const STREAM_ERROR_REASON_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>
   providerOutage: 'this model is unavailable right now for a reason on our side.',
   timeout: 'the model took too long to respond.',
   modelRestriction: 'the selected model could not complete this request.',
+  contextLength: 'this conversation is too long for the selected model.',
+  outputLimit: "the answer reached this model's maximum length and stopped there.",
+  attachment: 'this model could not read one of the attachments.',
+  toolCall: 'the model produced a tool call this request could not accept.',
+  contentFiltered: 'the safety system stopped this response.',
+  planRestriction: 'the selected model is not part of your plan.',
+  workspacePolicy: 'your workspace administrator has turned this off for your account.',
+  sessionExpired: 'your session ended before this turn finished.',
+  accountLimit: 'you have reached a usage limit on your account.',
   emptyResponse: 'no response was returned.',
 };
 
@@ -99,10 +109,13 @@ function streamErrorCode(message: ChatMessage): string | undefined {
  */
 function streamErrorReason(message: ChatMessage): string {
   const reported = getStreamErrorMessage(message);
-  if (reported && isPlainReason(reported)) return reported;
+  if (reported && isPlainReason(reported)) return withTurnErrorReference(reported, message);
   const code = streamErrorCode(message);
   const cause = code ? INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[code] : undefined;
-  return cause ? STREAM_ERROR_REASON_BY_CAUSE[cause] : STREAM_ERROR_CONNECTION_DETAIL;
+  return withTurnErrorReference(
+    cause ? STREAM_ERROR_REASON_BY_CAUSE[cause] : STREAM_ERROR_CONNECTION_DETAIL,
+    message,
+  );
 }
 
 const TURN_NOTICE_LINK_CLASS =

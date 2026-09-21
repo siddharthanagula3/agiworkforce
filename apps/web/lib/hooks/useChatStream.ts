@@ -412,6 +412,42 @@ function getVisibleErrorMessage(error: unknown): string {
   return toUserMessage(error, 'An unknown error occurred');
 }
 
+export interface StreamErrorInfo {
+  message: string;
+  code?: string;
+  retryable?: boolean;
+  /** Only ever the figure the provider supplied; never defaulted here. */
+  retryAfterSeconds?: number;
+  requestId?: string;
+}
+
+/**
+ * A mid-stream failure, whichever of the three frames carried it: the legacy
+ * web wire's `x_stream_error` delta, an agent-event envelope, or a bare
+ * string. Read in one place because the fields a reader needs kept arriving on
+ * one of the three only.
+ */
+function readStreamErrorFrame(raw: unknown): StreamErrorInfo | undefined {
+  if (typeof raw === 'string') return raw ? { message: raw } : undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const frame = raw as Record<string, unknown>;
+  const message = frame['message'];
+  if (typeof message !== 'string' || !message) return undefined;
+  const code = frame['code'];
+  const retryable = frame['retryable'];
+  const retryAfterSeconds = frame['retryAfterSeconds'];
+  const requestId = frame['requestId'];
+  return {
+    message,
+    ...(typeof code === 'string' && code ? { code } : {}),
+    ...(typeof retryable === 'boolean' ? { retryable } : {}),
+    ...(typeof retryAfterSeconds === 'number' && Number.isFinite(retryAfterSeconds)
+      ? { retryAfterSeconds }
+      : {}),
+    ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+  };
+}
+
 function buildAssistantErrorContent(message: string, code?: string): string {
   if (code === FREE_QUOTA_EXHAUSTED_CODE) return message;
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
@@ -1396,8 +1432,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       }
     : seedMetadata?.cloudAgentRun;
   let finishReason: string | undefined;
-  let streamErrorInfo: { message: string; code?: string; retryable?: boolean } | undefined =
-    seedMetadata?.streamError;
+  let streamErrorInfo: StreamErrorInfo | undefined = seedMetadata?.streamError;
   const interactiveCards = new Map<string, InteractiveCard>(
     (seedMetadata?.interactiveCards ?? [])
       .slice(0, INTERACTIVE_CARDS_MAX_PER_MESSAGE)
@@ -2282,13 +2317,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
           if (envelope.event.type === 'error' && !streamErrorInfo) {
-            streamErrorInfo = {
-              message: envelope.event.message,
-              ...(envelope.event.code ? { code: envelope.event.code } : {}),
-              ...(envelope.event.retryable !== undefined
-                ? { retryable: envelope.event.retryable }
-                : {}),
-            };
+            streamErrorInfo = readStreamErrorFrame(envelope.event);
           }
           if (envelope.event.type === 'stop') {
             finishReason =
@@ -2468,13 +2497,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               ).pending;
             }
             if (agentEnvelope.event.type === 'error' && !streamErrorInfo) {
-              streamErrorInfo = {
-                message: agentEnvelope.event.message,
-                ...(agentEnvelope.event.code ? { code: agentEnvelope.event.code } : {}),
-                ...(agentEnvelope.event.retryable !== undefined
-                  ? { retryable: agentEnvelope.event.retryable }
-                  : {}),
-              };
+              streamErrorInfo = readStreamErrorFrame(agentEnvelope.event);
             }
             if (agentEnvelope.event.type === 'stop') {
               finishReason =
@@ -2657,24 +2680,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
           const streamErrorDelta = parsed.choices?.[0]?.delta?.x_stream_error;
           if (!streamErrorInfo) {
-            if (
-              streamErrorDelta &&
-              typeof streamErrorDelta === 'object' &&
-              typeof streamErrorDelta.message === 'string' &&
-              streamErrorDelta.message
-            ) {
-              streamErrorInfo = {
-                message: streamErrorDelta.message,
-                ...(typeof streamErrorDelta.code === 'string'
-                  ? { code: streamErrorDelta.code }
-                  : {}),
-                ...(typeof streamErrorDelta.retryable === 'boolean'
-                  ? { retryable: streamErrorDelta.retryable }
-                  : {}),
-              };
-            } else if (typeof streamErrorDelta === 'string' && streamErrorDelta) {
-              streamErrorInfo = { message: streamErrorDelta };
-            }
+            streamErrorInfo = readStreamErrorFrame(streamErrorDelta);
           }
 
           // The function budget ended this connection, not the run; follow it in the journal.
