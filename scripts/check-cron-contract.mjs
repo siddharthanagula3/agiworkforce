@@ -102,6 +102,27 @@ export function isFixedHour(schedule) {
   return fields.length === 5 && !fields[1].includes('*');
 }
 
+/** Seconds between the two closest firings, wrapping past midnight. */
+export function shortestInterval(schedule) {
+  const slots = firingMinutes(schedule);
+  if (slots === null || slots.size === 0) return null;
+  const minutes = [...slots]
+    .map((slot) => Number(slot.slice(0, 2)) * 60 + Number(slot.slice(3)))
+    .sort((left, right) => left - right);
+  if (minutes.length === 1) return 24 * 60 * 60;
+  let shortest = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < minutes.length; index += 1) {
+    const next = index + 1 < minutes.length ? minutes[index + 1] : minutes[0] + 24 * 60;
+    shortest = Math.min(shortest, next - minutes[index]);
+  }
+  return shortest * 60;
+}
+
+/** A structured log call, which is the record a run leaves behind. */
+export function leavesARecord(source) {
+  return /\blogger\s*\.\s*(?:info|warn|error|fatal)\s*\(/.test(source);
+}
+
 function checkRouteContract({ repoRoot, routes, contract, errors }) {
   const bounded = new Map((contract.boundedByConstruction ?? []).map((entry) => [entry.id, entry]));
   const ceilings = new Map();
@@ -151,6 +172,13 @@ function checkRouteContract({ repoRoot, routes, contract, errors }) {
             `${contract.maxSeconds} second band ${CONTRACT_PATH} declares.`,
         );
       }
+    }
+
+    if (!leavesARecord(source)) {
+      errors.push(
+        `${where}: emits no structured log, so a run that did nothing and a run that never ` +
+          'happened are the same from outside.',
+      );
     }
 
     const loops = /\n\s*(?:for|while)\s*\(/.test(source);
@@ -211,6 +239,47 @@ function checkRegistration({ routes, crons, errors }) {
   }
   if (new Set(crons.map((cron) => cron.path)).size !== crons.length) {
     errors.push(`${VERCEL_CONFIG}: schedules the same path more than once.`);
+  }
+}
+
+/**
+ * A run that can still be going when the next one starts is two runs over the
+ * same rows. Either the schedule leaves room for the ceiling, or the route says
+ * what stops the second run touching what the first one holds.
+ */
+function checkOverlap({ crons, ceilings, contract, errors }) {
+  const declared = new Map((contract.overlapSafe ?? []).map((entry) => [entry.id, entry]));
+  const found = new Set();
+
+  for (const cron of crons) {
+    const name = cron.path.startsWith(ROUTE_PREFIX) ? cron.path.slice(ROUTE_PREFIX.length) : null;
+    if (name === null) continue;
+    const ceiling = ceilings.get(name);
+    const interval = shortestInterval(cron.schedule);
+    if (ceiling === undefined || interval === null || interval > ceiling) continue;
+    found.add(name);
+
+    const entry = declared.get(name);
+    if (!entry) {
+      errors.push(
+        `${CRON_DIR}/${name}/route.ts: fires every ${interval}s and may run for ${ceiling}s, so a ` +
+          'slow run is still going when the next one starts. Lengthen the schedule, lower ' +
+          `maxDuration, or record in ${CONTRACT_PATH} under overlapSafe what stops the second run ` +
+          'touching what the first one holds.',
+      );
+      continue;
+    }
+    if (typeof entry.mechanism !== 'string' || entry.mechanism.trim().length === 0) {
+      errors.push(`${CONTRACT_PATH}: overlapSafe entry ${name} names no mechanism.`);
+    }
+  }
+
+  for (const id of declared.keys()) {
+    if (found.has(id)) continue;
+    errors.push(
+      `${CONTRACT_PATH}: overlapSafe still lists ${id}, whose schedule now leaves room for its ` +
+        'ceiling. Delete the entry.',
+    );
   }
 }
 
@@ -289,6 +358,7 @@ export function checkCronContract(repoRoot = REPO_ROOT) {
 
   const ceilings = checkRouteContract({ repoRoot, routes, contract, errors });
   checkRegistration({ routes, crons, errors });
+  checkOverlap({ crons, ceilings, contract, errors });
   checkCollisions({ crons, ceilings, contract, errors });
 
   return { errors, report: { routes: routes.length, scheduled: crons.length } };

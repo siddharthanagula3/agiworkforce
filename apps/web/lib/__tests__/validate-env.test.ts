@@ -11,8 +11,15 @@ vi.mock('../pricing', () => ({
   STRIPE_PRICE_IDS: {},
 }));
 
+const mockRecordConfigurationState = vi.fn();
+vi.mock('../observability/metrics', () => ({
+  recordConfigurationState: (input: unknown) => mockRecordConfigurationState(input),
+}));
+
 import {
+  configKeyRegistry,
   validateConfigKeyRegistry,
+  validateDeployedValues,
   validateOAuthCallbackIsolation,
   validateRequiredEnvVars,
 } from '../validate-env';
@@ -111,27 +118,127 @@ describe('validateProductionKeyTypes · test keys in production', () => {
     Object.assign(process.env, savedEnv);
   });
 
-  it('warns when Clerk pk_test_ keys run in a production deployment', () => {
+  it('refuses the boot when Clerk pk_test_ keys run in a production deployment', () => {
+    process.env['AGI_ENFORCE_PRODUCTION_CONFIG'] = '1';
     process.env['VERCEL_ENV'] = 'production';
     process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_aGFuZHktdGVzdA';
     const result = validateProductionKeyTypes();
-    const w = result.warnings.find((x) => x.includes('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'));
-    expect(w).toBeDefined();
-    expect(w).toContain('pk_test_');
-    expect(result.valid).toBe(true);
+    const failure = result.errors.find((x) => x.includes('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'));
+    expect(failure).toBeDefined();
+    expect(failure).toContain('pk_test_');
+    expect(result.valid).toBe(false);
+  });
+
+  it('refuses a production runtime that carries no platform deployment marker', () => {
+    process.env['AGI_ENFORCE_PRODUCTION_CONFIG'] = '1';
+    delete process.env['VERCEL_ENV'];
+    delete process.env['AGI_DEPLOY_ENV'];
+    vi.stubEnv('NODE_ENV', 'production');
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_aGFuZHk';
+    expect(validateProductionKeyTypes().valid).toBe(false);
+    vi.unstubAllEnvs();
   });
 
   it('is silent for pk_live_ keys in production', () => {
     process.env['VERCEL_ENV'] = 'production';
     process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_live_aGFuZHktbGl2ZQ';
     process.env['CLERK_SECRET_KEY'] = 'sk_live_abc';
-    expect(validateProductionKeyTypes().warnings).toHaveLength(0);
+    expect(validateProductionKeyTypes().errors).toHaveLength(0);
   });
 
   it('is silent for pk_test_ keys OUTSIDE production (local dev / preview)', () => {
     delete process.env['VERCEL_ENV'];
     process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_aGFuZHk';
-    expect(validateProductionKeyTypes().warnings).toHaveLength(0);
+    expect(validateProductionKeyTypes().errors).toHaveLength(0);
+  });
+});
+
+describe('a deployed runtime refuses a value that belongs to another environment', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    for (const key of ['VERCEL_ENV', 'AGI_DEPLOY_ENV']) delete process.env[key];
+    for (const key of Object.keys(configKeyRegistry())) delete process.env[key];
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  const bad: Array<[string, string, string, string]> = [
+    ['production', 'STRIPE_SECRET_KEY', 'sk_test_FAKEFAKEFAKE0001', 'test credential'],
+    ['production', 'STRIPE_SECRET_KEY', 'rk_test_FAKEFAKEFAKE0001', 'test credential'],
+    ['production', 'STRIPE_SECRET_KEY', 'changeme', 'placeholder'],
+    ['production', 'STRIPE_SECRET_KEY', 'your-secret-here', 'placeholder'],
+    ['production', 'NEXT_PUBLIC_APP_URL', 'http://localhost:3000', 'loopback url'],
+    ['preview', 'STRIPE_SECRET_KEY', 'sk_live_FAKEFAKEFAKE0001', 'live credential'],
+    ['preview', 'NEXT_PUBLIC_APP_URL', 'http://127.0.0.1:3000', 'loopback url'],
+    ['preview', 'STRIPE_SECRET_KEY', 'placeholder', 'placeholder'],
+  ];
+
+  it.each(bad)('refuses %s booting on %s=%s', (environment, key, value, rule) => {
+    process.env['AGI_ENFORCE_PRODUCTION_CONFIG'] = '1';
+    process.env['VERCEL_ENV'] = environment;
+    process.env[key] = value;
+    const result = validateDeployedValues();
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toContain(rule);
+    expect(result.errors.join(' ')).toContain(key);
+  });
+
+  it('accepts the values each deployed environment is entitled to', () => {
+    process.env['AGI_ENFORCE_PRODUCTION_CONFIG'] = '1';
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_live_FAKEFAKEFAKE0001';
+    process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.example.com';
+    expect(validateDeployedValues()).toEqual({ valid: true, errors: [], warnings: [] });
+  });
+
+  it('leaves a development runtime alone, which is where a test key belongs', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_FAKEFAKEFAKE0001';
+    process.env['NEXT_PUBLIC_APP_URL'] = 'http://127.0.0.1:3000';
+    expect(validateDeployedValues().errors).toEqual([]);
+  });
+});
+
+describe('every configuration key declares all ten facets', () => {
+  it('names itself, its type, its owner, its default, when it is required and what it is', () => {
+    const descriptors = Object.values(configKeyRegistry());
+    expect(descriptors.length).toBeGreaterThan(15);
+    for (const descriptor of descriptors) {
+      expect(descriptor.key, 'key').toMatch(/^[A-Z][A-Z0-9_]*$/);
+      expect(['string', 'url', 'integer', 'boolean', 'enum']).toContain(descriptor.type);
+      expect(descriptor.owner.length, descriptor.key).toBeGreaterThan(0);
+      expect(descriptor.defaultValue === null || typeof descriptor.defaultValue === 'string').toBe(
+        true,
+      );
+      expect(Array.isArray(descriptor.requiredIn), descriptor.key).toBe(true);
+      expect(['secret', 'public']).toContain(descriptor.secrecy);
+      expect(descriptor.allowedEnvironments.length, descriptor.key).toBeGreaterThan(0);
+      expect(descriptor.description.length, descriptor.key).toBeGreaterThan(20);
+      expect(['in-use', 'deprecated']).toContain(descriptor.lifecycle);
+      if (descriptor.lifecycle === 'deprecated') expect(descriptor.supersededBy).toBeTruthy();
+    }
+  });
+
+  it('declares a validation for every key whose type constrains its value', () => {
+    for (const descriptor of Object.values(configKeyRegistry())) {
+      if (descriptor.type === 'string') continue;
+      expect(typeof descriptor.validate, descriptor.key).toBe('function');
+    }
+  });
+
+  it('gives no secret a default value, because a default secret is a shared secret', () => {
+    for (const descriptor of Object.values(configKeyRegistry())) {
+      if (descriptor.secrecy !== 'secret') continue;
+      expect(descriptor.defaultValue, descriptor.key).toBeNull();
+    }
   });
 });
 
@@ -566,5 +673,101 @@ describe('every encryption key the environment contract demands is one a module 
     }
 
     expect(declared.filter((key) => !read.has(key))).toEqual([]);
+  });
+});
+
+describe('the production config switch decides the boot, never the loudness', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+  let consoleError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    for (const key of ['VERCEL_ENV', 'AGI_DEPLOY_ENV']) delete process.env[key];
+    for (const key of Object.keys(configKeyRegistry())) delete process.env[key];
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockRecordConfigurationState.mockClear();
+  });
+
+  afterEach(() => {
+    consoleError.mockRestore();
+    vi.unstubAllEnvs();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  /** A production deployment holding a Stripe test key and a placeholder secret. */
+  function productionOnTestKeys(): void {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_FAKEFAKEFAKE0001';
+    process.env['CRON_SECRET'] = 'changeme';
+  }
+
+  it('warns and boots when the switch is unset, so a first deploy cannot take the site down', () => {
+    productionOnTestKeys();
+
+    const result = validateEnvironment();
+
+    expect(result.errors.join(' '), 'no production value finding may stop the boot').not.toContain(
+      'sk_test_',
+    );
+    expect(result.warnings.join(' ')).toContain('STRIPE_SECRET_KEY');
+    expect(result.warnings.join(' ')).toContain('AGI_ENFORCE_PRODUCTION_CONFIG is not 1');
+  });
+
+  it('refuses the boot when the switch is 1', () => {
+    productionOnTestKeys();
+    process.env['AGI_ENFORCE_PRODUCTION_CONFIG'] = '1';
+
+    const result = validateEnvironment();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(' ')).toContain('STRIPE_SECRET_KEY');
+  });
+
+  it('is loud in both positions: a console line per finding and an invalid configuration state', () => {
+    for (const enforcement of [undefined, '1']) {
+      consoleError.mockClear();
+      mockRecordConfigurationState.mockClear();
+      productionOnTestKeys();
+      if (enforcement) process.env['AGI_ENFORCE_PRODUCTION_CONFIG'] = enforcement;
+      else delete process.env['AGI_ENFORCE_PRODUCTION_CONFIG'];
+
+      validateEnvironment();
+
+      const said = consoleError.mock.calls.flat().join(' ');
+      expect(said, `switch=${String(enforcement)}`).toContain('[production-config]');
+      expect(said).toContain('STRIPE_SECRET_KEY');
+      expect(mockRecordConfigurationState).toHaveBeenCalledWith({
+        component: 'environment-production-values',
+        state: 'invalid',
+      });
+    }
+  });
+
+  it('says nothing and records nothing when the deployment holds the right values', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['STRIPE_SECRET_KEY'] = 'sk_live_FAKEFAKEFAKE0001';
+    process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.example.com';
+
+    validateEnvironment();
+
+    expect(consoleError.mock.calls.flat().join(' ')).not.toContain('[production-config]');
+    expect(mockRecordConfigurationState).not.toHaveBeenCalled();
+  });
+
+  it('registers the switch as a deployed-only key with no default', () => {
+    const descriptor = configKeyRegistry()['AGI_ENFORCE_PRODUCTION_CONFIG'];
+    expect(descriptor).toBeDefined();
+    expect(descriptor?.defaultValue).toBeNull();
+    expect(descriptor?.allowedEnvironments).toEqual(['preview', 'production']);
+    expect(descriptor?.owner).toBe('infrastructure');
+  });
+
+  it('is offered in the environment example, commented out and explained', () => {
+    const example = readFileSync(path.join(process.cwd(), '.env.example'), 'utf8');
+    expect(example).toContain('# AGI_ENFORCE_PRODUCTION_CONFIG=1');
+    expect(example).toMatch(/Set it to 1 once production is confirmed to hold live keys/);
   });
 });

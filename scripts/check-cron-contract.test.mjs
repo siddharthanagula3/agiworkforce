@@ -13,6 +13,8 @@ import {
   cronRoutes,
   firingMinutes,
   isFixedHour,
+  leavesARecord,
+  shortestInterval,
   readRoute,
   registeredCrons,
 } from './check-cron-contract.mjs';
@@ -34,6 +36,7 @@ function route({
   auth = true,
   loop = false,
   ceiling = false,
+  record = true,
 } = {}) {
   return [
     "import { NextRequest, NextResponse } from 'next/server';",
@@ -48,6 +51,7 @@ function route({
       ? '  if (!verifyCronRequest(request)) {\n    return NextResponse.json({ error: 1 }, { status: 401 });\n  }'
       : '  const ok = true;',
     loop ? '  for (const row of rows) {\n    await work(row);\n  }' : '',
+    record ? "  logger.info({ swept: rows.length }, 'swept');" : '',
     '  return NextResponse.json({});',
     '}',
   ].join('\n');
@@ -293,4 +297,67 @@ test('the schedule helpers expand what the collision rule depends on', () => {
   assert.equal(firingMinutes('x 3 * * *'), null);
   assert.equal(isFixedHour('40 4 * * *'), true);
   assert.equal(isFixedHour('*/5 * * * *'), false);
+});
+
+test('a route that leaves no record fails', () => {
+  const root = fixture({
+    routes: { sweep: route({ record: false }) },
+    crons: [{ path: '/api/cron/sweep', schedule: '0 4 * * *' }],
+  });
+  const { errors } = checkCronContract(root);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /emits no structured log/);
+});
+
+test('a route that can still be running when it next fires needs a declared mechanism', () => {
+  const crons = [{ path: '/api/cron/drain', schedule: '*/5 * * * *' }];
+  const routes = { drain: route({ seconds: 300 }) };
+
+  const undeclared = fixture({ routes, crons });
+  const first = checkCronContract(undeclared).errors;
+  assert.equal(first.length, 1);
+  assert.match(first[0], /fires every 300s and may run for 300s/);
+
+  const declared = fixture({
+    routes,
+    crons,
+    contract: { ...CONTRACT, overlapSafe: [{ id: 'drain', mechanism: 'each job is leased' }] },
+  });
+  assert.deepEqual(checkCronContract(declared).errors, []);
+
+  const noMechanism = fixture({
+    routes,
+    crons,
+    contract: { ...CONTRACT, overlapSafe: [{ id: 'drain', mechanism: '  ' }] },
+  });
+  assert.ok(checkCronContract(noMechanism).errors.some((e) => /names no mechanism/.test(e)));
+});
+
+test('a schedule that leaves room for the ceiling needs no declaration, and a stale one fails', () => {
+  const routes = { drain: route({ seconds: 300 }) };
+  const crons = [{ path: '/api/cron/drain', schedule: '*/10 * * * *' }];
+  assert.deepEqual(checkCronContract(fixture({ routes, crons })).errors, []);
+
+  const stale = fixture({
+    routes,
+    crons,
+    contract: { ...CONTRACT, overlapSafe: [{ id: 'drain', mechanism: 'each job is leased' }] },
+  });
+  assert.match(checkCronContract(stale).errors[0], /overlapSafe still lists drain/);
+});
+
+test('the interval helper measures the gap the overlap rule depends on', () => {
+  assert.equal(shortestInterval('*/5 * * * *'), 300);
+  assert.equal(shortestInterval('0 4 * * *'), 86_400);
+  assert.equal(shortestInterval('0,30 * * * *'), 1_800);
+  assert.equal(shortestInterval('55 3 * * *'), 86_400);
+  assert.equal(shortestInterval('0 23,0 * * *'), 3_600);
+  assert.equal(shortestInterval('not a schedule'), null);
+});
+
+test('the record helper reads a structured log and not a bare console call', () => {
+  assert.equal(leavesARecord("logger.info({ a }, 'done');"), true);
+  assert.equal(leavesARecord("logger.warn('nothing to do');"), true);
+  assert.equal(leavesARecord("console.log('done');"), false);
+  assert.equal(leavesARecord('const logger = 1;'), false);
 });

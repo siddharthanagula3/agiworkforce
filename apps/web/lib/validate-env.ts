@@ -1,6 +1,7 @@
 import {
   checkConfigKeys,
   defineConfigKeys,
+  deployedValueViolations,
   isLoopbackConnectionString,
   resolveRuntimeEnvironment,
   type ConfigKeyDescriptor,
@@ -18,6 +19,7 @@ import {
   describeOptionalFeatureDecisions,
   validateOptionalFeatureConfig,
 } from './config/optional-features';
+import { recordConfigurationState } from './observability/metrics';
 import { getAllRegisteredPriceIds } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
 import { totpKeysourceValidationError } from './crypto/totp-keysource';
@@ -210,12 +212,40 @@ export function validatePriceIdConsistency(): ValidationResult {
   };
 }
 
-export function validateProductionKeyTypes(): ValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
+export const PRODUCTION_CONFIG_ENFORCEMENT_VAR = 'AGI_ENFORCE_PRODUCTION_CONFIG';
 
-  if (process.env['VERCEL_ENV'] !== 'production') {
-    return { valid: true, errors, warnings };
+const PRODUCTION_VALUE_COMPONENT = 'environment-production-values';
+
+function enforcesProductionConfig(): boolean {
+  return process.env['AGI_ENFORCE_PRODUCTION_CONFIG']?.trim() === '1';
+}
+
+/**
+ * The switch decides whether the site comes up, never whether anybody hears
+ * about it. A finding is on the console and on the configuration gauge either
+ * way, because the deployment that holds a test key needs to be visible long
+ * before anyone is willing to let it refuse to boot.
+ */
+function reportProductionFindings(findings: readonly string[]): ValidationResult {
+  if (findings.length === 0) return { valid: true, errors: [], warnings: [] };
+
+  for (const finding of findings) console.error(`[production-config] ${finding}`);
+  recordConfigurationState({ component: PRODUCTION_VALUE_COMPONENT, state: 'invalid' });
+
+  if (enforcesProductionConfig()) return { valid: false, errors: [...findings], warnings: [] };
+  return {
+    valid: true,
+    errors: [],
+    warnings: findings.map(
+      (finding) =>
+        `${finding} The boot continues because ${PRODUCTION_CONFIG_ENFORCEMENT_VAR} is not 1.`,
+    ),
+  };
+}
+
+export function validateProductionKeyTypes(): ValidationResult {
+  if (resolveRuntimeEnvironment() !== 'production') {
+    return { valid: true, errors: [], warnings: [] };
   }
 
   const testKeyChecks: Array<{ env: string; prefix: string; impact: string }> = [
@@ -250,14 +280,15 @@ export function validateProductionKeyTypes(): ValidationResult {
     },
   ];
 
+  const findings: string[] = [];
   for (const { env, prefix, impact } of testKeyChecks) {
     const value = process.env[env];
     if (value && value.startsWith(prefix)) {
-      warnings.push(`${env} is a ${prefix}… development/test key in production, ${impact}`);
+      findings.push(`${env} is a ${prefix}… development/test key in production, ${impact}`);
     }
   }
 
-  return { valid: errors.length === 0, errors, warnings };
+  return reportProductionFindings(findings);
 }
 
 type StripeMode = 'test' | 'live';
@@ -472,51 +503,444 @@ const EVERY_ENVIRONMENT: readonly ConfigEnvironment[] = [
 const DEPLOYED_ONLY: readonly ConfigEnvironment[] = ['preview', 'production'];
 const LOCAL_ONLY: readonly ConfigEnvironment[] = ['development', 'test'];
 
+const DEPLOYED_ONLY_ENVS: readonly ConfigEnvironment[] = DEPLOYED_ONLY;
+
+function isUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? null : 'it is not an http url';
+  } catch {
+    return 'it is not a url';
+  }
+}
+
+function isPostgresUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'postgres:' || url.protocol === 'postgresql:'
+      ? null
+      : 'it is not a postgres connection string';
+  } catch {
+    return 'it is not a url';
+  }
+}
+
+function isPositiveNumber(value: string): string | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? null : 'it is not a positive number';
+}
+
+function oneOf(...allowed: readonly string[]): (value: string) => string | null {
+  return (value) =>
+    allowed.includes(value.trim().toLowerCase()) ? null : `it is not one of ${allowed.join(', ')}`;
+}
+
+function minimumLength(bytes: number): (value: string) => string | null {
+  return (value) =>
+    value.trim().length >= bytes ? null : `it is shorter than ${bytes} characters`;
+}
+
+type Facets = Omit<ConfigKeyDescriptor, 'key' | 'secrecy' | 'allowedEnvironments' | 'lifecycle'>;
+
+function secret(key: string, facets: Facets, where = EVERY_ENVIRONMENT): ConfigKeyDescriptor {
+  return { key, secrecy: 'secret', allowedEnvironments: where, lifecycle: 'in-use', ...facets };
+}
+
+function published(key: string, facets: Facets, where = EVERY_ENVIRONMENT): ConfigKeyDescriptor {
+  return { key, secrecy: 'public', allowedEnvironments: where, lifecycle: 'in-use', ...facets };
+}
+
 /**
  * What each key is and where it may be set. A secret named so the bundler
  * inlines it into client JavaScript is not a secret, and a key meant for one
  * environment set in another is that environment reaching into this one.
  */
 const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
-  { key: 'CLERK_SECRET_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'STRIPE_SECRET_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'STRIPE_WEBHOOK_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'CSRF_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'CRON_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'TOTP_ENCRYPTION_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'GITHUB_WEBHOOK_SECRET', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'GITHUB_TOKEN_ENCRYPTION_KEY', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'EMAIL_HASH_PEPPER', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'LOG_SALT', secrecy: 'secret', allowedEnvironments: EVERY_ENVIRONMENT },
-  {
-    key: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-    secrecy: 'public',
-    allowedEnvironments: EVERY_ENVIRONMENT,
-  },
-  {
-    key: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
-    secrecy: 'public',
-    allowedEnvironments: EVERY_ENVIRONMENT,
-  },
-  { key: 'NEXT_PUBLIC_APP_URL', secrecy: 'public', allowedEnvironments: EVERY_ENVIRONMENT },
-  { key: 'NEXT_PUBLIC_SANDBOX_ORIGIN', secrecy: 'public', allowedEnvironments: EVERY_ENVIRONMENT },
-  {
-    key: 'CONNECTOR_OAUTH_REDIRECT_BASE_URL',
-    secrecy: 'public',
-    allowedEnvironments: EVERY_ENVIRONMENT,
-  },
-  { key: 'VERCEL_ENV', secrecy: 'public', allowedEnvironments: DEPLOYED_ONLY },
-  { key: 'AGI_ALLOW_REMOTE_DATABASE', secrecy: 'public', allowedEnvironments: LOCAL_ONLY },
+  secret('CLERK_SECRET_KEY', {
+    type: 'string',
+    owner: 'identity',
+    defaultValue: null,
+    requiredIn: EVERY_ENVIRONMENT,
+    description: 'the server credential every session lookup authenticates with',
+  }),
+  secret('STRIPE_SECRET_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    description: 'the billing credential checkout, the portal and the webhook reconcile with',
+  }),
+  secret('STRIPE_WEBHOOK_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    description: 'what a billing webhook body is verified against before any entitlement moves',
+  }),
+  secret('CSRF_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    validate: minimumLength(32),
+    description: 'signs the double submit token every mutating browser request carries',
+  }),
+  secret('CRON_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    validate: minimumLength(32),
+    description: 'what every scheduled route authenticates its caller with',
+  }),
+  secret('TOTP_ENCRYPTION_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/crypto',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    description: 'seals the second factor secret at rest',
+  }),
+  secret('GITHUB_WEBHOOK_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'verifies a GitHub delivery before any repository state is read',
+  }),
+  secret('GITHUB_TOKEN_ENCRYPTION_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'seals a stored installation token at rest',
+  }),
+  secret('EMAIL_HASH_PEPPER', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    validate: minimumLength(32),
+    description: 'keys the email pseudonym, without which the hash is reversible by dictionary',
+  }),
+  secret('LOG_SALT', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    description: 'keys the identifier pseudonyms that reach a log line',
+  }),
+  secret('IP_HASH_PEPPER', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    description: 'keys the address pseudonym an abuse record is kept under',
+  }),
+  published('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', {
+    type: 'string',
+    owner: 'identity',
+    defaultValue: null,
+    requiredIn: EVERY_ENVIRONMENT,
+    description: 'the browser half of the identity pair, which must match the secret half',
+  }),
+  published('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    description: 'the browser half of the billing pair, which must be in the same mode',
+  }),
+  published('NEXT_PUBLIC_APP_URL', {
+    type: 'url',
+    owner: 'apps/web',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    validate: isUrl,
+    description: 'the origin every generated link, OAuth callback and email names',
+  }),
+  published('NEXT_PUBLIC_SANDBOX_ORIGIN', {
+    type: 'url',
+    owner: 'artifacts',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the separate origin an artifact renders in; absent, it degrades to same origin',
+  }),
+  published('CONNECTOR_OAUTH_REDIRECT_BASE_URL', {
+    type: 'url',
+    owner: 'apps/web/lib/connectors',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'where a connector authorization code is handed back to',
+  }),
+  published(
+    'VERCEL_ENV',
+    {
+      type: 'enum',
+      owner: 'apps/web',
+      defaultValue: null,
+      requiredIn: [],
+      validate: oneOf('production', 'preview', 'development'),
+      description: 'the platform deployment marker, which decides the runtime environment',
+    },
+    DEPLOYED_ONLY,
+  ),
+  published(
+    'AGI_ALLOW_REMOTE_DATABASE',
+    {
+      type: 'string',
+      owner: 'data-layer',
+      defaultValue: null,
+      requiredIn: [],
+      description: 'the stated override that lets a local runtime reach a shared database',
+    },
+    LOCAL_ONLY,
+  ),
+  published('AGI_E2B_COMPUTE_MICROUSD_PER_SECOND', {
+    type: 'integer',
+    owner: 'apps/web/lib/billing',
+    defaultValue: null,
+    requiredIn: DEPLOYED_ONLY_ENVS,
+    validate: isPositiveNumber,
+    description: 'what a second of sandbox compute costs, which the cost ledger meters with',
+  }),
+  published('LOG_LEVEL', {
+    type: 'enum',
+    owner: 'apps/web/lib',
+    defaultValue: 'info',
+    requiredIn: [],
+    validate: oneOf('trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'),
+    description: 'the floor a log line must reach; a deployed runtime clamps it to info',
+  }),
+  published('AGI_OTEL_EXPORTER_ENDPOINT', {
+    type: 'url',
+    owner: 'observability',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'where spans and metrics are exported; unset, nothing leaves the process',
+  }),
+  secret('DATABASE_URL', {
+    type: 'url',
+    owner: 'data-layer',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isPostgresUrl,
+    description: 'the database this runtime reaches, checked for environment isolation on connect',
+  }),
+  secret('AGI_DATABASE_URL', {
+    type: 'url',
+    owner: 'data-layer',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isPostgresUrl,
+    description: 'the database this runtime reaches, preferred over DATABASE_URL when both are set',
+  }),
+  secret('UPSTASH_REDIS_REST_URL', {
+    type: 'url',
+    owner: 'key-value',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the shared store rate limiting and the turn ceiling are counted in',
+  }),
+  secret('UPSTASH_REDIS_REST_TOKEN', {
+    type: 'string',
+    owner: 'key-value',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential for the shared store rate limiting is counted in',
+  }),
+  secret('KV_REST_API_URL', {
+    type: 'url',
+    owner: 'key-value',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the platform alias for the shared store, used when the Upstash pair is unset',
+  }),
+  secret('KV_REST_API_TOKEN', {
+    type: 'string',
+    owner: 'key-value',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the platform alias credential for the shared store',
+  }),
+  secret('WEB_PUSH_VAPID_PRIVATE_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'signs a push message so the browser push service accepts this deployment',
+  }),
+  published('WEB_PUSH_VAPID_PUBLIC_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the public half a browser subscribes with, which must pair with the private half',
+  }),
+  published('WEB_PUSH_VAPID_SUBJECT', {
+    type: 'string',
+    owner: 'apps/web/lib/services',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the contact a push service escalates a delivery problem to',
+  }),
+  secret('RESEND_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/support',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential every transactional email is sent with',
+  }),
+  secret('SENTRY_DSN', {
+    type: 'url',
+    owner: 'observability',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'where a server exception is reported; unset, nothing leaves the process',
+  }),
+  published('NEXT_PUBLIC_SENTRY_DSN', {
+    type: 'url',
+    owner: 'observability',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'where a browser exception is reported, which the bundle carries by design',
+  }),
+  published('OTEL_SERVICE_NAME', {
+    type: 'string',
+    owner: 'observability',
+    defaultValue: 'agiworkforce-web',
+    requiredIn: [],
+    description: 'the service name every span, metric and log line is attributed to',
+  }),
+  published('NODE_ENV', {
+    type: 'enum',
+    owner: 'apps/web',
+    defaultValue: 'development',
+    requiredIn: [],
+    validate: oneOf('development', 'test', 'production'),
+    description: 'the build mode, used only when no platform deployment marker is set',
+  }),
+  published('SIGNALING_HTTP_URL', {
+    type: 'url',
+    owner: 'services/signaling-server',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the pairing service this deployment mints device sessions against',
+  }),
+  secret('SIGNALING_INTERNAL_SECRET', {
+    type: 'string',
+    owner: 'services/signaling-server',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'what the pairing service authenticates this deployment with',
+  }),
+  published('ALLOWED_ORIGINS', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the extra origins allowed to call this deployment beyond its own',
+  }),
+  secret('CSRF_SECRET_PREV', {
+    type: 'string',
+    owner: 'apps/web/lib',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the previous signing secret, kept so a rotation does not log everybody out',
+  }),
+  secret('JWT_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib/auth',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'signs the short lived tokens the device and pairing flows exchange',
+  }),
+  secret('DESKTOP_TOKEN_SECRET', {
+    type: 'string',
+    owner: 'apps/web/lib/auth',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'signs the token a desktop build exchanges for a cloud session',
+  }),
+  secret(OBJECT_STORAGE_ENDPOINT_ENV, {
+    type: 'url',
+    owner: 'object-storage',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the storage endpoint uploads and generated media are written to',
+  }),
+  secret(OBJECT_STORAGE_ACCESS_KEY_ID_ENV, {
+    type: 'string',
+    owner: 'object-storage',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the storage identity uploads are written under',
+  }),
+  secret(OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV, {
+    type: 'string',
+    owner: 'object-storage',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the storage credential uploads are written with',
+  }),
+  published(
+    'AGI_ENFORCE_PRODUCTION_CONFIG',
+    {
+      type: 'boolean',
+      owner: 'infrastructure',
+      defaultValue: null,
+      requiredIn: [],
+      validate: oneOf('1'),
+      description:
+        'set to 1 once production is confirmed to hold live credentials, which turns a test key ' +
+        'or a placeholder from a warning into a refusal to boot',
+    },
+    DEPLOYED_ONLY,
+  ),
+  published(OBJECT_STORAGE_PRIVATE_BUCKET_ENV, {
+    type: 'string',
+    owner: 'object-storage',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the bucket private uploads live in, which must differ from the public one',
+  }),
 ];
 
 const CONFIG_KEY_REGISTRY = defineConfigKeys(CONFIG_KEY_DESCRIPTORS);
 
+export function configKeyRegistry() {
+  return CONFIG_KEY_REGISTRY;
+}
+
 export function validateConfigKeyRegistry(): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const fatal = new Set(['secret_exposed_to_client', 'descriptor_incomplete', 'invalid_value']);
   for (const violation of checkConfigKeys(CONFIG_KEY_REGISTRY)) {
-    (violation.reason === 'secret_exposed_to_client' ? errors : warnings).push(violation.message);
+    const deployed = isProductionRuntime() && violation.reason === 'required_and_unset';
+    (fatal.has(violation.reason) || deployed ? errors : warnings).push(violation.message);
   }
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+/**
+ * A deployed runtime refuses a value that belongs to another environment. This
+ * is an error rather than a warning because a boot that continues on a test
+ * credential looks healthy while every paid action silently does nothing.
+ */
+export function validateDeployedValues(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  for (const violation of deployedValueViolations(CONFIG_KEY_REGISTRY))
+    errors.push(violation.message);
   return { valid: errors.length === 0, errors, warnings };
 }
 
@@ -598,6 +1022,7 @@ export function validateEnvironment(): ValidationResult {
     validateGeneratedMediaStorage(),
     validateOAuthCallbackIsolation(),
     validateConfigKeyRegistry(),
+    validateDeployedValues(),
     validateOptionalFeatureConfig(),
   ];
 
