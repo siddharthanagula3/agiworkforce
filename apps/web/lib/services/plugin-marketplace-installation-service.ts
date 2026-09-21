@@ -7,7 +7,11 @@ import type {
   PluginMarketplaceInstallation,
 } from '@agiworkforce/cloud-contracts';
 
-import { getMarketplaceEntryForUser } from '@/lib/services/plugin-marketplace-service';
+import {
+  approveMarketplaceInstallationPermissions,
+  assertMarketplaceEntryInstallable,
+  getMarketplaceEntryForUser,
+} from '@/lib/services/plugin-marketplace-service';
 
 interface PluginMarketplaceInstallationRow {
   id: string;
@@ -89,6 +93,7 @@ export async function installMarketplaceEntry(
 ): Promise<PluginMarketplaceInstallation | null> {
   const entry = await getMarketplaceEntryForUser(db, userId, entryId);
   if (!entry) return null;
+  await assertMarketplaceEntryInstallable(db, entry);
 
   const rows = await db.query<{ id: string }>(
     `insert into public.plugin_marketplace_installations
@@ -103,6 +108,7 @@ export async function installMarketplaceEntry(
   );
   const inserted = rows[0];
   if (!inserted) return null;
+  await approveMarketplaceInstallationPermissions(db, userId, inserted.id, entry.permissions);
 
   const installed = await db.query<PluginMarketplaceInstallationRow>(
     `${INSTALLATION_SELECT} where installation.id = $1`,

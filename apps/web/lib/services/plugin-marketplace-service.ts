@@ -681,6 +681,36 @@ async function reviewPermissionChanges(
 }
 
 /**
+ * A marketplace entry carries no publisher signature, so the recorded scan of
+ * its content hash is the whole gate. Absence of a verdict is not a pass, and a
+ * verdict that asked for review is not one either: registration refuses only an
+ * outright block, so without this an entry the scanner flagged installed.
+ */
+export async function assertMarketplaceEntryInstallable(
+  db: DatabaseAdapter,
+  entry: Pick<PluginMarketplaceEntry, 'pluginKey' | 'contentHash'>,
+): Promise<void> {
+  const scan = await readPluginPackageScan(db, entry.contentHash);
+  if (!scan) {
+    throw new PluginPackageRefusedError(
+      'scan_missing',
+      `The ${entry.pluginKey} package has not been scanned, so it cannot be installed yet.`,
+    );
+  }
+  if (scan.verdict === 'pass') return;
+  throw new PluginPackageRefusedError(
+    scan.verdict === 'block' ? 'scan_blocked' : 'scan_review_required',
+    describePluginScan({
+      verdict: scan.verdict,
+      findings: scan.findings,
+      rulesVersion: scan.rulesVersion,
+      scannedFiles: 0,
+      scannedBytes: 0,
+    }),
+  );
+}
+
+/**
  * Called at install; without it every declared permission reads as new on the
  * next refresh.
  */

@@ -2,10 +2,17 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
-import { isPluginSemver } from '@agiworkforce/types';
+import {
+  isPluginPublisherKind,
+  isPluginSemver,
+  isPluginSourceKind,
+  type PluginPublisherKind,
+  type PluginSourceKind,
+} from '@agiworkforce/types';
 
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import { AppError, ErrorCode } from '@/lib/errors';
+import { assertPluginPackageInstallable } from './plugin-marketplace-service';
 
 export const PLUGIN_VERSION_STATUSES = [
   'draft',
@@ -64,6 +71,8 @@ export interface PluginVersionRecord {
   status: PluginVersionStatus;
   manifestUrl: string | null;
   sha256: string | null;
+  signature: string | null;
+  signatureAlgorithm: string | null;
   declaredSkills: string[];
   permissions: string[];
   changelog: string;
@@ -78,6 +87,8 @@ interface PluginVersionRow extends Record<string, unknown> {
   status: string;
   manifest_url: string | null;
   sha256: string | null;
+  signature?: string | null;
+  signature_algorithm?: string | null;
   declared_skills: unknown;
   permissions: unknown;
   changelog: string;
@@ -87,6 +98,7 @@ interface PluginVersionRow extends Record<string, unknown> {
 }
 
 const VERSION_COLUMNS = `plugin_id, version, status, manifest_url, sha256,
+   signature, signature_algorithm,
    declared_skills, permissions, changelog, lifecycle_reason, published_at, created_at`;
 
 function stringArray(value: unknown): string[] {
@@ -102,6 +114,8 @@ function mapVersion(row: PluginVersionRow): PluginVersionRecord {
     status: StatusSchema.parse(row.status),
     manifestUrl: row.manifest_url,
     sha256: row.sha256,
+    signature: row.signature ?? null,
+    signatureAlgorithm: row.signature_algorithm ?? null,
     declaredSkills: stringArray(row.declared_skills),
     permissions: stringArray(row.permissions),
     changelog: row.changelog,
@@ -229,7 +243,9 @@ function assertTransition(from: PluginVersionStatus, to: PluginVersionStatus): v
 /**
  * Repoint the entry at one of its versions. The entry's own columns stay the
  * single thing every existing reader consults, so publishing and rollback are
- * the same write with a different target.
+ * the same write with a different target. The digest and the signature move
+ * together: a new digest under the previous version's signature is an entry
+ * claiming an artifact nobody signed.
  */
 async function pointEntryAtVersion(
   db: DatabaseAdapter,
@@ -242,8 +258,10 @@ async function pointEntryAtVersion(
             status = $3,
             manifest_url = $4,
             sha256 = $5,
-            declared_skills = $6::jsonb,
-            permissions = $7::jsonb,
+            signature = $6,
+            signature_algorithm = $7,
+            declared_skills = $8::jsonb,
+            permissions = $9::jsonb,
             updated_at = now()
       where id = $1`,
     [
@@ -252,10 +270,32 @@ async function pointEntryAtVersion(
       entryStatus,
       target.manifestUrl,
       target.sha256,
+      target.signature,
+      target.signatureAlgorithm,
       JSON.stringify(target.declaredSkills),
       JSON.stringify(target.permissions),
     ],
   );
+}
+
+interface PluginEntryProvenanceRow {
+  source: string | null;
+  publisher_kind: string | null;
+}
+
+async function entryProvenance(
+  db: DatabaseAdapter,
+  pluginId: string,
+): Promise<{ source: PluginSourceKind | null; publisherKind: PluginPublisherKind | null }> {
+  const rows = await db.query<PluginEntryProvenanceRow>(
+    `select source, publisher_kind from public.plugin_registry_entries where id = $1 limit 1`,
+    [pluginId],
+  );
+  const row = rows[0];
+  return {
+    source: isPluginSourceKind(row?.source) ? row.source : null,
+    publisherKind: isPluginPublisherKind(row?.publisher_kind) ? row.publisher_kind : null,
+  };
 }
 
 export interface PublishPluginVersionInput {
@@ -264,6 +304,8 @@ export interface PublishPluginVersionInput {
   actorUserId: string;
   manifestUrl?: string | null;
   sha256?: string | null;
+  signature?: string | null;
+  signatureAlgorithm?: string | null;
   declaredSkills?: string[];
   permissions?: string[];
   changelog?: string;
@@ -284,13 +326,15 @@ export async function publishPluginVersion(
 
   const rows = await db.query<PluginVersionRow>(
     `insert into public.plugin_registry_versions
-       (plugin_id, version, status, manifest_url, sha256, declared_skills,
-        permissions, changelog, lifecycle_reason, published_at)
-     values ($1, $2, 'published', $3, $4, $5::jsonb, $6::jsonb, $7, null, now())
+       (plugin_id, version, status, manifest_url, sha256, signature, signature_algorithm,
+        declared_skills, permissions, changelog, lifecycle_reason, published_at)
+     values ($1, $2, 'published', $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, null, now())
      on conflict (plugin_id, version) do update
        set status = 'published',
            manifest_url = coalesce(excluded.manifest_url, plugin_registry_versions.manifest_url),
            sha256 = coalesce(excluded.sha256, plugin_registry_versions.sha256),
+           signature = excluded.signature,
+           signature_algorithm = excluded.signature_algorithm,
            declared_skills = excluded.declared_skills,
            permissions = excluded.permissions,
            changelog = excluded.changelog,
@@ -303,6 +347,8 @@ export async function publishPluginVersion(
       version,
       input.manifestUrl ?? existing?.manifestUrl ?? null,
       input.sha256 ?? existing?.sha256 ?? null,
+      input.signature ?? existing?.signature ?? null,
+      input.signatureAlgorithm ?? existing?.signatureAlgorithm ?? null,
       JSON.stringify(input.declaredSkills ?? existing?.declaredSkills ?? []),
       JSON.stringify(input.permissions ?? existing?.permissions ?? []),
       input.changelog ?? existing?.changelog ?? '',
@@ -548,10 +594,11 @@ export interface AppliedPluginUpdate {
 }
 
 /**
- * Move one installation onto a newer published version. A version that asks for
- * a permission the installed one did not have never applies on its own: the
- * caller has to name each added permission, which is what the diff screen asks
- * the member to approve.
+ * Move one installation onto a newer published version. Every bar a first
+ * install clears is cleared again here: the target's signed digest, its
+ * recorded scan verdict, and the member naming each permission the target asks
+ * for that the installed version did not. The approved set is then written from
+ * the target, so what the member consented to and what runs are one record.
  */
 export async function applyPluginUpdate(
   db: DatabaseAdapter,
@@ -565,8 +612,8 @@ export async function applyPluginUpdate(
   const pluginId = PluginIdSchema.parse(input.pluginId);
   const toVersion = VersionSchema.parse(input.toVersion);
 
-  const installed = await db.query<{ installed_version: string }>(
-    `select installed_version from public.plugin_installations
+  const installed = await db.query<{ installed_version: string; approved_permissions: unknown }>(
+    `select installed_version, approved_permissions from public.plugin_installations
       where user_id = $1 and plugin_id = $2`,
     [input.userId, pluginId],
   );
@@ -586,22 +633,41 @@ export async function applyPluginUpdate(
 
   const current = await readVersion(db, pluginId, fromVersion);
   const diff = diffPluginVersionRecords(current, target);
-  const acknowledged = new Set(input.acknowledgedPermissions ?? []);
-  const unapproved = diff.addedPermissions.filter((permission) => !acknowledged.has(permission));
+  // What the member already consented to, not what the previous version asked
+  // for: an installation held in review has approved less than it runs.
+  const held = new Set([
+    ...stringArray(installed[0]?.approved_permissions),
+    ...(input.acknowledgedPermissions ?? []),
+  ]);
+  const unapproved = target.permissions.filter((permission) => !held.has(permission)).sort();
   if (unapproved.length > 0) {
     throw new PluginLifecycleError(
       `${pluginId} ${toVersion} asks for ${unapproved.join(', ')}, which you have not approved yet.`,
     );
   }
 
+  const provenance = await entryProvenance(db, pluginId);
+  await assertPluginPackageInstallable(db, {
+    pluginId,
+    version: toVersion,
+    source: provenance.source,
+    publisherKind: provenance.publisherKind,
+    sha256: target.sha256,
+    signature: target.signature,
+    signatureAlgorithm: target.signatureAlgorithm,
+  });
+
   const reEnabled = current?.status === 'suspended';
   await db.execute(
     `update public.plugin_installations
         set installed_version = $3,
             enabled = enabled or $4,
+            approved_permissions = $5::jsonb,
+            pending_permissions = null,
+            review_required = false,
             updated_at = now()
       where user_id = $1 and plugin_id = $2`,
-    [input.userId, pluginId, toVersion, reEnabled],
+    [input.userId, pluginId, toVersion, reEnabled, JSON.stringify(target.permissions)],
   );
 
   return { pluginId, fromVersion, toVersion, diff, reEnabled };

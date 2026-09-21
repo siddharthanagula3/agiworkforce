@@ -61,6 +61,8 @@ vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   isMissingPluginMarketplaceSchema: (error: unknown) =>
     (error as { code?: string } | null)?.code === '42P01',
   getMarketplaceEntryForUser: marketplaceEntryMock,
+  assertMarketplaceEntryInstallable: vi.fn(async () => undefined),
+  approveMarketplaceInstallationPermissions: vi.fn(async () => []),
 }));
 vi.mock('@/lib/services/connector-policy-gate', () => ({
   evaluateConnectorPolicyForUser: vi.fn(),

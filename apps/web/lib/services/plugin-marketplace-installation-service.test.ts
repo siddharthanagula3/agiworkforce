@@ -2,11 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { getMarketplaceEntryForUserMock } = vi.hoisted(() => ({
+const {
+  getMarketplaceEntryForUserMock,
+  assertMarketplaceEntryInstallableMock,
+  approveMarketplaceInstallationPermissionsMock,
+} = vi.hoisted(() => ({
   getMarketplaceEntryForUserMock: vi.fn(),
+  assertMarketplaceEntryInstallableMock: vi.fn(),
+  approveMarketplaceInstallationPermissionsMock: vi.fn(),
 }));
 vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   getMarketplaceEntryForUser: getMarketplaceEntryForUserMock,
+  assertMarketplaceEntryInstallable: assertMarketplaceEntryInstallableMock,
+  approveMarketplaceInstallationPermissions: approveMarketplaceInstallationPermissionsMock,
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -64,7 +72,39 @@ const INSTALLATION_ROW = {
 };
 
 describe('installMarketplaceEntry', () => {
-  beforeEach(() => getMarketplaceEntryForUserMock.mockReset());
+  beforeEach(() => {
+    getMarketplaceEntryForUserMock.mockReset();
+    assertMarketplaceEntryInstallableMock.mockReset();
+    assertMarketplaceEntryInstallableMock.mockResolvedValue(undefined);
+    approveMarketplaceInstallationPermissionsMock.mockReset();
+    approveMarketplaceInstallationPermissionsMock.mockResolvedValue([]);
+  });
+
+  it('refuses an entry whose package the scanner did not clear', async () => {
+    getMarketplaceEntryForUserMock.mockResolvedValue(entry());
+    assertMarketplaceEntryInstallableMock.mockRejectedValue(new Error('scan_missing'));
+    const db = database([]);
+
+    await expect(installMarketplaceEntry(db, 'user-1', 'entry-1')).rejects.toThrow('scan_missing');
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('records what the entry asks for as approved, so a refresh has a baseline', async () => {
+    getMarketplaceEntryForUserMock.mockResolvedValue(entry({ permissions: ['network'] }));
+    const db = database([]);
+    db.query
+      .mockResolvedValueOnce([{ id: 'installation-1' }])
+      .mockResolvedValueOnce([INSTALLATION_ROW]);
+
+    await installMarketplaceEntry(db, 'user-1', 'entry-1');
+
+    expect(approveMarketplaceInstallationPermissionsMock).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      'installation-1',
+      ['network'],
+    );
+  });
 
   it('installs an entry the user owns through its source', async () => {
     getMarketplaceEntryForUserMock.mockResolvedValue(entry());
