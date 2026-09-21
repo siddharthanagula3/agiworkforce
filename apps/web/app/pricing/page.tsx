@@ -18,6 +18,7 @@ import {
   isPerSeatBillingPlan,
   isFreeBillingPlanTier,
   isBasicPlanTier,
+  isFreeOfChargePlanTier,
   isProPlanTier,
   isMaxPlanTier,
   isMax15xPlanTier,
@@ -188,17 +189,13 @@ interface CompareRow {
   highlighted?: boolean;
 }
 
-/**
- * The training-data-use row is unconditional and identical across every trust
- * mode and plan, apps/web/app/privacy/page.tsx states plainly that "AGI does
- * not use customer conversation content to train AGI-owned models", so the row
- * is a single constant rather than a per-plan derivation; there is no
- * weaker/stronger variant by tier to compute.
- */
+// AGI trains on no plan's content. The Free plan is served by providers' free
+// models, whose own terms may allow training, so its cell says so.
 const UPGRADE_SETTLE_ATTEMPTS = 6;
 const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
 
 const TRAINING_DATA_DISCLOSURE = 'No';
+const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Not by AGI. Free model providers may.';
 
 function formatLimit(limit: BillingPlanLimit, singular: string, plural: string): string {
   if (limit === 'unlimited') return 'Unlimited';
@@ -229,7 +226,9 @@ function managedPlanCapabilities(plan: BillingPlanTier) {
       : canUseBillingPlanCapability(plan, 'team_admin')
         ? 'Yes'
         : 'No',
-    trainingData: TRAINING_DATA_DISCLOSURE,
+    trainingData: isFreeOfChargePlanTier(plan)
+      ? FREE_PLAN_TRAINING_DATA_DISCLOSURE
+      : TRAINING_DATA_DISCLOSURE,
   };
 }
 
