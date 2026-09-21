@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { usePathname } from 'expo-router';
 import {
@@ -11,9 +11,8 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { useCapabilities } from '@/src/lib/capabilities';
 import {
-  resolveShellShortcuts,
+  useShellShortcuts,
   type ShellShortcutKey,
   type ShellShortcutRoute,
 } from './capabilityShortcuts';
@@ -42,9 +41,8 @@ export function ShellCapabilityShortcuts({
   onOpen: (route: ShellShortcutRoute) => void;
 }) {
   const colors = useThemeColors();
-  const capabilities = useCapabilities();
   const pathname = usePathname();
-  const { row, overflow } = useMemo(() => resolveShellShortcuts(capabilities), [capabilities]);
+  const { row, overflow } = useShellShortcuts();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   if (row.length === 0) return null;

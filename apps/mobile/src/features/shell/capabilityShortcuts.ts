@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import type { PlatformCapability } from '@agiworkforce/types';
+import { useCapabilities } from '@/src/lib/capabilities';
 
 export type ShellShortcutKey = 'voice' | 'camera' | 'scan' | 'compare';
 
@@ -42,4 +44,13 @@ export function resolveShellShortcuts(
     row: enabled.slice(0, SHELL_SHORTCUT_ROW_LIMIT),
     overflow: enabled.slice(SHELL_SHORTCUT_ROW_LIMIT),
   };
+}
+
+/**
+ * The server's answer, never a local guess. Reaching a shortcut still needs the
+ * OS permission its screen asks for; this decides only what the row offers.
+ */
+export function useShellShortcuts(): ShellShortcutPlacement {
+  const capabilities = useCapabilities();
+  return useMemo(() => resolveShellShortcuts(capabilities), [capabilities]);
 }
