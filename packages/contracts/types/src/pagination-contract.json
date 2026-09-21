@@ -61,19 +61,14 @@
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
     },
     {
-      "route": "apps/web/app/api/chat/conversations/route.ts",
-      "why": "The cursor path is the one the surface uses; the offset parameter stays for clients that still send it and is documented as such in the route.",
-      "fix": "Drop the offset parameter once no shipped client sends it."
-    },
-    {
-      "route": "apps/web/app/api/projects/route.ts",
-      "why": "Keyset paged; the offset parameter stays for clients that still send it and is documented as such in the route.",
-      "fix": "Drop the offset parameter once no shipped client sends it."
-    },
-    {
       "route": "apps/web/app/api/chat/conversations/[id]/route.ts",
       "why": "The message window inside one conversation is offset paged, so a message deleted above the window silently drops one from the next page.",
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/chat/conversations/route.ts",
+      "why": "The cursor path is the one the surface uses; the offset parameter stays for clients that still send it and is documented as such in the route.",
+      "fix": "Drop the offset parameter once no shipped client sends it."
     },
     {
       "route": "apps/web/app/api/memory/route.ts",
@@ -81,13 +76,18 @@
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
     },
     {
-      "route": "apps/web/app/api/schedules/route.ts",
-      "why": "The task list is offset paged and a schedule created while the reader pages drops one from the next page.",
-      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+      "route": "apps/web/app/api/projects/route.ts",
+      "why": "Keyset paged; the offset parameter stays for clients that still send it and is documented as such in the route.",
+      "fix": "Drop the offset parameter once no shipped client sends it."
     },
     {
       "route": "apps/web/app/api/schedules/[id]/runs/route.ts",
       "why": "Run history is offset paged over rows a running schedule keeps appending.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/schedules/route.ts",
+      "why": "The task list is offset paged and a schedule created while the reader pages drops one from the next page.",
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
     },
     {
@@ -101,13 +101,18 @@
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
     },
     {
-      "route": "apps/web/app/api/triggers/route.ts",
-      "why": "The trigger list is offset paged.",
-      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+      "route": "apps/web/app/api/support/staff/tickets/route.ts",
+      "why": "An operator page over a ticket queue that changes under the reader: a ticket resolved above the window drops one nobody sees on the next page, and one raised above it repeats one already shown.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts on (created_at, id) and return an opaque cursor instead of an offset."
     },
     {
       "route": "apps/web/app/api/triggers/[triggerId]/events/route.ts",
       "why": "Trigger event history is offset paged over rows the ingest keeps appending.",
+      "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
+    },
+    {
+      "route": "apps/web/app/api/triggers/route.ts",
+      "why": "The trigger list is offset paged.",
       "fix": "Read the page with keysetSql and buildPage from apps/web/lib/identity/pagination.ts and return an opaque cursor instead of a row count."
     }
   ],
