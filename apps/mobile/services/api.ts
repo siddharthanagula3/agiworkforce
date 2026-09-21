@@ -190,6 +190,7 @@ async function sendRequest(
   const headers = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
+    ...platformRequestHeaders(),
     ...(await getAuthHeaders()),
   };
   assertApiAccountGeneration(accountGeneration);

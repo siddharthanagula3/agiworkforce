@@ -1,5 +1,13 @@
 import { useState, useCallback } from 'react';
-import { View, Modal, Pressable, TextInput, ScrollView } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native';
 import Animated, { FadeIn, SlideInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -103,153 +111,161 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
       onRequestClose={handleDismiss}
       statusBarTranslucent
     >
-      <View className="flex-1 justify-end" style={{ backgroundColor: colors.scrim }}>
-        {/* Tap outside to dismiss */}
-        <Pressable accessible={false} className="flex-1" onPress={handleDismiss} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View className="flex-1 justify-end" style={{ backgroundColor: colors.scrim }}>
+          {/* Tap outside to dismiss */}
+          <Pressable accessible={false} className="flex-1" onPress={handleDismiss} />
 
-        <Animated.View
-          entering={reducedMotion ? undefined : SlideInDown.duration(300).springify()}
-          className="rounded-t-3xl overflow-hidden"
-          style={{ backgroundColor: colors.surfaceElevated, maxHeight: '80%' }}
-        >
-          {/* Handle bar */}
-          <View className="items-center pt-3 pb-2">
-            <View
-              className="w-10 h-1 rounded-full"
-              style={{ backgroundColor: colors.neutralBorder }}
-            />
-          </View>
-
-          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} bounces={false}>
-            {/* Header */}
-            <View className="items-center mb-5">
+          <Animated.View
+            entering={reducedMotion ? undefined : SlideInDown.duration(300).springify()}
+            className="rounded-t-3xl overflow-hidden"
+            style={{ backgroundColor: colors.surfaceElevated, maxHeight: '80%' }}
+          >
+            {/* Handle bar */}
+            <View className="items-center pt-3 pb-2">
               <View
-                className="w-14 h-14 rounded-2xl items-center justify-center mb-3"
-                style={{
-                  backgroundColor:
-                    approval.riskLevel === 'low'
-                      ? colors.successSurface
-                      : approval.riskLevel === 'medium'
-                        ? colors.warningSurface
-                        : colors.dangerSurface,
-                }}
-              >
-                <TypeIcon size={28} color={riskColor} />
-              </View>
-              <Text
-                className="text-xs uppercase tracking-wider font-medium"
-                style={{ color: colors.textMuted }}
-              >
-                Approval Required
-              </Text>
+                className="w-10 h-1 rounded-full"
+                style={{ backgroundColor: colors.neutralBorder }}
+              />
             </View>
 
-            {/* Risk level + tool name */}
-            <View className="flex-row items-center justify-center gap-3 mb-4">
-              <View className="flex-row items-center gap-1.5">
-                <RiskIcon size={14} color={riskColor} />
-                <Text className="text-[13px] font-semibold" style={{ color: riskColor }}>
-                  {riskConfig.label}
-                </Text>
-              </View>
-              <Badge label={approval.toolName} color="gray" />
-            </View>
-
-            <Separator className="mb-4" />
-
-            {/* Description */}
-            <Text
-              className="text-[14px] leading-[20px] text-center mb-6"
-              style={{ color: colors.textSecondary }}
-            >
-              {approval.description}
-            </Text>
-
-            {/* Reject reason input */}
-            {showRejectInput && (
-              <Animated.View entering={FadeIn.duration(200)} className="mb-4">
-                <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
-                  Rejection reason (optional)
-                </Text>
-                <TextInput
-                  value={rejectReason}
-                  onChangeText={setRejectReason}
-                  placeholder="Why are you rejecting this action?"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  maxLength={500}
-                  className="rounded-xl px-4 py-3 text-[13px] min-h-[60px]"
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} bounces={false}>
+              {/* Header */}
+              <View className="items-center mb-5">
+                <View
+                  className="w-14 h-14 rounded-2xl items-center justify-center mb-3"
                   style={{
-                    backgroundColor: colors.inputSurface,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                    color: colors.textPrimary,
+                    backgroundColor:
+                      approval.riskLevel === 'low'
+                        ? colors.successSurface
+                        : approval.riskLevel === 'medium'
+                          ? colors.warningSurface
+                          : colors.dangerSurface,
                   }}
-                  autoFocus
-                  selectionColor={colors.teal}
-                />
-              </Animated.View>
-            )}
-
-            {/* Action buttons */}
-            <View className="gap-3">
-              {!showRejectInput && (
-                <Pressable
-                  onPress={handleApprove}
-                  className="flex-row items-center justify-center gap-2 py-4 rounded-2xl active:opacity-80"
-                  style={{ backgroundColor: colors.teal }}
-                  accessibilityLabel={`Approve ${approval.toolName} action`}
-                  accessibilityRole="button"
                 >
-                  <Check size={18} color={colors.accentText} />
-                  <Text className="text-[15px] font-semibold" style={{ color: colors.accentText }}>
-                    Approve
-                  </Text>
-                </Pressable>
-              )}
-
-              <Pressable
-                onPress={handleReject}
-                className="flex-row items-center justify-center gap-2 py-4 rounded-2xl border active:opacity-80"
-                style={{
-                  borderColor: showRejectInput ? colors.agentError : colors.dangerBorder,
-                  backgroundColor: showRejectInput ? colors.agentError : colors.transparent,
-                }}
-                accessibilityLabel={
-                  showRejectInput
-                    ? `Confirm rejection of ${approval.toolName}`
-                    : `Reject ${approval.toolName} action`
-                }
-                accessibilityRole="button"
-              >
-                <X size={18} color={showRejectInput ? colors.accentText : colors.agentError} />
+                  <TypeIcon size={28} color={riskColor} />
+                </View>
                 <Text
-                  className="text-[15px] font-semibold"
-                  style={{ color: showRejectInput ? colors.accentText : colors.agentError }}
+                  className="text-xs uppercase tracking-wider font-medium"
+                  style={{ color: colors.textMuted }}
                 >
-                  {showRejectInput ? 'Confirm Reject' : 'Reject'}
+                  Approval Required
                 </Text>
-              </Pressable>
+              </View>
 
+              {/* Risk level + tool name */}
+              <View className="flex-row items-center justify-center gap-3 mb-4">
+                <View className="flex-row items-center gap-1.5">
+                  <RiskIcon size={14} color={riskColor} />
+                  <Text className="text-[13px] font-semibold" style={{ color: riskColor }}>
+                    {riskConfig.label}
+                  </Text>
+                </View>
+                <Badge label={approval.toolName} color="gray" />
+              </View>
+
+              <Separator className="mb-4" />
+
+              {/* Description */}
+              <Text
+                className="text-[14px] leading-[20px] text-center mb-6"
+                style={{ color: colors.textSecondary }}
+              >
+                {approval.description}
+              </Text>
+
+              {/* Reject reason input */}
               {showRejectInput && (
+                <Animated.View entering={FadeIn.duration(200)} className="mb-4">
+                  <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
+                    Rejection reason (optional)
+                  </Text>
+                  <TextInput
+                    value={rejectReason}
+                    onChangeText={setRejectReason}
+                    placeholder="Why are you rejecting this action?"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    maxLength={500}
+                    className="rounded-xl px-4 py-3 text-[13px] min-h-[60px]"
+                    style={{
+                      backgroundColor: colors.inputSurface,
+                      borderColor: colors.border,
+                      borderWidth: 1,
+                      color: colors.textPrimary,
+                    }}
+                    autoFocus
+                    selectionColor={colors.teal}
+                  />
+                </Animated.View>
+              )}
+
+              {/* Action buttons */}
+              <View className="gap-3">
+                {!showRejectInput && (
+                  <Pressable
+                    onPress={handleApprove}
+                    className="flex-row items-center justify-center gap-2 py-4 rounded-2xl active:opacity-80"
+                    style={{ backgroundColor: colors.teal }}
+                    accessibilityLabel={`Approve ${approval.toolName} action`}
+                    accessibilityRole="button"
+                  >
+                    <Check size={18} color={colors.accentText} />
+                    <Text
+                      className="text-[15px] font-semibold"
+                      style={{ color: colors.accentText }}
+                    >
+                      Approve
+                    </Text>
+                  </Pressable>
+                )}
+
                 <Pressable
-                  onPress={() => {
-                    setShowRejectInput(false);
-                    setRejectReason('');
+                  onPress={handleReject}
+                  className="flex-row items-center justify-center gap-2 py-4 rounded-2xl border active:opacity-80"
+                  style={{
+                    borderColor: showRejectInput ? colors.agentError : colors.dangerBorder,
+                    backgroundColor: showRejectInput ? colors.agentError : colors.transparent,
                   }}
-                  className="items-center py-2"
-                  accessibilityLabel="Cancel rejection"
+                  accessibilityLabel={
+                    showRejectInput
+                      ? `Confirm rejection of ${approval.toolName}`
+                      : `Reject ${approval.toolName} action`
+                  }
                   accessibilityRole="button"
                 >
-                  <Text className="text-sm" style={{ color: colors.textMuted }}>
-                    Cancel
+                  <X size={18} color={showRejectInput ? colors.accentText : colors.agentError} />
+                  <Text
+                    className="text-[15px] font-semibold"
+                    style={{ color: showRejectInput ? colors.accentText : colors.agentError }}
+                  >
+                    {showRejectInput ? 'Confirm Reject' : 'Reject'}
                   </Text>
                 </Pressable>
-              )}
-            </View>
-          </ScrollView>
-        </Animated.View>
-      </View>
+
+                {showRejectInput && (
+                  <Pressable
+                    onPress={() => {
+                      setShowRejectInput(false);
+                      setRejectReason('');
+                    }}
+                    className="items-center py-2"
+                    accessibilityLabel="Cancel rejection"
+                    accessibilityRole="button"
+                  >
+                    <Text className="text-sm" style={{ color: colors.textMuted }}>
+                      Cancel
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -12,6 +12,7 @@ import {
   Globe,
   ChevronLeft,
   ChevronRight,
+  TriangleAlert,
 } from 'lucide-react-native';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
@@ -19,9 +20,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
-import { copyToClipboard } from '@/lib/clipboard';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useArtifactStore } from '@/src/features/artifacts/store';
-import { publishArtifact } from '../services/artifactPublishing';
+import { publishArtifact, publishFailureMessage } from '../services/artifactPublishing';
 import {
   shareFile,
   exportToText,
@@ -131,12 +132,12 @@ export function ArtifactFullScreen({
 }: ArtifactFullScreenProps) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
-  const [copied, setCopied] = useState(false);
+  const { status: copyStatus, copy } = useCopyAction();
   const [viewMode, setViewMode] = useState<ViewMode>('source');
   const [downloading, setDownloading] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState<{ artifactId: string; url: string } | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const { status: linkCopyStatus, copy: copyLink } = useCopyAction();
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
 
   const publishedUrl = published && published.artifactId === artifact?.id ? published.url : null;
@@ -182,15 +183,10 @@ export function ArtifactFullScreen({
     [artifact, activeContent],
   );
 
-  const handleCopy = useCallback(async () => {
+  const handleCopy = useCallback(() => {
     if (!artifact) return;
-    const success = await copyToClipboard(activeContent);
-    if (success) {
-      setCopied(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [artifact, activeContent]);
+    void copy(activeContent);
+  }, [artifact, activeContent, copy]);
 
   const handleShare = useCallback(async () => {
     if (!artifact) return;
@@ -272,17 +268,13 @@ export function ArtifactFullScreen({
       });
 
       setPublished({ artifactId: artifact.id, url: shareUrl });
-      setLinkCopied(await copyToClipboard(shareUrl));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await copyLink(shareUrl);
     } catch (err) {
-      Alert.alert(
-        'Publish failed',
-        err instanceof Error ? err.message : 'Could not publish this artifact right now.',
-      );
+      Alert.alert('Publish failed', publishFailureMessage(err));
     } finally {
       setPublishing(false);
     }
-  }, [artifact, activeContent, publishing]);
+  }, [artifact, activeContent, copyLink, publishing]);
 
   const handleRestoreVersion = useCallback(() => {
     if (!artifactId) return;
@@ -292,13 +284,10 @@ export function ArtifactFullScreen({
     }
   }, [artifactId, restoreArtifactVersion, shownVersionIndex]);
 
-  const handleCopyLink = useCallback(async () => {
+  const handleCopyLink = useCallback(() => {
     if (!publishedUrl) return;
-    if (await copyToClipboard(publishedUrl)) {
-      setLinkCopied(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-  }, [publishedUrl]);
+    void copyLink(publishedUrl);
+  }, [publishedUrl, copyLink]);
 
   const handleShareLink = useCallback(async () => {
     if (!publishedUrl || !artifact) return;
@@ -498,11 +487,13 @@ export function ArtifactFullScreen({
                   borderRadius: 8,
                   backgroundColor: colors.neutralSurface,
                 }}
-                accessibilityLabel="Copy content"
+                accessibilityLabel={copyControlLabel(copyStatus, 'Copy content')}
                 accessibilityRole="button"
               >
-                {copied ? (
+                {copyStatus === 'copied' ? (
                   <Check size={17} color={colors.agentSuccess} />
+                ) : copyStatus === 'failed' ? (
+                  <TriangleAlert size={17} color={colors.agentError} />
                 ) : (
                   <Copy size={17} color={colors.textSecondary} />
                 )}
@@ -619,12 +610,14 @@ export function ArtifactFullScreen({
               </Text>
               <Pressable
                 onPress={handleCopyLink}
-                accessibilityLabel="Copy public link"
+                accessibilityLabel={copyControlLabel(linkCopyStatus, 'Copy public link')}
                 accessibilityRole="button"
                 style={{ padding: 4 }}
               >
-                {linkCopied ? (
+                {linkCopyStatus === 'copied' ? (
                   <Check size={15} color={colors.agentSuccess} />
+                ) : linkCopyStatus === 'failed' ? (
+                  <TriangleAlert size={15} color={colors.agentError} />
                 ) : (
                   <Copy size={15} color={colors.textSecondary} />
                 )}
