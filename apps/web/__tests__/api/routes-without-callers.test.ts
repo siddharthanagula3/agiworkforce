@@ -69,6 +69,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   },
   { url: '/api/uploads/knowledge-file/put', why: 'the browser PUTs to the signed url this issues' },
   { url: '/api/interactive-cards/respond', why: 'an interactive card posts its response here' },
+  {
+    url: '/api/download-beta',
+    why: 'subscriber beta installer, reached by a link sent outside the product',
+  },
   { url: '/api/llm/v1/chat/completions/resume-input', why: 'a tool approval resumes a run here' },
 
   // Platform-admin procedures are deliberately API-only. They are used during
