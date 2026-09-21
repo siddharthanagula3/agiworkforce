@@ -1387,6 +1387,19 @@ async fn execute_powershell(
         }
     };
 
+    // The same containment run_command has: a directory inside the workspace,
+    // checked before anything is asked or run.
+    let working_dir = match bash::command_working_dir(args) {
+        Ok(dir) => dir,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "powershell".into(),
+                success: false,
+                output: format!("The command was not run: {reason}"),
+            });
+        }
+    };
+
     let timeout_sec = args
         .get("timeout_sec")
         .and_then(|value| value.parse::<u64>().ok())
@@ -1474,7 +1487,7 @@ async fn execute_powershell(
 
     let request = crate::powershell_tool::PowerShellRequest {
         command,
-        working_dir: args.get("working_dir").cloned(),
+        working_dir: working_dir.map(|dir| dir.display().to_string()),
         timeout_sec,
         safe_mode,
     };
@@ -1671,6 +1684,28 @@ async fn execute_notebook_edit(
 
 #[cfg(test)]
 mod tests {
+
+    #[tokio::test]
+    async fn powershell_refuses_a_working_dir_outside_the_workspace_before_asking_or_running() {
+        let outside = tempfile::tempdir().expect("outside");
+        let mut args = HashMap::new();
+        args.insert("command".to_string(), "Get-ChildItem".to_string());
+        args.insert(
+            "working_dir".to_string(),
+            outside.path().display().to_string(),
+        );
+
+        let result = execute_powershell(&args, true, None)
+            .await
+            .expect("tool result");
+
+        assert!(!result.success);
+        assert!(
+            result.output.starts_with("The command was not run:"),
+            "{}",
+            result.output
+        );
+    }
     use super::*;
     use std::collections::BTreeSet;
 
@@ -1954,6 +1989,183 @@ decision = "ask"
             Some(ApprovalRequestKind::WorkspacePolicy { tool_name, .. })
                 if tool_name == "read_file"
         ));
+    }
+
+    #[tokio::test]
+    async fn a_policy_edited_mid_session_decides_the_very_next_call() {
+        let workspace = tempfile::Builder::new()
+            .prefix("policy-mid-session")
+            .tempdir_in(std::env::current_dir().expect("cwd"))
+            .expect("workspace");
+        let policy_dir = workspace.path().join(".agiworkforce");
+        std::fs::create_dir_all(&policy_dir).expect("policy dir");
+        let policy = policy_dir.join("policy.toml");
+        let notes = workspace.path().join("notes.txt");
+        std::fs::write(&notes, "kept notes").expect("notes");
+        let write_rule = |decision: &str| {
+            std::fs::write(
+                &policy,
+                format!(
+                    "[[rules]]\ntool = \"read_file\"\npattern = \"notes.txt$\"\ndecision = \"{decision}\"\n"
+                ),
+            )
+            .expect("policy");
+        };
+
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(0usize));
+        let asked_by_callback = asked.clone();
+        let callback: ApprovalCallback = std::sync::Arc::new(move |_request| {
+            let asked_by_callback = asked_by_callback.clone();
+            Box::pin(async move {
+                *asked_by_callback.lock().expect("asked") += 1;
+                ApprovalDecision::Deny
+            })
+        });
+        let call = ToolCall {
+            name: "read_file".to_string(),
+            args: HashMap::from([("path".to_string(), notes.display().to_string())]),
+        };
+        let opts = ToolExecOptions {
+            mcp_tool_definitions: None,
+            require_confirmation: false,
+            auto_approve_safe: true,
+            auto_approve_edits: false,
+            quiet: true,
+            approval_callback: Some(callback),
+            privacy_mode: crate::agent::PrivacyMode::Local,
+            workspace_root: Some(workspace.path().to_path_buf()),
+        };
+        let run = || execute_tool_with_opts(&call, &opts);
+
+        let before = run().await.expect("no policy");
+        assert!(before.success, "{}", before.output);
+        assert!(before.output.contains("kept notes"));
+
+        write_rule("deny");
+        let denied = run().await.expect("deny");
+        assert!(!denied.success);
+        assert!(denied.output.contains("denied by"), "{}", denied.output);
+
+        write_rule("ask");
+        let asked_result = run().await.expect("ask");
+        assert!(!asked_result.success);
+        assert_eq!(*asked.lock().expect("asked"), 1, "the ask rule never asked");
+
+        std::fs::remove_file(&policy).expect("drop the rule");
+        let after = run().await.expect("rule removed");
+        assert!(after.success, "{}", after.output);
+        assert_eq!(
+            *asked.lock().expect("asked"),
+            1,
+            "a removed rule still put a prompt in front of the user"
+        );
+    }
+
+    /// Every tool the catalog classes as a file edit is pointed at a file
+    /// outside the workspace with approval already granted, so the only thing
+    /// left to stop it is the workspace boundary.
+    #[tokio::test]
+    async fn no_file_editing_tool_changes_a_file_outside_the_workspace() {
+        let outside = tempfile::tempdir().expect("outside dir");
+        let cwd = std::env::current_dir().expect("cwd");
+        assert!(
+            !outside.path().starts_with(&cwd),
+            "the fixture must sit outside the workspace"
+        );
+        let text = outside.path().join("unrelated.txt");
+        let notebook = outside.path().join("unrelated.ipynb");
+        let text_before = "left alone\n";
+        let notebook_before = r#"{"cells":[{"cell_type":"code","id":"a","metadata":{},"source":["x = 1"],"outputs":[],"execution_count":null}],"metadata":{},"nbformat":4,"nbformat_minor":5}"#;
+        std::fs::write(&text, text_before).expect("text");
+        std::fs::write(&notebook, notebook_before).expect("notebook");
+        crate::file_state::record_file_read(&text, text_before);
+        crate::file_state::record_file_read(&notebook, notebook_before);
+        let created = outside.path().join("created.txt");
+        let text_path = text.display().to_string();
+
+        let editing_tools: Vec<String> =
+            crate::platform::runtime::tool_catalog::all_builtin_tool_definitions()
+                .into_iter()
+                .map(|definition| definition.name)
+                .filter(|name| crate::platform::runtime::tool_catalog::is_file_edit_tool(name))
+                .collect();
+        assert!(editing_tools.len() >= 5, "{editing_tools:?}");
+
+        for name in &editing_tools {
+            let pairs: Vec<(&str, String)> = match name.as_str() {
+                "write_file" => vec![
+                    ("path", created.display().to_string()),
+                    ("content", "moved\n".into()),
+                ],
+                "edit_file" => vec![
+                    ("path", text_path.clone()),
+                    ("old_string", "left alone".into()),
+                    ("new_string", "moved".into()),
+                ],
+                "multiedit" => vec![
+                    ("path", text_path.clone()),
+                    (
+                        "edits",
+                        r#"[{"old_string":"left alone","new_string":"moved"}]"#.into(),
+                    ),
+                ],
+                "apply_patch" => vec![(
+                    "patch",
+                    format!(
+                        "--- a/{text_path}\n+++ b/{text_path}\n@@ -1 +1 @@\n-left alone\n+moved\n"
+                    ),
+                )],
+                "resolve_conflict" => vec![
+                    ("path", text_path.clone()),
+                    ("resolutions", r#"[{"hunk":1,"choice":"ours"}]"#.into()),
+                ],
+                "notebook_edit" => vec![
+                    ("path", notebook.display().to_string()),
+                    ("mode", "replace".into()),
+                    ("cell_id", "a".into()),
+                    ("content", "x = 2".into()),
+                ],
+                "lsp_format" => vec![("file", text_path.clone())],
+                other => panic!("{other} edits files and has no boundary fixture here"),
+            };
+            let call = ToolCall {
+                name: name.clone(),
+                args: pairs
+                    .into_iter()
+                    .map(|(key, value)| (key.to_string(), value))
+                    .collect(),
+            };
+            let opts = ToolExecOptions {
+                mcp_tool_definitions: None,
+                require_confirmation: false,
+                auto_approve_safe: true,
+                auto_approve_edits: true,
+                quiet: true,
+                approval_callback: None,
+                privacy_mode: crate::agent::PrivacyMode::Local,
+                workspace_root: Some(cwd.clone()),
+            };
+            if let Ok(result) = execute_tool_with_opts(&call, &opts).await {
+                assert!(
+                    !result.success,
+                    "{name} reported success outside the workspace"
+                );
+            }
+            assert_eq!(
+                std::fs::read_to_string(&text).expect("text"),
+                text_before,
+                "{name} changed a file outside the workspace"
+            );
+            assert_eq!(
+                std::fs::read_to_string(&notebook).expect("notebook"),
+                notebook_before,
+                "{name} changed a notebook outside the workspace"
+            );
+            assert!(
+                !created.exists(),
+                "{name} created a file outside the workspace"
+            );
+        }
     }
 
     #[tokio::test]
