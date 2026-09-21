@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 
 use super::super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 use crate::platform::runtime::git::{
-    GitApi, GitOperation, MergeOutcome, PushForce, PushPlan, StashOutcome,
+    BaselineDiff, GitApi, GitOperation, MergeOutcome, PushForce, PushPlan, StashOutcome,
 };
 use crate::platform::runtime::git_tools::{
     git_operation_for, git_tool_spec, push_force, remote_of, repository_operation_for, GitToolClass,
@@ -290,6 +290,10 @@ async fn run_operation(
             .commits_not_in(branch, exclude)
             .await
             .map(|commits| json!({ "commits": commit_json(&commits) })),
+        GitOperation::Diff { baseline, paths } => git
+            .diff(baseline.clone(), paths)
+            .await
+            .map(|read| diff_json(&read)),
         GitOperation::BranchList { include_remote } => {
             git.branches(*include_remote).await.map(|branches| {
                 json!({
@@ -384,6 +388,31 @@ async fn run_operation(
     Ok(match outcome {
         Ok(value) => succeeded(tool_name, value),
         Err(error) => failed(tool_name, error.to_string()),
+    })
+}
+
+const MAX_DIFF_PATCH_CHARS: usize = 40_000;
+
+fn diff_json(read: &BaselineDiff) -> Value {
+    let patch_truncated = read.text.chars().count() > MAX_DIFF_PATCH_CHARS;
+    let patch: String = read.text.chars().take(MAX_DIFF_PATCH_CHARS).collect();
+    json!({
+        "baseline": read.baseline.describe(),
+        "stat": read.diff.stat(),
+        "files": read
+            .diff
+            .files
+            .iter()
+            .map(|file| json!({
+                "path": file.path().display().to_string(),
+                "kind": file.kind.label(),
+                "additions": file.additions(),
+                "deletions": file.deletions(),
+                "binary": file.binary,
+            }))
+            .collect::<Vec<_>>(),
+        "patch": patch,
+        "patchTruncated": patch_truncated,
     })
 }
 

@@ -2701,7 +2701,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
     match action {
         SessionAction::List { limit } => {
             let mut summaries =
-                runtime::session_control::list_managed_sessions().unwrap_or_default();
+                runtime::session_control::list_active_managed_sessions().unwrap_or_default();
             summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
             summaries.truncate(limit);
             if summaries.is_empty() {
@@ -4150,11 +4150,7 @@ pub async fn run_main() -> Result<()> {
                 ts::accent(query)
             );
             for s in &results {
-                let title = if s.title.is_empty() {
-                    "(untitled)"
-                } else {
-                    &s.title
-                };
+                let title = s.display_title();
                 let short_id = &s.id[..s.id.len().min(8)];
                 println!(
                     "  {} {}  {}  {}",

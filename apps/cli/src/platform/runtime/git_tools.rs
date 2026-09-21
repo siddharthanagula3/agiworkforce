@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use serde_json::{json, Value};
 
-use super::git::{GitOperation, HookPolicy, PushForce, ResetMode, StashOperation};
+use super::git::{DiffBaseline, GitOperation, HookPolicy, PushForce, ResetMode, StashOperation};
 use crate::repo::RepositoryOperation;
 
 /// What a git tool may do, and therefore what has to happen before it runs.
@@ -92,6 +92,19 @@ pub fn git_tool_specs() -> &'static [GitToolSpec] {
                 "properties": {
                     "branch": {"type": "string", "description": "Branch or ref to list. Defaults to HEAD."},
                     "exclude": {"type": "string", "description": "Comma-separated refs whose commits to leave out, e.g. origin/main."}
+                },
+                "additionalProperties": false
+            }),
+        },
+        GitToolSpec {
+            name: "git_diff",
+            description: "Read the patch between the working tree and a baseline: unstaged edits against the index (the default), staged changes the next commit records, everything since the last commit, or everything since a named commit, branch or tag.",
+            class: GitToolClass::Read,
+            schema: || json!({
+                "type": "object",
+                "properties": {
+                    "baseline": {"type": "string", "description": "unstaged, staged, head, or a commit, branch or tag. Defaults to unstaged."},
+                    "paths": {"type": "string", "description": "Comma-separated paths to narrow the diff to, relative to the repository root."}
                 },
                 "additionalProperties": false
             }),
@@ -375,6 +388,10 @@ pub fn remote_of(args: &HashMap<String, String>) -> String {
     text(args, "remote").unwrap_or("origin").to_string()
 }
 
+fn diff_baseline(args: &HashMap<String, String>) -> Result<DiffBaseline> {
+    DiffBaseline::parse(text(args, "baseline").unwrap_or_default())
+}
+
 /// What a git tool asks of the checkout itself, in the vocabulary
 /// [`RepositoryLayout::availability`] answers. `None` for a tool whose result
 /// does not depend on the shape of the checkout: listing branches, worktrees
@@ -389,6 +406,10 @@ pub fn repository_operation_for(
     match tool_name {
         "git_status" => Some(RepositoryOperation::ReadFiles),
         "git_show" | "git_log" => Some(RepositoryOperation::ReadHistory),
+        "git_diff" => Some(match diff_baseline(args) {
+            Ok(DiffBaseline::Unstaged | DiffBaseline::Staged) => RepositoryOperation::ReadFiles,
+            _ => RepositoryOperation::ReadHistory,
+        }),
         "git_stage" if stages_a_submodule(args, submodules) => {
             Some(RepositoryOperation::UpdateSubmodulePointer)
         }
@@ -432,6 +453,13 @@ pub fn git_operation_for(tool_name: &str, args: &HashMap<String, String>) -> Res
                 .filter(|entry| !entry.is_empty())
                 .map(str::to_string)
                 .collect(),
+        },
+        "git_diff" => GitOperation::Diff {
+            baseline: diff_baseline(args)?,
+            paths: match text(args, "paths") {
+                Some(_) => paths(args, "paths")?,
+                None => Vec::new(),
+            },
         },
         "git_branches" => GitOperation::BranchList {
             include_remote: flag(args, "include_remote")?,

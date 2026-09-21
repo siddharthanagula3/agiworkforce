@@ -101,6 +101,157 @@ impl ResetMode {
     }
 }
 
+/// What a diff is read against. The same working tree differs from its index,
+/// from the last commit and from any older commit, and each answers a
+/// different question about what changed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiffBaseline {
+    /// Edits the index does not hold yet.
+    Unstaged,
+    /// What the next commit would record.
+    Staged,
+    /// Everything since the last commit, staged or not.
+    Head,
+    /// Everything since a commit, branch or tag.
+    Revision(String),
+}
+
+impl DiffBaseline {
+    /// The baselines that need no revision named.
+    pub const NAMED: &'static [DiffBaseline] = &[Self::Unstaged, Self::Staged, Self::Head];
+
+    /// Read the word a person types after `/diff`. Anything that is not one of
+    /// the named baselines is a revision.
+    pub fn parse(value: &str) -> Result<Self> {
+        Ok(match value.trim() {
+            "" | "unstaged" => Self::Unstaged,
+            "staged" | "cached" => Self::Staged,
+            "head" | "HEAD" => Self::Head,
+            revision => Self::Revision(checked_ref(revision, "diff baseline")?),
+        })
+    }
+
+    pub fn describe(&self) -> String {
+        match self {
+            Self::Unstaged => "unstaged changes".to_string(),
+            Self::Staged => "staged changes".to_string(),
+            Self::Head => "changes since the last commit".to_string(),
+            Self::Revision(revision) => format!("changes since {revision}"),
+        }
+    }
+
+    fn args(&self) -> Result<Vec<String>> {
+        Ok(match self {
+            Self::Unstaged => Vec::new(),
+            Self::Staged => vec!["--cached".into()],
+            Self::Head => vec!["HEAD".into()],
+            Self::Revision(revision) => vec![checked_ref(revision, "diff baseline")?],
+        })
+    }
+}
+
+/// A diff read against one baseline: the patch text as git wrote it and the
+/// structure every surface summarises it from.
+#[derive(Debug, Clone)]
+pub struct BaselineDiff {
+    pub baseline: DiffBaseline,
+    pub text: String,
+    pub diff: crate::diff_model::Diff,
+}
+
+impl BaselineDiff {
+    fn from_patch(baseline: DiffBaseline, text: String) -> Self {
+        let diff = crate::diff_model::Diff::parse(&text);
+        Self {
+            baseline,
+            text,
+            diff,
+        }
+    }
+
+    /// The per-file summary a slash command prints.
+    pub fn summary(&self) -> String {
+        if self.diff.is_empty() {
+            return format!("No {}.", self.baseline.describe());
+        }
+        let mut summary = format!(
+            "{} ({}):",
+            capitalized(&self.baseline.describe()),
+            self.diff.stat()
+        );
+        for file in &self.diff.files {
+            summary.push_str("\n  ");
+            summary.push_str(&file.summary());
+        }
+        summary
+    }
+}
+
+fn capitalized(text: &str) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
+pub const DIFF_COMMAND_USAGE: &str =
+    "Usage: /diff [staged | head | <commit, branch or tag>]. On its own, /diff shows unstaged changes.";
+
+/// What `/diff <baseline>` reads in the working directory, or the sentence to
+/// show instead when it cannot.
+pub fn diff_for_command(arg: &str) -> std::result::Result<BaselineDiff, String> {
+    let baseline = DiffBaseline::parse(arg).map_err(|_| DIFF_COMMAND_USAGE.to_string())?;
+    let cwd = std::env::current_dir()
+        .map_err(|error| format!("Could not read the working directory: {error}"))?;
+    diff_blocking(&cwd, baseline).map_err(|error| error.to_string())
+}
+
+pub fn diff_summary_for_command(arg: &str) -> String {
+    match diff_for_command(arg) {
+        Ok(read) => read.summary(),
+        Err(message) => message,
+    }
+}
+
+/// [`GitApi::diff`] for the slash commands, which run on the terminal's own
+/// thread rather than inside the async runtime.
+pub fn diff_blocking(root: &Path, baseline: DiffBaseline) -> Result<BaselineDiff> {
+    let output = match std::process::Command::new("git")
+        .current_dir(root)
+        .args(diff_argv(&baseline, &[])?)
+        .output()
+    {
+        Ok(output) => output,
+        Err(error) => bail!("Could not run git: {error}"),
+    };
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        match detail.trim() {
+            "" => bail!("git diff failed."),
+            detail => bail!("git diff failed: {detail}"),
+        }
+    }
+    Ok(BaselineDiff::from_patch(
+        baseline,
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+    ))
+}
+
+fn diff_argv(baseline: &DiffBaseline, paths: &[PathBuf]) -> Result<Vec<String>> {
+    let mut argv = vec![
+        "diff".to_string(),
+        "--no-color".to_string(),
+        "--no-ext-diff".to_string(),
+    ];
+    argv.extend(baseline.args()?);
+    argv.push("--".to_string());
+    if !paths.is_empty() {
+        argv.extend(checked_paths(paths)?);
+    }
+    Ok(argv)
+}
+
 /// Everything this API can do, as values rather than command strings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitOperation {
@@ -166,6 +317,12 @@ pub enum GitOperation {
         branch: String,
         exclude: Vec<String>,
     },
+    /// The patch between the working tree and `baseline`, narrowed to `paths`
+    /// when any are named.
+    Diff {
+        baseline: DiffBaseline,
+        paths: Vec<PathBuf>,
+    },
     /// Move the current branch to `rev`. `Hard` also overwrites the working
     /// tree, which is why it is a mode rather than a flag on some other call.
     Reset {
@@ -217,6 +374,7 @@ impl GitOperation {
             Self::Pull { .. } => "pull",
             Self::Push { .. } => "push",
             Self::RevList { .. } => "rev-list",
+            Self::Diff { .. } => "diff",
             Self::Reset { .. } => "reset",
             Self::Clean { .. } => "clean",
             Self::BranchDelete { .. } => "branch delete",
@@ -247,6 +405,7 @@ impl GitOperation {
                 | Self::RevParse { .. }
                 | Self::Status
                 | Self::RevList { .. }
+                | Self::Diff { .. }
                 | Self::Stash(StashOperation::List)
         )
     }
@@ -458,6 +617,7 @@ impl GitOperation {
                 }
                 argv
             }
+            Self::Diff { baseline, paths } => diff_argv(baseline, paths)?,
             Self::Reset { mode, rev } => {
                 vec!["reset".into(), mode.flag().into(), checked_ref(rev, "rev")?]
             }
@@ -1011,6 +1171,16 @@ impl GitApi {
         snapshot.changes = crate::context::parse_porcelain_status(&body);
         snapshot.head_commit = self.rev_parse("HEAD").await.ok().map(|head| head.commit);
         Ok(snapshot)
+    }
+
+    pub async fn diff(&self, baseline: DiffBaseline, paths: &[PathBuf]) -> Result<BaselineDiff> {
+        let stdout = self
+            .run_checked(GitOperation::Diff {
+                baseline: baseline.clone(),
+                paths: paths.to_vec(),
+            })
+            .await?;
+        Ok(BaselineDiff::from_patch(baseline, stdout))
     }
 
     /// The paths in `touched` that the user, rather than the agent, wrote and
@@ -2433,6 +2603,187 @@ mod tests {
         assert_eq!(
             blocking,
             vec![false, false, false, false, true, true, true, true]
+        );
+    }
+
+    /// A checkout with one staged edit, one unstaged edit and a commit behind
+    /// the last one, so every baseline has a different answer.
+    fn checkout_with_layered_changes(dir: &Path) {
+        init_repo(dir);
+        let run = |args: &[&str]| {
+            let output = SyncCommand::new("git")
+                .current_dir(dir)
+                .args(args)
+                .output()
+                .expect("git available");
+            assert!(output.status.success(), "git {args:?} failed");
+        };
+        std::fs::write(dir.join("notes.txt"), "one\n").unwrap();
+        run(&["add", "notes.txt"]);
+        run(&["commit", "-q", "-m", "notes"]);
+        std::fs::write(dir.join("README.md"), "staged\n").unwrap();
+        run(&["add", "README.md"]);
+        std::fs::write(dir.join("notes.txt"), "two\n").unwrap();
+    }
+
+    fn changed_paths(read: &BaselineDiff) -> Vec<String> {
+        let mut paths: Vec<String> = read
+            .diff
+            .files
+            .iter()
+            .map(|file| file.path().display().to_string())
+            .collect();
+        paths.sort();
+        paths
+    }
+
+    #[tokio::test]
+    async fn every_baseline_answers_a_different_question_about_the_same_checkout() {
+        let dir = tempfile::tempdir().unwrap();
+        checkout_with_layered_changes(dir.path());
+        let git = GitApi::at(dir.path());
+
+        let mut baselines = DiffBaseline::NAMED.to_vec();
+        baselines.push(DiffBaseline::Revision("HEAD~1".into()));
+        let mut answers = Vec::new();
+        for baseline in baselines {
+            let expected: &[&str] = match &baseline {
+                DiffBaseline::Unstaged => &["notes.txt"],
+                DiffBaseline::Staged => &["README.md"],
+                DiffBaseline::Head | DiffBaseline::Revision(_) => &["README.md", "notes.txt"],
+            };
+            let read = git.diff(baseline.clone(), &[]).await.expect("diff");
+            assert_eq!(changed_paths(&read), expected, "{baseline:?}");
+            let blocking = diff_blocking(dir.path(), baseline.clone()).expect("diff");
+            assert_eq!(
+                changed_paths(&blocking),
+                changed_paths(&read),
+                "the slash command and the tool disagree about {baseline:?}"
+            );
+            answers.push((baseline, read));
+        }
+
+        let since_parent = &answers.last().expect("revision").1;
+        let notes = since_parent
+            .diff
+            .file(Path::new("notes.txt"))
+            .expect("notes");
+        assert_eq!(
+            notes.kind,
+            crate::diff_model::FileChangeKind::Added,
+            "notes.txt did not exist one commit back"
+        );
+        let since_head = &answers[2].1;
+        assert_eq!(
+            since_head
+                .diff
+                .file(Path::new("notes.txt"))
+                .expect("notes")
+                .kind,
+            crate::diff_model::FileChangeKind::Modified
+        );
+    }
+
+    #[tokio::test]
+    async fn a_diff_can_be_narrowed_to_the_paths_named() {
+        let dir = tempfile::tempdir().unwrap();
+        checkout_with_layered_changes(dir.path());
+        let read = GitApi::at(dir.path())
+            .diff(DiffBaseline::Head, &[PathBuf::from("README.md")])
+            .await
+            .expect("diff");
+        assert_eq!(changed_paths(&read), vec!["README.md".to_string()]);
+    }
+
+    #[test]
+    fn a_baseline_is_read_from_what_a_person_types_and_never_as_an_option() {
+        assert_eq!(DiffBaseline::parse("").unwrap(), DiffBaseline::Unstaged);
+        assert_eq!(
+            DiffBaseline::parse(" staged ").unwrap(),
+            DiffBaseline::Staged
+        );
+        assert_eq!(DiffBaseline::parse("head").unwrap(), DiffBaseline::Head);
+        assert_eq!(
+            DiffBaseline::parse("origin/main").unwrap(),
+            DiffBaseline::Revision("origin/main".into())
+        );
+        for smuggled in ["--output=/tmp/x", "-R"] {
+            assert!(
+                DiffBaseline::parse(smuggled).is_err(),
+                "{smuggled} would reach git as an option"
+            );
+        }
+        let argv = GitOperation::Diff {
+            baseline: DiffBaseline::Revision("main".into()),
+            paths: vec![PathBuf::from("-p")],
+        }
+        .argv()
+        .expect("argv");
+        let separator = argv.iter().position(|arg| arg == "--").expect("--");
+        assert_eq!(&argv[separator + 1..], ["-p"], "{argv:?}");
+        assert!(!GitOperation::Diff {
+            baseline: DiffBaseline::Head,
+            paths: Vec::new(),
+        }
+        .is_write());
+    }
+
+    #[tokio::test]
+    async fn a_clean_baseline_says_there_is_nothing_rather_than_listing_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        let git = GitApi::at(dir.path());
+        for baseline in DiffBaseline::NAMED {
+            let read = git.diff(baseline.clone(), &[]).await.expect("diff");
+            assert_eq!(
+                read.summary(),
+                format!("No {}.", baseline.describe()),
+                "{baseline:?}"
+            );
+        }
+        std::fs::write(dir.path().join("README.md"), "changed\n").unwrap();
+        let read = git.diff(DiffBaseline::Head, &[]).await.expect("diff");
+        assert_eq!(
+            read.summary(),
+            "Changes since the last commit (1 file changed, +1 -1):\n  M  README.md  +1 -1"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_snapshot_keeps_what_the_repository_held_when_it_was_taken() {
+        let dir = tempfile::tempdir().unwrap();
+        init_repo(dir.path());
+        let run = |args: &[&str]| {
+            SyncCommand::new("git")
+                .current_dir(dir.path())
+                .args(args)
+                .output()
+                .expect("git available");
+        };
+        let git = GitApi::at(dir.path());
+        std::fs::write(dir.path().join("README.md"), "the user was here\n").unwrap();
+        let snapshot = git.status(RepositoryId::new("test")).await.expect("status");
+        let as_taken = snapshot.clone();
+
+        run(&["commit", "-qam", "later"]);
+        run(&["checkout", "-q", "-b", "elsewhere"]);
+        std::fs::write(dir.path().join("new.txt"), "new\n").unwrap();
+        git.user_changes_at_risk(&snapshot, &[PathBuf::from("README.md")])
+            .await
+            .expect("at-risk read");
+        let now = git.status(RepositoryId::new("test")).await.expect("status");
+
+        assert_eq!(
+            snapshot, as_taken,
+            "a snapshot changed after the repository did"
+        );
+        assert_ne!(now.branch, snapshot.branch);
+        assert_ne!(now.head_commit, snapshot.head_commit);
+        assert_ne!(now.changes, snapshot.changes);
+        let stored = serde_json::to_string(&snapshot).expect("serialise");
+        assert_eq!(
+            serde_json::from_str::<RepositorySnapshot>(&stored).expect("read back"),
+            as_taken
         );
     }
 }

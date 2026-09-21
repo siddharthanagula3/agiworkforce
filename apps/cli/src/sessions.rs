@@ -164,6 +164,24 @@ pub struct SessionSummary {
     pub updated_at: i64,
     pub total_tokens: i64,
     pub message_count: i64,
+    pub archived: bool,
+}
+
+impl SessionSummary {
+    /// The title a listing shows. An archived session is marked, so a search
+    /// result is not mistaken for one the session list still offers.
+    pub fn display_title(&self) -> String {
+        let title = if self.title.is_empty() {
+            "(untitled)"
+        } else {
+            &self.title
+        };
+        if self.archived {
+            format!("{title} (archived)")
+        } else {
+            title.to_string()
+        }
+    }
 }
 
 /// High-level session store statistics.
@@ -468,13 +486,16 @@ fn summary_from_session(
         updated_at: session.updated_at.timestamp_millis(),
         total_tokens: total_tokens(&session.messages),
         message_count: session.messages.len() as i64,
+        archived: session.archived_at.is_some(),
     }
 }
 
+/// Sessions a listing offers, newest first. Archived ones are left to search.
 fn list_sessions_in(base_dir: &Path, limit: usize) -> Result<Vec<SessionSummary>> {
     let sessions = load_all_sessions(base_dir)?;
     Ok(sessions
         .into_iter()
+        .filter(|(_, session, _)| session.archived_at.is_none())
         .take(limit)
         .map(|(path, session, metadata)| summary_from_session(&path, &session, metadata.as_ref()))
         .collect())
@@ -733,22 +754,16 @@ pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
     let forked = ManagedSession::forked_from(&source_session, new_id.clone(), Utc::now(), None);
     save_session_to_default_path(&conn.base_dir, &forked)?;
 
-    let source_summary = list_sessions(conn, usize::MAX)?
-        .into_iter()
-        .find(|summary| summary.id == source_session.session_id);
-    let mut metadata = source_summary
-        .map(|summary| SessionMetadata {
-            title: Some(format!("(fork) {}", summary.title)),
-            custom_title: true,
-            model: Some(summary.model),
-            cwd: Some(summary.cwd),
-            git_branch: Some(summary.git_branch),
-        })
-        .unwrap_or_default();
-    if metadata.title.is_none() {
-        metadata.title = Some("(fork) Untitled".to_string());
-        metadata.custom_title = true;
-    }
+    let source_metadata = read_metadata(&conn.base_dir, &source_session.session_id)?;
+    let source_summary =
+        summary_from_session(&source_path, &source_session, source_metadata.as_ref());
+    let metadata = SessionMetadata {
+        title: Some(format!("(fork) {}", source_summary.title)),
+        custom_title: true,
+        model: Some(source_summary.model),
+        cwd: Some(source_summary.cwd),
+        git_branch: Some(source_summary.git_branch),
+    };
     write_metadata(&conn.base_dir, &new_id, &metadata)?;
 
     Ok(new_id)
@@ -885,11 +900,7 @@ pub fn format_session_list(sessions: &[SessionSummary]) -> String {
     for (label, group) in &groups {
         out.push_str(&format!("  {label}:\n"));
         for session in group {
-            let title = if session.title.is_empty() {
-                "(untitled)"
-            } else {
-                &session.title
-            };
+            let title = session.display_title();
             let short_id = &session.id[..session.id.len().min(8)];
             out.push_str(&format!(
                 "    {:<40} {:>9}  {}\n",
@@ -1073,6 +1084,101 @@ mod tests {
         assert_eq!(stats.session_count, 2);
         assert_eq!(stats.message_count, 2);
         assert!(stats.total_tokens >= 11);
+    }
+
+    #[test]
+    fn an_archived_session_leaves_every_listing_and_stays_findable_by_search() {
+        use crate::runtime::session_control::ManagedSessionStore;
+
+        let (_tempdir, conn) = temp_connection();
+        save_session(&conn, "kept", "Release notes", "", "/", "").unwrap();
+        save_message(&conn, "kept", &Message::text("user", "draft the notes"), 3).unwrap();
+        save_session(&conn, "shelved", "Importer spike", "", "/", "").unwrap();
+        save_message(
+            &conn,
+            "shelved",
+            &Message::text("user", "retry the importer"),
+            3,
+        )
+        .unwrap();
+        let store = ManagedSessionStore::new(conn.base_dir.clone());
+        store
+            .archive(ManagedSessionReference::SessionId("shelved".into()))
+            .expect("archive");
+
+        let history: Vec<String> = list_sessions(&conn, 10)
+            .unwrap()
+            .into_iter()
+            .map(|summary| summary.id)
+            .collect();
+        assert_eq!(history, vec!["kept".to_string()]);
+        let offered: Vec<String> = store
+            .list_active()
+            .unwrap()
+            .into_iter()
+            .map(|summary| summary.session_id)
+            .collect();
+        assert_eq!(offered, vec!["kept".to_string()]);
+        assert_eq!(
+            store.list().unwrap().len(),
+            2,
+            "archiving deleted a session"
+        );
+        let latest = resolve_reference_path(&conn.base_dir, "latest").expect("latest");
+        assert!(
+            latest.to_string_lossy().contains("kept"),
+            "latest resolved to an archived session: {}",
+            latest.display()
+        );
+
+        let found = search_sessions(&conn, "importer").unwrap();
+        let shelved = found
+            .iter()
+            .find(|summary| summary.id == "shelved")
+            .expect("an archived session must stay searchable");
+        assert!(shelved.archived);
+        assert_eq!(shelved.display_title(), "Importer spike (archived)");
+        assert!(format_session_list(&found).contains("Importer spike (archived)"));
+
+        store
+            .unarchive(ManagedSessionReference::SessionId("shelved".into()))
+            .expect("unarchive");
+        assert_eq!(list_sessions(&conn, 10).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn archiving_a_session_leaves_the_work_it_did_in_the_checkout_and_in_its_record() {
+        use crate::runtime::session::{ManagedSessionFileChange, ManagedSessionFileChangeKind};
+        use crate::runtime::session_control::ManagedSessionStore;
+
+        let (_tempdir, conn) = temp_connection();
+        let checkout = tempdir().unwrap();
+        let edited = checkout.path().join("importer.rs");
+        fs::write(&edited, "fn import() {}\n").unwrap();
+        let mut session = ManagedSession::new("worked", Utc::now());
+        session.workspace_root = Some(checkout.path().to_path_buf());
+        session.file_changes.push(ManagedSessionFileChange {
+            path: edited.clone(),
+            kind: ManagedSessionFileChangeKind::Modified,
+            tool: "edit_file".into(),
+            tool_call_id: "call-1".into(),
+            changed_at: Utc::now(),
+            reason: None,
+        });
+        let store = ManagedSessionStore::new(conn.base_dir.clone());
+        store.save(&session).expect("save");
+
+        store
+            .archive(ManagedSessionReference::SessionId("worked".into()))
+            .expect("archive");
+
+        assert_eq!(fs::read_to_string(&edited).unwrap(), "fn import() {}\n");
+        let archived = store
+            .load(ManagedSessionReference::SessionId("worked".into()))
+            .expect("load archived");
+        assert!(archived.archived_at.is_some());
+        assert_eq!(archived.file_changes, session.file_changes);
+        assert_eq!(archived.workspace_root, session.workspace_root);
     }
 
     #[test]

@@ -337,16 +337,18 @@ impl CliConfig {
 
     /// Load config from disk, falling back to defaults if file doesn't exist.
     pub fn load() -> Result<Self> {
-        let path = Self::config_path()?;
+        Self::load_from(&Self::config_path()?)
+    }
 
+    fn load_from(path: &std::path::Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::default());
         }
 
-        let contents = std::fs::read_to_string(&path).context("Failed to read config file")?;
+        let contents = std::fs::read_to_string(path).context("Failed to read config file")?;
         let loaded: CliConfig = toml::from_str(&contents).context("Failed to parse config.toml")?;
         let mut config = Self::with_builtin_defaults(loaded);
-        config.source.global_path = Some(path);
+        config.source.global_path = Some(path.to_path_buf());
         Ok(config)
     }
 
@@ -359,19 +361,9 @@ impl CliConfig {
     /// Load project-level config from `.agiworkforce/config.toml` in the current directory.
     #[allow(dead_code)]
     pub fn load_project_config() -> Option<CliConfig> {
-        let cwd = std::env::current_dir().ok()?;
-        let project_config = cwd.join(".agiworkforce").join("config.toml");
-        if !project_config.exists() {
-            return None;
-        }
-        let contents = std::fs::read_to_string(&project_config).ok()?;
-        let mut config: CliConfig = toml::from_str(&contents).ok()?;
-        config.source.project_path = Some(project_config);
-        Some(config)
+        Self::load_project_config_from(&std::env::current_dir().ok()?)
     }
 
-    /// Load project-level config from a specific directory (useful for testing).
-    #[cfg(test)]
     fn load_project_config_from(dir: &std::path::Path) -> Option<CliConfig> {
         let project_config = dir.join(".agiworkforce").join("config.toml");
         if !project_config.exists() {
@@ -547,15 +539,36 @@ impl CliConfig {
     /// repo cannot silently route prompts/credentials to a third-party server.
     #[allow(dead_code)]
     pub fn load_merged() -> Result<Self> {
-        let mut config = Self::load()?;
-        if Self::project_config_allowed() {
-            if let Some(mut project) = Self::load_project_config() {
+        let user = Self::load()?;
+        let repository = if Self::project_config_allowed() {
+            Self::load_project_config().map(|mut project| {
                 Self::consent_gate_project_providers(&mut project);
-                config.merge_from(&project);
-            }
+                project
+            })
+        } else {
+            None
+        };
+        Self::from_layers(
+            user,
+            repository,
+            &crate::platform::policy::managed::load_managed_policy(),
+        )
+    }
+
+    /// The user's file, then the repository's, then the environment, then the
+    /// organization's managed policy. Each layer overrides only what the
+    /// layers beneath it chose, and nothing overrides the managed one.
+    fn from_layers(
+        user: CliConfig,
+        repository: Option<CliConfig>,
+        managed: &crate::platform::policy::managed::ManagedPolicyState,
+    ) -> Result<Self> {
+        let mut config = user;
+        if let Some(repository) = repository {
+            config.merge_from(&repository);
         }
         config.merge_env_overrides();
-        config.apply_managed_overrides()?;
+        config.apply_managed_state(managed)?;
         Ok(config)
     }
 
@@ -586,7 +599,13 @@ impl CliConfig {
     /// Apply the managed (organization) layer last, so neither the user's
     /// config, a repository's config, nor an environment override can loosen it.
     pub fn apply_managed_overrides(&mut self) -> Result<()> {
-        let state = crate::platform::policy::managed::load_managed_policy();
+        self.apply_managed_state(&crate::platform::policy::managed::load_managed_policy())
+    }
+
+    fn apply_managed_state(
+        &mut self,
+        state: &crate::platform::policy::managed::ManagedPolicyState,
+    ) -> Result<()> {
         match state {
             crate::platform::policy::managed::ManagedPolicyState::Invalid(error) => {
                 bail!("Managed policy is invalid: {error}")
@@ -620,10 +639,11 @@ impl CliConfig {
     /// untrusted/headless workspaces. This keeps `.agiworkforce/config.toml`
     /// outside the process until the project trust boundary has been crossed.
     pub fn load_without_project() -> Result<Self> {
-        let mut config = Self::load()?;
-        config.merge_env_overrides();
-        config.apply_managed_overrides()?;
-        Ok(config)
+        Self::from_layers(
+            Self::load()?,
+            None,
+            &crate::platform::policy::managed::load_managed_policy(),
+        )
     }
 
     /// Merge values from another config, using `other`'s non-default values as overrides.
@@ -2304,6 +2324,64 @@ model = "fixture-config-model"
 
         assert_eq!(config.default.approval_mode, "ask");
         assert_eq!(config.ui.privacy_mode.as_deref(), Some("local"));
+    }
+
+    #[test]
+    fn each_configuration_layer_overrides_only_the_layers_beneath_it() {
+        use crate::platform::policy::managed::load_managed_policy_from;
+
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let checkout = tempfile::tempdir().unwrap();
+        let user_file = home.path().join("config.toml");
+        std::fs::write(
+            &user_file,
+            "[default]\napproval_mode = \"full-auto\"\nreasoning_effort = \"low\"\n\n[ui]\noutput_style = \"concise\"\nedit_mode = \"vim\"\n",
+        )
+        .unwrap();
+        let repository_dir = checkout.path().join(".agiworkforce");
+        std::fs::create_dir_all(&repository_dir).unwrap();
+        std::fs::write(
+            repository_dir.join("config.toml"),
+            "[default]\napproval_mode = \"auto-edit\"\nreasoning_effort = \"high\"\n\n[ui]\nedit_mode = \"emacs\"\n",
+        )
+        .unwrap();
+        let managed_file = home.path().join("managed-policy.toml");
+        std::fs::write(&managed_file, "[config]\napprovalMode = \"ask\"\n").unwrap();
+
+        let layered = |managed: &crate::platform::policy::managed::ManagedPolicyState| {
+            CliConfig::from_layers(
+                CliConfig::load_from(&user_file).expect("user layer"),
+                CliConfig::load_project_config_from(checkout.path()),
+                managed,
+            )
+        };
+
+        let merged = layered(&load_managed_policy_from(&managed_file)).expect("merged");
+        assert_eq!(merged.default.approval_mode, "ask", "managed beats both");
+        assert_eq!(merged.default.reasoning_effort.as_deref(), Some("high"));
+        assert_eq!(merged.ui.edit_mode.as_deref(), Some("emacs"));
+        assert_eq!(merged.ui.output_style.as_deref(), Some("concise"));
+        assert_eq!(
+            merged.source.global_path.as_deref(),
+            Some(user_file.as_path())
+        );
+        assert!(merged.source.project_path.is_some());
+
+        let without_policy =
+            layered(&load_managed_policy_from(&home.path().join("absent.toml"))).expect("merged");
+        assert_eq!(
+            without_policy.default.approval_mode, "auto-edit",
+            "the repository beats the user when nothing is pinned above it"
+        );
+
+        std::fs::write(&managed_file, "[config]\napprovalMode = [").unwrap();
+        assert!(
+            layered(&load_managed_policy_from(&managed_file)).is_err(),
+            "an unreadable managed layer must stop the load, not fall away"
+        );
     }
 
     #[test]

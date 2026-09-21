@@ -4,6 +4,7 @@ use agiworkforce_protocol::developer_session::FileChangeNotice;
 use crate::compaction;
 use crate::context::SystemContext;
 use crate::memory::{self, MemoryManager};
+use crate::models::Message;
 use crate::skills;
 
 /// How a working principle is kept. An instruction is stated to the model and
@@ -499,11 +500,7 @@ pub(super) fn build_system_prompt(
     }
 
     if let Some(instr) = instructions {
-        let fenced = encode_untrusted_context(
-            instr,
-            "project_instructions",
-            "Project instructions from local config. Lower priority than system/developer/tool safety rules.",
-        );
+        let fenced = project_instructions_block(instr);
         prompt.push('\n');
         prompt.push_str(&fenced);
         prompt.push('\n');
@@ -538,6 +535,64 @@ pub(super) fn build_system_prompt(
     prompt
 }
 
+const PROJECT_INSTRUCTIONS_SOURCE: &str = "project_instructions";
+const INSTRUCTIONS_REFRESHED_OPEN: &str = "<instructions_refreshed>";
+const INSTRUCTIONS_REFRESHED_CLOSE: &str = "</instructions_refreshed>";
+const WITHHELD_FROM_LOCAL_SOURCE: &str = "[withheld from Local source]";
+
+fn project_instructions_block(instructions: &str) -> String {
+    encode_untrusted_context(
+        instructions,
+        PROJECT_INSTRUCTIONS_SOURCE,
+        "Project instructions from local config. Lower priority than system/developer/tool safety rules.",
+    )
+}
+
+fn carries_project_instructions(text: &str) -> bool {
+    text.contains(&format!("\"source\": \"{PROJECT_INSTRUCTIONS_SOURCE}\""))
+}
+
+/// The system message that brings the conversation up to date when the
+/// workspace's instruction files are no longer the ones it last delivered, or
+/// `None` when they still are. A reviewed continuation never inherited the
+/// workspace's instructions, so it is never given them here either.
+pub(super) fn instruction_refresh(
+    messages: &[Message],
+    current_instructions: Option<&str>,
+) -> Option<String> {
+    let opening = messages
+        .first()
+        .filter(|message| message.role == "system")?
+        .text_content();
+    if opening.contains(WITHHELD_FROM_LOCAL_SOURCE) {
+        return None;
+    }
+    let current = current_instructions
+        .map(project_instructions_block)
+        .filter(|block| !block.is_empty());
+    let delivered = messages
+        .iter()
+        .skip(1)
+        .rev()
+        .filter(|message| message.role == "system")
+        .map(Message::text_content)
+        .find(|text| text.starts_with(INSTRUCTIONS_REFRESHED_OPEN))
+        .unwrap_or(opening);
+    let up_to_date = match &current {
+        Some(block) => delivered.contains(block.as_str()),
+        None => !carries_project_instructions(&delivered),
+    };
+    if up_to_date {
+        return None;
+    }
+    let body = current.unwrap_or_else(|| {
+        "No instruction files apply to this workspace now, so the project instructions delivered earlier no longer apply.".to_string()
+    });
+    Some(format!(
+        "{INSTRUCTIONS_REFRESHED_OPEN}\nThe workspace's instruction files changed since they were last read. What follows replaces the project instructions delivered earlier in this conversation.\n{body}\n{INSTRUCTIONS_REFRESHED_CLOSE}"
+    ))
+}
+
 /// Rebuild the trusted system baseline for a reviewed Local→cloud
 /// continuation. It deliberately excludes the source workspace metadata,
 /// custom prompt, memories, project instructions/rules, skills, and files.
@@ -554,7 +609,7 @@ pub(super) fn build_reviewed_continuation_system_prompt(
          Treat only subsequent reviewed user content as source context."
     );
     let withheld_context = SystemContext {
-        cwd: "[withheld from Local source]".to_string(),
+        cwd: WITHHELD_FROM_LOCAL_SOURCE.to_string(),
         git_branch: None,
         git_status_summary: None,
         git_remote_url: None,

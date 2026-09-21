@@ -34,6 +34,17 @@ pub(super) async fn execute_run_command(
         }
     };
 
+    let working_dir = match command_working_dir(args) {
+        Ok(dir) => dir,
+        Err(reason) => {
+            return Ok(ToolResult {
+                tool_name: "run_command".to_string(),
+                success: false,
+                output: format!("The command was not run: {reason}"),
+            });
+        }
+    };
+
     print_tool_status("run_command", &format!("Bash({})", command));
 
     // C3 execution-policy gate: every command the string would run, including the
@@ -102,6 +113,9 @@ pub(super) async fn execute_run_command(
                         describe_command(command),
                         classify_filesystem_effect(command).describe().to_string(),
                     ];
+                    if let Some(dir) = &working_dir {
+                        details.push(format!("in {}", dir.display()));
+                    }
                     if hook_bypass {
                         details.push(git_hook_bypass_reason().to_string());
                     }
@@ -219,6 +233,10 @@ pub(super) async fn execute_run_command(
             }
             None => crate::process_tree::shell_command(command),
         };
+        let mut command_process = command_process;
+        if let Some(dir) = &working_dir {
+            command_process.current_dir(dir);
+        }
         crate::process_tree::output(command_process, None, Some(COMMAND_TIMEOUT)).await
     } else {
         if let Some(host) = command_requests_network(command)
@@ -238,6 +256,7 @@ pub(super) async fn execute_run_command(
         let network =
             sandbox_network_policy(command, require_confirmation, approval_callback).await;
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let run_in = working_dir.clone().unwrap_or_else(|| cwd.clone());
         let cmd = command.to_string();
         let structured = structured.clone();
         let sandbox_result = async move {
@@ -249,7 +268,7 @@ pub(super) async fn execute_run_command(
                         &mgr,
                         program,
                         args,
-                        Some(&cwd),
+                        Some(&run_in),
                         Some(COMMAND_TIMEOUT),
                     )
                     .await
@@ -258,7 +277,7 @@ pub(super) async fn execute_run_command(
                     crate::sandbox::execute_sandboxed_with_timeout(
                         &mgr,
                         &cmd,
-                        Some(&cwd),
+                        Some(&run_in),
                         Some(COMMAND_TIMEOUT),
                     )
                     .await
@@ -338,6 +357,25 @@ pub(super) async fn execute_run_command(
             ),
         }),
     }
+}
+
+/// The directory a command was asked to run in. It has to be a directory
+/// inside the workspace; anywhere else is refused before anything runs.
+pub(super) fn command_working_dir(
+    args: &HashMap<String, String>,
+) -> std::result::Result<Option<std::path::PathBuf>, String> {
+    let Some(requested) = args
+        .get("working_dir")
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    else {
+        return Ok(None);
+    };
+    let dir = crate::path_security::validate_workspace_path(requested)?;
+    if !dir.is_dir() {
+        return Err(format!("{requested} is not a directory"));
+    }
+    Ok(Some(dir))
 }
 
 fn command_requests_network(command: &str) -> bool {
@@ -572,6 +610,50 @@ mod tests {
             "operand must reach the program intact: {}",
             result.output
         );
+    }
+
+    #[tokio::test]
+    async fn a_working_dir_outside_the_workspace_or_not_a_directory_is_refused_before_running() {
+        let outside = tempfile::tempdir().expect("outside");
+        let inside = tempfile::tempdir_in(".").expect("inside");
+        let file = inside.path().join("plain.txt");
+        std::fs::write(&file, "x").expect("file");
+        for (dir, why) in [
+            (outside.path().display().to_string(), "outside"),
+            (file.display().to_string(), "not a directory"),
+        ] {
+            let mut args = HashMap::new();
+            args.insert("command".to_string(), "touch ran.txt".to_string());
+            args.insert("working_dir".to_string(), dir);
+            let result = execute_run_command(&args, false, None)
+                .await
+                .expect("tool result");
+            assert!(!result.success, "{why}: {}", result.output);
+            assert!(result.output.contains("was not run"), "{}", result.output);
+        }
+        assert!(!outside.path().join("ran.txt").exists());
+        assert!(!inside.path().join("ran.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn a_command_runs_in_the_working_dir_it_names() {
+        if !sandbox_available() || !sandbox_executes().await {
+            return;
+        }
+        let inside = tempfile::tempdir_in(".").expect("inside");
+        let package = inside.path().join("package");
+        std::fs::create_dir_all(&package).expect("package");
+        std::fs::write(package.join("only-here.txt"), "x").expect("marker");
+
+        let mut args = HashMap::new();
+        args.insert("command".to_string(), "ls".to_string());
+        args.insert("working_dir".to_string(), package.display().to_string());
+        let result = execute_run_command(&args, false, None)
+            .await
+            .expect("tool result");
+
+        assert!(result.success, "{}", result.output);
+        assert!(result.output.contains("only-here.txt"), "{}", result.output);
     }
 
     #[tokio::test]
