@@ -516,6 +516,13 @@ pub struct AgentEventFileChanged {
     pub tool_call_id: String,
     pub path: String,
     pub change: AgentEventFileChangeKind,
+    /// Why the file changed, in one line beside the path. Absent when the
+    /// file could not be read back, never a guess at what the change was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<crate::developer_session::FileChangeNotice>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]

@@ -571,6 +571,78 @@ pub enum DeveloperFileChangeKind {
     Modified,
 }
 
+/// What kind of file a change touched. A surface renders a test, a manifest
+/// and a generated file differently because a reader weighs them differently.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum FileChangeSubject {
+    Source,
+    Test,
+    Manifest,
+    Lockfile,
+    Generated,
+    Documentation,
+    Configuration,
+}
+
+impl FileChangeSubject {
+    pub const ALL: &'static [FileChangeSubject] = &[
+        Self::Source,
+        Self::Test,
+        Self::Manifest,
+        Self::Lockfile,
+        Self::Generated,
+        Self::Documentation,
+        Self::Configuration,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Source => "source",
+            Self::Test => "test",
+            Self::Manifest => "dependency manifest",
+            Self::Lockfile => "lockfile",
+            Self::Generated => "generated file",
+            Self::Documentation => "documentation",
+            Self::Configuration => "configuration",
+        }
+    }
+}
+
+/// Something about a change a reader would want told before it lands. None of
+/// these refuse the change; they stop it from happening unremarked.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(rename_all = "snake_case")]
+pub enum FileChangeNotice {
+    DebugInstrumentation,
+    TestChanged,
+    DependencyAdded,
+    GeneratedFileEdited,
+    LockfileEditedByHand,
+}
+
+impl FileChangeNotice {
+    pub const ALL: &'static [FileChangeNotice] = &[
+        Self::DebugInstrumentation,
+        Self::TestChanged,
+        Self::DependencyAdded,
+        Self::GeneratedFileEdited,
+        Self::LockfileEditedByHand,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::DebugInstrumentation => "left a debugging aid behind",
+            Self::TestChanged => "changed an existing test",
+            Self::DependencyAdded => "added a dependency",
+            Self::GeneratedFileEdited => "edited a file a generator owns",
+            Self::LockfileEditedByHand => "wrote a lockfile by hand",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -580,6 +652,15 @@ pub struct DeveloperSessionFileChange {
     pub tool: String,
     pub tool_call_id: String,
     pub changed_at: String,
+    /// Why the file changed, in one line a surface can show beside the path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub subject: Option<FileChangeSubject>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notices: Vec<FileChangeNotice>,
 }
 
 /// A pending approval as `approval/requested` announced it.
@@ -1730,6 +1811,52 @@ impl HandoffLocalResource {
     }
 }
 
+/// What the origin established about the repository: how it is built, what
+/// runs it, and the setup a receiving surface would otherwise rediscover.
+/// Every field is a reading, never a guess: absent means nothing was found.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct HandoffArchitecture {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub package_manager: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub monorepo: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ci_providers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub containers: Vec<String>,
+    /// Instruction files a turn in this workspace loads, in load order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub instruction_files: Vec<String>,
+    /// Setup and check commands read from the repository's own scripts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<String>,
+}
+
+impl HandoffArchitecture {
+    /// Whether anything was actually discovered. An empty record is not sent:
+    /// a receiver must be able to tell "nothing found" from "not looked for".
+    pub fn is_empty(&self) -> bool {
+        self.project_type.is_none()
+            && self.language.is_none()
+            && self.package_manager.is_none()
+            && self.monorepo.is_none()
+            && self.ci_providers.is_empty()
+            && self.containers.is_empty()
+            && self.instruction_files.is_empty()
+            && self.commands.is_empty()
+    }
+}
+
 /// The checkout a session was working in, as the producing surface last saw it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1870,6 +1997,12 @@ pub struct DeveloperSessionHandoff {
     pub objective: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub decisions: Vec<HandoffDecision>,
+    /// What the session established about the repository it is working in.
+    /// Rediscovering it costs the receiving surface the same reads the origin
+    /// already paid for, so it travels with the work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub architecture: Option<HandoffArchitecture>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plan: Vec<HandoffPlanStep>,
     /// Every file the session changed, so the receiver knows the work even
@@ -2363,6 +2496,7 @@ mod tests {
         "posture",
         "objective",
         "decisions",
+        "architecture",
         "plan",
         "modifiedFiles",
         "validations",
@@ -2393,6 +2527,16 @@ mod tests {
                 permission_profile_id: "standard".to_string(),
             },
             objective: Some("make the importer resume after a failed batch".to_string()),
+            architecture: Some(HandoffArchitecture {
+                project_type: Some("Rust workspace".to_string()),
+                language: Some("Rust".to_string()),
+                package_manager: Some("cargo".to_string()),
+                monorepo: None,
+                ci_providers: vec!["GitHub Actions".to_string()],
+                containers: Vec::new(),
+                instruction_files: vec!["/work/repo/AGENTS.md".to_string()],
+                commands: vec!["cargo test".to_string()],
+            }),
             decisions: vec![HandoffDecision {
                 summary: "keep the existing queue table".to_string(),
                 rationale: Some("a new table would need a backfill".to_string()),
@@ -2414,6 +2558,9 @@ mod tests {
                 tool: "edit_file".to_string(),
                 tool_call_id: "call-1".to_string(),
                 changed_at: "2026-09-20T09:45:00Z".to_string(),
+                reason: Some("source edited".to_string()),
+                subject: Some(FileChangeSubject::Source),
+                notices: vec![FileChangeNotice::DebugInstrumentation],
             }],
             validations: vec![HandoffValidation {
                 command: "cargo test -p importer".to_string(),
