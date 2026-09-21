@@ -10,6 +10,15 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: mocks.query, execute: mocks.execute }),
 }));
+// Web push goes through the vetted fetch; the real resolver would ask DNS about a test host.
+vi.mock('@/lib/egress-policy', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/egress-policy')>('@/lib/egress-policy');
+  return {
+    ...actual,
+    pinnedPublicFetch: (...args: unknown[]) => mocks.fetch(...args),
+    assertResolvedPublicHostname: async () => undefined,
+  };
+});
 
 const VAPID_PUBLIC_KEY_ENV = 'WEB_PUSH_VAPID_PUBLIC_KEY';
 const VAPID_PRIVATE_KEY_ENV = 'WEB_PUSH_VAPID_PRIVATE_KEY';
