@@ -31,6 +31,8 @@ const MANIFEST_BASENAMES = new Set(['package.json', 'Cargo.toml']);
 const EXEMPT_FILES = new Set([
   'scripts/check-llm-failure-guardrails.mjs',
   'scripts/check-llm-failure-guardrails.test.mjs',
+  'scripts/check-raw-html-sinks.test.mjs',
+  'scripts/lib/raw-html-sinks.mjs',
   'scripts/check-test-integrity.mjs',
   'scripts/check-test-integrity.test.mjs',
 ]);
