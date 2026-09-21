@@ -146,7 +146,10 @@ export function handSpelledKeys(repoRoot, prefixes, files) {
     if (file.startsWith(`${FLAG_DIR}/`)) continue;
     const source = readFileSync(path.join(repoRoot, file), 'utf8');
     for (const { prefix } of prefixes) {
-      const pattern = new RegExp(`'(${prefix.replace(/\./g, '\\.')}[a-z0-9_.:-]*)'`, 'g');
+      const pattern = new RegExp(
+        `'(${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[a-z0-9_.:-]*)'`,
+        'g',
+      );
       let match;
       while ((match = pattern.exec(source)) !== null) {
         findings.set(`${file}::${match[1]}`, { file, key: match[1] });

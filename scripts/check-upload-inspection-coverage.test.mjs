@@ -141,7 +141,7 @@ test('fails when a deferral points at a file that does not inspect', () => {
     assert.equal(result.code, 1, `${stage} accepted a deferral to nothing`);
     assert.match(
       result.output,
-      new RegExp(`defers inspection to ${completing.replace(/[[\]]/g, '\\$&')}`),
+      new RegExp(`defers inspection to ${completing.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
     );
   }
 });
