@@ -20,6 +20,8 @@ const consumeSingleUse = vi.fn();
 const revokePermission = vi.fn();
 const stopComputerUseHelper = vi.fn();
 const takeOverComputerUse = vi.fn(() => ({ takenOver: true }));
+const isComputerUseTakenOver = vi.fn(() => false);
+const screenChangesSeen = vi.fn(() => 0);
 const captureScreen = vi.fn();
 const runShellCommand = vi.fn();
 const cancelShellRun = vi.fn();
@@ -57,7 +59,9 @@ vi.mock('../runtime/computerUseService', () => ({
   clickPointer: vi.fn(),
   computerUseAvailability: () => ({ supported: true }),
   dragPointer: vi.fn(),
+  isComputerUseTakenOver,
   movePointer: vi.fn(),
+  screenChangesSeen,
   pressKey: vi.fn(),
   scrollPointer: vi.fn(),
   stopComputerUseHelper,
@@ -140,7 +144,8 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   syncDeveloperAccounts,
 }));
 
-const { configureWindowOpening, dispatch } = await import('../runtime/dispatcher');
+const { SCREEN_STEP_COMMANDS, configureWindowOpening, dispatch, resetScreenStepGate } =
+  await import('../runtime/dispatcher');
 
 const window = {
   isDestroyed: () => false,
@@ -149,6 +154,8 @@ const window = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetScreenStepGate();
+  isComputerUseTakenOver.mockReturnValue(false);
   getPermissionState.mockReturnValue('granted');
   readShellPolicy.mockReturnValue({ allow: ['git'], deny: [] });
   writeShellPolicy.mockImplementation((policy: unknown) => policy);
@@ -630,5 +637,88 @@ describe('device registry and remote control commands', () => {
     const response = await dispatch(window, 'remote_control_start', args);
     expect(startRemoteControl).toHaveBeenCalledWith(args);
     expect(response).toMatchObject({ ok: true, value: { status: 'waiting' } });
+  });
+});
+
+describe('the screen steps a user can stop', () => {
+  const ARGS: Record<string, Record<string, unknown>> = {
+    computer_screenshot: {},
+    computer_zoom: { x: 0, y: 0, width: 10, height: 10 },
+    computer_move: { x: 10, y: 10 },
+    computer_click: { x: 10, y: 10 },
+    computer_drag: { x: 1, y: 1, toX: 2, toY: 2 },
+    computer_scroll: { x: 1, y: 1, deltaY: 3 },
+    computer_type: { text: 'hello' },
+    computer_key: { key: 'enter' },
+    computer_wait: { ms: 1 },
+  };
+
+  it('covers every screen step the contract defines', () => {
+    expect([...SCREEN_STEP_COMMANDS].sort()).toEqual(Object.keys(ARGS).sort());
+  });
+
+  it('refuses every one of them once the user has taken the screen back', async () => {
+    isComputerUseTakenOver.mockReturnValue(true);
+    for (const command of SCREEN_STEP_COMMANDS) {
+      const response = await dispatch(window, command, ARGS[command] ?? {});
+      expect(response, command).toMatchObject({ ok: false });
+    }
+  });
+
+  it('lets them through again once control is handed back', async () => {
+    isComputerUseTakenOver.mockReturnValue(false);
+    const response = await dispatch(window, 'computer_move', { x: 10, y: 10 });
+    expect(response).toMatchObject({ ok: true });
+  });
+
+  it('stops a step that has repeated with nothing changing', async () => {
+    const outcomes = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      outcomes.push(await dispatch(window, 'computer_click', { x: 40, y: 40 }));
+    }
+    expect(outcomes.slice(0, 4).every((entry) => (entry as { ok: boolean }).ok)).toBe(true);
+    expect(outcomes[4]).toMatchObject({ ok: false });
+    expect(outcomes[5]).toMatchObject({ ok: false });
+  });
+
+  it('lets the same step go on for as long as screenshots show the screen moving', async () => {
+    let changes = 100;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      screenChangesSeen.mockReturnValue((changes += 1));
+      const response = await dispatch(window, 'computer_scroll', { x: 40, y: 40, deltaY: 400 });
+      expect(response, `scroll ${attempt}`).toMatchObject({ ok: true });
+    }
+  });
+
+  it('still stops the same step when the screenshots in between showed nothing new', async () => {
+    screenChangesSeen.mockReturnValue(200);
+    const outcomes = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await dispatch(window, 'computer_screenshot', {});
+      outcomes.push(await dispatch(window, 'computer_scroll', { x: 40, y: 40, deltaY: 400 }));
+    }
+    expect(outcomes[3]).toMatchObject({ ok: true });
+    expect(outcomes[4]).toMatchObject({ ok: false });
+  });
+
+  it('lets a caller out of the stop by doing something else', async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await dispatch(window, 'computer_click', { x: 40, y: 40 });
+    }
+    await dispatch(window, 'computer_type', { text: 'a different step' });
+    expect(await dispatch(window, 'computer_click', { x: 40, y: 40 })).toMatchObject({ ok: true });
+  });
+
+  it('never stops a screenshot, which is how a caller finds out what happened', async () => {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      expect(await dispatch(window, 'computer_screenshot', {})).toMatchObject({ ok: true });
+    }
+  });
+
+  it('leaves a caller working through different parts of the screen alone', async () => {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const response = await dispatch(window, 'computer_click', { x: attempt * 40, y: 20 });
+      expect(response, `click ${attempt}`).toMatchObject({ ok: true });
+    }
   });
 });
