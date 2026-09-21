@@ -118,7 +118,7 @@ export async function* translateOpenAIStream(
     }
 
     if (choice.finish_reason && !stopEmitted) {
-      if ((choice.finish_reason as string) === UPSTREAM_FAILURE_FINISH_REASON) break;
+      if (choice.finish_reason === UPSTREAM_FAILURE_FINISH_REASON) break;
       for (const state of toolCalls.values()) {
         if (state.emittedStart) {
           yield { type: 'tool-use-end', toolUseId: state.id };

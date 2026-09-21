@@ -1,8 +1,5 @@
 export type OpenAIChatToolChoice =
-  | 'none'
-  | 'auto'
-  | 'required'
-  | { type: 'function'; function: { name: string } };
+  'none' | 'auto' | 'required' | { type: 'function'; function: { name: string } };
 
 export interface OpenAIChatTool {
   type: 'function';
@@ -23,8 +20,7 @@ export interface OpenAIChatUserMessagePartImage {
   image_url: { url: string; detail?: 'auto' | 'low' | 'high' };
 }
 export type OpenAIChatUserMessagePart =
-  | OpenAIChatUserMessagePartText
-  | OpenAIChatUserMessagePartImage;
+  OpenAIChatUserMessagePartText | OpenAIChatUserMessagePartImage;
 
 export interface OpenAIChatUserMessageParam {
   role: 'user';
@@ -103,7 +99,9 @@ export interface OpenAIChatCompletionChunk {
       }>;
     };
     logprobs?: unknown;
-    finish_reason?: 'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call' | null;
+    // `error` is not OpenAI's: OpenRouter ends a generation its upstream failed with it.
+    finish_reason?:
+      'stop' | 'length' | 'tool_calls' | 'content_filter' | 'function_call' | 'error' | null;
   }>;
   usage?: {
     prompt_tokens?: number;

@@ -710,9 +710,15 @@ function matchesOverloaded(status: number | undefined, message: string): boolean
   return /"type"\s*:\s*"overloaded_error"/i.test(message);
 }
 
+// What Node's fetch throws when the transport fails: before the headers
+// (`fetch failed`) or with the body half read (`terminated`). Matched whole, so
+// no provider text that merely contains the word can reach this branch.
+const FETCH_TRANSPORT_FAILURE_MESSAGES = new Set(['fetch failed', 'terminated']);
+
 function matchesConnection(name: string | undefined, message: string): boolean {
   const lower = message.toLowerCase();
   return (
+    (name === 'TypeError' && FETCH_TRANSPORT_FAILURE_MESSAGES.has(lower.trim())) ||
     name === 'APIConnectionError' ||
     name === 'APIConnectionTimeoutError' ||
     name === 'EmptyStreamError' ||
