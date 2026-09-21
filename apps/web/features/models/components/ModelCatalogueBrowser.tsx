@@ -305,9 +305,7 @@ export function ModelCatalogueBrowser({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Compare models</DialogTitle>
-            <DialogDescription>
-              Context, capabilities, plan access and price in credits per million tokens.
-            </DialogDescription>
+            <DialogDescription>Context, capabilities and plan access.</DialogDescription>
           </DialogHeader>
           <ModelCompareTable entries={comparedEntries} planLabel={planLabel} />
         </DialogContent>

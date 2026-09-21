@@ -1,8 +1,4 @@
-import {
-  evaluateModelEnvironment,
-  formatCredits,
-  formatCreditsPerMillionTokens,
-} from '@agiworkforce/types';
+import { evaluateModelEnvironment } from '@agiworkforce/types';
 import { getModelMetadata } from '@shared/config/llm';
 import { formatTokenCount } from '@features/code/code-surface';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
@@ -17,11 +13,6 @@ export function modelSummary(entry: ModelCatalogueEntry): string {
 export function tokenCeilingLabel(tokens: number | null): string {
   if (tokens === null || tokens <= 0) return UNPUBLISHED_VALUE;
   return `${formatTokenCount(tokens)} tokens`;
-}
-
-export function creditsPerMillionLabel(usdPerMillion: number): string {
-  if (!Number.isFinite(usdPerMillion) || usdPerMillion <= 0) return UNPUBLISHED_VALUE;
-  return formatCredits(formatCreditsPerMillionTokens(usdPerMillion));
 }
 
 export function accessLabel(entry: ModelCatalogueEntry, planLabel: string): string {
