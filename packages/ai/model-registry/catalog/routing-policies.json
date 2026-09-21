@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 14,
+    "policyVersion": 16,
     "records": [
       {
         "version": 1,
@@ -126,6 +126,34 @@
         "channel": "internal",
         "effectiveOn": "2026-09-20",
         "reason": "pins the bounded response-shape rubric for internal evaluation; runtime flags keep semantic assessment off until a measured canary carries a quality signal"
+      },
+      {
+        "version": 15,
+        "artifact": "prompt",
+        "id": "routing.response_assessment@1",
+        "channel": "canary",
+        "effectiveOn": "2026-09-20",
+        "reason": "advances the response-shape rubric after the dedicated output-quality evaluation held; runtime feature flags still control whether Auto turns invoke it",
+        "quality": {
+          "gate": "AI output quality evals",
+          "commit": "211f5dcad441a7823fc4705a2aadb8930645ff6b",
+          "verdict": "held",
+          "measuredOn": "2026-09-20"
+        }
+      },
+      {
+        "version": 16,
+        "artifact": "prompt",
+        "id": "routing.response_assessment@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-20",
+        "reason": "makes the evaluated rubric the stable default while runtime feature flags keep semantic assessment disabled until its measured product canary begins",
+        "quality": {
+          "gate": "AI output quality evals",
+          "commit": "211f5dcad441a7823fc4705a2aadb8930645ff6b",
+          "verdict": "held",
+          "measuredOn": "2026-09-20"
+        }
       }
     ]
   },
