@@ -277,7 +277,7 @@ describe('429 free-capacity payload', () => {
     return {
       error: {
         message:
-          'No free capacity right now. Try again shortly, upgrade your plan, or use your own provider key.',
+          'No free capacity right now. Try again shortly, or use your own provider key. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
         type: 'insufficient_quota',
         code: 'free_capacity_unavailable',
         ...(retryAt ? { retry_at: retryAt } : {}),

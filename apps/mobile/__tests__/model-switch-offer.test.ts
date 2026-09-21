@@ -24,6 +24,7 @@ describe('offersModelSwitch', () => {
       'max_output_tokens_exceeded',
       'tool_call_invalid',
       'free_capacity_unavailable',
+      'free_allowance_exhausted',
       '',
       null,
       undefined,
