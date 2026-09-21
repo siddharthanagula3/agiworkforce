@@ -187,6 +187,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
       >
         <h2
           class="truncate text-base font-semibold text-[var(--chat-text-primary)]"
+          title="Snapshot Project"
         >
           Snapshot Project
         </h2>

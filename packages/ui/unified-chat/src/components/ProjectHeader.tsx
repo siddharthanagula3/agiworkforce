@@ -134,7 +134,10 @@ export function ProjectHeader({ presentation, className, compact = false }: Proj
           <IconCircle presentation={presentation} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-base font-semibold text-[var(--chat-text-primary)]">
+              <h2
+                title={presentation.title}
+                className="truncate text-base font-semibold text-[var(--chat-text-primary)]"
+              >
                 {presentation.title}
               </h2>
               {presentation.importedFromLabel ? (
