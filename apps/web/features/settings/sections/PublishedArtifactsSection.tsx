@@ -209,7 +209,7 @@ export function PublishedArtifactsSection() {
                   <a
                     href={artifact.shareUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     style={{ ...actionButtonStyle, textDecoration: 'none' }}
                   >
                     Open

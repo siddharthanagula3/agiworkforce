@@ -212,7 +212,7 @@ export function SharedLinksSection() {
                   <a
                     href={share.shareUrl}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     style={{ ...actionButtonStyle, textDecoration: 'none' }}
                   >
                     Open

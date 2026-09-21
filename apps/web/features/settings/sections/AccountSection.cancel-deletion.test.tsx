@@ -112,7 +112,11 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     renderAccountSection();
 
     expect(await screen.findByTestId('pending-deletion-title')).toBeInTheDocument();
-    expect(screen.getByText(/cancellation window has closed/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /cancellation window has closed\. Erasure begins with the next daily run\./i,
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId('cancel-deletion-trigger')).not.toBeInTheDocument();
     expect(screen.queryByTestId('delete-account-trigger')).not.toBeInTheDocument();
   });
