@@ -14,6 +14,8 @@
 import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  canAccessModelForSubscriptionTier,
+  getDefaultModelFor,
   getRoutingSlotModel,
   INTERACTIVE_CARD_REQUEST_KEY,
   AGENT_EVENT_SCHEMA_VERSION,
@@ -187,10 +189,10 @@ afterEach(() => {
 });
 
 describe('constants', () => {
-  it('FREE_TRIAL_MODEL is a non-empty string read from models.json', () => {
-    expect(typeof FREE_TRIAL_MODEL).toBe('string');
-    expect(FREE_TRIAL_MODEL.length).toBeGreaterThan(0);
-    expect(FREE_TRIAL_MODEL).toBe(getRoutingSlotModel('general_fast'));
+  it('FREE_TRIAL_MODEL is the free plan default, a model the free plan can reach at no cost', () => {
+    expect(FREE_TRIAL_MODEL).toBe(getDefaultModelFor('free', 'chat'));
+    expect(canAccessModelForSubscriptionTier(FREE_TRIAL_MODEL, 'free')).toBe(true);
+    expect(FREE_TRIAL_MODEL).not.toBe(getRoutingSlotModel('general_fast'));
   });
 
   it('FREE_TRIAL_ENDPOINT points at agiworkforce.com web app (not api.agiworkforce.com)', () => {
