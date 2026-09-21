@@ -38,6 +38,7 @@ import {
 import { CLOUD_APP_ORIGIN } from '../config';
 import { rememberShellSignedCliIn, shellSignedCliIn } from './cliAccountStore';
 import { reconcileDeveloperAccount, type DeveloperAccountBridge } from './developerAccountSync';
+import { recordDesktopEvent } from './desktopTelemetryService';
 import { readWorkspaceGit } from './gitService';
 import { getRoot, listRoots } from './workspaceStore';
 
@@ -610,12 +611,14 @@ function queueAccountSync(server: RunningServer): Promise<void> {
         bridge,
       );
       accountSyncError = null;
+      recordDesktopEvent({ domain: 'sync', outcome: 'ok' });
       if (outcome === 'signed-in') rememberShellSignedCliIn(true);
       if (outcome === 'signed-out') rememberShellSignedCliIn(false);
       if (outcome === 'signed-in' || outcome === 'signed-out') await refreshOtherModels(server);
     } catch (error) {
       // An app-server that stopped mid-sequence says nothing about the account.
       if (server.closed) return;
+      recordDesktopEvent({ domain: 'sync', outcome: 'failed', cause: 'unknown' });
       accountSyncError = error instanceof Error ? error.message : String(error);
     }
   });

@@ -2,12 +2,16 @@ import type { HostUpdateAvailability } from '@agiworkforce/local-runtime-contrac
 
 export const DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL =
   'https://agiworkforce.com/api/releases/desktop-cloud/latest';
+
+/** The published channel this shell belongs to, and the download it asks for. */
+export const DESKTOP_CLOUD_RELEASE_CHANNEL = 'cloud';
+
 export type DesktopCloudMacArchitecture = 'arm64' | 'x64';
 
 export function desktopCloudInstallerDownloadUrl(
   architecture: DesktopCloudMacArchitecture,
 ): string {
-  return `https://agiworkforce.com/api/download?platform=mac&app=cloud&arch=${architecture}`;
+  return `https://agiworkforce.com/api/download?platform=mac&app=${DESKTOP_CLOUD_RELEASE_CHANNEL}&arch=${architecture}`;
 }
 
 export type DesktopCloudUpdateAvailability = HostUpdateAvailability;
@@ -179,5 +183,54 @@ export async function checkDesktopCloudUpdate(
     version: release.version,
     ...(release.publishedAt ? { publishedAt: release.publishedAt } : {}),
     downloadUrl: desktopCloudInstallerDownloadUrl(architecture),
+  };
+}
+
+export interface DesktopUpdatePrompt {
+  readonly type: 'info' | 'error';
+  readonly title: string;
+  readonly message: string;
+  readonly detail: string;
+  readonly buttons: readonly string[];
+  readonly downloadButton: number | null;
+}
+
+/**
+ * What the reader is shown for each of the three states a check can end in.
+ * Held here beside the check so a state cannot be added without an answer for
+ * what it says, and so the wording is readable without an Electron dialog.
+ */
+export function desktopUpdatePrompt(
+  outcome: DesktopCloudUpdateAvailability | { readonly failure: string },
+): DesktopUpdatePrompt {
+  if ('failure' in outcome) {
+    return {
+      type: 'error',
+      title: 'Couldn’t check for updates',
+      message: 'AGI Cloud update information is currently unavailable.',
+      detail: outcome.failure,
+      buttons: ['OK'],
+      downloadButton: null,
+    };
+  }
+  if (!outcome.available) {
+    return {
+      type: 'info',
+      title: 'AGI Cloud is up to date',
+      message: 'You have the latest AGI Cloud version.',
+      detail: `Installed: ${outcome.currentVersion}\nLatest published: ${outcome.version}`,
+      buttons: ['OK'],
+      downloadButton: null,
+    };
+  }
+  return {
+    type: 'info',
+    title: 'AGI Cloud update available',
+    message: `AGI Cloud ${outcome.version} is available.`,
+    detail:
+      `You have ${outcome.currentVersion}. Download the signed and notarized macOS installer, ` +
+      'then replace AGI Cloud in Applications. This opens your browser and does not install automatically.',
+    buttons: ['Download Installer', 'Later'],
+    downloadButton: 0,
   };
 }

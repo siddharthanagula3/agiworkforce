@@ -10,6 +10,7 @@ import {
 } from 'electron';
 import { focusPageComposer } from './composerFocus';
 import { pickSourceForDisplay } from './garnishCore';
+import { physicalCaptureSize } from './runtime/computerUseProtocol';
 import { hideQuickAsk, isQuickAskVisible } from './quickAsk';
 
 const HIDE_SETTLE_MS = 300;
@@ -77,10 +78,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: {
-        width: Math.round(display.size.width * display.scaleFactor),
-        height: Math.round(display.size.height * display.scaleFactor),
-      },
+      thumbnailSize: physicalCaptureSize(display),
     });
 
     const source = pickSourceForDisplay(sources, display.id);

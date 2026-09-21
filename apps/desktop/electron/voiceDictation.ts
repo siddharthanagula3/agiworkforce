@@ -1,4 +1,5 @@
 import { Notification, type BrowserWindow, type WebContents } from 'electron';
+import { recordDesktopEvent } from './runtime/desktopTelemetryService';
 import { focusPageComposer } from './composerFocus';
 import { ELECTRON_IPC_CHANNELS } from '../src/lib/tauri-electron/bridgeContract';
 import { isQuickAskVisible, quickAskPanel, surfaceQuickAsk } from './quickAsk';
@@ -53,12 +54,17 @@ function sendToggle(contents: WebContents): void {
 export async function toggleGlobalDictation(mainWindow: BrowserWindow | null): Promise<void> {
   const target = dictationTarget(mainWindow);
   if (!isLive(target)) {
+    recordDesktopEvent({ domain: 'voice_shortcut', outcome: 'refused', cause: 'not_configured' });
     notify(NO_SURFACE_TITLE, NO_SURFACE_BODY);
     return;
   }
 
   await focusPageComposer(target);
   await delay(COMPOSER_SETTLE_MS);
-  if (!isLive(target)) return;
+  if (!isLive(target)) {
+    recordDesktopEvent({ domain: 'voice_shortcut', outcome: 'failed', cause: 'cancelled' });
+    return;
+  }
   sendToggle(target.webContents);
+  recordDesktopEvent({ domain: 'voice_shortcut', outcome: 'ok' });
 }

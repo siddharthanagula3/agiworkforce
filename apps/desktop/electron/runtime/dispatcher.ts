@@ -13,6 +13,7 @@ import {
   type DesktopRuntimeErrorCode,
   type DesktopRuntimeResponse,
   type LocalChatMessage,
+  type LocalChatStopReason,
   type LocalModelSettings,
   type LocalModelSnapshot,
   type PermissionScope,
@@ -25,6 +26,7 @@ import {
   type DeviceRegistryProfile,
   DEVICE_STEP_TOOLS,
   deviceStepCapability,
+  deviceStepCommand,
   deviceStepScope,
   type DesktopHostDeclaration,
   type DeviceKeyModifier,
@@ -53,14 +55,21 @@ import {
   clickPointer,
   computerUseAvailability,
   dragPointer,
+  isComputerUseTakenOver,
   movePointer,
   pressKey,
+  screenChangesSeen,
   scrollPointer,
   stopComputerUseHelper,
   takeOverComputerUse,
   typeText,
   waitFor,
 } from './computerUseService';
+import {
+  computerUseLoopMessage,
+  createComputerUseLoopDetector,
+  stepSignature,
+} from './computerUseLoop';
 import { deviceIdentity } from './deviceIdentity';
 import { RemoteControlRefused } from '../remote/remoteControlHost';
 import {
@@ -76,6 +85,8 @@ import {
   runLocalChat,
 } from './localInferenceService';
 import { readLocalModelSettings, writeLocalModelSettings } from './localModelSettingsStore';
+import { recordDesktopEvent } from './desktopTelemetryService';
+import type { DesktopTelemetryEvent } from './desktopTelemetry';
 import { readClipboard } from './clipboardService';
 import { cancelShellRun, runShellCommand, type ShellApprovalRequest } from './shellService';
 import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
@@ -220,6 +231,55 @@ function requireRegionFields(region: Args): DeviceStepRegion {
 }
 
 class InvalidArguments extends Error {}
+
+/**
+ * Every step that drives the screen, taken from the contract rather than listed
+ * here, so a step added later is gated the day it exists. One gate is what
+ * makes "the user took the screen back" and "this is going in circles" true of
+ * all of them rather than of the ones somebody remembered.
+ */
+export const SCREEN_STEP_COMMANDS: ReadonlySet<string> = new Set(
+  DEVICE_STEP_TOOLS.filter((tool) => deviceStepScope(tool) === 'screen').map(deviceStepCommand),
+);
+
+const screenLoop = createComputerUseLoopDetector();
+let screenChangesAtLastStep = 0;
+
+export function resetScreenStepGate(): void {
+  screenLoop.reset();
+  screenChangesAtLastStep = screenChangesSeen();
+}
+
+function guardScreenStep(command: string, args: Args): void {
+  if (isComputerUseTakenOver()) {
+    throw new ComputerUseRefused(
+      'paused',
+      'The user has taken over the screen. Do not try another screen step; tell them what you were about to do and wait for them to hand control back.',
+    );
+  }
+  if (command === 'computer_screenshot' || command === 'computer_zoom') return;
+  // A screenshot that showed the screen moving means the steps so far did
+  // something, so the same step again is progress and not a loop.
+  if (screenChangesSeen() !== screenChangesAtLastStep) resetScreenStepGate();
+  const verdict = screenLoop.observe(stepSignature(command, args));
+  if (verdict === 'ok') return;
+  recordDesktopEvent({ domain: 'desktop_control', outcome: 'refused', cause: 'cancelled' });
+  throw new ComputerUseRefused('paused', computerUseLoopMessage(verdict));
+}
+
+/** A local turn that timed out or errored is a failure; a cancelled one is not. */
+export function localInferenceOutcome(stopReason: LocalChatStopReason): DesktopTelemetryEvent {
+  switch (stopReason) {
+    case 'error':
+      return { domain: 'local_inference', outcome: 'failed', cause: 'unknown' };
+    case 'timeout':
+      return { domain: 'local_inference', outcome: 'failed', cause: 'timeout' };
+    case 'cancelled':
+      return { domain: 'local_inference', outcome: 'refused', cause: 'cancelled' };
+    default:
+      return { domain: 'local_inference', outcome: 'ok' };
+  }
+}
 
 /**
  * Opening a window belongs to the process that owns them. It is injected so
@@ -639,6 +699,7 @@ async function execute(
   command: string,
   args: Args,
 ): Promise<unknown> {
+  if (SCREEN_STEP_COMMANDS.has(command)) guardScreenStep(command, args);
   switch (command) {
     case 'workspace_pick_root':
       return pickRoot(window, args);
@@ -739,17 +800,25 @@ async function execute(
       const timeoutMs = optionalNumber(args, 'timeoutMs');
       const temperature = optionalNumber(args, 'temperature');
       const maxOutputTokens = optionalNumber(args, 'maxOutputTokens');
-      return runLocalChat(
-        {
-          runId: requireString(args, 'runId'),
-          modelId: requireString(args, 'modelId'),
-          messages: requireLocalMessages(args),
-          ...(timeoutMs === undefined ? {} : { timeoutMs }),
-          ...(temperature === undefined ? {} : { temperature }),
-          ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
-        },
-        (delta) => emitRuntimeEvent(window, { kind: 'local-chat-delta', ...delta }),
-      );
+      recordDesktopEvent({ domain: 'local_inference', outcome: 'started' });
+      try {
+        const result = await runLocalChat(
+          {
+            runId: requireString(args, 'runId'),
+            modelId: requireString(args, 'modelId'),
+            messages: requireLocalMessages(args),
+            ...(timeoutMs === undefined ? {} : { timeoutMs }),
+            ...(temperature === undefined ? {} : { temperature }),
+            ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
+          },
+          (delta) => emitRuntimeEvent(window, { kind: 'local-chat-delta', ...delta }),
+        );
+        recordDesktopEvent(localInferenceOutcome(result.stopReason));
+        return result;
+      } catch (error) {
+        recordDesktopEvent({ domain: 'local_inference', outcome: 'refused', cause: 'unsupported' });
+        throw error;
+      }
     }
     case 'local_chat_cancel':
       return cancelLocalChat(requireString(args, 'runId'));
