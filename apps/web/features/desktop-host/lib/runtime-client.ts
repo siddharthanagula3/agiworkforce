@@ -127,6 +127,24 @@ export function writeLocalCommandPolicy(policy: ShellPolicy): Promise<ShellPolic
   return invoke<ShellPolicy>('shell_policy_write', { policy });
 }
 
+/**
+ * Layout the shell owns rather than one window's storage, so a second window
+ * opens on what the first left and a relaunch does not start from the default.
+ * `null` on either member means the shell has never been told.
+ */
+export interface ShellLayout {
+  secondaryPanelWidth: number | null;
+  sidebarCollapsed: boolean | null;
+}
+
+export function readShellLayout(): Promise<ShellLayout> {
+  return invoke<ShellLayout>('window_layout_read');
+}
+
+export function writeShellLayout(patch: Partial<ShellLayout>): Promise<ShellLayout> {
+  return invoke<ShellLayout>('window_layout_write', { ...patch });
+}
+
 export function cancelLocalCommand(runId: string): Promise<boolean> {
   return invoke<boolean>('shell_cancel', { runId });
 }

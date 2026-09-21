@@ -20,12 +20,6 @@
       "fix": "replace email: userEmail with emailPseudonym: pseudonymizeEmail(userEmail) from @/lib/server/email-pseudonym, or drop the field since userId identifies the account"
     },
     {
-      "file": "apps/web/app/api/settings/devices/[deviceId]/route.ts",
-      "field": "revokedCredentials",
-      "reason": "the name contains \"credential\" so the count of revoked credentials is redacted, and the line cannot say how much was revoked",
-      "fix": "rename to revokedCredentialCount"
-    },
-    {
       "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
       "field": "email",
       "reason": "four webhook reconciliation lines log the Stripe customer address, including two marked SECURITY and CRITICAL",

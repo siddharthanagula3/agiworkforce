@@ -88,6 +88,18 @@ function flag(key: string, rules: unknown[], overrides: Record<string, unknown> 
   };
 }
 
+function killSwitch(key: string, description: string, rules: unknown[]) {
+  return flag(key, rules, {
+    description,
+    variants: ['on', 'off'],
+    defaultVariant: 'on',
+  });
+}
+
+function versionRule(id: string, range: Record<string, string>) {
+  return { id, conditions: { clientVersion: range }, bucketBy: 'user', variant: 'off' };
+}
+
 function makeGetRequest(headers: Record<string, string> = {}) {
   return new Request('http://localhost:3000/api/me?surface=desktop', {
     method: 'GET',
@@ -206,5 +218,72 @@ describe('GET /api/me, evaluated rollout flags', () => {
       ['advanced_model_access', 'code_execution', 'generic_web_search'].sort(),
     );
     expect(body.feature_flag_variants).toEqual({});
+  });
+});
+
+describe('GET /api/me, capabilities held closed', () => {
+  const REASON = 'Voice stops responding on this build and a fix is on its way.';
+  const EXPLAINED = `${REASON} (incident INC-42)`;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_closed_1', email: 'c@example.com' });
+    mockNeonQuery.mockResolvedValue([]);
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'max', status: 'active' });
+    flagMocks.resolveOrgMembership.mockResolvedValue({
+      organizationId: WORKSPACE_ID,
+      role: 'admin',
+    });
+    flagMocks.getSubjectOverrides.mockResolvedValue([]);
+  });
+
+  it('carries the sentence the operator left, to the builds the range names', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      killSwitch('capability.can_use_voice', EXPLAINED, [
+        versionRule('disabled-inc-42', { max: '3.2' }),
+      ]),
+    ]);
+
+    const parsed = MeResponseSchema.safeParse(
+      await (await GET(makeGetRequest({ 'x-agi-client-version': '3.1.0' }))).json(),
+    );
+    expect(parsed.error).toBeUndefined();
+    if (!parsed.success) return;
+
+    expect(parsed.data.disabled_features).toEqual([
+      { capability: 'canUseVoice', reason: EXPLAINED },
+    ]);
+  });
+
+  it('leaves a build outside the range untouched', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      killSwitch('capability.can_use_voice', EXPLAINED, [
+        versionRule('disabled-inc-42', { max: '3.2' }),
+      ]),
+    ]);
+
+    const body = await (await GET(makeGetRequest({ 'x-agi-client-version': '3.3.0' }))).json();
+
+    expect(body.disabled_features).toEqual([]);
+  });
+
+  it('invents no explanation for a switch that carries none', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      killSwitch('capability.can_use_voice', 'Open unless voice is switched off.', [
+        versionRule('all-builds', { max: '9.9' }),
+      ]),
+    ]);
+
+    const body = await (await GET(makeGetRequest({ 'x-agi-client-version': '3.1.0' }))).json();
+
+    expect(body.disabled_features).toEqual([{ capability: 'canUseVoice', reason: null }]);
+  });
+
+  it('carries an empty list when the flag store has nothing to evaluate', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([]);
+
+    const body = await (await GET(makeGetRequest())).json();
+
+    expect(body.disabled_features).toEqual([]);
   });
 });
