@@ -448,6 +448,14 @@ const CONFIGURATION_STATE_VALUE: Readonly<Record<ConfigurationState, number>> = 
   invalid: -1,
 };
 
+export interface ConfigurationStateReport {
+  readonly component: string;
+  readonly state: ConfigurationState;
+  readonly observedAt: string;
+}
+
+const LAST_CONFIGURATION_STATE = new Map<string, ConfigurationStateReport>();
+
 /**
  * What a boot-time check found, as a standing series rather than a log line
  * nobody reads again. An optional integration that is simply absent reads
@@ -457,12 +465,27 @@ export function recordConfigurationState(input: {
   component: string;
   state: ConfigurationState;
 }): void {
+  LAST_CONFIGURATION_STATE.set(input.component, {
+    component: input.component,
+    state: input.state,
+    observedAt: new Date().toISOString(),
+  });
   instruments().configurationState.record(
     CONFIGURATION_STATE_VALUE[input.state],
     clean({
       [OBSERVABILITY_ATTRIBUTE.configurationComponent]: input.component,
       [OBSERVABILITY_ATTRIBUTE.configurationState]: input.state,
     }),
+  );
+}
+
+/**
+ * The gauge is write-only to this process, so a boot-time finding is otherwise
+ * unreadable from a request. This is what makes one answerable at /api/health.
+ */
+export function configurationStates(): readonly ConfigurationStateReport[] {
+  return [...LAST_CONFIGURATION_STATE.values()].sort((left, right) =>
+    left.component.localeCompare(right.component),
   );
 }
 
