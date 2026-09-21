@@ -80,6 +80,7 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'retrieval_chunks', column: 'organization_id' },
   { table: 'retrieval_documents', column: 'organization_id' },
   { table: 'organization_billing_contracts', column: 'organization_id' },
+  { table: 'enterprise_offline_payment_records', column: 'organization_id' },
   { table: 'organization_billing_invoices', column: 'organization_id' },
   { table: 'organization_commercial_agreements', column: 'organization_id' },
   { table: 'organization_subscription_state_transitions', column: 'organization_id' },
