@@ -293,6 +293,8 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
     .reverse()
     .map((day) => ({ key: day.day, requests: day.requests, costCents: day.costCents }));
 
+  const isEmpty = history !== null && !loading && !error && history.totals.requests === 0;
+
   return (
     <section
       aria-labelledby="usage-history-heading"
@@ -342,7 +344,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
           </div>
         )}
 
-        {history && !loading && !error && history.totals.requests === 0 && (
+        {isEmpty && (
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
             No settled usage in the last 30 days.
           </span>
