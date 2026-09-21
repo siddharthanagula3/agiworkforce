@@ -35,6 +35,12 @@ const REFUSED_ENDPOINTS = [
   'file:///etc/passwd',
   'not a url',
   '',
+  // Our own cloud is not a provider of the user's, and a workspace that keeps
+  // its work on this device would refuse the request anyway.
+  'https://agiworkforce.com/api/llm/v1',
+  'https://api.agiworkforce.com/v1',
+  'https://tenant.vercel.app/v1',
+  'https://clerk.agiworkforce.com/v1',
 ];
 
 const ACCEPTED_ENDPOINTS = [
@@ -79,6 +85,7 @@ describe('CustomModelsSettings', () => {
     ['https://169.254.169.254/v1', /private network/i],
     ['http://localhost:11434/v1', /must use https/i],
     ['https://localhost:11434/v1', /own machine or network/i],
+    ['https://agiworkforce.com/api/llm/v1', /belongs to AGI Workforce/i],
   ])('refuses to save %s and says why', async (endpoint, message) => {
     const user = userEvent.setup();
     render(<CustomModelsSettings />);

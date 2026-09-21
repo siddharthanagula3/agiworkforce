@@ -20,6 +20,9 @@ import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
 
 export interface AppMenuActions {
   newChat: () => void;
+  newWindow: () => void;
+  openConversationInNewWindow: () => void;
+  hasFocusedConversation: () => boolean;
   toggleQuickAsk: () => void;
   captureScreenshot: () => void;
   openSettings: () => void;
@@ -194,11 +197,22 @@ function historyMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   };
 }
 
-function windowMenu(): MenuItemConstructorOptions {
+function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   // Close is on every platform: macOS reads a window with no Cmd+W as broken,
   // and the app survives losing its last window because `activate`, a second
   // launch and a deep link all bring one back.
+  //
+  // Moving a conversation out is disabled rather than hidden when the front
+  // window is not on one: an item that appears and disappears as the user
+  // navigates is harder to find again than one that is visibly unavailable.
   const items: MenuItemConstructorOptions[] = [
+    { label: 'New Window', click: actions.newWindow },
+    {
+      label: 'Move Conversation to New Window',
+      enabled: actions.hasFocusedConversation(),
+      click: actions.openConversationInNewWindow,
+    },
+    { type: 'separator' },
     { role: 'minimize' },
     { role: 'zoom' },
     { role: 'close', accelerator: hostAccelerator('host-close-window') },
@@ -237,7 +251,7 @@ export function appMenuTemplate(
     editMenu(),
     viewMenu(actions),
     historyMenu(actions),
-    windowMenu(),
+    windowMenu(actions),
     helpMenu(actions),
   ];
 }
