@@ -1,19 +1,25 @@
 import 'server-only';
 
+import {
+  PLATFORM_ADMIN_ENV_VAR,
+  parsePlatformAdminIds,
+} from '@/features/admin/lib/platform-admin-access';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
 
-import type {
-  CreateEscalationInput,
-  EscalationPageOutcome,
-  EscalationSeverity,
-  EscalationTracker,
-  CreateTicketInput,
-  SupportTicket,
-  SupportTicketReply,
-  TicketEscalation,
-  TicketPriority,
-  TicketStatus,
+import {
+  OPEN_TICKET_STATUSES,
+  type CreateEscalationInput,
+  type EscalationPageOutcome,
+  type EscalationSeverity,
+  type EscalationTracker,
+  type CreateTicketInput,
+  type StaffSupportTicket,
+  type SupportTicket,
+  type SupportTicketReply,
+  type TicketEscalation,
+  type TicketPriority,
+  type TicketStatus,
 } from './types';
 
 /**
@@ -25,6 +31,9 @@ import type {
  * A reply is scoped through its ticket rather than by its own `user_id`, because
  * a staff reply carries the staff member's id and would otherwise be invisible
  * to the person whose ticket it is.
+ *
+ * The staff queue statements at the end carry no owner predicate. Each one instead
+ * requires the acting id to be on the platform operator allowlist, in the SQL.
  */
 
 interface TicketRow {
@@ -130,7 +139,7 @@ export async function getTicketForUser(
 }
 
 /**
- * The one read with no `user_id` predicate. Escalation is a staff action behind
+ * Escalation's read, with no `user_id` predicate. Escalation is a staff action behind
  * requirePlatformAdmin, and the escalating engineer is not the ticket's owner.
  */
 export async function getTicketForStaff(ticketId: string): Promise<SupportTicket | null> {
@@ -289,4 +298,118 @@ export async function updateTicketStatus(input: {
   );
   const row = rows[0];
   return row ? toTicket(row) : null;
+}
+
+interface StaffTicketRow extends TicketRow {
+  user_id: string;
+  email: string;
+}
+
+const STAFF_TICKET_COLUMNS = `${TICKET_COLUMNS}, user_id, email`;
+
+function toStaffTicket(row: StaffTicketRow): StaffSupportTicket {
+  return { ...toTicket(row), userId: row.user_id, email: row.email };
+}
+
+function platformOperatorIds(): string[] {
+  return parsePlatformAdminIds(process.env[PLATFORM_ADMIN_ENV_VAR]);
+}
+
+export async function listStaffQueue(input: {
+  staffUserId: string;
+  statuses: readonly TicketStatus[];
+  limit: number;
+  offset: number;
+}): Promise<StaffSupportTicket[]> {
+  const db = getNeonDb();
+  const rows = await db.query<StaffTicketRow>(
+    `select ${STAFF_TICKET_COLUMNS}
+       from public.support_tickets
+      where status = any($1::text[])
+        and $2::text = any($3::text[])
+      order by created_at desc, id desc
+      limit $4 offset $5`,
+    [[...input.statuses], input.staffUserId, platformOperatorIds(), input.limit, input.offset],
+  );
+  return rows.map(toStaffTicket);
+}
+
+export async function getStaffTicket(
+  ticketId: string,
+  staffUserId: string,
+): Promise<StaffSupportTicket | null> {
+  const db = getNeonDb();
+  const rows = await db.query<StaffTicketRow>(
+    `select ${STAFF_TICKET_COLUMNS}
+       from public.support_tickets
+      where id = $1
+        and $2::text = any($3::text[])`,
+    [ticketId, staffUserId, platformOperatorIds()],
+  );
+  const row = rows[0];
+  return row ? toStaffTicket(row) : null;
+}
+
+export async function listStaffTicketReplies(
+  ticketId: string,
+  staffUserId: string,
+): Promise<SupportTicketReply[]> {
+  const db = getNeonDb();
+  const rows = await db.query<ReplyRow>(
+    `select r.id, r.ticket_id, r.message, r.is_staff, r.created_at
+       from public.support_ticket_replies r
+      where r.ticket_id = $1
+        and $2::text = any($3::text[])
+      order by r.created_at asc`,
+    [ticketId, staffUserId, platformOperatorIds()],
+  );
+  return rows.map(toReply);
+}
+
+export async function insertStaffReply(input: {
+  ticketId: string;
+  staffUserId: string;
+  message: string;
+}): Promise<SupportTicketReply | null> {
+  const db = getNeonDb();
+  const rows = await db.query<ReplyRow>(
+    `insert into public.support_ticket_replies (ticket_id, user_id, message, is_staff)
+     select t.id, $2, $3, true
+       from public.support_tickets t
+      where t.id = $1
+        and t.status = any($4::text[])
+        and $2::text = any($5::text[])
+     returning id, ticket_id, message, is_staff, created_at`,
+    [
+      input.ticketId,
+      input.staffUserId,
+      input.message,
+      [...OPEN_TICKET_STATUSES],
+      platformOperatorIds(),
+    ],
+  );
+  const row = rows[0];
+  return row ? toReply(row) : null;
+}
+
+export async function moveTicketAsStaff(input: {
+  ticketId: string;
+  staffUserId: string;
+  from: TicketStatus;
+  to: TicketStatus;
+}): Promise<StaffSupportTicket | null> {
+  const db = getNeonDb();
+  const rows = await db.query<StaffTicketRow>(
+    `update public.support_tickets
+        set status = $3,
+            updated_at = now(),
+            resolved_at = case when $3 in ('resolved', 'closed') then now() else null end
+      where id = $1
+        and status = $2
+        and $4::text = any($5::text[])
+      returning ${STAFF_TICKET_COLUMNS}`,
+    [input.ticketId, input.from, input.to, input.staffUserId, platformOperatorIds()],
+  );
+  const row = rows[0];
+  return row ? toStaffTicket(row) : null;
 }

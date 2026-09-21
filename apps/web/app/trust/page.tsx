@@ -120,7 +120,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'Subprocessor transparency',
     value:
-      'Published: corrected 14 August 2026. A list of processors with purpose and region is published at /subprocessors, and processing terms are at /dpa. Stating the correction rather than quietly reissuing the list: a review on 14 August found six recipients missing, including a transactional email provider that had been delisted nine days earlier on the false reasoning that no email package appeared in our dependencies: it calls the provider’s HTTP API directly, so the check could not have found it. The list is now built from egress rather than from the manifest. As of 2026-08-14.',
+      'Published: corrected 14 August and 21 September 2026. A list of processors with purpose and region is published at /subprocessors, and processing terms are at /dpa. Stating the correction rather than quietly reissuing the list: a review on 14 August found six recipients missing, including a transactional email provider that had been delisted nine days earlier on the false reasoning that no email package appeared in our dependencies: it calls the provider’s HTTP API directly, so the check could not have found it. The list is now built from egress rather than from the manifest. A second review on 21 September found five inference recipients missing and one listed that receives nothing; a check now fails our build when a provider the model registry admits for Managed Cloud traffic is not on the page. As of 2026-09-21.',
   },
   {
     label: 'DPDP (India): notice under s.5',
@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 175 of 276 database-backed hosted API route files. Counted against the 276 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-21.',
+      'Partial: 175 of 276 database-backed hosted API route files. Counted against the 276 route files that reach the database; the other 117 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-21.',
   },
   {
     label: 'Authentication and CSRF',

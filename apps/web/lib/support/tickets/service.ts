@@ -7,17 +7,23 @@ import { resolveSupportPriority } from '@/lib/support/handoff/priority';
 import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
 
 import { notifyIncident } from '@/lib/server/incident/dispatch';
+import { sendTicketOpenedEmail } from '@/lib/support/handoff/escalation-email';
 import { generateReferenceId } from '@/lib/support/handoff/reference-id';
 
 import {
+  getStaffTicket,
   getTicketForStaff,
   getTicketForUser,
   insertEscalation,
   insertReply,
+  insertStaffReply,
   insertTicket,
   listEscalationsForTicket,
   listRepliesForTicket,
+  listStaffQueue,
+  listStaffTicketReplies,
   listTicketsForUser,
+  moveTicketAsStaff,
   startTicketForStaff,
   updateTicketStatus,
 } from './store';
@@ -27,10 +33,15 @@ import {
   MAX_TICKET_MESSAGE_CHARS,
   MAX_TICKET_SUBJECT_CHARS,
   OPEN_TICKET_STATUSES,
+  STAFF_QUEUE_PAGE_SIZE,
+  STAFF_QUEUE_STATUSES,
   canTransition,
   pagesOnCall,
   severityForPriority,
+  statusAfterStaffReply,
   type EscalationTracker,
+  type StaffTicketPage,
+  type StaffTicketThread,
   type SupportTicket,
   type SupportTicketReply,
   type TicketEscalation,
@@ -87,12 +98,37 @@ export interface OpenTicketInput {
   diagnostics?: SupportDiagnostics | null;
 }
 
+export interface OpenedTicket {
+  ticket: SupportTicket;
+  staffNotified: boolean;
+}
+
+async function notifySupportTeam(ticket: SupportTicket, userId: string): Promise<boolean> {
+  try {
+    const sent = await sendTicketOpenedEmail({ ticket, userId });
+    if (sent.delivered) {
+      logger.info({ ticketId: ticket.id }, '[support-ticket] support team emailed');
+      return true;
+    }
+    logger.error(
+      { ticketId: ticket.id, reason: sent.reason },
+      '[support-ticket] support team was not emailed about a new ticket',
+    );
+  } catch (error) {
+    logger.error(
+      { ticketId: ticket.id, error },
+      '[support-ticket] support team was not emailed about a new ticket',
+    );
+  }
+  return false;
+}
+
 /**
  * Priority is resolved from the contracted support tier here, exactly as it is
  * for a live escalation, so the two queues agree on who is waiting for what. A
  * ticket raised by someone with no contract is `normal`.
  */
-export async function openTicket(input: OpenTicketInput): Promise<SupportTicket> {
+export async function openTicket(input: OpenTicketInput): Promise<OpenedTicket> {
   const { priority, supportTier } = await resolveSupportPriority(getNeonDb(), input.userId);
 
   const ticket = await insertTicket({
@@ -115,7 +151,7 @@ export async function openTicket(input: OpenTicketInput): Promise<SupportTicket>
     { ticketId: ticket.id, priority, fromHandoff: ticket.handoffSessionId !== null },
     '[support-ticket] opened',
   );
-  return ticket;
+  return { ticket, staffNotified: await notifySupportTeam(ticket, input.userId) };
 }
 
 export function listTickets(userId: string, limit = MAX_TICKETS_LISTED): Promise<SupportTicket[]> {
@@ -277,4 +313,70 @@ export async function moveTicket(input: {
     '[support-ticket] status changed',
   );
   return moved;
+}
+
+export async function listStaffTickets(input: {
+  staffUserId: string;
+  offset: number;
+}): Promise<StaffTicketPage> {
+  const offset = Math.max(0, Math.floor(input.offset));
+  const rows = await listStaffQueue({
+    staffUserId: input.staffUserId,
+    statuses: STAFF_QUEUE_STATUSES,
+    limit: STAFF_QUEUE_PAGE_SIZE + 1,
+    offset,
+  });
+  const hasMore = rows.length > STAFF_QUEUE_PAGE_SIZE;
+  return {
+    tickets: rows.slice(0, STAFF_QUEUE_PAGE_SIZE),
+    nextOffset: hasMore ? offset + STAFF_QUEUE_PAGE_SIZE : null,
+  };
+}
+
+export async function readTicketForStaff(
+  ticketId: string,
+  staffUserId: string,
+): Promise<StaffTicketThread> {
+  const ticket = await getStaffTicket(ticketId, staffUserId);
+  if (!ticket) throw new TicketNotFoundError();
+  const replies = await listStaffTicketReplies(ticketId, staffUserId);
+  return { ticket, replies };
+}
+
+/**
+ * The reply is written first and the status moved after it, so a ticket is never
+ * marked answered without the answer. A status that moved under us is left as is.
+ */
+export async function replyToTicketAsStaff(input: {
+  ticketId: string;
+  staffUserId: string;
+  message: string;
+  resolve: boolean;
+}): Promise<StaffTicketThread> {
+  const ticket = await getStaffTicket(input.ticketId, input.staffUserId);
+  if (!ticket) throw new TicketNotFoundError();
+  if (!OPEN_TICKET_STATUSES.includes(ticket.status)) throw new TicketClosedError();
+
+  const reply = await insertStaffReply({
+    ticketId: input.ticketId,
+    staffUserId: input.staffUserId,
+    message: clamp(input.message, MAX_TICKET_MESSAGE_CHARS),
+  });
+  if (!reply) throw new TicketNotFoundError();
+
+  const to = statusAfterStaffReply(ticket.status, input.resolve);
+  if (to !== ticket.status && canTransition(ticket.status, to)) {
+    await moveTicketAsStaff({
+      ticketId: input.ticketId,
+      staffUserId: input.staffUserId,
+      from: ticket.status,
+      to,
+    });
+  }
+
+  logger.info(
+    { ticketId: input.ticketId, from: ticket.status, to, resolve: input.resolve },
+    '[support-ticket] staff replied',
+  );
+  return readTicketForStaff(input.ticketId, input.staffUserId);
 }

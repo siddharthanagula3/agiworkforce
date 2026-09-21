@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
   MAX_TICKET_MESSAGE_CHARS,
   MAX_TICKET_SUBJECT_CHARS,
+  TICKET_STATUS_LABEL,
   type SupportTicket,
   type TicketStatus,
 } from '@/lib/support/tickets/types';
@@ -16,6 +18,7 @@ import {
   openSupportTicket,
   readSupportTicket,
   replyToSupportTicket,
+  type OpenedSupportTicket,
   type SupportTicketThread,
 } from '../lib/ticket-client';
 
@@ -27,16 +30,9 @@ const PRIMARY_BUTTON_CLASS =
 const GHOST_BUTTON_CLASS =
   'inline-flex min-h-9 items-center justify-center rounded-md border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50';
 
-const STATUS_LABEL: Record<TicketStatus, string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
-};
-
 const STATUS_MEANING: Record<TicketStatus, string> = {
-  open: 'Raised and waiting to be picked up.',
-  in_progress: 'Someone on the support team is working on it.',
+  open: 'Raised. Nobody on the support team has replied yet.',
+  in_progress: 'The support team has picked this up.',
   resolved: 'Answered. Replying here reopens it if it is not actually fixed.',
   closed: 'Finished. Raise a new ticket and reference this one to carry on.',
 };
@@ -47,6 +43,9 @@ const STATUS_CLASS: Record<TicketStatus, string> = {
   resolved: 'text-success-text',
   closed: 'text-muted-foreground',
 };
+
+const STAFF_NOTIFIED_NOTICE = 'Ticket raised, and the support team has been emailed about it.';
+const STAFF_NOT_NOTIFIED_NOTICE = `Ticket raised and saved, but the email that tells the support team about it was not sent. If this is urgent, also write to ${CONTACT_EMAIL}.`;
 
 const CLOSE_CONFIRM_TITLE = 'Close this ticket?';
 const CLOSE_CONFIRM_LABEL = 'Close ticket';
@@ -61,7 +60,9 @@ function formatDateTime(iso: string): string {
 
 function StatusChip({ status }: { status: TicketStatus }) {
   return (
-    <span className={`text-xs font-medium ${STATUS_CLASS[status]}`}>{STATUS_LABEL[status]}</span>
+    <span className={`text-xs font-medium ${STATUS_CLASS[status]}`}>
+      {TICKET_STATUS_LABEL[status]}
+    </span>
   );
 }
 
@@ -69,7 +70,7 @@ function NewTicketForm({
   onCreated,
   onCancel,
 }: {
-  onCreated: (ticket: SupportTicket) => void;
+  onCreated: (opened: OpenedSupportTicket) => void;
   onCancel: () => void;
 }) {
   const [subject, setSubject] = useState('');
@@ -148,11 +149,13 @@ function NewTicketForm({
 
 function TicketThreadView({
   thread,
+  staffNotified,
   onBack,
   onThread,
   onTicket,
 }: {
   thread: SupportTicketThread;
+  staffNotified: boolean | null;
   onBack: () => void;
   onThread: (next: SupportTicketThread) => void;
   onTicket: (next: SupportTicket) => void;
@@ -210,9 +213,18 @@ function TicketThreadView({
         </p>
       </div>
 
+      {staffNotified === null ? null : (
+        <p
+          role="status"
+          className={`text-xs ${staffNotified ? 'text-success-text' : 'text-warning-text'}`}
+        >
+          {staffNotified ? STAFF_NOTIFIED_NOTICE : STAFF_NOT_NOTIFIED_NOTICE}
+        </p>
+      )}
+
       {replies.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No replies yet. You will get an email when the team answers.
+          No replies yet. Replies from the support team appear here.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -295,6 +307,7 @@ export function SupportTicketsPanel() {
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
   const [composing, setComposing] = useState(false);
+  const [created, setCreated] = useState<{ ticketId: string; staffNotified: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -369,6 +382,7 @@ export function SupportTicketsPanel() {
       {thread ? (
         <TicketThreadView
           thread={thread}
+          staffNotified={created?.ticketId === thread.ticket.id ? created.staffNotified : null}
           onBack={() => setThread(null)}
           onThread={applyThread}
           onTicket={applyTicket}
@@ -383,8 +397,9 @@ export function SupportTicketsPanel() {
       ) : composing ? (
         <NewTicketForm
           onCancel={() => setComposing(false)}
-          onCreated={(ticket) => {
+          onCreated={({ ticket, staffNotified }) => {
             setComposing(false);
+            setCreated({ ticketId: ticket.id, staffNotified });
             setTickets((current) => [ticket, ...(current ?? [])]);
             void open(ticket.id);
           }}
