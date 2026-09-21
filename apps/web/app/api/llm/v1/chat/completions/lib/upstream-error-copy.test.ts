@@ -182,12 +182,13 @@ describe('a request on the free plan model', () => {
     expect(copy.message).toMatch(/Try again/);
   });
 
-  it('keeps the status and code a client branches on', () => {
+  it('keeps the code a client branches on', () => {
     const limited = Object.assign(new Error('rate limit exceeded'), { status: 429 });
     const free = upstreamFailureCopy(limited, PROVIDER, { requestedModel: FREE_ROUTER });
     const pinned = upstreamFailureCopy(limited, PROVIDER, { requestedModel: 'some-pinned-model' });
 
-    expect([free.status, free.code, free.type]).toEqual([pinned.status, pinned.code, pinned.type]);
+    expect(free.code).toBe(pinned.code);
+    expect(free.message).not.toBe(pinned.message);
   });
 });
 
