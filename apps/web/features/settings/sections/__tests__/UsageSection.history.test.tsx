@@ -54,7 +54,9 @@ function history(over: Record<string, unknown> = {}) {
       { key: 'work', requests: 6, inputTokens: 600, outputTokens: 200, costCents: 200 },
       { key: 'chat', requests: 3, inputTokens: 300, outputTokens: 100, costCents: 50 },
     ],
-    byModel: [{ key: 'gpt-5', requests: 9, inputTokens: 900, outputTokens: 300, costCents: 250 }],
+    byModel: [
+      { key: 'fixture-model', requests: 9, inputTokens: 900, outputTokens: 300, costCents: 250 },
+    ],
     freshness: { asOf: new Date().toISOString(), latestActivityAt: null, unsettledRequests: 2 },
     ...over,
   };

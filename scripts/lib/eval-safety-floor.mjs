@@ -81,6 +81,23 @@ export function autoServedModelKeys(repoRoot) {
   return served;
 }
 
+// A baseline entry names the slot it is about, so it follows the slot's model
+// and the line-up stays the one place a concrete model id is written.
+export function autoSlotModelKeys(repoRoot) {
+  const policy = readJson(repoRoot, ROUTING_POLICY_FILE);
+  const families = readJson(repoRoot, FAMILY_CATALOG);
+  const bySlot = new Map();
+  for (const [slotId, slot] of Object.entries(policy?.auto?.slots ?? {})) {
+    const key = slot?.modelKey;
+    if (typeof key !== 'string') continue;
+    const resolved = key.startsWith(FAMILY_PREFIX)
+      ? families?.families?.[key.slice(FAMILY_PREFIX.length)]?.active?.modelKey
+      : key;
+    if (typeof resolved === 'string') bySlot.set(slotId, resolved);
+  }
+  return bySlot;
+}
+
 export function recordedRuns(repoRoot) {
   return readJsonDir(repoRoot, RUNS_DIR).map((entry) => ({
     file: entry.file,
@@ -172,8 +189,13 @@ export function tradeSafetyForCost(corpusSuite) {
  * decision rather than waved through. An entry may shrink and never grow: a
  * model that is not recorded, or a further corpus under one that is, fails.
  */
-export function auditServedFailures(failures, baseline) {
-  const recorded = new Map(Object.entries(baseline?.servedBelowThreshold ?? {}));
+export function auditServedFailures(failures, baseline, slotModels = new Map()) {
+  const recorded = new Map(
+    Object.entries(baseline?.servedBelowThreshold ?? {}).map(([key, entry]) => [
+      slotModels.get(key) ?? key,
+      entry,
+    ]),
+  );
   const problems = [];
   const fixed = [];
 
@@ -268,7 +290,7 @@ export function audit(repoRoot, { compareToBaseline, scoreDropFor, tolerance, ba
     const failed = failedHardGates(run);
     if (failed.length > 0) failures.set(run.modelKey, failed);
   }
-  const served_ = auditServedFailures(failures, baseline);
+  const served_ = auditServedFailures(failures, baseline, autoSlotModelKeys(repoRoot));
   problems.push(...served_.problems);
 
   return {
