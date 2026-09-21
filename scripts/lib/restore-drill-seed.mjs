@@ -20,45 +20,52 @@ export function isLoopbackConnection(connectionString) {
   }
 }
 
+// Postgres refuses a bind that supplies a parameter the statement never names,
+// so each statement carries exactly the values it references.
 const SEED_STATEMENTS = [
-  `insert into public.profiles (id, email, display_name)
+  {
+    text: `insert into public.profiles (id, email, display_name)
      values ($1, 'restore-drill@example.invalid', 'Restore Drill')
      on conflict (id) do nothing`,
-  `insert into public.organizations (id, name, slug, created_by)
-     values ($2::uuid, 'Restore Drill Org', 'restore-drill-org', $1)
+    values: [DRILL_FIXTURE_USER],
+  },
+  {
+    text: `insert into public.organizations (id, name, slug, created_by)
+     values ($1::uuid, 'Restore Drill Org', 'restore-drill-org', $2)
      on conflict (id) do nothing`,
-  `insert into public.web_conversations (id, user_id, title, model)
-     values ($3::uuid, $1, 'Restore drill conversation', 'drill-model')
+    values: [DRILL_FIXTURE_ORGANIZATION, DRILL_FIXTURE_USER],
+  },
+  {
+    text: `insert into public.web_conversations (id, user_id, title, model)
+     values ($1::uuid, $2, 'Restore drill conversation', 'drill-model')
      on conflict (id) do nothing`,
-  `insert into public.token_credits
+    values: [DRILL_FIXTURE_CONVERSATION, DRILL_FIXTURE_USER],
+  },
+  {
+    text: `insert into public.token_credits
      (id, user_id, period_start, period_end, credits_allocated_cents, credits_used_cents)
-     values ($4::uuid, $1, timestamptz '2026-01-01 00:00:00+00',
+     values ($1::uuid, $2, timestamptz '2026-01-01 00:00:00+00',
              timestamptz '2026-02-01 00:00:00+00', 5000, 1234)
      on conflict (id) do nothing`,
-  `insert into public.connector_oauth_grants
+    values: [DRILL_FIXTURE_CREDIT, DRILL_FIXTURE_USER],
+  },
+  {
+    text: `insert into public.connector_oauth_grants
      (id, user_id, connector_id, access_token_enc, token_endpoint)
-     values ($5::uuid, $1, 'restore-drill-connector', 'ciphertext-fixture',
+     values ($1::uuid, $2, 'restore-drill-connector', 'ciphertext-fixture',
              'https://connector.example.invalid/token')
      on conflict (id) do nothing`,
+    values: [DRILL_FIXTURE_GRANT, DRILL_FIXTURE_USER],
+  },
 ];
 
-/**
- * Rows in every table the drill compares. An empty database restores an empty
- * database, which proves the commands ran and nothing about whether data
- * survives them.
- */
+// An empty database restores an empty database, which proves the commands ran
+// and nothing about whether data survives them, so every compared table gets a row.
 export async function seedDrillFixtures(query) {
-  const parameters = [
-    DRILL_FIXTURE_USER,
-    DRILL_FIXTURE_ORGANIZATION,
-    DRILL_FIXTURE_CONVERSATION,
-    DRILL_FIXTURE_CREDIT,
-    DRILL_FIXTURE_GRANT,
-  ];
   for (const statement of SEED_STATEMENTS) {
-    await query(statement, parameters);
+    await query(statement.text, statement.values);
   }
-  return parameters.length;
+  return SEED_STATEMENTS.length;
 }
 
 export async function fingerprintTable(query, table) {
