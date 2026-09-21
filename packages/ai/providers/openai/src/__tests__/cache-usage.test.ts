@@ -62,12 +62,17 @@ describe('translateOpenAIStream, cache token usage', () => {
     expect(usage).not.toHaveProperty('cacheWriteTokens');
   });
 
-  it('maps cache_write_tokens on the trailing-usage fallback path (usage arrives without a finish_reason chunk)', async () => {
+  it('maps cache_write_tokens on the trailing-usage path (a usage-only chunk after the finish reason)', async () => {
     const chunks = [
       {
         id: 'chatcmpl-3',
         created: 1,
-        choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: null }],
+        choices: [{ index: 0, delta: { content: 'hi' }, finish_reason: 'stop' }],
+      },
+      {
+        id: 'chatcmpl-3',
+        created: 1,
+        choices: [],
         usage: {
           prompt_tokens: 8525,
           completion_tokens: 12,

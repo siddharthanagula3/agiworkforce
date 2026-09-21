@@ -410,3 +410,85 @@ describe('EmptyProviderResponseError', () => {
     expect(err.message).toContain('none');
   });
 });
+
+// An OpenAI-compatible stream can deliver its failure as an error object inside
+// a 200 body, where the numeric code in the body is the only status there is.
+describe('classifyError, a failure delivered inside a 200 stream body', () => {
+  it('reads the rate limit from the body when the transport carried no status', () => {
+    const err = Object.assign(new Error('rate limited by the upstream provider'), {
+      error: { code: 429, message: 'rate limited by the upstream provider' },
+    });
+    const c = classifyError(err);
+    expect(c.category).toBe('rate_limit');
+    expect(c.status).toBe(429);
+  });
+
+  it('reads an upstream server error from the body the same way', () => {
+    const err = Object.assign(new Error('upstream provider is unavailable'), {
+      error: { code: 503, message: 'upstream provider is unavailable' },
+    });
+    expect(classifyError(err).category).toBe('server_overload');
+  });
+
+  it('prefers the transport status over the body code when both are present', () => {
+    const err = Object.assign(new Error('bad request'), {
+      status: 400,
+      error: { code: 429, message: 'bad request' },
+    });
+    expect(classifyError(err).status).toBe(400);
+  });
+
+  it('ignores a body code that is not an HTTP status', () => {
+    const err = Object.assign(new Error('something went wrong'), {
+      error: { code: 1234, message: 'something went wrong' },
+    });
+    expect(classifyError(err).status).toBeUndefined();
+  });
+});
+
+// OpenRouter meters its free pools per minute and per day, and reports both as
+// a 429 that names the window it exhausted.
+describe('classifyError, an exhausted OpenRouter free pool', () => {
+  function freePoolError(window: string, extra: Record<string, unknown> = {}) {
+    return Object.assign(new Error(`429 Rate limit exceeded: free-models-per-${window}`), {
+      status: 429,
+      error: {
+        code: 429,
+        message: `Rate limit exceeded: free-models-per-${window}`,
+      },
+      ...extra,
+    });
+  }
+
+  it('treats the spent daily pool as an exhausted window, not as back-pressure', () => {
+    const c = classifyError(freePoolError('day'));
+    expect(c.category).toBe('quota_exhausted');
+    expect(c.retryable).toBe(false);
+    expect(c.fallbackable).toBe(true);
+  });
+
+  it('leaves the per-minute window as an ordinary rate limit worth waiting out', () => {
+    const c = classifyError(freePoolError('min'));
+    expect(c.category).toBe('rate_limit');
+    expect(c.retryable).toBe(true);
+  });
+
+  it('reads the window from the structured error body when the wrapper prose differs', () => {
+    const err = Object.assign(new Error('429 status code (no body)'), {
+      status: 429,
+      error: { code: 429, message: 'Rate limit exceeded: free-models-per-day' },
+    });
+    expect(classifyError(err).category).toBe('quota_exhausted');
+  });
+
+  it('treats any window longer than a minute the same way', () => {
+    expect(classifyError(freePoolError('hour')).category).toBe('quota_exhausted');
+  });
+
+  it('does not claim another provider’s rate limit is an exhausted pool', () => {
+    const err = Object.assign(new Error('429 Rate limit reached for requests per day'), {
+      status: 429,
+    });
+    expect(classifyError(err).category).toBe('rate_limit');
+  });
+});
