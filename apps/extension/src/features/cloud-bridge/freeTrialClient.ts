@@ -31,6 +31,7 @@ import { clearAutofillProfile } from '../content/autofill/profile-storage';
 import type { ManagedCloudOwner } from './managedCloudAuthority';
 import { configuredAgiWebOrigin, DEFAULT_AGI_WEB_ORIGIN } from '../../lib/webOrigin';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { logger } from '../../utils';
 
 // The plan default the server derives, so the extension never names a model free cannot reach.
 export const FREE_TRIAL_MODEL: string = getDefaultModelFor(normalizeBillingPlanTier(null), 'chat');
@@ -444,6 +445,17 @@ export type FreeTrialChunk =
         | 'protocol_error'
         | 'cancelled'
         | 'timeout';
+      /**
+       * The wait the provider itself asked for, never a guess. The panel
+       * states a time only when this is present, because a reader who sits
+       * out an invented one and fails again stops believing the next.
+       */
+      retryAfterSeconds?: number;
+      /**
+       * The id the gateway logged for this same failure, so a reader
+       * reporting it hands over the one string that finds the turn.
+       */
+      requestId?: string;
     };
 
 export interface ManagedChatStreamOptions {
@@ -490,6 +502,50 @@ function protocolError(message = 'Malformed response from AGI Cloud.'): ParsedSs
   return { error: { type: 'error', message, code: 'protocol_error' } };
 }
 
+const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
+
+function statableRetryAfterSeconds(raw: unknown): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  const seconds = Math.round(raw);
+  if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return undefined;
+  return seconds;
+}
+
+/**
+ * The gateway puts the sentence, the wait and the id on one frame. Reading
+ * only the sentence left the panel unable to say when a window reopens or to
+ * give support anything to search for, so both frames that can carry a failure
+ * are read here rather than twice, differently.
+ */
+function gatewayFailure(
+  raw: unknown,
+  fallbackMessage: string,
+): Extract<FreeTrialChunk, { type: 'error' }> {
+  const record =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : undefined;
+  const message =
+    typeof raw === 'string'
+      ? raw
+      : typeof record?.['message'] === 'string' && record['message']
+        ? (record['message'] as string)
+        : fallbackMessage;
+  const providerCode = typeof record?.['code'] === 'string' ? (record['code'] as string) : '';
+  const retryAfterSeconds = statableRetryAfterSeconds(record?.['retryAfterSeconds']);
+  const requestId = record?.['requestId'];
+  return {
+    type: 'error',
+    message,
+    code:
+      providerCode.includes('limit_reached') || providerCode.includes('free_trial')
+        ? 'quota_exceeded'
+        : 'server_error',
+    ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+    ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+  };
+}
+
 // Multi-line `data:` is one payload per the SSE spec, but the server also
 // forwards raw provider lines with no blank separator, which arrive joined.
 // Parsing is what tells the two apart; splitting unconditionally breaks the first.
@@ -527,26 +583,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
 
   const event = parsed as Record<string, unknown>;
   if (event['error'] !== undefined) {
-    const rawError = event['error'];
-    const errorRecord =
-      rawError && typeof rawError === 'object' && !Array.isArray(rawError)
-        ? (rawError as Record<string, unknown>)
-        : undefined;
-    const message =
-      typeof rawError === 'string'
-        ? rawError
-        : typeof errorRecord?.['message'] === 'string'
-          ? errorRecord['message']
-          : 'AGI Cloud request failed.';
-    const providerCode = typeof errorRecord?.['code'] === 'string' ? errorRecord['code'] : '';
-    const quota = providerCode.includes('limit_reached') || providerCode.includes('free_trial');
-    return {
-      error: {
-        type: 'error',
-        message,
-        code: quota ? 'quota_exceeded' : 'server_error',
-      },
-    };
+    return { error: gatewayFailure(event['error'], 'AGI Cloud request failed.') };
   }
 
   let recognized = false;
@@ -577,27 +614,8 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
 
         const streamError = deltaRecord['x_stream_error'];
         if (streamError !== undefined && streamError !== null) {
-          const streamErrorRecord =
-            typeof streamError === 'object' && !Array.isArray(streamError)
-              ? (streamError as Record<string, unknown>)
-              : undefined;
-          const message =
-            typeof streamError === 'string'
-              ? streamError
-              : typeof streamErrorRecord?.['message'] === 'string'
-                ? streamErrorRecord['message']
-                : 'AGI Cloud request failed while streaming.';
-          const code =
-            typeof streamErrorRecord?.['code'] === 'string' ? streamErrorRecord['code'] : '';
           return {
-            error: {
-              type: 'error',
-              message,
-              code:
-                code.includes('limit_reached') || code.includes('free_trial')
-                  ? 'quota_exceeded'
-                  : 'server_error',
-            },
+            error: gatewayFailure(streamError, 'AGI Cloud request failed while streaming.'),
           };
         }
 
@@ -669,6 +687,11 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
     recognized: true,
   };
 }
+
+// These codes are the reader's own usage limit, so the sentence names their
+// account; the shared free model allowance is a different failure with its own.
+const QUOTA_EXHAUSTED_MESSAGE =
+  'You have reached the usage limit on your account. Open Usage in AGI Cloud settings to see when it resets. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
 
 function bodyIndicatesFreeQuota(body: string): boolean {
   const normalized = body.toLowerCase();
@@ -750,10 +773,10 @@ export async function* streamFreeChat(
     }
     try {
       cappedMessages = capRequestMessages(messages);
-    } catch (error) {
+    } catch {
       yield {
         type: 'error',
-        message: error instanceof Error ? error.message : 'Invalid managed chat request.',
+        message: 'This message is too large for AGI Cloud. Shorten it and send again.',
         code: 'protocol_error',
       };
       return;
@@ -846,11 +869,7 @@ export async function* streamFreeChat(
       const isQuotaExceeded = bodyIndicatesFreeQuota(body);
 
       if (isQuotaExceeded) {
-        yield {
-          type: 'error',
-          message: 'Usage limit reached. Upgrade or wait for your limit to reset.',
-          code: 'quota_exceeded',
-        };
+        yield { type: 'error', message: QUOTA_EXHAUSTED_MESSAGE, code: 'quota_exceeded' };
         return;
       }
 
@@ -897,7 +916,7 @@ export async function* streamFreeChat(
       }
       yield {
         type: 'error',
-        message: `AGI Cloud is temporarily unavailable (${response.status}).`,
+        message: 'AGI Cloud is temporarily unavailable. Try again, or choose another model.',
         code: 'server_error',
       };
       return;
@@ -910,11 +929,16 @@ export async function* streamFreeChat(
     const responseContentType = response.headers.get('content-type') ?? '';
     if (!responseContentType.toLowerCase().includes('text/event-stream')) {
       const looksLikeSignInPage = responseContentType.toLowerCase().includes('text/html');
+      if (!looksLikeSignInPage) {
+        // The type belongs in a support report, not in the panel: it names a
+        // transport a reader never chose and cannot change.
+        logger.warn('managed chat replied with a non-stream content type', responseContentType);
+      }
       yield {
         type: 'error',
         message: looksLikeSignInPage
           ? 'Your AGI Cloud session has expired. Sign in again from the side panel to continue.'
-          : `AGI Cloud replied with ${responseContentType || 'an unknown content type'} instead of a response stream.`,
+          : 'AGI Cloud did not return a response stream for this turn. Try again.',
         code: looksLikeSignInPage ? 'auth_required' : 'protocol_error',
       };
       return;
@@ -927,10 +951,10 @@ export async function* streamFreeChat(
         runReference = { ...runHandle, lastSequence: -1 };
         yield { type: 'run', run: { ...runReference } };
       }
-    } catch (error) {
+    } catch {
       yield {
         type: 'error',
-        message: error instanceof Error ? error.message : 'Invalid Managed Cloud run handle.',
+        message: 'AGI Cloud started this turn in a way this extension cannot follow. Try again.',
         code: 'protocol_error',
       };
       return;

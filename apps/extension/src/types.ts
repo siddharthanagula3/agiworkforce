@@ -543,6 +543,8 @@ export interface ChatChunkMessage {
   done: boolean;
   error?: string;
   errorCode?: string;
+  errorRetryAfterSeconds?: number;
+  errorRequestId?: string;
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;

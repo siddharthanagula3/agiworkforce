@@ -63,7 +63,7 @@ import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-p
 import {
   hasMessageStreamError,
   getMessageStreamErrorCode,
-  getMessageStreamErrorMessage,
+  streamFailureNoticeText,
 } from '@/src/features/chat/utils/messageStreamError';
 import { offersModelSwitch } from '@/services/apiErrors';
 import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
@@ -1044,8 +1044,8 @@ export const MessageBubble = memo(function MessageBubble({
                 accessibilityRole={onRetryMessage ? 'button' : 'text'}
                 accessibilityLabel={
                   onRetryMessage
-                    ? 'This response may be incomplete. Tap to regenerate.'
-                    : 'This response may be incomplete.'
+                    ? `${streamFailureNoticeText(message)} Tap to try again.`
+                    : streamFailureNoticeText(message)
                 }
                 style={{
                   flexDirection: 'row',
@@ -1063,9 +1063,7 @@ export const MessageBubble = memo(function MessageBubble({
               >
                 <AlertCircle size={13} color={themeColors.agentError} />
                 <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>
-                  {getMessageStreamErrorMessage(message)
-                    ? `Response may be incomplete: ${getMessageStreamErrorMessage(message)}`
-                    : 'Response may be incomplete'}
+                  {streamFailureNoticeText(message)}
                 </Text>
                 {onRetryMessage && (
                   <>

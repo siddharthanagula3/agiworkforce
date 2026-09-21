@@ -73,6 +73,8 @@ import { buildBubbleWithTools } from './features/side-panel/bubbles';
 import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
+  streamFailureText,
+  type StreamFailureDetail,
   hydrateStoredChatMessage,
   pageContextStillDescribes,
   resolveComposerPrompt,
@@ -468,6 +470,8 @@ interface ChatChunk {
   done: boolean;
   error?: string;
   errorCode?: string;
+  errorRetryAfterSeconds?: number;
+  errorRequestId?: string;
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
@@ -4993,8 +4997,14 @@ function retryFailedMessage(messageId: string): void {
   sendMessage(promptText);
 }
 
-function handleStreamError(id: string, errorText: string, errorCode?: string): void {
+function handleStreamError(
+  id: string,
+  rawErrorText: string,
+  errorCode?: string,
+  detail: StreamFailureDetail = {},
+): void {
   if (_ctx.currentStreamId !== id) return;
+  const errorText = streamFailureText(rawErrorText, detail);
   const errorAction =
     errorCode !== undefined &&
     ![
@@ -10685,20 +10695,18 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (routeStamped || continuationChanged) saveMessages();
 
   if (chunk.error) {
-    if (chunk.error === '__QUOTA_EXCEEDED__') {
-      void refreshCloudAccountUI();
-      handleStreamError(
-        chunk.id,
-        'Your AGI Cloud usage limit has been reached. Open AGI Cloud settings to review your plan.',
-      );
-      return;
-    }
+    if (chunk.errorCode === 'quota_exceeded') void refreshCloudAccountUI();
     if (chunk.error === '__AUTH_REQUIRED__') {
       void refreshCloudAccountUI();
       handleStreamError(chunk.id, 'Sign in to AGI Cloud to send messages.');
       return;
     }
-    handleStreamError(chunk.id, chunk.error, chunk.errorCode);
+    handleStreamError(chunk.id, chunk.error, chunk.errorCode, {
+      ...(chunk.errorRetryAfterSeconds !== undefined
+        ? { retryAfterSeconds: chunk.errorRetryAfterSeconds }
+        : {}),
+      ...(chunk.errorRequestId !== undefined ? { requestId: chunk.errorRequestId } : {}),
+    });
     return;
   }
 

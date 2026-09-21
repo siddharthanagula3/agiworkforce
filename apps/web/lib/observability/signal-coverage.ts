@@ -146,11 +146,7 @@ export interface ClientSurfaceEvidence {
 
 export const CLIENT_SURFACE_EVIDENCE: readonly ClientSurfaceEvidence[] = [
   { surface: 'web', reportsVia: 'apps/web/lib/observability/client-failure-transport.ts' },
-  {
-    surface: 'desktop',
-    reportsVia: null,
-    why: 'it renders the shared chat surface and installs no sink, so every report it makes is dropped before it leaves the process',
-  },
+  { surface: 'desktop', reportsVia: 'apps/desktop/src/services/clientFailureReporting.ts' },
   {
     surface: 'mobile',
     reportsVia: null,

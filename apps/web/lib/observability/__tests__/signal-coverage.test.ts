@@ -198,7 +198,6 @@ describe('the surface split on the client-health dashboard', () => {
       'api',
       'chrome',
       'cli',
-      'desktop',
       'mobile',
       'vscode',
     ]);

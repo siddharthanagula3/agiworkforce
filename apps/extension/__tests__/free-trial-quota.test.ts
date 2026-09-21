@@ -937,6 +937,23 @@ describe('managed-cloud attachment payloads', () => {
   });
 });
 
+describe('the sentence the reader’s own usage limit ends on', () => {
+  it('names the account, because these codes are the account’s own budget', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(429, JSON.stringify({ error: { code: 'quota_exceeded' } })),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    const failure = chunks.find((chunk) => chunk.type === 'error');
+    expect(failure?.code).toBe('quota_exceeded');
+    expect(failure?.message).toContain('the usage limit on your account');
+    expect(failure?.message).not.toMatch(/shares|not a limit on your account/);
+    expect(failure?.message).toContain(
+      'Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
+    );
+    expect(failure?.message).not.toMatch(/^Usage limit reached/);
+  });
+});
+
 describe('streamFreeChat, inline stream error', () => {
   it('yields quota_exceeded on inline stream error with limit_reached code', async () => {
     const sseLines = [
@@ -958,6 +975,48 @@ describe('streamFreeChat, inline stream error', () => {
     fetchMock.mockResolvedValueOnce(makeStreamResponse(sseLines));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'server_error' });
+  });
+
+  it('keeps the wait and the reference the gateway put on the failure frame', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({
+          choices: [
+            {
+              delta: {
+                x_stream_error: {
+                  message: 'This model is overloaded right now.',
+                  code: 'provider_overloaded',
+                  retryable: true,
+                  retryAfterSeconds: 120,
+                  requestId: 'req_ext_stream',
+                },
+              },
+            },
+          ],
+        }),
+      ]),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks.at(-1)).toMatchObject({
+      type: 'error',
+      message: 'This model is overloaded right now.',
+      retryAfterSeconds: 120,
+      requestId: 'req_ext_stream',
+    });
+  });
+
+  it('keeps neither field when the gateway sent neither, and rejects one nobody could believe', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({
+          error: { message: 'Temporary outage', code: 'service_unavailable', retryAfterSeconds: 0 },
+        }),
+      ]),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).not.toHaveProperty('retryAfterSeconds');
+    expect(chunks[0]).not.toHaveProperty('requestId');
   });
 
   it('does not publish a counter on inline quota error', async () => {

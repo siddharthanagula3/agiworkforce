@@ -12,6 +12,7 @@ import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
+import { withFailureReference } from '@/services/failureCopy';
 import { buildAttachedDocumentContext } from '@/services/attachmentContext';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
 import {
@@ -147,7 +148,12 @@ import { getConversationMessageStore } from './conversationRepository';
 import { useChatCloudMessageStore } from './chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
-import { turnProducedNothing } from '@/src/features/chat/utils/messageStreamError';
+import {
+  EMPTY_RESPONSE_FAILURE,
+  parseStreamFailure,
+  turnProducedNothing,
+  type StreamFailure,
+} from '@/src/features/chat/utils/messageStreamError';
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import {
   generatedFileArtifactsFromWire,
@@ -1708,7 +1714,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const turnGeneratedFiles: GeneratedFileWire[] = [];
       const turnInteractiveCards: InteractiveCard[] = [];
       let turnFinishReason: string | undefined;
-      let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
+      let turnStreamError: StreamFailure | undefined;
       let agentActivity: AgentActivityState | undefined;
       let cloudAgentRun: ManagedCloudAgentRunReference | undefined;
       let unacknowledgedPublicText = '';
@@ -1877,28 +1883,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
               turnFinishReason = delta.finish_reason;
             }
-            if (!turnStreamError) {
-              const rawStreamError = delta.x_stream_error as unknown;
-              if (
-                rawStreamError &&
-                typeof rawStreamError === 'object' &&
-                typeof (rawStreamError as { message?: unknown }).message === 'string' &&
-                (rawStreamError as { message: string }).message
-              ) {
-                const r = rawStreamError as {
-                  message: string;
-                  code?: unknown;
-                  retryable?: unknown;
-                };
-                turnStreamError = {
-                  message: r.message,
-                  ...(typeof r.code === 'string' ? { code: r.code } : {}),
-                  ...(typeof r.retryable === 'boolean' ? { retryable: r.retryable } : {}),
-                };
-              } else if (typeof rawStreamError === 'string' && rawStreamError) {
-                turnStreamError = { message: rawStreamError };
-              }
-            }
+            turnStreamError ??= parseStreamFailure(delta.x_stream_error);
 
             const thinkingStartedAt = thinkingStartTimes.get(conversationId);
             const currentMsgStore = getConversationMessageStore(conversationId);
@@ -1961,11 +1946,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 hasStreamError: turnStreamError !== undefined,
               })
             ) {
-              turnStreamError = {
-                message: 'AGI Cloud returned an empty response. Try again.',
-                code: 'empty_response',
-                retryable: true,
-              };
+              turnStreamError = EMPTY_RESPONSE_FAILURE;
             }
             const completedAt = new Date().toISOString();
             const convTitle =
@@ -2196,7 +2177,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }
             const failure =
               error instanceof ApiHttpError
-                ? { message: error.message, code: error.code }
+                ? {
+                    message: withFailureReference(error.message, error.requestId),
+                    code: error.code,
+                  }
                 : { message: 'Something went wrong. Please try again.', code: null };
             if (agentActivity) {
               agentActivity = finishAgentActivityLocally(agentActivity, {
@@ -2528,7 +2512,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     ];
     const turnPendingApprovals: PendingApprovalCall[] = [];
     let turnFinishReason: string | undefined;
-    let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
+    let turnStreamError: StreamFailure | undefined;
     let agentActivity = readAgentActivityState(currentMessage?.metadata?.agentActivity);
 
     try {
@@ -2586,28 +2570,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
               turnFinishReason = delta.finish_reason;
             }
-            if (!turnStreamError) {
-              const rawStreamError = delta.x_stream_error as unknown;
-              if (
-                rawStreamError &&
-                typeof rawStreamError === 'object' &&
-                typeof (rawStreamError as { message?: unknown }).message === 'string' &&
-                (rawStreamError as { message: string }).message
-              ) {
-                const r = rawStreamError as {
-                  message: string;
-                  code?: unknown;
-                  retryable?: unknown;
-                };
-                turnStreamError = {
-                  message: r.message,
-                  ...(typeof r.code === 'string' ? { code: r.code } : {}),
-                  ...(typeof r.retryable === 'boolean' ? { retryable: r.retryable } : {}),
-                };
-              } else if (typeof rawStreamError === 'string' && rawStreamError) {
-                turnStreamError = { message: rawStreamError };
-              }
-            }
+            turnStreamError ??= parseStreamFailure(delta.x_stream_error);
 
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
@@ -3020,6 +2983,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const backoffMs = nextAttempt > 1 ? 1000 * Math.pow(2, nextAttempt - 2) : 0;
     const userContent = userMsg.content;
+    // The question included these files, so a retry that drops them asks a
+    // different question and the answer stops making sense. Already-uploaded
+    // assets are reused rather than sent again.
+    const userAttachments = restoreComposerAttachments(userMsg.attachments);
     const userModel = userMsg.model ?? assistantMsg?.model ?? DEFAULT_AUTO_MODE_ID;
 
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
@@ -3030,7 +2997,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const trimmedMsgs = rows.slice(0, userIndex);
     const replaceAndRetry = async () => {
       if (branches) {
-        await get().sendMessage(conversationId, userContent, userModel, undefined, {
+        await get().sendMessage(conversationId, userContent, userModel, userAttachments, {
           regenerateParentMessageId: anchorMessageId,
         });
         return;
@@ -3059,7 +3026,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             : candidate,
         ),
       }));
-      await get().sendMessage(conversationId, userContent, userModel);
+      await get().sendMessage(conversationId, userContent, userModel, userAttachments);
     };
 
     if (backoffMs > 0) {
