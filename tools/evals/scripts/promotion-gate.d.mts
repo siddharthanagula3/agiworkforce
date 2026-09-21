@@ -57,6 +57,7 @@ export interface BaselineAudit {
   readonly passed: boolean;
   readonly problems: readonly string[];
   readonly unmet: readonly string[];
+  readonly releaseUnmet: readonly string[];
   readonly audited: readonly string[];
 }
 
@@ -70,7 +71,9 @@ export function scoreFloor(
 export function auditBaselines(options: {
   readonly measurementsDir?: string;
   readonly families?: Readonly<Record<string, unknown>>;
+  readonly releaseFamilies?: ReadonlySet<string>;
 }): BaselineAudit;
+export function autoReleaseFamilyIds(registry: unknown): Set<string>;
 
 export function readGatePolicy(file?: string): GatePolicy;
 export function toleranceFor(policy: GatePolicy, familyId: string): GateTolerance;
