@@ -41,82 +41,82 @@ and this matrix holds more, so there is no declared maturity to show for the res
 
 ## Core consumer
 
-| Feature             | Declared maturity           | web        | desktop    | mobile     | cli     | vscode     | chrome     | api     |
-| ------------------- | --------------------------- | ---------- | ---------- | ---------- | ------- | ---------- | ---------- | ------- |
-| Chat                | not in the feature registry | Unverified | Present    | Present    | Present | Present    | Present    | Present |
-| History             | not in the feature registry | Present    | Present    | Present    | Present | Present    | Present    | Present |
-| Projects            | general_availability        | Present    | Present    | Present    | Present | Present    | Present    | Present |
-| Files and artifacts | not in the feature registry | Present    | Present    | Present    | Present | Present    | Present    | Present |
-| Library             | not in the feature registry | Unverified | Present    | Present    | Absent  | Absent     | Absent     | Present |
-| Memory              | not in the feature registry | Present    | Present    | Present    | Present | Present    | Present    | Present |
-| Search              | not in the feature registry | Unverified | Unverified | Unverified | Present | Unverified | Unverified | Present |
-| Work                | general_availability        | Present    | Present    | Present    | Present | Present    | Present    | Present |
-| Settings            | not in the feature registry | Present    | Present    | Present    | Present | Unverified | Unverified | Present |
-| Plan status         | not in the feature registry | Present    | Unverified | Present    | Present | Present    | Unverified | Present |
-| Help                | not in the feature registry | Present    | Unverified | Unverified | Present | Unverified | Absent     | Present |
+| Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Chat | not in the feature registry | Unverified | Present | Present | Present | Present | Present | Present |
+| History | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
+| Projects | general_availability | Present | Present | Present | Present | Present | Present | Present |
+| Files and artifacts | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
+| Library | not in the feature registry | Unverified | Present | Present | Absent | Absent | Absent | Present |
+| Memory | not in the feature registry | Present | Present | Present | Present | Present | Present | Present |
+| Search | not in the feature registry | Unverified | Unverified | Unverified | Present | Unverified | Unverified | Present |
+| Work | general_availability | Present | Present | Present | Present | Present | Present | Present |
+| Settings | not in the feature registry | Present | Present | Present | Present | Unverified | Unverified | Present |
+| Plan status | not in the feature registry | Present | Unverified | Present | Present | Present | Unverified | Present |
+| Help | not in the feature registry | Present | Unverified | Unverified | Present | Unverified | Absent | Present |
 
 ## Advanced AI
 
-| Feature          | Declared maturity           | web        | desktop    | mobile     | cli        | vscode     | chrome     | api        |
-| ---------------- | --------------------------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- |
-| Deep Research    | general_availability        | Present    | Present    | Present    | Absent     | Absent     | Absent     | Present    |
-| Study            | not in the feature registry | Present    | Absent     | Absent     | Absent     | Absent     | Absent     | Present    |
-| Analyze          | not in the feature registry | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified |
-| Image generation | not in the feature registry | Present    | Present    | Unverified | Present    | Absent     | Absent     | Present    |
-| Video generation | not in the feature registry | Present    | Absent     | Absent     | Absent     | Absent     | Absent     | Present    |
-| Voice            | not in the feature registry | Present    | Present    | Present    | Present    | Absent     | Present    | Present    |
-| Camera           | not in the feature registry | Unverified | Unverified | Present    | Absent     | Absent     | Absent     | Absent     |
-| Screen sharing   | not in the feature registry | Absent     | Present    | Absent     | Absent     | Absent     | Unverified | Absent     |
+| Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Deep Research | general_availability | Present | Present | Present | Absent | Absent | Absent | Present |
+| Study | not in the feature registry | Present | Absent | Absent | Absent | Absent | Absent | Present |
+| Analyze | not in the feature registry | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified | Unverified |
+| Image generation | not in the feature registry | Present | Present | Unverified | Present | Absent | Absent | Present |
+| Video generation | not in the feature registry | Present | Absent | Absent | Absent | Absent | Absent | Present |
+| Voice | not in the feature registry | Present | Present | Present | Present | Absent | Present | Present |
+| Camera | not in the feature registry | Unverified | Unverified | Present | Absent | Absent | Absent | Absent |
+| Screen sharing | not in the feature registry | Absent | Present | Absent | Absent | Absent | Unverified | Absent |
 
 ## Integrations
 
-| Feature        | Declared maturity           | web     | desktop    | mobile  | cli        | vscode     | chrome  | api     |
-| -------------- | --------------------------- | ------- | ---------- | ------- | ---------- | ---------- | ------- | ------- |
-| Connectors     | not in the feature registry | Present | Present    | Present | Absent     | Present    | Absent  | Present |
-| Skills         | general_availability        | Present | Present    | Present | Present    | Absent     | Absent  | Present |
-| Plugins        | beta                        | Present | Present    | Absent  | Present    | Absent     | Absent  | Present |
-| MCP            | not in the feature registry | Present | Unverified | Absent  | Unverified | Unverified | Partial | Present |
-| Tool approvals | not in the feature registry | Present | Present    | Present | Unverified | Present    | Present | Present |
+| Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Connectors | not in the feature registry | Present | Present | Present | Absent | Present | Absent | Present |
+| Skills | general_availability | Present | Present | Present | Present | Absent | Absent | Present |
+| Plugins | beta | Present | Present | Absent | Present | Absent | Absent | Present |
+| MCP | not in the feature registry | Present | Unverified | Absent | Unverified | Unverified | Partial | Present |
+| Tool approvals | not in the feature registry | Present | Present | Present | Unverified | Present | Present | Present |
 
 ## Developer
 
-| Feature              | Declared maturity           | web        | desktop    | mobile     | cli        | vscode     | chrome     | api        |
-| -------------------- | --------------------------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- | ---------- |
-| Code sessions        | general_availability        | Present    | Present    | Present    | Present    | Present    | Absent     | Present    |
-| Repository context   | not in the feature registry | Unverified | Unverified | Absent     | Unverified | Unverified | Absent     | Unverified |
-| Terminal             | not in the feature registry | Absent     | Present    | Absent     | Present    | Present    | Absent     | Absent     |
-| Git                  | not in the feature registry | Absent     | Present    | Absent     | Present    | Unverified | Absent     | Absent     |
-| Diffs                | not in the feature registry | Present    | Present    | Unverified | Present    | Present    | Absent     | Present    |
-| Browser verification | beta                        | Present    | Unverified | Absent     | Present    | Absent     | Unverified | Unverified |
-| Cloud tasks          | not in the feature registry | Present    | Present    | Present    | Unverified | Present    | Absent     | Present    |
+| Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Code sessions | general_availability | Present | Present | Present | Present | Present | Absent | Present |
+| Repository context | not in the feature registry | Unverified | Unverified | Absent | Unverified | Unverified | Absent | Unverified |
+| Terminal | not in the feature registry | Absent | Present | Absent | Present | Present | Absent | Absent |
+| Git | not in the feature registry | Absent | Present | Absent | Present | Unverified | Absent | Absent |
+| Diffs | not in the feature registry | Present | Present | Unverified | Present | Present | Absent | Present |
+| Browser verification | beta | Present | Unverified | Absent | Present | Absent | Unverified | Unverified |
+| Cloud tasks | not in the feature registry | Present | Present | Present | Unverified | Present | Absent | Present |
 
 ## Native
 
-| Feature         | Declared maturity           | web     | desktop    | mobile     | cli        | vscode     | chrome     | api     |
-| --------------- | --------------------------- | ------- | ---------- | ---------- | ---------- | ---------- | ---------- | ------- |
-| Local runtime   | not in the feature registry | Absent  | Present    | Absent     | Present    | Present    | Unverified | Absent  |
-| BYOK            | not in the feature registry | Present | Unverified | Unverified | Present    | Present    | Absent     | Present |
-| Global voice    | not in the feature registry | Absent  | Present    | Unverified | Present    | Absent     | Absent     | Absent  |
-| Computer use    | experimental                | Absent  | Present    | Absent     | Absent     | Absent     | Present    | Absent  |
-| Filesystem      | not in the feature registry | Absent  | Present    | Absent     | Unverified | Unverified | Absent     | Absent  |
-| Updater         | not in the feature registry | Absent  | Present    | Unverified | Present    | Absent     | Absent     | Present |
-| Scheduled tasks | general_availability        | Present | Present    | Present    | Present    | Present    | Present    | Present |
-| Hooks           | beta                        | Absent  | Present    | Absent     | Present    | Unverified | Absent     | Absent  |
-| Remote control  | experimental                | Present | Present    | Present    | Absent     | Absent     | Absent     | Present |
-| Event triggers  | beta                        | Present | Present    | Absent     | Unverified | Absent     | Absent     | Present |
+| Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Local runtime | not in the feature registry | Absent | Present | Absent | Present | Present | Unverified | Absent |
+| BYOK | not in the feature registry | Present | Unverified | Unverified | Present | Present | Absent | Present |
+| Global voice | not in the feature registry | Absent | Present | Unverified | Present | Absent | Absent | Absent |
+| Computer use | experimental | Absent | Present | Absent | Absent | Absent | Present | Absent |
+| Filesystem | not in the feature registry | Absent | Present | Absent | Unverified | Unverified | Absent | Absent |
+| Updater | not in the feature registry | Absent | Present | Unverified | Present | Absent | Absent | Present |
+| Scheduled tasks | general_availability | Present | Present | Present | Present | Present | Present | Present |
+| Hooks | beta | Absent | Present | Absent | Present | Unverified | Absent | Absent |
+| Remote control | experimental | Present | Present | Present | Absent | Absent | Absent | Present |
+| Event triggers | beta | Present | Present | Absent | Unverified | Absent | Absent | Present |
 
 ## Enterprise
 
-| Feature                      | Declared maturity           | web     | desktop    | mobile     | cli        | vscode     | chrome     | api     |
-| ---------------------------- | --------------------------- | ------- | ---------- | ---------- | ---------- | ---------- | ---------- | ------- |
-| SSO                          | not in the feature registry | Present | Present    | Unverified | Present    | Unverified | Unverified | Present |
-| Policy effects               | not in the feature registry | Present | Present    | Unverified | Present    | Unverified | Unverified | Present |
-| Model restrictions           | not in the feature registry | Present | Unverified | Unverified | Present    | Present    | Unverified | Present |
-| Connector restrictions       | not in the feature registry | Present | Present    | Unverified | Absent     | Present    | Absent     | Present |
-| Sharing restrictions         | not in the feature registry | Present | Unverified | Present    | Absent     | Absent     | Absent     | Present |
-| Audit visibility             | not in the feature registry | Present | Present    | Absent     | Present    | Absent     | Absent     | Present |
-| Managed-compute restrictions | not in the feature registry | Present | Present    | Present    | Unverified | Unverified | Unverified | Present |
-| Administration               | not in the feature registry | Present | Absent     | Absent     | Absent     | Absent     | Absent     | Present |
+| Feature | Declared maturity | web | desktop | mobile | cli | vscode | chrome | api |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| SSO | not in the feature registry | Present | Present | Unverified | Present | Unverified | Unverified | Present |
+| Policy effects | not in the feature registry | Present | Present | Unverified | Present | Unverified | Unverified | Present |
+| Model restrictions | not in the feature registry | Present | Unverified | Unverified | Present | Present | Unverified | Present |
+| Connector restrictions | not in the feature registry | Present | Present | Unverified | Absent | Present | Absent | Present |
+| Sharing restrictions | not in the feature registry | Present | Unverified | Present | Absent | Absent | Absent | Present |
+| Audit visibility | not in the feature registry | Present | Present | Absent | Present | Absent | Absent | Present |
+| Managed-compute restrictions | not in the feature registry | Present | Present | Present | Unverified | Unverified | Unverified | Present |
+| Administration | not in the feature registry | Present | Absent | Absent | Absent | Absent | Absent | Present |
 
 ## Features with no declared maturity
 
