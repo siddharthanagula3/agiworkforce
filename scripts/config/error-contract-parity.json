@@ -10,6 +10,14 @@
           "uncovered": {}
         },
         {
+          "surface": "vscode-headline",
+          "file": "apps/extension-vscode/src/features/sidebar-webview/errorPresentation.ts",
+          "region": "function failureHeadline[\\s\\S]*?(?=\\n\\s+default:)",
+          "uncovered": {
+            "unknown": "The switch's default is the sentence an unclassified failure is owed, so naming it a second time would only duplicate the fallback."
+          }
+        },
+        {
           "surface": "web",
           "file": "apps/web/features/code/local-code.ts",
           "region": "export function localTurnFailureSentence[\\s\\S]*?\\n\\}",
