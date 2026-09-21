@@ -2,7 +2,6 @@ import 'server-only';
 
 export const runtime = 'nodejs';
 
-import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireEnv } from '@shared/utils/env';
@@ -32,6 +31,7 @@ import {
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
+import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
   buildManagedComputeAccessGateResponse,
@@ -72,6 +72,7 @@ import {
 } from './lib/voice-session-store';
 
 const LIVE_SESSION_LEASE_SECONDS = 4 * 60 * 60;
+const VOICE_LIVE_SESSION_NAMESPACE = 'agi.voice.live';
 const SESSION_CREATE_TIMEOUT_MS = 20_000;
 const OPENAI_KEY_ENV = 'OPENAI_API_KEY';
 const MAX_SDP_LENGTH = 65_536;
@@ -203,6 +204,26 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
+  const voice = isLiveVoice(body.voice) ? body.voice : LIVE_DEFAULT_VOICE;
+  const language = body.language?.trim() ? body.language.trim() : null;
+  const pace = clampVoicePace(body.pace ?? VOICE_PACE_DEFAULT);
+  const surface: VoiceSessionSurface = body.surface ?? 'web';
+
+  // One offer is one session attempt: a client retrying the same POST sends the
+  // same SDP, and a user deliberately starting another session negotiates a
+  // fresh peer connection and therefore a different one. The header outranks it
+  // so a client that names its own retries is taken at its word.
+  const sessionIdentity = {
+    operation: 'voice_live_session',
+    model: liveModel.id,
+    conversationId: body.conversationId ?? null,
+    voice,
+    language,
+    pace,
+    surface,
+    offer: body.sdp,
+  };
+
   const ceilingSeconds = LIVE_SESSION_BLOCK_MINUTES * 60;
   const estimatedCostCents = liveSessionCostCents(ceilingSeconds);
   let reservation: ManagedUsageRequestReservation;
@@ -228,12 +249,12 @@ async function handleCreateLiveSession(request: NextRequest) {
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
       userId,
-      idempotencyKey: `agi.voice.live.${randomUUID()}`,
-      requestHash: fingerprintManagedUsageRequest({
-        model: liveModel.id,
-        conversationId: body.conversationId ?? null,
-        voice: body.voice ?? null,
+      idempotencyKey: managedUsageIdempotencyKey({
+        namespace: VOICE_LIVE_SESSION_NAMESPACE,
+        suppliedKey: request.headers.get('idempotency-key'),
+        identity: sessionIdentity,
       }),
+      requestHash: fingerprintManagedUsageRequest(sessionIdentity),
       provider,
       model: liveModel.id,
       estimatedCostCents,
@@ -281,10 +302,6 @@ async function handleCreateLiveSession(request: NextRequest) {
     }
   };
 
-  const voice = isLiveVoice(body.voice) ? body.voice : LIVE_DEFAULT_VOICE;
-  const language = body.language?.trim() ? body.language.trim() : null;
-  const pace = clampVoicePace(body.pace ?? VOICE_PACE_DEFAULT);
-  const surface: VoiceSessionSurface = body.surface ?? 'web';
   let context: LiveVoiceContextBundle = EMPTY_LIVE_VOICE_CONTEXT;
   try {
     context = await loadLiveVoiceContext(scoped.db, {
