@@ -3,56 +3,6 @@ import path from 'node:path';
 
 const OUTBOUND_CALLEES = ['fetchImpl', 'pinnedPublicFetch', 'fetch'];
 
-/**
- * A module that calls the resolved-host guard is telling us the URL is not one
- * it chose. That, plus the tool surfaces, is the set this rule governs.
- */
-export function unvettedUrlModules(roots, guard, extraDirs = []) {
-  const found = new Set();
-  for (const root of roots) {
-    for (const file of sourceFilesUnder(root)) {
-      if (fs.readFileSync(file, 'utf8').includes(guard)) found.add(file);
-    }
-  }
-  for (const dir of extraDirs) {
-    if (!fs.existsSync(dir)) continue;
-    for (const file of sourceFilesUnder(dir)) found.add(file);
-  }
-  return [...found].sort();
-}
-
-const IMPORT = /import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g;
-
-/** Endpoint constants this module imports, resolved one level into their file. */
-export function importedEndpointNames(source, file, scanRoot) {
-  const names = [];
-  IMPORT.lastIndex = 0;
-  let match;
-  while ((match = IMPORT.exec(source)) !== null) {
-    const specifier = match[2];
-    const resolved = resolveModule(specifier, file, scanRoot);
-    if (!resolved) continue;
-    const exported = fixedEndpointNames(fs.readFileSync(resolved, 'utf8'));
-    for (const name of match[1].split(',').map((part) => part.trim().split(/\s+as\s+/)[0])) {
-      if (exported.includes(name)) names.push(name);
-    }
-  }
-  return names;
-}
-
-function resolveModule(specifier, file, scanRoot) {
-  const base = specifier.startsWith('@/')
-    ? path.join(scanRoot, 'apps/web', specifier.slice(2))
-    : specifier.startsWith('.')
-      ? path.resolve(path.dirname(file), specifier)
-      : null;
-  if (!base) return null;
-  for (const candidate of [`${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')]) {
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
-  }
-  return null;
-}
-
 export function sourceFilesUnder(dir) {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -130,47 +80,6 @@ export function moduleScopeFunctions(source) {
     functions.push({ name, start: match.index, end: matchingBrace(source, brace) });
   }
   return functions.filter((fn) => fn.end > fn.start);
-}
-
-const ENDPOINT_CONST = /^(?:export\s+)?const\s+(\w+)\s*=\s*(['"`][^\n;]*)/gm;
-
-/**
- * Module constants holding a literal endpoint, including one built from another
- * such constant. A call to one of those reaches the vendor the allowlist
- * already vouches for, not a host someone else chose.
- */
-export function fixedEndpointNames(source, imported = []) {
-  const candidates = [];
-  ENDPOINT_CONST.lastIndex = 0;
-  let match;
-  while ((match = ENDPOINT_CONST.exec(source)) !== null) {
-    candidates.push({ name: match[1], value: match[2] });
-  }
-  const fixed = new Set(imported);
-  for (let pass = 0; pass < 3; pass += 1) {
-    for (const candidate of candidates) {
-      if (fixed.has(candidate.name)) continue;
-      if (/https?:\/\//.test(candidate.value)) {
-        fixed.add(candidate.name);
-        continue;
-      }
-      const interpolated = [...candidate.value.matchAll(/\$\{(\w+)\}/g)].map((m) => m[1]);
-      if (interpolated.length > 0 && interpolated.every((name) => fixed.has(name))) {
-        fixed.add(candidate.name);
-      }
-    }
-  }
-  const builders = [
-    ...source.matchAll(/function\s+(\w+)\([^)]*\)[^{]*\{\s*return\s+([`'"][^\n;]*)/g),
-  ];
-  for (const builder of builders) {
-    const value = builder[2];
-    const interpolated = [...value.matchAll(/\$\{(\w+)\}/g)].map((m) => m[1]);
-    if (/https?:\/\//.test(value) || interpolated.some((name) => fixed.has(name))) {
-      fixed.add(builder[1]);
-    }
-  }
-  return [...fixed];
 }
 
 const REDIRECT = /\bredirect\s*:\s*['"](\w+)['"]/;
