@@ -14,7 +14,7 @@ import {
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
-  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  onError?: (error: Error, errorInfo: ErrorInfo, errorId: string) => void;
   compact?: boolean;
   componentName?: string;
   showReportDialog?: boolean;
@@ -57,7 +57,7 @@ class ErrorBoundary extends Component<Props, State> {
     });
 
     if (this.props.onError) {
-      this.props.onError(error, errorInfo);
+      this.props.onError(error, errorInfo, errorId);
     }
 
     if (process.env.NODE_ENV === 'development') {

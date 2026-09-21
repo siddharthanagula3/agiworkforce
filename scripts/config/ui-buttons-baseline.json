@@ -1,0 +1,5 @@
+{
+  "generator": "scripts/check-ui-buttons.mjs",
+  "note": "Empty on purpose. Every control the shell sizes explicitly is 24px or taller today, and the guard refuses the first one that is not.",
+  "entries": []
+}

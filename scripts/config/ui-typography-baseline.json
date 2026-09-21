@@ -1,0 +1,11 @@
+{
+  "generator": "scripts/check-ui-typography.mjs",
+  "scale": [12, 12.8, 13, 13.5, 13.6, 14, 14.5, 15, 16, 17, 18, 24],
+  "entries": [
+    {
+      "key": "apps/web/app/gallery/GalleryClient.tsx:482:font-size:8px",
+      "reason": "inside the sandboxed srcdoc of a decorative gallery thumbnail scaled to 300%, so the rendered size is not 8px; the document is inert and carries no reader-facing copy"
+    }
+  ],
+  "note": "The shell draws text at these sizes and no others. A step is added here only when a role needs it; the entries below are declarations under the legibility floor that this lane does not own."
+}
