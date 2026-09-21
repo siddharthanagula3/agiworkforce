@@ -314,6 +314,22 @@ describe('BillingSection', () => {
     expect(screen.queryByText('Past_due')).toBeNull();
   });
 
+  it('reports a portal that would not open and hands the controls back', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    billingMocks.openBillingPortal.mockRejectedValueOnce(
+      new Error('Could not open billing portal.'),
+    );
+
+    render(<BillingSection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel plan' }));
+
+    const failure = await screen.findByText('Could not open billing portal.');
+    expect(failure.closest('[role="alert"]')).not.toBeNull();
+    expect(billingMocks.openBillingPortal).toHaveBeenCalledWith(undefined, 'cancel');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel plan' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'Manage billing' })).toBeEnabled();
+  });
+
   it('distinguishes renewal from a scheduled cancellation', () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
 

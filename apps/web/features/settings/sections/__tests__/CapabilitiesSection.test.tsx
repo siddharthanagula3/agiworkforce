@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 const fetchPreferenceNamespace = vi.fn(async (_namespace: string, fallback: unknown) => fallback);
 const savePreferenceNamespace = vi.fn(async (_namespace: string, _value: unknown) => undefined);
@@ -56,5 +56,18 @@ describe('CapabilitiesSection', () => {
     expect(
       screen.getByRole('switch', { name: 'Cloud code execution and file creation' }),
     ).toBeVisible();
+  });
+
+  it('reports a failed save as a failure rather than another muted status line', async () => {
+    savePreferenceNamespace.mockRejectedValueOnce(new Error('storage unavailable'));
+    render(<CapabilitiesSection />);
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Synced|Saved/));
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Cloud code execution and file creation' }));
+
+    const failure = await screen.findByRole('alert');
+    expect(failure).toHaveTextContent('Save failed: storage unavailable');
+    expect(failure).toHaveStyle({ color: 'var(--settings-destructive-text)' });
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

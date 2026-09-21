@@ -15,6 +15,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 
 interface StatusMessage {
   text: string;
@@ -138,9 +139,12 @@ export function TimeFocusSection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Optional boundaries you choose for yourself. Reminders never lock you out of AGI.
         </p>
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+        <SaveStatusLine
+          failed={message !== null}
+          style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }}
+        >
           {status}
-        </p>
+        </SaveStatusLine>
       </header>
 
       <div

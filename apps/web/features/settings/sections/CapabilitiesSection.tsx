@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Switch } from '@agiworkforce/ui';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
 import {
@@ -36,9 +37,9 @@ export function CapabilitiesSection() {
         </p>
         {/* AUDIT-FIX PAR-32: report a failed load instead of falling through
           to 'Synced to your account' while the toggles show local defaults. */}
-        <p
+        <SaveStatusLine
+          failed={saveError !== null || loadError !== null}
           className={`mt-2 text-xs ${loadError ? 'text-danger' : 'text-muted-foreground'}`}
-          role="status"
         >
           {saving
             ? 'Saving...'
@@ -49,7 +50,7 @@ export function CapabilitiesSection() {
                 : savedAt
                   ? 'Saved'
                   : 'Synced to your account'}
-        </p>
+        </SaveStatusLine>
         {loadError && (
           <button
             type="button"
