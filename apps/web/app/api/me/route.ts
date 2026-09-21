@@ -24,7 +24,7 @@ import {
   SYNCED_APP_SURFACES,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
-import type { MeResponse } from '@agiworkforce/cloud-contracts';
+import type { MeDisabledFeature, MeResponse } from '@agiworkforce/cloud-contracts';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
 import { webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import {
@@ -43,7 +43,12 @@ import {
 } from '@/lib/feature-flags/flag-evaluation-service';
 import { clientVisibleFlags } from '@/lib/feature-flags/routing-flags';
 import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
-import { platformCapabilitiesOf } from '@/lib/feature-flags/kill-switches';
+import { getActiveFlagDefinitions } from '@/lib/feature-flags/flag-store';
+import { versionDisableReason } from '@/lib/feature-flags/version-disable';
+import {
+  platformCapabilitiesOf,
+  type KillSwitchCapability,
+} from '@/lib/feature-flags/kill-switches';
 import { readRolloutGate } from '@/lib/feature-flags/rollout-gate';
 import {
   RELEASE_CHANNELS,
@@ -52,6 +57,22 @@ import {
 } from '@/lib/feature-flags/rollout-rings';
 
 const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
+
+/**
+ * The switches holding something closed right now, each with the sentence the
+ * operator left on it. The handshake can only name the platform subset, so
+ * without this a client told `work` is off has nowhere to read why.
+ */
+async function closedFeatures(
+  closed: readonly KillSwitchCapability[],
+): Promise<MeDisabledFeature[]> {
+  if (closed.length === 0) return [];
+  const definitions = await getActiveFlagDefinitions();
+  return closed.map((capability) => ({
+    capability,
+    reason: versionDisableReason(definitions, capability),
+  }));
+}
 
 const PatchMeSchema = z.object({
   display_name: z.string().min(1).max(120).optional(),
@@ -244,6 +265,7 @@ async function handleGetMe(request: NextRequest) {
       feature_flag_variants: rolloutFlags.variants,
       routing_preferences,
       capability_handshake: toWireCapabilityHandshake(capability_handshake),
+      disabled_features: await closedFeatures(killSwitches?.closedCapabilities ?? []),
     };
     return NextResponse.json(responseBody);
   } catch (error) {

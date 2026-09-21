@@ -31,6 +31,16 @@ export const MeRoutingPreferencesSchema = z
   })
   .catchall(z.unknown());
 
+/**
+ * A capability the server has switched off, with the sentence to show whoever
+ * hits it. `reason` is null when the switch carries no explanation, which is
+ * the difference between "this build is held off, here is why" and "off".
+ */
+export const MeDisabledFeatureSchema = z.object({
+  capability: z.string(),
+  reason: z.string().nullable(),
+});
+
 export const MeProfileSchema = z.object({
   display_name: z.string().nullable(),
   preferred_name: z.string().nullable(),
@@ -50,11 +60,13 @@ export const MeResponseSchema = z.object({
   feature_flag_variants: z.record(z.string(), z.string()).optional(),
   routing_preferences: MeRoutingPreferencesSchema,
   capability_handshake: EffectiveCapabilityDocumentSchema.optional(),
+  disabled_features: z.array(MeDisabledFeatureSchema).optional(),
 });
 
 export type MePlan = z.infer<typeof MePlanSchema>;
 export type MeSubscriptionSource = z.infer<typeof MeSubscriptionSourceSchema>;
 export type MeProfile = z.infer<typeof MeProfileSchema>;
+export type MeDisabledFeature = z.infer<typeof MeDisabledFeatureSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export function parseMeResponse(data: unknown): MeResponse {

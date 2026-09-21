@@ -5,11 +5,6 @@
       "guard": "check-audit-progress.mjs",
       "reason": "It reads docs/work/audit-remediation-ledger.md, which is kept out of the repository (git-excluded in the founder's checkout), so in CI it can only fail on a missing file. It is a local tool, not a gate.",
       "owed": "Either commit the ledger it reads or move the script out of scripts/check-*.mjs so it stops reading as a guard."
-    },
-    {
-      "guard": "check-capability-boundaries.mjs",
-      "reason": "It FAILS today: apps/mobile/src/features/shell/capabilityShortcuts.ts decides canUseCamera, canUseCloudModels and canUseVoice from string literals without reading the capability handshake. Wiring a red guard would stop the chain at it.",
-      "owed": "Fix the mobile file to read the handshake, then add \"pnpm check:capability-boundaries\" to check:llm-operability and delete this entry."
     }
   ]
 }
