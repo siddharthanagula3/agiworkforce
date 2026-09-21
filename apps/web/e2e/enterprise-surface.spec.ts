@@ -53,10 +53,28 @@ interface PageFailures {
   failedRequests: string[];
 }
 
+// /download probes these, and each answers 404 when nothing is published or
+// GitHub refuses the lookup; the page renders that answer as "not available yet".
+const RELEASE_AVAILABILITY_PROBES = new Set([
+  '/api/releases/desktop-cloud/latest',
+  '/api/releases/cli/latest',
+  '/api/download/checksums',
+]);
+
+function isUnpublishedReleaseAnswer(message: ConsoleMessage): boolean {
+  if (!/status of 404/.test(message.text())) return false;
+  try {
+    return RELEASE_AVAILABILITY_PROBES.has(new URL(message.location().url).pathname);
+  } catch {
+    return false;
+  }
+}
+
 function watch(page: Page): PageFailures {
   const f: PageFailures = { consoleErrors: [], pageErrors: [], failedRequests: [] };
   page.on('console', (m: ConsoleMessage) => {
-    if (m.type() === 'error') f.consoleErrors.push(m.text().slice(0, 200));
+    if (m.type() !== 'error' || isUnpublishedReleaseAnswer(m)) return;
+    f.consoleErrors.push(m.text().slice(0, 200));
   });
   page.on('pageerror', (e) => f.pageErrors.push(String(e).slice(0, 200)));
   page.on('requestfailed', (r) => {
