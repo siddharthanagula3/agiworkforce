@@ -21,6 +21,10 @@
 --          only reader discards the value, so the columns hold nothing a
 --          caller can observe.
 --
+-- Order  : this is a CONTRACT step and sorts last on purpose. The release before
+--          this one still names both columns in its device routes, so apply it
+--          only immediately before the release that stops naming them is deployed.
+--
 -- Depends: 0013 (device_authorization_codes), 0029 (its status contract)
 -- =============================================================================
 

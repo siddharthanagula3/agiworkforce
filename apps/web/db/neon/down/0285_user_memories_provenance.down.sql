@@ -16,6 +16,6 @@ alter table public.user_memories
 
 -- destructive: removes this migration's ledger row so the runner can apply it again.
 delete from public.schema_migrations
- where filename = '0286_user_memories_provenance.sql';
+ where filename = '0285_user_memories_provenance.sql';
 
 commit;
