@@ -2814,10 +2814,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             const errorCode =
               ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
                 string | undefined) || 'unknown_error';
-            finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
+            const failure = webSearchFailureSentence(errorCode);
+            finishTool('web_search', 'failed', failure);
             upsertNativeWebSearchEntry({
               status: 'failed',
-              error: `Web search failed: ${errorCode}`,
+              error: failure,
               completedAtMs: Date.now(),
             });
           }
@@ -3002,6 +3003,21 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     coalescedAppends.flush();
     await reader.cancel().catch(() => undefined);
   }
+}
+
+/**
+ * The provider's own search error codes, in the reader's words. A code the table
+ * does not know is reported as the search being unavailable, never as the code.
+ */
+const WEB_SEARCH_FAILURE_SENTENCES: Readonly<Record<string, string>> = {
+  too_many_requests: 'Web search is receiving too many requests right now.',
+  max_uses_exceeded: 'Web search reached the most searches allowed for one answer.',
+  query_too_long: 'The search query was too long to run.',
+  invalid_input: 'The search query could not be run.',
+};
+
+export function webSearchFailureSentence(code: string): string {
+  return WEB_SEARCH_FAILURE_SENTENCES[code] ?? 'Web search is unavailable right now.';
 }
 
 export function useChatStream(): UseChatStreamReturn {

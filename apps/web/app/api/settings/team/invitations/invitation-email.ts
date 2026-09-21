@@ -128,6 +128,6 @@ export async function sendInvitationEmail(
   logger.warn({ reason: result.reason }, '[team-invitations] invitation email failed to send');
   return {
     emailSent: false,
-    reason: `The invitation email could not be delivered (${result.reason}). ${manualReason}`,
+    reason: `The invitation email could not be delivered. ${manualReason}`,
   };
 }

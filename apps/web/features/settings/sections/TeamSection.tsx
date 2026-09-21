@@ -30,6 +30,7 @@ import {
   useUpdateTeamMemberRole,
   type OrganizationOwnerRoleAfterTransfer,
   type TeamInvitation,
+  type TeamInvitationCredentialResult,
   type TeamMember,
 } from '../hooks/use-settings-queries';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
@@ -185,6 +186,7 @@ export function TeamSection() {
   const [invitationLink, setInvitationLink] = useState<{
     email: string;
     url: string;
+    delivery: TeamInvitationCredentialResult['delivery'];
   } | null>(null);
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [successorUserId, setSuccessorUserId] = useState('');
@@ -324,7 +326,11 @@ export function TeamSection() {
       },
       {
         onSuccess: (result) => {
-          setInvitationLink({ email, url: buildInvitationLink(result.inviteToken) });
+          setInvitationLink({
+            email,
+            url: buildInvitationLink(result.inviteToken),
+            delivery: result.delivery,
+          });
           setMemberEmail('');
           setCopyStatus('idle');
         },
@@ -341,6 +347,7 @@ export function TeamSection() {
           setInvitationLink({
             email: invitation.email,
             url: buildInvitationLink(result.inviteToken),
+            delivery: result.delivery,
           });
           setCopyStatus('idle');
         },
@@ -694,8 +701,8 @@ export function TeamSection() {
             </button>
             <div style={{ flexBasis: '100%' }}>
               <p style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, margin: 0 }}>
-                No email is sent yet. Copy the private link after creating the invitation and send
-                it to that address. The recipient must sign in with the invited email.
+                After you create the invitation, a private link appears here, with a note on whether
+                an invitation email was sent. The recipient must sign in with the invited email.
               </p>
               {seatsAvailable === 0 ? (
                 <p role="alert" style={{ color: 'var(--text-2)', fontSize: 12, margin: '8px 0 0' }}>
@@ -724,8 +731,15 @@ export function TeamSection() {
                   marginBottom: 8,
                 }}
               >
-                <div style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}>
-                  Private link for {invitationLink.email}
+                <div>
+                  <div style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}>
+                    Private link for {invitationLink.email}
+                  </div>
+                  <p style={{ color: 'var(--text-2)', fontSize: 12, margin: '4px 0 0' }}>
+                    {invitationLink.delivery.emailSent
+                      ? `An invitation email was sent to ${invitationLink.email}. This link does the same thing if it does not arrive.`
+                      : invitationLink.delivery.reason}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -1212,8 +1226,8 @@ export function TeamSection() {
                   ? `${pendingAction.invitation.email} will no longer be able to join with this link. Its reserved seat becomes available immediately.`
                   : pendingAction?.kind === 'leave-workspace'
                     ? isOwner
-                      ? 'The selected member becomes owner, then you immediately lose access and your seat becomes available. Every session, device token and API key of yours is revoked, and any connector you shared with this workspace stops working for its members.'
-                      : 'You will immediately lose access to this workspace and your seat becomes available. Every session, device token and API key of yours is revoked, so you sign in again, and any connector you shared with this workspace stops working for its members. This cannot be undone by you.'
+                      ? 'The selected member becomes owner, then you immediately lose access and your seat becomes available. The device tokens and API keys issued in this workspace are revoked, and if you were working in it you are signed out. Any connector you shared with this workspace stops working for its members.'
+                      : 'You will immediately lose access to this workspace and your seat becomes available. The device tokens and API keys issued in this workspace are revoked, and if you were working in it you are signed out. Any connector you shared with this workspace stops working for its members. This cannot be undone by you.'
                     : pendingAction?.kind === 'role'
                       ? `${pendingAction.member.name} will become ${titleCase(pendingAction.role)}. The workspace must always retain at least one owner.`
                       : ''}
