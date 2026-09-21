@@ -5,6 +5,7 @@ import process from 'node:process';
 
 const WRITE_BASELINE = process.argv.includes('--write-baseline');
 const SUMMARY = process.argv.includes('--summary');
+const JSON_OUT = process.argv.includes('--json');
 
 const root = process.cwd();
 const BASELINE_PATH = 'scripts/.web-ui-invariants-baseline.json';
@@ -113,6 +114,20 @@ const RULES = [
     advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor, raise it or use a role token`,
   },
   {
+    id: 'arbitrary-z-index',
+    regex: /\bz-\[([^\]]+)\]/g,
+    predicate: (m) => !m[1].includes('var(--'),
+    advice:
+      'stacking is a shared ladder; use z-[var(--z-overlay)], z-[var(--z-modal)] or z-[var(--z-popover)] so one rung cannot outrank another by accident',
+  },
+  {
+    id: 'arbitrary-z-index-css',
+    extensions: new Set(['.css']),
+    regex: /z-index:\s*(-?\d+)/g,
+    advice:
+      'stacking is a shared ladder; reference the overlay, modal or popover token instead of a bare rung',
+  },
+  {
     id: 'hover-only-affordance',
     regex: /\bopacity-0\b/g,
     predicate: (_m, line) =>
@@ -125,6 +140,74 @@ const RULES = [
 
 const INLINE_COMMENT_RE = /^\s*(?:\/\/|\*)/;
 const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+
+// A JSX attribute is regularly written five lines away from its element, so
+// these three read the whole opening tag rather than one line.
+function openingTag(source, start) {
+  let depth = 0;
+  for (let index = start; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '{') depth += 1;
+    else if (character === '}') depth -= 1;
+    else if (character === '<' && index > start) return null;
+    else if (character === '>' && depth === 0) return source.slice(start, index + 1);
+  }
+  return null;
+}
+
+function lineOf(source, index) {
+  return source.slice(0, index).split('\n').length;
+}
+
+function tagRule(elements, id, advice, offends) {
+  const opener = new RegExp(`<(?:${elements.join('|')})\\b`, 'g');
+  return {
+    id,
+    advice,
+    scan(source, file) {
+      if (path.extname(file) !== '.tsx') return [];
+      const found = [];
+      for (const match of source.matchAll(opener)) {
+        const tag = openingTag(source, match.index);
+        if (tag === null || !offends(tag)) continue;
+        found.push({ line: lineOf(source, match.index), literal: match[0] });
+      }
+      return found;
+    },
+  };
+}
+
+const SOURCE_RULES = [
+  tagRule(
+    ['div', 'span', 'li', 'td'],
+    'clickable-div-without-semantics',
+    'a click handler on a non-interactive element is invisible to the keyboard and to assistive technology; use a button, or give the element a role and a key handler',
+    (tag) => /\bonClick=/.test(tag) && !/\brole=/.test(tag) && !/\btabIndex=/.test(tag),
+  ),
+  tagRule(
+    ['a', 'Link'],
+    'unsafe-blank-target',
+    'a new tab opened without rel="noopener noreferrer" hands the opener window to the destination',
+    (tag) => /target=["'{]?_blank/.test(tag) && !/noopener/.test(tag),
+  ),
+  {
+    id: 'outline-none-without-focus-ring',
+    advice:
+      'removing the focus outline without drawing a replacement leaves keyboard users with no idea where they are; pair it with focus-visible:ring or focus-visible:outline',
+    scan(source, file) {
+      if (path.extname(file) === '.css') return [];
+      const lines = source.split('\n');
+      const found = [];
+      lines.forEach((line, index) => {
+        if (!/\boutline-none\b/.test(line)) return;
+        const window = lines.slice(Math.max(0, index - 4), index + 5).join(' ');
+        if (/focus(?:-visible)?:(?:ring|outline|shadow|border)/.test(window)) return;
+        found.push({ line: index + 1, literal: 'outline-none' });
+      });
+      return found;
+    },
+  },
+];
 
 function absolute(rel) {
   return path.join(root, rel);
@@ -182,7 +265,14 @@ function scanSource(source, file) {
 }
 
 function scanFile(file) {
-  return scanSource(fs.readFileSync(absolute(file), 'utf8'), file);
+  const source = fs.readFileSync(absolute(file), 'utf8');
+  const violations = scanSource(source, file);
+  for (const rule of SOURCE_RULES) {
+    for (const hit of rule.scan(source, file)) {
+      violations.push({ file, line: hit.line, rule: rule.id, literal: hit.literal });
+    }
+  }
+  return violations;
 }
 
 function baselineKey(v) {
@@ -191,25 +281,33 @@ function baselineKey(v) {
 
 function loadBaseline() {
   const p = absolute(BASELINE_PATH);
-  if (!fs.existsSync(p)) return new Map();
+  if (!fs.existsSync(p)) return { counts: new Map(), unreasoned: [] };
   const data = JSON.parse(fs.readFileSync(p, 'utf8'));
   const counts = new Map();
+  const rules = new Set();
   for (const v of data.violations) {
     const key = baselineKey(v);
     counts.set(key, (counts.get(key) || 0) + 1);
+    rules.add(v.rule);
   }
-  return counts;
+  const reasons = data._reasons ?? {};
+  const unreasoned = [...rules].filter((rule) => (reasons[rule] ?? '').trim().length < 60).sort();
+  return { counts, unreasoned };
 }
 
 function writeBaseline(violations) {
   const byRule = {};
   for (const v of violations) byRule[v.rule] = (byRule[v.rule] || 0) + 1;
 
+  const p = absolute(BASELINE_PATH);
+  const previous = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+
   const payload = {
     _description:
       'Grandfathered web UI invariant violations, seeded at the start of the frontend redesign. ' +
       'New violations fail CI. This list only ever shrinks, every redesign phase should reduce ' +
       'it, and the redesign is not finished while it is non-empty. Do not add to it.',
+    _reasons: previous._reasons ?? {},
     _counts: byRule,
     violations: violations.map((v) => ({ ...v })),
   };
@@ -223,12 +321,17 @@ function writeBaseline(violations) {
 const allFiles = SOURCE_ROOTS.flatMap((dir) => walk(dir)).filter((f) => !isExempt(f));
 const allViolations = allFiles.flatMap(scanFile);
 
+if (JSON_OUT) {
+  console.log(JSON.stringify(allViolations));
+  process.exit(0);
+}
+
 if (WRITE_BASELINE) {
   writeBaseline(allViolations);
   process.exit(0);
 }
 
-const baseline = loadBaseline();
+const { counts: baseline, unreasoned } = loadBaseline();
 const remaining = new Map(baseline);
 const added = [];
 
@@ -249,6 +352,16 @@ if (SUMMARY) {
   }
 }
 
+if (unreasoned.length > 0) {
+  console.error(
+    `check:web-ui-invariants FAIL, ${unreasoned.length} baselined rule(s) carry no reason:\n`,
+  );
+  for (const rule of unreasoned) {
+    console.error(`  ${rule}  -> add "_reasons.${rule}" saying why it is owed, not just allowed`);
+  }
+  process.exit(1);
+}
+
 if (added.length === 0) {
   const total = [...baseline.values()].reduce((a, b) => a + b, 0);
   console.log(`check:web-ui-invariants PASS, no new violations (${total} still baselined).`);
@@ -256,7 +369,7 @@ if (added.length === 0) {
 }
 
 console.error(`check:web-ui-invariants FAIL, ${added.length} new violation(s).\n`);
-const adviceFor = Object.fromEntries(RULES.map((r) => [r.id, r.advice]));
+const adviceFor = Object.fromEntries([...RULES, ...SOURCE_RULES].map((r) => [r.id, r.advice]));
 for (const v of added.slice(0, 40)) {
   console.error(`  ${v.file}:${v.line}  [${v.rule}]  ${v.literal}`);
   console.error(`    -> ${adviceFor[v.rule]}`);

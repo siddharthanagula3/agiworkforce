@@ -621,6 +621,72 @@ export function checkTestFile(repoRoot, testFileAbsolutePath) {
   return findings;
 }
 
+/**
+ * The other half of the same question. `checkTestFile` asks whether a factory
+ * drops an export somebody imports today; this asks whether it drops one the
+ * module declares at all, which is what silently returns undefined the day a
+ * caller starts importing it.
+ */
+export function droppedExports(repoRoot, testFileAbsolutePath) {
+  const testText = readTextFile(testFileAbsolutePath);
+  if (testText === null) return [];
+  const dropped = [];
+  for (const call of findMockFactoryCalls(testText)) {
+    const analysis = analyzeMockFactory(call.factoryText);
+    if (!analysis.fixed) continue;
+    const mockedAbsolutePath = resolveSpecifier(repoRoot, testFileAbsolutePath, call.specifier);
+    if (!mockedAbsolutePath) continue;
+    const realExports = loadExports(mockedAbsolutePath);
+    if (realExports.size === 0) continue;
+    const missing = [...realExports].filter((name) => !analysis.keys.has(name)).sort();
+    if (missing.length === 0) continue;
+    dropped.push({
+      file: relFromRoot(repoRoot, testFileAbsolutePath),
+      specifier: call.specifier,
+      missing,
+    });
+  }
+  return dropped;
+}
+
+export const DRIFT_PATH = 'scripts/config/mock-exports-drift.json';
+
+export function driftRootOf(relativePath, roots = TEST_ROOTS) {
+  return roots.find((root) => relativePath.startsWith(`${root}/`)) ?? 'other';
+}
+
+/**
+ * One number per surface, not a list of forgiven call sites: a list of four
+ * thousand entries would be an allowlist wearing a ratchet's name.
+ */
+export function driftFailures(counts, ceilings) {
+  const failures = [];
+  for (const [root, count] of Object.entries(counts)) {
+    const ceiling = ceilings[root];
+    if (ceiling === undefined) {
+      if (count === 0) continue;
+      failures.push(
+        `${DRIFT_PATH} records no ceiling for '${root}', which has ${count} whole-module factory(ies) dropping an export`,
+      );
+      continue;
+    }
+    if ((ceiling.reason ?? '').trim().length < 60) {
+      failures.push(`${DRIFT_PATH}: '${root}' needs a reason, not a number`);
+    }
+    if (count > ceiling.count) {
+      failures.push(
+        `${root} now has ${count} whole-module factory(ies) dropping an export, up from ${ceiling.count}; a factory that does not spread importOriginal has to name every export the module declares`,
+      );
+    }
+  }
+  for (const root of Object.keys(ceilings)) {
+    if (counts[root] === undefined) {
+      failures.push(`${DRIFT_PATH}: '${root}' is no longer a surface with test files; delete it`);
+    }
+  }
+  return failures;
+}
+
 export function discoverTestFiles(repoRoot = REPO_ROOT, roots = TEST_ROOTS) {
   const pathspecs = roots.flatMap((root) => [
     `${root}/**/*.test.ts`,
@@ -675,9 +741,25 @@ export function runMockExportsGuard({
       left.file.localeCompare(right.file) || left.specifier.localeCompare(right.specifier),
   );
 
+  const counts = Object.fromEntries(roots.map((root) => [root, 0]));
+  for (const testFile of testFiles) {
+    const dropped = droppedExports(repoRoot, testFile);
+    if (dropped.length === 0) continue;
+    const root = driftRootOf(dropped[0].file, roots);
+    counts[root] = (counts[root] ?? 0) + dropped.length;
+  }
+  const driftFile = path.join(repoRoot, DRIFT_PATH);
+  const ceilings = fs.existsSync(driftFile)
+    ? (JSON.parse(fs.readFileSync(driftFile, 'utf8')).surfaces ?? {})
+    : {};
+  const drift = driftFailures(counts, ceilings);
+
   const lines =
-    findings.length === 0
-      ? [`Mock-export guard passed (${testFiles.length} test file(s) scanned).`]
+    findings.length === 0 && drift.length === 0
+      ? [
+          `Mock-export guard passed (${testFiles.length} test file(s) scanned, ` +
+            `${Object.values(counts).reduce((a, b) => a + b, 0)} whole-module factory(ies) still dropping an export).`,
+        ]
       : [
           `Mock-export guard FAILED: ${findings.length} vi.mock() factory(ies) omit a real export the module under test uses.`,
           '',
@@ -686,9 +768,10 @@ export function runMockExportsGuard({
             if (!details) return base;
             return `${base} (module: ${finding.module}; required by: ${[...finding.requiredBy].sort().join(', ')})`;
           }),
+          ...drift,
         ];
 
-  return { findings, testFileCount: testFiles.length, output: lines.join('\n') };
+  return { findings, drift, counts, testFileCount: testFiles.length, output: lines.join('\n') };
 }
 
 function printHelp() {
@@ -715,9 +798,9 @@ if (isMain) {
     } else {
       try {
         const result = runMockExportsGuard({ details: args.includes('--details') });
-        const stream = result.findings.length === 0 ? process.stdout : process.stderr;
-        stream.write(`${result.output}\n`);
-        if (result.findings.length > 0) process.exitCode = 1;
+        const failed = result.findings.length > 0 || result.drift.length > 0;
+        (failed ? process.stderr : process.stdout).write(`${result.output}\n`);
+        if (failed) process.exitCode = 1;
       } catch (error) {
         process.stderr.write(`Mock-export guard could not run: ${error.message}\n`);
         process.exitCode = 2;
