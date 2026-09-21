@@ -180,6 +180,16 @@
       "file": "apps/web/lib/services/enterprise-contracts/invoicing.ts",
       "migration": 287,
       "reason": "Reads and writes what this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration; the enterprise commercial domain has no production caller that authors an agreement yet."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-installation-service.ts",
+      "migration": 288,
+      "reason": "Does not read the columns this migration adds: the file names the table and, separately, the entry's own signature column, which the guard matches as a substring. The new columns are additive, so this code runs unchanged before and after the migration."
+    },
+    {
+      "file": "apps/web/lib/services/plugin-lifecycle.ts",
+      "migration": 288,
+      "reason": "Reads and writes the per-version signature columns this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration."
     }
   ]
 }
