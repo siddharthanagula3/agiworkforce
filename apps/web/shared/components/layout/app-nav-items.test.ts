@@ -161,3 +161,37 @@ describe('app rail · Study', () => {
     expect(ids).not.toContain('study');
   });
 });
+
+describe('app rail · Projects', () => {
+  it('offers Projects to every account on every route, including once a conversation is open', () => {
+    for (const pathname of ['/chat', '/chat/abc', '/chat/library', '/models']) {
+      for (const isAdmin of [true, false]) {
+        const projects = buildAppNavItems({ pathname, navigate: vi.fn(), isAdmin }).find(
+          (item) => item.id === 'projects',
+        );
+        expect(projects, `${pathname} admin=${isAdmin}`).toBeDefined();
+      }
+    }
+  });
+
+  it('opens the projects hub and marks itself current anywhere under it', () => {
+    const navigate = vi.fn();
+    const projects = buildAppNavItems({ pathname: '/chat/projects/p1', navigate }).find(
+      (item) => item.id === 'projects',
+    );
+    expect(projects?.isActive).toBe(true);
+    projects?.onClick();
+    expect(navigate).toHaveBeenCalledWith('/chat/projects');
+  });
+});
+
+describe('app rail · Models', () => {
+  it('has no Models entry: the founder removed it from the sidebar on 2026-09-21', () => {
+    for (const isAdmin of [true, false]) {
+      const ids = buildAppNavItems({ pathname: '/chat', navigate: vi.fn(), isAdmin }).map(
+        (item) => item.id,
+      );
+      expect(ids).not.toContain('models');
+    }
+  });
+});
