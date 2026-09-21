@@ -3326,14 +3326,21 @@ pub async fn run_main() -> Result<()> {
                     }
                     Err(e) => {
                         if json_events {
-                            // Best-effort classify into a deterministic kind. Anything
-                            // we can't classify becomes a generic stream_disconnect.
-                            let cli_err = errors::CliError::StreamError {
-                                provider: provider_label.clone(),
-                                message: e.to_string(),
-                                is_retryable: false,
+                            // The typed error in the chain keeps its own kind; only an
+                            // error with none becomes a generic stream_disconnect.
+                            let unclassified;
+                            let cli_err = match errors::cli_cause(&e) {
+                                Some(classified) => classified,
+                                None => {
+                                    unclassified = errors::CliError::stream_error(
+                                        provider_label.clone(),
+                                        e.to_string(),
+                                        false,
+                                    );
+                                    &unclassified
+                                }
                             };
-                            agent_events::AgentEvent::from_error(session_id.clone(), &cli_err)
+                            agent_events::AgentEvent::from_error(session_id.clone(), cli_err)
                                 .emit_stdout();
                         } else if *json {
                             eprintln!(
