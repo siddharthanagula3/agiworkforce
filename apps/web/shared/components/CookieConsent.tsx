@@ -19,6 +19,7 @@ import {
   ALL_ACCEPTED_PREFERENCES,
   COOKIE_CONSENT_OPEN_EVENT,
   NECESSARY_ONLY_PREFERENCES,
+  isAnalyticsLockedByOptOutSignal,
   readCookiePreferences,
   writeCookiePreferences,
   type CookiePreferences,
@@ -34,7 +35,12 @@ export const CookieConsent = () => {
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [preferences, setPreferences] = useState<CookiePreferences>(NECESSARY_ONLY_PREFERENCES);
+  const [optedOutBySignal, setOptedOutBySignal] = useState(false);
   const bannerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setOptedOutBySignal(isAnalyticsLockedByOptOutSignal());
+  }, []);
 
   useEffect(() => {
     if (!isLoaded || isSignedIn) {
@@ -196,8 +202,8 @@ export const CookieConsent = () => {
               <div className="flex-1">
                 <Label className="font-medium">Necessary</Label>
                 <p className="text-sm text-muted-foreground">
-                  Auth session, CSRF token and locale. Required for the site to work, so this cannot
-                  be switched off.
+                  Sign-in session, a request-integrity marker for signed-out browsers, and your
+                  language. Required for the site to work, so this cannot be switched off.
                 </p>
               </div>
               <Switch checked disabled aria-label="Necessary cookies (always on)" />
@@ -208,18 +214,23 @@ export const CookieConsent = () => {
                 <Label className="font-medium" htmlFor="cookie-analytics">
                   Analytics
                 </Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" id="cookie-analytics-description">
                   Aggregated page views (Google Analytics 4), with no personally identifying
                   information. Off by default.
+                  {optedOutBySignal
+                    ? ' Your browser is sending Global Privacy Control, so this stays off here and the switch cannot be turned on.'
+                    : ''}
                 </p>
               </div>
               <Switch
                 id="cookie-analytics"
-                checked={preferences.analytics}
+                checked={optedOutBySignal ? false : preferences.analytics}
+                disabled={optedOutBySignal}
                 onCheckedChange={(checked) =>
                   setPreferences({ necessary: true, analytics: checked })
                 }
                 aria-label="Analytics cookies"
+                aria-describedby="cookie-analytics-description"
               />
             </div>
           </div>

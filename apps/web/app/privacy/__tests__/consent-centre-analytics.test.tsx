@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -116,7 +118,7 @@ describe('consent centre analytics withdrawal reaches the analytics gate', () =>
 
     render(
       <>
-        <ConsentCentre />
+        <ConsentCentre optedOutBySignal={false} />
         <AnalyticsConsentGate trackingId={TRACKING_ID} />
       </>,
     );
@@ -138,7 +140,7 @@ describe('consent centre analytics withdrawal reaches the analytics gate', () =>
 
     render(
       <>
-        <ConsentCentre />
+        <ConsentCentre optedOutBySignal={false} />
         <AnalyticsConsentGate trackingId={TRACKING_ID} />
       </>,
     );
@@ -161,7 +163,7 @@ describe('consent centre analytics withdrawal reaches the analytics gate', () =>
 
     render(
       <>
-        <ConsentCentre />
+        <ConsentCentre optedOutBySignal={false} />
         <AnalyticsConsentGate trackingId={TRACKING_ID} />
       </>,
     );
@@ -179,7 +181,7 @@ describe('consent centre analytics withdrawal reaches the analytics gate', () =>
 
     render(
       <>
-        <ConsentCentre />
+        <ConsentCentre optedOutBySignal={false} />
         <AnalyticsConsentGate trackingId={TRACKING_ID} />
       </>,
     );
@@ -197,5 +199,50 @@ describe('consent centre analytics withdrawal reaches the analytics gate', () =>
 
     await waitFor(() => expect(gaScripts()).toHaveLength(1));
     expect(readCookiePreferences()).toEqual({ necessary: true, analytics: true });
+  });
+});
+
+describe('consent centre under a browser opt-out signal', () => {
+  it('shows a non-essential purpose as refused and will not let the browser grant it', async () => {
+    stubConsentApi([]);
+
+    render(<ConsentCentre optedOutBySignal={true} />);
+
+    await waitFor(() => expect(analyticsButton()).toBeTruthy());
+    expect(analyticsButton()).toHaveProperty('disabled', true);
+    expect(screen.getAllByText(/sending Global Privacy Control/i).length).toBeGreaterThan(0);
+  });
+
+  it('still lets a recorded consent be withdrawn, which agrees with the signal', async () => {
+    const { posted } = stubConsentApi([{ purpose: ANALYTICS_PURPOSE, granted: true }]);
+
+    render(<ConsentCentre optedOutBySignal={true} />);
+
+    await waitFor(() => expect(analyticsButton()).toBeTruthy());
+    expect(analyticsButton()).toHaveProperty('disabled', false);
+
+    await act(async () => {
+      fireEvent.click(analyticsButton());
+    });
+
+    expect(posted).toContainEqual({ purpose: ANALYTICS_PURPOSE, granted: false });
+  });
+
+  it('leaves every purpose grantable when no signal reached the page', async () => {
+    stubConsentApi([]);
+
+    render(<ConsentCentre optedOutBySignal={false} />);
+
+    await waitFor(() => expect(analyticsButton()).toBeTruthy());
+    expect(analyticsButton()).toHaveProperty('disabled', false);
+    expect(screen.queryByText(/sending Global Privacy Control/i)).toBeNull();
+  });
+});
+
+describe('the rights page reads the request signal', () => {
+  it('passes what the request carried into the consent centre', () => {
+    const page = readFileSync(join(resolve(__dirname, '..'), 'requests/page.tsx'), 'utf8');
+    expect(page).toMatch(/readGlobalPrivacyControlHeader\(await headers\(\)\)/);
+    expect(page).toMatch(/<ConsentCentre optedOutBySignal=\{optedOutBySignal\} \/>/);
   });
 });

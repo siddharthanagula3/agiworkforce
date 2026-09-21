@@ -111,9 +111,17 @@ const STORAGE: StorageRow[] = [
     key: 'cookie-consent',
     store: 'Local storage',
     holds:
-      'Your analytics choice. Never sent to us. Anything unreadable counts as no decision, which means analytics stays off.',
+      'Your analytics choice. Never sent to us. Anything unreadable counts as no decision, which means analytics stays off. A browser sending Global Privacy Control overrides whatever is stored here.',
     clearedBy: 'Clearing site data, which resets you to analytics off.',
     source: 'shared/lib/cookie-consent.ts',
+  },
+  {
+    key: 'agi.notice.free-plan-training',
+    store: 'Local storage',
+    holds:
+      'The account id that dismissed the Free plan notice about free model providers, so it is shown once per account rather than on every visit. Never sent to us.',
+    clearedBy: 'Clearing site data, which shows the notice again.',
+    source: 'features/chat/components/FreePlanTrainingNotice.tsx',
   },
   {
     key: 'agi.privacy.shareTelemetry',
@@ -246,6 +254,14 @@ const STORAGE: StorageRow[] = [
       'A message you typed into a new chat and navigated away from, held so pressing back gives it to you rather than losing it. It is the text you wrote, so it is named here rather than counted as a preference.',
     clearedBy: 'Closing the tab, sending the message, or clearing site data.',
     source: 'features/chat/lib/pending-composer-draft.ts',
+  },
+  {
+    key: '__storage_test__',
+    store: 'Local storage',
+    holds:
+      'Nothing readable. It is written and removed again in the same breath, to find out whether this browser allows local storage at all before anything tries to use it.',
+    clearedBy: 'Removed immediately by the check that wrote it.',
+    source: 'shared/utils/browser-utils.ts',
   },
   {
     key: 'Everything else, under an agi or agiworkforce prefix',
@@ -398,18 +414,22 @@ export default function CookiesPage() {
                     04 &middot; Do Not Track and Global Privacy Control.
                   </h2>
                   <Prose>
-                    <strong>We do not read either signal today.</strong> Browsers can send a Do Not
-                    Track header or a Global Privacy Control signal, and nothing in this product
-                    currently checks for them. We are stating that plainly rather than leaving you
-                    to assume one way or the other, because a site that silently ignores GPC while
-                    implying otherwise is worse than one that says so.
+                    <strong>We honour Global Privacy Control.</strong> A browser that sends the
+                    Sec-GPC header, or sets navigator.globalPrivacyControl, is read here as refusing
+                    every purpose that is not needed to serve the request you are making: analytics,
+                    and the product-update list in the consent centre. That refusal wins over an
+                    acceptance stored in this browser, so an earlier &ldquo;allow analytics&rdquo;
+                    choice stops applying for as long as the signal is on, and the analytics switch
+                    in cookie preferences is shown off and locked with the reason beside it.
                   </Prose>
                   <Prose size="sm">
-                    What this does and does not cost you: analytics is opt-in here regardless, so a
-                    browser sending GPC already gets the outcome it is asking for: nothing loads
-                    until you turn it on. The signal would matter for a sale or sharing of personal
-                    data for advertising, and we do neither. Reading the signal explicitly is
-                    tracked as an open item.
+                    What it does not do: it never touches the strictly necessary cookies in the
+                    table above, so it cannot sign you out or keep you from signing in, and it does
+                    not overrule a form you fill in yourself. If you tick a box asking us to email
+                    you, that tick is your instruction and we act on it. Do Not Track is a separate,
+                    older header with no agreed meaning and we still do not read it; the outcome it
+                    asks for is the one Global Privacy Control now gets. We do not sell or share
+                    personal data for advertising, and honouring the signal does not depend on that.
                   </Prose>
                 </Stack>
               </Section>

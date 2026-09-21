@@ -1,3 +1,5 @@
+import { headers } from 'next/headers';
+
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
@@ -23,6 +25,8 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+
+import { readGlobalPrivacyControlHeader } from '@/lib/consent-signals';
 
 import { ConsentCentre } from './ConsentCentre';
 import { RightsRequestForm } from './RightsRequestForm';
@@ -59,7 +63,9 @@ const SELF_SERVE: readonly LedgerRow[] = [
   },
 ];
 
-export default function DataRightsPage() {
+export default async function DataRightsPage() {
+  const optedOutBySignal = readGlobalPrivacyControlHeader(await headers());
+
   return (
     <div data-design="agi" className="agi-ds-page" data-legal-review="pending-counsel">
       <Header />
@@ -99,7 +105,7 @@ export default function DataRightsPage() {
                 revision of the notice that was on screen.
               </Prose>
             </div>
-            <ConsentCentre />
+            <ConsentCentre optedOutBySignal={optedOutBySignal} />
           </Stack>
         </Section>
 

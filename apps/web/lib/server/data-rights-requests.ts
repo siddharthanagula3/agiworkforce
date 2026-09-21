@@ -2,6 +2,11 @@ import 'server-only';
 
 import { randomBytes } from 'node:crypto';
 
+import {
+  compareByDeadline,
+  resolveDataRightsDeadline,
+  type DataRightsDeadline,
+} from '@/lib/compliance/data-rights-deadlines';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 export const DATA_RIGHTS_REQUEST_TYPES = [
@@ -131,6 +136,7 @@ export interface OpenDataRightsRequest extends DataRightsRequest {
   contactEmail: string;
   details: string | null;
   userId: string | null;
+  deadline: DataRightsDeadline;
 }
 
 interface OpenRequestRow extends RequestRow {
@@ -139,7 +145,13 @@ interface OpenRequestRow extends RequestRow {
   user_id: string | null;
 }
 
-export async function readOpenDataRightsRequests(limit = 100): Promise<OpenDataRightsRequest[]> {
+// The queue is ordered by the statutory clock rather than by receipt, because a
+// request answered in the order it arrived is still late if a shorter clock was
+// running on one behind it.
+export async function readOpenDataRightsRequests(
+  limit = 100,
+  now: Date = new Date(),
+): Promise<OpenDataRightsRequest[]> {
   const rows = await getNeonDb().query<OpenRequestRow>(
     `select reference, user_id, contact_email, request_type, details, status,
             created_at, resolved_at
@@ -149,10 +161,21 @@ export async function readOpenDataRightsRequests(limit = 100): Promise<OpenDataR
       limit $1`,
     [Math.min(Math.max(limit, 1), 500)],
   );
-  return rows.map((row) => ({
-    ...toRequest(row),
-    userId: row.user_id,
-    contactEmail: row.contact_email,
-    details: row.details,
-  }));
+  return rows
+    .map((row) => {
+      const request = toRequest(row);
+      return {
+        ...request,
+        userId: row.user_id,
+        contactEmail: row.contact_email,
+        details: row.details,
+        deadline: resolveDataRightsDeadline({ createdAt: request.createdAt, now }),
+      };
+    })
+    .sort((left, right) =>
+      compareByDeadline(
+        { dueAt: left.deadline.dueAt, createdAt: left.createdAt },
+        { dueAt: right.deadline.dueAt, createdAt: right.createdAt },
+      ),
+    );
 }
