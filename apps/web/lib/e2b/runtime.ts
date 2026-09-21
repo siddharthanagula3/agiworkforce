@@ -49,9 +49,10 @@ import {
 } from './types';
 import { e2bExecutionEnabled } from './gate';
 import { tracedCodeAction } from '@/lib/observability/code-action-span';
+import { activeSpan } from '@/lib/observability/span';
 
 import { traceSandboxExecutor } from './tracing';
-import type { E2BUnavailableCause } from './unavailability';
+import { codeExecutionUnavailableMessage, type E2BUnavailableCause } from './unavailability';
 import {
   harnessCredentialSpecs,
   harnessIsProxyCovered,
@@ -674,8 +675,15 @@ export const getE2BExecutor = tracedCodeAction(
     scope?: E2BSessionScope,
     onUnavailable?: (cause: E2BUnavailableCause) => void,
   ): Promise<E2BExecutor | null> {
-    const unavailable = (cause: E2BUnavailableCause): null => {
+    // The span is held rather than looked up: a refusal decided inside a nested
+    // span would otherwise settle that one and leave this one ok.
+    const provisionSpan = activeSpan();
+    const refuse = (cause: E2BUnavailableCause): void => {
+      provisionSpan?.refuse(cause, codeExecutionUnavailableMessage(cause));
       onUnavailable?.(cause);
+    };
+    const unavailable = (cause: E2BUnavailableCause): null => {
+      refuse(cause);
       return null;
     };
     if (!e2bExecutionEnabled()) return unavailable('not-configured');
@@ -829,7 +837,7 @@ export const getE2BExecutor = tracedCodeAction(
           return sandbox as SandboxInstance;
         } catch (err) {
           logger.warn({ err, template }, '[e2b] sandbox create failed; fail-closed');
-          onUnavailable?.('no-capacity');
+          refuse('provider-error');
           return null;
         }
       };
@@ -854,7 +862,7 @@ export const getE2BExecutor = tracedCodeAction(
               { userId: scope.userId, live, limit, planTier, ...scopeLog(scope) },
               '[e2b] per-user sandbox quota reached; refusing new sandbox (fail-closed)',
             );
-            onUnavailable?.('no-capacity');
+            refuse('no-capacity');
             return null;
           }
         } catch (err) {
@@ -862,7 +870,7 @@ export const getE2BExecutor = tracedCodeAction(
             { err, userId: scope.userId, planTier },
             '[e2b] sandbox quota check failed; refusing new sandbox (fail-closed)',
           );
-          onUnavailable?.('no-capacity');
+          refuse('provider-error');
           return null;
         }
         return create();
@@ -873,7 +881,7 @@ export const getE2BExecutor = tracedCodeAction(
           { userId: scope.userId, ...scopeLog(scope) },
           '[e2b] could not serialise sandbox creation; refusing (fail-closed)',
         );
-        onUnavailable?.('no-capacity');
+        refuse('provider-error');
         return null;
       }
       return guarded.result ?? null;
@@ -923,7 +931,7 @@ export const getE2BExecutor = tracedCodeAction(
           { err, userId: scope.userId, codeSessionId, networkAccess: scope.networkAccess },
           '[e2b] code-session network policy could not be enforced; refusing executor',
         );
-        onUnavailable?.('policy');
+        refuse('policy');
         try {
           await Sandbox.pause(sandboxId);
         } catch {
