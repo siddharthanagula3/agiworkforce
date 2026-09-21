@@ -183,6 +183,7 @@ export {
 export * from './resource-lifecycle';
 
 export * from './client-capability-manifest';
+export * from './experiment-registry';
 export * from './feature-release';
 export * from './request-identity';
 
