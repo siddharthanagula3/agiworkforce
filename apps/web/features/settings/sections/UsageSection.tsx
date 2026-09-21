@@ -9,7 +9,6 @@ import {
   formatUsageRemaining,
   formatUsageResetIn,
   getBillingPlanPricing,
-  getModelMetadataById,
   isBillingPlanTier,
   isContractPricedPlan,
   isFreeBillingPlanTier,
