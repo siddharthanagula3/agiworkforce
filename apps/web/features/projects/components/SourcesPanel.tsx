@@ -13,6 +13,7 @@ import {
   uploadProjectKnowledgeFile,
 } from '../services/project-knowledge-upload';
 import { toUserMessage } from '@/lib/user-error-message';
+import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -177,6 +178,12 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   }, [files, sortOrder, typeFilter]);
 
   const isUploading = uploadState.status === 'uploading';
+  const uploadingFileName = uploadState.status === 'uploading' ? uploadState.fileName : null;
+
+  useEffect(() => {
+    if (!uploadingFileName) return;
+    return beginActiveUpload(uploadingFileName);
+  }, [uploadingFileName]);
 
   return (
     <div data-testid="sources-panel">

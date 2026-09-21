@@ -127,6 +127,9 @@ describe('privacy preference persistence', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /retry saving/i })).toBeVisible(),
     );
+    const failure = screen.getByRole('alert');
+    expect(failure).toHaveStyle({ color: 'var(--settings-destructive-text)' });
+    expect(failure).not.toHaveTextContent('Saved');
     setTelemetryConsentCache(true);
     expect(hasTelemetryConsent()).toBe(false);
     expect(toggle()).toHaveAttribute('aria-checked', 'false');

@@ -402,7 +402,11 @@ export function AccountSection() {
                 {loggingOut ? 'Signing out...' : 'Log out'}
               </button>
             </AccountRow>
-            {logoutError && <p style={{ ...errorTextStyle, padding: '0 0 12px' }}>{logoutError}</p>}
+            {logoutError && (
+              <p role="alert" style={{ ...errorTextStyle, padding: '0 0 12px' }}>
+                {logoutError}
+              </p>
+            )}
 
             <button
               type="button"

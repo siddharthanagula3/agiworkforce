@@ -36,6 +36,7 @@ import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSec
 import { WORKSPACE_DELETION_PATH } from '@/features/admin/pages/workspace-deletion-route';
 import { SSOPanel } from './team/SSOPanel';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useWorkspaceSwitchInterruptions } from '@/features/workspaces/lib/workspace-switch-interruptions';
 
 type MemberRole = TeamMember['role'];
 
@@ -166,6 +167,7 @@ export function TeamSection() {
   const createOrganization = useCreateOrganization();
   const updateOrganization = useUpdateOrganizationSettings();
   const switchWorkspace = useSwitchWorkspace();
+  const switchInterruptions = useWorkspaceSwitchInterruptions();
   const createInvitation = useCreateTeamInvitation();
   const resendInvitation = useResendTeamInvitation();
   const revokeInvitation = useRevokeTeamInvitation();
@@ -261,7 +263,20 @@ export function TeamSection() {
             value={overview.activeOrganizationId ?? 'personal'}
             disabled={switchWorkspace.isPending}
             onChange={(event) => {
-              switchWorkspace.mutate(event.target.value === 'personal' ? null : event.target.value);
+              const target = event.target.value === 'personal' ? null : event.target.value;
+              if (switchInterruptions.length === 0) {
+                switchWorkspace.mutate(target);
+                return;
+              }
+              confirm({
+                title: 'Switch workspace?',
+                description: `Switching reloads the app in the new workspace. This work does not come with you: ${switchInterruptions
+                  .map((interruption) => interruption.description)
+                  .join(' ')}`,
+                confirmLabel: 'Switch anyway',
+                cancelLabel: 'Stay in this workspace',
+                onConfirm: () => switchWorkspace.mutate(target),
+              });
             }}
             style={{ ...controlStyle, width: 'auto' }}
           >
@@ -390,6 +405,7 @@ export function TeamSection() {
           </p>
         </div>
 
+        {confirmDialog}
         {workspacePicker}
 
         {!access.canManageTeam ? (

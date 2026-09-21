@@ -62,6 +62,31 @@ describe('TimeFocusSection', () => {
     );
   });
 
+  it('marks the form unsaved, then shows the write in flight, then settles quietly', async () => {
+    let releaseSave: () => void = () => {};
+    preferenceMocks.save.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseSave = resolve;
+        }),
+    );
+    render(<TimeFocusSection />);
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Break reminder' }), {
+      target: { value: '30' },
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Unsaved changes');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save time and focus settings' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Saving...');
+
+    releaseSave();
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Saved'));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('rejects an ambiguous all-day range instead of silently saving it', async () => {
     render(<TimeFocusSection />);
     expect(await screen.findByText('Saved')).toBeInTheDocument();
@@ -85,7 +110,10 @@ describe('TimeFocusSection', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save time and focus settings' }));
 
-    expect(await screen.findByText('Save failed: storage unavailable')).toBeInTheDocument();
+    const failure = await screen.findByRole('alert');
+    expect(failure).toHaveTextContent('Save failed: storage unavailable');
+    expect(failure).toHaveStyle({ color: 'var(--settings-destructive-text)' });
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('renders break reminder and quiet hours as rows, not bordered cards', async () => {
