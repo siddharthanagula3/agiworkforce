@@ -128,6 +128,28 @@ describe('readOrganizationUsage', () => {
     expect(usage.byMember[0]?.key).toBe('unknown');
   });
 
+  /**
+   * The question an owner actually has is "who is spending this", and an
+   * answer in membership order buries the one member who matters behind
+   * forty who spent nothing.
+   */
+  it('ranks the heaviest spender first so an owner can see who is driving the bill', async () => {
+    const h = harness({
+      member: [
+        agg({ key: 'user-heavy', requests: 400, cost_cents: '90000' }),
+        agg({ key: 'user-light', requests: 2, cost_cents: '30' }),
+      ],
+    });
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.byMember.map((row) => row.key)).toEqual(['user-heavy', 'user-light']);
+    expect(usage.byMember[0]?.costCents).toBe(90000);
+
+    const memberQuery = h.query.mock.calls.find(([sql]) => /user_id as key/.test(String(sql)));
+    expect(memberQuery).toBeDefined();
+    expect(String(memberQuery?.[0])).toContain('order by cost_cents desc');
+  });
+
   it('bounds each breakdown so one workspace cannot return an unbounded set', async () => {
     const h = harness();
     await readOrganizationUsage(h.db, ORG, window);

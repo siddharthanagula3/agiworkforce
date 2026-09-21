@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 173 of 274 database-backed hosted API route files. Counted against the 274 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
+      'Partial: 174 of 275 database-backed hosted API route files. Counted against the 275 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
   },
   {
     label: 'Authentication and CSRF',

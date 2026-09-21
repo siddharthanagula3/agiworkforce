@@ -891,6 +891,72 @@ describe('managed usage settlement feeds the COGS ledger', () => {
 
     expect(recordSettledProviderCost).not.toHaveBeenCalled();
   });
+
+  /**
+   * A turn that is cancelled arrives here as a failed outcome, and the caller
+   * still knows what the provider had produced by then. Billing that would
+   * charge for work the user stopped and never received, and a task cancelled
+   * halfway would keep costing exactly as much as one that ran to the end.
+   */
+  it('bills a cancelled turn nothing however much the caller reports it consumed', async () => {
+    const db = fakeDb([
+      {
+        request_status: 'released',
+        operation_result: 'finalized',
+        settlement_status: null,
+        actual_cost_microusd: 0,
+      },
+    ]);
+
+    const finalization = await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_cancelled',
+      requestHash: 'd'.repeat(64),
+      leaseToken: 'lease-1',
+      estimatedCostCents: 400,
+      provider: 'openai',
+      model: 'fixture-model',
+      outcome: 'failed',
+      actualCostMicrousd: 3_500_000,
+      providerCostMicrousd: 3_500_000,
+    });
+
+    const finalizeCall = vi.mocked(db.query).mock.calls.at(-1);
+    const params = finalizeCall?.[1] as unknown[];
+    expect(params[4]).toBe('failed');
+    expect(params[5]).toBe(0);
+    expect(finalization.actualCostMicrousd).toBe(0);
+    expect(recordSettledProviderCost).not.toHaveBeenCalled();
+  });
+
+  it('settles a cancelled turn once, so a retried cancellation changes nothing', async () => {
+    const db = fakeDb([
+      {
+        request_status: 'released',
+        operation_result: 'already_finalized',
+        settlement_status: null,
+        actual_cost_microusd: 0,
+      },
+    ]);
+
+    const finalization = await finalizeManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.turn_cancelled',
+      requestHash: 'd'.repeat(64),
+      leaseToken: 'lease-1',
+      estimatedCostCents: 400,
+      provider: 'openai',
+      model: 'fixture-model',
+      outcome: 'failed',
+      actualCostMicrousd: 3_500_000,
+    });
+
+    expect(finalization.operationResult).toBe('already_finalized');
+    expect(finalization.actualCostMicrousd).toBe(0);
+    expect(recordSettledProviderCost).not.toHaveBeenCalled();
+  });
 });
 
 describe('getServedRouteFromUsage', () => {

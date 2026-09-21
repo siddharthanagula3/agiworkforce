@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 import {
+  creditsFromCents,
   formatCreditWindowUsage,
   formatCredits,
   formatPlanCreditAllowanceLine,
@@ -16,6 +17,7 @@ import {
   managedUsageBucketLabel,
   type ManagedUsageCreditWindow,
 } from '@agiworkforce/types';
+import { usageWorkloadLabel } from '@/lib/billing/usage-attribution';
 import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import { RefreshCw } from 'lucide-react';
 import { Progress } from '@agiworkforce/ui';
@@ -130,6 +132,247 @@ function usageDetail(
   const resets = formatUsageResetIn(resetAt, nowMs);
   if (!resets) return remaining;
   return `${remaining} · ${resets} (${formatAbsolute(resetAt as string)})`;
+}
+
+interface UsageHistoryRow {
+  key: string;
+  requests: number;
+  costCents: number;
+}
+
+interface UsageHistoryPayload {
+  from: string;
+  to: string;
+  totals: { requests: number; costCents: number };
+  daily: { day: string; requests: number; costCents: number }[];
+  byWorkload: UsageHistoryRow[];
+  byModel: UsageHistoryRow[];
+  freshness: { asOf: string; latestActivityAt: string | null; unsettledRequests: number };
+}
+
+interface UsageHistoryState {
+  history: UsageHistoryPayload | null;
+  loading: boolean;
+  error: string | null;
+}
+
+function historyRows(value: unknown): UsageHistoryRow[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((row) => {
+    if (!row || typeof row !== 'object') return [];
+    const { key, requests, costCents } = row as Record<string, unknown>;
+    if (typeof key !== 'string' || typeof requests !== 'number' || typeof costCents !== 'number') {
+      return [];
+    }
+    return [{ key, requests, costCents }];
+  });
+}
+
+/**
+ * A body that is not this shape is not a smaller answer, it is a different
+ * endpoint answering, and rendering it would state someone else's numbers as
+ * this account's spend.
+ */
+function parseUsageHistory(value: unknown): UsageHistoryPayload | null {
+  if (!value || typeof value !== 'object') return null;
+  const payload = value as Record<string, unknown>;
+  const totals = payload['totals'];
+  const freshness = payload['freshness'];
+  if (!totals || typeof totals !== 'object' || !freshness || typeof freshness !== 'object') {
+    return null;
+  }
+  const { requests, costCents } = totals as Record<string, unknown>;
+  const { unsettledRequests } = freshness as Record<string, unknown>;
+  if (typeof requests !== 'number' || typeof costCents !== 'number') return null;
+
+  const days = Array.isArray(payload['daily']) ? payload['daily'] : [];
+  return {
+    from: String(payload['from'] ?? ''),
+    to: String(payload['to'] ?? ''),
+    totals: { requests, costCents },
+    daily: historyRows(
+      days.map((day) => ({ ...(day as object), key: (day as Record<string, unknown>)?.['day'] })),
+    ).map((row) => ({ day: row.key, requests: row.requests, costCents: row.costCents })),
+    byWorkload: historyRows(payload['byWorkload']),
+    byModel: historyRows(payload['byModel']),
+    freshness: {
+      asOf: String((freshness as Record<string, unknown>)['asOf'] ?? ''),
+      latestActivityAt: null,
+      unsettledRequests: typeof unsettledRequests === 'number' ? unsettledRequests : 0,
+    },
+  };
+}
+
+function useAccountUsageHistory(enabled: boolean): UsageHistoryState & { reload: () => void } {
+  const [state, setState] = useState<UsageHistoryState>({
+    history: null,
+    loading: false,
+    error: null,
+  });
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController();
+    setState((previous) => ({ ...previous, loading: true, error: null }));
+    void (async () => {
+      try {
+        const response = await fetch('/api/usage/history', {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        const history = parseUsageHistory(await response.json());
+        if (!history) throw new Error('unrecognised usage history');
+        setState({ history, loading: false, error: null });
+      } catch {
+        if (controller.signal.aborted) return;
+        setState({ history: null, loading: false, error: 'Could not load your usage history.' });
+      }
+    })();
+    return () => controller.abort();
+  }, [enabled, reloadToken]);
+
+  return { ...state, reload: () => setReloadToken((token) => token + 1) };
+}
+
+const HISTORY_DAY_LIMIT = 14;
+const HISTORY_ROW_LIMIT = 8;
+
+function formatDay(value: string): string {
+  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function HistoryRows({
+  caption,
+  rows,
+  labelFor,
+}: {
+  caption: string;
+  rows: readonly UsageHistoryRow[];
+  labelFor?: (key: string) => string;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{caption}</span>
+      {rows.map((row) => (
+        <div
+          key={row.key}
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            gap: 12,
+            fontSize: 12,
+            color: 'var(--text-3)',
+          }}
+        >
+          <span style={{ color: 'var(--text-2)' }}>{labelFor ? labelFor(row.key) : row.key}</span>
+          <span>
+            {`${row.requests} ${row.requests === 1 ? 'turn' : 'turns'} · ${formatCredits(
+              creditsFromCents(row.costCents),
+            )}`}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The meters above answer how much is left. This answers what it went on,
+ * which is the next thing anyone asks when a meter surprises them, and until
+ * this existed only a workspace administrator could see it.
+ */
+function UsageHistorySection({ enabled }: { enabled: boolean }) {
+  const { history, loading, error, reload } = useAccountUsageHistory(enabled);
+  if (!enabled) return null;
+
+  const dailyRows: UsageHistoryRow[] = (history?.daily ?? [])
+    .slice(-HISTORY_DAY_LIMIT)
+    .reverse()
+    .map((day) => ({ key: day.day, requests: day.requests, costCents: day.costCents }));
+
+  return (
+    <section
+      aria-labelledby="usage-history-heading"
+      style={{
+        border: '1px solid var(--settings-border)',
+        borderRadius: 'var(--radius-lg)',
+        background: 'var(--bg-elev)',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--settings-border)' }}>
+        <span
+          id="usage-history-heading"
+          style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}
+        >
+          Where your usage went
+        </span>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>
+          Settled usage from the last 30 days. Turns still settling are not counted yet.
+        </p>
+      </div>
+
+      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {loading && (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading usage history…</span>
+        )}
+
+        {error && !loading && (
+          <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{error}</span>
+            <button
+              type="button"
+              onClick={reload}
+              style={{
+                alignSelf: 'flex-start',
+                padding: '4px 8px',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--text-3)',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {history && !loading && !error && history.totals.requests === 0 && (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            No settled usage in the last 30 days.
+          </span>
+        )}
+
+        {history && !loading && !error && history.totals.requests > 0 && (
+          <>
+            <HistoryRows
+              caption="By product area"
+              rows={history.byWorkload.slice(0, HISTORY_ROW_LIMIT)}
+              labelFor={usageWorkloadLabel}
+            />
+            <HistoryRows
+              caption="By model"
+              rows={history.byModel.slice(0, HISTORY_ROW_LIMIT)}
+              labelFor={(key) => getModelMetadataById(key)?.name ?? key}
+            />
+            <HistoryRows caption="By day" rows={dailyRows} labelFor={formatDay} />
+            {history.freshness.unsettledRequests > 0 && (
+              <span role="status" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                {`${history.freshness.unsettledRequests} ${
+                  history.freshness.unsettledRequests === 1 ? 'turn is' : 'turns are'
+                } still settling and are not counted above.`}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
 }
 
 export function UsageSection() {
@@ -364,6 +607,15 @@ export function UsageSection() {
           </div>
         )}
       </section>
+
+      {/*
+        A contract-priced workspace reads its usage in the workspace console,
+        where the same rows are grouped per member. Free states its usage as a
+        meter and a reset time only, so a credit figure never appears for it.
+      */}
+      <UsageHistorySection
+        enabled={usage !== null && !isFreePlan && !isContractPricedPlan(usage.plan_tier)}
+      />
     </div>
   );
 }
