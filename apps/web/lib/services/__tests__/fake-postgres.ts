@@ -253,8 +253,20 @@ export class SqlSubsetParser {
         return negated ? !isNull : isNull;
       };
     }
+    if (this.peek()?.value === '<' && this.peek(1)?.value === '>') {
+      this.expect('<');
+      this.expect('>');
+      const other = this.operand();
+      return (env) => {
+        const a = left(env);
+        const b = other(env);
+        if (a === null || a === undefined || b === null || b === undefined) return false;
+        return a !== b;
+      };
+    }
     for (const operator of ['<', '>'] as const) {
       if (!this.accept(operator)) continue;
+      const inclusive = this.accept('=');
       const bound = this.operand();
       return (env) => {
         const a = left(env);
@@ -262,10 +274,20 @@ export class SqlSubsetParser {
         if (a === null || a === undefined || b === null || b === undefined) return false;
         const one = Date.parse(String(a));
         const two = Date.parse(String(b));
-        if (Number.isNaN(one) || Number.isNaN(two)) {
-          return operator === '<' ? (a as number) < (b as number) : (a as number) > (b as number);
-        }
-        return operator === '<' ? one < two : one > two;
+        const [x, y] =
+          Number.isNaN(one) || Number.isNaN(two) ? [a as number, b as number] : [one, two];
+        if (inclusive) return operator === '<' ? x <= y : x >= y;
+        return operator === '<' ? x < y : x > y;
+      };
+    }
+    if (this.accept('&')) {
+      this.expect('&');
+      const other = this.operand();
+      return (env) => {
+        const a = left(env);
+        const b = other(env);
+        if (!Array.isArray(a) || !Array.isArray(b)) return false;
+        return a.some((value) => b.includes(value as never));
       };
     }
     this.expect('=');
