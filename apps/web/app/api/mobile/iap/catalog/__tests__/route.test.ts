@@ -7,16 +7,36 @@ const { mockRequireCurrentUserId, mockDb, mockKillSwitchGate } = vi.hoisted(() =
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-chat', () => ({ requireCurrentUserId: mockRequireCurrentUserId }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mockDb.current }));
-vi.mock('@/lib/feature-flags/capability-gate', () => ({
+vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-chat')>()),
+  requireCurrentUserId: mockRequireCurrentUserId,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: () => mockDb.current,
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  getUserScopedDb: vi.fn(async () => ({
+    db: mockDb.current,
+    userId: 'user-1',
+    organizationId: null,
+  })),
+}));
+vi.mock('@/lib/feature-flags/capability-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/feature-flags/capability-gate')>()),
   readKillSwitchGate: mockKillSwitchGate,
 }));
-vi.mock('@/lib/feature-flags/flag-evaluation-service', () => ({
+vi.mock('@/lib/feature-flags/flag-evaluation-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/feature-flags/flag-evaluation-service')>()),
   buildFlagSubject: vi.fn(() => ({ userId: 'user-1' })),
 }));
 
