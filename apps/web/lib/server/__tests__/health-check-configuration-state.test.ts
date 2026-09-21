@@ -35,6 +35,8 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 vi.mock('@/lib/jobs/job-service', () => ({ readJobQueueStats: mocks.readJobQueueStats }));
 
+import { createMemoryKeyValueStore } from '@agiworkforce/key-value';
+
 import { PRODUCTION_DEPENDENCIES } from '@/lib/config/dependency-readiness';
 import {
   OBSERVABILITY_ATTRIBUTE,
@@ -45,6 +47,13 @@ import { METRIC_NAME } from '@/lib/observability/metrics';
 import { DEPENDENCY_SIGNALS, dependencySignal } from '@/lib/observability/signal-coverage';
 
 import { runHealthChecks } from '../health-check';
+
+const RETRIEVAL_READY = {
+  missing_relations: 0,
+  full_text_index: true,
+  embedding_index: true,
+  vector_extension: true,
+} as const;
 
 let reader: PeriodicExportingMetricReader;
 let provider: MeterProvider;
@@ -99,10 +108,10 @@ beforeEach(() => {
   process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_health';
   process.env['CLERK_SECRET_KEY'] = 'sk_test_health';
 
-  mocks.getKeyValueStore.mockReturnValue(null);
+  mocks.getKeyValueStore.mockReturnValue(createMemoryKeyValueStore());
   mocks.getStripeClientOrNull.mockReturnValue(null);
   mocks.neonQuery.mockImplementation(async (sql: string) =>
-    sql.includes('to_regclass') ? [{ missing: 0 }] : [{ '?column?': 1 }],
+    sql.includes('missing_relations') ? [RETRIEVAL_READY] : [{ '?column?': 1 }],
   );
   mocks.listAvailableManagedProviderIds.mockReturnValue(new Set<string>());
   mocks.getProviderAvailabilityMap.mockResolvedValue({});
@@ -129,7 +138,7 @@ describe('the health check reports what it resolved', () => {
     delete process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'];
     delete process.env['CLERK_SECRET_KEY'];
     mocks.neonQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('to_regclass')) return [{ missing: 0 }];
+      if (sql.includes('missing_relations')) return [RETRIEVAL_READY];
       throw new Error('connection refused');
     });
 
@@ -152,7 +161,7 @@ describe('the health check reports what it resolved', () => {
   // it is what stops this file inventing a second answer to the same question.
   it('counts a configured dependency that will not answer under the kind the registry names', async () => {
     mocks.neonQuery.mockImplementation(async (sql: string) => {
-      if (sql.includes('to_regclass')) return [{ missing: 0 }];
+      if (sql.includes('missing_relations')) return [RETRIEVAL_READY];
       throw new Error('connection refused');
     });
 
