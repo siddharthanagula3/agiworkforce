@@ -62,6 +62,8 @@ import {
   CloudCodeLimitError,
   CloudCodeValidationError,
   claimCloudCodeSessionForRun,
+  classifyGitFailure,
+  cloudCodeWorkingBranchName,
   commitAndPushCloudCodeSession,
   createCloudCodeSession,
   getCloudCodeSession,
@@ -1368,5 +1370,107 @@ describe('commitAndPushCloudCodeSession', () => {
       commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, '  '),
     ).rejects.toBeInstanceOf(CloudCodeValidationError);
     expect(executor.git.add).not.toHaveBeenCalled();
+  });
+});
+
+describe('the branch a repository session works on', () => {
+  beforeEach(() => {
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([]);
+  });
+
+  async function provision(db: FakeDb, executor: ReturnType<typeof gitExecutor>) {
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    return createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+  }
+
+  it('is cut before any work, and never the ref the clone checked out', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    const session = await provision(db, executor);
+
+    const expected = cloudCodeWorkingBranchName(session.title, session.id);
+    expect(executor.git.createBranch).toHaveBeenCalledWith({
+      path: expect.any(String),
+      branch: expected,
+    });
+    expect(expected).not.toBe('main');
+  });
+
+  it('stores the receipt on the session, so a later push knows where it belongs', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    const session = await provision(db, executor);
+
+    const row = db.rows.find((candidate) => candidate.id === session.id);
+    expect(row?.working_branch).toBe(cloudCodeWorkingBranchName(session.title, session.id));
+    expect(row?.base_branch).toBe('main');
+    expect(session.workingBranch).toBe(row?.working_branch);
+  });
+
+  it('fails the session rather than working on the base branch when the name is taken', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    executor.git.createBranch.mockResolvedValue({
+      ok: false,
+      output: '',
+      stdout: '',
+      stderr: "fatal: a branch named 'agi/repo-session-0-abcdef12' already exists",
+      exitCode: 128,
+    });
+
+    await expect(provision(db, executor)).rejects.toThrow('Working branch could not be created');
+
+    const row = db.rows[0];
+    expect(row?.state).toBe('failed');
+    expect(row?.working_branch).toBeNull();
+  });
+
+  it('tells the reader which step failed and not what git printed', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    const gitText = "fatal: could not read Username for 'https://github.com': No such device";
+    executor.git.clone.mockResolvedValue({
+      ok: false,
+      output: '',
+      stdout: '',
+      stderr: gitText,
+      exitCode: 128,
+    });
+
+    await expect(provision(db, executor)).rejects.toThrow('Repository setup failed');
+
+    const row = db.rows[0];
+    expect(String(row?.last_error)).toBe(
+      'Repository setup failed. GitHub did not accept the connection for this repository. Check that the GitHub app still has access to it, then try again.',
+    );
+    expect(String(row?.last_error)).not.toContain('fatal:');
+    expect(String(row?.last_error)).not.toContain('github.com');
+  });
+
+  it('names the move that fixes each kind of git failure, and only from a closed set', () => {
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      [
+        'remote: error: GH006: Protected branch update failed for refs/heads/main.',
+        'branch_protected',
+      ],
+      [
+        '! [rejected] main -> main (non-fast-forward)\nerror: failed to push some refs',
+        'branch_behind',
+      ],
+      ['remote: Repository not found.\nfatal: repository not found', 'repository_not_found'],
+      ["fatal: Authentication failed for 'https://github.com/o/r.git/'", 'credentials'],
+      [
+        'remote: Permission to o/r.git denied to x.\nThe requested URL returned error: 403',
+        'credentials',
+      ],
+      ['fatal: unable to access: Could not resolve host: github.com', 'network'],
+      ['error: something git has never printed before', 'unknown'],
+      ['', 'unknown'],
+    ];
+    for (const [output, kind] of cases) {
+      expect(classifyGitFailure(output), output).toBe(kind);
+    }
   });
 });
