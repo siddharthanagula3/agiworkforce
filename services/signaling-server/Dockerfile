@@ -68,6 +68,9 @@ RUN pnpm install --prod --frozen-lockfile 2>/dev/null || pnpm install --prod && 
 # =============================================================================
 FROM node:24-alpine AS production
 
+RUN rm -rf /usr/local/lib/node_modules/npm && \
+    rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 # Security: Install dumb-init for proper signal handling
 # This ensures SIGTERM/SIGINT are properly forwarded to Node.js
 RUN apk add --no-cache dumb-init

@@ -16,5 +16,22 @@
     "vulnerability, the scanned path for a misconfiguration, and the first instance URL",
     "for a ZAP alert."
   ],
-  "entries": []
+  "entries": [
+    {
+      "id": "10055",
+      "scanner": "zap",
+      "owner": "@siddharthanagula3",
+      "expires": "2026-10-20",
+      "locations": ["http://127.0.0.1:3000"],
+      "reason": "The main UI still uses React inline style attributes and displays user, provider, and connector HTTPS image URLs before or outside same-origin persistence. script-src remains nonce-only. Replace those style call sites and image paths before this acceptance expires."
+    },
+    {
+      "id": "90003",
+      "scanner": "zap",
+      "owner": "@siddharthanagula3",
+      "expires": "2026-10-20",
+      "locations": ["http://127.0.0.1:3000"],
+      "reason": "Clerk's Next.js integration injects its browser SDK and UI preload without integrity attributes. The current integration restricts both resources to the identity origin but cannot attach SRI. Replace them with verified same-origin assets before this acceptance expires."
+    }
+  ]
 }

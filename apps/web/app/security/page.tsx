@@ -331,7 +331,7 @@ const RELEASE: { label: string; value: string }[] = [
   {
     label: 'Dependency and code scanning',
     value:
-      'What blocks a merge: dependency audits at critical and high severity, cargo-deny checks for banned crates, sources, licences and advisories, and a check that every third-party GitHub Action is pinned to a full commit SHA (first-party actions/* are exempt from that check). What runs without blocking: a Semgrep security-audit pass, whose remaining findings are package-manager supply-chain hardening we have triaged and not yet done. It will block once they reach zero. A weekly Monday job runs a Rust advisory audit and clippy. We do not run CodeQL; if you saw that claim here before 14 August 2026, it was wrong.',
+      "Merge checks include JavaScript and Rust dependency audits, cargo-deny policy checks, Semgrep, CodeQL, Trivy scans of infrastructure and runtime images, and an OWASP ZAP baseline against the built web image. The gate also checks that third-party GitHub Actions are pinned to full commit SHAs. Findings at or above each gate's severity floor block the merge unless the scan ledger names an owner, a reason and an expiry. Expired and stale acceptances fail the gate.",
   },
   {
     label: 'macOS builds',
@@ -376,6 +376,16 @@ const NOT_DONE: { label: string; value: string }[] = [
     label: 'Inline styles',
     value:
       "The Content-Security-Policy still permits 'unsafe-inline' for styles because the component library depends on inline style attributes. Scripts do not have this exemption; styles do.",
+  },
+  {
+    label: 'Remote image sources',
+    value:
+      'The main-page Content-Security-Policy permits HTTPS image sources because generated media, connector icons and user-provided images can arrive from runtime URLs before they are stored behind a same-origin file route. Restricting those sources to a same-origin image proxy remains open work.',
+  },
+  {
+    label: 'Identity SDK integrity',
+    value:
+      'Clerk loads its browser SDK and UI preload from the identity origin without Subresource Integrity attributes. The script policy restricts external execution to identity origins and inline execution to nonce-bearing scripts, but a verified same-origin copy of those vendor assets does not exist yet.',
   },
   {
     label: 'Production access controls',
