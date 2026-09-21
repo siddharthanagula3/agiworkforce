@@ -207,9 +207,11 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import {
-  applyProjectContext,
+  fitProjectContextBlocks,
   loadProjectContext,
-  renderProjectContext,
+  MAX_PROJECT_CONTEXT_CHARS,
+  renderProjectContextBlocks,
+  type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
 import {
@@ -1105,11 +1107,14 @@ export function collectManagedPromptMaterials(request: ChatCompletionRequest): s
  * boundary ahead of its own dynamic time context; `dynamicSystemAddition`
  * (skill/memory content) is inserted right after it, and
  * `customInstructionsPreamble` (static, per-user config) joins the stable
- * side.
+ * side. `projectInstruction` joins it too: the workspace sets it once, so it
+ * is stable for the conversation, and it outranks the account's own
+ * preference, so it is ordered by layer rather than by arrival.
  */
 export function composeManagedSystemPreamble(input: {
   capabilityPreamble: string | null;
   customInstructionsPreamble: string | null | undefined;
+  projectInstruction?: string | null;
   dynamicSystemAddition: string;
 }): string {
   const withDynamicAddition = prependSystemPromptAdditionAfterCacheBoundary({
@@ -1119,6 +1124,7 @@ export function composeManagedSystemPreamble(input: {
   const split = splitSystemPromptCacheBoundary(withDynamicAddition);
   const stableBlock = orderInstructionBlocks([
     { layer: 'system', text: split ? split.stablePrefix : withDynamicAddition },
+    { layer: 'project', text: input.projectInstruction ?? '' },
     { layer: 'personalized', text: input.customInstructionsPreamble ?? '' },
   ])
     .map((block) => block.text)
@@ -2378,12 +2384,14 @@ export async function processRequest(
         ok: true;
         isTemporary: boolean;
         projectId: string | null;
+        projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
       }
     | ProcessFailure
   > = chatRequest.conversation_id
     ? (async () => {
         let projectSources: ProjectFileCitation[] = [];
+        let projectBlocks: readonly ProjectContextBlock[] = [];
         try {
           const scoped = await scopedDbPromise;
           if (scoped.userId !== userId) {
@@ -2453,10 +2461,8 @@ export async function processRequest(
                   ),
                 };
               }
-              const rendered = renderProjectContext(projectContext);
-              if (rendered.prompt) {
-                applyProjectContext(chatRequest, rendered.prompt);
-              }
+              const rendered = renderProjectContextBlocks(projectContext);
+              projectBlocks = fitProjectContextBlocks(rendered.blocks, MAX_PROJECT_CONTEXT_CHARS);
               projectSources = rendered.citations;
             } catch (error) {
               logger.error(
@@ -2489,6 +2495,7 @@ export async function processRequest(
             ok: true,
             isTemporary: ownedRows[0].is_temporary,
             projectId: ownedRows[0].project_id,
+            projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
           };
         } catch (error) {
@@ -2511,7 +2518,7 @@ export async function processRequest(
           };
         }
       })()
-    : Promise.resolve({ ok: true, isTemporary: false, projectId: null });
+    : Promise.resolve({ ok: true, isTemporary: false, projectId: null, projectBlocks: [] });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
     const platform = moderateManagedPrompt({
@@ -2586,6 +2593,8 @@ export async function processRequest(
 
   const conversationIsTemporary = ownership.isTemporary;
   const conversationProjectId = ownership.projectId;
+  const projectInstructionBlock =
+    ownership.projectBlocks.find((block) => block.layer === 'project')?.text ?? null;
 
   const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
     ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
@@ -2658,6 +2667,15 @@ export async function processRequest(
   }
 
   const dynamicSystemMessageRefs = new Map<object, InstructionLayer>();
+
+  // The project instruction is stable for the conversation and joins the cached
+  // preamble below. What the project merely supplies to read varies with the
+  // question, so each remaining block is carried at its own layer instead.
+  for (const block of ownership.projectBlocks) {
+    if (block.layer === 'project') continue;
+    chatRequest.messages.unshift({ role: 'system', content: block.text });
+    dynamicSystemMessageRefs.set(chatRequest.messages[0] as object, block.layer);
+  }
 
   if (chatRequest.mcp_context) {
     try {
@@ -4141,6 +4159,7 @@ export async function processRequest(
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
+      projectInstruction: projectInstructionBlock,
       dynamicSystemAddition: dynamicSkillMemoryText,
     });
     const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
@@ -4172,14 +4191,25 @@ export async function processRequest(
         tool_call_id: undefined,
       });
     }
-  } else if (dynamicSkillMemoryText) {
-    internalMessages.unshift({
-      role: 'system',
-      content: dynamicSkillMemoryText,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+  } else {
+    if (dynamicSkillMemoryText) {
+      internalMessages.unshift({
+        role: 'system',
+        content: dynamicSkillMemoryText,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
+    }
+    if (projectInstructionBlock) {
+      internalMessages.unshift({
+        role: 'system',
+        content: projectInstructionBlock,
+        multimodal_content: undefined,
+        tool_calls: undefined,
+        tool_call_id: undefined,
+      });
+    }
   }
 
   const executionRequirement = resolveCodeExecutionRequirement({

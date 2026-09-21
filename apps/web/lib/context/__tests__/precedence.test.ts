@@ -3,7 +3,13 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { CONTEXT_SOURCE_CLASSES } from '@agiworkforce/context';
+import {
+  CONTEXT_SOURCE_CLASSES,
+  CONTEXT_SOURCE_PRECEDENCE,
+  instructionLayerForContextClass,
+  instructionOrderProblems,
+  precedenceDisagreements,
+} from '@agiworkforce/context';
 
 import {
   ACCOUNT_INSTRUCTION,
@@ -67,6 +73,33 @@ describe('the precedence table', () => {
       'project_instruction',
       'web_result',
     ]);
+  });
+});
+
+describe('one order, not two that each claim to be the one', () => {
+  it('ranks no pair the other way round from the contract it is derived from', () => {
+    expect(precedenceDisagreements(CONTEXT_SOURCE_PRECEDENCE, CONTEXT_PRECEDENCE)).toEqual([]);
+    expect(precedenceDisagreements(CONTEXT_PRECEDENCE, CONTEXT_SOURCE_PRECEDENCE)).toEqual([]);
+  });
+
+  it('keeps the classes in the sequence the contract declares', () => {
+    expect(
+      CONTEXT_PRECEDENCE.filter(
+        (entry) => entry !== CURRENT_REQUEST && entry !== ACCOUNT_INSTRUCTION,
+      ),
+    ).toEqual([...CONTEXT_SOURCE_PRECEDENCE]);
+  });
+
+  it('reads no lower layer before a higher one', () => {
+    const layersOf = (entries: readonly string[]) =>
+      entries
+        .filter((entry): entry is (typeof CONTEXT_SOURCE_PRECEDENCE)[number] =>
+          (CONTEXT_SOURCE_PRECEDENCE as readonly string[]).includes(entry),
+        )
+        .map((entry) => instructionLayerForContextClass(entry));
+
+    expect(instructionOrderProblems(layersOf(CONTEXT_PRECEDENCE))).toEqual([]);
+    expect(instructionOrderProblems(layersOf(CONTEXT_SOURCE_PRECEDENCE))).toEqual([]);
   });
 });
 
