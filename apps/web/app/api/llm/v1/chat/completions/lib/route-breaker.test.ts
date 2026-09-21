@@ -10,6 +10,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
   buildServerProviderAdapter: vi.fn(),
   listAvailableManagedProviderIds: () => new Set<string>(),
+  resolveServerProviderCredentials: () => null,
   toGenericUpstreamError: vi.fn(),
 }));
 

@@ -3,8 +3,7 @@ import {
   ALLOWED_MANAGED_PROVIDER_HOSTS,
   resolveValidatedBaseUrl,
 } from '@agiworkforce/provider-runtime';
-
-const VERCEL_GATEWAY_DEFAULT_BASE_URL = 'https://ai-gateway.vercel.sh/v1';
+import { VERCEL_GATEWAY_DEFAULT_BASE_URL } from './endpoint';
 
 export interface VercelGatewayEmbeddingsConfig {
   apiKey: string;

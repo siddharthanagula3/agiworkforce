@@ -23,7 +23,7 @@ mod service_tests {
     #[test]
     fn test_root_element_access() {
         let service = UIAutomationService::new().expect("Failed to create service");
-        let root = service.root_element();
+        let root = service.call(|state| state.root_element().map(|_| ()));
 
         assert!(root.is_ok(), "Root element access should succeed");
     }
@@ -86,8 +86,8 @@ mod element_tree_tests {
     fn test_element_query_parsing() {
         let json = r#"{
             "name": "TestButton",
-            "control_type": "Button",
-            "max_results": 10
+            "controlType": "Button",
+            "maxResults": 10
         }"#;
 
         let query: ElementQuery = serde_json::from_str(json).expect("Failed to parse query");
@@ -180,7 +180,10 @@ mod element_tree_tests {
 
         let first_window = &windows[0];
 
-        let element_result = service.get_element(&first_window.id);
+        let element_result = service.call({
+            let id = first_window.id.clone();
+            move |state| state.get_element(&id).map(|_| ())
+        });
 
         assert!(
             element_result.is_ok(),
@@ -433,7 +436,10 @@ mod integration_tests {
         let window = &windows[0];
         let id = &window.id;
 
-        let element = service.get_element(id);
+        let element = service.call({
+            let id = id.clone();
+            move |state| state.get_element(&id).map(|_| ())
+        });
 
         assert!(element.is_ok(), "Should retrieve cached element");
     }
@@ -442,7 +448,11 @@ mod integration_tests {
     fn test_invalid_element_id() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let result = service.get_element("invalid-non-existent-id-12345");
+        let result = service.call(|state| {
+            state
+                .get_element("invalid-non-existent-id-12345")
+                .map(|_| ())
+        });
 
         assert!(result.is_err(), "Should fail with invalid element ID");
         let error = result.unwrap_err().to_string();
@@ -461,7 +471,11 @@ mod error_handling_tests {
     fn test_invalid_window_name() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let result = service.find_window("ThisWindowDefinitelyDoesNotExist12345XYZ", None);
+        let result = service.call(|state| {
+            state
+                .find_window("ThisWindowDefinitelyDoesNotExist12345XYZ", None)
+                .map(|element| element.map(|_| ()))
+        });
 
         assert!(
             result.is_ok(),
@@ -477,8 +491,69 @@ mod error_handling_tests {
     fn test_element_access_after_window_closed() {
         let service = UIAutomationService::new().expect("Failed to create service");
 
-        let result = service.get_element("999999-888888-777777");
+        let result = service.call(|state| state.get_element("999999-888888-777777").map(|_| ()));
 
         assert!(result.is_err(), "Should fail to get non-existent element");
+    }
+}
+
+#[cfg(test)]
+mod apartment_tests {
+    use super::super::UIAutomationService;
+    use std::sync::Arc;
+    use windows::Win32::System::Com::{CoGetApartmentType, APTTYPE, APTTYPEQUALIFIER, APTTYPE_MTA};
+
+    #[test]
+    fn native_operations_run_on_a_stable_mta_after_the_creator_thread_exits() {
+        let service = std::thread::spawn(|| Arc::new(UIAutomationService::new().unwrap()))
+            .join()
+            .unwrap();
+        let native_thread = service
+            .call(|state| {
+                let mut apartment = APTTYPE::default();
+                let mut qualifier = APTTYPEQUALIFIER::default();
+                unsafe { CoGetApartmentType(&mut apartment, &mut qualifier) }.unwrap();
+                assert_eq!(apartment, APTTYPE_MTA);
+                let root = state.root_element()?;
+                let id = state.register_element(&root)?;
+                Ok((std::thread::current().id(), id))
+            })
+            .unwrap();
+        assert_ne!(native_thread.0, std::thread::current().id());
+        let mut callers = Vec::new();
+        for _ in 0..4 {
+            let service = Arc::clone(&service);
+            let (thread, id) = native_thread.clone();
+            callers.push(std::thread::spawn(move || {
+                service
+                    .call(move |state| {
+                        assert_eq!(std::thread::current().id(), thread);
+                        state.get_element(&id)?;
+                        state.bounding_rect(&id)?;
+                        Ok(())
+                    })
+                    .unwrap()
+            }));
+        }
+        for caller in callers {
+            caller.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn independent_caller_threads_can_create_and_drop_services() {
+        let callers = (0..4)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    let service = UIAutomationService::new().unwrap();
+                    service
+                        .call(|state| state.root_element().map(|_| ()))
+                        .unwrap();
+                })
+            })
+            .collect::<Vec<_>>();
+        for caller in callers {
+            caller.join().unwrap();
+        }
     }
 }

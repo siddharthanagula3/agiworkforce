@@ -13,7 +13,7 @@ use windows::Win32::UI::Accessibility::{
     UIA_PROPERTY_ID,
 };
 
-impl UIAutomationService {
+impl UIAutomationState {
     pub fn list_windows(&self) -> Result<Vec<UIElementInfo>> {
         let desktop = self.root_element()?;
 
@@ -134,13 +134,13 @@ impl UIAutomationService {
 
         let condition = self.combine_conditions(&conditions, true)?;
 
-        let element = unsafe { root.FindFirst(TreeScope_Children, &condition) }
-            .map_err(|err| anyhow!("{err:?}"))?;
-        Ok(if element.as_raw().is_null() {
-            None
-        } else {
-            Some(element)
-        })
+        match unsafe { root.FindFirst(TreeScope_Children, &condition) } {
+            Ok(element) => Ok(Some(element)),
+            // FindFirst reports a missing match as a successful null COM pointer.
+            // The windows projection represents that null pointer as Error::empty().
+            Err(error) if error.code() == windows::core::HRESULT(0) => Ok(None),
+            Err(error) => Err(anyhow!("FindFirst: {error:?}")),
+        }
     }
 
     fn build_condition(&self, query: &ElementQuery) -> Result<IUIAutomationCondition> {

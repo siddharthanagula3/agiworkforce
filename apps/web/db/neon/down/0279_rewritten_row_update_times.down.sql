@@ -23,6 +23,6 @@ alter table public.api_keys drop column if exists updated_at;
 
 drop function if exists public.touch_row_updated_at();
 
-delete from public.schema_migrations where filename = '0277_rewritten_row_update_times.sql';
+delete from public.schema_migrations where filename = '0279_rewritten_row_update_times.sql';
 
 commit;

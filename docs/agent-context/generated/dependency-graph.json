@@ -774,6 +774,10 @@
       },
       {
         "from": "@agiworkforce/web",
+        "to": "@agiworkforce/providers-vercel-gateway"
+      },
+      {
+        "from": "@agiworkforce/web",
         "to": "@agiworkforce/routing"
       },
       {

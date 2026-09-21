@@ -1,21 +1,57 @@
 # Jev-assisted Auto model selection
 
-Status: Proposed architecture; no product implementation or rollout
+Status: Response-budget slice implemented behind off-by-default flags; semantic model selection remains proposed
 Owner: Provider/platform owner, with Managed inference and billing owners
 Last updated: 2026-09-19
 
 ## Outcome
 
-When a user selects Auto, assess the request's semantic requirements with Jev
-through Vercel AI Gateway, then let the existing registry-backed router select
-the answering model and serving route. Measure whether this improves completed
-task quality or cost at acceptable latency. No improvement is claimed yet.
+When a user selects Auto, the first implemented slice may assess the minimum
+response depth, format, explanation need and critical ambiguity with Jev through
+Vercel AI Gateway. Deterministic code maps an accepted assessment to the existing
+provider-neutral response budget. The existing registry-backed router still
+selects the answering model and serving route. Semantic model selection remains
+the later proposal in this document. No production improvement is claimed yet.
 
 The architecture and interfaces are in [plan.md](plan.md); the implementation
 sequence is in [tasks.md](tasks.md). This proposal extends the
 [provider routing contract](../../architecture/provider-routing.md) and the
 [ExecutionPlan and CPST design](../../architecture/execution-plan-contract.md).
 It does not make their unimplemented parts prerequisites for every first slice.
+
+## Implemented response-budget slice
+
+The Managed web request processor owns one optional assessment before Auto route
+resolution. `routing.response_assessment` enables shadow observation and
+`routing.response_assessment_apply` permits a confident result to affect the
+visible output budget. Both flags are absent/off by default. Disable the first
+flag to stop all evaluator calls.
+
+Exact user instructions and deterministic response-shape decisions bypass the
+evaluator. Named models, API callers, free accounts, media turns, restricted
+workspace model policies, residency-pinned workspaces and zero-retention-only
+workspaces also bypass it. A timeout, invalid result, low confidence, unavailable
+quota store or missing Gateway credential preserves the deterministic baseline.
+
+The evaluator model, promotion/pricing verification date, prompt identity,
+state/deadline/concurrency/daily-token limits and confidence threshold live in
+the generated routing policy. The promotion expiry fails closed until registry
+pricing evidence is refreshed. Evaluation cost and token usage are written to
+the COGS ledger in microUSD, and the routing trace records the decision without
+the raw user message. This slice never adds Jev to a selector or generator pool.
+
+The safe rollout sequence is:
+
+1. Create `routing.response_assessment` as an operator-targeted `on` flag while
+   leaving `routing.response_assessment_apply` absent or `off`.
+2. Compare shadow trace quality, added latency, total cost per satisfied request
+   and the labeled response-budget corpus.
+3. Enable `routing.response_assessment_apply` only for the approved cohort.
+4. Set `routing.response_assessment` to `off` for immediate rollback.
+
+Feature flags are evaluated per authenticated subject and remain server-only.
+An authenticated Gateway smoke test and a measured shadow report are still
+required before any production cohort is enabled.
 
 ## Scope
 
@@ -43,17 +79,17 @@ inference, and replacing the Rust router. The developer helper
 Inspected on 2026-09-19. Links name current owners; proposed symbols in the plan
 do not exist yet.
 
-| Concern            | Current implementation                                                                                                                                                                                             | Consequence for this design                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Semantic baseline  | [classify.ts](../../../packages/ai/routing/src/classify.ts) returns `RoutingTaskType` and heuristic confidence                                                                                                     | Jev can improve interpretation; heuristic confidence is not a calibrated trigger         |
-| Structural family  | [task-family.ts](../../../packages/ai/routing/src/task-family.ts) derives `TaskFamily` from modes, tools, attachments and lengths                                                                                  | Keep this taxonomy distinct from the semantic task type                                  |
-| Selection          | [auto.ts](../../../packages/ai/routing/src/auto.ts) implements admission, profile selection, ordering, continuity and fallbacks                                                                                    | Keep one resolver and its existing hard constraints                                      |
-| Quality floor      | [task-family-routing.ts](../../../packages/ai/routing/src/task-family-routing.ts) applies curated floors and cost ordering                                                                                         | A difficulty judgment cannot silently lower a curated floor                              |
-| Managed assembly   | [request-processor.ts](../../../apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts) assembles classification, tool intent, policy, budget, health and free-lane results                             | Insert assessment after data-sharing policy is known and before final model selection    |
-| Provider interface | [provider-adapter.ts](../../../packages/contracts/types/src/provider-adapter.ts) exposes chat streaming; Gateway also separately exports embeddings                                                                | Evaluation needs its own typed interface and Gateway transport                           |
-| Trace              | [routing-trace.ts](../../../packages/ai/routing/src/routing-trace.ts) and [trace service](../../../apps/web/lib/services/model-rollout/routing-decision-trace-service.ts) persist decisions and transport outcomes | Extend the trace; there is no semantic-assessment record today                           |
-| Cost               | [COGS ledger](../../../apps/web/lib/services/cogs-ledger-service.ts) has idempotent source references and microUSD columns, but its writer rounds provider cents before conversion                                 | Extend its input/write path to preserve sub-cent evaluator costs, including failed turns |
-| Quality evidence   | [tools/evals](../../../tools/evals/README.md) grades downstream outputs and measures usage                                                                                                                         | Extend this harness with semantic routing cases and paired route experiments             |
+| Concern            | Current implementation                                                                                                                                                                                                                      | Consequence for this design                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Semantic baseline  | [classify.ts](../../../packages/ai/routing/src/classify.ts) returns `RoutingTaskType` and heuristic confidence                                                                                                                              | Jev can improve interpretation; heuristic confidence is not a calibrated trigger      |
+| Structural family  | [task-family.ts](../../../packages/ai/routing/src/task-family.ts) derives `TaskFamily` from modes, tools, attachments and lengths                                                                                                           | Keep this taxonomy distinct from the semantic task type                               |
+| Selection          | [auto.ts](../../../packages/ai/routing/src/auto.ts) implements admission, profile selection, ordering, continuity and fallbacks                                                                                                             | Keep one resolver and its existing hard constraints                                   |
+| Quality floor      | [task-family-routing.ts](../../../packages/ai/routing/src/task-family-routing.ts) applies curated floors and cost ordering                                                                                                                  | A difficulty judgment cannot silently lower a curated floor                           |
+| Managed assembly   | [request-processor.ts](../../../apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts) assembles classification, tool intent, policy, budget, health and free-lane results                                                      | Insert assessment after data-sharing policy is known and before final model selection |
+| Provider interface | [provider-adapter.ts](../../../packages/contracts/types/src/provider-adapter.ts) exposes chat streaming; Gateway also separately exports embeddings                                                                                         | Evaluation needs its own typed interface and Gateway transport                        |
+| Trace              | [routing-trace.ts](../../../packages/ai/routing/src/routing-trace.ts) and [trace service](../../../apps/web/lib/services/model-rollout/routing-decision-trace-service.ts) persist decisions, transport outcomes and the response assessment | Reuse this field if later semantic model selection is implemented                     |
+| Cost               | [COGS ledger](../../../apps/web/lib/services/cogs-ledger-service.ts) accepts direct estimated and reported microUSD values without cent rounding                                                                                            | Reuse the idempotent evaluator event for later assessment dimensions                  |
+| Quality evidence   | [tools/evals](../../../tools/evals/README.md) grades downstream outputs and measures usage                                                                                                                                                  | Extend this harness with semantic routing cases and paired route experiments          |
 
 Older execution-plan rollout notes are not evidence of today's flag defaults.
 The task-family stage is currently enabled unless disabled; decision traces and

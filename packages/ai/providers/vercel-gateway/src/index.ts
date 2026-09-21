@@ -36,11 +36,11 @@ import {
   type VercelGatewayProviderOptions,
 } from './provider-options';
 import { createVercelGatewayUsageNormalizer } from './usage';
+import { VERCEL_GATEWAY_DEFAULT_BASE_URL } from './endpoint';
 
 const VERCEL_GATEWAY_PROVIDER_ID = 'vercel_gateway';
 const VERCEL_GATEWAY_LABEL = 'Vercel AI Gateway';
 const VERCEL_GATEWAY_API_KEY_ENV_VAR = 'VERCEL_GATEWAY_API_KEY';
-const VERCEL_GATEWAY_DEFAULT_BASE_URL = 'https://ai-gateway.vercel.sh/v1';
 
 const VERCEL_GATEWAY_AUTH_METHODS: readonly AuthMethod[] = [
   {
@@ -180,3 +180,16 @@ export {
   type VercelGatewayEmbeddingResult,
   type VercelGatewayEmbeddingsConfig,
 } from './embeddings';
+export {
+  createVercelGatewayEvaluator,
+  VercelGatewayEvaluationError,
+  type EvaluationAnswer,
+  type EvaluationBooleanQuestion,
+  type EvaluationChoiceQuestion,
+  type EvaluationQuestion,
+  type EvaluationQuestions,
+  type EvaluationScoreQuestion,
+  type VercelGatewayEvaluationConfig,
+  type VercelGatewayEvaluationRequest,
+  type VercelGatewayEvaluationResult,
+} from './evaluation';

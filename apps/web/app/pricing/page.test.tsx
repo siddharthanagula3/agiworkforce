@@ -101,6 +101,25 @@ vi.mock('@/features/marketing/components/Reveal', () => ({
 vi.mock('@/features/marketing/components/WaitlistModal', () => ({
   WaitlistTrigger: ({ label }: { label: string }) => <button>{label}</button>,
 }));
+vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
+  UpgradeWaitlistDialog: ({
+    request,
+    onAccessGranted,
+  }: {
+    request: { plan: string; billingInterval: string; seats?: number } | null;
+    onAccessGranted: (request: {
+      plan: string;
+      billingInterval: string;
+      seats?: number;
+    }) => Promise<void>;
+  }) =>
+    request ? (
+      <div>
+        <span>{`Waitlist for ${request.plan}`}</span>
+        <button onClick={() => void onAccessGranted(request)}>Continue with code</button>
+      </div>
+    ) : null,
+}));
 
 import PricingPage from './page';
 
@@ -230,7 +249,7 @@ describe('PricingPage', () => {
     expect(screen.getByText('$125')).toBeVisible();
   });
 
-  it('sends the chosen seat count to Team checkout', async () => {
+  it('preserves the chosen Team seat count after waitlist-code access', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
@@ -267,6 +286,9 @@ describe('PricingPage', () => {
     await waitFor(() => expect(teamCta).toBeEnabled());
     fireEvent.click(teamCta);
 
+    expect(await screen.findByText('Waitlist for team')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with code' }));
+
     await waitFor(() => expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({ seats: 14 }));
   });
 
@@ -283,7 +305,7 @@ describe('PricingPage', () => {
     );
   });
 
-  it('offers a Team yearly cadence and sends billingPeriod yearly when the yearly Price is ready', async () => {
+  it('preserves Team yearly cadence after waitlist-code access', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
@@ -321,6 +343,9 @@ describe('PricingPage', () => {
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
     fireEvent.click(teamCta);
+
+    expect(await screen.findByText('Waitlist for team')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with code' }));
 
     await waitFor(() =>
       expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({
@@ -773,7 +798,7 @@ describe('PricingPage', () => {
     expect(screen.getAllByText('£18/seat/mo').length).toBeGreaterThan(0);
   });
 
-  it('does not render the obsolete managed-cloud early-access waitlist', () => {
+  it('does not render the obsolete managed-cloud access waitlist before an upgrade choice', () => {
     render(<PricingPage />);
 
     expect(screen.queryByText('waitlistHeading')).toBeNull();

@@ -318,19 +318,22 @@ mod tests {
         );
         append_tar_file(&mut builder, "fixture-bundle/libfixture.so.1", b"library");
         append_tar_file(&mut builder, "fixture-bundle/data/fixture-data", b"data");
-        let mut symlink = Header::new_gnu();
-        symlink.set_entry_type(EntryType::Symlink);
-        symlink.set_size(0);
-        symlink.set_mode(0o777);
-        symlink.set_link_name("libfixture.so.1").unwrap();
-        symlink.set_cksum();
-        builder
-            .append_data(
-                &mut symlink,
-                "fixture-bundle/libfixture.so",
-                std::io::empty(),
-            )
-            .unwrap();
+        #[cfg(unix)]
+        {
+            let mut symlink = Header::new_gnu();
+            symlink.set_entry_type(EntryType::Symlink);
+            symlink.set_size(0);
+            symlink.set_mode(0o777);
+            symlink.set_link_name("libfixture.so.1").unwrap();
+            symlink.set_cksum();
+            builder
+                .append_data(
+                    &mut symlink,
+                    "fixture-bundle/libfixture.so",
+                    std::io::empty(),
+                )
+                .unwrap();
+        }
         finish_tar(builder);
 
         let destination = temp_dir.path().join("extracted");
@@ -349,6 +352,29 @@ mod tests {
                 .file_type()
                 .is_symlink()
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn tar_extraction_rejects_safe_symlinks_on_unsupported_platform() {
+        let temp = tempfile::tempdir().unwrap();
+        let archive = temp.path().join("safe-link.tar.gz");
+        let encoder = GzEncoder::new(File::create(&archive).unwrap(), Compression::default());
+        let mut builder = TarBuilder::new(encoder);
+        append_tar_file(&mut builder, "bundle/library", b"library");
+        let mut link = Header::new_gnu();
+        link.set_entry_type(EntryType::Symlink);
+        link.set_size(0);
+        link.set_mode(0o777);
+        link.set_link_name("library").unwrap();
+        link.set_cksum();
+        builder
+            .append_data(&mut link, "bundle/alias", std::io::empty())
+            .unwrap();
+        finish_tar(builder);
+        let error =
+            extract_archive(&archive, "tar.gz", &temp.path().join("destination")).unwrap_err();
+        assert!(error.to_string().contains("symlinks are unsupported"));
     }
 
     #[test]

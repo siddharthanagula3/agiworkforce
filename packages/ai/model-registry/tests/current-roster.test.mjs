@@ -400,11 +400,11 @@ test('selects the founder-approved roster and subscription bands', () => {
     assert.equal(slotModels.includes(retiredModelKey), false);
   }
 
-  const freeCodingModel = registry.policies.auto.slots.coding_fast.modelKey;
-  assert.equal(basicRoster.has(freeCodingModel), true);
-  assert.equal(compatibility.models[freeCodingModel].tierPolicy.minTier, 'free');
-  assert.equal(compatibility.models[freeCodingModel].capabilities.tools, true);
-  assert.equal(compatibility.models[freeCodingModel].capabilities.codeExecution, true);
+  const basicCodingModel = registry.policies.auto.slots.coding_fast.modelKey;
+  assert.equal(basicRoster.has(basicCodingModel), true);
+  assert.equal(compatibility.models[basicCodingModel].tierPolicy.minTier, 'basic');
+  assert.equal(compatibility.models[basicCodingModel].capabilities.tools, true);
+  assert.equal(compatibility.models[basicCodingModel].capabilities.codeExecution, true);
 
   const addressableFormerPicker = registry.providerModelKeys.perplexity.find(
     (modelKey) => registry.models[modelKey] && !selectableRoster.has(modelKey),

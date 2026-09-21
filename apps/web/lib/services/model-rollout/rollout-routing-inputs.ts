@@ -32,6 +32,8 @@ export interface WebCloudRolloutInputs {
   enableObservedHealthRanking?: boolean;
   enableCanary?: boolean;
   enableShadow?: boolean;
+  enableResponseAssessment?: boolean;
+  applyResponseAssessment?: boolean;
   canaryCohorts?: Readonly<Record<string, boolean>>;
   shadowRequestsToday: Readonly<Record<string, number>>;
   flagVariants: Readonly<Record<string, string>>;

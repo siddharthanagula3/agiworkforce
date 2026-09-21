@@ -797,7 +797,12 @@ mod tests {
 
     #[test]
     fn validated_code_edit_path_rejects_protected_system_paths() {
-        let error = validated_code_edit_path(PathBuf::from("/etc/passwd").as_path()).unwrap_err();
+        let path = if cfg!(windows) {
+            "C:\\Windows\\System32"
+        } else {
+            "/etc/passwd"
+        };
+        let error = validated_code_edit_path(std::path::Path::new(path)).unwrap_err();
         assert!(error.contains("protected system path") || error.contains("not allowed"));
     }
 

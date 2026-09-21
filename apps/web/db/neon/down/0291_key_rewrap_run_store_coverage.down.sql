@@ -14,6 +14,6 @@ ALTER TABLE public.organization_key_rewrap_runs
   DROP COLUMN IF EXISTS covered_stores;
 
 DELETE FROM public.schema_migrations
- WHERE filename = '0289_key_rewrap_run_store_coverage.sql';
+ WHERE filename = '0291_key_rewrap_run_store_coverage.sql';
 
 COMMIT;

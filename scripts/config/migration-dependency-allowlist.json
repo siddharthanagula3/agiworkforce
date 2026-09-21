@@ -3,207 +3,207 @@
   "entries": [
     {
       "file": "apps/web/app/api/settings/organization/route.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/authorization/subject.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/connectors/mcp-custom-connections.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/server/scim/scim-provisioning-service.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/active-workspace-service.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/domain-retention-service.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/organization-invitation-service.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/organization-policy-override-service.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/user-connector-tools.ts",
-      "migration": 274,
+      "migration": 276,
       "reason": "Does not read the row timestamps this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new columns are additive with defaults, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/auth/device/token/route.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/connectors/route.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/device/poll/route.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/search/route.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/settings/devices/[deviceId]/route.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/settings/sync/route.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/device-steps/device-registry.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/domain-retention-service.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/ediscovery-export-service.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/org-shared-session-service.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/retrieval-index-service.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/support/actions/executors/revoke-connector.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/triggers/trigger-ingest.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/user-connector-tools.ts",
-      "migration": 277,
+      "migration": 279,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a created_at or updated_at column of a different table, which the guard matches as a substring. The new column is additive with a default, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/server/risk-signals.ts",
-      "migration": 278,
+      "migration": 280,
       "reason": "Reads columns this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
     },
     {
       "file": "apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts",
-      "migration": 280,
+      "migration": 282,
       "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
     },
     {
       "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "migration": 280,
+      "migration": 282,
       "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
     },
     {
       "file": "apps/web/app/api/chat/sync/route.ts",
-      "migration": 280,
+      "migration": 282,
       "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
-      "migration": 283,
+      "migration": 285,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a column of the same name on a different table or the word in a comment, which the guard matches as a substring. The new column is additive, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/app/api/user/export/route.ts",
-      "migration": 284,
+      "migration": 286,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a column of the same name on a different table or the word in a comment, which the guard matches as a substring. The new column is additive, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/server/account-erasure.ts",
-      "migration": 284,
+      "migration": 286,
       "reason": "Does not read the column this migration adds: the file names the table and, separately, a column of the same name on a different table or the word in a comment, which the guard matches as a substring. The new column is additive, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/managed-memory-context-service.ts",
-      "migration": 284,
+      "migration": 286,
       "reason": "Reads and writes the column this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration is applied."
     },
     {
       "file": "apps/web/lib/services/enterprise-contracts/agreement-store.ts",
-      "migration": 285,
+      "migration": 287,
       "reason": "Reads and writes what this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration; the enterprise commercial domain has no production caller that authors an agreement yet."
     },
     {
       "file": "apps/web/lib/services/enterprise-contracts/agreement-store.ts",
-      "migration": 286,
+      "migration": 288,
       "reason": "Reads and writes what this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration; the enterprise commercial domain has no production caller that authors an agreement yet."
     },
     {
       "file": "apps/web/lib/services/enterprise-contracts/invoicing.ts",
-      "migration": 287,
+      "migration": 289,
       "reason": "Reads and writes what this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration; the enterprise commercial domain has no production caller that authors an agreement yet."
     },
     {
       "file": "apps/web/lib/services/plugin-installation-service.ts",
-      "migration": 288,
+      "migration": 290,
       "reason": "Does not read the columns this migration adds: the file names the table and, separately, the entry's own signature column, which the guard matches as a substring. The new columns are additive, so this code runs unchanged before and after the migration."
     },
     {
       "file": "apps/web/lib/services/plugin-lifecycle.ts",
-      "migration": 288,
+      "migration": 290,
       "reason": "Reads and writes the per-version signature columns this migration adds. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration."
     },
     {
       "file": "apps/web/lib/server/organization-encryption-keys.ts",
-      "migration": 289,
+      "migration": 291,
       "reason": "Reads and writes the covered-stores column this migration adds to the rewrap run row. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the migration."
     },
     {
       "file": "apps/web/lib/server/organization-erasure.ts",
-      "migration": 287,
+      "migration": 289,
       "reason": "Deletes from and classifies the table this migration creates. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the table exists."
     },
     {
       "file": "apps/web/lib/services/deletion-manifest.ts",
-      "migration": 287,
+      "migration": 289,
       "reason": "Deletes from and classifies the table this migration creates. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the table exists."
     }
   ]

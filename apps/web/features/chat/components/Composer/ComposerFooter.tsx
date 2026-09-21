@@ -51,6 +51,7 @@ import {
 } from '@shared/stores/model-store';
 import { FreeQuotaModelSection } from './FreeQuotaModelSection';
 import { freeQuotaSelection } from '@features/chat/lib/free-quota-selection';
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import { StyleSelector } from './StyleSelector';
 import { ModelCompatibilityNotice } from './ModelCompatibilityNotice';
 import {
@@ -67,6 +68,7 @@ import {
   type Effort,
   getPickerModelTier,
   evaluateModelEnvironment,
+  isFreeBillingPlanTier,
   normalizeBillingPlanTier,
   type ModelEnvironment,
   type EnvironmentAvailability,
@@ -77,6 +79,7 @@ import {
   getAllowedAutoModesForTier,
   getBestAutoModeForTier,
   getModelReasoning,
+  isAutoModeModelId,
   isModelAllowedForTier,
   splitEffortsByEntitlement,
 } from '@shared/config/llm';
@@ -794,6 +797,7 @@ export function ComposerFooter({
   const pickerLayout = useOverlayLayout();
   const modelTriggerRef = useRef<HTMLButtonElement>(null);
   const pickerPanelRef = useRef<HTMLDivElement>(null);
+  const freePlanRef = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -872,6 +876,7 @@ export function ComposerFooter({
   );
 
   const handlePickerTypeAhead = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (freePlanRef.current) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'Backspace') {
       event.stopPropagation();
@@ -913,6 +918,14 @@ export function ComposerFooter({
   // subscription; it is a guess in every other state, and this picker turns a
   // guess into an "requires upgrade" claim against paying subscribers.
   const knownTier = billingPolicyReady || billingUnauthenticated ? tier : null;
+  const freePlan = isFreeBillingPlanTier(knownTier);
+  freePlanRef.current = freePlan;
+
+  useEffect(() => {
+    if (!freePlan) return;
+    setCatalogueOpen(false);
+    setSearchQuery('');
+  }, [freePlan]);
 
   const hydrated = useHydrated();
   const selectedModel = hydrated ? getSelectedModel() : initialSelectedModel();
@@ -1117,6 +1130,8 @@ export function ComposerFooter({
     );
   }, [searchQuery]);
 
+  const freeDefaultModel = findSelectableModel(FREE_TRIAL_MODEL);
+
   const triggerReceipt = localSelection
     ? `${localSelection.serverLabel} on this device · nothing leaves this Mac`
     : selectedModelId === shortList.auto?.id
@@ -1170,10 +1185,14 @@ export function ComposerFooter({
     // reset leak where a now-invalid model could remain selected after the tier
     // changed. (coming_soon models can never be selected in the first place, but
     // this also recovers if a live model is retired.)
+    if (freePlan && isAutoModeModelId(selectedModelId)) {
+      setSelectedModelId(FREE_TRIAL_MODEL);
+      return;
+    }
     if (modelLock(selectedModel, tier).locked) {
       setSelectedModelId(getBestAutoModeForTier(tier));
     }
-  }, [billingPolicyReady, selectedModel, setSelectedModelId, tier]);
+  }, [billingPolicyReady, freePlan, selectedModel, selectedModelId, setSelectedModelId, tier]);
 
   useEffect(() => {
     // always_on reasoners keep thinking on. If thinking is enabled but the current
@@ -1407,9 +1426,11 @@ export function ComposerFooter({
                               const model = findSelectableModel(id);
                               if (model && !modelChangePending) handleSelectModel(model);
                             }}
-                          />
+                          >
+                            {freeDefaultModel ? renderModelRow(freeDefaultModel) : null}
+                          </FreeQuotaModelSection>
 
-                          {shortList.auto && (
+                          {!freePlan && shortList.auto && (
                             <AutoRow
                               auto={shortList.auto}
                               isSelected={shortList.auto.id === selectedModelId}
@@ -1426,7 +1447,8 @@ export function ComposerFooter({
                             />
                           )}
 
-                          {shortList.current &&
+                          {!freePlan &&
+                            shortList.current &&
                             (() => {
                               const model = AVAILABLE_MODELS.find(
                                 (candidate) => candidate.id === shortList.current?.id,
@@ -1434,7 +1456,7 @@ export function ComposerFooter({
                               return model ? renderModelRow(model) : null;
                             })()}
 
-                          {shortList.recommended.length > 0 && (
+                          {!freePlan && shortList.recommended.length > 0 && (
                             <>
                               <p className={PICKER_SECTION_LABEL_CLASS}>Recommended</p>
                               {shortList.recommended.map((row) => {
@@ -1446,7 +1468,7 @@ export function ComposerFooter({
                             </>
                           )}
 
-                          {shortList.favourites.length > 0 && (
+                          {!freePlan && shortList.favourites.length > 0 && (
                             <>
                               <p className={PICKER_SECTION_LABEL_CLASS}>Favourites</p>
                               {shortList.favourites.map((row) => {
@@ -1458,35 +1480,39 @@ export function ComposerFooter({
                             </>
                           )}
 
-                          <LocalModelSection
-                            state={localModels}
-                            selectedId={localSelection?.id ?? null}
-                            onSelect={handleSelectLocalModel}
-                          />
+                          {!freePlan && (
+                            <>
+                              <LocalModelSection
+                                state={localModels}
+                                selectedId={localSelection?.id ?? null}
+                                onSelect={handleSelectLocalModel}
+                              />
 
-                          <div className="my-1 border-t border-[var(--chat-border)]" />
-                          <button
-                            type="button"
-                            {...{ [PICKER_ROW_ATTR]: '' }}
-                            className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
-                            onClick={() => setCatalogueOpen(true)}
-                            aria-expanded={false}
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
-                                All models
-                              </span>
-                            </span>
-                            <span className="shrink-0 text-xs text-muted-foreground">
-                              {catalogue.status === 'ready'
-                                ? catalogue.count
-                                : shortList.totalCount}
-                            </span>
-                            <ChevronRight
-                              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                              aria-hidden="true"
-                            />
-                          </button>
+                              <div className="my-1 border-t border-[var(--chat-border)]" />
+                              <button
+                                type="button"
+                                {...{ [PICKER_ROW_ATTR]: '' }}
+                                className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
+                                onClick={() => setCatalogueOpen(true)}
+                                aria-expanded={false}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className={`${PICKER_ROW_NAME_CLASS} text-foreground`}>
+                                    All models
+                                  </span>
+                                </span>
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  {catalogue.status === 'ready'
+                                    ? catalogue.count
+                                    : shortList.totalCount}
+                                </span>
+                                <ChevronRight
+                                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                  aria-hidden="true"
+                                />
+                              </button>
+                            </>
+                          )}
                         </>
                       )}
                     </div>

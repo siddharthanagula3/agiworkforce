@@ -18,6 +18,9 @@ const dbMocks = vi.hoisted(() => ({
 }));
 
 const trialMocks = vi.hoisted(() => ({ trialDays: vi.fn((_plan: string): number | null => null) }));
+const waitlistAccessMocks = vi.hoisted(() => ({
+  hasAccess: vi.fn(async () => true),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
@@ -61,6 +64,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     userId: 'user_123',
     organizationId: null,
   })),
+}));
+vi.mock('@/lib/server/billing-waitlist-access', () => ({
+  hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 vi.mock('stripe', () => ({
   default: class StripeMock {
@@ -109,6 +115,7 @@ describe('POST /api/checkout, trials', () => {
       id: 'cs_test_123',
       url: 'https://checkout.stripe.test/cs_test_123',
     });
+    waitlistAccessMocks.hasAccess.mockResolvedValue(true);
   });
 
   it('starts no trial while the catalog sets no trial length', async () => {

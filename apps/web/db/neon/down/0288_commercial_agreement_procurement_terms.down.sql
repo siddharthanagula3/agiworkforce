@@ -24,6 +24,6 @@ alter table public.organization_commercial_agreements
 
 -- destructive: removes this migration's ledger row so the runner can apply it again.
 delete from public.schema_migrations
- where filename = '0286_commercial_agreement_procurement_terms.sql';
+ where filename = '0288_commercial_agreement_procurement_terms.sql';
 
 commit;

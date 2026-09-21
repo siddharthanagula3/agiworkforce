@@ -12,6 +12,6 @@ alter table public.organization_admin_policies drop column if exists server_vers
 drop trigger if exists project_knowledge_files_assign_version on public.project_knowledge_files;
 alter table public.project_knowledge_files drop column if exists server_version;
 
-delete from public.schema_migrations where filename = '0276_resource_row_versions.sql';
+delete from public.schema_migrations where filename = '0278_resource_row_versions.sql';
 
 commit;

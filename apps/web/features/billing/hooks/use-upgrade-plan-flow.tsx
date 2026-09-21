@@ -19,6 +19,8 @@ import {
 } from '@features/billing/services/stripe-payments';
 import { billingOwnerPlanChangeMessage } from '@features/billing/lib/subscription-owner-presentation';
 import { toUserMessage } from '@/lib/user-error-message';
+import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitlistDialog';
+import type { UpgradeWaitlistRequest } from '@features/billing/services/upgrade-waitlist';
 import {
   isBasicPlanTier,
   isProPlanTier,
@@ -36,11 +38,6 @@ interface UseUpgradePlanFlowOptions {
   openSettings: (tab: string) => void;
 }
 
-/**
- * Shared between WebChatPage's and WebAppShell's account menus so the
- * upgrade flow, dialog, mid-cycle confirm, and the real Stripe checkout call
- *, cannot drift between the two surfaces.
- */
 export function useUpgradePlanFlow({
   user,
   subscription,
@@ -51,17 +48,44 @@ export function useUpgradePlanFlow({
   const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
   const [upgradePlanTarget, setUpgradePlanTarget] = useState<UpgradeTarget | null>(null);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
+  const [waitlistRequest, setWaitlistRequest] = useState<UpgradeWaitlistRequest | null>(null);
 
-  // Managed cloud is open by default: a signed-in user already reaches it.
-  // The upgrade dialog only sells higher hosted capacity, it is not an access
-  // gate, so opening it simply shows the plan comparison (no waitlist).
   const openUpgradeDialog = useCallback((targetTier: UpgradeTarget | null = null) => {
     setUpgradePlanTarget(targetTier);
     setUpgradePlanOpen(true);
   }, []);
 
-  // Route the upgrade CTA to the real Stripe checkout flow (same service the
-  // billing dashboard uses). No waitlist email capture.
+  const startCheckout = useCallback(
+    async (request: UpgradeWaitlistRequest) => {
+      if (!user) throw new Error('Please sign in to upgrade.');
+      const toastId = toast.loading('Redirecting to checkout...');
+      try {
+        if (isBasicPlanTier(request.plan)) {
+          await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
+        } else if (isProPlanTier(request.plan)) {
+          await upgradeToProPlan({
+            userId: user.id,
+            userEmail: user.email || '',
+            billingPeriod: request.billingInterval,
+          });
+        } else if (isMaxPlanTier(request.plan)) {
+          await upgradeToMaxPlan({
+            userId: user.id,
+            userEmail: user.email || '',
+            billingPeriod: 'monthly',
+          });
+        } else if (isMax15xPlanTier(request.plan)) {
+          await upgradeToMax15xPlan({ userId: user.id, userEmail: user.email || '' });
+        }
+        toast.dismiss(toastId);
+      } catch (error) {
+        toast.dismiss(toastId);
+        throw error;
+      }
+    },
+    [user],
+  );
+
   const handleUpgradePlan = useCallback(
     async (plan: UpgradeTarget, annual: boolean) => {
       if (!user) {
@@ -91,32 +115,7 @@ export function useUpgradePlanFlow({
         setUpgradeConfirm({ plan, billingInterval: billingPeriod });
         return;
       }
-      const toastId = toast.loading('Redirecting to checkout...');
-      try {
-        if (isBasicPlanTier(plan)) {
-          await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
-        } else if (isProPlanTier(plan)) {
-          await upgradeToProPlan({
-            userId: user.id,
-            userEmail: user.email || '',
-            billingPeriod,
-          });
-        } else if (isMaxPlanTier(plan)) {
-          await upgradeToMaxPlan({
-            userId: user.id,
-            userEmail: user.email || '',
-            billingPeriod: 'monthly',
-          });
-        } else if (isMax15xPlanTier(plan)) {
-          await upgradeToMax15xPlan({ userId: user.id, userEmail: user.email || '' });
-        }
-        // On success the service redirects to Stripe; the dismiss below only
-        // runs if navigation has not yet replaced the page.
-        toast.dismiss(toastId);
-      } catch (err) {
-        toast.dismiss(toastId);
-        toast.error(toUserMessage(err, 'Failed to start checkout.'));
-      }
+      setWaitlistRequest({ plan, billingInterval: billingPeriod });
     },
     [billingPolicyReady, openSettings, subscription, user],
   );
@@ -139,6 +138,18 @@ export function useUpgradePlanFlow({
         onConfirmed={() => {
           setUpgradeConfirm(null);
           toast.success('Your plan has been upgraded.');
+        }}
+      />
+      <UpgradeWaitlistDialog
+        request={waitlistRequest}
+        onClose={() => setWaitlistRequest(null)}
+        onAccessGranted={async (request) => {
+          try {
+            await startCheckout(request);
+          } catch (error) {
+            toast.error(toUserMessage(error, 'Failed to start checkout.'));
+            throw error;
+          }
         }}
       />
     </>

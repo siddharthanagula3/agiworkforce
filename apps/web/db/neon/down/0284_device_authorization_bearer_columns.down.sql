@@ -14,6 +14,6 @@ alter table public.device_authorization_codes
 
 -- destructive: removes this migration's ledger row so the runner can apply it again.
 delete from public.schema_migrations
- where filename = '0282_device_authorization_bearer_columns.sql';
+ where filename = '0284_device_authorization_bearer_columns.sql';
 
 commit;

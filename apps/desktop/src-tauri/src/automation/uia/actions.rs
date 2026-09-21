@@ -13,7 +13,7 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow;
 
-impl UIAutomationService {
+impl UIAutomationState {
     pub fn check_patterns(&self, element_id: &str) -> Result<PatternCapabilities> {
         let element = self.get_element(element_id)?;
         Ok(PatternCapabilities::from_element(&element))

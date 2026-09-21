@@ -13,6 +13,6 @@ ALTER TABLE public.identity_risk_observations
   DROP COLUMN IF EXISTS user_agent_ref;
 
 DELETE FROM public.schema_migrations
- WHERE filename = '0278_identity_risk_client_and_address_reuse.sql';
+ WHERE filename = '0280_identity_risk_client_and_address_reuse.sql';
 
 COMMIT;

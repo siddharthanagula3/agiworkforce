@@ -12,6 +12,7 @@
     "agent.cloud_code_system@1": "sha256:e3a1fd2053fe4debebe6df4a3476a6e8419f3f7ab5363519e39c25ccd3f1f87a",
     "tool.url_fetch_description@1": "sha256:948239e4f02f23340b6c35cf437f9b700a24a3cce3c1ba3a535993f23b117554",
     "tool.places_search_description@1": "sha256:3843724a46bc0b0b2ede1f94449536f2c0dc1a4e9d9f890f181386809b596310",
-    "safety.untrusted_context@1": "sha256:2815c21a690488aec90f38edf052e48118cc1e2e14ae818f13e485d29e56b79b"
+    "safety.untrusted_context@1": "sha256:2815c21a690488aec90f38edf052e48118cc1e2e14ae818f13e485d29e56b79b",
+    "routing.response_assessment@1": "sha256:f6b217787691935c40ade1d63710294208784d54e7dd08349d4129cd86cd818e"
   }
 }

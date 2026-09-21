@@ -27,6 +27,6 @@ CREATE TRIGGER trg_retrieval_cloud_code_sessions
   FOR EACH ROW EXECUTE FUNCTION public.retrieval_track_code_session();
 
 DELETE FROM public.schema_migrations
-WHERE filename = '0281_retrieval_index_withdrawal_coverage.sql';
+WHERE filename = '0283_retrieval_index_withdrawal_coverage.sql';
 
 COMMIT;

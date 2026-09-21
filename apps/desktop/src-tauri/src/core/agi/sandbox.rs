@@ -1107,7 +1107,10 @@ mod tests {
         let cmd = build_execution_command(&runner, script, workspace, true).unwrap();
         let std_cmd = cmd.as_std();
 
-        assert_eq!(std_cmd.get_program(), std::ffi::OsStr::new("python3"));
+        assert_eq!(
+            std_cmd.get_program(),
+            std::ffi::OsStr::new(if cfg!(windows) { "python" } else { "python3" })
+        );
         let args = std_cmd.get_args().collect::<Vec<_>>();
         assert_eq!(args.last().copied(), Some(script.as_os_str()));
     }

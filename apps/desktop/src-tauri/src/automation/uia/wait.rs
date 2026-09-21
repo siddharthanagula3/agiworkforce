@@ -97,12 +97,7 @@ impl UIAutomationService {
         let mut attempt = 0;
 
         loop {
-            let element = self.get_element(element_id)?;
-
-            let is_enabled = unsafe { element.CurrentIsEnabled() }
-                .map_err(|err| anyhow!("CurrentIsEnabled failed: {err:?}"))?;
-
-            if is_enabled.as_bool() {
+            if self.is_element_enabled(element_id)? {
                 return Ok(());
             }
 

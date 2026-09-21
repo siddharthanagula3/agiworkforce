@@ -21,5 +21,5 @@ alter table public.profiles
 comment on column public.profiles.account_status is
   'active: normal. locked: self-service recovery (credential problem). suspended/banned: a decision about the account, reversed only by support. deletion_scheduled: signed in and able to cancel. deleted: erasure ordered; erasure_tombstones (0103) is the record that outlives the row.';
 
-delete from public.schema_migrations where filename = '0275_account_recovery_state.sql';
+delete from public.schema_migrations where filename = '0277_account_recovery_state.sql';
 commit;
