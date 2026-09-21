@@ -122,7 +122,7 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'database',
     label: 'Postgres',
-    what: 'A query is executed against the primary database and returns. A pass is then reused for up to an hour before another query runs, so this row can be that far behind the database itself.',
+    what: 'A query is executed against the primary database and returns. The answer is reused for up to a minute before another query runs, so this row can be that far behind the database itself.',
   },
   {
     key: 'stripe',
@@ -147,7 +147,7 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   {
     key: 'search',
     label: 'Search',
-    what: 'The retrieval index the search over your own content reads is present in the database. It runs beside the Postgres probe and is reused for the same hour, and it never runs a query on your behalf.',
+    what: 'The retrieval index the search over your own content reads is present in the database. It runs beside the Postgres probe and is reused for the same minute, and it never runs a query on your behalf.',
   },
 ];
 
