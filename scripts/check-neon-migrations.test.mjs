@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  STAGED_COMMIT_BASELINE,
   destructiveMarkerErrors,
   destructiveStatements,
   expandContractErrors,
   quotingErrors,
+  topLevelStatements,
+  transactionControlErrors,
 } from './check-neon-migrations.mjs';
 import {
   loadRegistry,
@@ -234,4 +237,79 @@ test('expanding and contracting one table in one migration is refused', () => {
 
   assert.equal(errors.length, 1);
   assert.match(errors[0], /expand and the contract in a single step/);
+});
+
+test('a migration with no transaction control of its own is left to the runner', () => {
+  assert.deepEqual(
+    transactionControlErrors(newMigration, 'create table public.widgets (id uuid primary key);'),
+    [],
+  );
+});
+
+test('one BEGIN ... COMMIT around every statement applies as one unit', () => {
+  const sql =
+    '-- header\nbegin;\ncreate table public.widgets (id uuid primary key);\n' +
+    "comment on table public.widgets is 'begin; commit;';\ncommit;\n-- trailing notes\n";
+
+  assert.deepEqual(transactionControlErrors(newMigration, sql), []);
+});
+
+test('a plpgsql body is not read as transaction control', () => {
+  const sql =
+    'begin;\ndo $$\nbegin\n  perform 1;\nend $$;\n' +
+    'create function public.f() returns void language plpgsql as $fn$ begin commit; end $fn$;\n' +
+    'commit;';
+
+  assert.deepEqual(transactionControlErrors(newMigration, sql), []);
+});
+
+test('a second commit inside one migration is refused', () => {
+  const errors = transactionControlErrors(
+    newMigration,
+    'begin;\ncreate table public.widgets (id uuid);\ncommit;\n' +
+      'begin;\nalter table public.widgets add column owner_id text;\ncommit;',
+  );
+
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /2 transaction blocks/);
+});
+
+test('a statement after the commit is refused', () => {
+  const errors = transactionControlErrors(
+    newMigration,
+    'begin;\ncreate table public.widgets (id uuid);\ncommit;\n' +
+      'create index widgets_id on public.widgets (id);',
+  );
+
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /outside its BEGIN \.\.\. COMMIT/);
+});
+
+test('START TRANSACTION and END count as the same control', () => {
+  assert.deepEqual(
+    transactionControlErrors(newMigration, 'start transaction;\nselect 1;\nend;'),
+    [],
+  );
+  assert.equal(
+    transactionControlErrors(newMigration, 'select 1;\nstart transaction;\nselect 2;\nend;').length,
+    1,
+  );
+});
+
+test('the staged-commit waiver lapses once the file applies as one unit', () => {
+  const [waived] = [...STAGED_COMMIT_BASELINE.keys()];
+
+  assert.deepEqual(
+    transactionControlErrors(waived, 'begin;\nselect 1;\ncommit;\nbegin;\nselect 2;\ncommit;'),
+    [],
+  );
+  assert.match(transactionControlErrors(waived, 'begin;\nselect 1;\ncommit;')[0], /Remove it/);
+});
+
+test('statements split on semicolons outside literals, comments and dollar quotes', () => {
+  assert.deepEqual(topLevelStatements("select ';';\n/* ; */ select $x$ ; $x$; -- ;\nselect 3"), [
+    "select ''",
+    'select $body$',
+    'select 3',
+  ]);
 });

@@ -63,7 +63,12 @@ function rowsFor(sql: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyCronRequest.mockReturnValue(true);
-  mocks.objectBackupReadiness.mockReturnValue({ configured: true, missing: [], crossRegion: true });
+  mocks.objectBackupReadiness.mockReturnValue({
+    configured: true,
+    missing: [],
+    crossRegion: true,
+    independentCredential: true,
+  });
   mocks.isCrossRegionBackup.mockReturnValue(true);
   mocks.query.mockImplementation(async (sql: string) => rowsFor(sql));
   mocks.objectKeyFromStorageUri.mockImplementation((value: string) => value);
@@ -106,6 +111,23 @@ describe(`GET ${ROUTE}`, () => {
     });
     expect(mocks.error).toHaveBeenCalled();
     expect(mocks.replicateObject).not.toHaveBeenCalled();
+  });
+
+  it('says so, and still copies, when the backup shares the primary storage key', async () => {
+    mocks.objectBackupReadiness.mockReturnValue({
+      configured: true,
+      missing: [],
+      crossRegion: true,
+      independentCredential: false,
+    });
+
+    const response = await GET(request());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.independentCredential).toBe(false);
+    expect(body.replicated).toBe(3);
+    expect(mocks.error).toHaveBeenCalledWith(expect.stringContaining('primary storage credential'));
   });
 
   it('replicates each stored object and reports whether the copy leaves the region', async () => {

@@ -110,6 +110,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  if (!readiness.independentCredential) {
+    logger.error(
+      'Object backup is written under the primary storage credential; one leaked key deletes both copies',
+    );
+  }
+
   const counts: Record<ReplicationOutcome, number> = {
     unconfigured: 0,
     replicated: 0,
@@ -180,6 +186,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       newestReplicatedAt: summary.newestReplicatedAt,
       oldestVerifiedAt: summary.oldestVerifiedAt,
       crossRegion: isCrossRegionBackup(),
+      independentCredential: readiness.independentCredential,
       cursors,
     });
   } catch (error) {

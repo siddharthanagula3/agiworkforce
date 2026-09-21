@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-17
+Last updated: 2026-09-21
 
 Copy this file for every severity 1 and severity 2 incident, fill it in within
 five working days, and leave the headings in place: a heading with nothing
@@ -42,6 +42,13 @@ the incident possible, not at the alert.
 
 The mechanism, in enough detail that a reader who has never seen this code can
 follow it. Name the files.
+
+## Has this happened before
+
+Link every earlier postmortem whose incident failed through the same mechanism,
+or write "no earlier incident" after reading them. When there is one, this
+postmortem is finished by the decision record the "When the same cause comes
+back" section of `docs/runbooks/incident-response.md` asks for; cite it here.
 
 ## Why it was not caught earlier
 
