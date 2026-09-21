@@ -266,11 +266,20 @@ describe('ModelPickerSheet', () => {
     }
   });
 
-  it('offers the same registry-owned Auto modes in AGI Cloud', () => {
+  it('offers the same registry-owned Auto modes in AGI Cloud on a paid plan', () => {
+    useTierStore.setState({ tier: 'pro' });
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     for (const mode of AUTO_MODES) {
       expect(getByLabelText(`${mode.name}: ${mode.description}`)).toBeTruthy();
+    }
+  });
+
+  it('does not offer Auto in AGI Cloud on the free plan, which the server would refuse', () => {
+    const { queryByLabelText } = renderPicker({ modelScope: 'cloud' });
+
+    for (const mode of AUTO_MODES) {
+      expect(queryByLabelText(`${mode.name}: ${mode.description}`)).toBeNull();
     }
   });
 

@@ -206,12 +206,16 @@ export function ModelPickerSheet({
     () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier),
     [cloudUnlocked, subscriptionTier],
   );
-  // Auto carries its own plan floor in the registry. A plan that cannot select
-  // it is not offered a row the server would refuse.
+  // Auto's plan floor is a managed cloud rule: on-device routing costs nothing,
+  // so the local picker offers Auto on every plan.
   const selectableAutoModes = useMemo(
     () =>
-      AUTO_MODES.filter((mode) => canAccessAutoRoutingProfileForTier(mode.id, subscriptionTier)),
-    [subscriptionTier],
+      modelScope === 'local'
+        ? AUTO_MODES
+        : AUTO_MODES.filter((mode) =>
+            canAccessAutoRoutingProfileForTier(mode.id, subscriptionTier),
+          ),
+    [modelScope, subscriptionTier],
   );
 
   const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
