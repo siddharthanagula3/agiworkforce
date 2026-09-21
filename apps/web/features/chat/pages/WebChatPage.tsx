@@ -175,6 +175,7 @@ import {
   conversationDeleteConfirm,
   conversationHref,
   projectDeleteConfirm,
+  runSessionRowAction,
 } from '@shared/components/layout/sidebar-session-actions';
 import {
   copyProjectLink,
@@ -188,7 +189,10 @@ import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layou
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
-import { ConversationTitleMenu } from '../components/ConversationTitleMenu';
+import {
+  ConversationTitleMenu,
+  ConversationTitlePlaceholder,
+} from '../components/ConversationTitleMenu';
 import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonomyNotice';
 import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
@@ -3423,9 +3427,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
 
   const handleRenameSession = useCallback(
-    (id: string, title: string) => {
-      void updateConversation(id, { title });
-    },
+    (id: string, title: string) =>
+      runSessionRowAction('rename', () => updateConversation(id, { title })),
     [updateConversation],
   );
 
@@ -5114,6 +5117,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                   <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
                 </span>
               )}
+              {!voiceModeActive &&
+                !temporaryChatActive &&
+                !hasMessages &&
+                isConversationTranscriptPending && <ConversationTitlePlaceholder />}
               {!voiceModeActive &&
                 hasMessages &&
                 activeConversationTitle &&

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -22,15 +22,33 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  Skeleton,
 } from '@agiworkforce/ui';
 import { AGI_WORK_TITLE_SUFFIX } from '../lib/agi-work';
+
+/**
+ * The header keeps the title slot while a conversation loads, so the row does
+ * not collapse and then push the trailing controls when the name arrives.
+ */
+export function ConversationTitlePlaceholder() {
+  return (
+    <div
+      className="flex min-w-0 flex-1 items-center justify-start px-2 py-0.5"
+      role="status"
+      aria-label="Loading conversation title"
+      aria-busy="true"
+    >
+      <Skeleton className="h-4 w-40 max-w-full rounded-md" />
+    </div>
+  );
+}
 
 export interface ConversationTitleMenuProps {
   title: string;
   agiWork?: boolean;
   archived?: boolean;
   projects: ReadonlyArray<{ id: string; name: string }>;
-  onRename: (title: string) => void;
+  onRename: (title: string) => void | Promise<boolean>;
   onMoveToProject?: (projectId: string) => void;
   onArchiveToggle?: () => void;
   onDelete: () => void;
@@ -56,17 +74,32 @@ export function ConversationTitleMenu({
 }: ConversationTitleMenuProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [draft, setDraft] = useState('');
+  const [pendingTitle, setPendingTitle] = useState<string | null>(null);
+
+  // Whatever the store settles on wins: a rename the server accepted, and an
+  // auto-title that landed while one was in flight, both arrive as this prop.
+  useEffect(() => {
+    setPendingTitle(null);
+  }, [title]);
 
   const startRename = useCallback(() => {
-    setDraft(title);
+    setDraft(pendingTitle ?? title);
     setIsRenaming(true);
-  }, [title]);
+  }, [pendingTitle, title]);
 
   const commitRename = useCallback(() => {
     const next = draft.trim();
-    if (next && next !== title) onRename(next);
+    const current = pendingTitle ?? title;
     setIsRenaming(false);
-  }, [draft, title, onRename]);
+    if (!next || next === current) return;
+    setPendingTitle(next);
+    const rollBack = () => setPendingTitle((shown) => (shown === next ? null : shown));
+    void Promise.resolve(onRename(next)).then((accepted) => {
+      if (accepted === false) rollBack();
+    }, rollBack);
+  }, [draft, pendingTitle, title, onRename]);
+
+  const displayedTitle = pendingTitle ?? title;
 
   return (
     <div className="flex min-w-0 flex-1 items-center justify-start">
@@ -96,7 +129,7 @@ export function ConversationTitleMenu({
               aria-label="Conversation options"
               className="flex min-w-0 items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-black/[0.04] hover:text-[var(--chat-text-primary)] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <span className="truncate">{title}</span>
+              <span className="truncate">{displayedTitle}</span>
               {agiWork && (
                 <span className="shrink-0 whitespace-pre text-[var(--chat-text-muted)]">
                   {AGI_WORK_TITLE_SUFFIX}
