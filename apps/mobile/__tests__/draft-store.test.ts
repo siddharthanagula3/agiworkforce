@@ -53,8 +53,8 @@ describe('a draft the OS interrupts', () => {
     setDraft('conv-1', 'half a thought', { scope: 'local' });
 
     jest.resetModules();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const reloaded =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require('../src/features/chat/draftStore') as typeof import('../src/features/chat/draftStore');
 
     expect(reloaded.getDraft('conv-1', { scope: 'local' })).toBe('half a thought');

@@ -423,7 +423,7 @@ export default async function StatusPage() {
                 {
                   label: 'Severity 1',
                   value:
-                    'Hosted platform cannot serve, or a confirmed unauthorised access to customer data. We start work immediately on discovery and post here once we can describe the impact accurately.',
+                    'Hosted platform cannot serve, or a confirmed unauthorised access to customer data. We start work immediately on discovery. The signal above shows the failing checks while we work; this page carries no written incident posts.',
                 },
                 {
                   label: 'Severity 2',

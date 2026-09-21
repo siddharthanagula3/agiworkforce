@@ -21,7 +21,7 @@ const statementStyle: CSSProperties = {
 
 const ledgerWrapStyle: CSSProperties = {
   width: '100%',
-  textAlign: 'left',
+  textAlign: 'start',
 };
 
 function AuthErrorBody() {

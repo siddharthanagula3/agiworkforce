@@ -414,7 +414,7 @@ const NOT_DONE: { label: string; value: string }[] = [
   {
     label: 'Health-check coverage',
     value:
-      'The live check on /status covers Postgres reachability, the payments API, and required environment configuration. Authentication, object storage, the gateway, the rate limiter, and model routes are not covered by it.',
+      'The live check on /status covers required configuration, Postgres, the payments API, whether the default chat and voice routes have a live model and a working provider behind them, whether the background work queues are draining, and whether the search index is present. Authentication, object storage, the gateway, the rate limiter, and individual model routes are not covered by it.',
   },
   {
     label: 'India: DPDP Act, 2023',
