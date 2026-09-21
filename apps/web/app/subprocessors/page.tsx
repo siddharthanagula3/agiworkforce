@@ -20,123 +20,187 @@ export const metadata = buildMetadata({
   path: '/subprocessors',
 });
 
-const SUBS: { name: string; purpose: string; region: string }[] = [
+interface Subprocessor {
+  name: string;
+  purpose: string;
+  region: string;
+  registryProviderIds: readonly string[];
+}
+
+const SUBS: Subprocessor[] = [
   {
     name: 'Neon',
     purpose: 'Primary Postgres data store for account, chat, and application data.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Clerk',
     purpose: 'Authentication, session, and user identity management.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Vercel',
-    purpose: 'Hosting and edge delivery for the web surface (agiworkforce.com).',
+    purpose:
+      'Two roles. (1) Hosting and edge delivery for the web surface (agiworkforce.com). (2) Vercel AI Gateway: an inference route that can serve a Managed Cloud chat request, sending your prompt and any attached content to the gateway, which forwards it to the provider that serves the model. That route carries a request only when AGI has configured a gateway credential for it and it is the cheapest admissible route for the model you picked, so it is neither every request nor every model. Vercel states the gateway keeps no prompts or outputs, deletes user data immediately after a request completes, and does not use prompts or responses for training (checked 2026-09-06). What happens to the content after the gateway hands it on is the serving provider’s practice, not the gateway’s. On the same condition of a configured credential, two other things can travel through this gateway: the text of files and notes when they are indexed for search, which is sent to be turned into embeddings, and, where response assessment is switched on, a shortened copy of a message that our routing sends to a small model to judge what kind of task it is.',
     region: 'Global edge',
+    registryProviderIds: ['vercel_gateway'],
   },
   {
     name: 'Fly.io',
     purpose:
       'Runtime for the real-time signaling server used by collaborative and multi-device sessions.',
     region: 'United States (San Jose)',
+    registryProviderIds: [],
   },
-  { name: 'Stripe', purpose: 'Payment processing for paid tiers.', region: 'United States' },
+  {
+    name: 'Stripe',
+    purpose: 'Payment processing for paid tiers.',
+    region: 'United States',
+    registryProviderIds: [],
+  },
   {
     name: 'Cloudflare',
     purpose:
-      'Two roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here. AGI serves catalogued files through a signed-in, active-workspace-scoped app route and does not return raw storage URLs in normal responses. Generated videos use a private bucket; images and other non-video files remain in a public bucket and can be opened without AGI sign-in if their underlying URL is obtained. (2) Edge delivery and DDoS protection for the marketing site.',
+      'Three roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here. AGI serves catalogued files through a signed-in, active-workspace-scoped app route and does not return raw storage URLs in normal responses. Generated videos use a private bucket; images and other non-video files remain in a public bucket and can be opened without AGI sign-in if their underlying URL is obtained. (2) Edge delivery and DDoS protection for the marketing site. (3) Workers AI: an inference route that can serve a Managed Cloud chat request on Cloudflare’s own hosting of open-weight models. Your prompt and any attached content go to api.cloudflare.com when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked. It reaches Workers AI directly rather than through Cloudflare’s AI Gateway proxy, so no gateway request log sits in that path. Cloudflare states that content sent to Workers AI is stored only where the customer pairs it with a storage service, and that it does not use that content to train any model on Workers AI or to improve any Cloudflare or third-party service without explicit consent (checked 2026-09-06).',
     region: 'Global edge',
+    registryProviderIds: ['workers_ai'],
   },
   {
     name: 'Sentry',
     purpose:
       'Error and performance monitoring. Receives crash reports and diagnostic context from the web surface and server routes.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'E2B',
     purpose:
       'Managed sandbox runtime. Executes code and processes files you supply during a Managed Cloud session. Sandbox execution is gated behind an explicit operator flag and is off by default; while it is off, nothing is sent here.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Google Analytics',
     purpose:
       'Product analytics for the marketing site. Receives page views and device/browser metadata.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Model providers (Managed Cloud)',
     purpose:
       'Inference for Managed Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select. This applies to Managed Cloud only: in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
     region: 'United States and other regions, per provider',
+    registryProviderIds: [
+      'anthropic',
+      'openai',
+      'google',
+      'xai',
+      'deepseek',
+      'deepseek_anthropic',
+      'moonshot',
+      'moonshot_anthropic',
+      'perplexity',
+    ],
+  },
+  {
+    name: 'OpenAI (dictation and Voice Mode)',
+    purpose:
+      'A second role for a provider the row above already names for chat. (1) Dictation: the audio you record in the composer is sent to OpenAI’s transcription endpoint and the text comes back (app/api/llm/v1/audio/transcriptions/route.ts). (2) Voice Mode: starting a live voice conversation opens a realtime session with OpenAI, and your microphone audio streams from your browser to that session for as long as it runs (app/api/voice/live/sessions/route.ts). Neither happens until you start dictation or Voice Mode. AGI does not store the audio in either path: the dictation route passes the bytes on and keeps none, and a voice session record holds the session’s settings and a pointer into the transcript, with no audio in it. OpenAI’s published API data policy says API inputs are not used to train its models, and that abuse-monitoring logs are held up to 30 days unless the law requires longer (checked 2026-09-05).',
+    region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'OpenRouter',
     purpose:
-      'Inference routing on Managed Cloud, in two situations. (1) Always, for the MiniMax, Qwen and Zhipu models: prompt content for those passes through OpenRouter on its way to the model provider. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
+      'Inference routing on Managed Cloud, in two situations. (1) For the Qwen and Zhipu models, when AGI holds no key of its own for that provider: prompt content for those passes through OpenRouter on its way to the model provider. When AGI does hold that provider’s key, the request goes direct instead and OpenRouter is not in the path. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
     region: 'United States',
+    registryProviderIds: ['open_router'],
   },
   {
-    name: 'MiniMax, Qwen and Zhipu',
+    name: 'Qwen (Alibaba) and Zhipu',
     purpose:
-      'Inference for their own models on Managed Cloud, reached through OpenRouter rather than directly.',
+      'Inference for their own models on Managed Cloud. Which path a request takes is decided by our server configuration, not by anything you choose: when AGI holds its own key for one of these providers the prompt goes to that provider directly, and when it does not, and the model has an OpenRouter route, it goes through OpenRouter instead.',
     region: 'Outside the United States, per provider',
+    registryProviderIds: ['qwen', 'zhipu', 'zhipu_anthropic'],
+  },
+  {
+    name: 'Cheaper Inference (operated by Keak)',
+    purpose:
+      'An inference gateway that can serve a Managed Cloud chat request. Your prompt and any attached content go to api.cheaperinference.com, which forwards them to the provider serving the model. A request reaches it only when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked, so it is neither every request nor every model. Keak states that Cheaper Inference does not store prompt or response bodies in its application database, that temporary uploads expire after an hour, and that it does not use customer prompt or response bodies to train Keak models; its operational logs are kept up to 12 months and its account and billing records for the agreement term plus seven years (checked 2026-09-06). What is kept beyond the gateway is the practice of whichever provider serves the request.',
+    region: 'United States, Canada, Europe and other countries where Keak operates',
+    registryProviderIds: ['cheaperinference', 'cheaperinference_anthropic'],
+  },
+  {
+    name: 'Experiential Labs (operated by Resolute Labs AI, Inc.)',
+    purpose:
+      'An inference gateway that can serve a Managed Cloud chat request, on the same condition as the row above: gateway routing on, this gateway’s endpoint and key configured, and this the cheapest admissible route for the model you picked. Your prompt and any attached content go to api.experientiallabs.ai, which resolves the model through a waterfall of upstream providers, so what is kept depends on the one that serves. A completed response is held for 24 hours so a follow-up can continue it, unless the request asks that it not be stored (checked 2026-09-06). We cannot tell you whether it trains on customer inputs: its published website policy covers only its marketing site and its platform policy sits behind a sign-in, so no statement either way is available to us, and we would rather say that than assume the answer. It publishes no processing region, so we do not claim one.',
+    region: 'Not published by the operator',
+    registryProviderIds: ['experientiallabs', 'experientiallabs_anthropic'],
   },
   {
     name: 'Upstash',
     purpose: 'Rate limiting and ephemeral request state.',
     region: 'Global edge',
+    registryProviderIds: [],
   },
   {
     name: 'Expo',
     purpose:
       'Two roles for the iOS and Android apps. (1) Push delivery: notification titles and bodies (including the names you give scheduled tasks) are relayed through Expo on their way to Apple and Google. (2) Over-the-air updates: every app launch requests an update manifest from Expo, which sees the device IP and build fingerprint.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Resend',
     purpose:
       'Transactional email, in three narrow paths and no others. (1) Support escalation: when a live-support session is escalated, the conversation transcript and the contact email you gave are emailed to our support address (lib/support/handoff/escalation-email.ts). (2) Scheduled-task notifications: if you enable them in Settings, the task name and your email address are used to tell you a run finished; the body carries no task output (lib/services/notification-email-service.ts). (3) Operational alerts to us, carrying user-linked job identifiers (lib/services/video-incident-alert-service.ts). There is no account-lifecycle email: no signup, deletion-confirmation, breach or policy-change mail is sent by anything.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Runway',
     purpose:
       'Video generation. The prompt text you type is sent to Runway when you generate a video with one of its models (app/api/media/video/generate/route.ts). Only reachable when an operator has configured a Runway key; otherwise the route refuses rather than silently choosing another provider.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Perplexity',
     purpose:
       'Two distinct roles, and the second was previously undisclosed. (1) Inference for its own models on Managed Cloud, as listed in the model-provider row above. (2) The backend for the platform web-search tool: when the assistant searches the web for you, your search query is sent to Perplexity (lib/web-search/web-search-tool.ts). That happens on the model’s initiative during a conversation, not only when you visit a search box.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Google (Play Android Publisher)',
     purpose:
       'Verifying Android in-app purchases. The purchase token from your device is sent to Google to confirm a subscription is genuine and current (lib/server/mobile-iap-store-verification.ts). Apple is deliberately NOT listed for the equivalent iOS path: Apple’s signed notifications are verified locally against bundled root certificates, so nothing is sent back to Apple.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'Google (Places API)',
     purpose:
       'Place search for the maps tool. When the assistant looks a place up for you, the search text you asked about and any location you named are sent to Google Places (lib/places/google-places-provider.ts), and a photo you open for a result is fetched from Google through our own route. This happens on the model’s initiative during a conversation, and only where an operator has configured a Places key; without one the tool is not offered at all. It is a separate recipient from the Play verification row above.',
     region: 'United States',
+    registryProviderIds: [],
   },
   {
     name: 'OpenStreetMap Foundation (Nominatim)',
     purpose:
       'Geocoding for the maps tool. A place name or location you ask about is sent to Nominatim to resolve it to coordinates (lib/services/map-geocoding-service.ts). Nominatim’s usage policy requires an identifying User-Agent, so the request is attributable to AGI rather than to you.',
     region: 'European Union',
+    registryProviderIds: [],
   },
   {
     name: 'GitHub',
     purpose:
       'The GitHub connector. When you install it, repository content and metadata you authorise are read through the GitHub API on your behalf (lib/github-app.ts). Nothing is read until you install the app and grant it access, and you can revoke it at GitHub at any time.',
     region: 'United States',
+    registryProviderIds: [],
   },
 ];
 
@@ -154,6 +218,14 @@ function subRows(): LedgerRow[] {
 }
 
 const CORRECTIONS = [
+  {
+    title: 'Five inference recipients were missing, found on 21 September 2026',
+    body: 'Three gateways that can serve a Managed Cloud chat request were absent from this page: Cheaper Inference, Experiential Labs, and Cloudflare’s Workers AI, which we listed only for storage and edge delivery. Vercel’s AI Gateway was absent the same way, under a vendor we listed only for hosting. And OpenAI was named for chat inference but not for dictation and Voice Mode, which is where microphone audio goes. All five are above, each with the condition under which it receives anything. A check now reads the model registry and fails our build when a provider with a route admissible for Managed Cloud traffic is not named on this page, so this particular gap cannot reopen quietly.',
+  },
+  {
+    title: 'One recipient received nothing, and two did not receive it the way we said',
+    body: 'MiniMax was listed as receiving Managed Cloud prompts through OpenRouter. No MiniMax route is admitted for Managed Cloud traffic, so the managed service sends it nothing; its models are reachable only where you bring your own key, and the row is gone. Qwen and Zhipu do receive Managed Cloud prompts, but not always through OpenRouter: where AGI holds its own key for one of them, the request goes to that provider directly. The word "always" described an intention rather than the code, which is the same failure as a missing row and is corrected above.',
+  },
   {
     title: 'A seventh recipient was missing, found on 12 September 2026',
     body: "Google's Places API was receiving the place text you ask the assistant about, and the map photos you open, while this page named Google only for Android purchase verification and named OpenStreetMap for the maps tool. Listing one half of a tool's egress is the same failure as listing none of it. The row is above.",
@@ -246,7 +318,7 @@ export default function SubprocessorsPage() {
                 Corrections, most recent first.
               </h2>
               <Prose>
-                Two reviews of what actually leaves this product, on 14 August and{' '}
+                Three reviews of what actually leaves this product, on 14 August, 12 September and{' '}
                 {POLICY_LAST_UPDATED.subprocessors}, found this page had been wrong in both
                 directions, and we would rather publish the correction than quietly reissue the
                 list.

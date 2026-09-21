@@ -364,15 +364,14 @@ export default function MobileLegalPage() {
             <Stack gap="tight">
               <h3 className="agi-ds-h3">EU AI Act disclosures.</h3>
               <Prose size="sm">
-                The planned AGI Mobile release is a general-purpose AI assistant. In compliance with
-                Art. 50(1) of Regulation (EU) 2024/1689, the app will disclose clearly within the
-                conversation interface that responses are AI-generated. Conversation exports include
-                a machine-readable marker and a human-readable disclosure block per Art. 50(2). AGI
-                Mobile does not engage in practices prohibited under Art. 5, including subliminal
-                manipulation; biometric categorisation to infer protected or sensitive attributes;
-                real-time remote biometric identification in public spaces; social scoring; emotion
-                inference in workplace or educational settings; or predictive policing based solely
-                on automated profiling.
+                {MOBILE_UNRELEASED
+                  ? 'The planned AGI Mobile release is a general-purpose AI assistant. Art. 50(1) of Regulation (EU) 2024/1689 requires that you be told you are interacting with an AI system, and the planned app carries that disclosure on a first-run screen you accept before it will make its first model request. Its planned on-device data export marks each chat transcript with a machine-readable Art. 50(2) marker; the per-conversation export sheet does not: its PDF, text, Markdown and copy-to-clipboard routes carry no marker today, and we would rather say so than let the first sentence cover both.'
+                  : 'AGI Mobile is a general-purpose AI assistant. Art. 50(1) of Regulation (EU) 2024/1689 requires that you be told you are interacting with an AI system, and the app carries that disclosure on a first-run screen you accept before it will make its first model request. The on-device data export marks each chat transcript with a machine-readable Art. 50(2) marker; the per-conversation export sheet does not: its PDF, text, Markdown and copy-to-clipboard routes carry no marker today, and we would rather say so than let the first sentence cover both.'}{' '}
+                AGI Mobile does not engage in practices prohibited under Art. 5, including
+                subliminal manipulation; biometric categorisation to infer protected or sensitive
+                attributes; real-time remote biometric identification in public spaces; social
+                scoring; emotion inference in workplace or educational settings; or predictive
+                policing based solely on automated profiling.
               </Prose>
             </Stack>
 
