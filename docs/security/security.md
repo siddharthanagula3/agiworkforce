@@ -577,9 +577,9 @@ column and the rotation sweep does not touch it.
 
 `DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing and this table used to say it
 sealed `device_authorization_codes.access_token`. That column was never
-encrypted, it held plain text that every writer set to NULL, and the
-`device_authorization_bearer_columns` migration drops it and its sibling
-`refresh_token`. A device's real credential is a hashed renewable pair in
+encrypted, it held plain text that every writer set to NULL, and no route names
+it or its sibling `refresh_token` any more. Both columns are dropped in the
+release after this one, once no deployed build names them. A device's real credential is a hashed renewable pair in
 `device_refresh_tokens`. `apps/web/lib/validate-env.ts` does not require it, no
 module reads it, and it can be deleted from the deployment environment.
 
