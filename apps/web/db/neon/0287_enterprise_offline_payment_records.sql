@@ -63,7 +63,7 @@ drop policy if exists enterprise_offline_payment_records_admin_read
   on public.enterprise_offline_payment_records;
 create policy enterprise_offline_payment_records_admin_read
   on public.enterprise_offline_payment_records for select
-  using (public.app_has_org_role(organization_id, array['owner', 'admin']::text[]));
+  using (public.app_has_org_permission(organization_id, 'billing.read'));
 
 drop policy if exists enterprise_offline_payment_records_admin_report
   on public.enterprise_offline_payment_records;
@@ -71,7 +71,7 @@ create policy enterprise_offline_payment_records_admin_report
   on public.enterprise_offline_payment_records
   for insert to app_rls
   with check (
-    public.app_has_org_role(organization_id, array['owner', 'admin']::text[])
+    public.app_has_org_permission(organization_id, 'billing.contracts.manage')
     and reconciled_at is null
     and reconciled_by is null
   );
