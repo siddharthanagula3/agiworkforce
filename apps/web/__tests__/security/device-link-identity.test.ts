@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { REDACTED, redactLogRecord } from '@/lib/observability/redact';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -117,6 +118,6 @@ describe('the stored fingerprint is treated as an authenticator', () => {
   });
 
   it('is denied by the log redactor as a backstop', () => {
-    expect(source('lib/observability/redact.ts')).toContain("'fingerprint'");
+    expect(redactLogRecord({ fingerprint: 'a1b2c3d4e5f6' })['fingerprint']).toBe(REDACTED);
   });
 });

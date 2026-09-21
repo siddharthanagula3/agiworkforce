@@ -201,15 +201,33 @@ export function resolveEnvironmentBaseUrl(env: IsolationEnvironment = process.en
 
 export type ConfigKeySecrecy = 'secret' | 'public';
 
+export type ConfigKeyType = 'string' | 'url' | 'integer' | 'boolean' | 'enum';
+
+export type ConfigKeyLifecycle = 'in-use' | 'deprecated';
+
 /**
  * What one configuration key is, and where it may be read. A key without an
  * entry is unreadable in production: an unclassified key is one nobody has
  * decided is safe to read there.
  */
 export interface ConfigKeyDescriptor {
+  /** the name, which is what the process reads */
   key: string;
+  type: ConfigKeyType;
+  /** the workspace package or web directory that answers for the value */
+  owner: string;
+  /** what the runtime uses when nothing is set, or null when there is no safe one */
+  defaultValue: string | null;
+  /** the environments that must have it set, which is what the boot check enforces */
+  requiredIn: readonly RuntimeEnvironment[];
   secrecy: ConfigKeySecrecy;
   allowedEnvironments: readonly RuntimeEnvironment[];
+  /** what a set value must look like; the message says what is wrong with it */
+  validate?: (value: string) => string | null;
+  description: string;
+  lifecycle: ConfigKeyLifecycle;
+  /** what to set instead; required whenever lifecycle is deprecated */
+  supersededBy?: string;
 }
 
 export type ConfigKeyRegistry = Readonly<Record<string, ConfigKeyDescriptor>>;
@@ -220,14 +238,61 @@ export function defineConfigKeys(descriptors: readonly ConfigKeyDescriptor[]): C
   );
 }
 
+export type ConfigKeyViolationReason =
+  | 'environment_not_allowed'
+  | 'secret_exposed_to_client'
+  | 'required_and_unset'
+  | 'invalid_value'
+  | 'deprecated_and_set'
+  | 'descriptor_incomplete';
+
 export interface ConfigKeyViolation {
   key: string;
   environment: RuntimeEnvironment;
-  reason: 'environment_not_allowed' | 'secret_exposed_to_client';
+  reason: ConfigKeyViolationReason;
   message: string;
 }
 
 const CLIENT_READABLE_PREFIX = 'NEXT_PUBLIC_';
+
+function describeDescriptor(
+  descriptor: ConfigKeyDescriptor,
+  environment: RuntimeEnvironment,
+): ConfigKeyViolation[] {
+  const violations: ConfigKeyViolation[] = [];
+  const fail = (reason: ConfigKeyViolationReason, message: string) =>
+    violations.push({ key: descriptor.key, environment, reason, message });
+
+  if (descriptor.secrecy === 'secret' && descriptor.key.startsWith(CLIENT_READABLE_PREFIX)) {
+    fail(
+      'secret_exposed_to_client',
+      `${descriptor.key} is registered as a secret but its ${CLIENT_READABLE_PREFIX} name ships its value to every browser.`,
+    );
+  }
+  if (descriptor.description.trim().length === 0) {
+    fail('descriptor_incomplete', `${descriptor.key} carries no description.`);
+  }
+  if (descriptor.owner.trim().length === 0) {
+    fail('descriptor_incomplete', `${descriptor.key} names no owner.`);
+  }
+  if (descriptor.lifecycle === 'deprecated' && !descriptor.supersededBy?.trim()) {
+    fail(
+      'descriptor_incomplete',
+      `${descriptor.key} is deprecated but names nothing to set instead.`,
+    );
+  }
+  for (const required of descriptor.requiredIn) {
+    if (descriptor.allowedEnvironments.includes(required)) continue;
+    fail(
+      'descriptor_incomplete',
+      `${descriptor.key} is required in ${required} but is not allowed there.`,
+    );
+  }
+  if (descriptor.defaultValue !== null && descriptor.secrecy === 'secret') {
+    fail('descriptor_incomplete', `${descriptor.key} is a secret with a default value.`);
+  }
+  return violations;
+}
 
 /**
  * A secret named so the bundler inlines it into client JavaScript is not a
@@ -242,12 +307,37 @@ export function checkConfigKeys(
   const violations: ConfigKeyViolation[] = [];
 
   for (const descriptor of Object.values(registry)) {
-    if (descriptor.secrecy === 'secret' && descriptor.key.startsWith(CLIENT_READABLE_PREFIX)) {
+    violations.push(...describeDescriptor(descriptor, environment));
+
+    const value = readTrimmed(env, descriptor.key);
+    if (value === undefined) {
+      if (descriptor.requiredIn.includes(environment) && descriptor.defaultValue === null) {
+        violations.push({
+          key: descriptor.key,
+          environment,
+          reason: 'required_and_unset',
+          message: `${descriptor.key} is required in ${environment} and has no safe default: ${descriptor.description}`,
+        });
+      }
+      continue;
+    }
+
+    if (descriptor.lifecycle === 'deprecated') {
       violations.push({
         key: descriptor.key,
         environment,
-        reason: 'secret_exposed_to_client',
-        message: `${descriptor.key} is registered as a secret but its ${CLIENT_READABLE_PREFIX} name ships its value to every browser.`,
+        reason: 'deprecated_and_set',
+        message: `${descriptor.key} is deprecated and still set. Use ${descriptor.supersededBy} instead.`,
+      });
+    }
+
+    const problem = descriptor.validate?.(value) ?? null;
+    if (problem !== null) {
+      violations.push({
+        key: descriptor.key,
+        environment,
+        reason: 'invalid_value',
+        message: `${descriptor.key} is set to a value this runtime refuses: ${problem}`,
       });
     }
   }
@@ -263,6 +353,102 @@ export function checkConfigKeys(
       reason: 'environment_not_allowed',
       message: `${key} is set in a ${environment} runtime but is only allowed in ${descriptor.allowedEnvironments.join(', ')}.`,
     });
+  }
+
+  return violations;
+}
+
+export interface DeployedValueRule {
+  /** what the value looks like when it belongs to another environment */
+  readonly match: (value: string) => boolean;
+  /** the environments that must refuse a value of this shape */
+  readonly refusedIn: readonly RuntimeEnvironment[];
+  readonly consequence: string;
+}
+
+const PLACEHOLDER_VALUES = new Set([
+  'changeme',
+  'change-me',
+  'example',
+  'placeholder',
+  'replace-me',
+  'secret',
+  'test',
+  'todo',
+  'xxx',
+  'yourvaluehere',
+]);
+
+function isPlaceholder(value: string): boolean {
+  const normalised = value.trim().toLowerCase();
+  if (PLACEHOLDER_VALUES.has(normalised)) return true;
+  if (normalised.startsWith('your-') || normalised.startsWith('your_')) return true;
+  return /^(.)\1{5,}$/u.test(normalised);
+}
+
+/**
+ * The shapes a deployed runtime must refuse. A test key in production takes no
+ * money and signs nobody in; a live key in preview spends and signs in against
+ * the real accounts, which is the same database and the same customers.
+ */
+export const DEPLOYED_VALUE_RULES: Readonly<Record<string, DeployedValueRule>> = Object.freeze({
+  test_credential: {
+    match: (value) => /^(?:sk|pk|rk|whsec)_test_/u.test(value),
+    refusedIn: ['production'],
+    consequence:
+      'a test-mode credential in production takes no payment and authenticates nobody, so the ' +
+      'deployment looks healthy while every paid action silently does nothing',
+  },
+  live_credential: {
+    match: (value) => /^(?:sk|pk|rk|whsec)_live_/u.test(value),
+    refusedIn: ['preview'],
+    consequence:
+      'a live credential in preview spends real money and mutates the real account, so preview ' +
+      'and production stop being separate environments',
+  },
+  loopback_url: {
+    match: (value) => /^https?:\/\//u.test(value) && isLoopbackConnectionString(value),
+    refusedIn: ['preview', 'production'],
+    consequence: 'a deployed runtime cannot reach the operator laptop, so the link goes nowhere',
+  },
+  placeholder: {
+    match: isPlaceholder,
+    refusedIn: ['preview', 'production'],
+    consequence: 'a placeholder is a value nobody chose, so what it configures is undefined',
+  },
+});
+
+export interface DeployedValueViolation {
+  key: string;
+  environment: RuntimeEnvironment;
+  rule: string;
+  message: string;
+}
+
+/**
+ * Enumerates the registry rather than a list of keys to check, so a key added
+ * without a thought about which environment its value belongs to is still
+ * measured.
+ */
+export function deployedValueViolations(
+  registry: ConfigKeyRegistry,
+  env: IsolationEnvironment = process.env,
+  environment: RuntimeEnvironment = resolveRuntimeEnvironment(env),
+): DeployedValueViolation[] {
+  const violations: DeployedValueViolation[] = [];
+
+  for (const descriptor of Object.values(registry)) {
+    const value = readTrimmed(env, descriptor.key);
+    if (value === undefined) continue;
+    for (const [rule, { match, refusedIn, consequence }] of Object.entries(DEPLOYED_VALUE_RULES)) {
+      if (!refusedIn.includes(environment) || !match(value)) continue;
+      violations.push({
+        key: descriptor.key,
+        environment,
+        rule,
+        message: `${descriptor.key} carries a ${rule.replace(/_/gu, ' ')} value in ${environment}: ${consequence}.`,
+      });
+    }
   }
 
   return violations;

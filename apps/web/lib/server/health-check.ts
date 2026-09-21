@@ -43,7 +43,7 @@ async function shouldSkipProbe(key: string): Promise<boolean> {
     if (!lastSuccessAt) return false;
     return Date.now() - lastSuccessAt < DATABASE_PROBE_MIN_INTERVAL_SECONDS * 1_000;
   } catch (error) {
-    logger.error({ error, key }, 'Health probe throttle check failed');
+    logger.error({ error, cacheKey: key }, 'Health probe throttle check failed');
     return false;
   }
 }
@@ -54,7 +54,7 @@ async function recordProbeSuccess(key: string): Promise<void> {
     if (!store) return;
     await store.set(key, Date.now(), { ttlSeconds: DATABASE_PROBE_MIN_INTERVAL_SECONDS });
   } catch (error) {
-    logger.error({ error, key }, 'Health probe throttle record failed');
+    logger.error({ error, cacheKey: key }, 'Health probe throttle record failed');
   }
 }
 

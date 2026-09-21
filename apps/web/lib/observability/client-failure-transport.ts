@@ -9,6 +9,10 @@ export const CLIENT_FAILURE_ENDPOINT = '/api/telemetry/client';
 
 const FLUSH_DELAY_MS = 500;
 
+// The ingest records a metric and answers; a request still open after this is
+// one the page is holding a promise for on behalf of nothing.
+const POST_TIMEOUT_MS = 5_000;
+
 // A render fault arrives in a loop, so the page spends a small budget and then
 // goes quiet rather than beating the ingest with the same report.
 export const CLIENT_FAILURE_PAGE_BUDGET = 20;
@@ -32,6 +36,7 @@ async function post(events: readonly ClientFailureReport[]): Promise<void> {
     headers,
     credentials: 'same-origin',
     keepalive: true,
+    signal: AbortSignal.timeout(POST_TIMEOUT_MS),
     body: JSON.stringify({ events }),
   });
 }
