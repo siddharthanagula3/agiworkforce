@@ -77,6 +77,8 @@ export function parseMobileIapCatalogResponse(value: unknown): MobileIapCatalogR
     appAccountToken,
     products: products as MobileIapCatalogProduct[],
     unavailableReason: value['unavailableReason'],
+    unavailableCode:
+      value['unavailableCode'] === 'waitlist_access_required' ? 'waitlist_access_required' : null,
   };
 }
 
@@ -89,6 +91,7 @@ export async function fetchMobileIapCatalog(): Promise<MobileIapCatalogResponse>
       appAccountToken: null,
       products: [],
       unavailableReason: 'Native purchases require the iOS or Android app.',
+      unavailableCode: null,
     };
   }
   return parseMobileIapCatalogResponse(

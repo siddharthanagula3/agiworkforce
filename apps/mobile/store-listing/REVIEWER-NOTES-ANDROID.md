@@ -49,8 +49,9 @@ an AGI managed-cloud host while Local Mode is active.
 web search, and image generation (`lib/v1FeatureFlags.ts` → `cloudChat`,
 `webSearch`, `imageGen` are all `true`). Sign-in is Clerk's native `AuthView`
 sheet, not a browser (`app/(auth)/login.tsx` → `<AuthView mode="signInOrUp" />`).
-Cloud is a public alpha open to anyone who signs in; there is no invite code or
-waitlist.
+Cloud is a public alpha whose Free plan is open to anyone who signs in, with no
+invite code or waitlist. Paid upgrades are opening in stages and need an access
+code; that is a server-side gate, and nothing in this build is purchasable.
 
 ## How to review it, no account needed
 

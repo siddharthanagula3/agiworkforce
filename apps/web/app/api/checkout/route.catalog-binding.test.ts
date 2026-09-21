@@ -13,7 +13,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 // These cases are about what a PERMITTED checkout binds; the upgrade gate has its own suite.
-vi.mock('@/lib/server/billing-waitlist-access', () => ({
+vi.mock('@/lib/server/billing-waitlist-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/billing-waitlist-access')>()),
   hasBillingWaitlistAccess: vi.fn(async () => true),
 }));
 vi.mock('@/lib/logger', () => ({

@@ -60,7 +60,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: null,
   })),
 }));
-vi.mock('@/lib/server/billing-waitlist-access', () => ({
+vi.mock('@/lib/server/billing-waitlist-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/billing-waitlist-access')>()),
   hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 vi.mock('stripe', () => ({
@@ -143,6 +144,43 @@ describe('POST /api/checkout', () => {
       expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
     },
   );
+
+  it.each(['canceled', 'expired', 'incomplete_expired'])(
+    'requires redeemed waitlist access when a paid row is only %s',
+    async (status) => {
+      dbMocks.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('from subscriptions')) {
+          return [{ status, plan_tier: 'pro', stripe_subscription_id: 'sub_old' }];
+        }
+        return [];
+      });
+      waitlistAccessMocks.hasAccess.mockResolvedValue(false);
+
+      const response = await POST(makeRequest('pro'));
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'waitlist_access_required' },
+      });
+      expect(stripeMocks.createCustomer).not.toHaveBeenCalled();
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it('never asks the gate about an account that still holds a live paid subscription', async () => {
+    dbMocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [{ status: 'active', plan_tier: 'pro', stripe_subscription_id: 'sub_live' }];
+      }
+      return [];
+    });
+    waitlistAccessMocks.hasAccess.mockResolvedValue(false);
+
+    const response = await POST(makeRequest('max_15x'));
+
+    expect(response.status).toBe(409);
+    expect(waitlistAccessMocks.hasAccess).not.toHaveBeenCalled();
+  });
 
   it('reads and writes the profile row on the caller connection, never the bare pool', async () => {
     const response = await POST(makeRequest());

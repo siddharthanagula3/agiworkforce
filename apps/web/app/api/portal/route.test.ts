@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
   createPortalSession: vi.fn(),
   listCustomers: vi.fn(),
+  listSubscriptions: vi.fn(),
 }));
+
+const waitlistAccessMocks = vi.hoisted(() => ({ hasAccess: vi.fn(async () => false) }));
 
 vi.hoisted(() => {
   process.env['STRIPE_SECRET_KEY'] = 'sk_test_dummy';
@@ -49,10 +52,14 @@ vi.mock('stripe', () => ({
       list: mocks.listCustomers,
     };
     subscriptions = {
-      list: vi.fn(),
+      list: mocks.listSubscriptions,
       retrieve: vi.fn(),
     };
   },
+}));
+vi.mock('@/lib/server/billing-waitlist-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/billing-waitlist-access')>()),
+  hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 
 import { POST } from './route';
@@ -85,6 +92,8 @@ describe('POST /api/portal', () => {
       id: 'bps_1',
       url: 'https://billing.stripe.com/session/test',
     });
+    mocks.listSubscriptions.mockResolvedValue({ data: [] });
+    waitlistAccessMocks.hasAccess.mockResolvedValue(false);
   });
 
   it('fails closed before Stripe when subscription state cannot be verified', async () => {
@@ -189,6 +198,7 @@ describe('POST /api/portal', () => {
 
     it('picks the customer whose metadata names the caller, not the email twin', async () => {
       unlinkedAccount();
+      mocks.listSubscriptions.mockResolvedValue({ data: [{ id: 'sub_recovered' }] });
       mocks.listCustomers.mockResolvedValueOnce({
         data: [
           { id: 'cus_stranger', metadata: {} },
@@ -207,6 +217,208 @@ describe('POST /api/portal', () => {
         'update profiles set stripe_customer_id = $1 where id = $2',
         ['cus_owned', 'user-1'],
       );
+    });
+  });
+});
+
+describe('POST /api/portal, upgrade access', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.execute.mockResolvedValue(1);
+    mocks.createPortalSession.mockResolvedValue({
+      id: 'bps_1',
+      url: 'https://billing.stripe.com/session/test',
+    });
+    mocks.listSubscriptions.mockResolvedValue({ data: [] });
+    waitlistAccessMocks.hasAccess.mockResolvedValue(false);
+  });
+
+  it.each([
+    ['active', 'active'],
+    ['trialing', 'trialing'],
+    ['past_due', 'past_due'],
+    ['unpaid', 'unpaid'],
+    ['paused', 'paused'],
+    ['canceled with a period still running', 'canceled'],
+  ])(
+    'opens the portal for a paying account in %s without consulting the gate',
+    async (_label, status) => {
+      mocks.query.mockResolvedValueOnce([
+        {
+          plan_tier: 'pro',
+          stripe_customer_id: 'cus_123',
+          stripe_subscription_id: 'sub_123',
+          current_period_end: new Date(Date.now() + 86_400_000).toISOString(),
+          status,
+        },
+      ]);
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(200);
+      expect(waitlistAccessMocks.hasAccess).not.toHaveBeenCalled();
+      expect(mocks.createPortalSession).toHaveBeenCalledWith({
+        customer: 'cus_123',
+        return_url: 'https://agiworkforce.com/pricing',
+      });
+    },
+  );
+
+  it('opens the portal for an ended store purchase so the receipt stays reachable', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'free',
+        stripe_customer_id: 'cus_123',
+        stripe_subscription_id: 'sub_ended',
+        status: 'canceled',
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(waitlistAccessMocks.hasAccess).not.toHaveBeenCalled();
+  });
+
+  it('refuses an account that never paid and holds no upgrade access', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'free',
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        status: 'active',
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'waitlist_access_required',
+        message:
+          'Paid upgrades are opening in stages. Join the waitlist or enter an access code to continue.',
+      },
+    });
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
+  it('still opens the portal when Stripe is billing a customer the row does not name', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'byok',
+        stripe_customer_id: 'cus_123',
+        stripe_subscription_id: null,
+        status: 'active',
+      },
+    ]);
+    mocks.listSubscriptions.mockResolvedValue({ data: [{ id: 'sub_live' }] });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(200);
+    expect(mocks.listSubscriptions).toHaveBeenCalledWith({
+      customer: 'cus_123',
+      status: 'all',
+      limit: 1,
+    });
+  });
+
+  it('refuses a linked customer Stripe has never billed', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'byok',
+        stripe_customer_id: 'cus_123',
+        stripe_subscription_id: null,
+        status: 'active',
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'waitlist_access_required' },
+    });
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
+  it('leaves an ungated free account to the ownership rules once access is redeemed', async () => {
+    waitlistAccessMocks.hasAccess.mockResolvedValue(true);
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'free',
+        stripe_customer_id: null,
+        stripe_subscription_id: null,
+        status: 'active',
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(409);
+    expect(mocks.listSubscriptions).not.toHaveBeenCalled();
+  });
+
+  it('fails closed without opening a session when access cannot be read', async () => {
+    waitlistAccessMocks.hasAccess.mockRejectedValueOnce(new Error('database unavailable'));
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'free',
+        stripe_customer_id: 'cus_123',
+        stripe_subscription_id: null,
+        status: 'active',
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(503);
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
+  describe('self-healing lookup', () => {
+    function unlinkedAccount(customerId: string | null) {
+      mocks.query.mockImplementation(async (sql: string) =>
+        sql.includes('select stripe_customer_id from profiles')
+          ? [{ stripe_customer_id: customerId }]
+          : [],
+      );
+    }
+
+    it('heals a customer whose Stripe account really holds a subscription', async () => {
+      unlinkedAccount('cus_real');
+      mocks.listSubscriptions.mockResolvedValue({ data: [{ id: 'sub_real' }] });
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(200);
+      expect(mocks.createPortalSession).toHaveBeenCalledWith({
+        customer: 'cus_real',
+        return_url: 'https://agiworkforce.com/pricing',
+      });
+    });
+
+    it('refuses a customer Stripe has never billed', async () => {
+      unlinkedAccount('cus_empty');
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'waitlist_access_required' },
+      });
+      expect(mocks.createPortalSession).not.toHaveBeenCalled();
+    });
+
+    it('spends no Stripe history call once upgrade access is redeemed', async () => {
+      waitlistAccessMocks.hasAccess.mockResolvedValue(true);
+      unlinkedAccount('cus_empty');
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(200);
+      expect(mocks.listSubscriptions).not.toHaveBeenCalled();
     });
   });
 });
