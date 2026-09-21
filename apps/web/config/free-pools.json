@@ -114,6 +114,7 @@
   "notes": "Alibaba Model Studio entries are promotional allocations: independent per model id, 1,000,000 tokens each, expiring on the console date recorded in expiresAtMs (read from the Benefits page on 2026-09-06). hardStopsBeforePaid mirrors the console's Free quota only switch, which was off for every listed model on that date; the lane refuses a pool that can bill past its allowance, so these rows stay ineligible until the founder turns the switch on per model and records the review. Exhaustion is signalled by AllocationQuota.FreeTierOnly, which the runtime classifies as quota_exhausted and marks the pool spent until its expiry.",
   "inventory": {
     "observedOn": "2026-09-19",
+    "issuer": "QwenCloud",
     "source": "QwenCloud Benefits screenshots supplied by the account owner",
     "evidenceUrl": "https://docs.qwencloud.com/resources/free-quota",
     "reportedEligible": 270,
@@ -3127,6 +3128,10 @@
     "videoSeconds": 2,
     "requestTimeoutMs": 60000,
     "pollIntervalMs": 5000,
-    "maxPolls": 24
+    "maxPolls": 24,
+    "attestationMaxAgeMs": 2592000000,
+    "chatMaxOutputTokens": 4096,
+    "chatRequestTimeoutMs": 240000,
+    "allowanceUsablePercent": 90
   }
 }

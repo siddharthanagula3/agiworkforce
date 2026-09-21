@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 174 of 275 database-backed hosted API route files. Counted against the 275 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-20.',
+      'Partial: 175 of 276 database-backed hosted API route files. Counted against the 276 route files that reach the database; the other 115 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-21.',
   },
   {
     label: 'Authentication and CSRF',
@@ -262,7 +262,7 @@ const VERIFY = [
   },
   {
     title: 'Check the Windows installer signature',
-    body: 'Run Get-AuthenticodeSignature on the downloaded installer. Our release pipeline blocks publication unless that check reports Valid, so yours should agree.',
+    body: 'No Windows installer is published yet. When one is, run Get-AuthenticodeSignature on it: our release pipeline blocks publication unless that check reports Valid, so yours should agree.',
   },
   {
     title: 'Check Local mode with a packet capture',
@@ -270,7 +270,7 @@ const VERIFY = [
   },
   {
     title: 'Check the live health signal',
-    body: '/status runs its check when you load it and shows the timestamp. It is not a static badge, and it states exactly which dependencies it does and does not cover.',
+    body: '/status runs its checks at most once a minute and shows the time they actually ran. It is not a static badge, and it states exactly which dependencies it does and does not cover.',
   },
 ];
 
@@ -381,6 +381,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-09-21',
+                        value:
+                          'Re-measured after the free quota model list began reading the account\u2019s plan as the caller, which moves that route onto the database under row-level isolation, and after the operator record of the QwenCloud free-quota-only check arrived, which keeps its state in the shared cache rather than the database. The row-level-isolation count moved from 174 to 175 of 276 database-backed routes; the owner-connection remainder stays at 101 and the routes that touch no database stay at 115.',
+                      },
                       {
                         label: '2026-09-20',
                         value:
