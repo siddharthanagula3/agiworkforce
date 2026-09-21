@@ -591,7 +591,8 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
         }),
       ),
     );
-  });
+    // Renders the whole modal and a dialog, with three 5s waits: 5s overall is too tight under load.
+  }, 20_000);
 
   it('names an expired session instead of blaming the network when connectors 401', async () => {
     stubFetch({ connectorFailuresBeforeSuccess: 1, connectorFailureStatus: 401 });

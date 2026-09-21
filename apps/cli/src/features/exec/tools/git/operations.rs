@@ -695,11 +695,19 @@ mod tests {
     async fn a_branch_the_repository_protects_is_refused_rather_than_offered() {
         let dir = tempfile::tempdir().expect("tempdir");
         init_repo(dir.path());
-        SyncCommand::new("git")
-            .current_dir(dir.path())
-            .args(["branch", "release"])
-            .output()
-            .expect("git");
+        // The default branch comes from git config, which differs per machine,
+        // so the repository states its own rather than inheriting the host's.
+        for args in [
+            &["config", "init.defaultBranch", "main"][..],
+            &["branch", "release"][..],
+            &["checkout", "-q", "release"][..],
+        ] {
+            SyncCommand::new("git")
+                .current_dir(dir.path())
+                .args(args)
+                .output()
+                .expect("git");
+        }
         let (callback, seen) = recording(ApprovalDecision::AlwaysAllow);
 
         let result = execute_git_tool(
@@ -1093,11 +1101,15 @@ mod tests {
 
         let asked = seen.lock().expect("seen");
         assert_eq!(asked.len(), 1);
-        let canonical = std::fs::canonicalize(&work).expect("canonical work");
-        assert!(
-            asked[0]
-                .summary
-                .contains(&format!("in {}", canonical.display())),
+        // Compared as a path, not as text: git spells a Windows root `C:/..`.
+        let named = asked[0]
+            .summary
+            .rsplit_once(" in ")
+            .map(|(_, path)| path.trim_end_matches('?'))
+            .expect("the prompt names a path");
+        assert_eq!(
+            crate::repo::layout::comparable_path(Path::new(named)),
+            crate::repo::layout::comparable_path(&work),
             "the prompt must name the repository: {}",
             asked[0].summary
         );
