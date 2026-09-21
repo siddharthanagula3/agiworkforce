@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@agiworkforce/routing', () => ({
-  classifyTaskLocally: vi.fn(() => ({ type: 'general', confidence: 0.8 })),
-  resolveAutoRoute: vi.fn(),
-}));
+vi.mock('@agiworkforce/routing', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/routing')>();
+  return {
+    ...actual,
+    classifyTaskLocally: vi.fn(() => ({ type: 'general', confidence: 0.8 })),
+    resolveAutoRoute: vi.fn(),
+  };
+});
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
   return {
