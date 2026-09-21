@@ -60,7 +60,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   }),
 }));
 
-vi.mock('@/lib/server/billing-waitlist-access', () => ({
+vi.mock('@/lib/server/billing-waitlist-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/billing-waitlist-access')>()),
   hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 

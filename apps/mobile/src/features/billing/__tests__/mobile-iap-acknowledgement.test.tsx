@@ -56,6 +56,7 @@ function androidCatalog() {
     appAccountToken: accountToken,
     products: [subscription],
     unavailableReason: null,
+    unavailableCode: null,
   };
 }
 

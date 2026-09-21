@@ -88,6 +88,7 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
+      unavailableCode: null,
     });
     let resolveVerification: ((value: unknown) => void) | undefined;
     mockVerifyPurchase.mockReturnValue(
@@ -158,6 +159,7 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
+      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -205,6 +207,7 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
+      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -239,6 +242,7 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
+      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -281,6 +285,7 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [oldProduct, nextProduct],
       unavailableReason: null,
+      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));

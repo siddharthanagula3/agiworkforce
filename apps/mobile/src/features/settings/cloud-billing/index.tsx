@@ -516,7 +516,11 @@ export default function CloudBillingScreen() {
         </>
       ) : (
         <SettingsInfo
-          title="Native purchases are not configured"
+          title={
+            nativeIap.catalog?.unavailableCode === 'waitlist_access_required'
+              ? 'Paid upgrades are opening in stages'
+              : 'Native purchases are not configured'
+          }
           body={
             nativeIap.error ??
             nativeIap.catalog?.unavailableReason ??
