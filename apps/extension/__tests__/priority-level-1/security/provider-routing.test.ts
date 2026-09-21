@@ -16,14 +16,17 @@ const CLOUD_IPC_PATTERNS: Array<{ re: RegExp; label: string }> = [
   },
 ];
 const UNLOCK_GUARD_RE = /checkCloudUnlocked|agi_cloud_unlocked|cloudUnlocked/;
-const EXCLUDED_DIR = join(SRC_DIR, 'features', 'cloud-bridge');
+const EXCLUDED_DIRS = new Set([
+  join(SRC_DIR, 'features', 'cloud-bridge'),
+  join(SRC_DIR, '__no_hex_guard_fixture__'),
+]);
 
 function collectTsFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
-      if (full !== EXCLUDED_DIR) out.push(...collectTsFiles(full));
+      if (!EXCLUDED_DIRS.has(full)) out.push(...collectTsFiles(full));
     } else if (full.endsWith('.ts')) {
       out.push(full);
     }
