@@ -487,6 +487,7 @@ export const window = {
   ),
   registerUriHandler: vi.fn(() => new Disposable()),
   registerWebviewViewProvider: vi.fn(() => new Disposable()),
+  registerWebviewPanelSerializer: vi.fn(() => new Disposable()),
   registerTreeDataProvider: vi.fn(() => new Disposable()),
   createTreeView: vi.fn(() => ({
     reveal: vi.fn(),
@@ -652,6 +653,40 @@ export const DiagnosticSeverity = {
   Information: 2,
   Hint: 3,
 } as const;
+
+export const SymbolKind: Record<string | number, string | number> = Object.fromEntries(
+  [
+    'File',
+    'Module',
+    'Namespace',
+    'Package',
+    'Class',
+    'Method',
+    'Property',
+    'Field',
+    'Constructor',
+    'Enum',
+    'Interface',
+    'Function',
+    'Variable',
+    'Constant',
+    'String',
+    'Number',
+    'Boolean',
+    'Array',
+    'Object',
+    'Key',
+    'Null',
+    'EnumMember',
+    'Struct',
+    'Event',
+    'Operator',
+    'TypeParameter',
+  ].flatMap((name, value) => [
+    [name, value],
+    [String(value), name],
+  ]),
+);
 
 export const CodeActionKind = {
   QuickFix: { value: 'quickfix', append: (v: string) => ({ value: `quickfix.${v}` }) },

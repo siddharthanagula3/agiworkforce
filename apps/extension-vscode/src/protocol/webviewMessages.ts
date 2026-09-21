@@ -274,3 +274,31 @@ export function parseWebviewMessage(raw: unknown): WebviewToExtMessage | undefin
   const result = WebviewToExtSchema.safeParse(raw);
   return result.success ? result.data : undefined;
 }
+
+/**
+ * Which webview a message came from, and which conversation it was written
+ * against. A panel keeps running while the conversation under it is replaced,
+ * so a send composed before New Chat would otherwise arrive as the first turn
+ * of the conversation that replaced it.
+ */
+export const SessionBindingSchema = z.object({
+  origin: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z0-9_-]+$/u),
+  epoch: z.number().int().nonnegative(),
+});
+
+export type SessionBinding = z.infer<typeof SessionBindingSchema>;
+
+export function parseBoundWebviewMessage(
+  raw: unknown,
+  current: SessionBinding,
+): WebviewToExtMessage | undefined {
+  const binding = SessionBindingSchema.safeParse(raw);
+  if (!binding.success) return undefined;
+  if (binding.data.origin !== current.origin) return undefined;
+  if (binding.data.epoch !== current.epoch) return undefined;
+  return parseWebviewMessage(raw);
+}

@@ -1,4 +1,3 @@
-
 export { ContextBuilder, getContextBuilder } from './contextBuilder';
 export type {
   ActiveFileContext,
@@ -18,6 +17,9 @@ export {
 } from './usageMeter';
 
 export { TokenCounter, getTokenCounter, activateTokenCounter } from './tokenCounter';
+
+export { searchMentionTargets } from './mentionSearch';
+export type { MentionTarget } from './mentionSearch';
 
 export { WorkspaceIndexer } from './workspaceIndexer';
 export type { FileEntry } from './workspaceIndexer';

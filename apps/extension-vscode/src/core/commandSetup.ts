@@ -130,6 +130,7 @@ import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import {
   getActiveWorkspaceFolder,
   getActiveWorkspaceFolderSync,
+  shellQuoteForCurrentPlatform,
 } from '../platform/workspaceFolders';
 import {
   getApiKey,
@@ -159,6 +160,7 @@ import {
 } from '../features/model-picker/modelConstants';
 import * as telemetry from './telemetry';
 import { recordFailure } from './subsystemHealth';
+import { markInUse } from './startupWork';
 import {
   setAgentEffortWithConsent,
   setAgentModeWithConsent,
@@ -419,6 +421,29 @@ async function readHostModels(
  * already taken, one for another account and one for another checkout are all
  * refused with the reason, rather than silently resuming someone else's work.
  */
+async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider): Promise<void> {
+  const threadId = sidebarProvider.activeThreadId();
+  if (threadId === undefined) {
+    await vscode.window.showInformationMessage(
+      'AGI Workforce: send a message first, then the terminal can pick this session up.',
+    );
+    return;
+  }
+  const folder = getActiveWorkspaceFolderSync();
+  if (folder === undefined) {
+    await vscode.window.showWarningMessage(
+      'AGI Workforce: open the folder this session is working in before continuing it in the terminal.',
+    );
+    return;
+  }
+  const cli = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
+  const terminal = vscode.window.createTerminal({ name: 'AGI', cwd: folder.uri });
+  terminal.show();
+  terminal.sendText(
+    `${shellQuoteForCurrentPlatform(cli)} --resume ${shellQuoteForCurrentPlatform(threadId)}`,
+  );
+}
+
 async function continueCliSessionHere(
   localRuntimes: LocalRuntimePool,
   accepted: Set<string>,
@@ -533,7 +558,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   const failedCommandIds: string[] = [];
   const register = (id: string, handler: CommandHandler): vscode.Disposable => {
     try {
-      return vscode.commands.registerCommand(id, handler);
+      return vscode.commands.registerCommand(id, (...args: unknown[]) => {
+        markInUse('command');
+        return handler(...args);
+      });
     } catch (err) {
       failedCommandIds.push(id);
       recordFailure(`command:${id}`, err);
@@ -682,7 +710,33 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     await revealFirstPartyChat();
   };
 
+  const sendSelectionToNewSession = async (): Promise<void> => {
+    const editor = vscode.window.activeTextEditor;
+    if (editor === undefined || editor.selection.isEmpty) {
+      vscode.window.showWarningMessage(
+        'AGI Workforce: select the code you want the new chat to start from.',
+      );
+      return;
+    }
+    if (sidebarProvider.chatTurnInFlight()) {
+      const choice = await vscode.window.showWarningMessage(
+        'Start a new chat with this selection?',
+        {
+          modal: true,
+          detail: 'The reply still being written will stop and will not be recoverable.',
+        },
+        'Start new chat',
+      );
+      if (choice !== 'Start new chat') return;
+    }
+    const draft = buildSidebarReferenceDraft(editor.document.uri);
+    sidebarProvider.resetConversation();
+    sidebarProvider.prefillComposer(draft.text, [draft.reference]);
+    await revealFirstPartyChat();
+  };
+
   context.subscriptions.push(
+    register('agi-workforce.sendSelectionToNewSession', sendSelectionToNewSession),
     register('agi-workforce.openSettings', (section?: unknown) => {
       SettingsPanel.createOrShow(context, section);
     }),
@@ -1180,6 +1234,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.continueCliSession', async () => {
       await continueCliSessionHere(localRuntimes, acceptedHandoffs);
+    }),
+
+    register('agi-workforce.continueInTerminal', async () => {
+      await continueThisSessionInTheTerminal(sidebarProvider);
     }),
 
     register('agi-workforce.showSessionsHistory', async () => {

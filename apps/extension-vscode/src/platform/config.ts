@@ -46,6 +46,7 @@ export interface MutableConfigValues {
   'agent.effort': ExtensionAgentEffort;
   'agent.thinking': boolean;
   telemetryEndpoint: string;
+  activateOnStartup: boolean;
 }
 
 export type MutableConfigKey = keyof MutableConfigValues;
@@ -77,6 +78,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'composer.followUpBehavior',
   'editorContext.autoAttach',
   'telemetryEndpoint',
+  'activateOnStartup',
 ] as const satisfies readonly MutableConfigKey[];
 
 export interface ExtensionSettingsSnapshot {
@@ -106,6 +108,7 @@ const DEFAULTS = {
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
   currentTier: 'unknown',
   cliPath: 'agi',
+  activateOnStartup: false,
 } as const;
 
 function get<T>(key: string, fallback: T): T {
@@ -143,6 +146,9 @@ export const Config = {
   },
   agentThinking(): boolean {
     return get<boolean>('agent.thinking', DEFAULTS.agentThinking);
+  },
+  activateOnStartup(): boolean {
+    return getUserScoped<boolean>('activateOnStartup', DEFAULTS.activateOnStartup);
   },
 
   hoverEnabled(): boolean {
@@ -228,6 +234,7 @@ export const Config = {
         'agent.effort': this.agentEffort(),
         'agent.thinking': this.agentThinking(),
         telemetryEndpoint: this.telemetryEndpoint(),
+        activateOnStartup: this.activateOnStartup(),
         currentTier: this.currentTier(),
         currentTierLabel: currentTierLabel(this.currentTier()),
       },

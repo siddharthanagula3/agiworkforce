@@ -77,6 +77,7 @@ const settingValueSchemas = {
   'agent.effort': z.enum(['low', 'medium', 'high', 'max']),
   'agent.thinking': z.boolean(),
   telemetryEndpoint: httpUrlSchema,
+  activateOnStartup: z.boolean(),
 } satisfies {
   [K in MutableConfigKey]: z.ZodType<MutableConfigValues[K]>;
 };

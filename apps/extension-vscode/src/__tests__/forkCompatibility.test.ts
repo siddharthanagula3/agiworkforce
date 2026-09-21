@@ -134,7 +134,7 @@ describe('Code-OSS fork compatibility', () => {
     expect(postMessage).not.toHaveBeenCalled();
 
     provider.resolveWebviewView(view, {} as vscode.WebviewViewResolveContext, {} as never);
-    await receiveMessage?.({ type: 'ready' });
+    await receiveMessage?.({ type: 'ready', origin: 'agi-workforce-sidebar', epoch: 0 });
 
     expect(postMessage).toHaveBeenCalledWith({
       type: 'composerDraft',
