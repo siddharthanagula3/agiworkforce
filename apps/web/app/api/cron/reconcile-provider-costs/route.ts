@@ -5,6 +5,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  MANAGED_USAGE_RECONCILIATION_FINDINGS,
+  reconcileManagedUsageCosts,
+  type ManagedUsageReconciliationFinding,
+  type ManagedUsageReconciliationRow,
+} from '@/lib/services/cogs-ledger-service';
 
 import {
   PROVIDER_COST_REPORT_CLIENTS,
@@ -95,6 +101,58 @@ async function runClient(
   return outcomeOf(report);
 }
 
+type LedgerFindingCounts = Record<ManagedUsageReconciliationFinding, number>;
+
+interface LedgerReconciliation {
+  status: 'reconciled' | 'failed';
+  findings: number;
+  byFinding: LedgerFindingCounts;
+  detail?: string;
+}
+
+function countFindings(rows: readonly ManagedUsageReconciliationRow[]): LedgerFindingCounts {
+  const counts = Object.fromEntries(
+    MANAGED_USAGE_RECONCILIATION_FINDINGS.map((finding) => [finding, 0]),
+  ) as LedgerFindingCounts;
+  for (const row of rows) counts[row.finding] += 1;
+  return counts;
+}
+
+async function reconcileLedger(window: DayWindow): Promise<LedgerReconciliation> {
+  let rows: ManagedUsageReconciliationRow[];
+  try {
+    rows = await reconcileManagedUsageCosts(window.start, window.end);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    logger.error(
+      { event: 'managed_usage_reconciliation_failed', day: window.day, detail },
+      'The settled managed usage ledger could not be reconciled against the cost events',
+    );
+    return {
+      status: 'failed',
+      findings: 0,
+      byFinding: countFindings([]),
+      detail,
+    };
+  }
+
+  const byFinding = countFindings(rows);
+  if (rows.length > 0) {
+    logger.error(
+      {
+        event: 'managed_usage_reconciliation_findings',
+        day: window.day,
+        findings: rows.length,
+        byFinding,
+        sourceRefs: rows.slice(0, 20).map((row) => row.sourceRef),
+      },
+      'Settled managed usage turns do not agree with the provider cost events for this day',
+    );
+  }
+
+  return { status: 'reconciled', findings: rows.length, byFinding };
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized provider cost reconciliation cron request');
@@ -143,12 +201,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const ledger = await reconcileLedger(window);
+
   return NextResponse.json(
     {
       day: window.day,
       reported: outcomes.filter((outcome) => outcome.status === 'reported').length,
       providers: outcomes,
+      ledger,
     },
-    { status: failed.length > 0 ? 500 : 200 },
+    { status: failed.length > 0 || ledger.status === 'failed' ? 500 : 200 },
   );
 }

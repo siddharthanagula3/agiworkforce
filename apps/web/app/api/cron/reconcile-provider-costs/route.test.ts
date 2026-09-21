@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   verifyCronRequest: vi.fn(),
   execute: vi.fn(),
+  query: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
@@ -11,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ execute: mocks.execute, query: vi.fn() }),
+  getNeonDb: () => ({ execute: mocks.execute, query: mocks.query }),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: mocks.info, warn: mocks.warn, error: mocks.error, debug: vi.fn() },
@@ -53,11 +54,52 @@ function routeFetch(byHost: Record<string, unknown>) {
   });
 }
 
+interface LedgerFixture {
+  costs?: Array<Record<string, unknown>>;
+  delivered?: Array<Record<string, unknown>>;
+  fail?: string;
+}
+
+function stubLedger(fixture: LedgerFixture = {}): void {
+  mocks.query.mockImplementation(async (sql: string) => {
+    if (fixture.fail !== undefined) throw new Error(fixture.fail);
+    if (sql.includes('provider_cost_events')) return fixture.costs ?? [];
+    if (sql.includes('managed_usage_requests')) return fixture.delivered ?? [];
+    return [];
+  });
+}
+
+function settledCost(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    source_ref: 'managed_usage:user_1:key_1:hash_1',
+    user_id: 'user_1',
+    provider: 'openai',
+    provider_cost_cents: 10,
+    billed_cents: 25,
+    customer_canonical_microusd: 250_000,
+    created_at: '2026-09-09T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function deliveredUsage(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    user_id: 'user_1',
+    idempotency_key: 'key_1',
+    request_hash: 'hash_1',
+    provider: 'openai',
+    actual_cost_cents: 25,
+    finalized_at: '2026-09-09T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
   mocks.verifyCronRequest.mockReturnValue(true);
   mocks.execute.mockResolvedValue(1);
+  stubLedger();
 });
 
 describe('yesterdayWindow', () => {
@@ -174,6 +216,65 @@ describe('GET /api/cron/reconcile-provider-costs', () => {
         (call) => (call[0] as { event?: string }).event === 'provider_cost_report_unknown',
       ),
     ).toHaveLength(1);
+  });
+
+  it('reconciles the settled ledger over the same day it reported on', async () => {
+    vi.stubGlobal('fetch', routeFetch({}));
+    stubLedger({ costs: [settledCost()], delivered: [deliveredUsage()] });
+
+    const body = (await (await GET(request())).json()) as {
+      ledger: { status: string; findings: number };
+    };
+
+    expect(body.ledger).toEqual({
+      status: 'reconciled',
+      findings: 0,
+      byFinding: { cost_without_usage: 0, usage_without_cost: 0, negative_margin: 0 },
+    });
+    const expected = yesterdayWindow(new Date());
+    const windows = mocks.query.mock.calls.map((call) => (call[1] as string[]).slice(0, 2));
+    expect(windows).toContainEqual([expected.start.toISOString(), expected.end.toISOString()]);
+  });
+
+  it('names a turn charged below what it cost, and every other disagreement', async () => {
+    vi.stubGlobal('fetch', routeFetch({}));
+    stubLedger({
+      costs: [
+        settledCost({ provider_cost_cents: 80, customer_canonical_microusd: 250_000 }),
+        settledCost({ source_ref: 'managed_usage:user_1:key_2:hash_2' }),
+      ],
+      delivered: [
+        deliveredUsage(),
+        deliveredUsage({ idempotency_key: 'key_3', request_hash: 'hash_3' }),
+      ],
+    });
+
+    const body = (await (await GET(request())).json()) as {
+      ledger: { findings: number; byFinding: Record<string, number> };
+    };
+
+    expect(body.ledger.findings).toBe(3);
+    expect(body.ledger.byFinding).toEqual({
+      cost_without_usage: 1,
+      usage_without_cost: 1,
+      negative_margin: 1,
+    });
+    const [logged] = mocks.error.mock.calls.find(
+      (call) => (call[0] as { event?: string }).event === 'managed_usage_reconciliation_findings',
+    ) as [{ sourceRefs: string[] }];
+    expect(logged.sourceRefs).toContain('managed_usage:user_1:key_3:hash_3');
+  });
+
+  it('answers 500 when the ledger cannot be reconciled, so the cron is retried', async () => {
+    vi.stubGlobal('fetch', routeFetch({}));
+    stubLedger({ fail: 'ledger read timed out' });
+
+    const response = await GET(request());
+    const body = (await response.json()) as { ledger: { status: string; detail: string } };
+
+    expect(response.status).toBe(500);
+    expect(body.ledger.status).toBe('failed');
+    expect(body.ledger.detail).toBe('ledger read timed out');
   });
 
   it('answers 500 when a provider endpoint fails', async () => {

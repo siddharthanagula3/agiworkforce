@@ -1,4 +1,8 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getPlanSessionUsageCapMicrousd } from '@/lib/server/managed-usage-policy';
 
 vi.mock('server-only', () => ({}));
 
@@ -29,6 +33,8 @@ const {
   reserveManagedUsageProviderStep,
   reserveManagedUsageRequest,
 } = await import('../managed-usage-request-service');
+
+const { recordSettledProviderCost } = await import('../cogs-ledger-service');
 
 const MICROUSD_PER_CENT = 10_000;
 const MANAGED_SETTLEMENT_TYPES = [
@@ -198,7 +204,15 @@ class LedgerDatabase {
     };
   }
 
+  /**
+   * Two Postgres sessions reaching the same statement at the same moment. The
+   * barrier holds every caller until they have all arrived, so the statement
+   * itself is the only thing that separates them, exactly as the row lock is.
+   */
+  statementBarrier: (() => Promise<void>) | null = null;
+
   async query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
+    if (this.statementBarrier) await this.statementBarrier();
     const rows = this.dispatch(sql, params);
     return rows as T[];
   }
@@ -1120,6 +1134,18 @@ function assertLedgerInvariants(ledger: LedgerDatabase): void {
   const keys = ledger.transactions.map((transaction) => transaction.metadata['idempotency_key']);
   expect(new Set(keys).size).toBe(keys.length);
 
+  // A row nobody can trace is a row nobody can reverse: every posting names
+  // what moved it and under which key, which is what the settlement statement
+  // refuses to write without.
+  for (const transaction of ledger.transactions) {
+    const cause = transaction.metadata['type'] ?? transaction.metadata['is_late_settlement'];
+    expect(cause, `posting ${transaction.amountMicrousd} names no cause`).toBeTruthy();
+    expect(
+      String(transaction.metadata['idempotency_key'] ?? ''),
+      `posting ${transaction.amountMicrousd} names no idempotency key`,
+    ).not.toBe('');
+  }
+
   // The only charge outside the lifecycle is the late settlement of a turn
   // recovery already refunded. It may exist once, for delivered work only.
   const late = ledger.transactions.filter(
@@ -1509,5 +1535,369 @@ describe('managed usage reservation lifecycle', () => {
     ledger.advance(9 * 86_400_000);
 
     expect(ledger.backfillOverageClassification()).toBe(0);
+  });
+});
+
+/**
+ * Every metered capability, read off the call sites rather than remembered. A
+ * module that opens a reservation names the feature the usage is charged to,
+ * either inline or through an exported constant, and an unresolvable name
+ * fails here instead of quietly dropping a capability from the sweep.
+ */
+function meteredFeatures(): string[] {
+  const webRoot = join(__dirname, '..', '..', '..');
+  const sources: string[] = [];
+  const walk = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '.next') continue;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.name.endsWith('.ts') && !entry.name.includes('.test.')) sources.push(path);
+    }
+  };
+  for (const top of ['app', 'lib']) walk(join(webRoot, top));
+
+  const constants = new Map<string, string>();
+  const reserving: string[] = [];
+  for (const path of sources) {
+    const text = readFileSync(path, 'utf8');
+    for (const match of text.matchAll(/(?:const|let)\s+([A-Z][A-Z0-9_]*)\s*=\s*'([a-z0-9_]+)'/g)) {
+      constants.set(match[1] as string, match[2] as string);
+    }
+    if (text.includes('reserveManagedUsageRequest')) reserving.push(text);
+  }
+
+  const features = new Set<string>();
+  const unresolved: string[] = [];
+  for (const text of reserving) {
+    for (const match of text.matchAll(
+      /quotaFeature\s*(?::|=(?![=>]))\s*(?:QuotaFeature\s*=\s*)?([^,;\n)]+)/g,
+    )) {
+      const raw = (match[1] as string).trim();
+      const literal = /^'([a-z0-9_]+)'$/.exec(raw);
+      if (literal) {
+        features.add(literal[1] as string);
+        continue;
+      }
+      if (/^[A-Z][A-Z0-9_]*$/.test(raw)) {
+        const resolved = constants.get(raw);
+        if (resolved) features.add(resolved);
+        else unresolved.push(raw);
+        continue;
+      }
+      if (/^(QuotaFeature|input\.|reservation\.|string)/.test(raw) || raw.startsWith('z.'))
+        continue;
+      if (raw.includes('?') || raw.includes('.')) continue;
+      unresolved.push(raw);
+    }
+    for (const match of text.matchAll(/QuotaFeature\s*=\s*((?:'[a-z0-9_]+'\s*\|?\s*)+)/g)) {
+      for (const member of (match[1] as string).matchAll(/'([a-z0-9_]+)'/g)) {
+        features.add(member[1] as string);
+      }
+    }
+  }
+
+  expect(unresolved, 'a metered feature name that cannot be resolved to its value').toEqual([]);
+  return [...features].sort();
+}
+
+describe('a turn that delivered nothing', () => {
+  let ledger: LedgerDatabase;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ledger = new LedgerDatabase();
+  });
+
+  it('covers every metered capability the reservation call sites name', () => {
+    const features = meteredFeatures();
+    expect(features.length).toBeGreaterThanOrEqual(6);
+    expect(features).toContain('chat');
+    expect(features).toContain('video');
+    expect(features).toContain('voice_live');
+  });
+
+  it.each(meteredFeatures().map((feature) => [feature] as const))(
+    'costs %s nothing when the provider fails after the reservation',
+    async (quotaFeature) => {
+      const account = ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 50_000_000 });
+      const reservation = await reserveManagedUsageRequest({
+        ...reservationInput(ledger, `failed-${quotaFeature}`, 900_000),
+        quotaFeature,
+      });
+      await markManagedUsageProviderStarted(reservation);
+      expect(account.usedMicrousd).toBe(900_000);
+
+      const asked: number[] = [];
+      const statement = ledger.query.bind(ledger);
+      ledger.query = async <T>(sql: string, params: unknown[] = []): Promise<T[]> => {
+        if (sql.includes('finalize_managed_usage_request_microusd')) asked.push(Number(params[5]));
+        return statement<T>(sql, params);
+      };
+
+      const finalization = await finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'failed',
+        actualCostMicrousd: 640_000,
+        providerCostMicrousd: 640_000,
+        usage: { quotaFeature },
+      });
+
+      expect(asked).toEqual([0]);
+      expect(finalization.requestStatus).toBe('released');
+      expect(finalization.actualCostMicrousd).toBe(0);
+      expect(account.usedMicrousd).toBe(0);
+      expect(recordSettledProviderCost).not.toHaveBeenCalled();
+      assertLedgerInvariants(ledger);
+    },
+  );
+
+  it.each(meteredFeatures().map((feature) => [feature] as const))(
+    'posts nothing at all when %s is refused at the plan window',
+    async (quotaFeature) => {
+      ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 50_000_000 });
+      const sessionCap = getPlanSessionUsageCapMicrousd(PLAN_TIER);
+      expect(sessionCap).toBeGreaterThan(0);
+
+      await expect(
+        reserveManagedUsageRequest({
+          ...reservationInput(ledger, `refused-${quotaFeature}`, (sessionCap ?? 0) + 1),
+          quotaFeature,
+        }),
+      ).rejects.toMatchObject({ status: 429, code: 'rolling_five_hour_limit_reached' });
+
+      expect(ledger.transactions).toEqual([]);
+      expect(recordSettledProviderCost).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('two callers finalizing the same turn at the same moment', () => {
+  let ledger: LedgerDatabase;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ledger = new LedgerDatabase();
+  });
+
+  /** Releases each caller only once all of them have reached the statement. */
+  function arriveTogether(callers: number): () => Promise<void> {
+    let waiting = 0;
+    let release = (): void => {};
+    const opened = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return async () => {
+      waiting += 1;
+      if (waiting >= callers) release();
+      await opened;
+    };
+  }
+
+  it('settles the delivered work once and agrees on what was settled', async () => {
+    const account = ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 50_000_000 });
+    const reservation = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'concurrent-settle', 800_000),
+    );
+    await markManagedUsageProviderStarted(reservation);
+
+    ledger.statementBarrier = arriveTogether(2);
+    const [first, second] = await Promise.all([
+      finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'completed',
+        actualCostMicrousd: 500_000,
+        usage: { totalTokens: 900 },
+      }),
+      finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'completed',
+        actualCostMicrousd: 500_000,
+        usage: { totalTokens: 900 },
+      }),
+    ]);
+    ledger.statementBarrier = null;
+
+    const results = [first.operationResult, second.operationResult].sort();
+    expect(results).toEqual(['already_finalized', 'finalized']);
+    expect(first.requestStatus).toBe('completed');
+    expect(second.requestStatus).toBe('completed');
+    expect(first.actualCostMicrousd).toBe(second.actualCostMicrousd);
+    expect(account.usedMicrousd).toBe(500_000);
+    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
+    assertLedgerInvariants(ledger);
+  });
+
+  it('either settles or releases, never one of each', async () => {
+    const account = ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 50_000_000 });
+    const reservation = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'concurrent-outcome', 800_000),
+    );
+    await markManagedUsageProviderStarted(reservation);
+
+    ledger.statementBarrier = arriveTogether(2);
+    const finalizations = await Promise.all([
+      finalizeManagedUsageRequest({
+        ...reservation,
+        outcome: 'completed',
+        actualCostMicrousd: 500_000,
+      }),
+      finalizeManagedUsageRequest({ ...reservation, outcome: 'failed', actualCostMicrousd: 0 }),
+    ]);
+    ledger.statementBarrier = null;
+
+    const statuses = new Set(finalizations.map((finalization) => finalization.requestStatus));
+    expect(statuses.size).toBe(1);
+    const settled = [...statuses][0] === 'completed' ? 500_000 : 0;
+    expect(account.usedMicrousd).toBe(settled);
+    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
+    assertLedgerInvariants(ledger);
+  });
+
+  it('admits one of two reservations racing for the same key', async () => {
+    ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 50_000_000 });
+
+    ledger.statementBarrier = arriveTogether(2);
+    const outcomes = await Promise.allSettled([
+      reserveManagedUsageRequest(reservationInput(ledger, 'concurrent-reserve', 700_000)),
+      reserveManagedUsageRequest(reservationInput(ledger, 'concurrent-reserve', 700_000)),
+    ]);
+    ledger.statementBarrier = null;
+
+    expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.find((outcome) => outcome.status === 'rejected');
+    expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(ManagedUsageRequestError);
+    expect(ledger.requests.size).toBe(1);
+    expect(ledger.transactions).toHaveLength(1);
+  });
+});
+
+describe('the windows a plan allowance is measured over', () => {
+  let ledger: LedgerDatabase;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ledger = new LedgerDatabase();
+  });
+
+  // The windows live in the reservation statement, so the model above is only
+  // worth what it shares with the migration that ships: an instant-relative
+  // interval with an inclusive lower edge, never a calendar boundary.
+  it('is the interval the reservation statement measures, taken from the migration', () => {
+    const neonDir = join(__dirname, '..', '..', '..', 'db', 'neon');
+    const migrations = readdirSync(neonDir)
+      .filter((name) => /^\d{4}_.*\.sql$/.test(name))
+      .sort();
+    let effective: string | null = null;
+    for (const name of migrations) {
+      const sql = readFileSync(join(neonDir, name), 'utf8');
+      const matches = [
+        ...sql.matchAll(
+          /create\s+or\s+replace\s+function\s+(?:public\.)?reserve_managed_usage_request_with_limits_microusd\b[\s\S]*?\n\$\$;/gi,
+        ),
+      ];
+      if (matches.length > 0) effective = matches[matches.length - 1]?.[0] ?? effective;
+    }
+
+    expect(effective).not.toBeNull();
+    expect(effective).toContain("created_at >= now() - interval '5 hours'");
+    expect(effective).toContain("created_at >= now() - interval '7 days'");
+    expect(effective).not.toMatch(/date_trunc\('day'/);
+    expect(effective).not.toMatch(/at time zone/i);
+  });
+
+  it('counts a turn at the far edge of the five-hour window and drops the one past it', async () => {
+    const sessionCap = getPlanSessionUsageCapMicrousd(PLAN_TIER) ?? 0;
+    ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 10 * sessionCap });
+    await reserveManagedUsageRequest(reservationInput(ledger, 'edge-first', sessionCap));
+
+    ledger.advance(5 * 3_600_000);
+    await expect(
+      reserveManagedUsageRequest(reservationInput(ledger, 'edge-inside', 1)),
+    ).rejects.toMatchObject({ code: 'rolling_five_hour_limit_reached' });
+
+    ledger.advance(1);
+    const admitted = await reserveManagedUsageRequest(reservationInput(ledger, 'edge-past', 1));
+    expect(admitted.estimatedCostMicrousd).toBe(1);
+  });
+
+  it('measures the window from the instant of the posting, not from a calendar day', async () => {
+    const sessionCap = getPlanSessionUsageCapMicrousd(PLAN_TIER) ?? 0;
+    ledger.nowMs = Date.UTC(2026, 8, 20, 23, 30, 0);
+    ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 10 * sessionCap });
+    await reserveManagedUsageRequest(reservationInput(ledger, 'before-midnight', sessionCap));
+
+    ledger.advance(3_600_000);
+    await expect(
+      reserveManagedUsageRequest(reservationInput(ledger, 'after-midnight', 1)),
+    ).rejects.toMatchObject({ code: 'rolling_five_hour_limit_reached' });
+  });
+});
+
+describe('spending past the plan allowance', () => {
+  let ledger: LedgerDatabase;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ledger = new LedgerDatabase();
+  });
+
+  // The catalogue grants no plan an allowance beyond its windows, so the only
+  // thing that can carry a turn past one is balance the account bought. The
+  // statement the service issues is where that is decided.
+  it('asks only for balance that was bought, on an account that opted in', () => {
+    const source = readFileSync(join(__dirname, '..', 'managed-usage-request-service.ts'), 'utf8');
+    const statement = /select greatest\(([\s\S]*?)as headroom_microusd([\s\S]*?)`/.exec(source);
+
+    expect(statement).not.toBeNull();
+    expect(statement?.[1]).toContain('least(');
+    expect(statement?.[1]).toContain('credits_allocated_microusd - credits.credits_used_microusd');
+    expect(statement?.[1]).toContain('top_up_allocated_microusd');
+    expect(statement?.[2]).toContain('subscription.overage_enabled');
+  });
+
+  it('refuses the turn when nothing was purchased to carry it', async () => {
+    const sessionCap = getPlanSessionUsageCapMicrousd(PLAN_TIER) ?? 0;
+    ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 10 * sessionCap });
+    await reserveManagedUsageRequest(reservationInput(ledger, 'cap-filling', sessionCap));
+
+    await expect(
+      reserveManagedUsageRequest(reservationInput(ledger, 'no-headroom', 500_000)),
+    ).rejects.toMatchObject({ status: 429, code: 'rolling_five_hour_limit_reached' });
+    expect(ledger.transactions).toHaveLength(1);
+  });
+
+  it('refuses a turn larger than the balance that was purchased', async () => {
+    const sessionCap = getPlanSessionUsageCapMicrousd(PLAN_TIER) ?? 0;
+    ledger.openAccount({
+      userId: USER_ID,
+      allocatedMicrousd: 10 * sessionCap,
+      topUpAllocatedMicrousd: 400_000,
+      overageEnabled: true,
+    });
+    await reserveManagedUsageRequest(reservationInput(ledger, 'cap-filling-2', sessionCap));
+
+    await expect(
+      reserveManagedUsageRequest(reservationInput(ledger, 'over-headroom', 400_001)),
+    ).rejects.toMatchObject({ status: 429, code: 'rolling_five_hour_limit_reached' });
+
+    const admitted = await reserveManagedUsageRequest(
+      reservationInput(ledger, 'within-headroom', 400_000),
+    );
+    expect(admitted.estimatedCostMicrousd).toBe(400_000);
+  });
+
+  it('refuses a purchased-balance turn to an account that never enabled it', async () => {
+    const sessionCap = getPlanSessionUsageCapMicrousd(PLAN_TIER) ?? 0;
+    ledger.openAccount({
+      userId: USER_ID,
+      allocatedMicrousd: 10 * sessionCap,
+      topUpAllocatedMicrousd: 400_000,
+    });
+    await reserveManagedUsageRequest(reservationInput(ledger, 'cap-filling-3', sessionCap));
+
+    await expect(
+      reserveManagedUsageRequest(reservationInput(ledger, 'not-enabled', 100_000)),
+    ).rejects.toMatchObject({ status: 429, code: 'rolling_five_hour_limit_reached' });
   });
 });
