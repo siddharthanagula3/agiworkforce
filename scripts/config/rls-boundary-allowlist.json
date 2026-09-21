@@ -90,6 +90,10 @@
       "reason": "feedback is reachable from Local mode with no cloud account, so user_id is nullable by design and a null owner cannot satisfy any WITH CHECK; the insert carries the server-derived user id and reads nothing back"
     },
     {
+      "path": "apps/web/app/api/mobile/iap/catalog/route.ts",
+      "reason": "the plan and upgrade access reads run on the caller-scoped connection; the owner connection is used only for mobile_iap_accounts, which 0112 makes service-owned under forced RLS with no app policy by design, keyed here by the authenticated user id"
+    },
+    {
       "path": "apps/web/app/api/mobile/iap/google-notifications/route.ts",
       "reason": "Google Play Pub/Sub notification verified by OIDC token, resolves its own subject from the provider payload"
     },
