@@ -58,9 +58,9 @@ export default function ByokEnvDocsPage() {
           <table className="agi-ledger">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>Provider</th>
-                <th style={{ textAlign: 'left' }}>Environment variable</th>
-                <th style={{ textAlign: 'left' }}>Notes</th>
+                <th style={{ textAlign: 'start' }}>Provider</th>
+                <th style={{ textAlign: 'start' }}>Environment variable</th>
+                <th style={{ textAlign: 'start' }}>Notes</th>
               </tr>
             </thead>
             <tbody>

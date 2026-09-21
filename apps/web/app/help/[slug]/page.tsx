@@ -16,8 +16,8 @@ const MARKDOWN_COMPONENTS: Components = {
       {children}
     </a>
   ),
-  ul: ({ children }) => <ul className="list-disc space-y-2 pl-6">{children}</ul>,
-  ol: ({ children }) => <ol className="list-decimal space-y-2 pl-6">{children}</ol>,
+  ul: ({ children }) => <ul className="list-disc space-y-2 ps-6">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal space-y-2 ps-6">{children}</ol>,
   pre: ({ children }) => <pre className="overflow-x-auto rounded-md bg-muted p-4">{children}</pre>,
 };
 

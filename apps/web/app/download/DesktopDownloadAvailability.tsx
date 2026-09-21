@@ -320,7 +320,7 @@ export function DesktopDownloadAvailability() {
         <div style={{ marginTop: '2rem' }}>
           <Eyebrow>Install it</Eyebrow>
           <ol
-            className="mt-4 list-decimal space-y-2 pl-5 text-sm"
+            className="mt-4 list-decimal space-y-2 ps-5 text-sm"
             aria-label="Install AGI Desktop on macOS"
           >
             {INSTALL_STEPS.map((step) => (

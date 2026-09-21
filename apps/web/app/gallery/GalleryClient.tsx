@@ -444,7 +444,7 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
         border: '1px solid var(--agi-rule)',
         borderRadius: 14,
         padding: '0',
-        textAlign: 'left',
+        textAlign: 'start',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
@@ -645,7 +645,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
                 border: '1px solid var(--agi-rule)',
                 borderRadius: 12,
                 cursor: 'pointer',
-                textAlign: 'left',
+                textAlign: 'start',
                 transition: 'border-color 150ms',
               }}
               onMouseEnter={(e) => {
@@ -1068,9 +1068,7 @@ function TabButton({
 
 type TabId = 'yours' | 'inspiration';
 type OverlayState =
-  | { kind: 'none' }
-  | { kind: 'category' }
-  | { kind: 'wizard'; category: ArtifactCategory };
+  { kind: 'none' } | { kind: 'category' } | { kind: 'wizard'; category: ArtifactCategory };
 
 /**
  * One row in the gallery grid: either a locally-derived artifact (has `content`

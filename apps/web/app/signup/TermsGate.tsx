@@ -105,7 +105,7 @@ export function TermsGate({
             .
           </span>
         </label>
-        <p className="mt-3 pl-7 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-3 ps-7 text-xs leading-relaxed text-muted-foreground">
           Version dated {POLICY_LAST_UPDATED.terms}. Your agreement is recorded with your account.
         </p>
       </div>

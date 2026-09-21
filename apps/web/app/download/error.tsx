@@ -45,7 +45,7 @@ export default function DownloadError({
           onClick={reset}
           className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
-          <RefreshCw aria-hidden="true" className="mr-2 h-4 w-4" />
+          <RefreshCw aria-hidden="true" className="me-2 h-4 w-4" />
           Try again
         </button>
         <Link

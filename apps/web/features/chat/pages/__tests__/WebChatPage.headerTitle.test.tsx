@@ -27,7 +27,7 @@ vi.mock('next/navigation', async (importOriginal) => ({
 }));
 
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
+  ...(await importOriginal<Record<string, unknown>>()),
   useAuth: () => ({
     getToken: async () => 'fixture-token',
     isLoaded: true,

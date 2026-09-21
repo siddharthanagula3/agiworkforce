@@ -57,14 +57,14 @@ export default function Error({
               onClick={reset}
               className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-8 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+              <RefreshCw className="h-4 w-4 me-2" aria-hidden="true" />
               Try again
             </button>
             <Link
               href={homeHref}
               className="inline-flex h-12 items-center justify-center rounded-full border border-border bg-card px-8 text-sm font-medium text-foreground no-underline hover:bg-muted transition-colors"
             >
-              <Home className="h-4 w-4 mr-2" aria-hidden="true" />
+              <Home className="h-4 w-4 me-2" aria-hidden="true" />
               {homeHref === PRODUCT_HOME_PATH ? 'Go to chat' : 'Go home'}
             </Link>
             {signInAction && (

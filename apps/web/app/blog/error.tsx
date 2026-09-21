@@ -39,14 +39,14 @@ export default function BlogError({
           onClick={reset}
           className="inline-flex h-10 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-medium hover:bg-blue-700 transition-colors text-white"
         >
-          <RefreshCw className="h-4 w-4 mr-2" />
+          <RefreshCw className="h-4 w-4 me-2" />
           Try Again
         </button>
         <Link
           href="/"
           className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
         >
-          <Home className="h-4 w-4 mr-2" />
+          <Home className="h-4 w-4 me-2" />
           Go Home
         </Link>
       </div>

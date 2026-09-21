@@ -636,7 +636,7 @@ export default function ProjectDetailPage() {
                           padding: '10px 14px',
                           background: 'transparent',
                           border: 0,
-                          textAlign: 'left',
+                          textAlign: 'start',
                           fontSize: 13,
                           color: 'hsl(var(--foreground))',
                           cursor: 'pointer',
@@ -674,7 +674,7 @@ export default function ProjectDetailPage() {
                           padding: '10px 14px',
                           background: 'transparent',
                           border: 0,
-                          textAlign: 'left',
+                          textAlign: 'start',
                           fontSize: 13,
                           color: 'hsl(var(--foreground))',
                           cursor: 'pointer',
@@ -784,7 +784,7 @@ export default function ProjectDetailPage() {
                     background: 'var(--agi-bg)',
                     boxShadow: '0 8px 28px rgba(0,0,0,0.22)',
                     zIndex: 'var(--z-popover)',
-                    textAlign: 'left',
+                    textAlign: 'start',
                   }}
                 >
                   <p
@@ -945,7 +945,7 @@ export default function ProjectDetailPage() {
                         color: 'var(--agi-ink-2)',
                         fontSize: 13,
                         cursor: 'pointer',
-                        textAlign: 'left',
+                        textAlign: 'start',
                       }}
                     >
                       <X style={{ width: 14, height: 14 }} aria-hidden="true" />
@@ -1152,7 +1152,7 @@ export default function ProjectDetailPage() {
                               background: 'transparent',
                               border: 0,
                               padding: '10px 14px',
-                              textAlign: 'left',
+                              textAlign: 'start',
                               cursor: 'pointer',
                             }}
                             onMouseEnter={(e) => {
