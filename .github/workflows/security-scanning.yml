@@ -60,11 +60,13 @@ jobs:
       - name: Scan infrastructure configuration (Trivy config)
         run: |
           set -euo pipefail
+          mkdir -p trivy-out
           docker run --rm \
             --volume "$PWD:/repo:ro" \
             --volume "$PWD/trivy-out:/out" \
             --user "$(id -u):$(id -g)" \
             "$TRIVY_IMAGE" config /repo \
+              --cache-dir /tmp/trivy-cache \
               --format json \
               --output /out/iac.json \
               --exit-code 0
