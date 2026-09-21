@@ -23,6 +23,15 @@ export const AUTOMATION_SURFACES = ['extension', 'desktop', 'cloud'] as const;
 
 export type AutomationSurface = (typeof AUTOMATION_SURFACES)[number];
 
+/** Receipts a surface may send, and the ingest may accept, in one request. */
+export const AUTOMATION_OUTCOME_MAX_BATCH = 200;
+
+/** Longest reason, check or observation a receipt may carry. */
+export const AUTOMATION_OUTCOME_MAX_REASON_CHARS = 300;
+
+/** Longest target a receipt may carry: an origin or an app bundle id. */
+export const AUTOMATION_OUTCOME_MAX_TARGET_CHARS = 300;
+
 /** What was checked after the action, and whether the check passed. */
 export interface AutomationVerification {
   readonly check: string;
