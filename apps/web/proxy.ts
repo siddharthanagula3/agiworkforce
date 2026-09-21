@@ -132,13 +132,20 @@ const isProtectedAppRoute = identityMiddleware.createRouteMatcher(
   routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES),
 );
 
-const isPublicApiRoute = identityMiddleware.createRouteMatcher([
+// Served without the identity proxy, so none of these may read the caller's
+// identity: a route that does fails with an identity error for every request.
+// The signed-in waitlist, access code and beta download routes therefore go
+// through the proxy; the anonymous waitlist sign-up stays here so a sign-up
+// never depends on the identity provider.
+export const PUBLIC_API_ROUTE_PATTERNS = [
   '/api/health',
-  '/api/download(.*)',
-  '/api/download-beta(.*)',
+  '/api/download',
+  '/api/download/(.*)',
   '/api/models',
-  '/api/waitlist(.*)',
-]);
+  '/api/waitlist/public',
+] as const;
+
+const isPublicApiRoute = identityMiddleware.createRouteMatcher([...PUBLIC_API_ROUTE_PATTERNS]);
 
 const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   ...routeMatcherPatterns(SESSION_AUTH_ROUTE_PREFIXES),
