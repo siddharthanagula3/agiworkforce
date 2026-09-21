@@ -74,6 +74,8 @@ import {
   pastedTextFileName,
 } from '@agiworkforce/utils/composer-paste';
 
+type ComposerUploadPhase = 'uploading' | 'unsent' | 'settled';
+
 const STACK_LAYOUT_MIN_HEIGHT = 34;
 
 function mergeTranscript(previous: string, transcript: string): string {
@@ -153,6 +155,8 @@ export function ChatInput({
   const inputRef = useRef<TextInput>(null);
   const transcriptionRunRef = useRef(0);
   const sendPendingRef = useRef(false);
+  const heldSendRef = useRef<string | null>(null);
+  const [sendHeld, setSendHeld] = useState(false);
   const queuedFollowUpsRef = useRef<QueuedFollowUp[]>(queuedFollowUps);
   queuedFollowUpsRef.current = queuedFollowUps;
   const queuedFollowUpSeqRef = useRef(0);
@@ -278,11 +282,25 @@ export function ChatInput({
     setDraft(draftKey, text, draftProvenance);
   }, [draftIdentity, draftKey, draftProvenance, text]);
 
+  const uploads = useUploadLifecycleStore((state) => state.uploads);
+  const attachmentUploadPhase = useMemo<ComposerUploadPhase>(() => {
+    const entries = attachments.map((a) => uploads[a.id]).filter(Boolean);
+    if (entries.some((entry) => entry.phase === 'uploading')) return 'uploading';
+    if (entries.some((entry) => entry.phase === 'failed' || entry.phase === 'canceled'))
+      return 'unsent';
+    return 'settled';
+  }, [attachments, uploads]);
+
   const sendComposerMessage = useCallback(
     (sourceText: string) => {
       if (sendPendingRef.current) return;
       const trimmed = sourceText.trim();
       if (!trimmed && attachments.length === 0) return;
+      if (attachmentUploadPhase === 'uploading') {
+        heldSendRef.current = sourceText;
+        setSendHeld(true);
+        return;
+      }
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -342,8 +360,37 @@ export function ChatInput({
           sendPendingRef.current = false;
         });
     },
-    [attachments, onSend, hapticsEnabled, draftKey, draftProvenance, isStreaming],
+    [
+      attachments,
+      attachmentUploadPhase,
+      onSend,
+      hapticsEnabled,
+      draftKey,
+      draftProvenance,
+      isStreaming,
+    ],
   );
+
+  // A send pressed while a file is still going up waits for it rather than
+  // reaching the model without it. An upload that ends any other way drops the
+  // held send and leaves the attachment showing why.
+  useEffect(() => {
+    if (attachmentUploadPhase === 'uploading') return;
+    const held = heldSendRef.current;
+    if (held === null) return;
+    heldSendRef.current = null;
+    setSendHeld(false);
+    if (attachmentUploadPhase === 'unsent') return;
+    sendComposerMessage(held);
+  }, [attachmentUploadPhase, sendComposerMessage]);
+
+  // Editing after pressing send takes the message back: what goes out is only
+  // ever the text the reader last looked at and chose to send.
+  useEffect(() => {
+    if (heldSendRef.current === null || heldSendRef.current === text) return;
+    heldSendRef.current = null;
+    setSendHeld(false);
+  }, [text]);
 
   const handleSend = useCallback(() => {
     sendComposerMessage(text);
@@ -595,7 +642,7 @@ export function ChatInput({
 
   const sendButtonState = isStreaming
     ? ('streaming' as const)
-    : !isOnline && hasContent
+    : (!isOnline && hasContent) || sendHeld
       ? ('queued' as const)
       : ('idle' as const);
 
@@ -1190,6 +1237,7 @@ export function ChatInput({
                   state={sendButtonState}
                   onPress={handleSendButtonPress}
                   disabled={!hasContent && !isStreaming}
+                  {...(sendHeld ? { accessibilityLabel: 'Sending when the upload finishes' } : {})}
                 />
               )}
             </View>

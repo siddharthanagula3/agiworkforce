@@ -1,4 +1,3 @@
-
 import { useCallback, useState } from 'react';
 import { View, Pressable, ActivityIndicator, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/text';
-import { copyToClipboard } from '@/lib/clipboard';
+import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
 
@@ -66,6 +65,7 @@ export function FileExportButton({
   onClose,
 }: FileExportButtonProps) {
   const colors = useThemeColors();
+  const { copy } = useCopyAction();
   const [loading, setLoading] = useState<ExportAction | null>(null);
   const [success, setSuccess] = useState<ExportAction | null>(null);
 
@@ -106,8 +106,7 @@ export function FileExportButton({
             break;
 
           case 'copy':
-            await copyToClipboard(content);
-            showSuccess(action);
+            if (await copy(content)) showSuccess(action);
             break;
 
           case 'share': {
@@ -124,7 +123,7 @@ export function FileExportButton({
         setLoading(null);
       }
     },
-    [content, title, loading, showSuccess],
+    [content, title, copy, loading, showSuccess],
   );
 
   return (
