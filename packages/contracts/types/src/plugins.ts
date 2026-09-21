@@ -59,6 +59,10 @@ export const PLUGIN_PUBLISHER_KINDS: readonly PluginPublisherKind[] = [
   'partner',
 ] as const;
 
+export function isPluginPublisherKind(value: unknown): value is PluginPublisherKind {
+  return typeof value === 'string' && (PLUGIN_PUBLISHER_KINDS as readonly string[]).includes(value);
+}
+
 export interface PluginPublisher {
   id: string;
   name: string;

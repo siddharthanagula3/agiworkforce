@@ -26,6 +26,8 @@ vi.mock('@/lib/services/plugin-marketplace-service', () => ({
   getMarketplaceEntryForUser: vi.fn(async () => null),
   isMissingPluginMarketplaceSchema: (error: unknown) =>
     (error as { code?: string } | null)?.code === '42P01',
+  assertMarketplaceEntryInstallable: vi.fn(async () => undefined),
+  approveMarketplaceInstallationPermissions: vi.fn(async () => []),
 }));
 
 import { NextRequest } from 'next/server';
