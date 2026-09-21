@@ -177,12 +177,58 @@ function tagRule(elements, id, advice, offends) {
   };
 }
 
+// A focus indicator does not have to be a ring: a background and label swap is
+// how a menu item shows focus, and a roving highlight carries it on a data
+// attribute. outline-none is a suppression, so it never counts as one.
+const FOCUS_REPLACEMENT =
+  /(?:group-)?(?:focus|focus-visible):(?:ring|outline-(?!none\b)|shadow|border|bg-|text-)|data-\[(?:selected|highlighted|state)[^\]]*\]:(?:bg-|text-|ring)/;
+// focus-within belongs to the wrapper that draws the ring for the bare input
+// inside it, so this one is read across the surrounding lines.
+const FOCUS_WITHIN = /focus-within:(?:ring|outline-(?!none\b)|shadow|border|bg-|text-)/;
+// An element focus never reaches by Tab owes no indicator: a -1 container is
+// moved to by script, for focus management, not by a keyboard user.
+const NEVER_TABBED = /tabIndex=\{[^}]*-1\b|tabIndex:\s*-1\b/;
+
+// Attributing an attribute to the element that owns it: back to the nearest tag
+// opener, forward to the end of its attribute list. Without it a neighbour's
+// tabIndex excuses an input that never had one.
+function enclosingTag(lines, index) {
+  let start = -1;
+  for (let i = index; i >= Math.max(0, index - 12); i -= 1) {
+    if (/<[A-Za-z]/.test(lines[i])) {
+      start = i;
+      break;
+    }
+  }
+  if (start === -1) return null;
+  let end = index;
+  for (let i = index; i < Math.min(lines.length, index + 6); i += 1) {
+    end = i;
+    if (/\/?>\s*$/.test(lines[i])) break;
+  }
+  return lines.slice(start, end + 1).join(' ');
+}
+
+// An empty element that is out of the accessibility tree is a scrim, not a
+// control: ARIA forbids a focusable descendant of aria-hidden, so role and
+// tabIndex are the wrong answer and Escape is the keyboard path.
+const DECORATIVE_OVERLAY = /\/>\s*$/;
+const HIDDEN_FROM_AT = /\baria-hidden(?!\s*=\s*(?:"false"|\{false\}))/;
+// Stopping a click from reaching an ancestor performs no action, so there is
+// nothing for a key press to activate.
+const PROPAGATION_ONLY = /onClick=\{\s*\(\s*\w*\s*\)\s*=>\s*\w+\.stopPropagation\(\)\s*\}/;
+
 const SOURCE_RULES = [
   tagRule(
     ['div', 'span', 'li', 'td'],
     'clickable-div-without-semantics',
     'a click handler on a non-interactive element is invisible to the keyboard and to assistive technology; use a button, or give the element a role and a key handler',
-    (tag) => /\bonClick=/.test(tag) && !/\brole=/.test(tag) && !/\btabIndex=/.test(tag),
+    (tag) =>
+      /\bonClick=/.test(tag) &&
+      !/\brole=/.test(tag) &&
+      !/\btabIndex=/.test(tag) &&
+      !(DECORATIVE_OVERLAY.test(tag) && HIDDEN_FROM_AT.test(tag)) &&
+      !PROPAGATION_ONLY.test(tag),
   ),
   tagRule(
     ['a', 'Link'],
@@ -200,8 +246,10 @@ const SOURCE_RULES = [
       const found = [];
       lines.forEach((line, index) => {
         if (!/\boutline-none\b/.test(line)) return;
-        const window = lines.slice(Math.max(0, index - 4), index + 5).join(' ');
-        if (/focus(?:-visible)?:(?:ring|outline|shadow|border)/.test(window)) return;
+        const element = enclosingTag(lines, index) ?? line;
+        if (FOCUS_REPLACEMENT.test(element) || NEVER_TABBED.test(element)) return;
+        const surrounding = lines.slice(Math.max(0, index - 12), index + 5).join(' ');
+        if (FOCUS_WITHIN.test(surrounding)) return;
         found.push({ line: index + 1, literal: 'outline-none' });
       });
       return found;

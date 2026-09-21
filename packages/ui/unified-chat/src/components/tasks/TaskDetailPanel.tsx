@@ -260,7 +260,7 @@ function OutputRow({ output }: { output: AgentActivityArtifactEntry }) {
         <a
           href={output.uri}
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[12px] font-medium text-foreground hover:bg-accent"
         >
           <Download className="h-3 w-3" />

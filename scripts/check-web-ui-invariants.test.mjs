@@ -177,7 +177,7 @@ test('flags outline-none with no focus replacement and allows one that has it', 
   assert.match(bad.out, /outline-none-without-focus-ring/);
 
   const good = check(
-    `export const A = () => (\n  <input\n    className="outline-none"\n  />\n);\nexport const B = 'focus-visible:ring-2';\n`,
+    `export const A = () => (\n  <input\n    className="outline-none focus-visible:ring-2"\n  />\n);\n`,
   );
   assert.equal(good.code, 0, 'a replacement within the element is the whole point of the rule');
 });
@@ -207,6 +207,78 @@ test('flags a click handler on a non-interactive element unless it carries seman
 
   const button = check(`export const A = () => <button onClick={() => undefined}>x</button>;\n`);
   assert.equal(button.code, 0);
+});
+
+test('an empty scrim that is hidden from assistive technology is not a control', () => {
+  const scrim = check(
+    `export const A = () => <div className="fixed inset-0" onClick={close} aria-hidden="true" />;\n`,
+  );
+  assert.equal(scrim.code, 0, 'ARIA forbids a focusable descendant of aria-hidden');
+
+  const bare = check(`export const A = () => <div onClick={close} aria-hidden />;\n`);
+  assert.equal(bare.code, 0, 'a valueless aria-hidden is aria-hidden="true"');
+
+  const explicitlyShown = check(
+    `export const A = () => <div onClick={close} aria-hidden={false} />;\n`,
+  );
+  assert.equal(explicitlyShown.code, 1, 'aria-hidden={false} leaves the element exposed');
+
+  const hasContent = check(`export const A = () => <div onClick={close} aria-hidden>x</div>;\n`);
+  assert.equal(hasContent.code, 1, 'an element with content is not a scrim');
+});
+
+test('a handler that only stops propagation is not a control', () => {
+  const guardOnly = check(
+    `export const A = () => <div onClick={(e) => e.stopPropagation()}>x</div>;\n`,
+  );
+  assert.equal(guardOnly.code, 0);
+
+  const alsoActs = check(
+    `export const A = () => <div onClick={(e) => { e.stopPropagation(); open(); }}>x</div>;\n`,
+  );
+  assert.equal(alsoActs.code, 1, 'a handler that also does something is a control');
+});
+
+test('a focus indicator counts when it is a background swap, a wrapper or a roving highlight', () => {
+  const background = check(
+    `export const A = () => <div className="outline-none focus:bg-accent focus:text-accent-foreground" />;\n`,
+  );
+  assert.equal(background.code, 0, 'a menu item shows focus by swapping its background');
+
+  const roving = check(
+    `export const A = () => <div className="outline-none data-[selected=true]:bg-accent" />;\n`,
+  );
+  assert.equal(roving.code, 0);
+
+  const wrapper = check(
+    `export const A = () => (\n  <div className="focus-within:ring-2">\n    <input\n      className="outline-none"\n    />\n  </div>\n);\n`,
+  );
+  assert.equal(wrapper.code, 0, 'the wrapper draws the ring for the bare input inside it');
+});
+
+test('outline-none is never its own focus replacement', () => {
+  const { code, out } = check(
+    `export const A = () => <button className="outline-none focus-visible:outline-none" />;\n`,
+  );
+  assert.equal(code, 1, 'suppressing the outline twice still leaves no indicator');
+  assert.match(out, /outline-none-without-focus-ring/);
+});
+
+test('an element Tab never reaches owes no focus indicator, but a neighbour cannot excuse one', () => {
+  const unfocusable = check(
+    `export const A = () => (\n  <div\n    tabIndex={-1}\n    className="outline-none"\n  />\n);\n`,
+  );
+  assert.equal(unfocusable.code, 0, 'a -1 container is moved to by script, not by a keyboard user');
+
+  const ternary = check(
+    `export const A = () => (\n  <div\n    tabIndex={isOverlay ? -1 : undefined}\n    className="outline-none"\n  />\n);\n`,
+  );
+  assert.equal(ternary.code, 0);
+
+  const neighbour = check(
+    `export const A = () => (\n  <>\n    <div tabIndex={-1} />\n    <input\n      className="outline-none"\n    />\n  </>\n);\n`,
+  );
+  assert.equal(neighbour.code, 1, "a sibling's tabIndex must not excuse the input");
 });
 
 test('a baselined rule with no reason fails, so the list cannot become an allowlist', () => {
