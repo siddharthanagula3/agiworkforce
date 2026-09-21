@@ -1,0 +1,43 @@
+{
+  "why": "Three surfaces render the same turn failure and each wrote its own table. The codes come from the Rust protocol through the generated binding, so this file only records which client reads which table and which members that client deliberately leaves to the fallback sentence. An excused member that gets handled fails, so the list shrinks and never grows quietly.",
+  "vocabularies": {
+    "TurnFailureCode": {
+      "consumers": [
+        {
+          "surface": "vscode",
+          "file": "apps/extension-vscode/src/features/sidebar-webview/errorPresentation.ts",
+          "region": "const FAILURE_CATEGORY[\\s\\S]*?\\}\\);",
+          "uncovered": {}
+        },
+        {
+          "surface": "web",
+          "file": "apps/web/features/code/local-code.ts",
+          "region": "export function localTurnFailureSentence[\\s\\S]*?\\n\\}",
+          "uncovered": {
+            "account_signed_out": "The desktop surface signs the account in itself, so the CLI's line about a terminal command is replaced by the surface's own sign-in affordance rather than by a sentence here.",
+            "plan_excludes_model": "The plan is shown by the surface's own upgrade affordance; a sentence here would say it a second time.",
+            "interrupted": "A turn the user stopped needs no explanation, and the CLI's line is already the plain one.",
+            "invalid_request": "Nothing this surface can tell the reader to do differs from the CLI's own line, which names the request that was refused.",
+            "unknown": "The fallback sentence is exactly what an unclassified failure is owed."
+          }
+        }
+      ]
+    },
+    "ToolErrorClass": {
+      "consumers": []
+    }
+  },
+  "retryability": {
+    "UNAUTHORIZED": false,
+    "FORBIDDEN": false,
+    "CONFLICT": false,
+    "NOT_FOUND": false,
+    "VALIDATION_ERROR": false,
+    "PAYMENT_REQUIRED": false,
+    "CLIENT_UPDATE_REQUIRED": false,
+    "CAPABILITY_UNAVAILABLE": false,
+    "RATE_LIMIT_EXCEEDED": true,
+    "TIMEOUT": true,
+    "NETWORK_ERROR": true
+  }
+}
