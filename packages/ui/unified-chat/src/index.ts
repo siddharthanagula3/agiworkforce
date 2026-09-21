@@ -54,6 +54,8 @@ export {
   isMessageContinuable,
   hasStreamError,
   getStreamErrorMessage,
+  getStreamErrorNotice,
+  getStreamErrorReference,
   CONTINUE_GENERATION_INSTRUCTION,
   looksTruncated,
   hasVisibleContent,

@@ -8,7 +8,7 @@ import { ResearchStatusChip, readMessageResearchStatus } from './ResearchStatusC
 import {
   isMessageContinuable,
   hasStreamError,
-  getStreamErrorMessage,
+  getStreamErrorNotice,
 } from '../lib/continue-generation';
 import type { Artifact, MessageArtifactProjection, MessageRouting } from '../lib/types';
 
@@ -243,9 +243,9 @@ export function MessageList({
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
               <span>
-                {getStreamErrorMessage(lastMessage)
+                {getStreamErrorNotice(lastMessage)
                   ? t('list.incompleteWithReason', 'Response may be incomplete: {{reason}}', {
-                      reason: getStreamErrorMessage(lastMessage),
+                      reason: getStreamErrorNotice(lastMessage),
                     })
                   : t(
                       'list.incomplete',
