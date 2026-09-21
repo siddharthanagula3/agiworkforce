@@ -251,6 +251,11 @@ export async function persistAssistantTurn(params: {
     // this message id, and a key left out would keep the cancelled attempt's.
     truncated: snapshot.truncated,
     truncationReason: snapshot.truncated ? TRUNCATED_ASSISTANT_TURN_REASON : null,
+    // The keys the reader renders the move from, asserted for the same reason
+    // as truncated: a second attempt that stayed on the pinned model must not
+    // inherit the first attempt's disclosure.
+    movedFromModel: processed.movedFromModel ?? null,
+    movedReason: processed.movedFromModel ? (processed.movedReason ?? null) : null,
     ...buildAssistantTurnAttribution(processed, snapshot),
     ...(snapshot.runReference ? { cloudAgentRun: snapshot.runReference } : {}),
     // The on-conflict set-list merges with `||`, so a client save that lands

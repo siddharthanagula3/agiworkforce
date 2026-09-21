@@ -267,6 +267,48 @@ describe('GET /api/me, capabilities held closed', () => {
     expect(body.disabled_features).toEqual([]);
   });
 
+  /**
+   * Builds that shipped before the version header existed are still in the
+   * field. Placing one at the newest release would close it out of every range
+   * an operator writes for a broken build; refusing it would make one
+   * deployment answer one binary.
+   */
+  it('holds nothing closed for a build that names no version', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      killSwitch('capability.can_use_voice', EXPLAINED, [
+        versionRule('disabled-inc-42', { max: '3.2' }),
+      ]),
+    ]);
+
+    const response = await GET(makeGetRequest());
+    const parsed = MeResponseSchema.safeParse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(parsed.error).toBeUndefined();
+    if (!parsed.success) return;
+    expect(parsed.data.disabled_features).toEqual([]);
+    expect(parsed.data.capability_handshake).toBeDefined();
+  });
+
+  it('answers two live builds from one deployment, each on its own terms', async () => {
+    flagMocks.getActiveFlagDefinitions.mockResolvedValue([
+      killSwitch('capability.can_use_voice', EXPLAINED, [
+        versionRule('disabled-inc-42', { min: '3.0', max: '3.2' }),
+      ]),
+    ]);
+
+    const [held, served] = await Promise.all(
+      ['3.1.0', '3.3.0'].map(async (version) =>
+        (await GET(makeGetRequest({ 'x-agi-client-version': version }))).json(),
+      ),
+    );
+
+    expect(held.disabled_features).toEqual([{ capability: 'canUseVoice', reason: EXPLAINED }]);
+    expect(served.disabled_features).toEqual([]);
+    expect(held.capability_handshake).toBeDefined();
+    expect(served.capability_handshake).toBeDefined();
+  });
+
   it('invents no explanation for a switch that carries none', async () => {
     flagMocks.getActiveFlagDefinitions.mockResolvedValue([
       killSwitch('capability.can_use_voice', 'Open unless voice is switched off.', [
