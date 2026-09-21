@@ -59,6 +59,16 @@ vi.mock('@/lib/jobs/job-service', () => ({
     { queue: 'default', queued: 0, running: 0, dead: 0, oldestQueuedAgeMs: 0, stuck: 0 },
   ],
 }));
+// The cache check is a real round trip, so without a store this suite would be
+// measuring whether a test host can reach a Redis that does not exist.
+vi.mock('@/lib/server/key-value', async (importOriginal) => {
+  const { createMemoryKeyValueStore } = await import('@agiworkforce/key-value');
+  const store = createMemoryKeyValueStore();
+  return {
+    ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+    getKeyValueStore: () => store,
+  };
+});
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: mockNeonQuery,
@@ -86,7 +96,16 @@ describe('Health Check API', () => {
       recurring: { interval: 'month' },
     });
     mockNeonQuery.mockImplementation(async (sql: string) =>
-      sql.includes('to_regclass') ? [{ missing: 0 }] : [{ '?column?': 1 }],
+      sql.includes('missing_relations')
+        ? [
+            {
+              missing_relations: 0,
+              full_text_index: true,
+              embedding_index: true,
+              vector_extension: true,
+            },
+          ]
+        : [{ '?column?': 1 }],
     );
   });
 
