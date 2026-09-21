@@ -6,7 +6,15 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'crates/**'
+      - 'services/**'
+      - 'tools/evals/**'
       - '.github/workflows/test-l1.yml'
+      - 'scripts/run-coverage*'
+      - 'scripts/check-coverage-floors*'
+      - 'scripts/lib/coverage-floors.mjs'
+      - 'vitest.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
   push:
     branches:
       - main
@@ -14,7 +22,15 @@ on:
       - 'apps/**'
       - 'packages/**'
       - 'crates/**'
+      - 'services/**'
+      - 'tools/evals/**'
       - '.github/workflows/test-l1.yml'
+      - 'scripts/run-coverage*'
+      - 'scripts/check-coverage-floors*'
+      - 'scripts/lib/coverage-floors.mjs'
+      - 'vitest.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
 
 concurrency:
   group: tests-l1-${{ github.ref }}
@@ -53,21 +69,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Run Priority Level 1 tests
         run: pnpm test:l1
         continue-on-error: false
 
       - name: Generate Coverage Report
-        if: always()
-        run: pnpm test:coverage || true
+        if: ${{ !cancelled() }}
+        run: pnpm test:coverage
 
-      - name: Upload Coverage to Codecov
+      - name: Preserve coverage evidence
         if: always()
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          files: ./coverage/coverage-final.json
-          fail_ci_if_error: false
-          verbose: true
+          name: coverage
+          path: |
+            coverage/coverage-final.json
+            coverage/coverage-summary.json
+          if-no-files-found: error
 
       - name: Verify Boundaries
         if: always()
@@ -75,4 +96,51 @@ jobs:
 
       - name: Verify LLM Failures
         if: always()
-        run: pnpm check:llm-failures:staged || echo "LLM failure check warning"
+        run: pnpm check:llm-failures:staged
+
+  upload-coverage:
+    needs: test-l1
+    if: ${{ always() && github.event_name == 'push' && needs.test-l1.result == 'success' && vars.CODECOV_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout source identity
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Download coverage evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: coverage
+          path: coverage
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage/coverage-final.json
+          disable_search: true
+          use_oidc: true
+          fail_ci_if_error: true
+          verbose: true
+
+  coverage-publication-status:
+    needs: test-l1
+    if: ${{ always() && github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Report Codecov activation state
+        env:
+          CODECOV_ENABLED: ${{ vars.CODECOV_ENABLED }}
+        run: |
+          if [[ "$CODECOV_ENABLED" == "true" ]]; then
+            echo "Codecov publishing is active." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Codecov publishing is inactive"
+              echo "Coverage tests, the repository floor, and the required GitHub artifact remain enforced."
+              echo "To publish externally, install the Codecov GitHub App for this repository, complete Codecov repository setup, set the repository variable CODECOV_ENABLED to true, and rerun this workflow."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

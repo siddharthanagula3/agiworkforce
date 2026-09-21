@@ -37,6 +37,21 @@
 
 export { applyConversationContext, classifyTaskLocally, estimateTokens } from './classify';
 export {
+  ANSWER_DEPTHS,
+  ANSWER_FORMATS,
+  RESPONSE_OUTPUT_TOKEN_CEILINGS,
+  planResponseBudget,
+} from './response-budget';
+export type {
+  AnswerDepth,
+  AnswerFormat,
+  ClarificationRequirement,
+  ResponseBudgetInput,
+  ResponseBudgetPlan,
+  ResponseBudgetSource,
+  SemanticResponseAssessment,
+} from './response-budget';
+export {
   canaryBucket,
   canaryRoutingEnabled,
   listProfileModelOrder,
@@ -53,7 +68,11 @@ export {
   SHADOW_ENV,
 } from './auto';
 export { routingStageEnabled } from './routing-stages';
-export { buildRoutingDecisionTrace, ROUTING_TRACE_SCHEMA_VERSION } from './routing-trace';
+export {
+  buildRoutingDecisionTrace,
+  ROUTING_TRACE_SCHEMA_VERSION,
+  type RoutingResponseAssessmentTrace,
+} from './routing-trace';
 export type { RoutingCohort, RoutingDecisionTrace, RoutingTraceRoute } from './routing-trace';
 export type {
   AutoRoutePreview,

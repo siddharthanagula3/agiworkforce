@@ -473,11 +473,15 @@ impl McpServersConfig {
         let Some(path) = Self::dotfile_config_path() else {
             return;
         };
+        self.merge_dotfile_servers_at(&path);
+    }
+
+    fn merge_dotfile_servers_at(&mut self, path: &std::path::Path) {
         if !path.exists() {
             return;
         }
 
-        let content = match std::fs::read_to_string(&path) {
+        let content = match std::fs::read_to_string(path) {
             Ok(content) => content,
             Err(error) => {
                 tracing::warn!(
@@ -569,14 +573,23 @@ impl McpServersConfig {
         let path = Self::dotfile_config_path().ok_or_else(|| {
             "Could not resolve home directory for ~/.agiworkforce/mcp.json".to_string()
         })?;
+        Self::write_dotfile_servers_at(&path, entries)
+    }
 
+    fn write_dotfile_servers_at(
+        path: &std::path::Path,
+        entries: &[(String, McpServerConfig)],
+    ) -> Result<usize, String> {
+        if entries.is_empty() {
+            return Ok(0);
+        }
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create dotfile directory: {}", e))?;
         }
 
         let mut root: serde_json::Value = if path.exists() {
-            let content = std::fs::read_to_string(&path)
+            let content = std::fs::read_to_string(path)
                 .map_err(|e| format!("Failed to read mcp.json: {}", e))?;
             serde_json::from_str(&content)
                 .map_err(|e| format!("Failed to parse mcp.json: {}", e))?
@@ -604,7 +617,7 @@ impl McpServersConfig {
 
         let output = serde_json::to_string_pretty(&root)
             .map_err(|e| format!("Failed to serialize mcp.json: {}", e))?;
-        std::fs::write(&path, output).map_err(|e| format!("Failed to write mcp.json: {}", e))?;
+        std::fs::write(path, output).map_err(|e| format!("Failed to write mcp.json: {}", e))?;
 
         Ok(written)
     }
@@ -2287,26 +2300,9 @@ mod tests {
 
     // ── merge_dotfile_servers (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01) ──
 
-    /// Guards tests that mutate the process-global `HOME` env var so they
-    /// don't race each other when `cargo test` runs this module's tests in
-    /// parallel (same pattern as
-    /// `integrations::native_messaging::manifest::tests::ENV_LOCK`).
-    static DOTFILE_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    /// Runs `body` with `HOME` pointed at a fresh tempdir, restoring the
-    /// original `HOME` afterwards.
-    fn with_temp_home<F: FnOnce(&std::path::Path)>(body: F) {
-        let _guard = DOTFILE_ENV_LOCK.lock().unwrap();
-        let original = std::env::var("HOME").ok();
+    fn with_temp_dotfile<F: FnOnce(&std::path::Path)>(body: F) {
         let temp = tempfile::tempdir().expect("failed to create tempdir");
-        std::env::set_var("HOME", temp.path());
-
         body(temp.path());
-
-        match original {
-            Some(val) => std::env::set_var("HOME", val),
-            None => std::env::remove_var("HOME"),
-        }
     }
 
     fn write_dotfile_mcp_json(home: &std::path::Path, json: &str) {
@@ -2317,7 +2313,7 @@ mod tests {
 
     #[test]
     fn merge_dotfile_servers_adds_new_server() {
-        with_temp_home(|home| {
+        with_temp_dotfile(|home| {
             write_dotfile_mcp_json(
                 home,
                 r#"{"mcpServers":{"my-tool":{"command":"npx","args":["-y","some-pkg"]}}}"#,
@@ -2326,7 +2322,7 @@ mod tests {
             let mut config = McpServersConfig {
                 mcp_servers: HashMap::new(),
             };
-            config.merge_dotfile_servers();
+            config.merge_dotfile_servers_at(&home.join(".agiworkforce/mcp.json"));
 
             let server = config
                 .mcp_servers
@@ -2343,7 +2339,7 @@ mod tests {
 
     #[test]
     fn merge_dotfile_servers_primary_config_wins_on_name_collision() {
-        with_temp_home(|home| {
+        with_temp_dotfile(|home| {
             write_dotfile_mcp_json(
                 home,
                 r#"{"mcpServers":{"shared":{"command":"dotfile-cmd","args":[]}}}"#,
@@ -2361,7 +2357,7 @@ mod tests {
                 },
             );
             let mut config = McpServersConfig { mcp_servers };
-            config.merge_dotfile_servers();
+            config.merge_dotfile_servers_at(&home.join(".agiworkforce/mcp.json"));
 
             assert_eq!(
                 config.mcp_servers.get("shared").unwrap().command,
@@ -2373,13 +2369,13 @@ mod tests {
 
     #[test]
     fn merge_dotfile_servers_skips_entry_without_command_or_transport() {
-        with_temp_home(|home| {
+        with_temp_dotfile(|home| {
             write_dotfile_mcp_json(home, r#"{"mcpServers":{"broken":{"env":{}}}}"#);
 
             let mut config = McpServersConfig {
                 mcp_servers: HashMap::new(),
             };
-            config.merge_dotfile_servers();
+            config.merge_dotfile_servers_at(&home.join(".agiworkforce/mcp.json"));
 
             assert!(
                 !config.mcp_servers.contains_key("broken"),
@@ -2390,11 +2386,11 @@ mod tests {
 
     #[test]
     fn merge_dotfile_servers_noop_when_file_missing() {
-        with_temp_home(|_home| {
+        with_temp_dotfile(|home| {
             let mut config = McpServersConfig {
                 mcp_servers: HashMap::new(),
             };
-            config.merge_dotfile_servers();
+            config.merge_dotfile_servers_at(&home.join(".agiworkforce/mcp.json"));
             assert!(config.mcp_servers.is_empty());
         });
     }
@@ -2403,7 +2399,7 @@ mod tests {
 
     #[test]
     fn write_dotfile_servers_creates_file_when_missing() {
-        with_temp_home(|home| {
+        with_temp_dotfile(|home| {
             let entries = vec![(
                 "claude:filesystem".to_string(),
                 McpServerConfig {
@@ -2415,8 +2411,11 @@ mod tests {
                 },
             )];
 
-            let written = McpServersConfig::write_dotfile_servers(&entries)
-                .expect("write_dotfile_servers should succeed");
+            let written = McpServersConfig::write_dotfile_servers_at(
+                &home.join(".agiworkforce/mcp.json"),
+                &entries,
+            )
+            .expect("write_dotfile_servers should succeed");
             assert_eq!(written, 1);
 
             let dotfile_path = home.join(".agiworkforce").join("mcp.json");
@@ -2437,14 +2436,14 @@ mod tests {
             let mut config = McpServersConfig {
                 mcp_servers: HashMap::new(),
             };
-            config.merge_dotfile_servers();
+            config.merge_dotfile_servers_at(&home.join(".agiworkforce/mcp.json"));
             assert!(config.mcp_servers.contains_key("claude:filesystem"));
         });
     }
 
     #[test]
     fn write_dotfile_servers_preserves_existing_entries_and_overwrites_collisions() {
-        with_temp_home(|home| {
+        with_temp_dotfile(|home| {
             write_dotfile_mcp_json(
                 home,
                 r#"{"mcpServers":{"existing":{"command":"npx","args":["-y","old-pkg"]}}}"#,
@@ -2460,7 +2459,11 @@ mod tests {
                     transport: None,
                 },
             )];
-            McpServersConfig::write_dotfile_servers(&entries).expect("write should succeed");
+            McpServersConfig::write_dotfile_servers_at(
+                &home.join(".agiworkforce/mcp.json"),
+                &entries,
+            )
+            .expect("write should succeed");
 
             let dotfile_path = home.join(".agiworkforce").join("mcp.json");
             let content = std::fs::read_to_string(&dotfile_path).unwrap();
@@ -2475,9 +2478,12 @@ mod tests {
 
     #[test]
     fn write_dotfile_servers_is_a_noop_for_empty_entries() {
-        with_temp_home(|home| {
-            let written =
-                McpServersConfig::write_dotfile_servers(&[]).expect("empty write should succeed");
+        with_temp_dotfile(|home| {
+            let written = McpServersConfig::write_dotfile_servers_at(
+                &home.join(".agiworkforce/mcp.json"),
+                &[],
+            )
+            .expect("empty write should succeed");
             assert_eq!(written, 0);
             let dotfile_path = home.join(".agiworkforce").join("mcp.json");
             assert!(

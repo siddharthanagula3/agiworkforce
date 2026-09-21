@@ -17,6 +17,10 @@ const dbMocks = vi.hoisted(() => ({
   ),
 }));
 
+const waitlistAccessMocks = vi.hoisted(() => ({
+  hasAccess: vi.fn(async () => true),
+}));
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -55,6 +59,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     userId: 'user_123',
     organizationId: null,
   })),
+}));
+vi.mock('@/lib/server/billing-waitlist-access', () => ({
+  hasBillingWaitlistAccess: waitlistAccessMocks.hasAccess,
 }));
 vi.mock('stripe', () => ({
   default: class StripeMock {
@@ -102,7 +109,40 @@ describe('POST /api/checkout', () => {
       id: 'cs_test_123',
       url: 'https://checkout.stripe.test/cs_test_123',
     });
+    waitlistAccessMocks.hasAccess.mockResolvedValue(true);
   });
+
+  it('requires redeemed waitlist access before a free account can open checkout', async () => {
+    waitlistAccessMocks.hasAccess.mockResolvedValue(false);
+
+    const response = await POST(makeRequest('pro'));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'waitlist_access_required' },
+    });
+    expect(stripeMocks.createCustomer).not.toHaveBeenCalled();
+    expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it.each(['free', 'local-only', 'byok'])(
+    'requires redeemed waitlist access for the %s tier',
+    async (planTier) => {
+      dbMocks.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('from subscriptions')) {
+          return [{ status: 'active', plan_tier: planTier }];
+        }
+        return [];
+      });
+      waitlistAccessMocks.hasAccess.mockResolvedValue(false);
+
+      const response = await POST(makeRequest('pro'));
+
+      expect(response.status).toBe(403);
+      expect(stripeMocks.createCustomer).not.toHaveBeenCalled();
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    },
+  );
 
   it('reads and writes the profile row on the caller connection, never the bare pool', async () => {
     const response = await POST(makeRequest());

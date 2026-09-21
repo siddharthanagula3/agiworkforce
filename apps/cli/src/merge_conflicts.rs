@@ -791,6 +791,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         run(root, &["init", "--initial-branch=main", "."]);
+        run(root, &["config", "core.autocrlf", "false"]);
         run(root, &["config", "merge.conflictStyle", "diff3"]);
         std::fs::write(root.join("app.txt"), "first\nshared\nlast\n").unwrap();
         run(root, &["add", "app.txt"]);
@@ -989,6 +990,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         run(&root, &["init", "--initial-branch=main", "."]);
+        run(&root, &["config", "core.autocrlf", "false"]);
         let conflicted = "alpha\n<<<<<<< HEAD\none\n=======\n1\n>>>>>>> f\nbravo\ncharlie\ndelta\necho\nfoxtrot\n<<<<<<< HEAD\ntwo\n=======\n2\n>>>>>>> f\ngolf\n";
         std::fs::write(root.join("app.txt"), conflicted).unwrap();
         run(&root, &["add", "app.txt"]);

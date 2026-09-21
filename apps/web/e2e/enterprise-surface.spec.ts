@@ -1,5 +1,6 @@
 import { test, expect, type Page, type ConsoleMessage } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { mockAuthProvider } from './lib/mock-auth-provider';
 
 /**
  * Sweeps the surface an enterprise buyer actually walks before signing.
@@ -13,6 +14,12 @@ const BASE =
   process.env['ENTERPRISE_SWEEP_BASE_URL'] ??
   process.env['PLAYWRIGHT_BASE_URL'] ??
   'http://localhost:3000';
+
+test.beforeEach(async ({ page }) => {
+  if (['localhost', '127.0.0.1', '[::1]'].includes(new URL(BASE).hostname)) {
+    await mockAuthProvider(page);
+  }
+});
 
 /** The buyer's path: what it is, what it costs, and whether it survives review. */
 const ENTERPRISE_ROUTES = [
@@ -86,6 +93,28 @@ async function settleTheme(page: Page): Promise<void> {
   await page.evaluate(async () => {
     await document.fonts?.ready;
   });
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.agi-reveal')].every(
+      (node) =>
+        node.classList.contains('agi-reveal-armed') || node.classList.contains('is-revealed'),
+    ),
+  );
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await page.waitForFunction(() =>
+    document.getAnimations().every((animation) => {
+      const timing = animation.effect?.getComputedTiming();
+      return (
+        timing?.iterations === Infinity ||
+        animation.playState === 'finished' ||
+        animation.playState === 'idle'
+      );
+    }),
+  );
 }
 
 test.describe('enterprise buyer surface', () => {

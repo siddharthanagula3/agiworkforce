@@ -260,8 +260,13 @@ mod patch_validation_tests {
     /// Post-fix: rejected at header parse time.
     #[test]
     fn rejects_absolute_path_in_minus_header() {
-        let patch = "--- /etc/cron.d/backdoor\n+++ /etc/cron.d/backdoor\n@@ -0,0 +1,1 @@\n+pwned\n";
-        let err = validate_patch_targets(patch, Path::new(".")).unwrap_err();
+        let target = std::env::temp_dir().join("outside-project");
+        let patch = format!(
+            "--- {}\n+++ {}\n@@ -0,0 +1,1 @@\n+pwned\n",
+            target.display(),
+            target.display()
+        );
+        let err = validate_patch_targets(&patch, Path::new(".")).unwrap_err();
         assert!(
             err.to_string().contains("absolute path"),
             "expected absolute-path rejection, got: {}",
@@ -271,8 +276,12 @@ mod patch_validation_tests {
 
     #[test]
     fn rejects_absolute_path_in_plus_header() {
-        let patch = "--- a/src/x.rs\n+++ /tmp/x.rs\n@@ -1,1 +1,1 @@\n-old\n+new\n";
-        let err = validate_patch_targets(patch, Path::new(".")).unwrap_err();
+        let target = std::env::temp_dir().join("outside-project");
+        let patch = format!(
+            "--- a/src/x.rs\n+++ {}\n@@ -1,1 +1,1 @@\n-old\n+new\n",
+            target.display()
+        );
+        let err = validate_patch_targets(&patch, Path::new(".")).unwrap_err();
         assert!(err.to_string().contains("absolute path"), "got: {}", err);
     }
 
@@ -322,6 +331,12 @@ mod patch_validation_tests {
             .current_dir(workspace.path())
             .status()
             .expect("git init");
+        assert!(std::process::Command::new("git")
+            .args(["config", "core.autocrlf", "false"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("set fixture line endings")
+            .success());
         workspace
     }
 

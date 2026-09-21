@@ -2723,6 +2723,9 @@ export function getDefaultModelFor(
   kind: DefaultModelKind,
 ): string {
   const accessTier = normalizeSubscriptionAccessTier(tier ?? 'free');
+  if (accessTier === 'free' && kind === 'chat') {
+    return getRoutingSlotModel('router_zero_cost');
+  }
   const normalizedTier = accessTier === 'basic' ? 'free' : normalizeProductTier(tier);
   const policy = getTierPolicy(normalizedTier);
   const preference = DEFAULT_KIND_SLOT_PREFERENCE[kind];

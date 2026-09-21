@@ -1017,3 +1017,636 @@ Jev selected the shared transport at 0.98 confidence (fingerprint
 and bundler-based VS Code compilation / React type alignment at 0.99 / 1.00
 (fingerprint `62b793fb7f3d804f653d10d576a573fde4b50521c6a53ec58f1f2a8f80d1ffd8`).
 Remote CI and CodeQL still require verification after this batch is pushed.
+
+### Public-page CI fixture follow-up
+
+Commit `6c382b80d` is on main. GitHub reports zero open Dependabot alerts;
+the JavaScript CodeQL analysis closed the repaired findings, leaving five
+Rust alerts awaiting a fresh Rust analysis. These are pending verification,
+not dismissed findings.
+
+The preceding web CI run exposed 22 enterprise page failures from requests to
+the deliberately non-routable `clerk-ci.invalid` provider. A local reproduction
+with the same placeholder key failed at the same request assertion. The suite
+now reuses the existing signed-out provider fixture only for loopback targets;
+explicit remote targets still use the real provider. The fixture intercepts
+both Clerk browser bundles. Page, console and request assertions remain intact.
+Jev selected this approach at 0.99 confidence (fingerprint
+`8cba2d68398d239d982f5bf9ef8d590a1159b4d2c2f506985b0ef5863f36f9dc`).
+
+The development-server rerun encountered HMR WebSocket errors and auth
+readiness failures, so it was stopped and replaced with the production build
+used by CI. That build, including TypeScript, passes. All 37 enterprise and auth
+accessibility cases pass against it with two workers and zero retries. The
+previously flaky signup field-error case also passes five isolated repetitions
+without retries. The remaining fixture consumers pass 14 cases with one existing
+conditional skip. Targeted ESLint, Prettier and diff whitespace checks pass.
+Evidence: `/tmp/agi-enterprise-repro.log`,
+`/tmp/agi-fixture-production-build.log`,
+`/tmp/agi-enterprise-production-fixed.log`,
+`/tmp/agi-auth-readiness-stability.log`, `/tmp/agi-auth-fixture-consumers.log`.
+
+The subsequent Rust analysis at `43787483` closed four of the five alerts.
+Residual alert #793 still classified `parsed.username()` in the crash envelope
+URL as cleartext transmission. Independent review confirmed the only upload
+path rejects non-HTTPS DSNs, builds an HTTPS URL, and uses a client with
+`https_only(true)` and redirects disabled. The installed reqwest 0.13.5
+implementation rejects HTTP before connecting, including when proxies are
+configured. All 16 focused crash-report tests pass, including rejection before
+any connection reaches the local listener and expected valid envelope content
+(`/tmp/agi-crash-alert-verification.log`). No live HTTPS delivery was exercised.
+Jev selected evidence-backed false-positive disposition at 0.99 confidence
+(`b0b87516c032151c2918b3a28a4cb376940808ebd3b3556b9d67d17e944d1ad9`).
+Alert #793 was dismissed with this evidence; no scanner rule was disabled.
+At that checkpoint, GitHub reported zero open code-scanning alerts and zero open
+Dependabot alerts; the subsequent analysis is recorded below.
+
+Next: preserve the running native CI checks, push the fixture correction, and
+verify fresh CI results. The most recent remote Rust security, repository
+operability, skill-integrity, cross-version and standalone desktop E2E workflows
+pass. The main CI build remains in progress.
+The separate-region production object-backup prerequisite remains unresolved.
+
+The follow-up cloud inspection confirms the primary private bucket is in WNAM.
+Cloudflare documents an EU jurisdiction endpoint as a supported separate
+location, but the current Wrangler OAuth session receives HTTP 403 / code 9109
+from token administration (`GET /user/tokens`). No scoped backup credential was
+available and no production configuration was changed. The existing Neon
+project is in `aws-us-east-1`, outside the `us-east-2` availability stated by the
+installed Neon Object Storage guidance. Cloudflare references:
+[data locations](https://developers.cloudflare.com/r2/reference/data-location/)
+and [scoped R2 credentials](https://developers.cloudflare.com/r2/api/tokens/).
+
+The Rust analysis of `6c382b80d` raised #808 at the shared OAuth adapter.
+All three reported sources are `#[cfg(test)]` loopback fixtures using dummy
+credentials. The live fixed-provider manager selects HTTPS token endpoints;
+the configurable desktop MCP OAuth manager has no live callers in the repository.
+The separate shared MCP OAuth implementation validates remote HTTPS endpoints.
+Independent review confirmed this reachability distinction. The shared adapter
+itself accepts HTTP, so this disposition does not claim it enforces TLS for
+arbitrary future callers.
+
+Jev selected verification and false-positive disposition at 1.0 confidence
+(`be0e47fe001407bca05fd4cac1704d88e812bfc530b7933945da171ef6a6f4ad`).
+After building the isolated checkout's missing native-host prerequisite, all four
+focused OAuth transport tests pass: code/refresh protocol preservation, error
+status/body/repeated headers, capped response bodies, and refusal to forward
+credentials on redirects. The investigator also passed all three canonical MCP
+HTTPS-enforcement tests. Evidence: `/tmp/agi-native-host-build.log` and
+`/tmp/agi-oauth-alert-verification.log`. Alert #808 was dismissed as a test-only
+false positive with this evidence; no scanner configuration changed. GitHub
+again reports zero open code-scanning and Dependabot alerts.
+
+Remote CI on `6c382b80d` reports Windows success (later found to mask test
+failures; see correction below) and passes macOS Rust checks, Linux default
+Rust tests/Clippy, all-feature Clippy, iOS build/onboarding, desktop/Chrome E2E,
+VS Code with the real CLI, security scans, contracts, DB/RLS and repository
+guards. The complete affected JavaScript test step passed in 41m23s, followed
+by webview and CLI wrapper tests. The final Next build compiled successfully
+but its TypeScript subprocess exhausted the default 4 GB heap. The build step
+now receives the same 8 GB `NODE_OPTIONS` setting as the passing standalone
+typecheck; Turbo already explicitly passes this variable through. The local
+production build had passed with that setting earlier in this batch. Workflow
+YAML, environment propagation and formatting checks pass. Jev selected this
+step-scoped correction at 1.0 confidence
+(`f5e3e8e7469d600517a5ab0041f536e97cc2523f745dee3c201fad5e5664d6f3`).
+Remote rerun remains required for this correction and the browser fixture.
+Evidence: `/tmp/agi-js-6c-job.log`.
+
+A fresh cargo audit from `/tmp`, outside repository suppression configuration,
+reports zero vulnerability-class findings with `settings.ignore: []`, plus 17
+unmaintained, one unsound and two yanked warnings. Its complete output is
+`/tmp/agi-rust-current-unsuppressed-audit.json`.
+
+## Windows CI suppression correction, 2026-09-20
+
+The Windows job on `99fd8a995` reported success while `cargo test --workspace
+--lib` exited 1: 2,647 CLI cases passed, 34 failed, one was ignored and one
+filtered. Its existing `continue-on-error: true` masked those failures and
+prevented subsequent desktop tests from being reached. Earlier Windows success
+statements describe GitHub's job conclusion, not a passing test suite. Evidence:
+`/tmp/agi-windows-99fd.log`, CI run `35499143996`, job `106047808375`.
+
+The correction removes that suppression and its canonical security-gate
+exclusion, so the existing policy guard rejects an unregistered reintroduction. Native Windows command paths now retain backslashes; glob rejects
+rooted and drive-prefixed patterns while retaining canonical result containment.
+Remote MCP transports no longer require an irrelevant local subprocess sandbox;
+stdio still fails closed when its backend is unavailable. Regression cases cover
+Windows drive-relative, rooted, UNC and verbatim paths, a legitimate in-project
+glob, Windows command paths, remote MCP and unavailable stdio sandboxes.
+
+Fixtures use JSON serialization for rewritten hook paths, explicit repository
+line endings, native absolute paths and source locations. Seatbelt-only tests
+remain active on Unix, where that path grammar applies; platform-neutral sandbox
+checks and unsupported-backend rejection remain active on Windows. No production
+sandbox restrictions were relaxed. Two locally exposed worktree test races now
+use the existing child-process test mutex and private temporary worktree paths.
+
+Jev selected repair-and-enforce at confidence 1.0, request hash
+`f90d8ab2c69dea5c16f867a3a4bcaa9502683c6a41d7a196e369b59c59558b4e`.
+An independent read-only boundary investigator traced glob and MCP. The requested
+fresh candidate reviewer could not start because the agent thread limit was
+reached, so the coordinator performed a separate bypass and compatibility review,
+including native path components, remote/stdio branches and direct callers.
+
+The initial concurrent local CLI suite passed 2,720 cases and exposed two worktree
+fixture races. A serial run passed 2,723 cases with one existing ignored case;
+normal-concurrency verification after the race correction is recorded below.
+Windows-specific regression execution remains a remote-runner requirement.
+
+The complete CodeQL analysis for `99fd8a995` passed in every language and both
+GitHub code-scanning and Dependabot APIs report zero open alerts. Web E2E completed
+66 cases on their first attempt and three on retry: two auth hydration timing
+cases and one pricing contrast case. This is a passing job with retained flaky
+results, not 69 clean first-attempt passes. The final JavaScript build and Linux
+Rust lane were still running at this checkpoint. Production backup/approval
+prerequisites remain separate and unresolved.
+
+Normal-concurrency revalidation after the worktree fixture correction passed:
+**2,723 CLI tests, zero failures, one existing ignored test** in 9.73 seconds.
+Logs: `/tmp/agi-windows-portability-final.log` and the earlier diagnostic
+`/tmp/agi-windows-portability-serial.log`.
+
+CLI Clippy passed with `-D warnings -D unsafe-code`. Rust formatting and diff
+checks passed. The security-gate policy continues to allow its separate,
+explicitly registered maintenance advisory and local lock-drift exclusions.
+
+### Remote verification checkpoint after `f9777a111`
+
+The normal pre-commit and clean-worktree pre-push checks passed, and remote main
+advanced to `f9777a111`. CI run `35501315844` now enforces Windows test failures;
+its Windows job is `106053497365`. `/tmp/agi-windows-strict-ci-watch.log` records
+progress. No Windows runtime success is claimed until the actual test output is
+available. The coordinator worktree is
+`/Users/siddhartha/.codex/worktrees/ci-security-continuation/agiworkforce`.
+
+The previous run `35499143996` completed, including its repaired Next production
+build: 383 static pages, successful TypeScript, 41 successful build tasks, and
+22,894 passing web tests across 2,174 files. Raw evidence:
+`/tmp/agi-js-99fd-final.log`. The new commit changes no JavaScript application
+package, so its affected-package lint/typecheck/test/build steps select zero
+tasks; its separate webview suite passes 221 cases. Do not describe that short
+job as a fresh full web build. Its raw log is `/tmp/agi-js-f977-final.log`.
+
+The obsolete production workflow `35501303092` targeted `99fd8a995` and waited
+for `production-web` approval before any deploy started. It was canceled so the
+known masked-Windows result cannot promote or block the corrected release queue.
+Jev selected that action at confidence 0.98, request hash
+`b102fb4f6bb992cd5407723ca11b94e6cd03092c5394e460f761f412836e52a2`.
+No approval requirement or production configuration was changed. The separate
+signaling workflow `35501303198` passed its service tests and is building its
+container. Production backup credentials and the required approval remain gates.
+
+Next action: inspect raw Windows test results for run `35501315844`, repair any
+remaining native failures rather than suppressing them, then recheck final CI,
+CodeQL `35501315321`, Rust Security `35501315847`, and open security alerts.
+
+### Signaling cleanup package identity
+
+Signaling run `35501303198` passed tests and its container build, but its advisory
+cleanup job `106054256531` failed with `get versions API failed. Package not
+found.` The build publishes `${github.repository}/signaling-server`; cleanup
+incorrectly requested only `signaling-server`. Cleanup now derives the owner and
+complete package name from the canonical `IMAGE_NAME`, preserving its existing
+five-untagged-version retention setting and permissions. The action documents
+owner and package name as separate inputs:
+[delete-package-versions](https://github.com/actions/delete-package-versions#usage).
+Jev selected this scoped repair at confidence 0.99, request hash
+`4c39ca4c502d28d32263fd3c9209287a344a85aea38a11bedff48465760290e2`.
+Evidence: `/tmp/agi-signaling-cleanup-failure.log`. CLI package enumeration is
+unavailable because its credential lacks `read:packages`; the workflow uses its
+own package-enabled token. Actual cleanup success remains a remote requirement.
+Railway and Fly deployments were skipped; no production service URL is configured.
+
+### Follow-up: auth readiness and animation-aware accessibility checks
+
+Run `35501315844` fails the login field-error accessibility case on both attempts:
+Continue remains disabled after provider loading. Pricing also reports transient
+contrast failures on its first attempt and passes its retry. These results
+supersede the earlier observation that the signed-out suite was stable.
+
+A browser reproduction using the captured CI login document and corresponding
+locally built client chunks isolates a missed readiness event. With the existing
+signed-out provider fixture completing immediately, its status is `ready` before
+the installed Clerk React adapter registers its effect listener. The provider is
+loaded but the product's render-only `clerk.loaded` read remains stale. With the
+original 100 ms fixture delay, the same instrument passes. The replay maps two
+chunk URLs through the local build's client reference manifest; it is a controlled
+client reproduction, not a fresh end-to-end server run.
+
+`identityAuthAdapter.tsx` now subscribes to the provider's status and reads its
+loaded snapshot with `useSyncExternalStore`. Its server snapshot stays false;
+loading still disables sign-in, and unmount removes the listener. Two regression
+cases fail before this repair and pass afterward. All 89 auth tests across ten
+files pass, targeted ESLint passes, and the production build including TypeScript
+passes. Chromium replay passes six cases alternating immediate and delayed
+readiness, plus both timing cases through the password step. The committed
+browser regression uses an immediate-load option in the existing fixture.
+
+The enterprise accessibility helper now waits for Reveal initialization and
+finite document animations to finish before running the unchanged axe assertions.
+A Chromium instrument using the actual reveal CSS verifies final opacity, ignores
+infinite decoration, accepts readable text, and still rejects a permanent contrast
+defect. This validates the measurement guard; the pricing page still needs its
+next full remote E2E result. Jev selected the readiness subscription at confidence
+0.98 and the animation wait at 0.44 (request
+`12b60d33100e370ddeeb03744469d8c5c98b99e5ea23b87661bc10e8180332f0`).
+
+Three isolated local production-server attempts stalled before rendering login;
+the user's localhost:3100 server was untouched. The isolated server was stopped,
+and no product server authentication changes were made to bypass that problem.
+Remote verification remains required before marking this web lane green.
+Evidence: `/tmp/agi-auth-zero-delay.log`,
+`/tmp/agi-auth-readiness-regression-before.log`,
+`/tmp/agi-auth-readiness-regression-after.log`,
+`/tmp/agi-auth-readiness-suite.log`, `/tmp/agi-auth-readiness-build.log`,
+`/tmp/agi-auth-readiness-browser-after.log`,
+`/tmp/agi-auth-readiness-browser-flow.log`, `/tmp/agi-animation-settle-test.log`.
+
+### Strict Windows follow-up: native shell argument preservation
+
+The strict Windows job `106053497365` now reports 2,663 CLI tests passed,
+two failed, one existing ignored and one filtered. This is an improvement over
+the earlier 34 failures, not a green Windows result. Desktop tests have still
+not been reached. The two remaining failures are the live hook transformer
+and the project-agent directory display. Raw log: `/tmp/agi-windows-f977.log`.
+
+The hook failure is production command corruption. Rust's default Windows
+argument serialization follows CRT rules, while Git for Windows' MSYS `sh`
+consumes paired backslashes inside a quoted argument. JSON-bearing scripts
+therefore lose the escapes in native paths before execution. The shared
+`process_tree::shell_command` now encodes only the Windows `sh -c` payload with
+MSYS quoting, preserving Unix invocation and ordinary executable argv. Hooks,
+compound shell tools and the explicit unsandboxed shell branch use this owner.
+No permission or sandbox decision changes. The directory renderer now joins
+`.agiworkforce` and `agents` as separate native path components.
+
+The independent read-only Windows investigator confirmed the hook path and
+identified the other two shell callers. The parser contract was checked against
+[MSYS2 runtime source](https://github.com/msys2/msys2-runtime/blob/msys2-3.6.10/winsup/cygwin/dcrt0.cc)
+and [Rust's Windows command extension](https://doc.rust-lang.org/std/os/windows/process/trait.CommandExt.html).
+The argument encoder targets MSYS/Cygwin `sh`; native Windows verification is
+still required. Jev selected this repair at confidence 0.89 and the native display
+join at 0.96, request
+`bf92ef37a589f7c6e4c73d73c289065e4c1ae9d4bc01daaa9c3398afebfcc53a`.
+
+New shell round-trip tests cover drive/UNC/verbatim paths, trailing backslashes,
+quotes, Unicode, control escapes, shell-looking text and JSON stdin. All 2,725
+CLI tests pass locally with normal concurrency and one existing ignored test;
+this does not substitute for Windows execution. Evidence:
+`/tmp/agi-windows-shell-cli-tests.log`, `/tmp/agi-windows-tui-followup.log`.
+The completed CodeQL run `35501315321` is successful; a subsequent API read still
+shows zero open code-scanning and zero open Dependabot alerts.
+CLI Clippy also passes with `-D warnings -D unsafe-code`, and formatting/diff
+checks pass. The parent separately reviewed the three changed callers and both
+structured-program branches: only explicit shell scripts use the Windows
+encoder; authorization, native program argv, process ownership, timeout and
+cancellation semantics remain with their existing owners. A fresh reviewer
+agent remains unavailable due to the previously reached agent thread limit;
+this is not represented as a fresh independent postpatch review.
+
+### Coverage gate integrity follow-up
+
+The historical green Priority Level 1 run `35499143990` concealed a failed
+coverage command: 230 files and 462 tests failed, with 2,726 files and 32,410
+tests passing. `pnpm test:coverage || true` swallowed the exit status. Root
+Vitest 4 also ran package-owned Vitest 5 assertions and resolved package-relative
+paths from the repository root. A focused two-file reproduction fails from the
+root and passes all 14 cases with the web package's own runner and cwd. The
+repository line-floor argument used the invalid singular `threshold` spelling.
+
+Jev selected package-owned runners and a merged Istanbul report at confidence
+1.0, request `91be5a40af7d25863e00b37f3f08572ea29cec83f3dada0a4d01d905e6e0b102`.
+The repair reuses the existing 23-project list and floor parser, preserves
+package thresholds, and enforces the existing 75% aggregate floor. Missing,
+empty, malformed or stale reports cannot produce a pass. Eighteen harness and
+floor tests pass, including separate package processes and duplicate-source
+coverage merging. The full package-owned coverage run is still in progress;
+its aggregate is not yet verified. ESLint ignores these scripts under the
+existing configuration; Node syntax checks and execution tests provide actual
+validation instead of claiming a lint pass over ignored files.
+
+The workflow now propagates coverage failures and retains exact report
+artifacts. Codecov auto-search is disabled because the earlier failed upload
+selected source files with coverage in their names after no report was generated.
+The previous advisory Codecov upload returned HTTP 400 requiring a token, and
+the repository has no Codecov token secret. The isolated OIDC follow-up below
+addresses authentication; external delivery is not yet verified. Dependency audit after adding the existing
+Istanbul coverage library reports zero vulnerabilities at every severity.
+Evidence: `/tmp/agi-priority-99fd-clean.log`,
+`/tmp/agi-root-coverage-repro.log`, `/tmp/agi-package-coverage-repro.log`,
+`/tmp/agi-coverage-floor-check.log`, `/tmp/agi-package-coverage-full.log`,
+`/tmp/agi-coverage-dependency-audit.json`.
+
+### Verified web and macOS results on `9c24ac9c5`
+
+Web job `106059036252` passed: 70 browser cases, zero failures or flaky cases,
+and nine skipped cases on the development-only preview route. Both the immediate
+provider-readiness regression and password-field accessibility case passed on
+first execution. Pricing axe accessibility also passed without retry. The public
+contrast instrument measured all 240 route/theme pairs with zero skipped pairs.
+The complete macOS compile and Clippy job `106059036311` passed, as did extended
+feature Clippy `106059036283`. Windows and Linux native execution, JavaScript
+checks, and final CodeQL analyses remain in progress at this checkpoint.
+Evidence: `/tmp/agi-web-e2e-9c24-clean.log`, CI run `35503385094`.
+
+Coverage harness commit `db2a04e7d` is local and awaiting completion of the
+current native CI run before push, to preserve its verification. The full
+operability chain and normal commit hooks passed. Full coverage measurement
+remains in progress; no aggregate pass is claimed.
+
+### Signup fixture and coverage publication follow-up
+
+The full package-owned web coverage run measured 83.5% lines: 22,893 tests
+passed, three failed, six were skipped. All three failures were in the signup
+agreement fixture, whose Clerk mock exposed only `loaded` and omitted the
+status subscription used by the verified readiness fix. The fixture now exposes
+a stable Clerk instance with `on`/`off` and immediate notification; all original
+consent, SSO and local persistence assertions remain. The failed file plus the
+auth adapter suite pass all 27 cases with coverage. Jev selected this repair at
+confidence 1.0, request
+`65a528306ff2fe9ae83a83dcfba7c1a349ed4453a0db403a678128aebf6bf31f`.
+The original full run is retained as failed evidence; the targeted result is
+not represented as a second full-suite pass.
+
+[Codecov's official action contract](https://github.com/codecov/codecov-action#using-oidc)
+supports GitHub OIDC without an upload secret. A separate main-push upload job
+now downloads the exact coverage artifact and publishes using OIDC, with upload
+failure blocking. Only this job receives `id-token: write`; it installs no
+project dependencies and runs no project code. Pull-request tests and coverage
+remain blocking and retain their artifacts, without granting their test process
+an identity token. Source checkout credentials are not persisted. Jev selected
+this approach at confidence 1.0, request
+`2f1f6c13f69211bd037340d419b9de8dce708a87f14de419ff285974c2676c9b`.
+Nineteen harness, floor and workflow isolation checks pass, as do signup-file
+ESLint, the pinned-action guard, and frozen lockfile validation. The next main
+run must verify actual Codecov account acceptance; configuration alone is not
+a successful upload. Evidence: `/tmp/agi-signup-readiness-followup.log`,
+`/tmp/agi-coverage-floor-check.log`, `/tmp/agi-coverage-frozen-lock.log`.
+
+### Complete coverage measurement and package-floor repairs
+
+The 23-project local run finished with 33,710 tests passed, three failed and
+35 skipped. All three test failures are the signup fixture cases fixed above.
+The merged report measures 116,969 of 146,585 lines, **79.79%**, exceeding the
+unchanged 75% repository floor. The runner correctly returned failure, including
+two additional package-floor failures even though all their tests passed:
+routing 94.68% versus 95%, and sync 90.64% versus 92%.
+
+Existing test suites now cover rejected release/evaluation provenance, exact
+prompt-version lookup, restrictive memory retention across newer-device merges,
+and changed consent categories with unchanged list length. No production path,
+threshold or skip changed. Full affected-package coverage passes: routing
+**908 tests, 95.17% lines** and sync **138 tests, 92.39% lines**. The next remote
+full run remains authoritative for the final combined state. Jev selected these
+boundary tests at confidence 1.0, request
+`ccd60d0fe9fce8df115bc4b6173d0220f5762bf04eba2b1b590dff8642cafdd2`.
+Evidence: `/tmp/agi-package-coverage-full.log`,
+`/tmp/agi-routing-coverage-followup.log`, `/tmp/agi-sync-coverage-followup.log`.
+
+### Windows desktop loader repair and completed security scan
+
+Run `35503385094` now confirms all 2,667 Windows CLI tests pass (one existing
+ignored case, one filtered case). The desktop library test executable aborts
+before enumeration with `0xc0000139 / STATUS_ENTRYPOINT_NOT_FOUND`. No test
+has been skipped to bypass that failure. The locked Tauri build chain emits
+its manifest as `rustc-link-arg-bins`, omitting the library test executable,
+while Tao/Muda import Common Controls v6 procedures. This matches the
+[upstream Tauri report](https://github.com/tauri-apps/tauri/issues/13419);
+the exact missing procedure was not exposed by the runner.
+
+The desktop now owns one Windows manifest, preserving Tauri's default Common
+Controls dependency. Tauri continues to own icon/version resources, with only
+its manifest emission disabled. The already-locked `embed-resource` crate
+compiles the separate manifest for every desktop artifact, including library
+tests, with missing-resource failures enforced. The branch checks the target
+OS, preserving non-Windows builds. Native CI now extracts and validates the
+embedded manifest from both the ordinary application and the actual Cargo
+library-test artifact before running the unchanged workspace tests. Jev selected
+this repair at confidence 1.0, request
+`66c0d477e07a2ca200620f52b033a06c6eacc6e26b0aa318ab5196d19f8b9bc3`.
+Native execution of this repair remains pending the next push.
+
+The completed CodeQL run `35503385040` passed all four language analyses and
+its security audit. Fresh GitHub API queries report zero open code-scanning
+alerts and zero open Dependabot alerts. iOS end-to-end job `106059036332`
+also passed. JavaScript job `106058988001` failed only the three signup mock
+cases already repaired and verified above (22,893 passing web tests).
+Evidence: `/tmp/agi-windows-9c24-clean.log`, `/tmp/agi-js-9c24.log`.
+
+Independent candidate review found no concrete regression. It retained the
+native execution gap: resource presence alone cannot prove the loader error is
+fixed, and debug binary inspection does not establish release startup. Rust
+formatting, manifest/workflow/document formatting and 26 CI selection/deployment
+contract tests pass. Evidence: `/tmp/agi-windows-workflow-tests.log` and
+`/tmp/agi-windows-manifest-format.log`.
+
+The full local macOS desktop library check also passes (`cargo check -p
+agiworkforce-desktop --lib --offline`), including the changed build script.
+The Cargo-generated lockfile adds only the direct edge to the already-locked
+resource compiler. Evidence: `/tmp/agi-windows-manifest-check.log`.
+
+### Push and coverage cancellation follow-up
+
+All four follow-up commits reached main at `d6def28a39b1e6a62e5f4fbc6e99a8a0f815390d`
+through the complete clean-checkout pre-push guard chain. New CI is `35505437427`,
+CodeQL `35505436633`, and package coverage `35505437305`.
+
+The obsolete root-runner coverage run `35503385112` resisted automatic and
+explicit normal cancellation, keeping the new coverage run pending. GitHub's
+[documented force-cancel endpoint](https://docs.github.com/en/rest/actions/workflow-runs#force-cancel-a-workflow-run)
+accepted cancellation (HTTP 202) of that obsolete run only. Its long coverage
+step used `always()`, which can continue through cancellation. The follow-up
+uses `!cancelled()` so prior failures still collect coverage while explicit or
+concurrency cancellation stops expensive test work. Nineteen coverage/harness
+checks pass; evidence `/tmp/agi-coverage-cancellation-tests.log`. This follow-up
+is retained locally until current native CI evidence completes, avoiding another
+immediate full-run restart. Jev selected this bounded approach at confidence 1.0,
+request `76bdd0ce05b981465eb86df133831172d9cbc142b67fbf6a16ce95fde5d451c6`.
+
+The previous Linux native job completed tests, trust boundaries and sync parity
+before the new push canceled its remaining Clippy step; it is not recorded as a
+full job pass. Evidence: `/tmp/agi-linux-9c24.log`.
+
+The obsolete run reached `cancelled` and released the slot; the new package
+coverage job `106064730904` is running. The current main database/RLS,
+contracts and Chrome E2E jobs have passed.
+
+### Verification on `d6def28a3`
+
+Web E2E job `106064409427` passed all 70 cases with no flaky retries; its nine
+skips are the same development-only preview cases. Contrast again measured all
+240 route/theme pairs with zero missing pairs. macOS compile/Clippy, extended
+feature Clippy, repository guards, dedicated Rust security, standalone desktop
+E2E, Chrome E2E, VS Code/CLI E2E, contracts, database/RLS, cross-version and
+output-quality jobs passed. Native Windows/Linux execution, iOS, aggregate
+coverage and the remaining CodeQL analyses were still running at this checkpoint.
+Evidence: `/tmp/agi-web-e2e-d6def.log`, `/tmp/agi-rust-security-d6def.log`,
+`/tmp/agi-security-d6def.log`, `/tmp/agi-ci-d6def-watch.log`.
+
+The JavaScript dependency audit reports no known vulnerabilities. Semgrep's
+successful gate still reports its 225 raw matches accounted for by the existing
+ten reviewed allowlist entries; no allowlist or rule was relaxed. GitHub has
+zero open code-scanning and Dependabot alerts, which is distinct from claiming
+that every scanner produces zero raw matches. Existing Rust advisory exceptions
+are likewise not represented as absent; unsuppressed vulnerability-class results
+and the dependency-policy gate remain the relevant evidence.
+
+The pending cancellation-only follow-up is `31e0c200c`. Its deterministic scope
+selector reports all expensive surface lanes false; Turbo's affected dry run
+selects no package tasks. This establishes unchanged native/application scope,
+not a substitute for the follow-up workflow/coverage verification.
+Evidence: `/tmp/agi-cancellation-affected-graph.json`.
+
+Native cache investigation is recorded once as `CI-NATIVE-CACHE-2026-09-20`.
+Jev selected a non-blocking performance follow-up rather than restarting the
+current native verification, confidence 0.98, request
+`5465eea504845c6e9209302bc0a51b750384247e6952fabf1a9050b792af4063`.
+Windows compilation passed and reached the manifest verification step.
+
+### Coverage prerequisite and fixture follow-up
+
+Run `35505437305` measured 79.79% aggregate lines with all existing thresholds
+unchanged. The signup and package-floor repairs passed. Web coverage exposed a
+missing Chromium executable and a 64 MiB compression fixture timing out at 5 seconds.
+The latter reproduces locally under coverage at 5003 ms. Chromium now uses the same
+installation command as main CI. The archive fixture shares a valid workbook with
+the honest control and uses 256 KiB padding; the test measures actual inflated
+member bytes divided by ZIP bytes against the canonical 120x limit. An independent
+source/mutation probe measured 215.94x and showed removing the preflight guard
+accepts that same workbook. The streaming-member guard test remains unchanged.
+Jev selected this approach at 0.99, request
+`fb15a740f43f0c3decf5f48f4516d8f2ac66f9236fc90be9a705b484873fcab8`.
+All 12 focused browser/archive tests pass under coverage (1.28 seconds), and all
+20 coverage-harness/floor tests pass. Independent post-change review found no
+blocking regression. These targeted results do not replace full remote coverage.
+Evidence: `/tmp/agi-decompression-before.log`, `/tmp/agi-decompression-after.log`,
+`/tmp/agi-coverage-prerequisite-tests.log`, `/tmp/agi-coverage-d6def-clean.log`.
+
+The isolated Codecov uploader obtained an OIDC token, but Codecov returned HTTP404
+`Repository not found` for the exact repository slug. No Codecov secret exists;
+the available GitHub token cannot list user app installations (403). The official
+[quick start](https://docs.codecov.com/docs/quick-start) requires a connected GitHub
+app and repository setup. The browser reached GitHub sign-in for Codecov and was
+left as a handoff. Account activation is not verified, and the upload remains a
+blocking failure. Evidence: `/tmp/agi-codecov-d6def.log`.
+
+Linux native tests, trust-boundary/sync checks and final Clippy have now passed on
+`d6def28a3`; iOS release simulator build and first-run onboarding also passed.
+Windows manifest verification and the main JavaScript job are still running.
+Evidence: `/tmp/agi-linux-d6def.log`, run `35505437427`.
+The combined follow-up now touches a web test, so the earlier cancellation-only
+scope result does not describe this combined diff; web verification is required.
+
+### Windows runtime repair after manifest verification
+
+Run `35505437427` is complete. The Windows manifests passed, followed by 2,667
+CLI passes and desktop execution with 5,266 passes, 180 failures and 46 existing
+ignores. Other main-CI lanes passed, including Linux/macOS Rust, all-feature
+Clippy, full JavaScript tests/builds, iOS, browser E2E/accessibility and security.
+CodeQL `35505436633` passed all four languages; fresh GitHub APIs report zero open
+code-scanning and Dependabot alerts. Deployment workflows were skipped after CI
+failed, which is not deployment verification.
+
+The Windows candidate confines UI Automation and all cached native interfaces to
+an MTA worker, using bounded messages carrying ordinary data. Worker shutdown
+releases interfaces before COM uninitialization. Shared path comparisons reconcile
+ordinary/verbatim Windows paths, case and separators while preserving each
+caller's deny policy and using the original canonical path for operations.
+Traversal is rejected before filesystem resolution; benign names containing two
+dots remain accepted. Platform test fixtures use actual temporary directories and
+platform shell/runner contracts. Memory tests stop holding plaintext handles open
+during encrypted migration; MCP fixtures receive explicit paths without changing
+HOME or the imported-server consent gate.
+
+Jev selected this bounded repair under request
+`e094be82aa21d43b790fc78af16b784f48696cee07b7ac4b60d556ba9d1e82bb`.
+Windows UIA module and test metadata cross-compilation passes; actual Windows
+execution remains pending. Source and failure evidence:
+`/tmp/agi-windows-d6def-clean.log`, `/tmp/agi-windows-uia-check.log`.
+The Codecov HTTP 404 repository-connection blocker is unchanged; no authentication
+or protected production environment review was bypassed.
+
+Independent review reproduced a remaining dangling-symlink route in both write
+validators: an allowed alias to an absent protected file was retained and later
+followed by the write. Both validators now distinguish an absent path from an
+unresolved link and reject resolution errors. The extracted production-method
+probe failed its new regression before correction (15 passes, one failure) and
+passed all 16 checks afterward, including existing-link and ordinary temporary-file
+controls. Evidence: `/tmp/agi-path-boundary-before.log`,
+`/tmp/agi-path-boundary-after.log`. Windows UIA library Clippy also passes with
+`-D warnings -D unsafe-code` in the isolated cross-target compile harness.
+A broader test-target Clippy probe found seven pre-existing UIA fixture lints
+(length checks and an unjoined child); it is not the owning CI's library-only
+Clippy contract and was not represented as passing. The complete desktop test
+binary is being rebuilt for final affected-boundary execution.
+
+Final affected desktop execution: `cargo test -p agiworkforce-desktop --lib
+--offline -- <affected filters>` passed 114 tests, zero failures/ignores. Filters
+covered both path validators and their legitimate controls, shared blocked paths,
+MCP configuration, memory/outcome fixtures, encryption preservation/wrong-key/
+corruption tests, platform sandbox/archive/permissions fixtures and rate-limit
+contracts. Evidence: `/tmp/agi-windows-focused-tests.log` (complete selected test
+names). `cargo fmt --all -- --check`, `git diff --check`, and
+`pnpm check:rust-egress-boundary` also passed. These local results do not replace
+native Windows runtime verification.
+
+Owning desktop library lint passed: `cargo clippy -p agiworkforce-desktop --lib
+--offline -- -D warnings -D unsafe-code` (2m33s), evidence
+`/tmp/agi-windows-local-clippy.log`. The staged secret guard passed all 54 harness
+checks and scanned 13,352 files with its existing reviewed exemptions unchanged.
+
+Continuation checkpoint: all three pending commits reached main at
+`31ecfa8252a607bf35dc7bdffe18066ed8f7a256` through the complete clean-checkout
+pre-push chain (`/tmp/agi-windows-runtime-push.log`). The worktree is
+`/Users/siddhartha/.codex/worktrees/ci-security-continuation/agiworkforce`.
+Native runtime repair CI: `35509236785` (Windows job `106074185871`);
+coverage: `35509236745`; CodeQL: `35509236121`; Rust Security: `35509236799`.
+These runs are still executing. Next action is to inspect their actual results,
+repair only newly evidenced failures, and verify fresh alert counts after CodeQL
+finishes. Preserve the 114 local passes and completed prior unchanged-surface
+checks; do not replay them without a new relevant change. Codecov browser tab 10
+remains at GitHub sign-in, and production review is still owner-controlled.
+
+Linux follow-up on `31ecfa825`: job `106074185782` executed 5,355 passing desktop
+tests, one failure and 31 existing ignores. The failure was the Git fixture's
+expected error text: `../outside.txt` now fails at the shared traversal guard
+before the later repository-containment guard. It reproduced locally. Jev
+selected separate boundary cases (confidence 0.77, request
+`88962ac9eab90bb7dd8d0cc99133360d64a3a00e2876da4e1c90b679d63183d0`).
+The test now asserts the traversal rejection and separately verifies an absolute
+outside-repository path and a resolved external symlink still fail containment;
+existing allowed relative and absolute paths remain controls. Production code
+and security policy are unchanged. All eight focused Git/shared-path cases pass.
+Evidence: `/tmp/agi-linux-31ecfa-clean.log`, `/tmp/agi-git-path-before.log`,
+`/tmp/agi-git-path-after.log`.
+
+Completed on the pushed commit: main security scans, repository guards, database/
+RLS, contracts, JavaScript lint/typecheck/test/build, macOS Rust, all-feature
+Clippy, desktop E2E, web E2E/accessibility, Rust Security, Repo Operability,
+pinned actions, cross-version and Guardian. CodeQL run `35509236121` passed all
+four language analyses and its security audit. Fresh GitHub API queries report
+zero open code-scanning alerts and zero open Dependabot alerts. The Rust audit
+reports zero vulnerabilities under the existing policy; maintenance and
+unsoundness warning-policy debt is unchanged and was not represented as absent.
+
+Windows job `106074185871` compiled the repair and passed manifest verification,
+then stopped while compiling the desktop test executable because a Windows-only
+Piper test called `contains` on `anyhow::Error`. It did not reach native test
+execution. The assertion now renders the error before checking its message. A
+focused harness compiles the relevant module and its tests for
+`x86_64-pc-windows-msvc`; all seven Piper bundle tests pass locally. Fresh native
+Windows execution remains required.
+
+Priority Level 1 run `35509236745` ran every package suite. The web package had
+22,895 passes, one timeout and six skips; all other package suites completed, the
+aggregate line result was 79.8% against the unchanged 75% floor, and package floors
+passed. The timeout constructed eleven 2 MB zip members with DEFLATE even though
+the assertion exercises only the declared expanded-size preflight. That one
+fixture now uses ZIP STORE, retains the eleven-member 22 MB expansion and unchanged
+20 MB production limit, and completes its focused rejection in 0.7 seconds. Jev
+selected the fixture-only repair at confidence 0.98, request
+`855208cf0b37b707aaa016f53037c7edae63d5c959262bb49d5bc565032f1965`.
+The separate upload job still receives a valid GitHub OIDC token and then receives
+Codecov HTTP 404 `Repository not found`; repository connection remains an external
+blocking prerequisite.

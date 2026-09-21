@@ -295,9 +295,12 @@ mod tests {
 
     #[test]
     fn a_panic_is_recorded_by_its_source_location_alone() {
-        let location = describe_location(std::panic::Location::caller());
-        assert!(location.contains("src/crash_reports.rs:"), "{location}");
-        assert_eq!(location.split(':').count(), 3);
+        let caller = std::panic::Location::caller();
+        let location = describe_location(caller);
+        assert_eq!(
+            location,
+            format!("{}:{}:{}", caller.file(), caller.line(), caller.column())
+        );
     }
 
     #[test]

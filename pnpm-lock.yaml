@@ -141,6 +141,9 @@ importers:
       husky:
         specifier: ^9.1.7
         version: 9.1.7
+      istanbul-lib-coverage:
+        specifier: 3.2.2
+        version: 3.2.2
       knip:
         specifier: ^6.35.1
         version: 6.35.1
@@ -1063,6 +1066,9 @@ importers:
       '@agiworkforce/providers-factory':
         specifier: workspace:*
         version: link:../../packages/ai/providers/factory
+      '@agiworkforce/providers-vercel-gateway':
+        specifier: workspace:^
+        version: link:../../packages/ai/providers/vercel-gateway
       '@agiworkforce/routing':
         specifier: workspace:*
         version: link:../../packages/ai/routing

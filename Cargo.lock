@@ -243,6 +243,7 @@ dependencies = [
  "dirs 5.0.1",
  "docx-rs",
  "ed25519-dalek 2.2.0",
+ "embed-resource",
  "enigo",
  "flate2",
  "futures",

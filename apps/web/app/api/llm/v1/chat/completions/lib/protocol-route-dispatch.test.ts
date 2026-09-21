@@ -40,6 +40,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
     buildProtocolRouteAdapter(providerId, options),
   buildServerProviderAdapter: () => protocolAdapter,
   listAvailableManagedProviderIds: () => new Set<string>(),
+  resolveServerProviderCredentials: () => null,
   resolveProviderFromModel: (model: string) => model,
   toGenericUpstreamError: vi.fn(),
 }));

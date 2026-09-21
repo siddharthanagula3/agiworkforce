@@ -2,11 +2,17 @@ import type { Page } from '@playwright/test';
 
 // This fixture exercises our auth UI against a signed-out provider boundary.
 // It cannot create a session or authorize an application API request.
-export async function mockAuthProvider(page: Page): Promise<void> {
+export async function mockAuthProvider(
+  page: Page,
+  { loadDelayMs = 100 }: { loadDelayMs?: number } = {},
+): Promise<void> {
   await page.route('**/clerk.browser.js*', (route) =>
     route.fulfill({ contentType: 'application/javascript', body: '' }),
   );
-  await page.addInitScript(() => {
+  await page.route('**/ui.browser.js*', (route) =>
+    route.fulfill({ contentType: 'application/javascript', body: '' }),
+  );
+  await page.addInitScript((loadDelayMs) => {
     const signIn = {
       status: 'needs_first_factor',
       supportedFirstFactors: [{ strategy: 'password' }],
@@ -41,7 +47,7 @@ export async function mockAuthProvider(page: Page): Promise<void> {
         loaded: false,
         status: 'loading',
         async load() {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, loadDelayMs));
           this.loaded = true;
           this.status = 'ready';
           for (const listener of listeners) listener('ready');
@@ -68,5 +74,5 @@ export async function mockAuthProvider(page: Page): Promise<void> {
         },
       },
     });
-  });
+  }, loadDelayMs);
 }

@@ -8,6 +8,83 @@ The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
 
+## CI-WINDOWS-RUNTIME-2026-09-20
+
+Main CI `35505437427` verified both Windows embedded manifests and passed all
+2,667 CLI tests. Desktop execution reached 5,266 passes, 180 failures and 46
+existing ignores. Most failures share a production COM defect: initialization
+occurred once per process while UI Automation interfaces moved across threads.
+Separate production path failures expose ordinary/verbatim Windows prefix
+mismatches and traversal checking after canonicalization erased parent segments.
+The candidate confines native COM interfaces to an owned MTA worker and shares
+Windows-aware deny comparisons while preserving each caller's policy. Independent
+review also reproduced dangling symlinks bypassing both nonexistent-write validators;
+the candidate rejects unresolved links and retains valid resolved-link behavior. Remaining
+failures use Unix-only paths, shell syntax, unsupported sandbox/archive assumptions,
+process-global HOME mutation, or plaintext fixture connections held open during
+encrypted migration. Correct these fixtures without weakening production guards.
+Windows module/test cross-compilation and 114 local affected tests pass; native
+Windows runtime revalidation is still required. Run `35509236785` compiled the
+candidate, but a Windows-only Piper test used a string method directly on an
+`anyhow::Error`, so the desktop test executable did not finish compiling and no
+native desktop tests ran. The corrected assertion compiles for the Windows target,
+and all seven Piper bundle tests pass locally. The same run exposed one Linux Git
+error-message assertion after 5,355 passes; its traversal and repository-escape
+cases are now separated, with eight focused cases passing. macOS, all-feature
+Clippy, JavaScript tests/builds, browser E2E/accessibility and security jobs passed
+on the same remote commit. CodeQL completed with zero open code-scanning alerts;
+Dependabot also reports zero open alerts. A fresh push must verify the complete
+Linux and native Windows jobs. Codecov connection and deployment review remain
+separate blockers.
+Evidence: `/tmp/agi-windows-d6def-clean.log`, `/tmp/agi-windows-uia-check.log`, and
+[deployment handoff](docs/work/deployment-handoff-2026-09-19.md).
+
+## CI-NATIVE-CACHE-2026-09-20
+
+The four explicit Rust caches in `.github/workflows/ci.yml` target
+`apps/desktop/src-tauri/target`, but Cargo's workspace output is root `target`.
+Windows run `35503385094` restored a 305 MB registry/source cache for the wrong
+path, plus a separate setup-toolchain cache for the correct root path containing
+only 1,357 bytes. Both immutable entries then reported up to date. This supports
+avoidable cold-build work, not a claim that all native runtime is cache overhead.
+The current run uses a changed lockfile hash, so its implicit root cache may
+populate correctly. No timeout or cache-caused correctness failure was observed.
+Consolidate cache ownership around Cargo metadata's actual target directory in
+a separate performance change, with one cold/warm comparison and no relaxed
+checks. Escalate only if cache behavior blocks the current correctness run.
+Evidence: `/tmp/agi-windows-9c24-clean.log`, job `106059036315`, and
+`.github/workflows/ci.yml` cache declarations.
+
+## CI-COVERAGE-GATE-2026-09-20
+
+The Priority Level 1 coverage step hid 462 failed tests in run `35499143990`
+with `|| true`. Root execution mixed Vitest versions and package working
+directories; the intended 75% line threshold also used an invalid option.
+The package-owned runner repair preserves all 23 projects and existing package
+floors, propagates failures, and merges fresh reports. The full run measured
+79.79% aggregate coverage with 33,710 passing tests and three stale signup-fixture
+failures. Those three now pass in a targeted rerun. Routing and sync package-floor
+gaps also pass after meaningful boundary tests. Remote run `35505437305` measured
+79.79% and exposed two web failures: missing Chromium and 64 MiB fixture compression
+exceeding the test timeout under instrumentation. The follow-up installs Chromium
+and uses a measured 256 KiB fixture above the same ratio ceiling; all 12 focused
+browser/security cases and 20 harness checks pass. Run `35509236745` verified
+Chromium and measured 79.8% repository line coverage with every package floor
+intact. Its only test failure was a second archive fixture that spent the 5-second
+budget DEFLATE-compressing eleven 2 MB members before checking their declared
+expanded size. That fixture now uses ZIP STORE while preserving the same
+eleven-member, 22 MB declared expansion and the unchanged production limit; its
+focused rejection completes in 0.7 seconds. Jev selected this fixture-only repair
+at confidence 0.98, request
+`855208cf0b37b707aaa016f53037c7edae63d5c959262bb49d5bc565032f1965`.
+Fresh remote coverage revalidation is required.
+Codecov accepted GitHub OIDC issuance but rejected repository lookup with HTTP 404
+`Repository not found`; its browser setup is blocked at GitHub sign-in. Activate or
+repair the existing Codecov repository connection, then rerun the failed uploader.
+Do not disable the upload failure gate or broaden token permissions. Do not
+lower the floor or count the old green job as successful coverage. Evidence and
+next verification: [deployment handoff](docs/work/deployment-handoff-2026-09-19.md#coverage-gate-integrity-follow-up).
+
 ## WEB-MARKDOWN-TABLE-ALIGN-2026-09-19
 
 Browser TB02 copied valid Markdown with a right-aligned numeric column, but the rendered
@@ -557,8 +634,11 @@ compilation all happen after a merge rather than at review.
 triggers on `pull_request` for `**/*.rs`, `**/Cargo.toml` and `**/Cargo.lock`
 and runs the same clippy command for the two shipped crates, which type-checks
 them. `auto-route-conformance` runs on pull requests but replays one fixture
-against a single crate. `windows-smoke`'s own `cargo test` carries
-`continue-on-error: true` even on its main-only run.
+against a single crate. The 2026-09-20 CI continuation found 34 Windows CLI
+test failures hidden by `continue-on-error`. That suppression is removed in the
+current repair; native path handling and platform fixtures are corrected. Exact
+runner verification is tracked in `docs/work/deployment-handoff-2026-09-19.md`.
+The separate pre-merge coverage decision remains open.
 **What was fixed in this pass:** the guardrail layer pinned the
 `native_changed` half of that condition and not the `github.ref` half, so the
 trade-off could be widened or narrowed with nothing failing either way, and a

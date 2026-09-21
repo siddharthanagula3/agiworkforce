@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 13,
+    "policyVersion": 16,
     "records": [
       {
         "version": 1,
@@ -118,6 +118,42 @@
         "effectiveOn": "2026-09-18",
         "reason": "the untrusted context safety preamble as it served when the ledger took the prompt manifest",
         "bootstrap": "records what was already serving"
+      },
+      {
+        "version": 14,
+        "artifact": "prompt",
+        "id": "routing.response_assessment@1",
+        "channel": "internal",
+        "effectiveOn": "2026-09-20",
+        "reason": "pins the bounded response-shape rubric for internal evaluation; runtime flags keep semantic assessment off until a measured canary carries a quality signal"
+      },
+      {
+        "version": 15,
+        "artifact": "prompt",
+        "id": "routing.response_assessment@1",
+        "channel": "canary",
+        "effectiveOn": "2026-09-20",
+        "reason": "advances the response-shape rubric after the dedicated output-quality evaluation held; runtime feature flags still control whether Auto turns invoke it",
+        "quality": {
+          "gate": "AI output quality evals",
+          "commit": "211f5dcad441a7823fc4705a2aadb8930645ff6b",
+          "verdict": "held",
+          "measuredOn": "2026-09-20"
+        }
+      },
+      {
+        "version": 16,
+        "artifact": "prompt",
+        "id": "routing.response_assessment@1",
+        "channel": "stable",
+        "effectiveOn": "2026-09-20",
+        "reason": "makes the evaluated rubric the stable default while runtime feature flags keep semantic assessment disabled until its measured product canary begins",
+        "quality": {
+          "gate": "AI output quality evals",
+          "commit": "211f5dcad441a7823fc4705a2aadb8930645ff6b",
+          "verdict": "held",
+          "measuredOn": "2026-09-20"
+        }
       }
     ]
   },
@@ -136,6 +172,33 @@
     "kind": "routing_policy",
     "defaultAlias": "auto",
     "fallbackSlot": "workhorse_general",
+    "semanticResponseAssessment": {
+      "model": "typesafe-ai/jev",
+      "developer": "typesafe-ai",
+      "transportProvider": "vercel_gateway",
+      "upstreamProvider": "typesafe-ai",
+      "harnessId": "vercel_gateway/evaluation",
+      "promptId": "routing.response_assessment",
+      "contextTokens": 32000,
+      "promotionEndsOn": "2026-09-25",
+      "pricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD",
+        "source": "https://vercel.com/ai-gateway/models/jev",
+        "verifiedOn": "2026-09-20"
+      },
+      "limits": {
+        "maxStateBytes": 4096,
+        "maxInputTokensPerRequest": 2048,
+        "timeoutMs": 2000,
+        "maxInFlight": 16,
+        "dailyInputTokenCap": 1000000,
+        "minimumSelectedProbability": 0.7
+      },
+      "zeroDataRetentionVerified": false,
+      "residencyRegions": []
+    },
     "profileOrder": ["economy", "balanced", "premium"],
     "autoProfileByTask": {
       "simple_chat": "economy",

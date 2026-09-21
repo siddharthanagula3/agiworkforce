@@ -1066,7 +1066,7 @@
         "explicitBreakpoints": true
       },
       "reasoningDots": 3,
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
         "stage": "registered",
         "stagedOn": "2026-09-05",
@@ -1482,7 +1482,7 @@
           "budgetPath": "thinkingConfig.thinkingBudget"
         }
       },
-      "tierPolicy": { "minTier": "free" },
+      "tierPolicy": { "minTier": "basic" },
       "lifecycle": {
         "stage": "promoted",
         "stagedOn": "2026-09-05",

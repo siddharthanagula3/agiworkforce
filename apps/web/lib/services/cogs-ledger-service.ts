@@ -98,6 +98,8 @@ export interface CostEventAttribution extends UsageAttribution {
   customerCanonicalCents?: number | null;
   /** What the provider itself later reported, when a report is in hand. */
   providerReportedCostCents?: number | null;
+  providerEstimatedCostMicrousd?: number | null;
+  providerReportedCostMicrousd?: number | null;
   feature?: RateCardFeature | null;
   routeId?: string | null;
   surface?: string | null;
@@ -490,9 +492,24 @@ export function resolveCustomerCanonicalMicrousd(attribution: CostEventAttributi
 }
 
 function reconciliationStatus(attribution: CostEventAttribution): CogsReconciliationStatus {
-  return nonNegativeInt(attribution.providerReportedCostCents) === null
+  return nonNegativeInt(attribution.providerReportedCostMicrousd) === null &&
+    nonNegativeInt(attribution.providerReportedCostCents) === null
     ? 'estimated'
     : 'provider_reported';
+}
+
+function providerEstimatedMicrousd(event: ProviderCostEvent): number {
+  return (
+    nonNegativeInt(event.providerEstimatedCostMicrousd) ??
+    microusdFromCents(Math.max(0, Math.round(event.providerCostCents)))
+  );
+}
+
+function providerReportedMicrousd(event: ProviderCostEvent): number | null {
+  const direct = nonNegativeInt(event.providerReportedCostMicrousd);
+  if (direct !== null) return direct;
+  const cents = nonNegativeInt(event.providerReportedCostCents);
+  return cents === null ? null : microusdFromCents(cents);
 }
 
 export async function recordProviderCostEvent(
@@ -502,7 +519,6 @@ export async function recordProviderCostEvent(
   const tokenClasses = event.tokenClasses ?? NO_TOKEN_CLASSES;
   const attribution = normalizeUsageAttribution(event);
   const customerCanonicalMicrousd = resolveCustomerCanonicalMicrousd(event);
-  const providerReportedCents = nonNegativeInt(event.providerReportedCostCents);
   await db.execute(
     `insert into public.provider_cost_events (
        user_id, capability, provider, model, unit_basis, units,
@@ -541,8 +557,8 @@ export async function recordProviderCostEvent(
       event.organizationId ?? null,
       customerCanonicalMicrousd,
       customerCanonicalMicrousd === null ? null : creditsFromMicrousd(customerCanonicalMicrousd),
-      microusdFromCents(Math.max(0, Math.round(event.providerCostCents))),
-      providerReportedCents === null ? null : microusdFromCents(providerReportedCents),
+      providerEstimatedMicrousd(event),
+      providerReportedMicrousd(event),
       reconciliationStatus(event),
       event.feature ?? null,
       event.routeId ?? null,

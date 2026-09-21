@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 const signInState = vi.hoisted(() => ({
   status: 'needs_first_factor' as string,
@@ -33,9 +33,16 @@ const signUpState = vi.hoisted(() => ({
   reset: vi.fn(),
 }));
 
+const clerkState = vi.hoisted(() => ({
+  loaded: true,
+  listeners: new Set<() => void>(),
+  on: vi.fn(),
+  off: vi.fn(),
+}));
+
 vi.mock('@clerk/nextjs', () => ({
   AuthenticateWithRedirectCallback: () => null,
-  useClerk: () => ({ loaded: true }),
+  useClerk: () => clerkState,
   useSignIn: () => ({ signIn: signInState, errors: null, fetchStatus: 'idle' }),
   useSignUp: () => ({ signUp: signUpState, errors: null, fetchStatus: 'idle' }),
 }));
@@ -60,6 +67,14 @@ function client(mode: AuthMode) {
 const ok = { error: null };
 
 beforeEach(() => {
+  clerkState.loaded = true;
+  clerkState.listeners.clear();
+  clerkState.on.mockReset().mockImplementation((_event, listener) => {
+    clerkState.listeners.add(listener);
+  });
+  clerkState.off.mockReset().mockImplementation((_event, listener) => {
+    clerkState.listeners.delete(listener);
+  });
   signInState.status = 'needs_first_factor';
   signInState.identifier = EMAIL;
   signInState.supportedFirstFactors = [];
@@ -96,6 +111,35 @@ beforeEach(() => {
 });
 
 describe('identity auth adapter contract', () => {
+  it('observes readiness changes without a provider context rerender', () => {
+    clerkState.loaded = false;
+    const { result, unmount } = renderHook(() => useIdentityAuthClient('login', REDIRECTS));
+    expect(result.current.isReady).toBe(false);
+    act(() => {
+      clerkState.loaded = true;
+      clerkState.listeners.forEach((listener) => listener());
+    });
+    expect(result.current.isReady).toBe(true);
+    act(() => {
+      clerkState.loaded = false;
+      clerkState.listeners.forEach((listener) => listener());
+    });
+    expect(result.current.isReady).toBe(false);
+    unmount();
+    expect(clerkState.listeners.size).toBe(0);
+    expect(clerkState.off).toHaveBeenCalledWith('status', expect.any(Function));
+  });
+
+  it('recovers readiness when loading completes between render and subscription', () => {
+    clerkState.loaded = false;
+    clerkState.on.mockImplementation((_event, listener) => {
+      clerkState.loaded = true;
+      clerkState.listeners.add(listener);
+    });
+    const result = client('login');
+    expect(result.current.isReady).toBe(true);
+  });
+
   it('sends an account with a password to the password step', async () => {
     signInState.supportedFirstFactors = [{ strategy: 'password' }, { strategy: 'email_code' }];
 
