@@ -127,7 +127,7 @@ describe('inclusion policy', () => {
   });
 
   it("'explicit-renderable' keeps marked previews and leaves an unmarked HTML example inert", () => {
-    const inert = '```html\n<script>alert("inert")</script>\n```';
+    const inert = '```html\n<main>Unmarked example</main>\n```';
     const preview = '```html\n<!-- @artifact -->\n<main>Preview me</main>\n```';
     const arts = deriveArtifacts(`${inert}\n\n${preview}`, {
       conversationId: 'c',
@@ -197,7 +197,7 @@ describe('hasArtifacts + removeArtifactBlocks', () => {
   });
 
   it('removes only marked artifacts under the explicit policy', () => {
-    const inert = '```html\n<script>alert("inert")</script>\n```';
+    const inert = '```html\n<main>Unmarked example</main>\n```';
     const preview = '```html\n<!-- @artifact -->\n<main>Preview me</main>\n```';
     const body = `Before\n\n${inert}\n\n${preview}\n\nAfter`;
     const arts = deriveArtifacts(body, {
@@ -207,7 +207,7 @@ describe('hasArtifacts + removeArtifactBlocks', () => {
     });
     const cleaned = removeArtifactBlocks(body, arts, { include: 'explicit-renderable' });
 
-    expect(cleaned).toContain('<script>alert("inert")</script>');
+    expect(cleaned).toContain('<main>Unmarked example</main>');
     expect(cleaned).not.toContain('Preview me');
     expect(cleaned).toContain('Before');
     expect(cleaned).toContain('After');

@@ -97,7 +97,7 @@ export function shellScreenUrl(
   prefersDark: boolean,
 ): string {
   const html = `<!doctype html><html><head><meta charset="utf-8">
-<meta name="color-scheme" content="${prefersDark ? 'dark' : 'light'}"><title>${escapeHtml(screen.title)}</title><style>
+<meta name="color-scheme" content="${prefersDark ? 'dark' : 'light'}"><title>{{title}}</title><style>
   html,body{height:100%;margin:0}
   body{background:${pageBackgroundColor(prefersDark)};color:${prefersDark ? '#ececec' : '#1f1f1f'};
     display:flex;align-items:center;justify-content:center;
@@ -112,14 +112,25 @@ export function shellScreenUrl(
   button:hover{opacity:.9}
   button:focus-visible{outline:2px solid ${prefersDark ? '#ececec' : '#1f1f1f'};outline-offset:2px}
 </style></head><body><main>
-  <h1>${escapeHtml(screen.heading)}</h1>
-  <p>${escapeHtml(screen.body)}</p>
-  <button id="retry" autofocus>${escapeHtml(screen.action)}</button>
-  <p style="margin:1.5rem 0 0"><code>Reference: ${escapeHtml(screen.reference)}</code></p>
+  <h1>{{heading}}</h1>
+  <p>{{body}}</p>
+  <button id="retry" data-retry-url="{{retryUrl}}" autofocus>{{action}}</button>
+  <p style="margin:1.5rem 0 0"><code>Reference: {{reference}}</code></p>
 </main><script>
   document.getElementById('retry').addEventListener('click',function(){
-    location.href=${JSON.stringify(retryUrl)};
+    location.href=document.getElementById('retry').dataset.retryUrl;
   });
 </script></body></html>`;
-  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  const fields: Record<string, string> = {
+    title: screen.title,
+    heading: screen.heading,
+    body: screen.body,
+    action: screen.action,
+    reference: screen.reference,
+    retryUrl,
+  };
+  const rendered = html.replace(/\{\{([a-zA-Z]+)\}\}/g, (_, field: string) =>
+    escapeHtml(fields[field] ?? ''),
+  );
+  return `data:text/html;charset=utf-8,${encodeURIComponent(rendered)}`;
 }

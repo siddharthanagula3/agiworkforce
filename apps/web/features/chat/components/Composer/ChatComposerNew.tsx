@@ -5029,7 +5029,7 @@ const ChatComposerNewComponent = ({
                           <span className="block truncate">{m.label}</span>
                           <span
                             id={`image-model-route-${index}`}
-                            className="block text-[11px] text-muted-foreground"
+                            className="block text-caption text-muted-foreground"
                           >
                             {m.source === 'promotional'
                               ? `Free · ${promotionalMediaIssuer ?? 'provider'} quota`
@@ -5123,7 +5123,7 @@ const ChatComposerNewComponent = ({
                           <span className="block truncate">{m.label}</span>
                           <span
                             id={`video-model-route-${index}`}
-                            className="block text-[11px] text-muted-foreground"
+                            className="block text-caption text-muted-foreground"
                           >
                             {m.source === 'promotional'
                               ? `Free · ${promotionalMediaIssuer ?? 'provider'} quota`

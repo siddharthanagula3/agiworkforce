@@ -195,7 +195,7 @@ describe('GET /api/github/repositories', () => {
   });
 
   it('refuses when the plan includes no Code sessions', async () => {
-    mockGetSubscription.mockResolvedValue({ plan_tier: 'free', status: 'active' });
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'local-only', status: 'active' });
     const response = await GET(listRequest());
     expect(response.status).toBe(503);
     expect(mockListInstallationRepositories).not.toHaveBeenCalled();
