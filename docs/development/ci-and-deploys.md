@@ -123,10 +123,11 @@ deployment record says which component versions it carries.
 
 - Web changes rebuild Web; gateway and signaling-only changes do not.
 - Service changes rebuild only the owning service.
-- Root dependency/workspace inputs and shared packages conservatively select
-  every consumer.
-- Native Rust work selects the expensive Linux, macOS, Windows, and Desktop E2E
-  lanes; Web-only changes skip them.
+- Root dependency/workspace inputs and shared packages select the affected app
+  and deployment lanes. They do not rebuild Rust binaries by themselves.
+- Rust sources, Cargo inputs, and cross-language sync parity sources select the
+  expensive Linux, macOS, and Windows Rust lanes. Desktop changes independently
+  select Desktop E2E. Workflow-only, npm wrapper, and Web changes skip Rust.
 - Documentation-only changes select no deployment or native lane.
 
 CI and deploy workflows cancel superseded runs on the same branch or production

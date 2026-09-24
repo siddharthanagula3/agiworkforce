@@ -156,11 +156,18 @@ describe('the connector call log holds what /trust and /security say it holds', 
     const security = row(SECURITY, 'What it does not record');
 
     for (const text of [trust, security]) {
-      expect(text).toContain('never the arguments or the result');
+      expect(text).toMatch(
+        /(?:never|does not store) the (?:call’s )?arguments or (?:the )?result/u,
+      );
       expect(text).not.toMatch(/no hosted per-tool|no hosted, user-visible journal/u);
     }
     expect(trust).toContain('Calls to built-in tools are not in that log');
-    expect(security).toContain('There is no hosted journal of built-in tool calls');
+    expect(security).toContain(
+      'Individual built-in tool calls are not listed in the account activity feed',
+    );
+    expect(security).toContain(
+      'The security audit path records a tool’s name, category and outcome',
+    );
   });
 });
 
