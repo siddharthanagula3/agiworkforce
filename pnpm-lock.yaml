@@ -1490,9 +1490,15 @@ importers:
 
   packages/ai/provider-runtime:
     dependencies:
+      '@agiworkforce/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
       '@agiworkforce/types':
         specifier: workspace:*
         version: link:../../contracts/types
+      '@typesafe-ai/sdk':
+        specifier: 0.6.0
+        version: 0.6.0
     devDependencies:
       vitest:
         specifier: ^4.1.11
