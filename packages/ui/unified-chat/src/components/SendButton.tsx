@@ -31,9 +31,9 @@ export function SendButton({
         type="button"
         onClick={onClick}
         className={cn(
-          'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-200',
+          'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-quick',
           'bg-red-500 text-white shadow-lg shadow-red-500/25 hover:bg-red-600',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
           className,
         )}
         title={t('composer.stopGeneration', 'Stop generation')}
@@ -51,8 +51,8 @@ export function SendButton({
         onClick={onClick}
         disabled={disabled}
         className={cn(
-          'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-200',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+          'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-quick',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
           disabled
             ? 'bg-amber-500/50 text-white/70 cursor-not-allowed'
             : 'bg-amber-500 text-white shadow-md hover:bg-amber-600',
@@ -77,8 +77,8 @@ export function SendButton({
       onClick={onClick}
       disabled={!canSend}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-200',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+        'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-quick',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
         canSend
           ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80'
           : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)] cursor-not-allowed',

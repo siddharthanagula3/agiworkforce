@@ -163,6 +163,7 @@ async function finishFailed(
   job: VideoGenerationJob,
   claimToken: string,
   publicError: string,
+  undeliveredProviderCostCents?: number,
 ): Promise<VideoGenerationJob> {
   const finalized = await finalizeVideoGenerationJob({
     db,
@@ -170,6 +171,7 @@ async function finishFailed(
     claimToken,
     outcome: 'failed',
     publicError,
+    ...(undeliveredProviderCostCents === undefined ? {} : { undeliveredProviderCostCents }),
   });
   if (!finalized) throw new Error('Video job disappeared during failure settlement.');
   return finalized;
@@ -186,6 +188,7 @@ async function finishRefused(
   claimToken: string,
   refusal: string,
   reason: OutputModerationReason,
+  undeliveredProviderCostCents?: number,
 ): Promise<VideoGenerationJob> {
   recordMediaSafety({
     media: 'video',
@@ -194,7 +197,7 @@ async function finishRefused(
     provider: job.provider,
     surface: job.sourceSurface,
   });
-  return finishFailed(db, job, claimToken, refusal);
+  return finishFailed(db, job, claimToken, refusal, undeliveredProviderCostCents);
 }
 
 async function persistCompletedVideo(
@@ -467,6 +470,7 @@ async function reconcileVideoGenerationJobCore(
   }
 
   let persistedAsset: PersistedVideoAsset | undefined;
+  let completedProviderCostCents: number | undefined;
   try {
     const provider = await pollVideoProvider(claimed);
     if (provider.status === 'queued' || provider.status === 'processing') {
@@ -510,12 +514,14 @@ async function reconcileVideoGenerationJobCore(
         true,
       );
     }
+    completedProviderCostCents = provider.actualCostCents ?? claimed.estimatedCostCents;
     if (claimed.provider === 'runway' && claimed.cancelRequestedAt) {
       return finishFailed(
         db,
         claimed,
         claimToken,
         'Runway completed after cancellation was requested. AGI did not deliver the result.',
+        completedProviderCostCents,
       );
     }
     const beforePersistence = await getVideoGenerationJobForSystem(db, claimed.id);
@@ -573,7 +579,14 @@ async function reconcileVideoGenerationJobCore(
 
     if (current && isTerminal(current)) return current;
     if (error instanceof GeneratedVideoRefusedError) {
-      return finishRefused(db, claimed, claimToken, error.refusal, error.moderationReason);
+      return finishRefused(
+        db,
+        claimed,
+        claimToken,
+        error.refusal,
+        error.moderationReason,
+        completedProviderCostCents,
+      );
     }
     if (error instanceof VideoAssetCompensationError) {
       return deferVideoGenerationJob({

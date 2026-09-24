@@ -3131,6 +3131,7 @@
     "maxPolls": 24,
     "attestationMaxAgeMs": 2592000000,
     "chatMaxOutputTokens": 4096,
+    "chatImageReserveTokens": 4096,
     "chatRequestTimeoutMs": 240000,
     "allowanceUsablePercent": 90
   }

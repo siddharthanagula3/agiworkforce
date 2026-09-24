@@ -48,6 +48,7 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 import {
   FREE_PLAN_MONTHLY_SEARCH_CALLS,
   PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS,
+  readSearchAllowance,
   reserveSearchCharge,
   resolveSearchBudget,
   resolveSearchCallerKind,
@@ -121,6 +122,39 @@ describe('search charge', () => {
 });
 
 describe('free plan bound', () => {
+  it('reports the remaining Free search allowance from the same rolling count as admission', async () => {
+    countUserFeatureUnitsSince.mockResolvedValue(FREE_PLAN_MONTHLY_SEARCH_CALLS - 1);
+    await expect(readSearchAllowance({ userId: 'user-1', planTier: 'free', db })).resolves.toEqual({
+      status: 'available',
+      used: FREE_PLAN_MONTHLY_SEARCH_CALLS - 1,
+      limit: FREE_PLAN_MONTHLY_SEARCH_CALLS,
+      windowDays: 30,
+    });
+    countUserFeatureUnitsSince.mockResolvedValue(FREE_PLAN_MONTHLY_SEARCH_CALLS);
+    await expect(readSearchAllowance({ userId: 'user-1', planTier: 'free', db })).resolves.toEqual({
+      status: 'exhausted',
+      used: FREE_PLAN_MONTHLY_SEARCH_CALLS,
+      limit: FREE_PLAN_MONTHLY_SEARCH_CALLS,
+      windowDays: 30,
+    });
+  });
+
+  it('does not claim search is available when its count cannot be read', async () => {
+    countUserFeatureUnitsSince.mockRejectedValue(new Error('ledger down'));
+    await expect(readSearchAllowance({ userId: 'user-1', planTier: 'free', db })).resolves.toEqual({
+      status: 'unknown',
+      limit: FREE_PLAN_MONTHLY_SEARCH_CALLS,
+      windowDays: 30,
+    });
+  });
+
+  it('does not apply the Free search bound to a paid account', async () => {
+    await expect(readSearchAllowance({ userId: 'user-1', planTier: 'pro', db })).resolves.toEqual({
+      status: 'paid',
+    });
+    expect(countUserFeatureUnitsSince).not.toHaveBeenCalled();
+  });
+
   it('includes a search while the account is under its monthly calls', async () => {
     countUserFeatureUnitsSince.mockResolvedValue(FREE_PLAN_MONTHLY_SEARCH_CALLS - 1);
     const decision = await resolveSearchBudget({

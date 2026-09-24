@@ -54,6 +54,10 @@ export function conversationHref(conversationId: string): string {
   return `/chat/${encodeURIComponent(conversationId)}`;
 }
 
+export function conversationShareHref(conversationId: string): string {
+  return `${conversationHref(conversationId)}?share=true`;
+}
+
 function quoted(label: string | null | undefined, fallback: string): string {
   return label?.trim() ? `“${label.trim()}”` : fallback;
 }

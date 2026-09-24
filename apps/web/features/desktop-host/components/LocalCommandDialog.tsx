@@ -7,7 +7,7 @@ import {
   type ShellRunResult,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, useDialogKeyboard } from '@agiworkforce/ui';
 import {
   cancelLocalCommand,
   listWorkspaceRoots,
@@ -96,6 +96,7 @@ function transcriptFile(result: ShellRunResult, root: WorkspaceRoot, nowMs: numb
  * that decides what a renderer may run.
  */
 export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDialogProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [roots, setRoots] = useState<WorkspaceRoot[]>([]);
   const [activeRoot, setActiveRoot] = useState<WorkspaceRoot | null>(null);
   const [folder, setFolder] = useState('');
@@ -133,14 +134,7 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
     onClose();
   }, [onClose]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, close]);
+  useDialogKeyboard({ open, onClose: close, panelRef });
 
   const onAddRoot = useCallback(async () => {
     try {
@@ -207,10 +201,11 @@ export function LocalCommandDialog({ open, onClose, onAttach }: LocalCommandDial
    */
   return createPortal(
     <div
+      ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-label={TITLE}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/40 p-4"
       onClick={close}
     >
       <div

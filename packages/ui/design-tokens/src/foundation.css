@@ -173,13 +173,18 @@
     /* One radius ladder for every surface. The size-named --chat-radius-* and
      * --radius-* families are indirections into these rungs, so a rung moves in
      * one place. */
+    --corner-detail: 2px;
+    --corner-compact: 4px;
     --corner-control: 6px;
     --corner-field: 8px;
+    --corner-menu: 10px;
     --corner-surface: 12px;
     --corner-panel: 16px;
     --corner-overlay: 24px;
     --corner-hero: 32px;
     --corner-pill: 9999px;
+
+    --stroke-hairline: 1px;
 
     --space-1: 4px;
     --space-2: 8px;
@@ -211,12 +216,31 @@
     --brand-microsoft-blue: #00a4ef;
     --brand-microsoft-yellow: #ffb900;
 
-    --layer-base: 0;
-    --layer-sticky: 100;
-    --layer-dropdown: 200;
-    --layer-overlay: 300;
-    --layer-modal: 400;
-    --layer-toast: 500;
+    /* One stacking ladder for every surface. Low rungs compose content inside
+     * an existing stacking context; named global rungs coordinate portalled
+     * and fixed UI across packages. Consumers never invent a numeric rung. */
+    --z-behind-far: -2;
+    --z-behind: -1;
+    --z-base: 0;
+    --z-content: 1;
+    --z-content-raised: 2;
+    --z-control: 10;
+    --z-content-sticky: 20;
+    --z-panel-backdrop: 30;
+    --z-panel: 40;
+    --z-panel-raised: 45;
+    --z-dropdown: 50;
+    --z-navigation: 60;
+    --z-navigation-sticky: 70;
+    --z-sticky: 100;
+    --z-overlay: 200;
+    --z-overlay-panel: 210;
+    --z-modal: 300;
+    --z-popover: 350;
+    --z-tooltip: 380;
+    --z-notification: 400;
+    --z-fullscreen: 9999;
+    --z-skip-link: 10000;
 
     /* Frequent interactions must not be animations the user waits through.
      * instant is a state change, quick is a menu or popover, moved is a surface
@@ -224,9 +248,14 @@
     --duration-instant: 90ms;
     --duration-quick: 160ms;
     --duration-moved: 260ms;
+    /* One-time page and artifact reveals may be slower than routine controls.
+     * Keeping that exception named prevents 700ms from leaking into menus,
+     * toggles, drawers, or progress updates. */
+    --duration-reveal: 700ms;
     --curve-standard: cubic-bezier(0.2, 0, 0, 1);
     --curve-exit: cubic-bezier(0.4, 0, 1, 1);
     --curve-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+    --curve-reveal: cubic-bezier(0.22, 1, 0.36, 1);
 
     --elevation-1: 0 1px 2px rgb(8 10 12 / 0.06);
     --elevation-2: 0 2px 4px rgb(8 10 12 / 0.06), 0 4px 12px -4px rgb(8 10 12 / 0.1);

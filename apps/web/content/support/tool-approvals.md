@@ -4,36 +4,41 @@ title: Approvals: what a tool may do without asking
 path: /agent-permissions
 category: connectors
 tags: approval, approvals, permission, always allow, ask every time, auto approve, read only, tool permissions, deny tool, call log, reset permissions
-updated: 2026-09-20
+updated: 2026-09-22
 scope: public
 ---
 
 ## The account-wide default
 
-Settings carries one **Default approval for tool actions** with two settings:
+Settings carries one **Default approval for tool actions** with three settings:
 
 - **Ask before every action.** Every connector, plugin and tool action waits for
-  your approval, including actions that only read data. This is the default.
+  your approval, including actions that only read data.
 - **Run read-only actions without asking.** Actions that only read data, search
   the web, fetch a page, or run code in the AGI sandbox run on their own.
   Anything that writes, deletes, sends, buys, changes credentials, or runs on
   your own machine still asks, and so does every connector tool AGI does not
   know.
+- **Skip approvals.** This is the website default for an unconfigured account.
+  Eligible reads, searches, sandboxed code, and reversible actions run without
+  asking. Destructive or unknown actions still ask. Saved per-tool Ask and Deny
+  choices and workspace restrictions still apply.
 
-The setting syncs to your account, so it holds wherever you are signed in.
+Your saved choice syncs to your account. If the website cannot read it, tools
+ask rather than assuming automatic approval.
 
 ## Per-tool permissions
 
 Each connector has a **Tool Permissions** panel that overrides the default for
 one tool at a time: **Always run without asking**, **Needs approval each time**,
 or **Never run this tool**. **Reset all to default** clears every override for
-that connector and asks first.
+that connector and applies the account policy.
 
 ## Approving in the moment
 
-When a tool runs for the first time, AGI asks. Choosing **Always allow** saves
-that verdict so the same tool can run without prompting again. A temporary chat
-ignores saved "Always allow" verdicts and asks every time.
+When a tool requires approval, choosing **Always allow** saves that verdict so
+the same tool can run without prompting again. A temporary chat ignores saved
+"Always allow" verdicts.
 
 ## Checking what ran
 

@@ -43,7 +43,7 @@ function SendControl({
         type="button"
         onClick={onClick}
         className={cn(
-          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 bg-foreground text-background hover:bg-foreground/90 transition-all duration-200',
+          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-all duration-quick hover:bg-foreground/90 sm:h-9 sm:w-9 pointer-coarse:h-11 pointer-coarse:w-11',
           className,
         )}
         title="Stop generation"
@@ -61,16 +61,16 @@ function SendControl({
         onClick={onClick}
         disabled={disabled}
         className={cn(
-          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
+          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-quick sm:h-9 sm:w-9 pointer-coarse:h-11 pointer-coarse:w-11',
           disabled
             ? 'bg-muted text-muted-foreground cursor-not-allowed'
-            : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80',
+            : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-e2 hover:opacity-80',
           className,
         )}
         title="Queue message · will send after current response finishes"
         aria-label="Add message to queue"
       >
-        <Clock className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
+        <Clock className="h-5 w-5" aria-hidden="true" />
       </button>
     );
   }
@@ -86,9 +86,9 @@ function SendControl({
         disabled={!canSend}
         aria-describedby={reason ? reasonId : undefined}
         className={cn(
-          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 transition-all duration-200',
+          'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-quick sm:h-9 sm:w-9 pointer-coarse:h-11 pointer-coarse:w-11',
           canSend
-            ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80'
+            ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-e2 hover:opacity-80'
             : 'bg-muted text-muted-foreground cursor-not-allowed',
           className,
         )}
@@ -98,7 +98,7 @@ function SendControl({
         {isSending ? (
           <Spinner size="sm" />
         ) : (
-          <ArrowUp className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
+          <ArrowUp className="h-5 w-5" aria-hidden="true" />
         )}
       </button>
       {reason ? (

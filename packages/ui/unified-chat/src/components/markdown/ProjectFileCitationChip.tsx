@@ -52,7 +52,7 @@ function ProjectFileChip({ citation }: { citation: ProjectFileCitation }) {
     'inline-flex h-7 max-w-[16rem] items-center gap-1 align-middle',
     'rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)]',
     'px-2.5 text-xs font-medium text-[var(--chat-text-secondary)] no-underline',
-    'transition-colors duration-100 hover:bg-[var(--chat-surface-elevated)] hover:text-[var(--chat-text-primary)]',
+    'transition-colors duration-instant hover:bg-[var(--chat-surface-elevated)] hover:text-[var(--chat-text-primary)]',
   );
 
   return (
@@ -73,7 +73,7 @@ function ProjectFileChip({ citation }: { citation: ProjectFileCitation }) {
           side="top"
           sideOffset={6}
           className={cn(
-            'z-50 flex max-w-[320px] flex-col gap-1 rounded-lg border px-3 py-2 text-xs',
+            'z-[var(--z-dropdown)] flex max-w-[320px] flex-col gap-1 rounded-lg border px-3 py-2 text-xs',
             'bg-[var(--chat-surface-overlay)] text-[var(--chat-text-primary)]',
             'border-[var(--chat-border)] shadow-[var(--chat-shadow-lg)]',
           )}

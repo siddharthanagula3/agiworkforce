@@ -177,6 +177,12 @@ describe('public Desktop download surfaces', () => {
 
     const status = await screen.findByRole('status', { name: 'AGI Desktop downloads unavailable' });
     expect(status).toHaveTextContent('No signed AGI Desktop installer is available right now.');
+    expect(
+      screen.getByRole('region', { name: 'Desktop installer availability' }),
+    ).not.toHaveTextContent('AGI Desktop ships for macOS');
+    expect(
+      screen.getByRole('region', { name: 'We check the signature before you download.' }),
+    ).toHaveTextContent('When a Desktop installer is published');
     expect(within(status).getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
       'href',
       '/login?redirectTo=%2F',

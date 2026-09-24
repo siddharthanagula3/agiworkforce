@@ -68,6 +68,7 @@ describe('product routes', () => {
       '/library(.*)',
       '/models(.*)',
       '/open(.*)',
+      '/quick-ask(.*)',
       '/schedules(.*)',
       '/tasks(.*)',
       '/settings(.*)',

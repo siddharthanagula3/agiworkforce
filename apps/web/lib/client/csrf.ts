@@ -4,7 +4,7 @@ import {
   CLIENT_VERSION_HEADER,
   REQUEST_ID_HEADER,
   newRequestId,
-} from '@agiworkforce/cloud-contracts';
+} from '@agiworkforce/cloud-contracts/client-request';
 
 interface CsrfTokenResponse {
   token: string;

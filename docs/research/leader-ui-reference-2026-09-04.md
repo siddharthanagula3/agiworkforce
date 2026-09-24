@@ -1,8 +1,12 @@
 # chatgpt.com and claude.ai interface reference (observed 2026-09-04)
 
-Status: Current
+Status: Historical snapshot
 Owner: Product (founder) and the parity agents
 Last updated: 2026-09-04
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. Preserve this as the September 4
+live observation record.
 
 Every statement here was observed first hand in the founder's signed-in sessions (ChatGPT Plus, Claude Max) in Chrome on 2026-09-04, driven by the orchestrating agent. It records what is on screen, what it does and what it talks to, so agents build parity from evidence instead of memory. It extends `claude-ai-ui-reference-2026-09-03.md`, which still holds for the parts of claude.ai it covers; where the two differ, this file is newer. Nothing not written here was opened and must not be assumed.
 

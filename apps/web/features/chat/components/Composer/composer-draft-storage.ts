@@ -1,72 +1,229 @@
-import { getItem, removeItem, setItem } from '@shared/utils/localStorage';
-
-/**
- * The in-memory draft store and `pending-composer-draft` between them cover
- * every move the user makes inside one document: a soft navigation keeps the
- * store, a history step replays the parked text. `use-conversation-draft-sync`
- * then carries the store's map to the conversation row, which is what reaches
- * the user's other devices and is authoritative between them.
- *
- * All three fill only when the composer unmounts, so none of them holds a
- * keystroke that was never navigated away from, and a refresh or a crash takes
- * exactly that. This writes as the user types instead. It is a local crash
- * copy, not a second owner: the mount prefers the store's draft whenever there
- * is one, so a draft typed on another device still wins.
- *
- * The record shape mirrors `apps/mobile/src/features/chat/draftStore.ts`: a
- * version, the text, and an empty draft stored as the absence of a key. The
- * `agi-` prefix is what makes sign-out reap it, see APP_STORAGE_KEY_PATTERNS
- * in shared/stores/authentication-store.ts.
- */
 const DRAFT_STORAGE_PREFIX = 'agi-composer-draft';
-const DRAFT_RECORD_VERSION = 1;
+const DRAFT_RECORD_VERSION = 2;
+const LEGACY_DRAFT_RECORD_VERSION = 1;
 const NEW_CHAT_DRAFT_KEY = 'new-chat';
+const DOCUMENT_OWNER_KEY = `${DRAFT_STORAGE_PREFIX}:document-owner`;
 
 interface StoredDraftRecord {
   version: number;
   text: string;
 }
 
-function draftStorageKey(conversationId: string | null): string {
-  const scope = encodeURIComponent(conversationId ?? NEW_CHAT_DRAFT_KEY);
-  return `${DRAFT_STORAGE_PREFIX}:v${DRAFT_RECORD_VERSION}:${scope}`;
+interface DocumentOwnerState {
+  current: string;
+  previous: string[];
+}
+
+function draftScope(conversationId: string | null): string {
+  return encodeURIComponent(conversationId ?? NEW_CHAT_DRAFT_KEY);
+}
+
+function draftStorageKey(ownerId: string, conversationId: string | null): string {
+  return `${DRAFT_STORAGE_PREFIX}:v${DRAFT_RECORD_VERSION}:${ownerId}:${draftScope(conversationId)}`;
+}
+
+function readRecord(storage: Storage, key: string, version: number): StoredDraftRecord | null {
+  let raw: string | null;
+  try {
+    raw = storage.getItem(key);
+  } catch {
+    return null;
+  }
+  if (raw === null) return null;
+  try {
+    const record: unknown = JSON.parse(raw);
+    if (
+      !record ||
+      typeof record !== 'object' ||
+      !('version' in record) ||
+      record.version !== version ||
+      !('text' in record) ||
+      typeof record.text !== 'string'
+    ) {
+      return { version, text: '' };
+    }
+    return record as StoredDraftRecord;
+  } catch {
+    return { version, text: '' };
+  }
+}
+
+function writeRecord(storage: Storage, key: string, text: string): boolean {
+  try {
+    storage.setItem(key, JSON.stringify({ version: DRAFT_RECORD_VERSION, text }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function createComposerDraftStorage(
+  storage: Storage,
+  ownerId: string,
+  previousOwnerIds: readonly string[],
+  retirePreviousOwners = false,
+) {
+  let migrationComplete = true;
+  for (const previousOwnerId of previousOwnerIds) {
+    if (previousOwnerId === ownerId) continue;
+    const previousPrefix = `${DRAFT_STORAGE_PREFIX}:v${DRAFT_RECORD_VERSION}:${previousOwnerId}:`;
+    const keys: string[] = [];
+    try {
+      for (let index = 0; index < storage.length; index++) {
+        const key = storage.key(index);
+        if (key?.startsWith(previousPrefix)) keys.push(key);
+      }
+    } catch {
+      migrationComplete = false;
+    }
+    for (const previousKey of keys) {
+      const currentKey = `${DRAFT_STORAGE_PREFIX}:v${DRAFT_RECORD_VERSION}:${ownerId}:${previousKey.slice(previousPrefix.length)}`;
+      const record = readRecord(storage, previousKey, DRAFT_RECORD_VERSION);
+      if (!record) {
+        migrationComplete = false;
+        continue;
+      }
+      if (readRecord(storage, currentKey, DRAFT_RECORD_VERSION) === null) {
+        if (!writeRecord(storage, currentKey, record.text)) {
+          migrationComplete = false;
+          continue;
+        }
+      }
+      if (retirePreviousOwners) {
+        try {
+          storage.removeItem(previousKey);
+        } catch {
+          migrationComplete = false;
+        }
+      }
+    }
+  }
+
+  const read = (conversationId: string | null): string => {
+    const currentKey = draftStorageKey(ownerId, conversationId);
+    const current = readRecord(storage, currentKey, DRAFT_RECORD_VERSION);
+    if (current) return current.text;
+    for (const previousOwnerId of previousOwnerIds) {
+      const previous = readRecord(
+        storage,
+        draftStorageKey(previousOwnerId, conversationId),
+        DRAFT_RECORD_VERSION,
+      );
+      if (previous) {
+        writeRecord(storage, currentKey, previous.text);
+        return previous.text;
+      }
+    }
+    const legacyKey = `${DRAFT_STORAGE_PREFIX}:v${LEGACY_DRAFT_RECORD_VERSION}:${draftScope(conversationId)}`;
+    const legacy = readRecord(storage, legacyKey, LEGACY_DRAFT_RECORD_VERSION);
+    if (!legacy) return '';
+    if (writeRecord(storage, currentKey, legacy.text)) {
+      try {
+        storage.removeItem(legacyKey);
+      } catch {
+        // The new copy is already durable; the old key can wait for sign-out cleanup.
+      }
+    }
+    return legacy.text;
+  };
+
+  // Empty text stays as a tombstone so an inherited or legacy draft cannot reappear.
+  const write = (conversationId: string | null, text: string): boolean =>
+    writeRecord(storage, draftStorageKey(ownerId, conversationId), text.trim() ? text : '');
+
+  return {
+    read,
+    write,
+    clear: (conversationId: string | null): void => {
+      write(conversationId, '');
+    },
+    migrationComplete,
+  };
+}
+
+let activeStorage: ReturnType<typeof createComposerDraftStorage> | null | undefined;
+
+function currentStorage(): ReturnType<typeof createComposerDraftStorage> | null {
+  if (activeStorage !== undefined) return activeStorage;
+  if (typeof window === 'undefined') return null;
+  try {
+    const rawOwner = window.sessionStorage.getItem(DOCUMENT_OWNER_KEY);
+    let previousOwnerState: DocumentOwnerState | null = null;
+    if (rawOwner) {
+      try {
+        const parsed: unknown = JSON.parse(rawOwner);
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          'current' in parsed &&
+          typeof parsed.current === 'string' &&
+          'previous' in parsed &&
+          Array.isArray(parsed.previous) &&
+          parsed.previous.every((value) => typeof value === 'string')
+        ) {
+          previousOwnerState = parsed as DocumentOwnerState;
+        }
+      } catch {
+        previousOwnerState = null;
+      }
+    }
+    const random = new Uint8Array(16);
+    window.crypto.getRandomValues(random);
+    const ownerId = Array.from(random, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const previousOwnerIds = previousOwnerState
+      ? [previousOwnerState.current, ...previousOwnerState.previous]
+      : [];
+    window.sessionStorage.setItem(
+      DOCUMENT_OWNER_KEY,
+      JSON.stringify({ current: ownerId, previous: previousOwnerIds }),
+    );
+    let retirePreviousOwners = false;
+    try {
+      const navigation = window.performance.getEntriesByType('navigation')[0] as
+        PerformanceNavigationTiming | undefined;
+      retirePreviousOwners = navigation?.type === 'reload';
+    } catch {
+      retirePreviousOwners = false;
+    }
+    activeStorage = createComposerDraftStorage(
+      window.localStorage,
+      ownerId,
+      previousOwnerIds,
+      retirePreviousOwners,
+    );
+    if (activeStorage.migrationComplete) {
+      window.sessionStorage.setItem(
+        DOCUMENT_OWNER_KEY,
+        JSON.stringify({ current: ownerId, previous: [] }),
+      );
+    }
+    return activeStorage;
+  } catch {
+    activeStorage = null;
+    return null;
+  }
 }
 
 export function readPersistedDraft(conversationId: string | null): string {
-  const record = getItem<StoredDraftRecord | null>(draftStorageKey(conversationId), null);
-  if (!record || record.version !== DRAFT_RECORD_VERSION || typeof record.text !== 'string') {
-    return '';
-  }
-  return record.text;
+  return currentStorage()?.read(conversationId) ?? '';
 }
 
-/** @returns `false` when the draft did not reach storage, see {@link setItem}. */
 export function writePersistedDraft(conversationId: string | null, text: string): boolean {
-  const key = draftStorageKey(conversationId);
-  if (!text.trim()) {
-    removeItem(key);
-    return true;
-  }
-  return setItem<StoredDraftRecord>(key, { version: DRAFT_RECORD_VERSION, text });
+  return currentStorage()?.write(conversationId, text) ?? false;
 }
 
 export function clearPersistedDraft(conversationId: string | null): void {
-  removeItem(draftStorageKey(conversationId));
+  currentStorage()?.clear(conversationId);
 }
 
-/**
- * Every new chat shares the unsaved surface's one draft slot, so restoring it
- * on any mount would hand the previous new chat's text to the next one, which
- * is the rule `pending-composer-draft` exists to hold. A document load is the
- * one arrival that is neither a push nor a pop: the user is returning to where
- * they were interrupted. Module scope is per document, so the first composer
- * to mount on the unsaved surface after a load claims the draft and every
- * mount after it, all of them soft navigations, gets nothing.
- */
 let reloadedPendingDraftClaimed = false;
 
 export function claimReloadedPendingDraft(): string {
   if (reloadedPendingDraftClaimed) return '';
   reloadedPendingDraftClaimed = true;
   return readPersistedDraft(null);
+}
+
+export function __resetComposerDraftStorageForTests(): void {
+  activeStorage = undefined;
 }

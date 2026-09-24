@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { withSseHeartbeat } from './sse-heartbeat';
+import { SSE_HEARTBEAT_INTERVAL_MS, SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -47,6 +47,31 @@ afterEach(() => {
 });
 
 describe('withSseHeartbeat', () => {
+  it('owns the two-second heartbeat and no-buffer SSE response contract', () => {
+    expect(SSE_HEARTBEAT_INTERVAL_MS).toBe(2_000);
+    expect(SSE_RESPONSE_HEADERS).toMatchObject({
+      'Content-Type': 'text/event-stream',
+      'X-Accel-Buffering': 'no',
+    });
+  });
+
+  it('emits the first idle heartbeat at the shared default interval', async () => {
+    const source = makeSource();
+    const reader = withSseHeartbeat(source.stream).getReader();
+    let settled = false;
+    const first = reader.read().then((result) => {
+      settled = true;
+      return result;
+    });
+
+    await vi.advanceTimersByTimeAsync(SSE_HEARTBEAT_INTERVAL_MS - 1);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(new TextDecoder().decode((await first).value)).toBe(': keepalive\n\n');
+
+    await reader.cancel();
+  });
+
   it('passes real data through unchanged when the source never goes idle', async () => {
     const source = makeSource();
     const wrapped = withSseHeartbeat(source.stream, 15_000);

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, FileText, HardDrive, MessageSquare, X, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 
 interface Props {
   open: boolean;
@@ -34,6 +35,13 @@ export function AddSourcesModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const dismissOrBack = useCallback(() => {
+    if (view === 'text-input') setView('main');
+    else onClose();
+  }, [onClose, view]);
+
+  useDialogKeyboard({ open, onClose: dismissOrBack, panelRef: dialogRef });
+
   useEffect(() => {
     if (open) {
       setView('main');
@@ -44,21 +52,6 @@ export function AddSourcesModal({
       setSubmitError(null);
     }
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
-        if (view === 'text-input') {
-          setView('main');
-        } else {
-          onClose();
-        }
-      }
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [open, onClose, view]);
 
   useEffect(() => {
     if (!open) return;
@@ -130,6 +123,7 @@ export function AddSourcesModal({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Add sources"
@@ -142,21 +136,20 @@ export function AddSourcesModal({
         alignItems: 'center',
         justifyContent: 'center',
         background: 'rgba(0,0,0,0.6)',
-        padding: 16,
+        padding: 'var(--space-4)',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        ref={dialogRef}
         style={{
           position: 'relative',
           width: '100%',
           maxWidth: 520,
           background: 'var(--agi-bg)',
           border: '1px solid var(--agi-rule-strong)',
-          borderRadius: 16,
+          borderRadius: 'var(--corner-panel)',
           overflow: 'hidden',
           boxShadow: '0 8px 40px rgba(0,0,0,0.32)',
         }}
@@ -167,7 +160,7 @@ export function AddSourcesModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '18px 20px 14px',
+            padding: 'var(--space-4) var(--space-5) var(--space-4)',
             borderBottom: '1px solid var(--agi-rule)',
           }}
         >
@@ -191,7 +184,7 @@ export function AddSourcesModal({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: 8,
+              borderRadius: 'var(--corner-field)',
               border: 'none',
               background: 'transparent',
               cursor: 'pointer',
@@ -209,7 +202,7 @@ export function AddSourcesModal({
         </div>
 
         {/* Body */}
-        <div style={{ padding: '20px 20px 24px' }}>
+        <div style={{ padding: 'var(--space-5) var(--space-5) var(--space-5)' }}>
           {view === 'main' ? (
             <>
               {/* Drag-drop zone */}
@@ -223,14 +216,14 @@ export function AddSourcesModal({
                 onDrop={handleDrop}
                 style={{
                   border: `2px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule-strong)'}`,
-                  borderRadius: 12,
-                  padding: '28px 16px',
+                  borderRadius: 'var(--corner-surface)',
+                  padding: 'var(--space-6) var(--space-4)',
                   textAlign: 'center',
                   background: isDragging
                     ? 'color-mix(in srgb, var(--color-primary) 12%, transparent)'
                     : 'var(--agi-bg-2)',
                   transition: 'border-color 0.15s, background 0.15s',
-                  marginBottom: 20,
+                  marginBottom: 'var(--space-5)',
                 }}
               >
                 <p
@@ -238,7 +231,7 @@ export function AddSourcesModal({
                     fontSize: 14,
                     fontWeight: 500,
                     color: 'var(--agi-ink)',
-                    margin: '0 0 4px',
+                    margin: '0 0 var(--space-1)',
                   }}
                 >
                   Drag sources here
@@ -260,7 +253,7 @@ export function AddSourcesModal({
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: 10,
+                  gap: 'var(--space-3)',
                 }}
               >
                 {/* Upload */}
@@ -311,7 +304,7 @@ export function AddSourcesModal({
               {/* Connector note */}
               <p
                 style={{
-                  marginTop: 16,
+                  marginTop: 'var(--space-4)',
                   fontSize: 12,
                   color: 'var(--agi-ink-2)',
                   textAlign: 'center',
@@ -332,7 +325,7 @@ export function AddSourcesModal({
                     textDecoration: 'underline',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 3,
+                    gap: 'var(--space-1)',
                   }}
                 >
                   Set up connectors
@@ -342,7 +335,7 @@ export function AddSourcesModal({
               {submitError ? (
                 <p
                   role="alert"
-                  style={{ margin: '10px 0 0', color: 'var(--agi-error)', fontSize: 12 }}
+                  style={{ margin: 'var(--space-3) 0 0', color: 'var(--agi-error)', fontSize: 12 }}
                 >
                   {submitError}
                 </p>
@@ -350,7 +343,7 @@ export function AddSourcesModal({
             </>
           ) : (
             <>
-              <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: 'var(--space-3)' }}>
                 <label
                   htmlFor="add-sources-text-title"
                   style={{
@@ -358,7 +351,7 @@ export function AddSourcesModal({
                     fontSize: 12,
                     fontWeight: 500,
                     color: 'var(--agi-ink-2)',
-                    marginBottom: 5,
+                    marginBottom: 'var(--space-1)',
                   }}
                 >
                   Title (optional)
@@ -372,8 +365,8 @@ export function AddSourcesModal({
                   maxLength={120}
                   style={{
                     width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 8,
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--corner-field)',
                     border: '1px solid var(--agi-rule-strong)',
                     background: 'var(--agi-bg-2)',
                     color: 'var(--agi-ink)',
@@ -384,7 +377,7 @@ export function AddSourcesModal({
                 />
               </div>
 
-              <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 'var(--space-4)' }}>
                 <label
                   htmlFor="add-sources-text-content"
                   style={{
@@ -392,7 +385,7 @@ export function AddSourcesModal({
                     fontSize: 12,
                     fontWeight: 500,
                     color: 'var(--agi-ink-2)',
-                    marginBottom: 5,
+                    marginBottom: 'var(--space-1)',
                   }}
                 >
                   Content
@@ -406,8 +399,8 @@ export function AddSourcesModal({
                   rows={8}
                   style={{
                     width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: 8,
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--corner-field)',
                     border: '1px solid var(--agi-rule-strong)',
                     background: 'var(--agi-bg-2)',
                     color: 'var(--agi-ink)',
@@ -421,13 +414,13 @@ export function AddSourcesModal({
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   onClick={() => setView('main')}
                   style={{
-                    padding: '8px 16px',
-                    borderRadius: 9999,
+                    padding: 'var(--space-2) var(--space-4)',
+                    borderRadius: 'var(--corner-pill)',
                     border: '1px solid var(--agi-rule-strong)',
                     background: 'transparent',
                     color: 'var(--agi-ink-2)',
@@ -442,8 +435,8 @@ export function AddSourcesModal({
                   disabled={!textContent.trim() || isUploading || isSubmitting}
                   onClick={() => void handleTextSubmit()}
                   style={{
-                    padding: '8px 18px',
-                    borderRadius: 9999,
+                    padding: 'var(--space-2) var(--space-4)',
+                    borderRadius: 'var(--corner-pill)',
                     border: 'none',
                     background:
                       textContent.trim() && !isUploading && !isSubmitting
@@ -469,7 +462,7 @@ export function AddSourcesModal({
               {submitError ? (
                 <p
                   role="alert"
-                  style={{ margin: '10px 0 0', color: 'var(--agi-error)', fontSize: 12 }}
+                  style={{ margin: 'var(--space-3) 0 0', color: 'var(--agi-error)', fontSize: 12 }}
                 >
                   {submitError}
                 </p>
@@ -505,9 +498,9 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 8,
-        padding: '14px 8px 12px',
-        borderRadius: 12,
+        gap: 'var(--space-2)',
+        padding: 'var(--space-4) var(--space-2) var(--space-3)',
+        borderRadius: 'var(--corner-surface)',
         border: `1px solid ${hovered && !disabled ? 'var(--color-primary)' : 'var(--agi-rule-strong)'}`,
         background:
           hovered && !disabled
@@ -539,8 +532,8 @@ function SourceButton({ icon, label, description, badge, onClick, disabled }: So
             fontSize: 12,
             color: 'var(--color-primary)',
             background: 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
-            borderRadius: 9999,
-            padding: '1px 6px',
+            borderRadius: 'var(--corner-pill)',
+            padding: 'var(--space-1) var(--space-2)',
             fontWeight: 500,
           }}
         >

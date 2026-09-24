@@ -87,7 +87,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
               {message.tool_calls && message.tool_calls.length > 0 && (
                 <div className="mb-2 space-y-1">
                   {message.tool_calls.map((tool, ti) => (
-                    <details key={ti} className="rounded bg-background px-2 py-1 text-xs">
+                    <details key={ti} className="rounded-compact bg-background px-2 py-1 text-xs">
                       <summary className="cursor-pointer text-foreground">{tool.tool_name}</summary>
                       {tool.display_args && (
                         <pre className="mt-1 whitespace-pre-wrap text-muted-foreground">
@@ -103,7 +103,7 @@ export function SharedSessionViewer({ session, token }: { session: SharedSession
                   {message.attachments.map((attachment, ai) => (
                     <div
                       key={ai}
-                      className="rounded bg-background/60 px-2 py-1 text-xs italic text-muted-foreground"
+                      className="rounded-compact bg-background/60 px-2 py-1 text-xs italic text-muted-foreground"
                     >
                       {attachment.name}, [attachment omitted from shared snapshot]
                     </div>

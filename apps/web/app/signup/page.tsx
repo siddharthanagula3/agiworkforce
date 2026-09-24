@@ -3,6 +3,7 @@ import { AuthLayout } from '@/features/auth/AuthLayout';
 import { configuredAuthProviders } from '@/features/auth/authProviderConfig';
 import {
   buildLoginUrl,
+  buildLoginCompleteUrl,
   buildSignUpCompleteUrl,
   buildSsoCallbackUrl,
   readAuthRouteContext,
@@ -36,7 +37,7 @@ export default async function SignupPage({
   );
   const context = readAuthRouteContext(params, redirectTo);
   if (await hasVerifiedSession()) {
-    redirect(buildSignUpCompleteUrl(context));
+    redirect(buildLoginCompleteUrl(context));
   }
 
   return (

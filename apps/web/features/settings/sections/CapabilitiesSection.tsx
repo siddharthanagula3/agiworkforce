@@ -14,7 +14,7 @@ import {
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
-  const { settings, saving, saveError, savedAt, loadError, retry, setBoolean } =
+  const { settings, saving, saveError, savedAt, loadError, retry, retrySave, setBoolean } =
     useCapabilitiesPreferences();
   const localModeHost = useLocalModeHost();
 
@@ -60,6 +60,15 @@ export function CapabilitiesSection() {
             Try again
           </button>
         )}
+        {saveError && retrySave ? (
+          <button
+            type="button"
+            onClick={retrySave}
+            className="mt-2 rounded-md border border-border/60 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/60"
+          >
+            Try saving again
+          </button>
+        ) : null}
       </div>
 
       <section className="flex flex-col gap-4">

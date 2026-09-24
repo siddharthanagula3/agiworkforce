@@ -69,7 +69,8 @@ vi.mock('../lib/tool-loop', () => ({
 vi.mock('../lib/managed-agent-stream', () => ({
   buildManagedAgentStream: transportMocks.buildStream,
 }));
-vi.mock('../lib/managed-failover', () => ({
+vi.mock('../lib/managed-failover', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/managed-failover')>()),
   createFailoverPlan: () => ({ next: () => null }),
 }));
 vi.mock('@/lib/services/managed-auto-memory-service', () => ({

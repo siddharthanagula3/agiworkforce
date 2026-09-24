@@ -101,7 +101,7 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
   if (confirming) {
     return (
       <>
-        <DropdownMenuLabel className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+        <DropdownMenuLabel className="text-caption font-medium uppercase tracking-[0.12em] text-muted-foreground">
           {t('navWorkspaceSection', { defaultValue: 'Workspace' })}
         </DropdownMenuLabel>
         <div id={confirmDescriptionId} className="px-2 pb-1 text-sm">
@@ -142,7 +142,7 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
 
   return (
     <>
-      <DropdownMenuLabel className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+      <DropdownMenuLabel className="text-caption font-medium uppercase tracking-[0.12em] text-muted-foreground">
         {t('navWorkspaceSection', { defaultValue: 'Workspace' })}
       </DropdownMenuLabel>
       {workspaces.isLoading ? (
@@ -176,7 +176,7 @@ export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
           />
           {organizations.length > 0 ? (
             <>
-              <DropdownMenuLabel className="text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+              <DropdownMenuLabel className="text-caption font-medium uppercase tracking-[0.12em] text-muted-foreground">
                 {t('navEnterpriseWorkspaces', { defaultValue: 'Enterprise' })}
               </DropdownMenuLabel>
               {organizations.map((workspace: WorkspaceSummary) => (

@@ -1,5 +1,6 @@
 import type { SearchResponse, SearchResult } from './search-media';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import type { ArtifactDerivationPolicy } from '@agiworkforce/artifacts';
 export type { SearchResponse, SearchResult, MediaGenerationResult } from './search-media';
 export type WebSearchResults = SearchResponse | SearchResult[];
 export type WebChatStyleMode = 'concise' | 'formal' | 'explanatory';
@@ -136,6 +137,7 @@ export interface ThinkingSegment {
 }
 
 export interface WebChatMessageMetadata {
+  artifactDerivation?: ArtifactDerivationPolicy;
   tokensUsed?: number;
   inputTokens?: number;
   outputTokens?: number;
@@ -143,6 +145,7 @@ export interface WebChatMessageMetadata {
   cachedInputTokens?: number;
   model?: string;
   provider?: string;
+  routeLane?: string;
   cost?: number;
   totalDurationMs?: number;
   selectionReason?: string;

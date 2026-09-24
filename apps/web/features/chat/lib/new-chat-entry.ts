@@ -1,4 +1,5 @@
 export const NEW_CHAT_PATH = '/chat';
+export const QUICK_ASK_PATH = '/quick-ask';
 export const NEW_CHAT_DRAFT_PARAM = 'q';
 export const NEW_CHAT_SOURCE_PARAM = 'from';
 export const NEW_CHAT_MODE_PARAM = 'mode';
@@ -78,11 +79,14 @@ export function quoteForNewChatDraft(text: string): string {
   return `> ${collapsed.slice(0, MAX_QUOTE_LENGTH)}\n\n`;
 }
 
-export function stripNewChatParams(params: URLSearchParams): string {
+export function stripNewChatParams(
+  params: URLSearchParams,
+  surfaceRoot: typeof NEW_CHAT_PATH | typeof QUICK_ASK_PATH = NEW_CHAT_PATH,
+): string {
   const next = new URLSearchParams(params);
   next.delete(NEW_CHAT_DRAFT_PARAM);
   next.delete(NEW_CHAT_SOURCE_PARAM);
   next.delete(NEW_CHAT_MODE_PARAM);
   const query = next.toString();
-  return query ? `${NEW_CHAT_PATH}?${query}` : NEW_CHAT_PATH;
+  return query ? `${surfaceRoot}?${query}` : surfaceRoot;
 }

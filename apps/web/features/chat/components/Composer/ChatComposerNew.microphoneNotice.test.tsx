@@ -88,6 +88,7 @@ beforeEach(() => {
 afterEach(() => {
   window.localStorage.clear();
   useBillingStore.setState({ user: null } as never);
+  useBillingStore.setState({ disabledFeatures: [] });
 });
 
 describe('the first time the microphone is asked for', () => {
@@ -229,6 +230,22 @@ describe('declining', () => {
 
     expect(notice()).toBeNull();
     expect(useMicrophoneNoticeStore.getState().request).toBeNull();
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+});
+
+describe('while the server holds dictation off', () => {
+  it('shows the microphone as unavailable with the reason and never opens it', async () => {
+    window.localStorage.setItem(MICROPHONE_NOTICE_STORAGE_KEY, ACCOUNT);
+    useBillingStore.setState({ disabledFeatures: [{ capability: 'dictation', reason: null }] });
+    renderChat();
+
+    const microphone = await screen.findByRole('button', {
+      name: 'Dictation is temporarily switched off while we investigate a problem with it.',
+    });
+    expect(microphone.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(microphone);
+
     expect(getUserMedia).not.toHaveBeenCalled();
   });
 });

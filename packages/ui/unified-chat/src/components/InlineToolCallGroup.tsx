@@ -56,7 +56,7 @@ export function InlineToolCallGroup({
           'flex items-center gap-1.5 select-none',
           'h-7 px-1 rounded-md',
           'cursor-pointer hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))]',
-          'transition-colors duration-100',
+          'transition-colors duration-instant',
         )}
       >
         <span className="text-sm text-[color:var(--chat-text-muted,#8b8680)] font-normal">
@@ -71,7 +71,7 @@ export function InlineToolCallGroup({
           strokeWidth={2}
           className={cn(
             'inline-tool-call-group__chevron shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
-            'transition-transform duration-150',
+            'transition-transform duration-quick',
             open && 'rotate-180',
           )}
           aria-hidden="true"

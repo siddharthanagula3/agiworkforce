@@ -56,6 +56,13 @@ export function dispatchProviderForRoute(routeId: string): string | undefined {
   return route.provider === OPEN_ROUTER_PROVIDER ? 'openrouter' : route.provider;
 }
 
+export function dispatchProviderForSelectedRoute(route: {
+  routeId: string;
+  provider: string;
+}): string {
+  return dispatchProviderForRoute(route.routeId) ?? route.provider;
+}
+
 export type RouteSelectionRejectionReason =
   | 'unknown_route'
   | 'model_mismatch'

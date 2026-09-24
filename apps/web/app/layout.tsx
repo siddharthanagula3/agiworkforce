@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from 'next';
-import { ClerkProvider } from '@clerk/nextjs';
 import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
 import { THEME_INIT_SCRIPT } from '@/shared/components/seo/theme-init-script';
@@ -10,9 +9,8 @@ import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
 import { CookieConsent } from '@shared/components/CookieConsent';
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
-import { WebPushOptIn } from '@/features/notifications';
+import { BrowserIdentityBoundary } from './BrowserIdentityBoundary';
 import { OG_IMAGE } from '@/lib/seo/site';
-import { readServerTelemetryConsent } from '@/lib/server/telemetry-consent';
 import {
   organizationSchema,
   softwareApplicationSchema,
@@ -45,26 +43,6 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
-
-const clerkLocalization = {
-  signIn: {
-    start: {
-      title: 'Sign in to AGI',
-      titleCombined: 'Sign in or create an AGI account',
-      subtitle: 'Welcome back. Continue to your AGI workspace.',
-      subtitleCombined: 'Use your AGI account to continue.',
-    },
-  },
-  signUp: {
-    start: {
-      title: 'Create your AGI account',
-      titleCombined: 'Create or sign in to AGI',
-      subtitle:
-        'Start with the Managed Cloud trial on the web, then move serious work to Local or BYOK.',
-      subtitleCombined: 'Use your AGI account to continue.',
-    },
-  },
-};
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -143,18 +121,10 @@ export default async function RootLayout({
 
   const gaTrackingId = process.env['NEXT_PUBLIC_GA_TRACKING_ID'];
 
-  // The account's real, server-stored consent, so a brand-new device's first
-  // paint sees it before instrumentation-client.ts decides whether to init
-  // Sentry (WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01). The helper owns the
-  // auth() call inside its catch-all: this layout renders routes the Clerk
-  // proxy matcher excludes, where a bare auth() throws and 500s the page.
-  const telemetryConsent = await readServerTelemetryConsent();
-
   return (
     <html
       lang="en"
       suppressHydrationWarning
-      data-telemetry-consent={String(telemetryConsent)}
       className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable}`}
     >
       <body className="antialiased">
@@ -191,7 +161,7 @@ export default async function RootLayout({
          * If this ever needs to come back, it needs a consent category and a
          * row on /cookies in the same change, not a silent re-enable.
          */}
-        <ClerkProvider localization={clerkLocalization} telemetry={{ disabled: true }}>
+        <BrowserIdentityBoundary>
           <SkipLinks />
           {/*
            * No landmark here. Each route owns its `main`: the marketing pages
@@ -212,9 +182,8 @@ export default async function RootLayout({
            * `ANALYTICS_REQUIRES_CONSENT` in shared/lib/cookie-consent.ts.
            */}
           <CookieConsent />
-          <WebPushOptIn />
           {gaTrackingId && <AnalyticsConsentGate trackingId={gaTrackingId} nonce={nonce} />}
-        </ClerkProvider>
+        </BrowserIdentityBoundary>
       </body>
     </html>
   );

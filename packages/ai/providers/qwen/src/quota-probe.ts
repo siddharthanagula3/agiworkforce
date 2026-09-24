@@ -22,7 +22,12 @@ export interface QwenQuotaProbeResult {
 }
 
 export interface QwenQuotaInput {
-  messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
+  messages: {
+    role: 'system' | 'user' | 'assistant';
+    content:
+      | string
+      | ({ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } })[];
+  }[];
   signal?: AbortSignal;
 }
 
@@ -36,6 +41,15 @@ export async function streamQwenQuotaChat(
   const offering = getProviderOffering(offeringKey);
   if (!offering?.providerModelId || offering.quotaProbeProtocol !== 'chat') {
     throw new Error('This model does not support free-quota chat.');
+  }
+  if (
+    !offering.quotaChatImageInput &&
+    input.messages.some(
+      (message) =>
+        Array.isArray(message.content) && message.content.some((part) => part.type === 'image_url'),
+    )
+  ) {
+    throw new Error('This free-quota model does not accept image input.');
   }
   return transport(`${QWEN_DEFAULT_BASE_URL}/chat/completions`, {
     method: 'POST',

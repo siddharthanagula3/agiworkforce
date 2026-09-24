@@ -252,7 +252,7 @@ export function ReflectSection() {
                   key={day.date}
                   aria-hidden="true"
                   title={`${formatDate(day.date)}: ${day.conversationCount}`}
-                  className="min-w-1 flex-1 rounded-t bg-primary/70"
+                  className="min-w-1 flex-1 rounded-t-compact bg-primary/70"
                   style={{
                     height: `${Math.max(8, (day.conversationCount / maxDailyCount) * 100)}%`,
                   }}

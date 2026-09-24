@@ -844,7 +844,7 @@ export function LibraryView({
             onChange={(event) => setSearchInput(event.target.value)}
             placeholder="Search files and projects"
             aria-label="Search the library by name"
-            className="w-full rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-9 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
+            className="w-full rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-2 pl-9 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
           />
         </label>
 
@@ -863,8 +863,8 @@ export function LibraryView({
                 onClick={() => setTab(entry.id)}
                 className={
                   tab === entry.id
-                    ? 'min-h-9 shrink-0 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)]'
-                    : 'min-h-9 shrink-0 rounded-[var(--chat-radius-md)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
+                    ? 'min-h-9 shrink-0 rounded-md bg-[var(--chat-surface-hover)] px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)]'
+                    : 'min-h-9 shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]'
                 }
               >
                 {entry.label}
@@ -915,7 +915,7 @@ export function LibraryView({
         <div
           data-testid="library-error"
           role="alert"
-          className="flex items-center gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-sm text-[var(--chat-destructive-text)]"
+          className="flex items-center gap-3 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-sm text-[var(--chat-destructive-text)]"
         >
           <span>{error}</span>
           <Button
@@ -1032,7 +1032,7 @@ function FileViewerOverlay({
       <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
         <nav
           aria-label="Breadcrumb"
-          className="flex min-w-0 items-center gap-1.5 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-base)]/90 px-2.5 py-1 text-sm text-[var(--chat-text-secondary)] backdrop-blur-sm"
+          className="flex min-w-0 items-center gap-1.5 rounded-md bg-[var(--chat-surface-base)]/90 px-2.5 py-1 text-sm text-[var(--chat-text-secondary)] backdrop-blur-sm"
         >
           <span className="shrink-0">Library</span>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -1040,12 +1040,12 @@ function FileViewerOverlay({
             {libraryItemDisplayName(item)}
           </span>
         </nav>
-        <div className="flex shrink-0 items-center gap-1.5 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-base)]/90 p-1 backdrop-blur-sm">
+        <div className="flex shrink-0 items-center gap-1.5 rounded-md bg-[var(--chat-surface-base)]/90 p-1 backdrop-blur-sm">
           {previewUri ? (
             <div
               role="group"
               aria-label="Zoom"
-              className="flex items-center gap-1 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] px-1 py-1"
+              className="flex items-center gap-1 rounded-md border border-[var(--chat-border)] px-1 py-1"
             >
               <button
                 type="button"
@@ -1112,7 +1112,7 @@ function FileViewerOverlay({
             className="max-h-full max-w-full object-contain"
           />
         ) : (
-          <div className="flex flex-col items-center gap-3 rounded-[var(--chat-radius-lg)] bg-[var(--chat-surface-base)] p-8 text-center text-sm text-[var(--chat-text-secondary)]">
+          <div className="flex flex-col items-center gap-3 rounded-lg bg-[var(--chat-surface-base)] p-8 text-center text-sm text-[var(--chat-text-secondary)]">
             <FileKindIcon
               kind={iconKindFor(item.file_name, item.mime_type)}
               className="h-12 w-12 text-[var(--chat-text-muted)]"
@@ -1128,7 +1128,7 @@ function FileViewerOverlay({
 
       {askAboutFile ? (
         <form
-          className="absolute inset-x-0 bottom-6 mx-auto flex h-12 w-full max-w-[600px] shrink-0 items-center gap-1 rounded-[28px] border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] px-2 shadow-lg backdrop-blur-sm"
+          className="absolute inset-x-0 bottom-6 mx-auto flex h-12 w-full max-w-[600px] shrink-0 items-center gap-1 rounded-hero border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] px-2 shadow-lg backdrop-blur-sm"
           onSubmit={(event) => {
             event.preventDefault();
             submitQuestion();
@@ -1346,7 +1346,7 @@ function LibraryGrid(props: LibraryListProps) {
 }
 
 const TILE_SHELL_CLASS =
-  'rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] hover:bg-[var(--chat-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+  'rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] hover:bg-[var(--chat-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 const TILE_MEDIA_CLASS = `flex aspect-square w-full items-center justify-center overflow-hidden ${TILE_SHELL_CLASS}`;
 
@@ -1486,10 +1486,10 @@ function LibraryList(props: LibraryListProps) {
 }
 
 const MENU_PANEL_CLASS =
-  'absolute right-0 z-20 mt-1 min-w-44 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
+  'absolute right-0 z-[var(--z-content-sticky)] mt-1 min-w-44 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
 
 const MENU_TRIGGER_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+  'flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 /**
  * The tile chip stays in the DOM at low emphasis and gains its border and full
@@ -1497,13 +1497,13 @@ const MENU_TRIGGER_CLASS =
  * unreachable on a touch pointer, which has neither.
  */
 const MENU_TRIGGER_OVERLAY_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-[var(--chat-radius-sm)] border border-transparent bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+  'flex h-8 w-8 items-center justify-center rounded-sm border border-transparent bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 const MENU_ITEM_CLASS =
-  'flex w-full min-h-9 items-center gap-2 rounded-[var(--chat-radius-sm)] px-2.5 py-1.5 text-left text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
+  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-left text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
 const MENU_ITEM_DESTRUCTIVE_CLASS =
-  'flex w-full min-h-9 items-center gap-2 rounded-[var(--chat-radius-sm)] px-2.5 py-1.5 text-left text-sm text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
+  'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-left text-sm text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
 function useDismissOnOutsideClick(
   open: boolean,
@@ -1848,7 +1848,7 @@ function SortMenu({
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
         aria-label={`Sort by ${active?.label ?? sort}`}
-        className="flex min-h-9 items-center gap-1.5 rounded-[var(--chat-radius-md)] px-2.5 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+        className="flex min-h-9 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
       >
         <SlidersHorizontal className="h-4 w-4" aria-hidden />
         <span className="hidden sm:inline">{active?.label}</span>
@@ -1896,8 +1896,8 @@ function ToolbarToggle({
       onClick={onClick}
       className={
         pressed
-          ? 'flex min-h-9 items-center gap-1.5 rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] px-2.5 py-1.5 text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
-          : 'flex min-h-9 items-center gap-1.5 rounded-[var(--chat-radius-md)] px-2.5 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          ? 'flex min-h-9 items-center gap-1.5 rounded-md bg-[var(--chat-surface-hover)] px-2.5 py-1.5 text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          : 'flex min-h-9 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
       }
     >
       {children}
@@ -1928,8 +1928,8 @@ function IconToggle({
       onClick={onClick}
       className={
         pressed
-          ? 'flex h-9 w-9 items-center justify-center rounded-[var(--chat-radius-md)] bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
-          : 'flex h-9 w-9 items-center justify-center rounded-[var(--chat-radius-md)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          ? 'flex h-9 w-9 items-center justify-center rounded-md bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          : 'flex h-9 w-9 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
       }
     >
       {children}
@@ -1954,7 +1954,7 @@ function ArtifactSection({
     return (
       <div
         data-testid={`library-artifact-loading-${item.id}`}
-        className="flex items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-text-muted)]"
+        className="flex items-center gap-2 rounded-md border border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-text-muted)]"
       >
         <Spinner size="sm" className="h-3.5 w-3.5" />
         Loading preview
@@ -1966,7 +1966,7 @@ function ArtifactSection({
     return (
       <div
         data-testid={`library-artifact-error-${item.id}`}
-        className="flex items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-destructive-text)]"
+        className="flex items-center gap-2 rounded-md border border-[var(--chat-border)] px-3 py-3 text-xs text-[var(--chat-destructive-text)]"
       >
         <span>This artifact would not open ({source.message}).</span>
         <button
@@ -1981,7 +1981,7 @@ function ArtifactSection({
   }
 
   return (
-    <div className="rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] p-3">
+    <div className="rounded-md border border-[var(--chat-border)] p-3">
       <ArtifactRenderer
         artifact={{
           id: item.id,

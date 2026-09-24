@@ -7,17 +7,19 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDot,
+  Cloud,
   Code2,
   GitBranch,
+  Lightbulb,
   Lock,
   Mic,
+  Monitor,
   Plug,
   Plus,
   Search,
   Square,
   X,
 } from '@agiworkforce/icons';
-import { Cloud, Lightbulb, Monitor } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -55,6 +57,7 @@ import {
 } from '@/app/settings/_lib/preferences-client';
 import {
   DEFAULT_TOOL_APPROVAL_PREFERENCES,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
   TOOL_APPROVAL_POLICY_OPTIONS,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
   toolApprovalPolicyOption,
@@ -817,7 +820,7 @@ function ApprovalModeControl() {
     let cancelled = false;
     fetchPreferenceNamespace<ToolApprovalPreferences>(
       TOOL_APPROVAL_PREFERENCE_NAMESPACE,
-      DEFAULT_TOOL_APPROVAL_PREFERENCES,
+      WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
     )
       .then((value) => {
         if (!cancelled) setPolicy(value.defaultPolicy);

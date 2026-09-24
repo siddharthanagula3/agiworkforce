@@ -27,6 +27,11 @@ vi.mock('./tool-loop-anthropic', () => ({
 
 const mockGetE2BExecutor = vi.fn();
 const mockPauseE2BSession = vi.fn();
+const mockResolveCloudCodeExecutionPolicy = vi.fn();
+vi.mock('@/lib/server/code-execution-policy', () => ({
+  resolveCloudCodeExecutionPolicy: (...args: unknown[]) =>
+    mockResolveCloudCodeExecutionPolicy(...args),
+}));
 vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: (...args: unknown[]) => mockGetE2BExecutor(...args),
   pauseE2BSession: (...args: unknown[]) => mockPauseE2BSession(...args),
@@ -138,6 +143,8 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
+    mockResolveCloudCodeExecutionPolicy.mockReset();
+    mockResolveCloudCodeExecutionPolicy.mockResolvedValue({ allowed: true });
     mockPersistGeneratedFileBytes.mockReset();
     mockPersistGeneratedFiles.mockReset();
     mockReserveManagedUsageProviderStep.mockReset();
@@ -266,6 +273,463 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       state: 'ready_for_review',
     });
     expect(activity[7]?.event).toEqual({ type: 'stop', reason: 'end-turn' });
+  });
+
+  it('tells the model that a failed notebook cell has no process exit code', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_cell_error',
+                function: {
+                  name: EXECUTE_CODE_TOOL,
+                  arguments: JSON.stringify({
+                    language: 'python',
+                    code: "raise RuntimeError('EXPECTED_ERROR')",
+                  }),
+                },
+              },
+            ],
+          }),
+          chunk({}, 'tool_calls'),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'The cell raised an exception.' }), chunk({}, 'stop')]),
+      );
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode: vi.fn().mockResolvedValue({
+        ok: false,
+        output: '',
+        error: 'RuntimeError: EXPECTED_ERROR',
+      }),
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn(),
+    } satisfies E2BExecutor);
+
+    const processed = makeProcessed();
+    processed.chatRequest.code_execution = true;
+    await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    const continuation = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const toolResult = continuation.messages.find((message) => message.role === 'tool');
+    expect(toolResult?.content).toContain('RuntimeError: EXPECTED_ERROR');
+    expect(toolResult?.content).toContain('No process exit code is available');
+    expect(toolResult?.content).not.toMatch(/exit code [1-9]/i);
+  });
+
+  it('does not provision a sandbox when the account execution setting is unavailable', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_unavailable_policy',
+                function: {
+                  name: EXECUTE_CODE_TOOL,
+                  arguments: JSON.stringify({ language: 'python', code: 'print(1)' }),
+                },
+              },
+            ],
+          }),
+          chunk({}, 'tool_calls'),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Try again later.' }), chunk({}, 'stop')]),
+      );
+    mockResolveCloudCodeExecutionPolicy.mockResolvedValue({
+      allowed: false,
+      reason: 'unavailable',
+    });
+
+    const processed = makeProcessed();
+    processed.chatRequest.code_execution = true;
+    await drain(runToolLoop(processed, { approvalMode: 'auto', userId: 'user-1' }));
+
+    expect(mockGetE2BExecutor).not.toHaveBeenCalled();
+    const continuation = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(continuation.messages.find((message) => message.role === 'tool')?.content).toContain(
+      'account setting is temporarily unavailable',
+    );
+  });
+
+  it('retries one empty Free model continuation after code ran without executing the code twice', async () => {
+    const toolCall = sseStreamFrom([
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: 'call_free_code',
+            function: {
+              name: 'execute_code',
+              arguments: JSON.stringify({ language: 'python', code: 'print(7 * 6)' }),
+            },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(toolCall)
+      .mockResolvedValueOnce(sseStreamFrom([chunk({}, 'stop')]))
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Actual stdout: 42' }), chunk({}, 'stop')]),
+      );
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '42\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(3);
+    expect(runCode).toHaveBeenCalledTimes(1);
+    expect(output).toContain('Actual stdout: 42');
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('retries a reasoning-only Free continuation after a tool result without repeating the tool', async () => {
+    const toolCall = sseStreamFrom([
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: 'call_free_reasoning',
+            function: {
+              name: 'execute_code',
+              arguments: JSON.stringify({ language: 'python', code: 'print(7 * 6)' }),
+            },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(toolCall)
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({ content: '<thinking>Working through the result.</thinking>' }, 'stop'),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Actual stdout: 42' }), chunk({}, 'stop')]),
+      );
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '42\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(3);
+    expect(runCode).toHaveBeenCalledTimes(1);
+    expect(output).toContain('Actual stdout: 42');
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('retries a whitespace-only Free continuation without repeating the completed tool', async () => {
+    const toolCall = sseStreamFrom([
+      chunk({
+        tool_calls: [
+          {
+            index: 0,
+            id: 'call_free_whitespace',
+            function: {
+              name: 'execute_code',
+              arguments: JSON.stringify({ language: 'python', code: 'print(7 * 6)' }),
+            },
+          },
+        ],
+      }),
+      chunk({}, 'tool_calls'),
+    ]);
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(toolCall)
+      .mockResolvedValueOnce(sseStreamFrom([chunk({ content: '  \n  ' }, 'stop')]))
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Actual stdout: 42' }), chunk({}, 'stop')]),
+      );
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '42\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(3);
+    expect(runCode).toHaveBeenCalledOnce();
+    expect(output).toContain('Actual stdout: 42');
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('expands one output-limited Free continuation after code ran without rerunning code', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_free_length',
+                function: {
+                  name: 'execute_code',
+                  arguments: JSON.stringify({ language: 'python', code: 'print(7 * 6)' }),
+                },
+              },
+            ],
+          }),
+          chunk({}, 'tool_calls'),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStreamFrom([chunk({ reasoning: 'Checking stdout.' }, 'length')]))
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Actual stdout: 42' }), chunk({}, 'stop')]),
+      );
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '42\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(3);
+    expect(runCode).toHaveBeenCalledTimes(1);
+    const firstContinuation = mockBuildToolLoopStream.mock.calls[1]?.[2] as {
+      messages: Array<{ role: string }>;
+      max_tokens: number;
+    };
+    const retriedContinuation = mockBuildToolLoopStream.mock.calls[2]?.[2] as {
+      messages: Array<{ role: string }>;
+      max_tokens: number;
+    };
+    expect(retriedContinuation.max_tokens).toBe(firstContinuation.max_tokens * 2);
+    expect(retriedContinuation.messages).toEqual(firstContinuation.messages);
+    expect(retriedContinuation.messages.filter((message) => message.role === 'tool')).toHaveLength(
+      1,
+    );
+    expect(output).toContain('Actual stdout: 42');
+    expect(output).not.toContain('Checking stdout.');
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('honors an explicit Free output cap after a completed tool', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_free_capped',
+                function: {
+                  name: 'execute_code',
+                  arguments: JSON.stringify({ language: 'python', code: 'print(7 * 6)' }),
+                },
+              },
+            ],
+          }),
+          chunk({}, 'tool_calls'),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStreamFrom([chunk({ reasoning: 'Checking stdout.' }, 'length')]));
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '42\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+    processed.chatRequest.max_tokens = 1000;
+
+    await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    expect(runCode).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after one larger-budget Free continuation when it still has no answer', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_free_bounded',
+                function: {
+                  name: 'execute_code',
+                  arguments: JSON.stringify({ language: 'python', code: 'print(7 * 6)' }),
+                },
+              },
+            ],
+          }),
+          chunk({}, 'tool_calls'),
+        ]),
+      )
+      .mockResolvedValueOnce(sseStreamFrom([chunk({ reasoning: 'First attempt.' }, 'length')]))
+      .mockResolvedValueOnce(sseStreamFrom([chunk({ reasoning: 'Second attempt.' }, 'length')]));
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '42\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(3);
+    expect(runCode).toHaveBeenCalledTimes(1);
+    expect(output).not.toContain('First attempt.');
+  });
+
+  it('releases a Free post-tool reasoning prelude when the same stream produces an answer', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({
+            tool_calls: [
+              {
+                index: 0,
+                id: 'call_free_reasoning_answer',
+                function: {
+                  name: 'execute_code',
+                  arguments: JSON.stringify({ language: 'python', code: 'print(7 * 6)' }),
+                },
+              },
+            ],
+          }),
+          chunk({}, 'tool_calls'),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({ content: '<thinking>Checking stdout.</thinking>' }),
+          chunk({ content: 'Actual stdout: 42' }, 'stop'),
+        ]),
+      );
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: '42\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    expect(runCode).toHaveBeenCalledTimes(1);
+    expect(output).toContain('Actual stdout: 42');
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('adapts a Free model textual code call through the normal sandbox path without showing markup', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(
+        sseStreamFrom([
+          chunk({ content: '<tool_call>execute_code <arg_key>code</arg_key>' }),
+          chunk({ content: " <arg_value>print('CANCEL_RECOVERY_OK')</arg_value>" }),
+          chunk(
+            { content: ' <arg_key>language</arg_key> <arg_value>python</arg_value> </tool_call>' },
+            'stop',
+          ),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'CANCEL_RECOVERY_OK' }), chunk({}, 'stop')]),
+      );
+    const runCode = vi.fn().mockResolvedValue({ ok: true, output: 'CANCEL_RECOVERY_OK\n' });
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    expect(runCode).toHaveBeenCalledExactlyOnceWith({
+      language: 'python',
+      code: "print('CANCEL_RECOVERY_OK')",
+    });
+    expect(output).toContain('CANCEL_RECOVERY_OK');
+    expect(output).not.toContain('<tool_call>');
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('refuses a malformed Free model textual code call without executing or showing markup', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([
+        chunk({ content: '<tool_call>execute_code <arg_key>code</arg_key>' }),
+        chunk({ content: ' <arg_value>print(42)</arg_value> </tool_call>' }, 'stop'),
+      ]),
+    );
+    const runCode = vi.fn();
+    mockGetE2BExecutor.mockResolvedValue({
+      runCode,
+      writeFile: vi.fn(),
+      createFolder: vi.fn(),
+      dispose: vi.fn().mockResolvedValue(undefined),
+    } satisfies E2BExecutor);
+    const processed = makeProcessed();
+    processed.freeLane = {} as NonNullable<ProcessedRequest['freeLane']>;
+    processed.chatRequest.code_execution = true;
+
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+    expect(runCode).not.toHaveBeenCalled();
+    expect(output).toContain('code_execution_not_performed');
+    expect(output).not.toContain('<tool_call>');
   });
 
   it('fail-closes a model-emitted execute_code when the cut-over flag is OFF (gate-bypass guard)', async () => {

@@ -63,8 +63,8 @@ export { SETTINGS_CONNECTORS } from '@/features/connectors/hooks/use-connectors-
 function SectionSkeleton() {
   return (
     <div className="flex animate-pulse flex-col gap-6">
-      <div className="h-6 w-48 rounded bg-foreground/10" />
-      <div className="h-4 w-80 rounded bg-foreground/[0.07]" />
+      <div className="h-6 w-48 rounded-compact bg-foreground/10" />
+      <div className="h-4 w-80 rounded-compact bg-foreground/[0.07]" />
       <div className="h-40 w-full rounded-xl bg-foreground/[0.07]" />
     </div>
   );
@@ -189,7 +189,7 @@ export function WebSettingsModal({
     general: <GeneralSection />,
     account: <AccountSection />,
     team: (
-      <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
         <WorkspaceConsolePointer />
         <TeamSection />
       </div>

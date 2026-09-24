@@ -123,7 +123,7 @@ export const AnalyticsSettings = () => {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
           What Data Do We Collect?
         </h3>
-        <div className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+        <div role="list" className="space-y-3 text-sm text-gray-600 dark:text-gray-400">
           <DataCollectionItem
             label="Usage Events"
             description="Actions like creating automations, running goals, and feature usage"
@@ -293,6 +293,9 @@ const SettingToggle: React.FC<SettingToggleProps> = ({ title, description, enabl
       </div>
       <button
         type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={title}
         onClick={onToggle}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
           enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
@@ -320,7 +323,7 @@ const DataCollectionItem: React.FC<DataCollectionItemProps> = ({
   collected,
 }) => {
   return (
-    <div className="flex items-start gap-3">
+    <div role="listitem" className="flex items-start gap-3">
       <span className={collected ? 'text-green-600' : 'text-gray-400'}>
         {collected ? '✓' : '○'}
       </span>

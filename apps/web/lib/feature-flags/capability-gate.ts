@@ -72,13 +72,13 @@ export async function assertCapabilityAvailable(
   };
   if (gate.tenantLockedDown) {
     denied('disabled_by_organization');
-    throw createError.forbidden(
-      'This workspace is locked down while an incident is investigated. Contact support.',
-    );
+    throw createError
+      .forbidden('This workspace is locked down while an incident is investigated. Contact support.')
+      .asUserSafe();
   }
   if (!gate.capabilityAllowed(capability)) {
     denied('temporarily_unavailable');
-    throw createError.serviceUnavailable(await closedMessage(capability, label, nowMs));
+    throw createError.serviceUnavailable(await closedMessage(capability, label, nowMs)).asUserSafe();
   }
 }
 

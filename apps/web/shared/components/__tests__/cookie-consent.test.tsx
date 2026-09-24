@@ -27,21 +27,11 @@ vi.mock('next/script', () => ({
     ),
 }));
 
-vi.mock('next/navigation', () => ({
-  usePathname: () => '/pricing',
-}));
-
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: React.ReactNode }) => (
     <a href={href}>{children}</a>
   ),
 }));
-
-const clerkAuthMocks = vi.hoisted(() => ({
-  useAuth: vi.fn(() => ({ isLoaded: true, isSignedIn: false })),
-}));
-
-vi.mock('@clerk/nextjs', () => ({ useAuth: clerkAuthMocks.useAuth }));
 
 const TRACKING_ID = 'G-TESTID0000';
 
@@ -60,14 +50,21 @@ function storeDecision(preferences: CookiePreferences): void {
   );
 }
 
+function setSignedInCookie(signedIn: boolean): void {
+  document.cookie = signedIn
+    ? '__client_uat=1700000000; path=/'
+    : '__client_uat=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   delete (window as unknown as Record<string, unknown>)[`ga-disable-${TRACKING_ID}`];
-  clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
+  setSignedInCookie(false);
 });
 
 afterEach(() => {
   window.localStorage.clear();
+  setSignedInCookie(false);
   document.documentElement.style.removeProperty('--agi-consent-inset');
 });
 
@@ -323,7 +320,7 @@ describe('CookieConsent banner drives the gate', () => {
     }
   });
 
-  // The banner is fixed at z-50 over the composer. Both shells end at
+  // The banner is fixed at z-[var(--z-dropdown)] over the composer. Both shells end at
   // `--agi-consent-inset`, so publishing it while up and releasing it once
   // answered is what keeps the composer out from under the card.
   it('publishes its height while up and releases it once answered', async () => {
@@ -391,11 +388,9 @@ describe('CookieConsent banner drives the gate', () => {
     }
   });
 
-  // Consent belongs to the public site: a signed-in visitor is inside the
-  // product, not deciding whether to use it, the way neither chatgpt.com nor
-  // claude.ai interrupt a signed-in session with this banner.
-  it('never opens for a signed-in visitor, undecided or not', async () => {
-    clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+  it('does not interrupt a signed-in visitor with a current decision', async () => {
+    setSignedInCookie(true);
+    storeDecision(NECESSARY_ONLY_PREFERENCES);
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       render(<CookieConsent />);
@@ -410,19 +405,75 @@ describe('CookieConsent banner drives the gate', () => {
     }
   });
 
-  it('waits for Clerk to resolve before deciding whether to open', async () => {
-    clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: false, isSignedIn: false });
+  it('re-prompts a signed-in visitor whose consent predates the notice', async () => {
+    setSignedInCookie(true);
+    window.localStorage.setItem(
+      COOKIE_CONSENT_STORAGE_KEY,
+      JSON.stringify({
+        ...buildCookieConsentRecord(ALL_ACCEPTED_PREFERENCES),
+        noticeVersion: 'cookies:1999-01-01+privacy:1999-01-01',
+      }),
+    );
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      const { rerender } = render(<CookieConsent />);
+      render(
+        <>
+          <CookieConsent />
+          <AnalyticsConsentGate trackingId={TRACKING_ID} />
+        </>,
+      );
 
       await act(async () => {
         vi.advanceTimersByTime(2000);
       });
-      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
 
-      clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
-      rerender(<CookieConsent />);
+      expect(await screen.findByRole('region', { name: 'Cookie consent' })).toBeTruthy();
+      expect(gaScripts()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('closes an undecided tab after the visitor answers the notice in another tab', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+      await act(async () => {
+        vi.advanceTimersByTime(1200);
+      });
+      expect(await screen.findByRole('region', { name: 'Cookie consent' })).toBeTruthy();
+
+      storeDecision(NECESSARY_ONLY_PREFERENCES);
+      await act(async () => {
+        window.dispatchEvent(new StorageEvent('storage', { key: COOKIE_CONSENT_STORAGE_KEY }));
+      });
+
+      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not open after the delay if another tab answered first', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
+      storeDecision(NECESSARY_ONLY_PREFERENCES);
+
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens after the prompt delay for an undecided visitor', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<CookieConsent />);
       await act(async () => {
         vi.advanceTimersByTime(1200);
       });
@@ -433,7 +484,7 @@ describe('CookieConsent banner drives the gate', () => {
     }
   });
 
-  it('closes immediately if the visitor signs in while the banner is up', async () => {
+  it('keeps asking when an undecided visitor signs in while the banner is up', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const { rerender } = render(<CookieConsent />);
@@ -443,17 +494,17 @@ describe('CookieConsent banner drives the gate', () => {
       });
       expect(await screen.findByRole('region', { name: 'Cookie consent' })).toBeTruthy();
 
-      clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+      setSignedInCookie(true);
       rerender(<CookieConsent />);
 
-      expect(screen.queryByRole('region', { name: 'Cookie consent' })).toBeNull();
+      expect(await screen.findByRole('region', { name: 'Cookie consent' })).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
   });
 
   it('still opens from the explicit /cookies preferences control for a signed-in visitor', async () => {
-    clerkAuthMocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    setSignedInCookie(true);
     render(<CookieConsent />);
 
     await act(async () => {

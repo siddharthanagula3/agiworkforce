@@ -19,6 +19,7 @@ const SEARCH_VERB_PHRASES: readonly string[] = [
   'search online',
   'search for',
   'web search',
+  'web searches',
   'google it',
   'google for',
   'look it up',
@@ -85,6 +86,13 @@ function buildPhrasePattern(phrases: readonly string[]): RegExp {
 const SEARCH_VERB_PATTERN = buildPhrasePattern(SEARCH_VERB_PHRASES);
 const RECENCY_PATTERN = buildPhrasePattern(RECENCY_PHRASES);
 const SOURCE_PATTERN = buildPhrasePattern(SOURCE_PHRASES);
+const SEARCH_OPT_OUT_PATTERN =
+  /\b(?:do\s+not|don't|dont|never|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:the|on)\s+)?(?:web|internet|online)|browse(?:ing)?\s+(?:the\s+)?web|look(?:ing)?\s+(?:it|this|that)\s+up)\b/iu;
+const HTTP_URL_PATTERN = /https?:\/\/[^\s<>"']+/i;
+const URL_FETCH_ACTION_PATTERN =
+  /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
+const URL_FETCH_OPT_OUT_PATTERN =
+  /\b(?:do\s+not|don't|dont|never|avoid)\s+(?:fetch|open|read)\s+(?:(?:this|that|the)\s+)?(?:url|link|page|https?:\/\/)/iu;
 
 export type ExplicitSearchIntentSignal = 'search_verb' | 'recency' | 'sources';
 
@@ -102,12 +110,25 @@ export const EXPLICIT_SEARCH_INTENT_PHRASES: Readonly<
  */
 export function detectExplicitWebSearchIntent(text: string): ExplicitSearchIntentSignal | null {
   if (!text) return null;
+  if (hasExplicitWebSearchOptOut(text)) return null;
   if (SEARCH_VERB_PATTERN.test(text)) return 'search_verb';
   if (RECENCY_PATTERN.test(text)) return 'recency';
   if (SOURCE_PATTERN.test(text)) return 'sources';
   return null;
 }
 
+export function hasExplicitWebSearchOptOut(text: string): boolean {
+  return SEARCH_OPT_OUT_PATTERN.test(text);
+}
+
 export function hasExplicitWebSearchIntent(text: string): boolean {
   return detectExplicitWebSearchIntent(text) !== null;
+}
+
+export function hasExplicitWebFetchIntent(text: string): boolean {
+  return (
+    HTTP_URL_PATTERN.test(text) &&
+    URL_FETCH_ACTION_PATTERN.test(text) &&
+    !URL_FETCH_OPT_OUT_PATTERN.test(text)
+  );
 }

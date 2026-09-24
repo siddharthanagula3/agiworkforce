@@ -30,14 +30,16 @@ pub(super) fn build_tool_definitions(
     is_web_focus: bool,
     model: &str,
     skills_offered: bool,
+    turn_text: &str,
 ) -> (
     Option<Vec<ToolDefinition>>,
     Option<ToolChoice>,
     Option<Arc<crate::core::agi::tools::ToolRegistry>>,
+    Option<String>,
 ) {
     if enable_tools != Some(true) || tool_scope.is_none() {
         debug!("[Chat] Tools disabled: no explicit user-selected tool scope");
-        return (None, None, None);
+        return (None, None, None, None);
     }
 
     let registry = match tools::create_tool_registry_for_schema() {
@@ -51,7 +53,10 @@ pub(super) fn build_tool_definitions(
         }
     };
 
-    let mut tool_defs = tools::build_chat_tools(registry.as_ref(), Some(mcp_state));
+    let tools::ChatToolSet {
+        tools: mut tool_defs,
+        mut deferred_mcp,
+    } = tools::build_chat_tools_for_turn(registry.as_ref(), Some(mcp_state), turn_text);
 
     if !skills_offered {
         tool_defs.retain(|tool| tool.name != crate::core::agi::tools::SKILL_TOOL_ID);
@@ -76,13 +81,14 @@ pub(super) fn build_tool_definitions(
             // Local Web search is a narrow network permission. It never grants
             // file, shell, MCP, browser-control, memory, or connector tools.
             tool_defs.retain(|tool| tool.name == "search_web");
+            deferred_mcp.clear();
         }
         ChatToolScope::AgiWork => {
             if !capabilities.agentic {
                 warn!(
                     "[Chat] AGI Work tools withheld: selected model lacks verified agentic capability"
                 );
-                return (None, None, None);
+                return (None, None, None, None);
             }
         }
     }
@@ -119,10 +125,15 @@ pub(super) fn build_tool_definitions(
             "[Chat] Enabling {} tools for chat (Claude Desktop-like mode, includes MCP tools)",
             tool_defs.len()
         );
-        (Some(tool_defs), Some(ToolChoice::Auto), registry)
+        (
+            Some(tool_defs),
+            Some(ToolChoice::Auto),
+            registry,
+            crate::core::mcp::schema_budget::deferred_tools_notice(&deferred_mcp),
+        )
     } else {
         debug!("[Chat] No tools available, proceeding without tool support");
-        (None, None, None)
+        (None, None, None, None)
     }
 }
 
@@ -214,7 +225,7 @@ mod tests {
     #[test]
     fn unknown_model_capabilities_withhold_all_tools_until_provider_discovery() {
         let mcp_state = McpState::new();
-        let (tool_defs, _, _) = build_tool_definitions(
+        let (tool_defs, _, _, _) = build_tool_definitions(
             Some(true),
             Some(ChatToolScope::AgiWork),
             &mcp_state,
@@ -223,6 +234,7 @@ mod tests {
             false,
             "fixture-local-model:dynamic",
             true,
+            "",
         );
 
         assert!(
@@ -239,7 +251,7 @@ mod tests {
             agentic: true,
             ..Default::default()
         };
-        let (tool_defs, _, _) = build_tool_definitions(
+        let (tool_defs, _, _, _) = build_tool_definitions(
             Some(true),
             None,
             &mcp_state,
@@ -247,6 +259,7 @@ mod tests {
             false,
             "fixture-tool-model",
             true,
+            "",
         );
 
         assert!(tool_defs.is_none());
@@ -259,7 +272,7 @@ mod tests {
             tools: true,
             ..Default::default()
         };
-        let (tool_defs, _, _) = build_tool_definitions(
+        let (tool_defs, _, _, _) = build_tool_definitions(
             Some(true),
             Some(ChatToolScope::WebSearch),
             &mcp_state,
@@ -267,6 +280,7 @@ mod tests {
             false,
             "fixture-tool-model",
             false,
+            "",
         );
 
         let names: Vec<&str> = tool_defs
@@ -286,7 +300,7 @@ mod tests {
             agentic: false,
             ..Default::default()
         };
-        let (tool_defs, _, _) = build_tool_definitions(
+        let (tool_defs, _, _, _) = build_tool_definitions(
             Some(true),
             Some(ChatToolScope::AgiWork),
             &mcp_state,
@@ -294,6 +308,7 @@ mod tests {
             false,
             "fixture-tool-model",
             true,
+            "",
         );
 
         assert!(tool_defs.is_none());

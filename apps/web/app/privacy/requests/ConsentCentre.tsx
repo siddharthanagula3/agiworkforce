@@ -189,7 +189,7 @@ export function ConsentCentre({ optedOutBySignal: signalledByRequest }: ConsentC
             type="button"
             className="agi-ds-btn"
             data-variant="secondary"
-            style={{ marginTop: 8 }}
+            style={{ marginTop: 'var(--space-2)' }}
             disabled={isPending || (overriddenBySignal && !record?.granted)}
             onClick={() => void decide(purpose.id, !record?.granted, data.noticeVersion)}
           >

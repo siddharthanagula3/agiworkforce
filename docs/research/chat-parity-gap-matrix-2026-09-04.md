@@ -1,8 +1,13 @@
 # Chat parity gap matrix (chatgpt.com, claude.ai, AGI Workforce web) 2026-09-04
 
-Status: Current
+Status: Historical snapshot
 Owner: Product (founder) and the parity agents
 Last updated: 2026-09-04
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. Preserve this file as evidence
+of the measured September 4 products and AGI revision; do not treat its gap rows
+as current without re-verifying the implementation.
 
 Sources: docs/research/leader-ui-measurements-2026-09-04.md (both leaders, dark theme, 1543 wide), docs/research/agiworkforce-chat-measurements-2026-09-04.md (localhost, light theme, 1543 and 390 wide), docs/research/agiworkforce-chat-inventory-2026-09-04.md (code map at ce1391c49), docs/research/leader-ui-reference-2026-09-04.md (behaviour tour). Priorities: P0 broken functionality, P1 obvious visual or interaction parity gap, P2 noticeable polish difference, P3 minor cosmetic difference. P0 and P1 close before any P2 or P3 work starts. The "Shared" column is what both leaders do and is the implementation target unless the "Required change" says why AGI Workforce departs.
 

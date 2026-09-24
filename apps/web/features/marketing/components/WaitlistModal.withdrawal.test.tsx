@@ -15,8 +15,9 @@ vi.mock('@/lib/services/waitlistServiceClient', () => ({
 const WITHDRAWAL_ROUTE = '/privacy/requests';
 const BARE_UNSUBSCRIBE_PROMISE = /unsubscribe anytime/i;
 
-function openModal() {
+async function openModal() {
   fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
+  await screen.findByRole('dialog', undefined, { timeout: 5_000 });
 }
 
 describe('waitlist surfaces point their off-the-list promise at a route that exists', () => {
@@ -24,13 +25,13 @@ describe('waitlist surfaces point their off-the-list promise at a route that exi
     vi.clearAllMocks();
   });
 
-  it('gives the modal fine print a link to the withdrawal route instead of a bare promise', () => {
+  it('gives the modal fine print a link to the withdrawal route instead of a bare promise', async () => {
     render(
       <WaitlistModalProvider>
         <WaitlistTrigger label="Join Cloud waitlist" />
       </WaitlistModalProvider>,
     );
-    openModal();
+    await openModal();
 
     const finePrint = document.querySelector('.agi-ds-hint');
     expect(finePrint).not.toBeNull();
@@ -46,7 +47,7 @@ describe('waitlist surfaces point their off-the-list promise at a route that exi
         <WaitlistTrigger label="Join Cloud waitlist" />
       </WaitlistModalProvider>,
     );
-    openModal();
+    await openModal();
 
     fireEvent.change(screen.getByRole('textbox', { name: /email address/i }), {
       target: { value: 'visitor@example.com' },

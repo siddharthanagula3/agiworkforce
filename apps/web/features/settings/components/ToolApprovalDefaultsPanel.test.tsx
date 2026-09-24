@@ -23,20 +23,16 @@ describe('ToolApprovalDefaultsPanel', () => {
     preferences.readAutonomousToolApprovalsAllowed.mockResolvedValue(true);
   });
 
-  it('shows the fail-closed default when the account has never chosen one', async () => {
-    preferences.fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'ask_every_time' });
+  it('shows Skip approvals for an unconfigured website account', async () => {
+    preferences.fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'autonomous' });
 
     render(<ToolApprovalDefaultsPanel />);
 
     expect(preferences.fetchPreferenceNamespace).toHaveBeenCalledWith('tool-approvals', {
-      defaultPolicy: 'ask_every_time',
+      defaultPolicy: 'autonomous',
     });
-    await waitFor(() =>
-      expect(screen.getByRole('radio', { name: /Ask before every action/i })).toBeChecked(),
-    );
-    expect(
-      screen.getByRole('radio', { name: /Run read-only actions without asking/i }),
-    ).not.toBeChecked();
+    await waitFor(() => expect(screen.getByRole('radio', { name: SKIP_APPROVALS })).toBeChecked());
+    expect(screen.getByRole('radio', { name: /Ask before every action/i })).not.toBeChecked();
   });
 
   it('persists the account-wide default when the user opts into read-only auto-approval', async () => {
@@ -106,13 +102,13 @@ describe('ToolApprovalDefaultsPanel', () => {
     await waitFor(() => expect(screen.getByRole('radio', { name: SKIP_APPROVALS })).toBeDisabled());
   });
 
-  it('marks the fail-closed policy as the default in the list', async () => {
-    preferences.fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'ask_every_time' });
+  it('marks Skip approvals as the website default in the list', async () => {
+    preferences.fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'autonomous' });
 
     render(<ToolApprovalDefaultsPanel />);
 
     expect(
-      await screen.findByRole('radio', { name: /Ask before every action\s*Default/i }),
+      await screen.findByRole('radio', { name: /Skip approvals\s*Default/i }),
     ).toBeInTheDocument();
   });
 });

@@ -36,40 +36,42 @@
       ]
     },
     {
-      "id": "default-policy-asks-for-every-tool",
+      "id": "website-default-skips-eligible-approvals",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "prose",
-      "sentence": "**Consequence, and the single most important honest statement on the public pages:** the default policy is `ask_every_time` (`DEFAULT_TOOL_APPROVAL_POLICY` in `packages/contracts/types/src/tool-approval-policy.ts`) and `policyAutoApprovesTool` auto-approves nothing under it, so on a default account every tool call asks, built-in tools included.",
+      "sentence": "**Website account default:** every unconfigured website account with readable settings and a workspace that permits Skip approvals resolves to `autonomous` (`WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY` in `apps/web/shared/types/toolApprovalPolicy.ts`).",
       "implementation": [
-        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY",
+        "apps/web/shared/types/toolApprovalPolicy.ts#WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
-          "name": "ships ask_every_time as the default policy"
+          "name": "runs eligible built-ins for an unconfigured website account"
         },
         {
           "kind": "test",
-          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
-          "name": "auto-approves nothing under the default policy"
+          "file": "apps/web/shared/types/toolApprovalPolicy.test.ts",
+          "name": "uses Skip approvals for an unconfigured website account"
         }
       ]
     },
     {
-      "id": "builtin-runs-only-under-a-chosen-policy",
+      "id": "shared-fallback-still-asks",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "prose",
-      "sentence": "A built-in tool runs with no prompt only once the account has chosen `auto_approve_read_only` or `autonomous`, or has saved `allow` for that one tool.",
+      "sentence": "The shared `DEFAULT_TOOL_APPROVAL_POLICY` remains `ask_every_time` for unreadable policy data, missing identity, and other fail-closed paths; under it `policyAutoApprovesTool` auto-approves nothing.",
       "implementation": [
+        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts#loadToolApprovalPolicy",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
-          "name": "auto-approves nothing under the default policy"
+          "name": "auto-approves nothing when policy loading fails"
         }
       ]
     },
@@ -700,23 +702,6 @@
       ]
     },
     {
-      "id": "desktop-token-is-never-stored",
-      "section": "What is encrypted, and with which key",
-      "kind": "prose",
-      "sentence": "The desktop token minted by `apps/web/app/api/auth/desktop-token/route.ts` is also AES-256-GCM under `TOTP_ENCRYPTION_KEY`, but it is never stored: rotating that key invalidates outstanding desktop tokens and the desktop app re-pairs.",
-      "implementation": [
-        "apps/web/app/api/auth/desktop-token/route.ts",
-        "apps/web/lib/validate-env.ts"
-      ],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/lib/crypto/totp-envelope.test.ts",
-          "name": "TOTP secret storage"
-        }
-      ]
-    },
-    {
       "id": "default-key-id-needs-no-backfill",
       "section": "The key ring",
       "kind": "prose",
@@ -966,24 +951,10 @@
       ]
     },
     {
-      "id": "desktop-token-writes-no-durable-column",
-      "section": "Not yet done",
-      "kind": "prose",
-      "sentence": "`app/api/auth/desktop-token/route.ts` is not on this list: it writes no durable column, and the desktop token is handed to the client and never stored.",
-      "implementation": ["apps/web/lib/validate-env.ts"],
-      "proof": [
-        {
-          "kind": "test",
-          "file": "apps/web/lib/crypto/envelope.test.ts",
-          "name": "scripts/reencrypt.mjs"
-        }
-      ]
-    },
-    {
       "id": "device-token-key-is-required-by-nothing",
       "section": "What is encrypted, and with which key",
       "kind": "prose",
-      "sentence": "`apps/web/lib/validate-env.ts` does not require it, no module reads it, and it can be deleted from the deployment environment.",
+      "sentence": "`apps/web/lib/validate-env.ts` does not require the old encryption key and no module reads it.",
       "implementation": ["apps/web/lib/validate-env.ts"],
       "proof": [
         {
@@ -997,12 +968,17 @@
       "id": "device-authorization-bearer-columns-are-dropped",
       "section": "What is encrypted, and with which key",
       "kind": "prose",
-      "sentence": "That column was never encrypted, it held plain text that every writer set to NULL, and no route names it or its sibling `refresh_token` any more.",
+      "sentence": "That column was never encrypted, and current routes neither read nor write it or its sibling `refresh_token`.",
       "implementation": [
+        "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql",
         "apps/web/app/api/device/approve/route.ts",
         "apps/web/lib/validate-env.ts"
       ],
       "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-auth-surface.mjs"
+        },
         {
           "kind": "test",
           "file": "apps/web/__tests__/api/device-approve.test.ts",
@@ -1740,14 +1716,6 @@
       "why": "operator-procedure"
     },
     {
-      "id": "device-token-crypto-module-is-gone",
-      "section": "Not yet done",
-      "kind": "prose",
-      "sentence": "The `lib/device-token-crypto.ts` module this section used to name alongside it no longer exists.",
-      "implementation": ["apps/web/app/api/auth/desktop-token/route.ts"],
-      "why": "historical-record"
-    },
-    {
       "id": "losing-the-updater-key-ends-auto-update",
       "section": "4. Tauri updater signing key custody",
       "kind": "prose",
@@ -1897,6 +1865,17 @@
       "kind": "rows",
       "rows": 3,
       "implementation": ["apps/desktop/src-tauri/src/features/calendar/outlook_calendar.rs"],
+      "why": "historical-record"
+    },
+    {
+      "id": "legacy-device-token-retirement-rehearsal",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "Candidate migration `0292` retires both only if every value is NULL; it has passed a rolled-back local rehearsal but is not applied to production.",
+      "implementation": [
+        "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql",
+        "ACTIVE_ISSUES.md"
+      ],
       "why": "historical-record"
     },
     {

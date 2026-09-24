@@ -117,6 +117,7 @@ describe('a modal holds the page behind it still', () => {
 
 const HAND_ROLLED_ROOTS = ['apps/web/app', 'apps/web/features', 'apps/web/shared', 'packages/ui'];
 const LOCKS_ITSELF = /document\.body\.style\.overflow\s*=\s*['"]hidden['"]|<RemoveScroll\b/;
+const OWNS_KEYBOARD_CONTRACT = /\b(useDialogKeyboard|useOverlayDialog)\s*\(/;
 
 /**
  * Dialogs drawn by hand rather than on a primitive, which take no scroll lock.
@@ -209,6 +210,21 @@ function unlockedHandRolledModals(): string[] {
   return out.sort();
 }
 
+function handRolledWebModalsWithoutKeyboardContract(): string[] {
+  const out: string[] = [];
+  for (const root of HAND_ROLLED_ROOTS.filter((path) => path.startsWith('apps/web/'))) {
+    for (const file of sourceFiles(resolve(repoRoot, root))) {
+      if (file.startsWith(primitivesDir)) continue;
+      const text = readFileSync(file, 'utf8');
+      if (!text.includes('aria-modal')) continue;
+      if (claimsModal(file, text) && !OWNS_KEYBOARD_CONTRACT.test(text)) {
+        out.push(relative(repoRoot, file));
+      }
+    }
+  }
+  return out.sort();
+}
+
 describe('a dialog drawn by hand takes the same lock or is recorded', () => {
   const found = unlockedHandRolledModals();
 
@@ -226,5 +242,11 @@ describe('a dialog drawn by hand takes the same lock or is recorded', () => {
     for (const reason of Object.values(UNLOCKED_HAND_ROLLED_MODALS)) {
       expect(reason.length).toBeGreaterThan(20);
     }
+  });
+});
+
+describe('a hand-drawn Web modal owns the dialog keyboard contract', () => {
+  it('moves focus in, traps Tab, handles Escape and restores the opener through a shared hook', () => {
+    expect(handRolledWebModalsWithoutKeyboardContract()).toEqual([]);
   });
 });

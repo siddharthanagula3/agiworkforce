@@ -167,7 +167,7 @@ export function WorkspaceConsoleNav() {
       {SECTIONS.map((section) => (
         <div key={section.title} className="flex flex-col gap-1">
           <p
-            className="px-3 pb-1 text-[12px] font-medium uppercase tracking-[0.12em]"
+            className="px-3 pb-1 text-caption font-medium uppercase tracking-[0.12em]"
             style={{ color: 'var(--text-3)' }}
           >
             {section.title}
@@ -190,7 +190,7 @@ export function WorkspaceConsoleNav() {
                 <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0" />
                 <span className="flex min-w-0 flex-col">
                   <span className="text-sm font-medium leading-tight">{link.label}</span>
-                  <span className="text-[12px] leading-snug" style={{ color: 'var(--text-3)' }}>
+                  <span className="text-caption leading-snug" style={{ color: 'var(--text-3)' }}>
                     {link.hint}
                   </span>
                 </span>
@@ -214,7 +214,7 @@ export function WorkspaceConsoleNav() {
           className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
         >
           <span className="min-w-0">
-            <span className="block text-[12px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <span className="block text-caption font-medium uppercase tracking-[0.12em] text-muted-foreground">
               Administration
             </span>
             <span className="block truncate text-sm font-semibold text-foreground">

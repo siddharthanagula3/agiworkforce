@@ -47,7 +47,7 @@ const EVIDENCE: { label: string; value: string }[] = [
   {
     label: 'Business continuity and disaster recovery',
     value:
-      'docs/runbooks/business-continuity.md. The recovery mechanism per asset, the evidence for each, and the gaps: no declared objectives, no scheduled restore test, one region.',
+      'docs/runbooks/business-continuity.md. The recovery mechanism per asset, the evidence for each, and the gaps: no declared objectives, no scheduled restore test against the production database, one region.',
   },
   {
     label: 'Database backup and restore',
@@ -198,12 +198,12 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 175 of 276 database-backed hosted API route files. Counted against the 276 route files that reach the database; the other 117 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-21.',
+      'Partial: 175 of 276 database-backed hosted API route files. Counted against the 276 route files that reach the database; the other 116 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-21.',
   },
   {
     label: 'Authentication and CSRF',
     value:
-      'Implemented. Fourteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-17.',
+      'Implemented. Fifteen protected route groups are checked at the edge before render; admin routes require an explicit server-side role. CSRF tokens are HMAC-SHA256 with an enforced minimum secret length, constant-time comparison, a rotation window, and fail-closed behaviour when unconfigured. This row read six until 2026-09-12, while the matcher had grown to twelve. As of 2026-09-21.',
   },
   {
     label: 'Rate limiting',
@@ -218,7 +218,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Security event logging',
     value:
-      'Implemented: nine event types, written by a single module. Seven are failure and abuse events: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, admin action, failed CSRF validation, and invalid signature. Two are not failures and were missing from this row until 2026-09-12: a content notice filed against a generation, and the retention purge recording its own run so a window that did not hold is visible. There is no hosted per-tool activity journal; the desktop keeps one locally. As of 2026-09-14.',
+      'Implemented: nine event types, written by a single module. Seven are failure and abuse events: failed authentication, rate-limit exceeded, failed authorization, suspicious activity, admin action, failed CSRF validation, and invalid signature. Two are not failures and were missing from this row until 2026-09-12: a content notice filed against a generation, and the retention purge recording its own run so a window that did not hold is visible. Separately, the hosted service logs each call a connector makes for you: which connector, which tool, when, and whether it answered, never the arguments or the result. Calls to built-in tools are not in that log. As of 2026-09-21.',
   },
   {
     label: 'Account erasure',
@@ -228,7 +228,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Release signing',
     value:
-      'Implemented on macOS and Windows. The macOS workflow fails without Apple signing and notarization credentials and ships a notarized universal disk image. The Windows installer is signed through Azure Trusted Signing and the pipeline blocks if the signature does not verify. As of 2026-08-05.',
+      'Implemented on macOS for the desktop app. Its release workflow fails without Apple signing and notarization credentials, builds a signed and notarized disk image for each Mac architecture, and verifies the signature and notarization of each before anything is uploaded. There is no Windows build of the desktop app, so nothing is signed for Windows. As of 2026-09-21.',
   },
   {
     label: 'Managed Cloud maturity',
@@ -243,7 +243,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Business continuity evidence',
     value:
-      'Summarised, with the gaps named. docs/runbooks/business-continuity.md states the recovery mechanism for each asset, the evidence in the repository for each one, and what is not measured: no declared recovery point or recovery time objective, no scheduled restore test, and no second region or provider for serving. Two restore drills exist and are run by a human, so the recovery point is a property of the configuration rather than a tested outcome. As of 2026-09-18.',
+      'Summarised, with the gaps named. docs/runbooks/business-continuity.md states the recovery mechanism for each asset, the evidence in the repository for each one, and what is not measured: no declared recovery point or recovery time objective, no scheduled restore test against the production database, and no second region or provider for serving. Of the two restore drills, the host-neutral one runs every week against a throwaway database built from the migrations, which proves the restore commands and the schema but not that this deployment’s data restores. The point-in-time drill against the real database is run by a human, so the recovery point is a property of the configuration rather than a tested outcome. As of 2026-09-21.',
   },
 ];
 
@@ -262,7 +262,7 @@ const VERIFY = [
   },
   {
     title: 'Check the Windows installer signature',
-    body: 'No Windows installer is published yet. When one is, run Get-AuthenticodeSignature on it: our release pipeline blocks publication unless that check reports Valid, so yours should agree.',
+    body: 'There is nothing to check yet: the desktop app is built for macOS only, and no Windows installer exists. When one ships, run Get-AuthenticodeSignature on it before you run it.',
   },
   {
     title: 'Check Local mode with a packet capture',
@@ -384,7 +384,12 @@ export default function TrustPage() {
                       {
                         label: '2026-09-21',
                         value:
-                          'Re-measured after the free quota model list began reading the account\u2019s plan as the caller, which moves that route onto the database under row-level isolation, and after the operator record of the QwenCloud free-quota-only check arrived, which keeps its state in the shared cache rather than the database. The row-level-isolation count moved from 174 to 175 of 276 database-backed routes; the owner-connection remainder stays at 101 and the routes that touch no database stay at 115.',
+                          'Three rows corrected against the code. Release signing described a retired desktop build: the desktop app is built and notarized for macOS, one disk image per Mac architecture, and has no Windows build at all, so the Windows signing it claimed signs nothing we ship. Business continuity said no restore test is scheduled, while the host-neutral restore drill has run every week since 5 September; what has no scheduled test is the production database. Security event logging said the hosted service keeps no per-tool log, while every call a connector makes has been logged since 17 September. Each row now names the owner and the test that proves it in a reviewed index, and a row whose text changes without a matching review fails the build.',
+                      },
+                      {
+                        label: '2026-09-21',
+                        value:
+                          'Re-measured after the free quota model list began reading the account\u2019s plan as the caller, which moves that route onto the database under row-level isolation, and after the operator record of the QwenCloud free-quota-only check arrived, which keeps its state in the shared cache rather than the database. The row-level-isolation count moved from 174 to 175 of 276 database-backed routes; the owner-connection remainder stays at 101 and the routes that touch no database stay at 115. Re-measured again after the two support staff ticket routes arrived, which reach the database through services rather than in the route file, and an unused route that minted a desktop sign-in link was deleted, which leaves 116 hosted routes that touch no database.',
                       },
                       {
                         label: '2026-09-20',

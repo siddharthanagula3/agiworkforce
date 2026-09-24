@@ -13,9 +13,14 @@ export interface RouteLoadingProps {
  */
 export function RouteLoading({ label }: RouteLoadingProps) {
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 py-12">
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 bg-background px-4 py-12 text-foreground">
       <Spinner size="lg" className="text-muted-foreground" aria-hidden="true" />
-      <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+      <p
+        className="text-sm text-muted-foreground"
+        role="status"
+        aria-live="polite"
+        aria-label={label}
+      >
         {label}
       </p>
     </div>

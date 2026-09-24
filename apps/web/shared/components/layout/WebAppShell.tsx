@@ -57,6 +57,7 @@ import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import {
   conversationDeleteConfirm,
   conversationHref,
+  conversationShareHref,
   projectDeleteConfirm,
   runSessionRowAction,
 } from '@shared/components/layout/sidebar-session-actions';
@@ -329,10 +330,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     [conversations, updateConversation],
   );
   const handleMarkUnreadSession = useCallback((id: string) => toggleUnread(id), [toggleUnread]);
-  // No conversation is on screen outside /chat, so Share opens the one the row
-  // names; its header share control is the only place the link can be minted.
   const handleShareSession = useCallback(
-    (id: string) => router.push(conversationHref(id)),
+    (id: string) => router.push(conversationShareHref(id)),
     [router],
   );
   const handleMoveToProjectSession = useCallback(
@@ -501,8 +500,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     >
       <span className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted" aria-hidden />
       <span className="flex min-w-0 flex-1 flex-col gap-1.5" aria-hidden>
-        <span className="h-3 w-24 animate-pulse rounded bg-muted" />
-        <span className="h-2.5 w-32 animate-pulse rounded bg-muted/70" />
+        <span className="h-3 w-24 animate-pulse rounded-compact bg-muted" />
+        <span className="h-2.5 w-32 animate-pulse rounded-compact bg-muted/70" />
       </span>
       <span className="sr-only">Loading account…</span>
     </div>
@@ -514,7 +513,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           <button
             type="button"
             aria-label={`Account menu for ${displayName}`}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}
@@ -525,7 +524,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
                 <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
               </div>
               {accountUser?.email && (
-                <p className="truncate text-[12px] text-muted-foreground">{accountUser.email}</p>
+                <p className="truncate text-caption text-muted-foreground">{accountUser.email}</p>
               )}
             </div>
             <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -551,7 +550,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
               <button
                 type="button"
                 aria-label={`Account menu for ${displayName}`}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
               >
                 {userInitial}
               </button>
@@ -587,7 +586,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     onNewChat: handleNewChat,
     onOpenCode: disabledFeatures.includes('code') ? undefined : handleOpenCode,
     onOpenSearch: handleOpenSearch,
-    showUsageWidget: managedUsageSummary !== null,
+    showUsageWidget: currentTier !== undefined && !isFreeTier && managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,
     onOpenUsage: handleOpenUsage,
     onSelect: handleSelectSession,
@@ -610,7 +609,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   };
 
   // The shell ends where the consent banner begins rather than running under
-  // it. The banner is fixed at z-50 and its card takes pointer events, so
+  // it. The banner is fixed at z-[var(--z-dropdown)] and its card takes pointer events, so
   // anything the app painted in that strip was unreachable until it was
   // answered: measured at 390x844, where the banner is 267px tall, the
   // "Create Your First Schedule" button on /chat/schedules and Preview,
@@ -660,7 +659,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
                 aria-expanded={mobileNavOpen}
                 aria-controls="webappshell-mobile-nav"
                 onClick={openMobileNav}
-                className="flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-foreground transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
               >
                 <Menu className="h-5 w-5" aria-hidden="true" />
               </button>

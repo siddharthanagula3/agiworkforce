@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
-import { listCanonicalModels, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import {
+  listCanonicalModels,
+  getProviderOfferings,
+  AGENT_EVENT_SCHEMA_VERSION,
+} from '@agiworkforce/types';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { useChatStream, saveMessageToDb } from './useChatStream';
 
 const NON_REASONING_CHAT_MODEL = (() => {
@@ -131,6 +136,24 @@ describe('useChatStream', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps the specific conversation-start failure instead of replacing it with a generic notice', async () => {
+    const { result } = renderHook(() => useChatStream());
+    const message = 'This account is sending requests too quickly. Try again in about 60 seconds.';
+
+    await act(async () => {
+      await result.current.sendMessage('Hello', {
+        conversationId: TEMP_CONVERSATION.id,
+        ensureConversationId: async () => {
+          useChatStore.getState().setError(message, TEMP_CONVERSATION.id);
+          return null;
+        },
+      });
+    });
+
+    expect(useChatStore.getState().error).toBe(message);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('shows quota exhaustion without generic retry guidance', async () => {
     const message =
       'This model’s free quota has been exhausted. Choose another model in Free to continue.';
@@ -153,6 +176,169 @@ describe('useChatStream', () => {
     expect(assistant?.metadata?.errorCode).toBe('free_quota_exhausted');
     expect(assistant?.content).not.toMatch(/try again|start a new chat/i);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps artifact formatting instructions out of the visible and persisted user turn', async () => {
+    mockSseStream([{ choices: [{ delta: { content: 'done' }, finish_reason: 'stop' }] }]);
+    const prompt = 'Create an HTML artifact that says hello.';
+    const artifactInstruction =
+      'Answer with one ```html block. Put <!-- @artifact --> on the first line.';
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage(prompt, {
+        conversationId: TEMP_CONVERSATION.id,
+        artifactInstruction,
+      });
+    });
+
+    const userMessage = useChatStore.getState().messages.find((message) => message.role === 'user');
+    expect(userMessage?.content).toBe(prompt);
+    const completionCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/llm/'));
+    const request = JSON.parse(String(completionCall?.[1]?.body ?? '{}')) as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages?.[0]).toEqual({ role: 'system', content: artifactInstruction });
+    expect(request.messages?.at(-1)).toMatchObject({ role: 'user', content: prompt });
+  });
+
+  it('sends only the current text prompt to a promotional media route in a long conversation', async () => {
+    const offeringKey = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'image-sync',
+    )![0];
+    useChatStore.getState().addMessage(
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: 'Earlier conversation context must not become a generation prompt.',
+        createdAt: new Date().toISOString(),
+      },
+      TEMP_CONVERSATION.id,
+    );
+    mockSseStream([
+      {
+        choices: [
+          { delta: { content: '![Generated image](</api/files/fixture>)' }, finish_reason: 'stop' },
+        ],
+      },
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Draw a blue paper boat', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: offeringKey,
+      });
+    });
+
+    const completionCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/models/free-quota/completions'));
+    expect(completionCall).toBeDefined();
+    const request = JSON.parse(String(completionCall?.[1]?.body ?? '{}')) as {
+      model: string;
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(request.model).toBe(offeringKey);
+    expect(request.messages).toEqual([{ role: 'user', content: 'Draw a blue paper boat' }]);
+  });
+
+  it('omits prior attachment parts when a new text turn switches to a promotional chat route', async () => {
+    const offeringKey = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat' && offering.provider === 'qwen',
+    )![0];
+    useChatStore.getState().addMessage(
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: 'What does the image say?',
+        attachments: [
+          { id: 'fixture-image', assetId: 'fixture-asset', type: 'image', name: 'fixture.png' },
+        ],
+        createdAt: new Date().toISOString(),
+      },
+      TEMP_CONVERSATION.id,
+    );
+    mockSseStream([{ choices: [{ delta: { content: 'hello' }, finish_reason: 'stop' }] }]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Reply with hello.', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: offeringKey,
+      });
+    });
+
+    const completionCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/api/models/free-quota/completions'));
+    const request = JSON.parse(String(completionCall?.[1]?.body ?? '{}')) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(request.messages.every((message) => typeof message.content === 'string')).toBe(true);
+    expect(request.messages[0]?.content).toContain(
+      'attachment in this earlier message is unavailable',
+    );
+    expect(request.messages.at(-1)).toMatchObject({ role: 'user', content: 'Reply with hello.' });
+  });
+
+  it('projects a generated Free video file into the existing inline video player', async () => {
+    const offeringKey = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'video-async',
+    )![0];
+    const videoUrl = '/api/files/00000000-0000-4000-8000-000000000001';
+    mockSseStream([
+      {
+        choices: [
+          {
+            delta: { content: `[View generated video](<${videoUrl}>)` },
+            finish_reason: 'stop',
+          },
+        ],
+      },
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Animate a blue paper boat', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: offeringKey,
+      });
+    });
+
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.content).toBe('Video generated.');
+    expect(assistant?.metadata).toMatchObject({
+      toolType: 'video-generation',
+      videoStatus: 'completed',
+      videoUrl,
+    });
+  });
+
+  it('does not turn an arbitrary provider video link into a generated-file player', async () => {
+    const offeringKey = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'video-async',
+    )![0];
+    const link = '[View generated video](<https://untrusted.example/video.mp4>)';
+    mockSseStream([{ choices: [{ delta: { content: link }, finish_reason: 'stop' }] }]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('Animate a blue paper boat', {
+        conversationId: TEMP_CONVERSATION.id,
+        model: offeringKey,
+      });
+    });
+
+    const assistant = useChatStore
+      .getState()
+      .messagesByConversation[TEMP_CONVERSATION.id]?.find((entry) => entry.role === 'assistant');
+    expect(assistant?.content).toBe(link);
+    expect(assistant?.metadata?.videoUrl).toBeUndefined();
   });
 
   describe('auth failure at send time', () => {
@@ -212,27 +398,23 @@ describe('useChatStream', () => {
       isTemporary: false,
     };
 
-    it('does not start provider egress until the user row is durable', async () => {
+    it('admits the durable user row through the completion request without a client save round trip', async () => {
       useChatStore.setState({
         activeConversationId: persistedConversation.id,
         conversations: [persistedConversation],
       });
-      let finishUserSave!: (response: Response) => void;
       const calls: string[] = [];
+      let completionBody: Record<string, unknown> | undefined;
       vi.mocked(fetch).mockImplementation(async (input, init) => {
         const url = String(input);
         if (url.includes('/messages')) {
           const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
           calls.push(`save:${String(body['role'])}`);
-          if (body['role'] === 'user') {
-            return await new Promise<Response>((resolve) => {
-              finishUserSave = resolve;
-            });
-          }
           return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
         }
         if (url.includes('/api/llm/')) {
-          calls.push('provider');
+          calls.push('completion');
+          completionBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
           const stream = new ReadableStream({
             start(controller) {
               controller.enqueue(
@@ -249,50 +431,56 @@ describe('useChatStream', () => {
       });
 
       const { result } = renderHook(() => useChatStream());
-      let send!: Promise<boolean>;
-      act(() => {
-        send = result.current.sendMessage('admit this exact turn', {
+      const onTurnCommitted = vi.fn();
+      await act(async () => {
+        await result.current.sendMessage('admit this exact turn', {
           conversationId: persistedConversation.id,
+          onTurnCommitted,
         });
       });
 
-      await vi.waitFor(() => expect(finishUserSave).toBeTypeOf('function'));
-      expect(calls).toEqual(['save:user']);
-
-      finishUserSave(
-        new Response(JSON.stringify({ message: { id: '11111111-1111-4111-8111-111111111111' } }), {
-          status: 200,
-        }),
-      );
-      await act(async () => {
-        await send;
+      await vi.waitFor(() => expect(calls).toEqual(['completion', 'save:assistant']));
+      expect(completionBody?.['user_message']).toMatchObject({
+        id: expect.stringMatching(/^[0-9a-f-]{36}$/u),
       });
-      await vi.waitFor(() => expect(calls).toEqual(['save:user', 'provider', 'save:assistant']));
+      expect(onTurnCommitted).toHaveBeenCalledOnce();
     });
 
-    it('never calls the provider when the durable user-row write fails, though the optimistic message stays painted', async () => {
+    it('surfaces a server-side admission failure without falling back to the old message endpoint', async () => {
       useChatStore.setState({
         activeConversationId: persistedConversation.id,
         conversations: [persistedConversation],
       });
-      const providerCalls: string[] = [];
-      vi.mocked(fetch).mockImplementation(async (input) => {
+      const calls: string[] = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
         const url = String(input);
-        if (url.includes('/messages')) return new Response('{}', { status: 422 });
-        if (url.includes('/api/llm/')) providerCalls.push(url);
+        if (url.includes('/api/llm/')) {
+          calls.push('completion');
+          return new Response(
+            JSON.stringify({
+              error: {
+                message: 'Your message could not be saved. No model request was sent.',
+                code: 'user_message_persistence_failed',
+              },
+            }),
+            { status: 503 },
+          );
+        }
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          calls.push(`save:${String(body['role'])}`);
+        }
         return new Response('{}', { status: 200 });
       });
 
       const { result } = renderHook(() => useChatStream());
       await act(async () => {
-        await expect(
-          result.current.sendMessage('do not bill this', {
-            conversationId: persistedConversation.id,
-          }),
-        ).resolves.toBe(false);
+        await result.current.sendMessage('do not bill this', {
+          conversationId: persistedConversation.id,
+        });
       });
 
-      expect(providerCalls).toEqual([]);
+      expect(calls).toEqual(['completion', 'save:user', 'save:assistant']);
       expect(
         useChatStore
           .getState()
@@ -301,7 +489,7 @@ describe('useChatStream', () => {
           ),
       ).toBe(true);
       expect(useChatStore.getState().error).toBe(
-        'Your message was not saved, so no model was called.',
+        'Your message could not be saved. No model request was sent.',
       );
     });
   });
@@ -1378,13 +1566,18 @@ describe('useChatStream', () => {
         new Response(JSON.stringify({ code: 'CSRF_VALIDATION_FAILED' }), { status: 403 }),
       );
 
-      await expect(
-        saveMessageToDb(
+      let rejection: unknown;
+      try {
+        await saveMessageToDb(
           'conv-1',
           { id: 'msg-3', role: 'assistant', content: 'answer' },
           getAuthToken,
-        ),
-      ).rejects.toThrow('Failed to save message to DB: 403');
+        );
+      } catch (error) {
+        rejection = error;
+      }
+      expect(rejection).toBeInstanceOf(Error);
+      expect((rejection as Error).message).toContain('Failed to save message to DB: 403');
     });
   });
 
@@ -2016,6 +2209,9 @@ describe('useChatStream', () => {
       expect(assistantMessages[0]?.id).toBe('0190a000-0000-7000-8000-0000000000aa');
       expect(assistantMessages[0]?.content).toBe('Once upon a time, the story continued.');
       expect(assistantMessages[0]?.metadata?.finishReason).toBe('stop');
+      expect(assistantMessages[0]?.metadata?.artifactDerivation).toBe(
+        EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+      );
 
       const llmRequest = llmBodies[0]!;
       expect(llmRequest['model']).toBe('test/model-1');

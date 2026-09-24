@@ -29,7 +29,6 @@ export interface UnauditedRoute {
 export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'analytics/events/route.ts', reason: 'own_content' },
   { route: 'artifacts/publish/[token]/route.ts', reason: 'own_content' },
-  { route: 'auth/desktop-token/route.ts', reason: 'no_governed_state' },
   { route: 'auth/device/code/route.ts', reason: 'no_governed_state' },
   { route: 'auth/device/token/route.ts', reason: 'no_governed_state' },
   { route: 'beta/apply/route.ts', reason: 'pre_account' },
@@ -108,6 +107,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'uploads/knowledge-file/put/route.ts', reason: 'own_content' },
   { route: 'uploads/local-project-knowledge/route.ts', reason: 'own_content' },
   { route: 'uploads/presign/route.ts', reason: 'own_content' },
+  { route: 'voice/transcribe/route.ts', reason: 'dedicated_record' },
   { route: 'voice/live/sessions/[sessionId]/settings/route.ts', reason: 'own_content' },
   { route: 'waitlist/cloud-managed/route.ts', reason: 'pre_account' },
   { route: 'waitlist/public/route.ts', reason: 'pre_account' },

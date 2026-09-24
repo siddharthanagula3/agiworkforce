@@ -4,7 +4,7 @@ title: Troubleshooting: when something does not work
 path: /support
 category: troubleshooting
 tags: troubleshooting, not working, error, failed, broken, stuck, cannot send, no response, offline, retry, upgrade required, unavailable, contact support, search failed, search unavailable, cli login, agi login, device code, extension
-updated: 2026-09-21
+updated: 2026-09-22
 scope: public
 ---
 
@@ -43,9 +43,10 @@ files. Convert, split, or paste the contents as text.
 
 ## A tool or connector did nothing
 
-On the default approval setting every tool action waits for you, so a session
-that looks stalled may be waiting on an approval. Check the approval prompt, the
-connector's **Recent calls** log, and its per-tool permissions: a tool set to
+Under the website's Skip approvals default, eligible tools run automatically.
+A session may still wait for a destructive or unknown action, a saved Ask choice,
+or a workspace restriction. Check the approval prompt, the connector's
+**Recent calls** log, and its per-tool permissions: a tool set to
 **Never run this tool** is refused by your own setting.
 
 ## A model is missing from the picker

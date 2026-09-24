@@ -88,7 +88,7 @@ export function UpgradeWelcome({
               <div className="mt-4 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-sm">
                 <span
                   className="rounded-full px-3 py-1 font-semibold text-[var(--chat-accent-on-primary)]"
-                  style={{ background: 'var(--chat-accent-primary, #c8892a)' }}
+                  style={{ background: 'var(--chat-accent-primary)' }}
                 >
                   {planLabel}
                 </span>
@@ -163,7 +163,7 @@ export function UpgradeWelcome({
           <Link
             href="/chat"
             className="w-full rounded-lg border border-transparent px-5 py-3 text-center text-sm font-semibold text-[var(--chat-accent-on-primary)] no-underline transition-opacity hover:opacity-90 sm:w-auto sm:py-2.5"
-            style={{ background: 'var(--chat-accent-primary, #c8892a)' }}
+            style={{ background: 'var(--chat-accent-primary)' }}
           >
             Start chatting
           </Link>
@@ -186,7 +186,7 @@ function StatusMark({ activated }: { activated: boolean }) {
       className="relative flex h-16 w-16 items-center justify-center rounded-full"
       style={{
         background:
-          'linear-gradient(135deg, var(--chat-accent-primary, #c8892a) 0%, var(--chat-accent-secondary, #21808d) 100%)',
+          'linear-gradient(135deg, var(--chat-accent-primary) 0%, var(--chat-accent-secondary) 100%)',
       }}
     >
       {activated ? (

@@ -22,7 +22,7 @@ import {
   type SupportTicketThread,
 } from '../lib/ticket-client';
 
-const CARD_CLASS = 'rounded-[var(--radius-lg)] border border-border bg-background p-3';
+const CARD_CLASS = 'rounded-lg border border-border bg-background p-3';
 const FIELD_CLASS =
   'w-full rounded-md border border-border bg-background px-3 py-2 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring disabled:opacity-60';
 const PRIMARY_BUTTON_CLASS =

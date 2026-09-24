@@ -7,7 +7,13 @@ import type {
 } from '@agiworkforce/unified-chat/composer-editor';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
-import { readPersistedDraft, writePersistedDraft } from './composer-draft-storage';
+import { parkPendingDraft } from '@features/chat/lib/pending-composer-draft';
+import { hasPendingDraftClear } from '@features/chat/lib/pending-draft-clear';
+import {
+  __resetComposerDraftStorageForTests,
+  readPersistedDraft,
+  writePersistedDraft,
+} from './composer-draft-storage';
 import { ChatComposerNew } from './ChatComposerNew';
 
 /**
@@ -107,19 +113,20 @@ function draftStorageKeys(): string[] {
   return Object.keys(window.localStorage).filter((key) => key.startsWith('agi-composer-draft'));
 }
 
-/** A reload keeps localStorage and nothing else. */
+/** A reload keeps localStorage and its tab-scoped owner pointer. */
 function simulateDocumentReload() {
   useChatStore.setState({
     draftsByConversation: {},
     draftContent: '',
     composerTogglesByConversation: {},
   });
-  window.sessionStorage.clear();
+  __resetComposerDraftStorageForTests();
 }
 
 beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
+  __resetComposerDraftStorageForTests();
   useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
   useChatStore.setState({
     draftsByConversation: {},
@@ -143,13 +150,20 @@ describe('the persisted draft record', () => {
     expect(readPersistedDraft('conv-1')).toBe(DRAFT);
   });
 
-  it('stores an emptied draft as the absence of a key', () => {
+  it('recovers storage after a malformed document-owner pointer', () => {
+    window.sessionStorage.setItem('agi-composer-draft:document-owner', '{bad json');
+
+    expect(writePersistedDraft('conv-1', DRAFT)).toBe(true);
+    expect(readPersistedDraft('conv-1')).toBe(DRAFT);
+  });
+
+  it('stores an emptied draft as a tombstone that cannot resurrect older text', () => {
     writePersistedDraft('conv-1', DRAFT);
 
     writePersistedDraft('conv-1', '   ');
 
     expect(readPersistedDraft('conv-1')).toBe('');
-    expect(draftStorageKeys()).toHaveLength(0);
+    expect(draftStorageKeys()).toHaveLength(1);
   });
 
   it('keeps each conversation to its own key', () => {
@@ -272,6 +286,10 @@ describe('a draft survives an interruption the user did not choose', () => {
     typeInTextarea('');
 
     expect(readPersistedDraft('conv-1')).toBe('');
+    expect(hasPendingDraftClear('conv-1')).toBe(true);
+
+    typeInTextarea('a newer thought');
+    expect(hasPendingDraftClear('conv-1')).toBe(false);
   });
 });
 
@@ -285,9 +303,15 @@ describe('the unsaved surface', () => {
   it('restores what was being typed when the document went down', () => {
     writePersistedDraft(null, DRAFT);
 
-    render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />);
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />, {
+      wrapper: StrictMode,
+    });
 
     expect(textarea().value).toBe(DRAFT);
+
+    typeInTextarea('');
+
+    expect(textarea().value).toBe('');
   });
 
   it('does not hand that draft to the next new chat opened in the same document', () => {
@@ -296,5 +320,16 @@ describe('the unsaved surface', () => {
     render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />);
 
     expect(textarea().value).toBe('');
+  });
+
+  it('restores a draft after browser Back during the development double-mount', () => {
+    parkPendingDraft(DRAFT);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={null} emptyState />, {
+      wrapper: StrictMode,
+    });
+
+    expect(textarea().value).toBe(DRAFT);
   });
 });

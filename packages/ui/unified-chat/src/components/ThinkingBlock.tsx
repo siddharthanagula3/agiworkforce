@@ -60,13 +60,13 @@ function StepResult({ result }: StepResultProps) {
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
-        className="flex items-center gap-1 text-[12px] text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] transition-colors"
+        className="flex items-center gap-1 text-caption text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] transition-colors"
       >
         {collapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
         <span>{collapsed ? 'Show result' : 'Hide result'}</span>
       </button>
       {!collapsed && (
-        <pre className="mt-1 rounded-[var(--chat-radius-sm)] bg-[var(--chat-surface-overlay)] px-3 py-2 text-[12px] font-mono text-[var(--chat-text-muted)] leading-relaxed overflow-x-auto whitespace-pre-wrap break-words">
+        <pre className="mt-1 rounded-sm bg-[var(--chat-surface-overlay)] px-3 py-2 text-caption font-mono text-[var(--chat-text-muted)] leading-relaxed overflow-x-auto whitespace-pre-wrap break-words">
           {result}
         </pre>
       )}
@@ -190,7 +190,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
           type="button"
           onClick={() => setCompactExpanded(true)}
           className={cn(
-            'inline-flex max-w-full items-center gap-1.5 rounded-[var(--chat-radius-sm)]',
+            'inline-flex max-w-full items-center gap-1.5 rounded-sm',
             'py-0.5 text-[13px] font-normal',
             'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
             'transition-colors',
@@ -222,7 +222,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
           }
         }}
         className={cn(
-          'inline-flex max-w-full items-center gap-2 rounded-[var(--chat-radius-sm)] px-1 py-1',
+          'inline-flex max-w-full items-center gap-2 rounded-sm px-1 py-1',
           'text-left text-[13px] font-medium text-[var(--chat-thinking-text)]',
           'hover:text-[var(--chat-text-primary)] transition-colors',
         )}
@@ -238,7 +238,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
         <span className="truncate">{block.summary}</span>
         <div className="flex items-center gap-2 shrink-0">
           {block.durationMs !== undefined && !summaryIncludesDuration && (
-            <span className="text-[12px] font-normal text-[var(--chat-text-muted)]">
+            <span className="text-caption font-normal text-[var(--chat-text-muted)]">
               {formatDuration(block.durationMs)}
             </span>
           )}
@@ -258,7 +258,7 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
             <MarkdownContent content={reasoningStep.content} isStreaming={isRunning} />
           </div>
         ) : (
-          <div className="mt-1 overflow-hidden rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]">
+          <div className="mt-1 overflow-hidden rounded-md border border-[var(--chat-border)]">
             <Timeline steps={block.steps} isRunning={isRunning} />
           </div>
         ))}

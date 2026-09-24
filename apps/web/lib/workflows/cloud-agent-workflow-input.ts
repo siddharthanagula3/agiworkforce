@@ -172,6 +172,7 @@ const FreeTrialBillingSchema = z
     userId: z.string().min(1),
     requestId: z.string().min(1).max(256),
     reservedMicrousd: z.number().finite().nonnegative(),
+    unmetered: z.literal(true).optional(),
     // Carried across the invocation boundary so a durable turn returns its
     // unspent global event headroom too. Dropping it here would leave every
     // durable event turn holding its whole reservation forever, which spends
@@ -411,11 +412,10 @@ export function cloudAgentWorkflowBillingKey(billing: CloudAgentWorkflowBilling)
  * Put the live reservation back on the serialized request, on the side the
  * discriminant says it came from.
  *
- * This is the single point that decides which budget the tool loop enforces:
- * `processed.freeTrial` drives the free-tier output cap, `processed.managedUsage`
- * drives the managed per-step reservation. Setting the wrong one -- as the
- * previous unconditional `managedUsage: { db, ...input.billing }` did for any
- * non-managed billing -- makes a free turn unmetered.
+ * This is the single point that preserves the request's billing boundary:
+ * `processed.freeTrial` carries Free access and any shared event reservation,
+ * while `processed.managedUsage` carries a paid account reservation. Setting
+ * the wrong one would charge Free traffic to a paid account ledger.
  */
 export function rehydrateCloudAgentWorkflowRequest(
   input: CloudAgentWorkflowInput,

@@ -210,6 +210,7 @@ const workflowRouteMocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: rlsMocks.getUserScopedDb,
+  getVerifiedBearerUserScopedDb: rlsMocks.getUserScopedDb,
 }));
 
 // Only the reservation entry points are stubbed; `isFreePlanTier` and the policy

@@ -175,6 +175,33 @@ describe('legal policy set, prohibited claims', () => {
     }
   });
 
+  it('links the published terms for the named model gateways and API providers', () => {
+    const terms = readAppFile('terms', 'page.tsx');
+    for (const provider of [
+      'OpenRouter',
+      'OpenAI',
+      'Anthropic',
+      'CheaperInference',
+      'DeepSeek',
+      'Qwen Cloud',
+      'Moonshot AI',
+      'Z.ai',
+      'MiniMax',
+      'Experiential Labs',
+    ]) {
+      expect(terms, provider).toContain(`name: '${provider}`);
+    }
+    expect(terms).toContain('providers&rsquo; current published API or platform terms');
+    expect(terms).toContain('They do not mean every');
+  });
+
+  it('does not present the retained Tauri release pipeline as the public Desktop download', () => {
+    const security = readAppFile('security', 'page.tsx');
+    expect(security).not.toMatch(/The installer is signed through Azure Trusted Signing/);
+    expect(security).not.toMatch(/publishes a notarized universal disk image/);
+    expect(security).not.toMatch(/no backup-restore test evidence/i);
+  });
+
   it('discloses the transactional email provider that is actually wired', () => {
     const clientPath = path.join(WEB_DIR, 'lib/support/handoff/resend-client.ts');
     if (!existsSync(clientPath)) return;

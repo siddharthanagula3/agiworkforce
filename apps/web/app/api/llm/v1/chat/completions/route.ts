@@ -67,7 +67,7 @@ import { ADAPTER_PROVIDERS } from './lib/adapter-providers';
 import { drainToLlmResponse } from './lib/adapter-response';
 import { createFailoverPlan, FIRST_PROVIDER_STEP } from './lib/managed-failover';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
-import { withSseHeartbeat } from './lib/sse-heartbeat';
+import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './lib/sse-heartbeat';
 import {
   CHAT_TOOL_LOOP_BUDGET_MS,
   PROVIDER_STREAM_DEADLINE_MS,
@@ -100,11 +100,13 @@ class DurableStreamStalledError extends Error {
 import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
+  EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   withDisabledConnectorIds,
   withoutStandingApprovals,
 } from './lib/connector-tool-permissions';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
 import { loadTurnToolPermissions, policyAutoApprovesTool } from './lib/tool-approval-policy';
+import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import type { StreamChunk } from '@agiworkforce/types';
@@ -127,7 +129,7 @@ import type {
   CloudAgentRun,
   CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getVerifiedBearerUserScopedDb } from '@/lib/server/rls-db';
 import { runWithPhaseTimer, timePhase } from '@/lib/observability/phase-timer';
 import { annotateActiveSpan, withSpan } from '@/lib/observability/span';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
@@ -254,14 +256,12 @@ async function conversationRunConflictResponse(
 }
 
 async function beginCloudAgentRun(
-  request: NextRequest,
   userId: string,
   processed: ProcessedRequest,
   workMode: CloudAgentWorkMode,
+  db: DatabaseAdapter,
 ): Promise<{ run: CloudAgentRun; db: DatabaseAdapter } | NextResponse> {
   try {
-    const db = processed.managedUsage?.db ?? (await getUserScopedDb(request)).db;
-
     // Concurrency guard: a conversation may have only one active (billable) run
     // at a time. A new turn arriving while a prior run is still running/queued
     // (and not already cancelling) would otherwise silently spawn a second
@@ -379,6 +379,9 @@ async function dispatchChatCompletions(
   );
   if (managedGateResponse) return managedGateResponse;
 
+  const scopedDbPromise = getVerifiedBearerUserScopedDb(request, { userId, token });
+  scopedDbPromise.catch(() => {});
+
   // The workspace administrator's decision, evaluated before `processRequest`
   // so a denied turn never reserves credits it will not spend.
   // Runs with the spend gate, which reads a different row and consults nothing
@@ -411,11 +414,15 @@ async function dispatchChatCompletions(
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await timePhase(CHAT_TURN_PHASE.processRequest, () =>
-    processRequest(request, authResult, { workspaceControls: workspaceControls.controls }),
+    processRequest(request, authResult, {
+      workspaceControls: workspaceControls.controls,
+      scopedDbPromise,
+    }),
   );
   if (!processResult.ok) return processResult.response;
 
   const processed = processResult;
+  const requestDb = (await scopedDbPromise).db;
   annotateActiveSpan({
     [OBSERVABILITY_ATTRIBUTE.sessionId]: processed.conversationId,
     [OBSERVABILITY_ATTRIBUTE.turnId]: processed.requestId,
@@ -505,7 +512,7 @@ async function dispatchChatCompletions(
     // report. One badge, two behaviours. Verified end-to-end against the real
     // Anthropic translation pipeline in research-loop.anthropic-wire.test.ts.
     if (processed.researchMode && !processed.freeTrial) {
-      const startedRun = await beginCloudAgentRun(request, userId, processed, 'research');
+      const startedRun = await beginCloudAgentRun(userId, processed, 'research', requestDb);
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
       const researchUsage = createObservedProviderUsage();
@@ -628,9 +635,7 @@ async function dispatchChatCompletions(
       });
 
       const researchHeaders: Record<string, string> = {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
+        ...SSE_RESPONSE_HEADERS,
         'X-AGI-Research-Loop': 'active',
         ...getCorsHeaders(request),
         ...getSecurityHeaders(),
@@ -675,6 +680,16 @@ async function dispatchChatCompletions(
     // E2B paths already 4xx for tools:false; this closes the same gap for connectors/MCP.
     const modelSupportsTools =
       getModelMetadataById(processed.chatRequest.model)?.capabilities?.tools ?? true;
+    const userConnectorToolsEnabled = processed.chatRequest.connector_tools_enabled !== false;
+    const operatorTools = modelSupportsTools
+      ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () => loadMcpToolDefs())
+      : [];
+    const isAgiWorkTurn = processed.chatRequest.work_mode === 'agiwork';
+    const requestOffersTools = (processed.llmRequest.tools?.length ?? 0) > 0;
+    const connectorPermissionsRequired =
+      modelSupportsTools && (userConnectorToolsEnabled || operatorTools.length > 0);
+    const toolApprovalPolicyRequired =
+      connectorPermissionsRequired || requestOffersTools || isAgiWorkTurn;
     // AUDIT-FIX CON-1/CON-2: load the user's saved allow/ask/deny verdicts BEFORE
     // the catalog is built. `deny` tools are dropped from the catalog entirely
     // (so a Blocked tool is never advertised to the model and stops re-surfacing
@@ -684,11 +699,19 @@ async function dispatchChatCompletions(
     // whether the provider-native search below is withdrawn for the gated
     // shape, so skipping the read forced the default onto accounts that had
     // chosen otherwise and broke search-native models.
-    const toolPolicyDb = processed.managedUsage?.db ?? (await getUserScopedDb(request)).db;
-    const { connectorPermissions, toolApprovalPolicy } = await timePhase(
-      CHAT_TURN_PHASE.toolPermissions,
-      () => loadTurnToolPermissions(toolPolicyDb, userId, { modelSupportsTools }),
-    );
+    const { connectorPermissions, toolApprovalPolicy } =
+      connectorPermissionsRequired || toolApprovalPolicyRequired
+        ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
+            return loadTurnToolPermissions(requestDb, userId, {
+              modelSupportsTools,
+              connectorPermissionsRequired,
+              toolApprovalPolicyRequired,
+            });
+          })
+        : {
+            connectorPermissions: EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+            toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
+          };
     // Per-conversation connector opt-out: connectors the client switched off
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
     // verdicts. Neither replaces the other -- a connector can be off for one
@@ -703,10 +726,9 @@ async function dispatchChatCompletions(
     // flat 32 for everybody, and the truncation it causes is reported back
     // rather than only logged, a "Connected" connector whose tools were
     // silently dropped is indistinguishable from a broken one.
-    const [operatorTools, connectorCatalog] = modelSupportsTools
-      ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () =>
-          Promise.all([
-            loadMcpToolDefs(),
+    const connectorCatalog =
+      modelSupportsTools && userConnectorToolsEnabled
+        ? await timePhase(CHAT_TURN_PHASE.toolCatalog, () =>
             loadUserConnectorToolCatalog(userId, {
               customConnectorLimit:
                 getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
@@ -714,9 +736,8 @@ async function dispatchChatCompletions(
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
             }),
-          ]),
-        )
-      : [[], { tools: [], dropped: [], limit: null }];
+          )
+        : { tools: [], dropped: [], limit: null };
     const connectorTools = connectorCatalog.tools;
     const mcpTools = [...operatorTools, ...connectorTools];
 
@@ -737,20 +758,16 @@ async function dispatchChatCompletions(
       toolApprovalPolicy,
     );
 
-    const isAgiWorkTurn = processed.chatRequest.work_mode === 'agiwork';
-
     if (loopInputs.shouldRun || isAgiWorkTurn) {
       const startedRun = await timePhase(CHAT_TURN_PHASE.agentRunStart, () =>
-        beginCloudAgentRun(request, userId, processed, isAgiWorkTurn ? 'agiwork' : 'chat'),
+        beginCloudAgentRun(userId, processed, isAgiWorkTurn ? 'agiwork' : 'chat', requestDb),
       );
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
 
       const baseAgentHeaders = (): Record<string, string> => {
         const headers: Record<string, string> = {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
+          ...SSE_RESPONSE_HEADERS,
           ...getCorsHeaders(request),
           ...getSecurityHeaders(),
         };
@@ -964,7 +981,7 @@ async function dispatchChatCompletions(
             turnId: checkpoint.turnId,
             nextEventSequence: checkpoint.nextEventSequence,
             completedSteps: checkpoint.completedSteps,
-            request: buildApprovalCheckpointRequest(processed.chatRequest),
+            request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
             events: checkpoint.events,
@@ -984,7 +1001,7 @@ async function dispatchChatCompletions(
             turnId: checkpoint.turnId,
             nextEventSequence: checkpoint.nextEventSequence,
             completedSteps: checkpoint.completedSteps,
-            request: buildApprovalCheckpointRequest(processed.chatRequest),
+            request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
             inputRequests: checkpoint.inputRequests,
@@ -1001,7 +1018,7 @@ async function dispatchChatCompletions(
             turnId: checkpoint.turnId,
             nextEventSequence: checkpoint.nextEventSequence,
             completedSteps: checkpoint.completedSteps,
-            request: buildApprovalCheckpointRequest(processed.chatRequest),
+            request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
             deviceStep: checkpoint.deviceStep,
@@ -1099,7 +1116,7 @@ async function dispatchChatCompletions(
             );
           }
           const nextAttempt = budgetLeft
-            ? failover.next(error, { step: FIRST_PROVIDER_STEP })
+            ? failover.next(error, { step: FIRST_PROVIDER_STEP, sameRouteRetrySafe: true })
             : null;
           const nextAdapterProvider = nextAttempt ? ADAPTER_PROVIDERS[nextAttempt.provider] : null;
           if (nextAttempt && nextAdapterProvider) {

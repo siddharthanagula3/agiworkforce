@@ -1,0 +1,49 @@
+@theme inline {
+  --text-caption: var(--type-caption-size);
+  --text-caption--line-height: var(--type-caption-height);
+  --text-caption--font-weight: var(--type-caption-weight);
+  --text-caption--letter-spacing: var(--type-caption-tracking);
+
+  --text-metadata: var(--type-metadata-size);
+  --text-metadata--line-height: var(--type-metadata-height);
+  --text-metadata--font-weight: var(--type-metadata-weight);
+  --text-metadata--letter-spacing: var(--type-metadata-tracking);
+
+  --container-reading: var(--measure-prose);
+  --container-content: var(--measure-content);
+  --container-wide: var(--measure-wide);
+
+  --radius-xs: var(--corner-detail);
+  --radius-compact: var(--corner-compact);
+  --radius-sm: var(--corner-control);
+  --radius-md: var(--corner-field);
+  --radius-menu: var(--corner-menu);
+  --radius-lg: var(--corner-surface);
+  --radius-xl: var(--corner-panel);
+  --radius-2xl: var(--corner-overlay);
+  --radius-3xl: var(--corner-hero);
+  --radius-control: var(--corner-control);
+  --radius-surface: var(--corner-surface);
+  --radius-pill: var(--corner-pill);
+
+  --spacing-space-2: var(--space-2);
+  --spacing-space-3: var(--space-3);
+  --spacing-gutter-compact: var(--gutter-compact);
+  --spacing-gutter-regular: var(--gutter-regular);
+  --spacing-gutter-wide: var(--gutter-wide);
+
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+  --shadow-e3: var(--elevation-3);
+  --shadow-e4: var(--elevation-4);
+
+  --transition-duration-instant: var(--duration-instant);
+  --transition-duration-quick: var(--duration-quick);
+  --transition-duration-moved: var(--duration-moved);
+  --transition-duration-reveal: var(--duration-reveal);
+
+  --ease-standard: var(--curve-standard);
+  --ease-exit: var(--curve-exit);
+  --ease-spring: var(--curve-spring);
+  --ease-reveal: var(--curve-reveal);
+}

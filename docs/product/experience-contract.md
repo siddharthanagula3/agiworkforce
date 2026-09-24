@@ -2,7 +2,7 @@
 
 Status: Current target; implementation incomplete
 Owner: Product + frontend platform
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 This is the canonical frontend architecture and experience contract for AGI across Web, Desktop, Mobile, CLI, VS Code, and Chrome. It converts the current Claude/ChatGPT product evidence into AGI-owned behavior, component boundaries, screen ownership, and completion rules.
 
@@ -10,22 +10,65 @@ It does not authorize cloning proprietary source, icons, copy, screenshots, or e
 
 If a visible control conflicts with the effective runtime capability, the control is the bug. If this document conflicts with `docs/product/definition.md` or `docs/architecture/trust-boundaries.md`, those documents win and this file must be corrected.
 
+## September 21 Ecosystem Delta
+
+The first-party ChatGPT and Claude changes verified through 2026-09-21 add the
+following required outcomes. The dated evidence is in
+`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`.
+
+- **One home, two execution shapes.** The default interaction is a direct
+  conversational answer. The same home can escalate a job into a durable work
+  run with progress, questions, approvals, schedules, and reopenable
+  deliverables. A separate branded work product is not required.
+- **Permission-aware unified search.** Cloud search covers eligible
+  conversations, messages, projects, files, artifacts, images, and work output.
+  Local developer search remains host scoped. Results must honor deletion,
+  revocation, workspace membership, account switching, and temporary-chat
+  exclusion.
+- **Inspectable memory.** Saved memories, referenced history, project memory,
+  work memory, and local workspace memory are separately scoped. Every memory
+  entry exposes provenance, last update, edit, exclusion, export, and deletion;
+  sensitive categories require explicit controls.
+- **Remote connection versus host extension.** Account connectors and OAuth
+  metadata can follow the Cloud account. Desktop extensions, local files,
+  browser/computer permissions, and host credentials stay with the trusted host.
+  Signing in on another client does not copy them.
+- **Multiple connected identities.** A supported provider may have multiple
+  OAuth accounts. The UI identifies the selected connection, and revocation,
+  policy changes, and account switching converge on every Cloud surface.
+- **Plugin migration.** Reusable instructions, skills, apps/connectors, and
+  tools form AGI-owned workflow packages. Custom GPT/GPT Store compatibility is
+  migration input, not the target architecture. Install, scan, approve, update,
+  export, disable, and remove are complete states.
+- **Artifact lifecycle.** Uploaded files, generated documents, spreadsheets,
+  presentations, reports, images, sites, and code outputs are versioned objects
+  with preview, edit, compare, restore, share, export, revoke, and reopen
+  behavior.
+- **Privacy is a destination.** Privacy controls cover memory, chat history,
+  connected accounts, retention, sensitive integrations, export, deletion,
+  temporary work, and account switching. They are not scattered disclosures.
+
 ## 1. Product composition
 
 AGI is one suite, not one universal interface and not six unrelated products.
 
-| Product domain     | Primary surfaces                                 | Canonical data                                                       | Execution                              | Sync rule                                                                                                                         |
-| ------------------ | ------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Cloud Conversation | Web, Desktop, Mobile Cloud, Chrome Managed Cloud | Account conversations, messages, projects, cloud files, cloud memory | Managed Cloud                          | Shared across account Cloud surfaces; Chrome contributes eligible conversation replicas while local storage remains authoritative |
-| Cloud Work         | Web, Desktop, Mobile Cloud                       | Goals, runs, steps, approvals, schedules, deliverables               | Managed sandbox and connected tools    | Shared only across supported cloud surfaces                                                                                       |
-| Local Consumer     | Mobile Local                                     | Local conversations, files, local memory                             | On device                              | Never automatically synced                                                                                                        |
-| Developer Session  | CLI, VS Code, Desktop Code                       | Repository/workspace sessions, turns, diffs, terminal, checkpoints   | Local, worktree, approved remote/cloud | CLI and VS Code share host-owned sessions; not consumer chat history                                                              |
-| Browser Task       | Chrome, Desktop browser adapters                 | Browser-scoped task history, page context, site policy               | Browser/native host/managed browser    | Browser task state stays separate; eligible Chrome chat transcripts mirror to Cloud Conversation                                  |
-| Remote Projection  | Mobile/Web to a trusted local host               | Device/session projection, approvals, event cursor                   | Host remains authority                 | Projection only; no implicit conversation migration                                                                               |
-| Handoff Snapshot   | Explicit source and destination                  | Redacted selected context with provenance                            | Destination runtime                    | User-approved copy/fork, never background sync                                                                                    |
+| Product domain     | Primary surfaces                                 | Canonical data                                                                                                                                          | Execution                              | Sync rule                                                                                                                                           |
+| ------------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud Conversation | Web, Desktop, Mobile Cloud, Chrome Managed Cloud | Account conversations, messages, projects, cloud files/artifacts, cloud memory, connected tools/apps, OAuth connection metadata, settings, entitlements | Managed Cloud                          | One signed-in account domain across Cloud surfaces; surface caches are replicas and Chrome contributes only provenance-eligible Cloud conversations |
+| Cloud Work         | Web, Desktop, Mobile Cloud                       | Goals, runs, steps, approvals, schedules, deliverables                                                                                                  | Managed sandbox and connected tools    | Shared only across supported cloud surfaces                                                                                                         |
+| Local Consumer     | Mobile Local                                     | Local conversations, files, local memory                                                                                                                | On device                              | Never automatically synced                                                                                                                          |
+| Developer Session  | Desktop Code, CLI, VS Code                       | Repository/workspace sessions, turns, diffs, terminal, checkpoints, tools, permissions, approved files, credential references                           | Local, worktree, approved remote/cloud | All three share one host-owned runtime and session identity; not consumer chat history and never a Cloud secret store                               |
+| Browser Task       | Chrome, Desktop browser adapters                 | Browser-scoped task history, page context, site policy                                                                                                  | Browser/native host/managed browser    | Browser task state stays separate; eligible Chrome chat transcripts mirror to Cloud Conversation                                                    |
+| Remote Projection  | Mobile/Web to a trusted local host               | Device/session projection, approvals, event cursor                                                                                                      | Host remains authority                 | Projection only; no implicit conversation migration                                                                                                 |
+| Handoff Snapshot   | Explicit source and destination                  | Redacted selected context with provenance                                                                                                               | Destination runtime                    | User-approved copy/fork, never background sync                                                                                                      |
 
-The public Electron Desktop is managed-cloud-only. Retained Tauri Local/BYOK
-screens are internal code, not a second public application or a release claim.
+The public Electron Desktop participates in both continuity domains: its
+consumer conversation surface uses the account-synced Managed Cloud domain,
+while Desktop Code uses the host-owned developer domain shared with CLI and VS
+Code. The domains may coexist in one shell but never share data implicitly.
+Retained Tauri Local/BYOK screens are internal code, not a second public
+application or a release claim; reusable behavior must move behind the canonical
+host protocol.
 
 ## 2. Frontend principles
 
@@ -39,6 +82,8 @@ screens are internal code, not a second public application or a release claim.
 8. **Every async flow has complete states.** Loading, empty, disabled, error, warning, success, offline, retry, cancellation, and permission denial are designed and tested.
 9. **One mounted owner per route.** Dead alternative shells are removed after migration proof.
 10. **AGI has its own visual identity.** Competitive references set quality and behavior, not brand imitation.
+11. **One account and entitlement span the suite.** Free access and any paid plan resolve through one canonical entitlement regardless of the surface or billing channel; a surface must not invent a separate subscription.
+12. **Continuity is a release behavior.** A mutation on one connected surface converges on every other eligible surface, and offline edits, conflicts, revocation, deletion, and account switching have explicit deterministic outcomes.
 
 ## 3. Canonical ownership
 
@@ -195,11 +240,12 @@ Only Cloud data syncs across these surfaces. Layouts are not required to be iden
 
 These screens remain unavailable until a first-class work-run protocol exists.
 
-### 6.3 Retained Tauri Local screens, not public Desktop
+### 6.3 Retained Tauri Local consumer screens, not the public shell
 
-This inventory describes retained internal code only. D-2026-09-15-04 removed
-it from the public Desktop product; none of these rows may be used as evidence
-that Electron exposes Local or BYOK inference.
+This inventory describes retained internal consumer-mode code only. The public
+Electron shell must expose Desktop Code through the shared host developer
+runtime, but these retained screens do not prove that integration and must not
+be mounted as a second public Desktop shell.
 
 - Local chat.
 - Local projects/files.
@@ -503,7 +549,8 @@ Project context must include actual extracted/retrieved content when claimed. A 
 - Cloud global memory.
 - Cloud project memory.
 - Work-project memory.
-- Retained Tauri Local consumer memory (not a public Desktop feature).
+- Retained Tauri Local consumer memory (not the shared Desktop Code/CLI/VS Code
+  workspace-memory owner).
 - Mobile local memory.
 - Developer workspace memory.
 - Browser extension local memory.
@@ -571,21 +618,27 @@ Cross-scope search respects data boundaries. A global UI must not imply a global
 - Browser-internal/restricted pages keep Managed Cloud chat available while showing an accessible notice and disabling only page context and browser automation.
 - The monolithic side panel must be split by domain before major feature growth.
 
-## 13. Current implementation reality, 2026-07-16 snapshot, cells corrected 2026-08-09
+## 13. Historical implementation reality, 2026-07-16 snapshot, cells corrected 2026-08-09
 
-| Capability                        | Web            | Desktop                                                  | Mobile                   | CLI                    | VS Code                | Chrome                                   |
-| --------------------------------- | -------------- | -------------------------------------------------------- | ------------------------ | ---------------------- | ---------------------- | ---------------------------------------- |
-| Primary shell                     | Live           | Live                                                     | Live                     | Live                   | Live                   | Live                                     |
-| Consumer cloud chat               | Live           | Partial                                                  | Live                     | N/A                    | N/A                    | Separate browser chat                    |
-| Local consumer chat               | N/A            | Live                                                     | Live                     | N/A                    | N/A                    | N/A                                      |
-| AGI Work run (composer mode)      | Live           | Live                                                     | Live                     | N/A                    | N/A                    | Workflow UI is not Cloud Work            |
-| Standalone Cowork session surface | Missing        | Missing                                                  | Missing                  | N/A                    | N/A                    | N/A                                      |
-| Developer sessions                | N/A            | Local-only `CodeWorkspace` mounted; no remote projection | Static/unwired remote UI | Live                   | Live with split stack  | Not developer-session remote control     |
-| Artifacts/files                   | Partial        | Live/partial                                             | Partial                  | Developer files only   | Developer files/diffs  | Image/screenshot only                    |
-| Tools/approvals                   | Live/partial   | Live/partial                                             | Live/partial             | Live                   | Live                   | Live/partial                             |
-| Search/research                   | Live/partial   | Live/partial                                             | Partial                  | Tool-driven            | Workspace search       | Page operations only                     |
-| Voice                             | Dictation only | In-window dictation; system-wide gated off               | Live conversation        | Live (REPL voice)      | Absent                 | Speech input only                        |
-| Remote control                    | Absent         | Host/companion UI not mounted                            | Static/feature-off       | Host transport missing | Host transport missing | Native bridge is not Code remote control |
+This table preserves the implementation snapshot and its August corrections.
+Its standalone Cowork terminology is historical. As of the 2026-09-21 product
+contract, AGI targets direct chat and durable work in one product home, not a
+separate competitor-named surface. Current status comes from
+`docs/work/implementation-status.md` and executable evidence.
+
+| Capability                                  | Web            | Desktop                                                  | Mobile                   | CLI                    | VS Code                | Chrome                                   |
+| ------------------------------------------- | -------------- | -------------------------------------------------------- | ------------------------ | ---------------------- | ---------------------- | ---------------------------------------- |
+| Primary shell                               | Live           | Live                                                     | Live                     | Live                   | Live                   | Live                                     |
+| Consumer cloud chat                         | Live           | Partial                                                  | Live                     | N/A                    | N/A                    | Separate browser chat                    |
+| Local consumer chat                         | N/A            | Live                                                     | Live                     | N/A                    | N/A                    | N/A                                      |
+| AGI Work run (composer mode)                | Live           | Live                                                     | Live                     | N/A                    | N/A                    | Workflow UI is not Cloud Work            |
+| Standalone work product (historical target) | Missing        | Missing                                                  | Missing                  | N/A                    | N/A                    | N/A                                      |
+| Developer sessions                          | N/A            | Local-only `CodeWorkspace` mounted; no remote projection | Static/unwired remote UI | Live                   | Live with split stack  | Not developer-session remote control     |
+| Artifacts/files                             | Partial        | Live/partial                                             | Partial                  | Developer files only   | Developer files/diffs  | Image/screenshot only                    |
+| Tools/approvals                             | Live/partial   | Live/partial                                             | Live/partial             | Live                   | Live                   | Live/partial                             |
+| Search/research                             | Live/partial   | Live/partial                                             | Partial                  | Tool-driven            | Workspace search       | Page operations only                     |
+| Voice                                       | Dictation only | In-window dictation; system-wide gated off               | Live conversation        | Live (REPL voice)      | Absent                 | Speech input only                        |
+| Remote control                              | Absent         | Host/companion UI not mounted                            | Static/feature-off       | Host transport missing | Host transport missing | Native bridge is not Code remote control |
 
 This table is not a release claim. `packages/ai/model-registry/catalog/harnesses.json` remains authoritative for runtime wiring status.
 
@@ -593,20 +646,23 @@ CORRECTED 2026-08-09 (four cells the 2026-07-16 snapshot got wrong or that later
 work superseded; mirrors the same corrections in
 `docs/work/implementation-status.md`):
 
-- The single "Work/Cowork run: Missing/Missing/Missing" row conflated two
+- The single "Work/run: Missing/Missing/Missing" row conflated two
   capabilities and is split, matching the parity matrix's 2026-08-06 split.
   **AGI Work**: composer-mode dispatch, is mounted and wired end to end on all
   three consumer surfaces (`apps/web/lib/workflows/start-cloud-agent-workflow.ts`,
   `apps/web/app/tasks/page.tsx`, `apps/mobile/app/(app)/agents/index.tsx`,
   `AgiWorkProjects`/`AgiWorkArtifacts`/`AgiWorkScheduled` rendered from
-  `apps/desktop/src/features/v3/DesktopShellV3.tsx`). Only the **standalone
-  Cowork session surface**, a dedicated resumable async workspace rather than a
-  mode inside chat, is still Missing.
+  `apps/desktop/src/features/v3/DesktopShellV3.tsx`). The August correction also
+  tracked a standalone work product as Missing. That separate-product target is
+  retired by the 2026-09-21 one-home contract; durable work remains required,
+  but it escalates from the shared conversation home.
 - Desktop developer sessions are no longer "missing from current shell": the
   Electron host owns an `agi app-server` process per approved folder through
   `apps/desktop/electron/runtime/developerSessionService.ts`. The Tauri
-  `CodeWorkspace` remains retained internal code, not a public Desktop Local
-  surface. What is still missing is the remote projection, which the "Remote
+  `CodeWorkspace` remains retained internal presentation code, not a second
+  public shell. The release target is the Electron Desktop Code presentation
+  over the same host-owned session/tool/auth/file contracts consumed by CLI and
+  VS Code. What is still missing is the remote projection, which the "Remote
   control" row already records.
 - Desktop voice no longer carries a broken system-wide claim. The settings
   control is gated on the `systemDictationAvailable` probe

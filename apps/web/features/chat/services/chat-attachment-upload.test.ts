@@ -50,9 +50,16 @@ describe('uploadChatAttachments', () => {
       );
     vi.stubGlobal('fetch', fetchMock);
     const file = new File(['%PDF'], 'brief.pdf', { type: 'application/pdf' });
+    const onStatus = vi.fn();
 
-    await expect(uploadChatAttachments([file])).resolves.toEqual([
+    await expect(uploadChatAttachments([file], { onStatus })).resolves.toEqual([
       expect.objectContaining({ assetId: id, name: 'brief.pdf', type: 'file' }),
+    ]);
+    expect(onStatus.mock.calls.map(([status]) => status.phase)).toEqual([
+      'preparing',
+      'uploading',
+      'verifying',
+      'complete',
     ]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -63,6 +70,41 @@ describe('uploadChatAttachments', () => {
       3,
       '/api/uploads/chat-attachment/complete',
       expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('reports the exact failed file without inventing byte progress', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            storageKey: 'chat-attachments/user/key.txt',
+            uploadUrl: 'https://upload.example.test/signed',
+            uploadMethod: 'PUT',
+            uploadHeaders: { 'Content-Type': 'text/plain' },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onStatus = vi.fn();
+
+    await expect(
+      uploadChatAttachments([new File(['hello'], 'notes.txt', { type: 'text/plain' })], {
+        onStatus,
+      }),
+    ).rejects.toThrow('Could not upload notes.txt to storage.');
+
+    expect(onStatus).toHaveBeenLastCalledWith({
+      index: 0,
+      fileName: 'notes.txt',
+      phase: 'failed',
+      error: 'Could not upload notes.txt to storage.',
+    });
+    expect(onStatus.mock.calls.flat()).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ percent: expect.any(Number) })]),
     );
   });
 

@@ -136,10 +136,10 @@ function CodeBlock({ code, language }: CodeBlockProps) {
   }
 
   return (
-    <div className="relative my-3 rounded-[var(--chat-radius-lg)] bg-[var(--chat-surface-overlay)] overflow-hidden">
+    <div className="relative my-3 rounded-lg bg-[var(--chat-surface-overlay)] overflow-hidden">
       {language && (
         <div className="flex items-center justify-between px-4 py-1.5 border-b border-[var(--chat-border)]">
-          <span className="text-[12px] font-medium text-[var(--chat-text-muted)] uppercase tracking-wide">
+          <span className="text-caption font-medium text-[var(--chat-text-muted)] uppercase tracking-wide">
             {language}
           </span>
           <Button
@@ -392,7 +392,7 @@ function renderInline(text: string): React.ReactNode {
       parts.push(
         <code
           key={match.index}
-          className="rounded bg-[var(--chat-surface-overlay)] px-1 py-0.5 font-mono text-[13px] text-[var(--chat-text-primary)]"
+          className="rounded-compact bg-[var(--chat-surface-overlay)] px-1 py-0.5 font-mono text-[13px] text-[var(--chat-text-primary)]"
         >
           {token.slice(1, -1)}
         </code>,
@@ -450,7 +450,7 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
         </div>
         <span
           className={cn(
-            'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium',
+            'shrink-0 rounded-full px-2 py-0.5 text-caption font-medium',
             toolCall.status === 'failed'
               ? 'bg-red-500/10 text-red-300'
               : toolCall.status === 'completed'
@@ -728,7 +728,7 @@ export function MessageBubble({
               className={cn(
                 'w-full resize-y rounded-2xl bg-[var(--chat-user-bubble-bg)] px-4 py-2.5',
                 'text-[15px] leading-relaxed text-[var(--chat-text-primary)]',
-                'outline-none ring-1 ring-[var(--chat-accent-secondary)]',
+                'outline-none ring-1 ring-[var(--chat-focus-ring)]',
               )}
             />
             <div className="flex justify-end gap-2">

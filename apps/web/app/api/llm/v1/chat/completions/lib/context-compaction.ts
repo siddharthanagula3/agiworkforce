@@ -13,6 +13,7 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { resolveWireMode } from './adapter-providers';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   fingerprintManagedUsageRequest,
   finalizeManagedUsageRequest,
@@ -169,7 +170,8 @@ async function generateCompactionSummary(params: {
     temperature: 0,
     stream: false,
   });
-  const wireMode = resolveWireMode(route.provider);
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  const wireMode = resolveWireMode(dispatchProvider);
 
   const idempotencyKey = `context-compaction:${params.conversationId}:${params.boundaryMessageId}`;
   const requestHash = fingerprintManagedUsageRequest({
@@ -206,11 +208,11 @@ async function generateCompactionSummary(params: {
   let providerCompleted = false;
   try {
     await markManagedUsageProviderStarted(reservation);
-    const adapter = buildServerProviderAdapter(route.provider);
+    const adapter = buildServerProviderAdapter(dispatchProvider);
     const response = await drainToLlmResponse(
       adapter.stream(chatRequest, new AbortController().signal),
       route.modelKey,
-      (chunk) => toGenericUpstreamError(route.provider, chunk),
+      (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
       wireMode,
     );
     providerCompleted = true;

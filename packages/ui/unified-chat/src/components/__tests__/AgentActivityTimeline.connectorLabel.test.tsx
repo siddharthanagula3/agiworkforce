@@ -38,6 +38,7 @@ describe('AgentActivityTimeline · custom connector badge', () => {
   it('badges an opaque custom connector with the initial of its real display name', () => {
     const { container } = render(
       <AgentActivityTimeline
+        defaultExpanded
         activity={connectorActivity(
           'mcp__custom-a1b2c3d4e5__do_thing',
           'Using Acme Logistics connector',
@@ -50,6 +51,7 @@ describe('AgentActivityTimeline · custom connector badge', () => {
   it('reads the display name out of an approval summary too', () => {
     const { container } = render(
       <AgentActivityTimeline
+        defaultExpanded
         activity={connectorActivity('mcp__custom-a1b2c3d4e5__do_thing', 'Review Zephyr action')}
       />,
     );
@@ -59,6 +61,7 @@ describe('AgentActivityTimeline · custom connector badge', () => {
   it('keeps the generic badge when the server sent no display name', () => {
     const { container } = render(
       <AgentActivityTimeline
+        defaultExpanded
         activity={connectorActivity('mcp__custom-a1b2c3d4e5__do_thing', 'Using MCP tool')}
       />,
     );
@@ -68,6 +71,7 @@ describe('AgentActivityTimeline · custom connector badge', () => {
   it('still falls back to the server id when the summary is an action phrase', () => {
     const { container } = render(
       <AgentActivityTimeline
+        defaultExpanded
         activity={connectorActivity('mcp__github__get_pull_request_diff', 'Fetching page')}
       />,
     );

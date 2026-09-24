@@ -102,7 +102,7 @@ export function ConversationStatsPanel({ messages }: { messages: readonly ChatMe
           </dl>
 
           {stats.reportedTurns < stats.assistantTurns ? (
-            <p className="mt-2 text-[12px] text-[var(--chat-text-muted)]">
+            <p className="mt-2 text-caption text-[var(--chat-text-muted)]">
               {t(
                 'stats.partialCoverage',
                 '{{reported}} of {{total}} replies reported usage. The rest predate usage capture or came from a provider that reports none, so this total is a floor.',

@@ -24,7 +24,7 @@ function markHistoryStep(): void {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('popstate', markHistoryStep);
+  window.addEventListener('popstate', markHistoryStep, { capture: true });
 }
 
 export function parkPendingDraft(content: string): void {

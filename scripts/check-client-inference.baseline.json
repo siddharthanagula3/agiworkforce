@@ -583,12 +583,6 @@
       "fix": "Import ErrorCode and raise its members; add a transport class to the shared taxonomy if none of them fits."
     },
     {
-      "file": "apps/web/shared/stores/query-client.ts",
-      "symbol": "ErrorCode",
-      "why": "The retry table matches PGRST116, NETWORK_ERROR and PAYMENT_REQUIRED as string literals rather than reading the shared error codes, so a code the server renames is retried under the old spelling forever.",
-      "fix": "Read ErrorCode and the retry disposition from the shared taxonomy instead of matching literals."
-    },
-    {
       "file": "apps/mobile/src/shared/components/FeatureUnavailable.tsx",
       "symbol": "CONTROL_LAYERS",
       "why": "The unavailable screen restates entitlement, permission and policy to choose its copy, so a fourth control layer added to the registry renders the wrong sentence on mobile.",

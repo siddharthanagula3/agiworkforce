@@ -7,9 +7,15 @@ import {
   isExecutableImageModel,
   isModelLive,
 } from '@agiworkforce/types';
-import { MessageBubble, messageListVariants, messageBubbleVariants } from './MessageBubble';
+import {
+  MessageBubble,
+  consumeMessageEntranceAnimation,
+  messageListVariants,
+  messageBubbleVariants,
+} from './MessageBubble';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 
 const IMAGE_MODEL_ID = getModels({
   modelTypes: ['image'],
@@ -30,8 +36,25 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
   return {
     ...actual,
-    MarkdownContent: ({ content }: { content: string }) => (
-      <span data-testid="markdown-content">{content}</span>
+    MarkdownContent: ({
+      content,
+      literalHtml,
+      linkifyNumericCitations,
+      citations,
+    }: {
+      content: string;
+      literalHtml?: boolean;
+      linkifyNumericCitations?: boolean;
+      citations?: readonly { url: string }[];
+    }) => (
+      <span
+        data-testid="markdown-content"
+        data-literal-html={literalHtml ? 'true' : 'false'}
+        data-linkify-numeric-citations={linkifyNumericCitations ? 'true' : 'false'}
+        data-citation-urls={citations?.map((source) => source.url).join('|') ?? ''}
+      >
+        {content}
+      </span>
     ),
   };
 });
@@ -77,6 +100,12 @@ describe('MessageBubble', () => {
   });
 
   describe('entrance animation wrapper', () => {
+    it('allows a message entrance only on its first mount key', () => {
+      const key = `conversation:message:${crypto.randomUUID()}`;
+      expect(consumeMessageEntranceAnimation(key)).toBe(true);
+      expect(consumeMessageEntranceAnimation(key)).toBe(false);
+    });
+
     it('renders the motion.div container (mocked as plain div)', () => {
       const { container } = render(<MessageBubble message={makeMessage()} />);
       // The motion mock renders a plain div · verify the outer element exists
@@ -95,7 +124,7 @@ describe('MessageBubble', () => {
   describe('user messages', () => {
     it('renders message content', () => {
       render(<MessageBubble message={makeMessage({ content: 'Hello world' })} />);
-      expect(screen.getByText('Hello world')).toBeInTheDocument();
+      expect(screen.getByText('Hello world')).toHaveAttribute('data-literal-html', 'true');
     });
 
     it('renders the user message inside a right-aligned bubble', () => {
@@ -123,7 +152,7 @@ describe('MessageBubble', () => {
 
     it('renders message content', () => {
       render(<MessageBubble message={assistantMsg()} />);
-      expect(screen.getByText('I can help')).toBeInTheDocument();
+      expect(screen.getByText('I can help')).toHaveAttribute('data-literal-html', 'false');
     });
 
     it('renders assistant content flat (no user bubble)', () => {
@@ -286,6 +315,93 @@ describe('MessageBubble', () => {
       expect(screen.getByText('A sourced answer.')).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Source 1: Primary source' })).toBeNull();
       expect(screen.queryByRole('link', { name: /https:\/\/example\.com\/research/ })).toBeNull();
+    });
+
+    it('uses the resolved source order for completed model-authored numbered lists', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: [
+              'Official examples [1][2].',
+              '',
+              'Five relevant sources:',
+              '1. [Example Domains](https://www.iana.org/help/example-domains)',
+              '2. [Reserved Domains](https://www.iana.org/domains/reserved)',
+              '',
+              'Read both pages.',
+            ].join('\n'),
+            metadata: {
+              searchResults: [
+                {
+                  url: 'https://www.iana.org/help/http-changes',
+                  title: 'HTTP changes',
+                  snippet: '',
+                },
+                {
+                  url: 'https://www.iana.org/help/example-domains',
+                  title: 'Example Domains',
+                  snippet: '',
+                },
+                {
+                  url: 'https://www.iana.org/domains/reserved',
+                  title: 'Reserved Domains',
+                  snippet: '',
+                },
+              ],
+            },
+          })}
+        />,
+      );
+
+      const markdown = screen.getByTestId('markdown-content');
+      expect(markdown).toHaveTextContent('Official examples [2][3].');
+      expect(markdown).toHaveAttribute('data-linkify-numeric-citations', 'true');
+    });
+
+    it('keeps numeric citations unlinked when a listed source was not delivered', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: [
+              'A claim [1].',
+              '',
+              'Sources:',
+              '1. [Unseen page](https://unseen.example/report)',
+              '',
+              'Check the page itself.',
+            ].join('\n'),
+            metadata: {
+              searchResults: [
+                {
+                  url: 'https://www.iana.org/help/example-domains',
+                  title: 'Example Domains',
+                  snippet: '',
+                },
+                {
+                  url: 'https://www.iana.org/domains/reserved',
+                  title: 'Reserved Domains',
+                  snippet: '',
+                },
+              ],
+              citations: [
+                { url: 'https://www.iana.org/help/example-domains', title: 'Example Domains' },
+                { url: 'https://www.iana.org/help/example-domains', title: 'Example Domains' },
+                { url: 'https://www.iana.org/domains/reserved', title: 'Reserved Domains' },
+              ],
+            },
+          })}
+        />,
+      );
+
+      const markdown = screen.getByTestId('markdown-content');
+      expect(markdown).toHaveTextContent('A claim [1].');
+      expect(markdown).toHaveAttribute('data-linkify-numeric-citations', 'false');
+      expect(markdown).toHaveAttribute(
+        'data-citation-urls',
+        'https://www.iana.org/help/example-domains|https://www.iana.org/domains/reserved',
+      );
     });
 
     it('renders the previous chats that informed an assistant turn', () => {
@@ -1278,6 +1394,50 @@ describe('MessageBubble', () => {
     });
   });
 
+  describe('explicit artifact derivation', () => {
+    beforeEach(() => {
+      useArtifactsStore.getState().clearArtifacts();
+      useChatStore.getState().setActiveConversation('conv-explicit-artifacts');
+    });
+
+    it('keeps an unmarked fenced HTML script example visible as inert source', () => {
+      const source = '<script>alert("inert")</script>';
+      render(
+        <MessageBubble
+          message={makeMessage({
+            id: 'msg-inert-html',
+            role: 'assistant',
+            content: `Example:\n\n\`\`\`html\n${source}\n\`\`\``,
+            metadata: { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY },
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId('markdown-content')).toHaveTextContent(source);
+      expect(useArtifactsStore.getState().getMessageArtifacts('msg-inert-html')).toHaveLength(0);
+      expect(screen.queryByRole('button', { name: /open artifact/i })).toBeNull();
+    });
+
+    it('promotes marked HTML while keeping its source out of the transcript', async () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            id: 'msg-marked-html',
+            role: 'assistant',
+            content: 'Preview:\n\n```html\n<!-- @artifact -->\n<main>EXPLICIT_PREVIEW</main>\n```',
+            metadata: { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY },
+          })}
+        />,
+      );
+
+      expect(screen.getByTestId('markdown-content')).not.toHaveTextContent('EXPLICIT_PREVIEW');
+      await waitFor(() =>
+        expect(useArtifactsStore.getState().getMessageArtifacts('msg-marked-html')).toHaveLength(1),
+      );
+      expect(screen.getByRole('button', { name: /open artifact/i })).toBeTruthy();
+    });
+  });
+
   // Raster-image attachment rendering (claude.ai parity): image attachments
   // render a real <img> thumbnail that opens the full-size lightbox on click,
   // with a graceful broken-image fallback. Non-image attachments keep a chip.
@@ -2013,6 +2173,48 @@ describe('MessageBubble', () => {
         />,
       );
       expect(noSourcesNotice()).toBeInTheDocument();
+    });
+
+    it('does not offer a search retry when the account cannot run another search', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: 'Search could not run because the included allowance is exhausted.',
+            metadata: {
+              webSearchRequested: true,
+              webSearchAskedInText: true,
+              agentActivity: {
+                schemaVersion: 1,
+                sessionId: 's1',
+                turnId: 't1',
+                lastSequence: 1,
+                status: 'completed',
+                startedAtMs: 0,
+                updatedAtMs: 100,
+                entries: [
+                  {
+                    kind: 'tool',
+                    id: 'search-1',
+                    toolCallId: 'call-1',
+                    name: 'web_search',
+                    category: 'web-search',
+                    summary: 'Web search unavailable: 20 included searches used in the last 30 days.',
+                    status: 'failed',
+                    unavailable: true,
+                    startedAtMs: 0,
+                    completedAtMs: 50,
+                  },
+                ],
+              },
+            },
+          })}
+          onRegenerate={vi.fn()}
+        />,
+      );
+
+      expect(noSourcesNotice()).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Retry this response with web search' })).toBeNull();
     });
 
     it('stays quiet when only the toggle asked and the search produced zero sources', () => {

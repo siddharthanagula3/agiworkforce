@@ -2,8 +2,6 @@ import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-const navigation = vi.hoisted(() => ({ pathname: '/' }));
-vi.mock('next/navigation', () => ({ usePathname: () => navigation.pathname }));
 vi.mock('./AppRuntimeMounts', () => ({
   default: () => <div data-testid="app-runtime-mounts" />,
 }));
@@ -11,8 +9,7 @@ vi.mock('./AppRuntimeMounts', () => ({
 vi.mock('react-i18next', () => ({
   I18nextProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock('@agiworkforce/ui', async (importActual) => ({
-  ...(await importActual<typeof import('@agiworkforce/ui')>()),
+vi.mock('@agiworkforce/ui/sonner', () => ({
   SonnerToaster: () => null,
 }));
 vi.mock('./i18n', () => ({
@@ -43,9 +40,10 @@ vi.mock('@agiworkforce/unified-chat/capabilities', () => ({
 }));
 
 import Providers from './providers';
+import ProductRuntimeProviders from './ProductRuntimeProviders';
 
 describe('Providers', () => {
-  it('keeps the theme provider outside every other client provider', () => {
+  it('keeps the common provider shell lightweight', () => {
     const { container } = render(
       <Providers>
         <span>App content</span>
@@ -53,33 +51,25 @@ describe('Providers', () => {
     );
 
     const themeProvider = screen.getByTestId('theme-provider');
-    const capabilityProvider = screen.getByTestId('capability-provider');
-    const queryProvider = screen.getByTestId('query-provider');
 
-    expect(themeProvider).toContainElement(capabilityProvider);
-    expect(capabilityProvider).toContainElement(queryProvider);
+    expect(themeProvider).toHaveTextContent('App content');
+    expect(screen.queryByTestId('capability-provider')).toBeNull();
+    expect(screen.queryByTestId('query-provider')).toBeNull();
     expect(themeProvider.parentElement).toBe(container);
   });
 
-  it('mounts the app runtime on an app route and nowhere else', async () => {
-    navigation.pathname = '/pricing';
-    const marketing = render(
-      <Providers>
+  it('keeps product-only providers in the product runtime', () => {
+    render(
+      <ProductRuntimeProviders>
         <span>App content</span>
-      </Providers>,
+      </ProductRuntimeProviders>,
     );
-    expect(marketing.queryByTestId('app-runtime-mounts')).toBeNull();
-    marketing.unmount();
 
-    navigation.pathname = '/chat';
-    const app = render(
-      <Providers>
-        <span>App content</span>
-      </Providers>,
-    );
-    expect(await app.findByTestId('app-runtime-mounts')).toBeInTheDocument();
-    app.unmount();
-    navigation.pathname = '/';
+    const capabilityProvider = screen.getByTestId('capability-provider');
+    const queryProvider = screen.getByTestId('query-provider');
+
+    expect(capabilityProvider).toContainElement(queryProvider);
+    expect(screen.getByTestId('app-runtime-mounts')).toBeInTheDocument();
   });
 
   it('does not remove or replace the server-rendered structured data', () => {

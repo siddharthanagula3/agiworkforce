@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Fable (lead) for the founder
-Last updated: 2026-09-15
+Last updated: 2026-09-21
 
 The one execution document for the multi-client productization mandate of
 2026-09-14: findings, plan, open tasks and the verification matrix. Resolved
@@ -12,7 +12,29 @@ go to `founder-assistance.md`, defect root causes to `ACTIVE_ISSUES.md`.
 Classification used everywhere below: VERIFIED (exercised in the running
 client), SOURCE-CONFIRMED (read in code, not run), INFERRED, BLOCKED.
 
-## 1. Coordination
+## September 21 Scope Amendment
+
+This file remains the execution record for the September 14–15 client pass.
+Its named sessions, ownership assignments, checkpoints, and findings are dated
+history, not current coordination instructions.
+
+The current product contract is one ecosystem with two continuity domains:
+
+- Account Cloud: Web, Mobile Cloud, Desktop Cloud, and eligible Chrome Managed
+  Cloud share account conversations, projects, memory, Cloud files/artifacts,
+  connected tools/apps, OAuth connection metadata, settings, personalization,
+  and entitlement state.
+- Host Developer: Desktop Code, CLI, and VS Code share local session identity,
+  tools/extensions, permissions, approved repositories/files, and credential
+  references through one host-owned runtime.
+
+Desktop bridges the domains only through an explicit reviewed handoff. The
+current serial implementation order is Website, Mobile, Desktop, Chrome, CLI,
+then VS Code. Managed Free is available after sign-in; paid upgrades remain
+waitlist/access-code gated. Current competitor requirements are owned by
+`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`.
+
+## 1. Historical Coordination
 
 Two Claude sessions share this checkout. The peer session owns, until it
 reports its protocol-8 push: `apps/cli`, `apps/extension`,

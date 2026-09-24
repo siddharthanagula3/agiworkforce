@@ -65,6 +65,7 @@
     "untitled": "已发布的工件",
     "publishedOn": "发布于 {{date}}",
     "sharedFrom": "来自 AGI 的分享",
+    "sharedWithWorkspace": "已与您的工作区共享",
     "renderFailed": "无法渲染此工件：{{error}}",
     "svgUnavailable": "此 SVG 中没有可以安全显示的内容。"
   },

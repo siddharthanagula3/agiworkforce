@@ -1,9 +1,14 @@
 # Release inclusion inventory, 2026-09-19
 
-Status: Current
+Status: Historical release snapshot
 Owner: Release engineering
 Candidate base: `c8ed5c61728588a29be380468b06342963c0657a`
 Remote base: `cc85ac9fc1d9d1ea99f7bd55216ced6791a30a70`
+
+This manifest is immutable evidence for the named September 19 candidate. It is
+not an inclusion list for the current working tree or a September 21 launch
+claim. Generate a new candidate inventory from the eventual verified Website
+release revision instead of editing the paths below.
 
 This manifest records every path in the consolidated release snapshot. The 756
 paths in the primary listing plus the three post-listing paths are all intended

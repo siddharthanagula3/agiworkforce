@@ -567,7 +567,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         <span className="truncate text-sm font-medium">{title}</span>
                         <span
                           className={cn(
-                            'shrink-0 rounded-full border px-2 py-0.5 text-[12px] font-medium',
+                            'shrink-0 rounded-full border px-2 py-0.5 text-caption font-medium',
                             TASK_TONE_BADGE_CLASS[tone],
                           )}
                         >

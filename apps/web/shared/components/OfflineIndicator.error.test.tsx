@@ -34,6 +34,14 @@ describe('OfflineIndicator errors', () => {
     const status = await screen.findByRole('status');
     expect(status.textContent).toMatch(/Something went wrong on our side/i);
     expect(status.textContent).not.toMatch(/SELECT secret|private-trace|HTTP 500/i);
-    expect(screen.getByRole('button', { name: 'Retry sync' })).toBeTruthy();
+    expect(status.firstElementChild).toHaveClass(
+      'bg-destructive/10',
+      'border-destructive/30',
+      'text-danger-text',
+    );
+    expect(screen.getByRole('button', { name: 'Retry sync' })).toHaveClass(
+      'bg-destructive/15',
+      'text-danger-text',
+    );
   });
 });

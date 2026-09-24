@@ -117,7 +117,7 @@ function ToolRow({ connectorId, toolName }: ToolRowProps) {
             aria-pressed={current === level}
             title={label}
             className={cn(
-              'flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-all duration-150',
+              'flex h-7 min-w-7 items-center justify-center gap-1 rounded-md border px-2 text-xs font-medium transition-all duration-quick',
               current === level ? activeClass : INACTIVE_CLASS,
             )}
           >
@@ -137,7 +137,7 @@ function PermissionLegend() {
         <div key={level} className="flex items-center gap-1.5">
           <span
             className={cn(
-              'flex h-5 w-5 items-center justify-center rounded border text-[12px]',
+              'flex h-5 w-5 items-center justify-center rounded-compact border text-caption',
               activeClass,
             )}
           >

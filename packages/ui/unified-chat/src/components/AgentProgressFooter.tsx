@@ -84,12 +84,12 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
 
       {hasStepInfo && (
         <div className="flex shrink-0 flex-col items-center gap-0.5">
-          <span className="text-[12px] font-medium tabular-nums text-muted-foreground">
+          <span className="text-caption font-medium tabular-nums text-muted-foreground">
             Step {completedSteps}/{totalSteps}
           </span>
           <div className="h-1 w-24 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-teal-500 transition-all duration-700 ease-out"
+              className="h-full rounded-full bg-teal-500 transition-all duration-moved ease-standard"
               style={{ width: `${progressWidth}%` }}
               aria-hidden="true"
             />
@@ -98,7 +98,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
       )}
 
       <div className="flex shrink-0 items-center gap-2">
-        <div className="flex items-center gap-1 text-[12px] tabular-nums text-muted-foreground">
+        <div className="flex items-center gap-1 text-caption tabular-nums text-muted-foreground">
           <Timer className="h-3 w-3" aria-hidden="true" />
           <span>{formatElapsed(elapsedMs)}</span>
         </div>
@@ -107,7 +107,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
           type="button"
           onClick={onExpandSidecar}
           className={cn(
-            'rounded p-1 text-muted-foreground transition-colors',
+            'rounded-compact p-1 text-muted-foreground transition-colors',
             'hover:bg-white/10 hover:text-foreground',
             'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-500',
           )}

@@ -150,7 +150,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
       {/* Toolbar */}
       <div className="flex items-center justify-between px-2 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs font-medium">
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-compact text-xs font-medium">
             <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Sheet</span>
           </div>
@@ -159,7 +159,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
             {data.columns.length === 1 ? 'column' : 'columns'}
           </span>
         </div>
-        <span className="text-[12px] text-muted-foreground pr-1" aria-live="polite">
+        <span className="text-caption text-muted-foreground pr-1" aria-live="polite">
           {copiedCell ? 'Cell copied' : selected ? 'Ctrl/⌘+C to copy cell' : ''}
         </span>
       </div>
@@ -177,11 +177,11 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
           className="w-full border-collapse text-sm"
           data-testid="spreadsheet-table"
         >
-          <thead className="sticky top-0 z-10 shadow-sm ring-1 ring-border">
+          <thead className="sticky top-0 z-[var(--z-control)] shadow-sm ring-1 ring-border">
             <tr role="row">
               <th
                 role="columnheader"
-                className="w-10 border-r border-b border-border bg-muted p-1 text-center text-[12px] text-muted-foreground font-medium select-none"
+                className="w-10 border-r border-b border-border bg-muted p-1 text-center text-caption text-muted-foreground font-medium select-none"
               >
                 #
               </th>
@@ -236,7 +236,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
                 <tr key={rowIndex} role="row" className="group">
                   <td
                     role="rowheader"
-                    className="border-r border-b border-border bg-muted/30 p-1 text-center text-[12px] text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors"
+                    className="border-r border-b border-border bg-muted/30 p-1 text-center text-caption text-muted-foreground font-mono select-none group-hover:bg-accent/50 transition-colors"
                   >
                     {rowIndex + 1}
                   </td>
@@ -277,7 +277,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
       {/* Footer, honest truncation note */}
       {truncated && (
         <div
-          className="border-t bg-muted/20 px-3 py-1.5 text-[12px] text-muted-foreground"
+          className="border-t bg-muted/20 px-3 py-1.5 text-caption text-muted-foreground"
           data-testid="spreadsheet-truncation-note"
         >
           Showing first {SPREADSHEET_ROW_CAP} of {sortedRows.length} rows. Download the CSV for the

@@ -390,7 +390,7 @@ export default function ProjectDetailPage() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 12,
+            gap: 'var(--space-3)',
             color: 'var(--agi-ink-2)',
             fontSize: 14,
           }}
@@ -403,8 +403,8 @@ export default function ProjectDetailPage() {
               border: '1px solid var(--agi-rule-strong)',
               background: 'transparent',
               color: 'var(--agi-ink-2)',
-              padding: '6px 12px',
-              borderRadius: 8,
+              padding: 'var(--space-2) var(--space-3)',
+              borderRadius: 'var(--corner-field)',
               fontSize: 12,
               cursor: 'pointer',
             }}
@@ -428,7 +428,7 @@ export default function ProjectDetailPage() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 12,
+            gap: 'var(--space-3)',
             color: 'var(--agi-ink-2)',
             fontSize: 14,
           }}
@@ -444,8 +444,8 @@ export default function ProjectDetailPage() {
               border: '1px solid var(--agi-rule-strong)',
               background: 'transparent',
               color: 'var(--agi-ink-2)',
-              padding: '6px 12px',
-              borderRadius: 8,
+              padding: 'var(--space-2) var(--space-3)',
+              borderRadius: 'var(--corner-field)',
               fontSize: 12,
               cursor: 'pointer',
             }}
@@ -465,7 +465,7 @@ export default function ProjectDetailPage() {
           style={{
             minHeight: '100%',
             background: 'hsl(var(--background))',
-            padding: '48px 32px',
+            padding: 'var(--space-7) var(--space-6)',
             color: 'hsl(var(--foreground))',
           }}
         >
@@ -477,8 +477,8 @@ export default function ProjectDetailPage() {
                 border: '1px solid var(--agi-rule-strong)',
                 background: 'transparent',
                 color: 'var(--agi-ink-2)',
-                padding: '6px 12px',
-                borderRadius: 8,
+                padding: 'var(--space-2) var(--space-3)',
+                borderRadius: 'var(--corner-field)',
                 fontSize: 12,
                 cursor: 'pointer',
               }}
@@ -491,7 +491,7 @@ export default function ProjectDetailPage() {
                 fontFamily: 'var(--sans)',
                 fontSize: 22,
                 color: 'hsl(var(--foreground))',
-                margin: '24px 0 8px',
+                margin: 'var(--space-5) 0 var(--space-2)',
               }}
             >
               Project not found
@@ -522,7 +522,7 @@ export default function ProjectDetailPage() {
           style={{
             maxWidth: 720,
             margin: '0 auto',
-            padding: '0 24px',
+            padding: '0 var(--space-5)',
             display: 'flex',
             flexDirection: 'column',
             minHeight: '100%',
@@ -536,7 +536,7 @@ export default function ProjectDetailPage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '16px 0 0',
+              padding: 'var(--space-4) 0 0',
               flexShrink: 0,
             }}
           >
@@ -553,7 +553,7 @@ export default function ProjectDetailPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: 8,
+                borderRadius: 'var(--corner-field)',
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
@@ -567,7 +567,7 @@ export default function ProjectDetailPage() {
             {/* Right side: project actions. Model choice belongs to the actual
                 send-owning composer below, so this page never presents a
                 second selector backed by a different store. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
               {/* "..." overflow menu */}
               <div ref={menuRef} style={{ position: 'relative' }}>
                 <button
@@ -582,7 +582,7 @@ export default function ProjectDetailPage() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRadius: 8,
+                    borderRadius: 'var(--corner-field)',
                     border: '1px solid var(--agi-rule)',
                     background: menuOpen ? 'var(--agi-bg-3)' : 'transparent',
                     cursor: 'pointer',
@@ -613,7 +613,7 @@ export default function ProjectDetailPage() {
                       minWidth: 180,
                       background: 'var(--agi-bg)',
                       border: '1px solid var(--agi-rule-strong)',
-                      borderRadius: 10,
+                      borderRadius: 'var(--corner-menu)',
                       boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
                       overflow: 'hidden',
                       zIndex: 'var(--z-popover)',
@@ -631,9 +631,9 @@ export default function ProjectDetailPage() {
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 10,
+                          gap: 'var(--space-3)',
                           width: '100%',
-                          padding: '10px 14px',
+                          padding: 'var(--space-3) var(--space-4)',
                           background: 'transparent',
                           border: 0,
                           textAlign: 'start',
@@ -669,9 +669,9 @@ export default function ProjectDetailPage() {
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 10,
+                          gap: 'var(--space-3)',
                           width: '100%',
-                          padding: '10px 14px',
+                          padding: 'var(--space-3) var(--space-4)',
                           background: 'transparent',
                           border: 0,
                           textAlign: 'start',
@@ -716,11 +716,14 @@ export default function ProjectDetailPage() {
               flexDirection: 'column',
               alignItems: 'center',
               textAlign: 'center',
-              padding: '48px 0 32px',
+              padding: 'var(--space-7) 0 var(--space-6)',
               flexShrink: 0,
             }}
           >
-            <div ref={appearanceRef} style={{ position: 'relative', marginBottom: 12 }}>
+            <div
+              ref={appearanceRef}
+              style={{ position: 'relative', marginBottom: 'var(--space-3)' }}
+            >
               {(() => {
                 const TriggerIcon = resolveProjectIcon(
                   hasKnownProjectIcon(project.iconEmoji) ? project.iconEmoji : null,
@@ -731,7 +734,7 @@ export default function ProjectDetailPage() {
                   justifyContent: 'center',
                   width: 56,
                   height: 56,
-                  borderRadius: 16,
+                  borderRadius: 'var(--corner-panel)',
                   border: 'none',
                   background: `${resolveProjectAccentHex(project.accentColor)}22`,
                 } as const;
@@ -778,8 +781,8 @@ export default function ProjectDetailPage() {
                     left: '50%',
                     transform: 'translateX(-50%)',
                     width: 272,
-                    padding: 12,
-                    borderRadius: 12,
+                    padding: 'var(--space-3)',
+                    borderRadius: 'var(--corner-surface)',
                     border: '1px solid var(--agi-rule-strong)',
                     background: 'var(--agi-bg)',
                     boxShadow: '0 8px 28px rgba(0,0,0,0.22)',
@@ -789,7 +792,7 @@ export default function ProjectDetailPage() {
                 >
                   <p
                     style={{
-                      margin: '0 0 6px',
+                      margin: '0 0 var(--space-2)',
                       fontSize: 12,
                       fontWeight: 600,
                       color: 'var(--agi-ink-2)',
@@ -800,7 +803,12 @@ export default function ProjectDetailPage() {
                   <div
                     role="listbox"
                     aria-label="Project colour"
-                    style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 'var(--space-2)',
+                      marginBottom: 'var(--space-3)',
+                    }}
                   >
                     {PROJECT_ACCENT_REGISTRY.map((accent) => (
                       <button
@@ -868,7 +876,7 @@ export default function ProjectDetailPage() {
 
                   <p
                     style={{
-                      margin: '0 0 6px',
+                      margin: '0 0 var(--space-2)',
                       fontSize: 12,
                       fontWeight: 600,
                       color: 'var(--agi-ink-2)',
@@ -882,8 +890,8 @@ export default function ProjectDetailPage() {
                     style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(6, 1fr)',
-                      gap: 4,
-                      marginBottom: 10,
+                      gap: 'var(--space-1)',
+                      marginBottom: 'var(--space-3)',
                     }}
                   >
                     {PROJECT_ICON_REGISTRY.map((entry) => {
@@ -905,7 +913,7 @@ export default function ProjectDetailPage() {
                             width: 32,
                             height: 32,
                             border: 'none',
-                            borderRadius: 8,
+                            borderRadius: 'var(--corner-field)',
                             cursor: 'pointer',
                             background: isSelected ? 'var(--agi-bg-3)' : 'transparent',
                             color: isSelected
@@ -922,8 +930,8 @@ export default function ProjectDetailPage() {
                   <div
                     style={{
                       borderTop: '1px solid var(--agi-rule-strong)',
-                      marginTop: 4,
-                      paddingTop: 6,
+                      marginTop: 'var(--space-1)',
+                      paddingTop: 'var(--space-2)',
                     }}
                   >
                     <button
@@ -937,10 +945,10 @@ export default function ProjectDetailPage() {
                         display: 'flex',
                         width: '100%',
                         alignItems: 'center',
-                        gap: 8,
-                        padding: '6px 4px',
+                        gap: 'var(--space-2)',
+                        padding: 'var(--space-2) var(--space-1)',
                         border: 'none',
-                        borderRadius: 8,
+                        borderRadius: 'var(--corner-field)',
                         background: 'transparent',
                         color: 'var(--agi-ink-2)',
                         fontSize: 13,
@@ -971,10 +979,10 @@ export default function ProjectDetailPage() {
                 data-testid="project-shared-badge"
                 style={{
                   alignSelf: 'flex-start',
-                  marginTop: 8,
+                  marginTop: 'var(--space-2)',
                   fontSize: 12,
-                  padding: '2px 8px',
-                  borderRadius: 9999,
+                  padding: 'var(--space-1) var(--space-2)',
+                  borderRadius: 'var(--corner-pill)',
                   border: '1px solid var(--agi-rule)',
                   color: 'var(--agi-ink-2)',
                 }}
@@ -985,7 +993,7 @@ export default function ProjectDetailPage() {
 
             {/* Optional project description / instructions summary */}
             {headerPresentation && (
-              <div style={{ marginTop: 8, maxWidth: 540 }}>
+              <div style={{ marginTop: 'var(--space-2)', maxWidth: 540 }}>
                 <ProjectHeader compact presentation={headerPresentation} />
               </div>
             )}
@@ -994,7 +1002,10 @@ export default function ProjectDetailPage() {
           {/* ---------------------------------------------------------------- */}
           {/* Composer                                                         */}
           {/* ---------------------------------------------------------------- */}
-          <div data-testid="project-detail-composer" style={{ flexShrink: 0, marginBottom: 32 }}>
+          <div
+            data-testid="project-detail-composer"
+            style={{ flexShrink: 0, marginBottom: 'var(--space-6)' }}
+          >
             <ChatComposerNew
               onSend={handleProjectSend}
               placeholder={`New chat in ${project.name}`}
@@ -1009,8 +1020,8 @@ export default function ProjectDetailPage() {
               role="alert"
               className="rounded-lg border border-warning/30 bg-warning/10 text-warning"
               style={{
-                marginBottom: 16,
-                padding: '8px 12px',
+                marginBottom: 'var(--space-4)',
+                padding: 'var(--space-2) var(--space-3)',
                 fontSize: 12,
                 lineHeight: 1.5,
                 flexShrink: 0,
@@ -1048,7 +1059,7 @@ export default function ProjectDetailPage() {
                 onClick={() => setTab(t)}
                 data-testid={`project-detail-tab-${t}`}
                 style={{
-                  padding: '10px 16px',
+                  padding: 'var(--space-3) var(--space-4)',
                   flexShrink: 0,
                   background: 'transparent',
                   border: 'none',
@@ -1059,7 +1070,7 @@ export default function ProjectDetailPage() {
                   fontWeight: tab === t ? 600 : 400,
                   cursor: 'pointer',
                   textTransform: 'capitalize',
-                  marginBottom: -1,
+                  marginBottom: 'calc(var(--stroke-hairline) * -1)',
                   transition: 'color 0.15s, border-color 0.15s',
                 }}
               >
@@ -1072,7 +1083,7 @@ export default function ProjectDetailPage() {
           {/* Tab content                                                      */}
           {/* ---------------------------------------------------------------- */}
           <div
-            style={{ flex: 1, paddingTop: 20, paddingBottom: 40 }}
+            style={{ flex: 1, paddingTop: 'var(--space-5)', paddingBottom: 'var(--space-7)' }}
             role="tabpanel"
             id={`project-detail-panel-${tab}`}
             aria-labelledby={`project-detail-tab-${tab}`}
@@ -1087,7 +1098,7 @@ export default function ProjectDetailPage() {
                   Loading chats...
                 </p>
               ) : projectChatsError ? (
-                <div style={{ textAlign: 'center', padding: '32px 16px' }}>
+                <div style={{ textAlign: 'center', padding: 'var(--space-6) var(--space-4)' }}>
                   <p role="alert" style={{ color: 'var(--agi-ink-2)', fontSize: 13 }}>
                     {projectChatsError}
                   </p>
@@ -1098,8 +1109,8 @@ export default function ProjectDetailPage() {
                       border: '1px solid var(--agi-rule-strong)',
                       background: 'transparent',
                       color: 'var(--agi-ink-2)',
-                      padding: '6px 12px',
-                      borderRadius: 8,
+                      padding: 'var(--space-2) var(--space-3)',
+                      borderRadius: 'var(--corner-field)',
                       fontSize: 12,
                       cursor: 'pointer',
                     }}
@@ -1115,7 +1126,7 @@ export default function ProjectDetailPage() {
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 6,
+                      gap: 'var(--space-2)',
                       padding: 0,
                       margin: 0,
                     }}
@@ -1132,7 +1143,7 @@ export default function ProjectDetailPage() {
                           style={{
                             listStyle: 'none',
                             border: '1px solid var(--agi-rule)',
-                            borderRadius: 10,
+                            borderRadius: 'var(--corner-menu)',
                             overflow: 'hidden',
                           }}
                         >
@@ -1147,11 +1158,11 @@ export default function ProjectDetailPage() {
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'space-between',
-                              gap: 12,
+                              gap: 'var(--space-3)',
                               width: '100%',
                               background: 'transparent',
                               border: 0,
-                              padding: '10px 14px',
+                              padding: 'var(--space-3) var(--space-4)',
                               textAlign: 'start',
                               cursor: 'pointer',
                             }}
@@ -1195,7 +1206,13 @@ export default function ProjectDetailPage() {
                     })}
                   </ul>
                   {hasMoreProjectChats && (
-                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        marginTop: 'var(--space-4)',
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => void loadMoreProjectChats()}
@@ -1204,8 +1221,8 @@ export default function ProjectDetailPage() {
                           border: '1px solid var(--agi-rule-strong)',
                           background: 'transparent',
                           color: 'var(--agi-ink-2)',
-                          padding: '6px 12px',
-                          borderRadius: 8,
+                          padding: 'var(--space-2) var(--space-3)',
+                          borderRadius: 'var(--corner-field)',
                           fontSize: 12,
                           cursor: isLoadingMoreProjectChats ? 'default' : 'pointer',
                           opacity: isLoadingMoreProjectChats ? 0.6 : 1,
@@ -1261,13 +1278,13 @@ interface EmptyChatsStateProps {
 
 function EmptyChatsState({ projectName }: EmptyChatsStateProps) {
   return (
-    <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+    <div style={{ textAlign: 'center', padding: 'var(--space-7) var(--space-4)' }}>
       <p
         style={{
           fontSize: 14,
           fontWeight: 600,
           color: 'var(--agi-ink)',
-          margin: '0 0 6px',
+          margin: '0 0 var(--space-2)',
         }}
       >
         No chats yet

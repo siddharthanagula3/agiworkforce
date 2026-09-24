@@ -15,6 +15,7 @@ import { getModelMetadata } from '@shared/config/llm';
 import { CODE_COPY, contextWindowLabel } from './code-surface';
 import {
   TOOL_APPROVAL_POLICY_OPTIONS,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
   type ToolApprovalPreferences,
 } from '@shared/types/toolApprovalPolicy';
 import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
@@ -2069,7 +2070,10 @@ describe('CloudCodePage', () => {
       expect(screen.getByText(option.hint)).toBeInTheDocument();
       expect(screen.queryByText(option.description)).not.toBeInTheDocument();
     }
-    expect(rows[0]).toHaveAttribute('aria-checked', 'true');
+    const defaultIndex = TOOL_APPROVAL_POLICY_OPTIONS.findIndex(
+      (option) => option.policy === WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES.defaultPolicy,
+    );
+    expect(rows[defaultIndex]).toHaveAttribute('aria-checked', 'true');
   });
 
   it('holds the greeting until the account name resolves', async () => {

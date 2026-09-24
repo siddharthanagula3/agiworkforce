@@ -43,8 +43,8 @@ export function ChatNotificationBadge({
           className={cn(
             'absolute -top-1 -right-1 flex items-center justify-center',
             'min-w-[18px] h-[18px] rounded-full',
-            'text-[12px] text-white font-bold leading-none',
-            'ring-2 ring-[hsl(var(--card))]',
+            'text-caption text-white font-bold leading-none',
+            'ring-2 ring-card',
             bgClass,
             label === '' && 'min-w-[10px] h-[10px] -top-0.5 -right-0.5',
             className,

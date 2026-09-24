@@ -16,6 +16,8 @@ const EXEMPT: Record<string, string> = {
     'runAuthGate rejects any request without a Bearer header, so a browser cannot drive it.',
   'uploads/local-project-knowledge/route.ts':
     "The bearer here is the signed `?token=`, not the cookie. verifyLocalUploadToken checks an HMAC over claims that BIND the upload to the cookie-derived userId, and additionally pins content-type, byte count and expiry; the nonce is written with the `wx` flag so a token is single-use. A cross-site page cannot mint one, the only issuer is /api/uploads/presign, which is itself cookie-authenticated AND CSRF-checked, and the whole handler throws notFound unless NODE_ENV === 'development'.",
+  'voice/transcribe/route.ts':
+    'The local wrapper delegates to transcriptionsHandler, which requires CSRF before resolving the Clerk principal; this file only adds the dictation capability admission check.',
   'auth/device/code/route.ts':
     'Two handlers, two principals. The cookie-authenticated one is the GET lookup, whose only write marks an ALREADY-expired code as expired, idempotent housekeeping an attacker gains nothing from. The POST is unauthenticated RFC 8628 device-code creation with no cookie principal at all.',
 };

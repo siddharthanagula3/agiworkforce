@@ -43,7 +43,7 @@ import {
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
-import { withSseHeartbeat } from './sse-heartbeat';
+import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import {
   collectGeneratedFileRefs,
@@ -779,9 +779,7 @@ export async function buildStreamResponse(
   const reconciledStream = stream.pipeThrough(transformStream);
 
   const streamHeaders: Record<string, string> = {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+    ...SSE_RESPONSE_HEADERS,
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };
@@ -1240,9 +1238,7 @@ export async function buildAdapterStreamResponse(
   });
 
   const streamHeaders: Record<string, string> = {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+    ...SSE_RESPONSE_HEADERS,
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };

@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
@@ -10,6 +10,25 @@ function file(name: string, type: string, bytes = 4): File {
 }
 
 describe('a file the composer refuses', () => {
+  it('rejects an empty file before upload while admitting a valid file in the same selection', () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAttachments({ onError }));
+
+    act(() => {
+      result.current.addFiles([file('empty.txt', 'text/plain', 0), file('notes.txt', 'text/plain')]);
+    });
+
+    expect(result.current.attachments.map((item) => item.name)).toEqual(['notes.txt']);
+    expect(result.current.refused).toEqual([{ filename: 'empty.txt', reason: 'empty' }]);
+    expect(result.current.previews.map((item) => item.file.name)).toEqual(['notes.txt']);
+    expect(onError).toHaveBeenCalledWith(
+      '"empty.txt" is empty. Add content to the file and attach it again.',
+    );
+    expect(chatDraftRefusalNotes(result.current.refused)).toEqual([
+      '[attachment unavailable: empty.txt is empty. Add content to the file and attach it again.]',
+    ]);
+  });
+
   it('is reported by name and reason, not only as a toast', () => {
     const { result } = renderHook(() => useAttachments());
 

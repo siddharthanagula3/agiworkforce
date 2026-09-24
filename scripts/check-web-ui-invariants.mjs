@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import ts from 'typescript';
 
 const WRITE_BASELINE = process.argv.includes('--write-baseline');
 const SUMMARY = process.argv.includes('--summary');
@@ -95,6 +96,41 @@ const RULES = [
     advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor, use the caption or metadata role`,
   },
   {
+    id: 'literal-caption-size',
+    regex: /\btext-\[12px\]/g,
+    advice: 'use the semantic `text-caption` or `text-metadata` role',
+  },
+  {
+    id: 'raw-duration-utility',
+    regex: /\bduration-\d+\b/g,
+    advice:
+      'use duration-instant, duration-quick, duration-moved, or duration-reveal from the shared motion ladder',
+  },
+  {
+    id: 'literal-duration-utility',
+    regex: /\bduration-\[(?!var\()[^\]]+\]/g,
+    advice:
+      'use a named duration utility from the shared motion ladder instead of an arbitrary literal',
+  },
+  {
+    id: 'raw-easing-utility',
+    regex: /\bease-(?:in-out|in|out|linear)\b/g,
+    advice:
+      'use ease-standard, ease-exit, ease-spring, or ease-reveal from the shared curve ladder',
+  },
+  {
+    id: 'bare-radius-utility',
+    regex: /\brounded(?:-(?:t|r|b|l))?\b(?!-)/g,
+    advice:
+      'use a named radius utility from the shared corner ladder; bare rounded utilities hide an unowned literal',
+  },
+  {
+    id: 'literal-radius-utility',
+    regex: /\brounded(?:-[trbl]{1,2})?-\[(?:\d|\.\d)[^\]]*\]/g,
+    advice:
+      'use a named radius utility from the shared corner ladder instead of an arbitrary literal',
+  },
+  {
     id: 'tiny-type-inline',
     regex: /\bfontSize:\s*(\d+(?:\.\d+)?)\b/g,
     predicate: (m) => Number(m[1]) < MIN_FONT_SIZE_PX,
@@ -112,6 +148,20 @@ const RULES = [
     regex: /font-size:\s*(\d+(?:\.\d+)?)px/g,
     predicate: (m) => Number(m[1]) < MIN_FONT_SIZE_PX,
     advice: `below the ${MIN_FONT_SIZE_PX}px legibility floor, raise it or use a role token`,
+  },
+  {
+    id: 'literal-radius-css',
+    extensions: new Set(['.css']),
+    regex: /border-radius:\s*([^;]+)/g,
+    predicate: (m) => /(?:^|\s)\d*\.?\d+(?:px|rem)(?:\s|$|!)/.test(m[1]),
+    advice:
+      'CSS radii must consume the shared --corner-* ladder; scaled device geometry, zero and true circles remain explicit',
+  },
+  {
+    id: 'raw-z-index-utility',
+    regex: /(?<![\w-])-?z-\d+\b/g,
+    advice:
+      'stacking is a shared ladder; use a named z-[var(--z-*)] rung so local and global layers cannot outrank each other by accident',
   },
   {
     id: 'arbitrary-z-index',
@@ -218,7 +268,224 @@ const HIDDEN_FROM_AT = /\baria-hidden(?!\s*=\s*(?:"false"|\{false\}))/;
 // nothing for a key press to activate.
 const PROPAGATION_ONLY = /onClick=\{\s*\(\s*\w*\s*\)\s*=>\s*\w+\.stopPropagation\(\)\s*\}/;
 
+const INLINE_SPACING_PROPERTIES = new Set([
+  'padding',
+  'paddingTop',
+  'paddingRight',
+  'paddingBottom',
+  'paddingLeft',
+  'paddingInline',
+  'paddingBlock',
+  'margin',
+  'marginTop',
+  'marginRight',
+  'marginBottom',
+  'marginLeft',
+  'marginInline',
+  'marginBlock',
+  'gap',
+  'rowGap',
+  'columnGap',
+]);
+const INLINE_RADIUS_PROPERTIES = new Set([
+  'borderRadius',
+  'borderTopLeftRadius',
+  'borderTopRightRadius',
+  'borderBottomRightRadius',
+  'borderBottomLeftRadius',
+]);
+const STANDALONE_RENDERERS = new Set([
+  'apps/web/app/api/og/route.tsx',
+  'apps/web/app/global-error.tsx',
+]);
+
+function propertyName(node) {
+  if (ts.isIdentifier(node) || ts.isStringLiteral(node)) return node.text;
+  return null;
+}
+
+function literalInlineSpacing(node) {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return /-?\d+(?:\.\d+)?px/.test(node.text);
+  }
+  if (ts.isNumericLiteral(node)) return Number(node.text) !== 0;
+  return (
+    ts.isPrefixUnaryExpression(node) &&
+    node.operator === ts.SyntaxKind.MinusToken &&
+    ts.isNumericLiteral(node.operand) &&
+    Number(node.operand.text) !== 0
+  );
+}
+
+function literalInlineRadius(node) {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return /^\d*\.?\d+(?:px|rem)$/.test(node.text);
+  }
+  return ts.isNumericLiteral(node) && Number(node.text) !== 0;
+}
+
+function belongsToInlineStyle(node) {
+  let current = node.parent;
+  while (current && !ts.isSourceFile(current)) {
+    if (
+      ts.isJsxExpression(current) &&
+      ts.isJsxAttribute(current.parent) &&
+      current.parent.name.getText() === 'style'
+    ) {
+      return true;
+    }
+    if (
+      (ts.isVariableDeclaration(current) || ts.isSatisfiesExpression(current)) &&
+      current.type?.getText().includes('CSSProperties')
+    ) {
+      return true;
+    }
+    if (ts.isVariableDeclaration(current) || ts.isStatement(current)) return false;
+    current = current.parent;
+  }
+  return false;
+}
+
 const SOURCE_RULES = [
+  {
+    id: 'verbose-theme-utility',
+    advice: 'use the generated semantic utility, such as text-foreground, instead of wrapping its token in hsl(var())',
+    scan(source, file) {
+      if (
+        !['.ts', '.tsx'].includes(path.extname(file)) ||
+        /\.(?:test|spec)\.tsx?$/.test(file)
+      ) {
+        return [];
+      }
+      const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+      const utility = /\b[a-z][a-z-]*-\[hsl\(var\(--[a-z-]+\)\)\]/g;
+      const literalKinds = new Set([
+        ts.SyntaxKind.StringLiteral,
+        ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+        ts.SyntaxKind.TemplateHead,
+        ts.SyntaxKind.TemplateMiddle,
+        ts.SyntaxKind.TemplateTail,
+      ]);
+      const found = [];
+      const visit = (node) => {
+        if (literalKinds.has(node.kind)) {
+          for (const match of node.text.matchAll(utility)) {
+            found.push({
+              line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+              literal: match[0],
+            });
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sourceFile);
+      return found;
+    },
+  },
+  {
+    id: 'mixed-icon-families',
+    advice: 'choose one icon package per production file so one control does not mix glyph geometry',
+    scan(source, file) {
+      if (
+        !file.startsWith('apps/web/') ||
+        !['.ts', '.tsx'].includes(path.extname(file)) ||
+        /\.(?:test|spec)\.tsx?$/.test(file)
+      ) {
+        return [];
+      }
+      const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+      const imports = sourceFile.statements.filter(ts.isImportDeclaration);
+      const iconImports = imports.filter(
+        (statement) =>
+          ts.isStringLiteral(statement.moduleSpecifier) &&
+          ['@agiworkforce/icons', 'lucide-react'].includes(statement.moduleSpecifier.text),
+      );
+      const families = new Set(iconImports.map((statement) => statement.moduleSpecifier.text));
+      if (families.size < 2) return [];
+      const secondImport = iconImports[1];
+      return [
+        {
+          line: sourceFile.getLineAndCharacterOfPosition(secondImport.getStart(sourceFile)).line + 1,
+          literal: '@agiworkforce/icons + lucide-react',
+        },
+      ];
+    },
+  },
+  {
+    id: 'inline-radius-literal',
+    advice:
+      'inline radii must consume the shared --corner-* ladder; use a token string instead of a private numeric radius',
+    scan(source, file) {
+      if (
+        path.extname(file) !== '.tsx' ||
+        /\.(?:test|spec)\.tsx$/.test(file) ||
+        STANDALONE_RENDERERS.has(file)
+      ) {
+        return [];
+      }
+      const sourceFile = ts.createSourceFile(
+        file,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const found = [];
+      const visit = (node) => {
+        if (
+          ts.isPropertyAssignment(node) &&
+          INLINE_RADIUS_PROPERTIES.has(propertyName(node.name)) &&
+          literalInlineRadius(node.initializer)
+        ) {
+          found.push({
+            line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+            literal: node.getText(sourceFile),
+          });
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sourceFile);
+      return found;
+    },
+  },
+  {
+    id: 'inline-spacing-literal',
+    advice:
+      'inline spacing must consume the shared --space-* ladder; use a token string or a spacing utility instead of a private pixel value',
+    scan(source, file) {
+      if (
+        path.extname(file) !== '.tsx' ||
+        /\.(?:test|spec)\.tsx$/.test(file) ||
+        STANDALONE_RENDERERS.has(file)
+      ) {
+        return [];
+      }
+      const sourceFile = ts.createSourceFile(
+        file,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      );
+      const found = [];
+      const visit = (node) => {
+        if (
+          ts.isPropertyAssignment(node) &&
+          INLINE_SPACING_PROPERTIES.has(propertyName(node.name)) &&
+          belongsToInlineStyle(node) &&
+          literalInlineSpacing(node.initializer)
+        ) {
+          found.push({
+            line: sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1,
+            literal: node.getText(sourceFile),
+          });
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(sourceFile);
+      return found;
+    },
+  },
   tagRule(
     ['div', 'span', 'li', 'td'],
     'clickable-div-without-semantics',

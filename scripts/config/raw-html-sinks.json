@@ -21,12 +21,6 @@
       "reason": "A type=application/ld+json script body built from JSON.stringify of server-built schema objects with every '<' escaped to \\u003c, so no value can close the script element or open a tag."
     },
     {
-      "file": "apps/web/shared/lib/security.ts",
-      "kind": "inner-html-assignment",
-      "count": 1,
-      "reason": "Decodes entities through a detached textarea: a textarea's content is parsed as RCDATA, so no element is created and no script runs, and only textarea.value (plain text) leaves the function."
-    },
-    {
       "file": "apps/desktop/src/features/artifacts/ArtifactRendererView.tsx",
       "kind": "srcdoc-attribute",
       "count": 1,

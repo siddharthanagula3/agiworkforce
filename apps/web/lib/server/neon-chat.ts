@@ -17,6 +17,7 @@ export type ChatConversationRow = {
   organization_id?: string | null;
   title: string;
   model: string | null;
+  selected_route_id?: string | null;
   project_id: string | null;
   pinned: boolean;
   starred: boolean;

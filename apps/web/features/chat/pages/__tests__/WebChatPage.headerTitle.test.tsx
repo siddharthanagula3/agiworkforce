@@ -188,7 +188,7 @@ vi.mock('@features/projects/services/managed-cloud-projects', async (importOrigi
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
-  return { ...actual, Sidebar: () => null };
+  return { ...actual, Sidebar: () => <nav data-testid="chat-sidebar" /> };
 });
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
@@ -235,12 +235,14 @@ vi.mock('../../components/work-session/WorkSessionPanel', async (importOriginal)
 }));
 vi.mock('../../components/artifacts/ArtifactsPanel', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../components/artifacts/ArtifactsPanel')>()),
-  ArtifactsPanel: () => null,
+  ArtifactsPanel: () => <aside data-testid="artifacts-panel" />,
   ArtifactsToggleButton: () => null,
 }));
 vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
   ...(await importOriginal()),
-  ResearchPanel: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ResearchPanel: ({ children }: { children?: ReactNode }) => (
+    <aside data-testid="research-panel">{children}</aside>
+  ),
   ResearchToggleButton: () => null,
 }));
 vi.mock('@shared/components/agi/SidebarWordmark', async (importOriginal) => ({
@@ -343,5 +345,18 @@ describe('WebChatPage conversation title slot', () => {
     // A title that quietly goes back tells the reader nothing: the same
     // sentence the sidebar uses for a failed rename is shown here too.
     expect(toastError).toHaveBeenCalledWith(sessionRowActionFailureMessage('rename'));
+  });
+
+  it('removes full-shell chrome from the compact Quick Ask surface', async () => {
+    openConversation();
+
+    const { container } = render(<WebChatPage compact />);
+    await screen.findByTestId('message-list');
+
+    expect(container.firstElementChild).toHaveAttribute('data-chat-surface', 'quick-ask');
+    expect(container.querySelector('[data-app-header]')).toBeNull();
+    expect(screen.queryByTestId('chat-sidebar')).toBeNull();
+    expect(screen.queryByTestId('research-panel')).toBeNull();
+    expect(screen.queryByTestId('artifacts-panel')).toBeNull();
   });
 });

@@ -285,6 +285,19 @@ export interface StreamChunkResponseMeta {
   systemFingerprint?: string;
   serviceTier?: string;
   provider?: string;
+  upstreamFrameShape?: UpstreamFrameShape;
+}
+
+export interface UpstreamFrameShape {
+  frames: number;
+  contentFrames: number;
+  contentChars: number;
+  reasoningFrames: number;
+  reasoningChars: number;
+  reasoningDetailFrames: number;
+  reasoningDetailItems: number;
+  toolCallFrames: number;
+  finishFrames: number;
 }
 
 export interface StreamChunkUsage {

@@ -15,6 +15,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireCsrfToken } from '@/lib/csrf';
 import { readPersistedAssistantTurn } from '../../../../lib/assistant-turn-persistence';
 import { buildTurnResumeStream } from '../../../../lib/stream-envelope';
+import { SSE_RESPONSE_HEADERS } from '../../../../lib/sse-heartbeat';
 
 type RouteContext = { params: Promise<{ runId: string }> };
 
@@ -83,9 +84,7 @@ async function handleTurnStreamResume(request: NextRequest, context: RouteContex
 
   return new NextResponse(body, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
+      ...SSE_RESPONSE_HEADERS,
       'X-AGI-Stream-Resume': 'turn-cursor',
       'X-AGI-Stream-Resume-Characters': String(remainder.length),
       ...(turn.truncationReason ? { 'X-AGI-Stream-Truncation': turn.truncationReason } : {}),

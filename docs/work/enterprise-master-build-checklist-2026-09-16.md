@@ -1,7 +1,14 @@
 # AGI Workforce - Enterprise-Grade Master Build Checklist
 
-Status: Current as of 2026-09-16, HEAD `bfc0ada75`
+Status: Historical audit snapshot as of 2026-09-16, HEAD `bfc0ada75`
 Owner: Repository maintainers
+
+Superseded for current implementation status and sequencing by the September
+21 product rebaseline. The 2,097 judgments below are preserved as frozen audit
+evidence; their Partial/Missing labels are not a current queue and must be
+re-verified against code before remediation. Use `ACTIVE_ISSUES.md`,
+`docs/agent-context/known-flaws.md`, `docs/work/implementation-status.md`, and
+the active surface release audit instead.
 
 Every item verified three times: code audit, independent re-check, and a ships-and-runs check (production env names, CI gating, releases, live site). `[x]` done · `[ ]` not done (🟡 partial, 🔴 missing, ⚪ external/N/A) · _(revised)_ changed by a later check · ⛔ **not live**: built on main but in no release or deployment users run.
 

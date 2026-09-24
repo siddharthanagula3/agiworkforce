@@ -7,21 +7,21 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import {
-  DEFAULT_TOOL_APPROVAL_POLICY,
-  DEFAULT_TOOL_APPROVAL_PREFERENCES,
   TOOL_APPROVAL_POLICY_OPTIONS,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
   type ToolApprovalPolicy,
   type ToolApprovalPreferences,
 } from '@shared/types/toolApprovalPolicy';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const WORKSPACE_BLOCKS_AUTONOMY =
-  'Your workspace does not allow skipping approvals, so this option is unavailable.';
+  'Your workspace does not allow skipping approvals. The server will ask before every action.';
 
 export function ToolApprovalDefaultsPanel() {
   const [policy, setPolicy] = useState<ToolApprovalPolicy>(
-    DEFAULT_TOOL_APPROVAL_PREFERENCES.defaultPolicy,
+    WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES.defaultPolicy,
   );
   const [autonomyAvailable, setAutonomyAvailable] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export function ToolApprovalDefaultsPanel() {
     let cancelled = false;
     fetchPreferenceNamespace<ToolApprovalPreferences>(
       TOOL_APPROVAL_PREFERENCE_NAMESPACE,
-      DEFAULT_TOOL_APPROVAL_PREFERENCES,
+      WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
     )
       .then((value) => {
         if (cancelled) return;
@@ -138,7 +138,7 @@ export function ToolApprovalDefaultsPanel() {
               <span>
                 <span className="block text-sm font-medium text-foreground">
                   {option.label}
-                  {option.policy === DEFAULT_TOOL_APPROVAL_POLICY ? (
+                  {option.policy === WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY ? (
                     <span className="ml-2 text-xs font-normal text-muted-foreground">Default</span>
                   ) : null}
                 </span>

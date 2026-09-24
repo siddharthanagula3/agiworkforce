@@ -36,6 +36,14 @@ const { editorHandle, editorProps } = vi.hoisted(() => ({
   editorProps: { current: null as ComposerEditorProps | null },
 }));
 
+const { preloadTranscriptMarkdown } = vi.hoisted(() => ({
+  preloadTranscriptMarkdown: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@features/chat/lib/preload-transcript-markdown', () => ({
+  preloadTranscriptMarkdown,
+}));
+
 vi.mock('@agiworkforce/unified-chat/composer-editor', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const { forwardRef, useImperativeHandle } = await import('react');
@@ -106,7 +114,8 @@ vi.mock('./VoiceInputButton', () => ({
   ),
 }));
 
-vi.mock('@features/chat/hooks/use-dictation', () => ({
+vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@features/chat/hooks/use-dictation')>()),
   useDictation: ({ onInsert }: { onInsert: (text: string) => void }) => ({
     status: 'idle',
     isActive: false,
@@ -200,6 +209,14 @@ describe('editor arm · the composer mounts it', () => {
 
     expect(screen.getByRole('textbox', { name: /message input/i })).not.toBeNull();
     expect(document.querySelector('textarea')).toBeNull();
+  });
+
+  it('warms the transcript renderer when the user arms the composer', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    fireEvent.focus(screen.getByRole('textbox', { name: /message input/i }));
+
+    expect(preloadTranscriptMarkdown).toHaveBeenCalledOnce();
   });
 });
 

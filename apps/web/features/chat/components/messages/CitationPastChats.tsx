@@ -39,7 +39,7 @@ export function CitationPastChats({ citations }: { citations: readonly PastChatC
                 ? `Open the source conversation ${citation.title}, ${date}`
                 : `Open the source conversation ${citation.title}`
             }
-            className="inline-flex h-7 max-w-[16rem] items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)] px-2.5 align-middle text-xs font-medium text-[var(--chat-text-secondary)] no-underline transition-colors duration-100 hover:bg-[var(--chat-surface-elevated)] hover:text-[var(--chat-text-primary)]"
+            className="inline-flex h-7 max-w-[16rem] items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)] px-2.5 align-middle text-xs font-medium text-[var(--chat-text-secondary)] no-underline transition-colors duration-instant hover:bg-[var(--chat-surface-elevated)] hover:text-[var(--chat-text-primary)]"
           >
             <MessagesSquare
               className="h-3.5 w-3.5 shrink-0 text-[var(--chat-text-muted)]"

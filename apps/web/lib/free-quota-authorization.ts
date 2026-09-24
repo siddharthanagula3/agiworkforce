@@ -44,6 +44,7 @@ export const PolicySchema = z.object({
   maxPolls: z.number().int().positive(),
   attestationMaxAgeMs: z.number().int().positive(),
   chatMaxOutputTokens: z.number().int().positive(),
+  chatImageReserveTokens: z.number().int().positive(),
   chatRequestTimeoutMs: z.number().int().positive(),
   allowanceUsablePercent: z.number().int().min(1).max(100),
 });

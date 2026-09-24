@@ -79,17 +79,6 @@ const storesPersistingPreference = readdirSync(STORES_DIR)
   .filter(({ source }) => persistedKeys(source)?.includes(PREFERENCE))
   .map(({ name }) => name);
 
-/**
- * `web-chat-store` keeps a second copy under its own storage key. Nothing
- * outside that file reads or writes it: `selectSidebarCollapsed` and
- * `toggleSidebar` have no call site, and both web shells go through
- * `layout-store`. It is a dead duplicate, not a second source of truth, and it
- * is recorded here so a third copy, or a reader for this one, fails loudly.
- */
-const KNOWN_DUPLICATE_STORES: Record<string, string> = {
-  'web-chat-store.ts': 'persisted with no reader outside the store; both shells read layout-store',
-};
-
 describe('the collapsed sidebar is a preference of this device', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -165,27 +154,7 @@ describe('nothing else in the web app claims the preference', () => {
     expect(offenders.map(relative)).toEqual([]);
   });
 
-  /**
-   * Two stores persist it today and only one is read. A third, or a reader for
-   * the duplicate, means two devices can disagree with each other through the
-   * same browser, which is the failure this row is about.
-   */
-  it('is persisted by one live store, with every duplicate accounted for', () => {
-    const live = storesPersistingPreference.filter((name) => !(name in KNOWN_DUPLICATE_STORES));
-
-    expect(live).toEqual(['layout-store.ts']);
-    expect(storesPersistingPreference.filter((name) => name in KNOWN_DUPLICATE_STORES)).toEqual(
-      Object.keys(KNOWN_DUPLICATE_STORES),
-    );
-  });
-
-  it('leaves the recorded duplicate with no reader outside its own file', () => {
-    const duplicateAccessors = /selectSidebarCollapsed|\btoggleSidebar\b/;
-    const readers = sourceFiles
-      .filter((file) => !relative(file).startsWith('shared/stores/'))
-      .filter((file) => duplicateAccessors.test(readFileSync(file, 'utf8')))
-      .map(relative);
-
-    expect(readers).toEqual([]);
+  it('is persisted by exactly one store', () => {
+    expect(storesPersistingPreference).toEqual(['layout-store.ts']);
   });
 });

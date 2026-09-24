@@ -1,8 +1,10 @@
-import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+
 import { Header } from '@shared/components/layout/Header';
-import { Ledger, Stack } from '@/features/marketing/components/system';
-import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
+import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
+import { buildMetadata } from '@/lib/seo/metadata';
 import {
   DOC_AUDIENCE_LABELS,
   DOC_MATURITY_LABELS,
@@ -19,72 +21,76 @@ export const metadata = buildMetadata({
   path: '/docs',
 });
 
-const SIDEBAR: { heading: string; icon: string; links: { label: string; href: string }[] }[] = [
+const SURFACE_GUIDES = [
   {
-    heading: 'Get Started',
-    icon: '>_',
-    links: [
-      { label: 'Welcome to AGI', href: '/docs' },
-      { label: 'Installation', href: '/download' },
-      { label: 'Quickstart', href: '/get-started' },
-    ],
+    href: '/get-started',
+    title: 'Start with AGI',
+    body: 'Choose a route, sign in, and understand what follows your account and what stays on your device.',
   },
   {
-    heading: 'CLI',
-    icon: '$',
-    links: [
-      { label: 'Overview', href: '/cli' },
-      { label: 'MCP Tools', href: '/integrations' },
-    ],
+    href: '/web',
+    title: 'Web',
+    body: 'Managed chat, projects, artifacts, memory, cited research, connected tools, and account settings.',
   },
   {
-    heading: 'Desktop',
-    icon: '⬜',
-    links: [
-      { label: 'Overview', href: '/desktop' },
-      { label: 'Local Mode', href: '/local' },
-      { label: 'BYOK', href: '/byok' },
-      { label: 'Connectors', href: '/integrations' },
-    ],
+    href: '/mobile',
+    title: 'Mobile',
+    body: 'The planned iPhone and Android clients, including Cloud continuity and device-local work.',
   },
   {
-    heading: 'Mobile',
-    icon: '◻',
-    links: [
-      { label: 'Overview', href: '/mobile' },
-      { label: 'Local Mode', href: '/local' },
-    ],
+    href: '/desktop',
+    title: 'Desktop',
+    body: 'The planned macOS app for Managed Cloud, approved folders, computer use, voice, and the trusted local host.',
   },
   {
-    heading: 'Web',
-    icon: '○',
-    links: [
-      { label: 'Overview', href: '/get-started' },
-      { label: 'Projects', href: '/features/projects' },
-      { label: 'Artifacts', href: '/features/artifacts' },
-    ],
+    href: '/chrome-extension',
+    title: 'Chrome',
+    body: 'The planned browser side panel, page context, approvals, and eligible Managed Cloud chat continuity.',
   },
   {
-    heading: 'Reference',
-    icon: '◈',
-    links: [
-      { label: 'Documentation index', href: '/docs#index' },
-      { label: 'API Reference', href: '/api-docs' },
-      { label: 'Providers', href: '/providers' },
-      { label: 'Integrations', href: '/integrations' },
-      { label: 'FAQ', href: '/faq' },
-    ],
+    href: '/cli',
+    title: 'CLI',
+    body: 'The Rust-native local developer agent for sessions, tools, diffs, reviews, sandboxed execution, and hooks.',
   },
   {
-    heading: 'Trust',
-    icon: '◇',
-    links: [
-      { label: 'Security', href: '/security' },
-      { label: 'Privacy', href: '/privacy' },
-      { label: 'Release notes', href: '/release-notes' },
-    ],
+    href: '/vscode-extension',
+    title: 'VS Code',
+    body: 'The planned IDE client over the same host-owned developer sessions, tools, permissions, and files as the CLI.',
   },
-];
+] as const;
+
+const REFERENCE_GUIDES = [
+  {
+    href: '/api-docs',
+    title: 'API reference',
+    body: 'OpenAI-compatible endpoints, authentication, request shapes, and response contracts.',
+  },
+  {
+    href: '/providers',
+    title: 'Providers and models',
+    body: 'The current catalogue, provider routes, capability labels, and availability information.',
+  },
+  {
+    href: '/integrations',
+    title: 'Tools and integrations',
+    body: 'Connected apps, MCP tools, plugins, and the trust boundary around every route.',
+  },
+  {
+    href: '/local',
+    title: 'Local mode',
+    body: 'What stays on the device, which surfaces can run locally, and how an explicit handoff works.',
+  },
+  {
+    href: '/byok',
+    title: 'Bring your own key',
+    body: 'Where BYOK is available, how provider credentials are stored, and what never enters account sync.',
+  },
+  {
+    href: '/security',
+    title: 'Security and trust',
+    body: 'Isolation, approvals, data handling, retention, deletion, and the limits of current claims.',
+  },
+] as const;
 
 function applicabilityLines(entry: DocIndexEntry): readonly string[] {
   const metadata = entry.metadata;
@@ -99,298 +105,110 @@ function applicabilityLines(entry: DocIndexEntry): readonly string[] {
   return [first, `${describePlans(plans)} · ${describeSegments(plans)} · Updated ${entry.updated}`];
 }
 
-const SURFACE_TABS = [
-  { label: 'Get Started', href: '/docs', active: true },
-  { label: 'CLI', href: '/cli' },
-  { label: 'Desktop', href: '/desktop' },
-  { label: 'Mobile', href: '/mobile' },
-  { label: 'Web', href: '/get-started' },
-  { label: 'Chrome', href: '/chrome-extension' },
-  { label: 'VS Code', href: '/vscode-extension' },
-];
-
-const FEATURE_CARDS = [
-  {
-    href: '/cli',
-    title: 'AGI CLI',
-    body: 'Rust-native agent for coding sessions, diffs, reviews, sandboxed execution, and hooks in your terminal.',
-    cta: 'agi',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <polyline points="4 17 10 11 4 5" />
-        <line x1="12" y1="19" x2="20" y2="19" />
-      </svg>
+function guideRows(guides: typeof SURFACE_GUIDES | typeof REFERENCE_GUIDES) {
+  return guides.map((guide) => ({
+    label: (
+      <Link href={guide.href} className="agi-ds-link">
+        {guide.title}
+      </Link>
     ),
-  },
-  {
-    href: '/desktop',
-    title: 'AGI Desktop',
-    body: 'The planned AGI app for macOS. Your managed-cloud account, approved folders, computer use, and the Chrome bridge.',
-    cta: 'AGI.app',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <rect x="2" y="3" width="20" height="14" rx="2" />
-        <line x1="8" y1="21" x2="16" y2="21" />
-        <line x1="12" y1="17" x2="12" y2="21" />
-      </svg>
-    ),
-  },
-  {
-    href: '/mobile',
-    title: 'AGI Mobile',
-    body: 'Planned for iPhone and Android, including on-device Local Mode and handoff to Desktop for heavier work.',
-    cta: COMING_SOON_LABEL,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <rect x="5" y="2" width="14" height="20" rx="2" />
-        <circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" />
-      </svg>
-    ),
-  },
-  {
-    href: '/get-started',
-    title: 'AGI Web',
-    body: 'Hosted chat with projects, artifacts, cited research, and account management. Works in any browser.',
-    cta: 'agiworkforce.com',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" />
-        <line x1="2" y1="12" x2="22" y2="12" />
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/chrome-extension',
-    title: 'Chrome Extension',
-    body: 'Side panel UI in Chrome MV3. Answers come back from AGI Managed Cloud, and pairing Desktop is an optional local road for selections and captures. No provider keys in the browser.',
-    cta: COMING_SOON_LABEL,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" />
-        <circle cx="12" cy="12" r="4" />
-        <line x1="21.17" y1="8" x2="12" y2="8" />
-        <line x1="3.95" y1="6.06" x2="8.54" y2="14" />
-        <line x1="10.88" y1="21.94" x2="15.46" y2="14" />
-      </svg>
-    ),
-  },
-  {
-    href: '/vscode-extension',
-    title: 'VS Code Extension',
-    body: '@agi chat participant, diff review, inline completions, and slash commands inside VS Code.',
-    cta: COMING_SOON_LABEL,
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <polyline points="16 18 22 12 16 6" />
-        <polyline points="8 6 2 12 8 18" />
-      </svg>
-    ),
-  },
-];
-
-const REFERENCE_CARDS = [
-  {
-    href: '/api-docs',
-    title: 'API Reference',
-    body: 'OpenAI-compatible gateway endpoints for building on AGI infrastructure.',
-    cta: '/v1/chat/completions',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" />
-        <line x1="16" y1="13" x2="8" y2="13" />
-        <line x1="16" y1="17" x2="8" y2="17" />
-        <polyline points="10 9 9 9 8 9" />
-      </svg>
-    ),
-  },
-  {
-    href: '/providers',
-    title: 'Providers & Models',
-    body: 'Cloud APIs, local runtimes, and custom endpoints. Bring your own keys or run fully offline.',
-    cta: 'providers',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
-      </svg>
-    ),
-  },
-  {
-    href: '/integrations',
-    title: 'MCP & Integrations',
-    body: 'Model Context Protocol plugins, the Desktop bridge, CLI BYOK key management, and custom connectors.',
-    cta: 'integrations',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-      </svg>
-    ),
-  },
-  {
-    href: '/byok',
-    title: 'BYOK Mode',
-    body: 'Add a provider key in the released CLI and route work directly. VS Code support is coming soon; Web and Desktop accept no provider keys.',
-    cta: 'byok',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-      </svg>
-    ),
-  },
-];
+    value: guide.body,
+  }));
+}
 
 export default function DocsPage() {
   const { groups, documentCount, newestUpdate } = documentationIndex();
 
   return (
-    <div data-design="agi">
-      <div className="agi-docs-wrap">
-        <Header />
+    <div data-design="agi" className="agi-ds-page">
+      <Header />
+      <main id="main-content">
+        <PageHero
+          id="agi-docs-title"
+          eyebrow="Documentation"
+          title="Build with every AGI surface."
+          em="every AGI surface."
+          lede="One account connects the Cloud app surfaces. Desktop, CLI, and VS Code share a separate host-owned developer runtime. These guides state which data follows you, which tools are available, and where each trust boundary begins."
+          ctas={[
+            { href: '/get-started', label: 'Start here' },
+            { href: '/api-docs', label: 'API reference', variant: 'secondary' },
+          ]}
+        />
 
-        {/* Secondary surface tab nav */}
-        <nav className="agi-docs-tabnav" aria-label="Documentation sections">
-          <div className="agi-docs-tabs">
-            {SURFACE_TABS.map((tab) => (
-              <Link
-                key={tab.href + tab.label}
-                href={tab.href}
-                className={`agi-docs-tab${tab.active ? ' agi-docs-tab--active' : ''}`}
-              >
-                {tab.label}
-              </Link>
-            ))}
-          </div>
-          <div className="agi-docs-tabnav-right">
-            <Link href="/api-docs" className="agi-docs-tabnav-link">
-              Reference
-            </Link>
-            <Link href="/changelog" className="agi-docs-tabnav-link">
-              Changelog
-            </Link>
-            <a
-              href="https://github.com/siddharthanagula3/agiworkforce"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="agi-docs-tabnav-link"
-            >
-              GitHub
-            </a>
-          </div>
-        </nav>
-
-        {/* Sidebar + content */}
-        <div className="agi-docs-layout">
-          <aside className="agi-docs-sidebar" aria-label="Documentation navigation">
-            {SIDEBAR.map((section) => (
-              <div key={section.heading} className="agi-docs-sidebar-group">
-                <p className="agi-docs-sidebar-heading">{section.heading}</p>
-                <ul role="list">
-                  {section.links.map((link) => (
-                    <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        className={`agi-docs-sidebar-link${section.heading === 'Get Started' && link.label === 'Welcome to AGI' ? ' active' : ''}`}
-                      >
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </aside>
-
-          <main className="agi-docs-content">
-            <p className="agi-docs-breadcrumb">Get Started</p>
-            <h1 className="agi-docs-h1">Welcome to AGI</h1>
-            <p className="agi-docs-lead">
-              AGI is a multi-surface AI workspace: one account across six surfaces, three routing
-              modes (Local, BYOK, and Cloud), and a consistent API for tools, memory, and
-              connectors.
-            </p>
-
-            <div className="agi-docs-cards">
-              {FEATURE_CARDS.map((card) => (
-                <Link key={card.href + card.title} href={card.href} className="agi-docs-card">
-                  <div className="agi-docs-card-icon">{card.icon}</div>
-                  <strong className="agi-docs-card-title">{card.title}</strong>
-                  <p className="agi-docs-card-body">{card.body}</p>
-                  <p className="agi-docs-card-cta">
-                    {card.cta === COMING_SOON_LABEL ? (
-                      <>{COMING_SOON_LABEL} ›</>
-                    ) : (
-                      <>
-                        Get started with <code>{card.cta}</code> ›
-                      </>
-                    )}
-                  </p>
-                </Link>
-              ))}
-            </div>
-
-            <div className="agi-docs-section">
-              <p className="agi-docs-section-eyebrow">Reference</p>
-              <h2 className="agi-docs-section-title">APIs, providers, and integrations.</h2>
-              <div className="agi-docs-cards">
-                {REFERENCE_CARDS.map((card) => (
-                  <Link key={card.href + card.title} href={card.href} className="agi-docs-card">
-                    <div className="agi-docs-card-icon">{card.icon}</div>
-                    <strong className="agi-docs-card-title">{card.title}</strong>
-                    <p className="agi-docs-card-body">{card.body}</p>
-                    <p className="agi-docs-card-cta">
-                      <code>{card.cta}</code> ›
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            <div className="agi-docs-section" id="index">
-              <p className="agi-docs-section-eyebrow">Documentation index</p>
-              <h2 className="agi-docs-section-title">
-                Every page, what it applies to, and when it was last checked.
+        <Section id="surfaces" labelledBy="agi-docs-surfaces-title" rule>
+          <Stack gap="loose">
+            <div>
+              <p className="agi-ds-eyebrow">Surface guides</p>
+              <h2 className="agi-ds-h2" id="agi-docs-surfaces-title">
+                Start where you work.
               </h2>
-              {groups.length > 0 ? (
-                <>
-                  <p className="agi-docs-lead">
-                    {`${documentCount} pages. Each row states its maturity, who it is written for, which surfaces and plans it applies to, and the date its claims were last read back against the code${newestUpdate ? `. Newest: ${newestUpdate}` : ''}.`}
-                  </p>
-                  {groups.map((group) => (
-                    <div key={group.id} className="agi-docs-sidebar-group">
-                      <h3 className="agi-docs-sidebar-heading">{group.label}</h3>
-                      <Ledger
-                        caption={`${group.label} documentation`}
-                        rows={group.entries.map((entry) => ({
-                          label: (
-                            <Link href={entry.href} className="agi-docs-tabnav-link">
-                              {entry.title}
-                            </Link>
-                          ),
-                          value: (
-                            <Stack gap="tight">
-                              {applicabilityLines(entry).map((line) => (
-                                <span key={line}>{line}</span>
-                              ))}
-                            </Stack>
-                          ),
-                        }))}
-                      />
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <p className="agi-docs-lead">
-                  The documentation index is not loading right now. The pages above still work, and
-                  the help centre search at /help reaches the same content.
-                </p>
-              )}
             </div>
-          </main>
-        </div>
-      </div>
+            <Prose>
+              The website is the active launch surface. The remaining guides describe the current
+              implementation and release state without presenting planned clients as published.
+            </Prose>
+            <Ledger caption="AGI surface guides" rows={guideRows(SURFACE_GUIDES)} />
+          </Stack>
+        </Section>
+
+        <Section id="reference" labelledBy="agi-docs-reference-title" rule ground="2">
+          <Stack gap="loose">
+            <div>
+              <p className="agi-ds-eyebrow">Reference</p>
+              <h2 className="agi-ds-h2" id="agi-docs-reference-title">
+                Routes, models, tools, and trust.
+              </h2>
+            </div>
+            <Ledger caption="AGI reference guides" rows={guideRows(REFERENCE_GUIDES)} />
+          </Stack>
+        </Section>
+
+        <Section id="index" labelledBy="agi-docs-index-title" rule>
+          <Stack gap="loose">
+            <div>
+              <p className="agi-ds-eyebrow">Documentation index</p>
+              <h2 className="agi-ds-h2" id="agi-docs-index-title">
+                Every page, its scope, and its review date.
+              </h2>
+            </div>
+            {groups.length > 0 ? (
+              <>
+                <Prose>
+                  {`${documentCount} pages. Each row states its maturity, audience, supported surfaces and plans, and the date its claims were last checked${newestUpdate ? `. Newest: ${newestUpdate}` : ''}.`}
+                </Prose>
+                {groups.map((group) => (
+                  <Stack gap="tight" key={group.id}>
+                    <h3 className="agi-ds-h3">{group.label}</h3>
+                    <Ledger
+                      caption={`${group.label} documentation`}
+                      rows={group.entries.map((entry) => ({
+                        label: (
+                          <Link href={entry.href} className="agi-ds-link">
+                            {entry.title}
+                          </Link>
+                        ),
+                        value: (
+                          <Stack gap="tight">
+                            {applicabilityLines(entry).map((line) => (
+                              <span key={line}>{line}</span>
+                            ))}
+                          </Stack>
+                        ),
+                      }))}
+                    />
+                  </Stack>
+                ))}
+              </>
+            ) : (
+              <Prose>
+                The documentation index is not loading right now. The surface and reference guides
+                above still work, and the help centre reaches the same support material.
+              </Prose>
+            )}
+          </Stack>
+        </Section>
+      </main>
+      <MarketingFooter />
     </div>
   );
 }

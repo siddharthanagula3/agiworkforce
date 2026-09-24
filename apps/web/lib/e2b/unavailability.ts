@@ -11,6 +11,7 @@ export const E2B_UNAVAILABLE_CAUSES = [
   'no-capacity',
   'policy',
   'over-quota',
+  'free-allowance-exhausted',
   'provider-error',
 ] as const;
 
@@ -25,6 +26,7 @@ const CAUSE_SENTENCE: Record<E2BUnavailableCause, string> = {
   // reader to buy one; Usage is where the reset is shown.
   'over-quota':
     'this account has no usage budget left to pay for sandbox time; Usage in Settings shows when it resets',
+  'free-allowance-exhausted': 'the Free sandbox allowance is used for today; it resets tomorrow',
   // An outage read as the account's own limit the last time these were one
   // cause, so the sentence says whose problem it is before anything else.
   'provider-error':

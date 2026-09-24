@@ -30,16 +30,18 @@ const PUBLIC_SYSTEM_DIR = 'apps/web/features/marketing/';
  * Product UI takes its accent from the `--chat-*` and `--color-*` roles, never
  * from here.
  */
-const FALLBACK_READERS: ReadonlyArray<{ file: string; why: string }> = [
+const OUTSIDE_PUBLIC_SCOPE_READERS: ReadonlyArray<{ file: string; why: string }> = [
   {
     file: 'apps/web/features/support/components/SupportWidget.module.css',
-    why: 'the widget renders on public and product grounds, so it reads the name with a literal fallback',
+    why: 'the widget renders under either an explicit marketing or product surface palette',
   },
   {
     file: 'packages/ui/ui/src/AgiMark.tsx',
     why: 'the mark defaults its accent prop to the token with a currentColor fallback',
   },
 ];
+
+const LITERAL_FALLBACK_READERS = ['packages/ui/ui/src/AgiMark.tsx'] as const;
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -99,10 +101,10 @@ describe('the public amber accent', () => {
   });
 
   it('is read only where the public design scope applies', () => {
-    const fallback = new Set(FALLBACK_READERS.map((entry) => entry.file));
+    const outsidePublicScope = new Set(OUTSIDE_PUBLIC_SCOPE_READERS.map((entry) => entry.file));
     const unexpected = readingFiles()
       .filter((file) => file.path !== GLOBALS)
-      .filter((file) => !fallback.has(file.path))
+      .filter((file) => !outsidePublicScope.has(file.path))
       .filter((file) => !file.path.startsWith(PUBLIC_SYSTEM_DIR))
       .filter((file) => !PUBLIC_SCOPE.test(file.source))
       .map((file) => file.path);
@@ -115,7 +117,7 @@ describe('the public amber accent', () => {
 
   it('has no fallback reader that has stopped reading it', () => {
     const reading = new Map(readingFiles().map((file) => [file.path, file.source]));
-    const stale = FALLBACK_READERS.map((entry) => entry.file).filter((file) => {
+    const stale = LITERAL_FALLBACK_READERS.filter((file) => {
       const source = reading.get(file);
       return source === undefined || !AMBER_WITH_FALLBACK.test(source);
     });

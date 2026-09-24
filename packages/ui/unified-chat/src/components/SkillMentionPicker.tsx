@@ -80,14 +80,14 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
     <div
       ref={listRef}
       className={cn(
-        'absolute bottom-full left-0 z-50 mb-2 w-72 max-h-72 overflow-y-auto',
-        'rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl backdrop-blur-xl',
+        'absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 max-h-72 overflow-y-auto',
+        'rounded-xl border border-border bg-popover shadow-2xl backdrop-blur-xl',
       )}
       role="listbox"
       aria-label="Skill mentions"
     >
-      <div className="px-3 py-2 border-b border-[hsl(var(--border))]">
-        <span className="text-[12px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+      <div className="px-3 py-2 border-b border-border">
+        <span className="text-caption font-semibold uppercase tracking-wide text-muted-foreground">
           AI Skills, type to filter
         </span>
       </div>
@@ -101,13 +101,13 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
             'w-full text-left px-3 py-2 flex items-center justify-between gap-2 transition-colors text-sm',
             i === selectedIndex
               ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground'
-              : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]',
+              : 'text-foreground hover:bg-accent',
           )}
           onClick={() => onSelect(skill)}
           onMouseEnter={() => setSelectedIndex(i)}
         >
           <span className="font-medium truncate">{skill.name}</span>
-          <span className="text-[12px] text-muted-foreground shrink-0">{skill.category}</span>
+          <span className="text-caption text-muted-foreground shrink-0">{skill.category}</span>
         </button>
       ))}
     </div>

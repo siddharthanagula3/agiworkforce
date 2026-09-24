@@ -119,7 +119,7 @@ export function ConversationTitleMenu({
               setIsRenaming(false);
             }
           }}
-          className="w-[240px] max-w-full rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-start text-sm font-medium text-[var(--chat-text-primary)] outline-none focus:ring-2 focus:ring-primary"
+          className="w-[240px] max-w-full rounded-md border border-[var(--chat-border-strong)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-start text-sm font-medium text-[var(--chat-text-primary)] outline-none focus:ring-2 focus:ring-focus-ring"
         />
       ) : (
         <DropdownMenu>
@@ -127,7 +127,7 @@ export function ConversationTitleMenu({
             <button
               type="button"
               aria-label="Conversation options"
-              className="flex min-w-0 items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-black/[0.04] hover:text-[var(--chat-text-primary)] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="flex min-w-0 items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-black/[0.04] hover:text-[var(--chat-text-primary)] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
             >
               <span className="truncate">{displayedTitle}</span>
               {agiWork && (

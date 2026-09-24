@@ -212,7 +212,7 @@ export function FloatingStatusTrail({ className }: FloatingStatusTrailProps) {
       exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
       transition={{ duration: prefersReducedMotion ? 0.15 : 0.2 }}
       className={cn(
-        'fixed top-20 right-6 z-40',
+        'fixed top-20 right-6 z-[var(--z-panel)]',
         'w-80 max-w-[calc(100vw-3rem)]',
         'flex flex-col gap-2',
         'p-4 rounded-xl',

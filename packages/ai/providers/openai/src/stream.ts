@@ -87,8 +87,9 @@ export async function* translateOpenAIStream(
     if (delta.content) {
       yield { type: 'text-delta', delta: delta.content, ...logprobs };
     }
-    if (delta.reasoning_content) {
-      yield { type: 'thinking-delta', delta: delta.reasoning_content };
+    const reasoning = delta.reasoning_content || delta.reasoning;
+    if (reasoning) {
+      yield { type: 'thinking-delta', delta: reasoning };
     }
     if (typeof (delta as { refusal?: unknown }).refusal === 'string') {
       refused = true;

@@ -2,9 +2,13 @@
 
 import { useCallback, useRef, useState } from 'react';
 
-import { TERMS_GATE_STORAGE_KEY } from '@/app/signup/TermsGate';
+import { clearTermsGateMarker, TERMS_GATE_STORAGE_KEY } from '@/app/signup/TermsGate';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { isRetryableAuthError, type AuthErrorKind } from '@/lib/auth/error-taxonomy';
+import {
+  classifyAuthError,
+  isRetryableAuthError,
+  type AuthErrorKind,
+} from '@/lib/auth/error-taxonomy';
 import { AuthCodeStep } from './AuthCodeStep';
 import { AuthEmailStep } from './AuthEmailStep';
 import { AuthNewPasswordStep } from './AuthNewPasswordStep';
@@ -12,6 +16,7 @@ import { AuthNoticeStep } from './AuthNoticeStep';
 import { AuthPasswordStep } from './AuthPasswordStep';
 import { AuthSecondFactorStep } from './AuthSecondFactorStep';
 import { IdentityBotProtection, useIdentityAuthClient } from './identityAuthAdapter';
+import { useAuthCopy } from './authCopy';
 import { rememberAuthMethod } from './lastUsedMethod';
 import type {
   AuthMethodId,
@@ -49,6 +54,7 @@ export function AuthFlow({
   redirects: AuthRedirects;
 }) {
   const client = useIdentityAuthClient(mode, redirects, { mfaEmailFallback });
+  const copy = useAuthCopy();
 
   const [step, setStep] = useState<AuthStep>(INITIAL_STEP);
   const [phase, setPhase] = useState<AuthPhase>('idle');
@@ -99,11 +105,14 @@ export function AuthFlow({
         } else {
           apply(result);
         }
+      } catch (error) {
+        const kind = classifyAuthError(error).kind;
+        apply({ status: 'failed', kind, message: copy.errorCopy(kind).message });
       } finally {
         if (!handingOff) setPhase('idle');
       }
     },
-    [apply, busy, clearMessages, client.isReady],
+    [apply, busy, clearMessages, client.isReady, copy],
   );
 
   const onRetry = useCallback(() => {
@@ -125,16 +134,27 @@ export function AuthFlow({
       setProviderPending(provider);
       setPhase('redirecting');
       if (mode === 'signup') writeTermsMarker();
-      const result = await client.startProvider(provider);
-      if (result.status === 'redirecting') {
-        rememberAuthMethod({ kind: 'provider', provider });
-        return;
+      let handingOff = false;
+      try {
+        const result = await client.startProvider(provider);
+        if (result.status === 'redirecting') {
+          handingOff = true;
+          rememberAuthMethod({ kind: 'provider', provider });
+          return;
+        }
+        apply(result);
+      } catch (error) {
+        const kind = classifyAuthError(error).kind;
+        apply({ status: 'failed', kind, message: copy.errorCopy(kind).message });
+      } finally {
+        if (!handingOff) {
+          if (mode === 'signup') clearTermsGateMarker();
+          setProviderPending(null);
+          setPhase('idle');
+        }
       }
-      setProviderPending(null);
-      setPhase('idle');
-      apply(result);
     },
-    [apply, busy, clearMessages, client, mode, providerPending],
+    [apply, busy, clearMessages, client, copy, mode, providerPending],
   );
 
   const onStartPasskey = useCallback(() => {
@@ -253,8 +273,14 @@ export function AuthFlow({
         providerPending={providerPending}
         onRetry={onRetry}
         onSubmit={(email) => {
-          if (mode === 'signup') writeTermsMarker();
-          void run(() => client.startWithEmail(email), 'checking_account');
+          void run(async () => {
+            if (mode === 'signup') clearTermsGateMarker();
+            const result = await client.startWithEmail(email);
+            if (mode === 'signup' && result.status === 'next' && result.step.kind !== 'notice') {
+              writeTermsMarker();
+            }
+            return result;
+          }, 'checking_account');
         }}
         onStartProvider={(provider) => void onStartProvider(provider)}
         passkeySignIn={mode === 'login' && passkeySignIn}

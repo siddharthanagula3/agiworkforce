@@ -94,11 +94,11 @@ export function WorkspaceConsoleShell({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 py-4 md:flex-row md:gap-10 md:px-6 md:py-10">
+    <div className="mx-auto flex w-full max-w-content flex-col gap-4 px-gutter-compact py-4 md:flex-row md:gap-10 md:px-gutter-regular md:py-10">
       <aside className="w-full shrink-0 md:w-60">
         <div className="mb-0 md:mb-6">
           <p
-            className="hidden text-[12px] font-medium uppercase tracking-[0.14em] md:block"
+            className="hidden text-caption font-medium uppercase tracking-[0.14em] md:block"
             style={{ color: 'var(--text-3)' }}
           >
             Administration

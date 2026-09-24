@@ -306,7 +306,7 @@ export default function DirectorySyncAdminPage({
           {scimBaseUrl ? (
             <p className="mt-4 text-sm text-foreground">
               SCIM base URL:{' '}
-              <code className="rounded bg-muted px-2 py-1 text-emerald-700 dark:text-emerald-300">
+              <code className="rounded-compact bg-muted px-2 py-1 text-emerald-700 dark:text-emerald-300">
                 {scimBaseUrl}
               </code>
             </p>
@@ -333,7 +333,7 @@ export default function DirectorySyncAdminPage({
               {connections.map((connection) => (
                 <li
                   key={connection.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-compact border border-border p-3"
                 >
                   <div>
                     <p className="text-sm text-foreground">
@@ -357,7 +357,7 @@ export default function DirectorySyncAdminPage({
                         onConfirm: () => deleteConnection(connection.id),
                       })
                     }
-                    className="rounded border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
+                    className="rounded-compact border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
                   >
                     Remove
                   </button>
@@ -372,7 +372,7 @@ export default function DirectorySyncAdminPage({
               <select
                 value={provider}
                 onChange={(event) => setProvider(event.target.value)}
-                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                className="rounded-compact border border-input bg-background px-2 py-1 text-sm text-foreground"
               >
                 {PROVIDERS.map((entry) => (
                   <option key={entry.value} value={entry.value}>
@@ -388,7 +388,7 @@ export default function DirectorySyncAdminPage({
                 onChange={(event) => setDirectoryId(event.target.value)}
                 required
                 maxLength={255}
-                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                className="rounded-compact border border-input bg-background px-2 py-1 text-sm text-foreground"
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -397,13 +397,13 @@ export default function DirectorySyncAdminPage({
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
                 maxLength={255}
-                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                className="rounded-compact border border-input bg-background px-2 py-1 text-sm text-foreground"
               />
             </label>
             <button
               type="submit"
               disabled={busy}
-              className="rounded bg-emerald-500/90 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+              className="rounded-compact bg-emerald-500/90 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
             >
               Add connection
             </button>
@@ -418,7 +418,7 @@ export default function DirectorySyncAdminPage({
           </p>
 
           {freshToken ? (
-            <div className="mt-4 rounded border border-emerald-500/40 bg-emerald-500/10 p-3">
+            <div className="mt-4 rounded-compact border border-emerald-500/40 bg-emerald-500/10 p-3">
               <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                 Copy this now, it will not be shown again
               </p>
@@ -433,7 +433,7 @@ export default function DirectorySyncAdminPage({
               {tokens.map((token) => (
                 <li
                   key={token.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-compact border border-border p-3"
                 >
                   <div>
                     <p className="text-sm text-foreground">
@@ -460,7 +460,7 @@ export default function DirectorySyncAdminPage({
                           onConfirm: () => revokeToken(token.id),
                         })
                       }
-                      className="rounded border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
+                      className="rounded-compact border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
                     >
                       Revoke
                     </button>
@@ -477,7 +477,7 @@ export default function DirectorySyncAdminPage({
                 value={tokenConnectionId}
                 onChange={(event) => setTokenConnectionId(event.target.value)}
                 required
-                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                className="rounded-compact border border-input bg-background px-2 py-1 text-sm text-foreground"
               >
                 <option value="">Select a connection</option>
                 {connections.map((connection) => (
@@ -494,13 +494,13 @@ export default function DirectorySyncAdminPage({
                 onChange={(event) => setTokenName(event.target.value)}
                 required
                 maxLength={120}
-                className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground"
+                className="rounded-compact border border-input bg-background px-2 py-1 text-sm text-foreground"
               />
             </label>
             <button
               type="submit"
               disabled={busy || connections.length === 0}
-              className="rounded bg-emerald-500/90 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+              className="rounded-compact bg-emerald-500/90 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
             >
               Mint token
             </button>
@@ -529,7 +529,7 @@ export default function DirectorySyncAdminPage({
               {groups.map((group) => (
                 <li
                   key={group.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-compact border border-border p-3"
                 >
                   <div>
                     <p className="text-sm text-foreground">{group.display_name}</p>
@@ -548,7 +548,7 @@ export default function DirectorySyncAdminPage({
                           event.target.value === '' ? null : (event.target.value as MappedRole),
                         )
                       }
-                      className="rounded border border-input bg-background px-2 py-1 text-sm text-foreground disabled:opacity-50"
+                      className="rounded-compact border border-input bg-background px-2 py-1 text-sm text-foreground disabled:opacity-50"
                     >
                       <option value="">No mapping (member)</option>
                       {mappableRoles.map((role) => (

@@ -41,7 +41,7 @@ vi.mock('@/lib/e2b/gate', () => ({
   e2bProvisioningReady: () => e2bMocks.cutover,
 }));
 vi.mock('@/lib/server/code-execution-policy', () => ({
-  isCloudCodeExecutionEnabled: async () => true,
+  resolveCloudCodeExecutionPolicy: async () => ({ allowed: true }),
 }));
 
 import { runToolLoop } from './tool-loop';

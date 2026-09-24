@@ -77,6 +77,7 @@ export { DesktopRouteSurface } from './components/DesktopRouteSurface';
 export { DesktopSettingsSection } from './components/DesktopSettingsSection';
 export { DesktopTitleStrip } from './components/DesktopTitleStrip';
 export { DesktopUpdateRow } from './components/DesktopUpdateRow';
+export { DesktopUpdateNotice } from './components/DesktopUpdateNotice';
 export { LocalAccessSection } from './components/LocalAccessSection';
 export { LocalCommandDialog, type LocalCommandDialogProps } from './components/LocalCommandDialog';
 export {

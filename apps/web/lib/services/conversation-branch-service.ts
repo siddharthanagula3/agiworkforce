@@ -7,10 +7,12 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 
 type CopiedAssistantMessage = {
   id: string;
   content: string;
+  metadata: Record<string, unknown> | null;
 };
 
 type CopiedMessage = CopiedAssistantMessage & {
@@ -353,12 +355,13 @@ export async function forkConversation(
                 created_at
            from messages_to_copy
           order by message_position
-         returning id, role, content
+         returning id, role, content, metadata
        )
        select source.id as source_message_id,
               inserted.id,
               inserted.role,
-              inserted.content
+              inserted.content,
+              inserted.metadata
          from messages_to_copy as source
          join inserted_messages as inserted
            on inserted.id = source.target_message_id`,
@@ -383,7 +386,11 @@ export async function forkConversation(
 
     copiedAssistantMessages = copied
       .filter((message) => message.role === 'assistant')
-      .map((message) => ({ id: message.id, content: message.content }));
+      .map((message) => ({
+        id: message.id,
+        content: message.content,
+        metadata: message.metadata,
+      }));
 
     return target;
   });
@@ -395,6 +402,9 @@ export async function forkConversation(
       conversationId: target.id,
       messageId: message.id,
       content: message.content,
+      ...(message.metadata?.['artifactDerivation'] === EXPLICIT_ARTIFACT_DERIVATION_POLICY
+        ? { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY }
+        : {}),
     });
   }
 
