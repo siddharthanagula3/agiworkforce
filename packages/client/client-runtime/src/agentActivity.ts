@@ -175,6 +175,22 @@ export interface AgentActivityState {
   turnDiff?: AgentActivityTurnDiff;
 }
 
+export function hasUnavailableWebSearch(activity: unknown): boolean {
+  if (!activity || typeof activity !== 'object' || !('entries' in activity)) return false;
+  if (!Array.isArray(activity.entries)) return false;
+  return activity.entries.some(
+    (entry: unknown) =>
+      entry !== null &&
+      typeof entry === 'object' &&
+      'kind' in entry &&
+      entry.kind === 'tool' &&
+      'category' in entry &&
+      entry.category === 'web-search' &&
+      'unavailable' in entry &&
+      entry.unavailable === true,
+  );
+}
+
 export interface FinishAgentActivityLocallyOptions {
   status: Extract<AgentActivityRunStatus, 'completed' | 'failed' | 'cancelled'>;
   completedAtMs: number;
@@ -341,6 +357,10 @@ const CODE_EXECUTION_UNAVAILABLE_PATTERN =
   /^Code execution is unavailable for this request(?::([^.]+))?\./;
 const CLOUD_CODE_EXECUTION_OFF_PATTERN = /^Cloud code execution is turned off for this account\./;
 const TOOL_NOT_AVAILABLE_PATTERN = /^Tool ([\w.-]+) is not available\.$/;
+const SEARCH_ALLOWANCE_EXHAUSTED_PATTERN =
+  /^Web search is unavailable on this account right now: it has used its (\d+) included searches in the last (\d+) days\./;
+const SEARCH_CREDITS_EXHAUSTED_PATTERN =
+  /^Web search is unavailable on this account right now: this search is charged and the account has no credits left for it\./;
 
 const CODE_EXECUTION_UNAVAILABLE_NOTICE =
   'Code execution was not available for this request, so the answer was written without running code.';
@@ -353,7 +373,7 @@ const CLOUD_CODE_EXECUTION_OFF_NOTICE =
  * harness names travels in the tool result text, so it is read back here rather
  * than flattened into one sentence that tells the user nothing.
  */
-function toolUnavailableNotice(raw: string | undefined): string | undefined {
+function toolUnavailableNotice(raw: string | undefined, toolName: string): string | undefined {
   if (!raw) return undefined;
   const trimmed = raw.trim();
   const codeExecution = CODE_EXECUTION_UNAVAILABLE_PATTERN.exec(trimmed);
@@ -364,6 +384,15 @@ function toolUnavailableNotice(raw: string | undefined): string | undefined {
       : CODE_EXECUTION_UNAVAILABLE_NOTICE;
   }
   if (CLOUD_CODE_EXECUTION_OFF_PATTERN.test(trimmed)) return CLOUD_CODE_EXECUTION_OFF_NOTICE;
+  if (toolName === 'web_search') {
+    const searchAllowance = SEARCH_ALLOWANCE_EXHAUSTED_PATTERN.exec(trimmed);
+    if (searchAllowance) {
+      return `Web search unavailable: ${searchAllowance[1]} included searches used in the last ${searchAllowance[2]} days.`;
+    }
+    if (SEARCH_CREDITS_EXHAUSTED_PATTERN.test(trimmed)) {
+      return 'Web search unavailable: no search credits remain on this account.';
+    }
+  }
   const namedTool = TOOL_NOT_AVAILABLE_PATTERN.exec(trimmed);
   if (namedTool) return `${namedTool[1]} was not available for this request.`;
   return undefined;
@@ -611,7 +640,9 @@ function applyAgentEvent(
       const id = `tool:${event.toolCallId}`;
       const index = next.entries.findIndex((entry) => entry.id === id);
       const rawFailure = event.isError ? stringifyError(event.output) : undefined;
-      const failureSummary = event.isError ? toolUnavailableNotice(rawFailure) : undefined;
+      const failureSummary = event.isError
+        ? toolUnavailableNotice(rawFailure, event.name)
+        : undefined;
       const unavailable = failureSummary !== undefined;
       if (index >= 0) {
         next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({

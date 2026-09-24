@@ -9,7 +9,7 @@ import { useDesktopHost } from '../lib/host';
 const LABEL = 'App version';
 const CHECK_LABEL = 'Check for updates';
 const CHECKING_LABEL = 'Checking…';
-const INSTALL_LABEL = 'Install';
+const INSTALL_LABEL = 'Download installer';
 const UP_TO_DATE = 'This is the latest version.';
 const CHECK_FAILED = 'The update check did not complete.';
 
@@ -17,28 +17,32 @@ const rowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: 16,
-  padding: '14px 0',
+  gap: 'var(--space-4)',
+  padding: 'var(--space-4) 0',
   borderBottom: '1px solid var(--settings-border)',
   flexWrap: 'wrap',
 };
 
 const labelStyle: CSSProperties = { fontSize: 14, color: 'var(--text-1)', margin: 0 };
 
-const hintStyle: CSSProperties = { fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' };
+const hintStyle: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--text-3)',
+  margin: 'var(--space-1) 0 0',
+};
 
 const errorStyle: CSSProperties = {
   fontSize: 12,
   color: 'var(--settings-destructive-text)',
-  margin: '2px 0 0',
+  margin: 'var(--space-1) 0 0',
 };
 
 const buttonStyle: CSSProperties = {
   flexShrink: 0,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 6,
-  padding: '7px 11px',
+  gap: 'var(--space-2)',
+  padding: 'var(--space-2) var(--space-3)',
   fontSize: 12,
   fontWeight: 500,
   color: 'var(--text-1)',
@@ -94,7 +98,7 @@ export function DesktopUpdateRow() {
           </p>
         ) : null}
       </div>
-      <div style={{ display: 'flex', flexShrink: 0, gap: 8 }}>
+      <div style={{ display: 'flex', flexShrink: 0, gap: 'var(--space-2)' }}>
         <button
           type="button"
           style={buttonStyle}

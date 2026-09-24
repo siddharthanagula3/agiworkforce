@@ -484,6 +484,37 @@ describe('FollowUpSuggestions component', () => {
     expect(items.length).toBeGreaterThan(0);
   });
 
+  it('does not suggest another web search when this turn was refused', () => {
+    render(
+      <FollowUpSuggestions
+        lastAssistantContent="According to the cited source, the account has no searches left this period."
+        suggestions={[
+          'Search the web to verify',
+          'Tell me more about this',
+          'Could you browse online for another source?',
+        ]}
+        searchUnavailable
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Search the web to verify')).toBeNull();
+    expect(screen.queryByText('Could you browse online for another source?')).toBeNull();
+    expect(screen.getByText('Tell me more about this')).toBeVisible();
+  });
+
+  it('filters the heuristic web-search pill after an unavailable search', () => {
+    render(
+      <FollowUpSuggestions
+        lastAssistantContent="According to recent studies, this is the result."
+        searchUnavailable
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Search the web to verify')).toBeNull();
+  });
+
   it('returns null when isGenerating is true', () => {
     const { container } = render(
       <FollowUpSuggestions

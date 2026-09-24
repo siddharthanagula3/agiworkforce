@@ -104,7 +104,7 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
           borderColor: colors.border,
         }}
       >
-        <Text style={{ fontSize: 9, fontWeight: '700', color: colors.textSecondary }}>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>
           {sourceBadge}
         </Text>
       </View>

@@ -13,6 +13,7 @@ import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-p
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { resolveWebCloudModelRoute } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   fingerprintManagedUsageRequest,
   finalizeManagedUsageRequest,
@@ -83,6 +84,7 @@ export async function transcribeScannedPages(
     );
     return null;
   }
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
 
   const chatRequest = openAIWireRequestToChatRequest({
     model: route.providerModelId,
@@ -136,10 +138,13 @@ export async function transcribeScannedPages(
   try {
     await markManagedUsageProviderStarted(reservation);
     const response = await drainToLlmResponse(
-      buildServerProviderAdapter(route.provider).stream(chatRequest, new AbortController().signal),
+      buildServerProviderAdapter(dispatchProvider).stream(
+        chatRequest,
+        new AbortController().signal,
+      ),
       route.modelKey,
-      (chunk) => toGenericUpstreamError(route.provider, chunk),
-      resolveWireMode(route.provider),
+      (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
+      resolveWireMode(dispatchProvider),
     );
     providerCompleted = true;
 

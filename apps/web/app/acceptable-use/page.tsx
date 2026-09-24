@@ -53,9 +53,9 @@ const SUMMARY: readonly LedgerRow[] = [
       'Code runs in an isolated cloud sandbox. Use it for your own compute. Not for mining, scanning, flooding, or building malware.',
   },
   {
-    label: 'Tools ask first',
+    label: 'Tool approvals',
     value:
-      'Your Tool Approvals setting decides, and it governs our own tools as well as connectors. On the default, every tool action waits for you. Choose to auto-approve read-only work and reads inside AGI, web search, page fetch and code in the AGI sandbox run on their own, while anything that writes, deletes, sends, buys, changes credentials or runs on your own machine still asks, connectors we do not know included. See the full authority map on agent permissions.',
+      'Your Tool Approvals setting decides, and it governs our own tools as well as connectors. The website starts with Skip approvals for eligible actions, including reads inside AGI, web search, page fetch and code in the AGI sandbox. Destructive or unknown actions still ask, as do tools you marked Needs approval; blocked tools stay blocked. You can switch to Ask before every action or read-only auto-approval. Workspace restrictions may require more approval. See the full authority map on agent permissions.',
   },
   {
     label: 'A block is absolute',

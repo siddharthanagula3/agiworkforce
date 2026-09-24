@@ -17,9 +17,12 @@ import { LOCAL_METRIC_LABEL, METRIC_LABEL_BOUND, resetLabelCardinality } from '.
 import { SERVICE_DASHBOARDS, attributeKey, dashboardPanels } from '../dashboards';
 import { METRIC_NAME, recordFailure, recordQueueAge, recordQueueDepth } from '../metrics';
 import {
+  CLIENT_SURFACE_EVIDENCE,
   DEPENDENCY_SIGNALS,
   SPAN_DOMAIN_EVIDENCE,
+  clientSurfacesWithoutReporting,
   dependencySignal,
+  unaccountedClientSurfaces,
   unwatchedDependencies,
 } from '../signal-coverage';
 import { SPAN_DOMAINS, withSpan } from '../span';
@@ -146,6 +149,58 @@ describe('saturation is a standing reading, not an incident report', () => {
       (panel) => panel.metric === METRIC_NAME.queueAge || panel.metric === METRIC_NAME.queueStuck,
     );
     expect(panels.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the surface split on the client-health dashboard', () => {
+  it('accounts for every surface the product analytics vocabulary names, exactly once', () => {
+    expect(unaccountedClientSurfaces()).toEqual([]);
+    const accounted = CLIENT_SURFACE_EVIDENCE.map((evidence) => evidence.surface);
+    expect(new Set(accounted).size).toBe(accounted.length);
+  });
+
+  it('splits the client failure metric by surface, so the accounting answers a real panel', () => {
+    const panels = dashboardPanels().filter((panel) => panel.metric === METRIC_NAME.clientFailures);
+    expect(panels.length).toBeGreaterThan(0);
+    expect(
+      panels.some((panel) => panel.groupBy.includes(attributeKey(OBSERVABILITY_ATTRIBUTE.surface))),
+    ).toBe(true);
+  });
+
+  it('cites a module that installs a sink, or says why the surface reports nothing', () => {
+    const broken: string[] = [];
+    for (const evidence of CLIENT_SURFACE_EVIDENCE) {
+      if (evidence.reportsVia === null) {
+        if ((evidence.why ?? '').trim().length === 0) {
+          broken.push(`${evidence.surface} has neither an installer nor a reason`);
+        }
+        continue;
+      }
+      const cited = path.join(REPO_ROOT, evidence.reportsVia);
+      if (!existsSync(cited)) {
+        broken.push(`${evidence.surface} cites ${evidence.reportsVia}, which is not a file`);
+        continue;
+      }
+      if (!readFileSync(cited, 'utf8').includes('setClientFailureSink')) {
+        broken.push(
+          `${evidence.surface} cites ${evidence.reportsVia}, which installs no failure sink`,
+        );
+      }
+    }
+    expect(broken).toEqual([]);
+  });
+
+  // Desktop renders the shared chat surface, so unlike the rest it has reports
+  // to lose. This holds the silent surfaces to the ones the repository has
+  // today rather than letting a new one join them unnoticed.
+  it('holds the surfaces that report nothing to the ones the repository has today', () => {
+    expect([...clientSurfacesWithoutReporting()].sort()).toEqual([
+      'api',
+      'chrome',
+      'cli',
+      'mobile',
+      'vscode',
+    ]);
   });
 });
 

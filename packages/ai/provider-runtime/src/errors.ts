@@ -25,6 +25,7 @@
 
 import {
   UNSUPPORTED_FILE_INPUT_ERROR_NAME,
+  type NetworkCondition,
   type StreamChunkErrorClassification,
 } from '@agiworkforce/types';
 
@@ -148,6 +149,11 @@ const ERROR_CATEGORY_MEMBERS: Readonly<Record<ErrorCategory, true>> = {
   unknown: true,
 };
 
+/** The union at run time, so a caller can walk it rather than restate it. */
+export const ERROR_CATEGORIES = Object.freeze(
+  Object.keys(ERROR_CATEGORY_MEMBERS) as ErrorCategory[],
+) as readonly ErrorCategory[];
+
 export function isErrorCategory(value: unknown): value is ErrorCategory {
   return (
     typeof value === 'string' && Object.prototype.hasOwnProperty.call(ERROR_CATEGORY_MEMBERS, value)
@@ -175,6 +181,50 @@ export function toStreamErrorClassification(
       : {}),
     ...(classified.providerHint !== undefined ? { providerHint: classified.providerHint } : {}),
   };
+}
+
+/**
+ * Which network condition a failed upstream call is evidence of, so a provider
+ * problem is reported in the one vocabulary every surface renders from.
+ *
+ * Only the provider's own reachability is observable here, never ours, so no
+ * category resolves to `backend_unreachable`. Most are evidence of nothing
+ * about a network at all: a refusal, a bad request or an exhausted plan each
+ * arrived over a connection that worked, and reporting them as a network
+ * condition is how a user's own limit ends up blamed on a provider. Those are
+ * `null`, and the caller keeps whatever condition it already observed.
+ *
+ * Typed total over the union so a new category has to answer this question.
+ */
+const ERROR_CATEGORY_NETWORK_CONDITIONS: Readonly<Record<ErrorCategory, NetworkCondition | null>> =
+  {
+    aborted: null,
+    api_timeout: 'provider_degraded',
+    rate_limit: null,
+    server_overload: 'provider_degraded',
+    capacity_off_switch: 'provider_degraded',
+    context_overflow: null,
+    max_output: null,
+    tool_validation: null,
+    invalid_model: null,
+    invalid_input: null,
+    unsupported_input: null,
+    media_too_large: null,
+    auth: null,
+    billing_exhausted: null,
+    quota_exhausted: null,
+    safety: null,
+    content_blocked: null,
+    empty_response: null,
+    connection: 'provider_degraded',
+    pause_turn: null,
+    server_error: 'provider_degraded',
+    client_error: null,
+    unknown: null,
+  };
+
+export function networkConditionForErrorCategory(category: ErrorCategory): NetworkCondition | null {
+  return ERROR_CATEGORY_NETWORK_CONDITIONS[category];
 }
 
 /**
@@ -318,7 +368,12 @@ interface SDKErrorLike {
   name?: string;
   code?: string;
   type?: string;
-  error?: { type?: string; message?: string; code?: string; status?: string };
+  error?: {
+    type?: string;
+    message?: string;
+    code?: string | number;
+    status?: string | number;
+  };
   headers?: Headers | Record<string, string | string[] | undefined>;
   response?: {
     headers?: Headers | Record<string, string | string[] | undefined>;
@@ -334,11 +389,26 @@ function asSDKError(err: unknown): SDKErrorLike {
   return { message: 'Unknown error' };
 }
 
+const MIN_HTTP_STATUS = 100;
+const MAX_HTTP_STATUS = 599;
+
+function httpStatusOrUndefined(value: string | number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return undefined;
+  return value >= MIN_HTTP_STATUS && value <= MAX_HTTP_STATUS ? value : undefined;
+}
+
+/**
+ * An OpenAI-compatible stream can report its failure as an error object inside
+ * a 200 body. The SDK raises that as an `APIError` with no status at all, so
+ * the numeric code in the body is the only status there is, and without it a
+ * mid-stream rate limit classified as `unknown` and reached the reader as
+ * "the model failed to produce a response".
+ */
 function extractStatus(e: SDKErrorLike): number | undefined {
   if (typeof e.status === 'number') return e.status;
   if (typeof e.statusCode === 'number') return e.statusCode;
   if (typeof e.response?.status === 'number') return e.response.status;
-  return undefined;
+  return httpStatusOrUndefined(e.error?.code) ?? httpStatusOrUndefined(e.error?.status);
 }
 
 function extractMessage(e: SDKErrorLike): string {
@@ -422,6 +492,10 @@ const BILLING_EXHAUSTED_CODES: ReadonlySet<string> = new Set([
 
 export const SPENDING_CAP_PROVIDER_HINT = 'spending_cap';
 
+// The shared free pool's window is spent while the provider's paid routes stay
+// healthy, so a consumer must not read this as the provider being down.
+export const FREE_POOL_PROVIDER_HINT = 'free_pool_window';
+
 /**
  * Alibaba Model Studio answers an exhausted promotional allocation with
  * `AllocationQuota.FreeTierOnly` (HTTP 403 when "free quota only" is on) and an
@@ -495,6 +569,42 @@ function matchesSpendingCapExhausted(lowerMessage: string): boolean {
 }
 
 /**
+ * OpenRouter meters its free pools in two windows and names the one it spent in
+ * the 429 it returns: `free-models-per-min` reopens within the minute, and
+ * `free-models-per-day` does not reopen for hours. Both used to classify as
+ * plain `rate_limit`, so every Free user whose daily pool was gone was told to
+ * try again in a moment.
+ *
+ * The window is only ever named in this marker. The body's `metadata` and the
+ * `X-RateLimit-*` headers carry the limit, what is left of it and when it
+ * resets, but none of them says which window reset it describes, so the marker
+ * is the structured signal, read from the body's own `message` first and from
+ * the SDK's flattened prose second.
+ *
+ * Deliberately anchored on OpenRouter's own pool name rather than on a generic
+ * "per day" phrase, which several other providers use for limits that are not
+ * a free pool at all.
+ */
+const FREE_POOL_WINDOW_MARKER = 'free-models-per-';
+const SHORT_RATE_LIMIT_WINDOWS: ReadonlySet<string> = new Set(['sec', 'second', 'min', 'minute']);
+
+function freePoolWindow(e: SDKErrorLike, lowerMessage: string): string | undefined {
+  const bodyMessage = typeof e.error?.message === 'string' ? e.error.message.toLowerCase() : '';
+  for (const source of [bodyMessage, lowerMessage]) {
+    const markerAt = source.indexOf(FREE_POOL_WINDOW_MARKER);
+    if (markerAt === -1) continue;
+    const window = /^[a-z]+/.exec(source.slice(markerAt + FREE_POOL_WINDOW_MARKER.length));
+    if (window) return window[0];
+  }
+  return undefined;
+}
+
+function matchesFreePoolWindowExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
+  const window = freePoolWindow(e, lowerMessage);
+  return window !== undefined && !SHORT_RATE_LIMIT_WINDOWS.has(window);
+}
+
+/**
  * A spending cap is a quota-window-exhausted signal in its own right, not
  * merely decoration on one of the other markers below. Gating it behind an
  * already-true `matchesQuotaExhausted` result meant a 429 that said ONLY
@@ -513,7 +623,8 @@ function matchesQuotaExhausted(e: SDKErrorLike, lowerMessage: string): boolean {
   return (
     lowerMessage.includes('quota exceeded') ||
     lowerMessage.includes('resource_exhausted') ||
-    matchesSpendingCapExhausted(lowerMessage)
+    matchesSpendingCapExhausted(lowerMessage) ||
+    matchesFreePoolWindowExhausted(e, lowerMessage)
   );
 }
 
@@ -649,9 +760,15 @@ function matchesOverloaded(status: number | undefined, message: string): boolean
   return /"type"\s*:\s*"overloaded_error"/i.test(message);
 }
 
+// What Node's fetch throws when the transport fails: before the headers
+// (`fetch failed`) or with the body half read (`terminated`). Matched whole, so
+// no provider text that merely contains the word can reach this branch.
+const FETCH_TRANSPORT_FAILURE_MESSAGES = new Set(['fetch failed', 'terminated']);
+
 function matchesConnection(name: string | undefined, message: string): boolean {
   const lower = message.toLowerCase();
   return (
+    (name === 'TypeError' && FETCH_TRANSPORT_FAILURE_MESSAGES.has(lower.trim())) ||
     name === 'APIConnectionError' ||
     name === 'APIConnectionTimeoutError' ||
     name === 'EmptyStreamError' ||
@@ -829,7 +946,9 @@ export function classifyError(err: unknown): ClassifiedError {
           ? { providerHint: overageHint }
           : matchesSpendingCapExhausted(lower)
             ? { providerHint: SPENDING_CAP_PROVIDER_HINT }
-            : {}),
+            : matchesFreePoolWindowExhausted(e, lower)
+              ? { providerHint: FREE_POOL_PROVIDER_HINT }
+              : {}),
       };
     }
     return {

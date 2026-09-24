@@ -183,8 +183,11 @@ async function handleGetLatestRelease(
     );
   }
 
-  recordDownload(release.id, request).catch((e: unknown) => {
-    console.error('[Releases] Failed to record download:', e);
+  recordDownload(release.id, request).catch((error: unknown) => {
+    logger.warn(
+      { error, releaseId: release.id, platform: validPlatform, channel },
+      'Release download analytics were not recorded',
+    );
   });
 
   const parsedVersion = parseSemanticVersion(release.version);

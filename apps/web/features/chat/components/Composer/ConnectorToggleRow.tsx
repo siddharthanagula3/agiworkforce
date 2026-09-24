@@ -9,7 +9,7 @@ const ROW_CLASS =
 const INDENTED_CLASS = 'pl-8';
 const FLUSH_CLASS = 'pl-3';
 const LOGO_CLASS = 'h-5 w-5 shrink-0 rounded-md border-border shadow-none';
-const BOX_CLASS = 'flex h-4 w-4 shrink-0 items-center justify-center rounded border';
+const BOX_CLASS = 'flex h-4 w-4 shrink-0 items-center justify-center rounded-compact border';
 const BOX_CHECKED_CLASS = 'border-primary bg-primary text-primary-foreground';
 const BOX_UNCHECKED_CLASS = 'border-border';
 
@@ -48,7 +48,7 @@ export function ConnectorToggleRow({
         aria-hidden="true"
         className={cn(BOX_CLASS, checked ? BOX_CHECKED_CLASS : BOX_UNCHECKED_CLASS)}
       >
-        {checked && <Check className="h-3 w-3" />}
+        {checked && <Check className="h-4 w-4" />}
       </span>
     </button>
   );

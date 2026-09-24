@@ -53,6 +53,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
   currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
+  activateOnStartup: 'agiWorkforce.activateOnStartup',
 };
 
 describe('Config DEFAULTS ↔ package.json parity', () => {

@@ -41,7 +41,7 @@ vi.mock('@/lib/e2b/gate', () => ({
   e2bProvisioningReady: () => e2bMocks.cutover,
 }));
 vi.mock('@/lib/server/code-execution-policy', () => ({
-  isCloudCodeExecutionEnabled: async () => true,
+  resolveCloudCodeExecutionPolicy: async () => ({ allowed: true }),
 }));
 
 import { runToolLoop } from './tool-loop';
@@ -140,14 +140,12 @@ function searchResponse(): Response {
 
 function requestAt(callIndex: number): { tools?: unknown[]; tool_choice?: unknown } | undefined {
   return factoryMocks.streamRequest.mock.calls[callIndex]?.[2] as
-    | { tools?: unknown[]; tool_choice?: unknown }
-    | undefined;
+    { tools?: unknown[]; tool_choice?: unknown } | undefined;
 }
 
 function offeredToolNames(callIndex: number): string[] {
   const request = factoryMocks.streamRequest.mock.calls[callIndex]?.[2] as
-    | { tools?: unknown[] }
-    | undefined;
+    { tools?: unknown[] } | undefined;
   return (request?.tools ?? [])
     .map((tool) => functionToolName(tool) || nativeSearchToolName(tool))
     .filter(Boolean);
@@ -230,7 +228,9 @@ describe('tool loop · unavailable tool withdrawal', () => {
       runToolLoop(makeProcessed(e2bExecutionToolDefs()), { approvalMode: 'auto' }),
     );
 
-    expect(output).toContain('no sandbox was available for this account right now');
+    expect(output).toContain(
+      'this account already has as many sandboxes running as its plan allows',
+    );
     expect(offeredToolNames(0)).toContain(EXECUTE_CODE_TOOL);
     expect(offeredToolNames(1)).not.toContain(EXECUTE_CODE_TOOL);
     expect(output).toContain('Answered without running code.');

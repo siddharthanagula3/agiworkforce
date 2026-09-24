@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use colored::Colorize;
 
 use crate::config::CliConfig;
-use crate::errors::CliError;
+use crate::errors::{CliError, IncompleteTurnCause};
 use crate::hooks;
 use crate::models::{self, ContentBlock, Message, StreamCallback, ToolCallResponse};
 use crate::terminal_style as ts;
@@ -287,6 +287,45 @@ async fn run_pre_tool_use_hooks(
     }
 }
 
+/// What one finished generation is worth to the turn that asked for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GenerationVerdict {
+    /// Tool calls came back; the turn continues into the tool loop.
+    Continues,
+    /// A whole answer.
+    Delivered,
+    /// A real answer the provider cut short. It is kept and the reader is told.
+    DeliveredIncomplete(IncompleteTurnCause),
+    /// Nothing worth delivering came back.
+    Failed(IncompleteTurnCause),
+}
+
+/// Judge one finished generation.
+///
+/// The stop reason used to be an opaque provider string every call site
+/// compared against `"end_turn"`, so an answer cut at the model's output limit,
+/// an answer the provider's safety layer stopped, and an answer that was never
+/// written at all each ended the turn as an ordinary success.
+pub(crate) fn judge_generation(outcome: &agiworkforce_llm::ChatOutcome) -> GenerationVerdict {
+    if !outcome.tool_calls.is_empty() {
+        return GenerationVerdict::Continues;
+    }
+    let has_answer = !outcome.text.trim().is_empty();
+    match &outcome.stop {
+        Some(stop) if stop.is_refusal() => {
+            GenerationVerdict::Failed(IncompleteTurnCause::RefusedBySafety)
+        }
+        Some(stop) if stop.is_output_limit() && has_answer => {
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::OutputLimitReached)
+        }
+        Some(stop) if stop.is_output_limit() => {
+            GenerationVerdict::Failed(IncompleteTurnCause::OutputLimitReached)
+        }
+        _ if has_answer => GenerationVerdict::Delivered,
+        _ => GenerationVerdict::Failed(IncompleteTurnCause::NoResponse),
+    }
+}
+
 /// Map the CLI's `CompletionResult` onto the engine's `Completion` (the
 /// authoritative assembled outcome + the subscription flag the shared
 /// `ChatOutcome` does not carry).
@@ -303,6 +342,7 @@ fn completion_from_result(result: models::CompletionResult) -> Completion {
                 reasoning_output_tokens: result.reasoning_output_tokens,
             },
             stop_reason: result.stop_reason,
+            stop: result.stop,
         },
         via_subscription: result.via_subscription,
     }
@@ -521,7 +561,7 @@ impl AgentSession {
         ) {
             Ok(selection) => selection,
             Err(error) => {
-                self.emit_auto_route_notice(format!(
+                self.emit_turn_notice(format!(
                     "Auto routing kept {} (re-resolution failed: {error})",
                     self.model
                 ));
@@ -562,7 +602,7 @@ impl AgentSession {
         }
 
         if self.model != model_before {
-            self.emit_auto_route_notice(format!(
+            self.emit_turn_notice(format!(
                 "Auto route: {:?} -> {}/{}",
                 task_type, selection.upstream_provider, selection.provider_model_id
             ));
@@ -576,7 +616,7 @@ impl AgentSession {
         }));
     }
 
-    fn emit_auto_route_notice(&self, notice: String) {
+    fn emit_turn_notice(&self, notice: String) {
         if crate::tui::tui_active() {
             crate::tui::push_tui_notice(notice);
         } else if !self.quiet {
@@ -759,6 +799,15 @@ impl AgentSession {
             );
         }
 
+        if let Some(root) = self.workspace_root() {
+            if self.refresh_instructions_in(&root) {
+                self.emit_turn_notice(
+                    "Project instructions changed since they were last read; this turn uses the files as they are now."
+                        .to_string(),
+                );
+            }
+        }
+
         // Add user message, prepending plan-mode prefix if applicable.
         let mut prefix = String::new();
         if let Some(feedback) = self.plan_rejection_feedback.take() {
@@ -898,7 +947,7 @@ message -- revise and call `update_plan` again.\n\n",
             max_budget_usd: self.max_budget_usd,
         };
 
-        let (run_result, completion_usage) = {
+        let (run_result, completion_usage, incomplete) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
                 config,
@@ -910,9 +959,14 @@ message -- revise and call `update_plan` again.\n\n",
                 first_on_chunk: Some(on_chunk),
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
+                incomplete: None,
             };
             let result = run_turn(&mut adapter, params, &mut tracker).await;
-            (result, std::mem::take(&mut adapter.completion_usage))
+            (
+                result,
+                std::mem::take(&mut adapter.completion_usage),
+                adapter.incomplete,
+            )
         };
 
         // Restore runaway state regardless of turn outcome.
@@ -1066,6 +1120,7 @@ message -- revise and call `update_plan` again.\n\n",
             cache_creation_tokens: total_cache_creation,
             cost_usd,
             via_subscription,
+            incomplete,
         })
     }
 
@@ -1134,6 +1189,10 @@ struct TurnHostAdapter<'a> {
     /// intentionally remain aggregate for telemetry, but pricing and budget
     /// enforcement must not treat several tool-loop completions as one request.
     completion_usage: Vec<crate::cost_ledger::CompletionUsage>,
+    /// Set when the answer this turn delivers is real but was cut short, so
+    /// every surface can say so beside the text instead of presenting a
+    /// truncated reply as a whole one.
+    incomplete: Option<IncompleteTurnCause>,
 }
 
 impl TurnHostAdapter<'_> {
@@ -1286,6 +1345,7 @@ impl TurnHostAdapter<'_> {
                                         cache_creation_input_tokens: 0,
                                         via_subscription: true,
                                         stop_reason: Some("end_turn".to_string()),
+                                        stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
                                         reasoning_output_tokens: 0,
                                     })
                                 } else {
@@ -1373,6 +1433,95 @@ impl TurnHostAdapter<'_> {
             }
         };
         Ok(completion_from_result(continuation))
+    }
+
+    fn record_completion_usage(&mut self, completion: &Completion) {
+        let usage = &completion.outcome.usage;
+        self.completion_usage
+            .push(crate::cost_ledger::CompletionUsage {
+                model: self.session.model.clone(),
+                input_tokens: usage.input_tokens,
+                output_tokens: usage.output_tokens,
+                cache_read_tokens: usage.cache_read_input_tokens,
+                cache_write_tokens: usage.cache_creation_input_tokens,
+                included_in_subscription: completion.via_subscription,
+            });
+    }
+
+    /// The one place a finished generation becomes a finished turn.
+    ///
+    /// A generation with nothing in it ends the turn as a failure rather than
+    /// as a blank success; one the provider cut at its output limit keeps every
+    /// word it did produce and says what is missing.
+    async fn settle_generation(&mut self, completion: Completion) -> Result<Completion> {
+        match judge_generation(&completion.outcome) {
+            GenerationVerdict::Continues | GenerationVerdict::Delivered => Ok(completion),
+            GenerationVerdict::DeliveredIncomplete(cause) => {
+                self.deliver_incomplete(completion, cause)
+            }
+            GenerationVerdict::Failed(cause) => {
+                // Sending the same turn again reproduces a refusal and
+                // reproduces a truncation, so only the empty reply is worth a
+                // second attempt, and only because the protocol's own policy
+                // already calls that class retryable.
+                if !cause.code().is_retryable() {
+                    return Err(self.incomplete_turn_error(cause));
+                }
+                narrate!(
+                    "  {}",
+                    ts::warning(format!("{} Sending it once more.", cause.summary()))
+                );
+                let retried = models::stream_completion(
+                    self.config,
+                    &self.session.provider,
+                    &self.session.model,
+                    &self.session.messages,
+                    self.max_tokens,
+                    Some(&self.tool_defs),
+                    self.session.continuation_sink(),
+                    self.session.thinking_budget_tokens,
+                    self.session.effort,
+                )
+                .await?;
+                let retried = completion_from_result(retried);
+                self.record_completion_usage(&retried);
+                match judge_generation(&retried.outcome) {
+                    GenerationVerdict::Continues | GenerationVerdict::Delivered => Ok(retried),
+                    GenerationVerdict::DeliveredIncomplete(cause) => {
+                        self.deliver_incomplete(retried, cause)
+                    }
+                    GenerationVerdict::Failed(cause) => Err(self.incomplete_turn_error(cause)),
+                }
+            }
+        }
+    }
+
+    fn deliver_incomplete(
+        &mut self,
+        completion: Completion,
+        cause: IncompleteTurnCause,
+    ) -> Result<Completion> {
+        self.incomplete = Some(cause);
+        if self.session.json_events {
+            crate::agent_events::AgentEvent::turn_incomplete(
+                self.session.json_session_id.clone(),
+                cause,
+            )
+            .emit_stdout();
+        } else {
+            // Not gated on `quiet`: this is the answer's own truth, not turn
+            // narration, and a reader who is shown a cut answer with no notice
+            // reads it as the whole one.
+            crate::output::print_warn(&cause.notice());
+        }
+        Ok(completion)
+    }
+
+    fn incomplete_turn_error(&self, cause: IncompleteTurnCause) -> anyhow::Error {
+        anyhow::Error::new(CliError::incomplete_turn(
+            models::provider_name(&self.session.provider),
+            cause,
+        ))
     }
 
     /// Shared per-tool pre-dispatch check (availability, invalid args, plan-mode
@@ -1547,18 +1696,9 @@ impl TurnHost for TurnHostAdapter<'_> {
             TurnPhase::Continuation => self.complete_continuation().await,
         };
         if let Ok(completion) = &completion {
-            let usage = &completion.outcome.usage;
-            self.completion_usage
-                .push(crate::cost_ledger::CompletionUsage {
-                    model: self.session.model.clone(),
-                    input_tokens: usage.input_tokens,
-                    output_tokens: usage.output_tokens,
-                    cache_read_tokens: usage.cache_read_input_tokens,
-                    cache_write_tokens: usage.cache_creation_input_tokens,
-                    included_in_subscription: completion.via_subscription,
-                });
+            self.record_completion_usage(completion);
         }
-        completion
+        self.settle_generation(completion?).await
     }
 
     fn record_assistant(&mut self, completion: &Completion) {
@@ -2476,8 +2616,26 @@ impl TurnHost for TurnHostAdapter<'_> {
                         status
                     );
                 }
+                let mut noticed = Vec::new();
                 if let Ok(mut activity) = self.session.session_activity.lock() {
-                    activity.tool_finished(id, *ok);
+                    for change in activity.tool_finished(id, *ok) {
+                        let Some(reason) = change.reason.as_ref() else {
+                            continue;
+                        };
+                        for notice in &reason.notices {
+                            noticed.push((change.path.clone(), *notice));
+                        }
+                    }
+                }
+                if !self.session.quiet {
+                    for (path, notice) in &noticed {
+                        narrate!(
+                            "  {} {}: {}",
+                            "!".dimmed(),
+                            ts::code(path.display().to_string()),
+                            crate::agent::prompt::notice_advisory(*notice).dimmed()
+                        );
+                    }
                 }
                 if self.session.json_events {
                     crate::agent_events::AgentEvent::ToolResult {
@@ -2921,6 +3079,7 @@ mod tests {
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
+            incomplete: None,
         };
 
         assert_eq!(
@@ -3130,6 +3289,7 @@ mod tests {
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
+            incomplete: None,
         };
 
         let prepared = adapter
@@ -3403,6 +3563,7 @@ mod tests {
             cache_creation_input_tokens: 0,
             via_subscription: false,
             stop_reason: Some("end_turn".to_string()),
+            stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
             reasoning_output_tokens: 0,
         }
     }
@@ -3434,6 +3595,7 @@ mod tests {
                 first_on_chunk: None,
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
+                incomplete: None,
             },
             scripted: completions.into(),
             events: Vec::new(),
@@ -3786,6 +3948,401 @@ mod tests {
         assert!(
             session.subagent_manager.is_none(),
             "a rejected agent name must not initialize the subagent manager"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // What a finished generation is worth to the turn that asked for it
+    // -----------------------------------------------------------------------
+
+    fn outcome(
+        text: &str,
+        stop: Option<agiworkforce_llm::GenerationStop>,
+        tool_calls: Vec<ToolCallResponse>,
+    ) -> agiworkforce_llm::ChatOutcome {
+        agiworkforce_llm::ChatOutcome {
+            text: text.to_string(),
+            tool_calls,
+            usage: agiworkforce_llm::Usage::default(),
+            stop_reason: None,
+            stop,
+        }
+    }
+
+    #[test]
+    fn an_answer_cut_at_the_output_limit_is_kept_and_named() {
+        assert_eq!(
+            judge_generation(&outcome(
+                "Half an ans",
+                Some(agiworkforce_llm::GenerationStop::OutputLimit),
+                vec![],
+            )),
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::OutputLimitReached),
+        );
+    }
+
+    #[test]
+    fn a_response_the_safety_layer_stopped_is_not_a_finished_turn() {
+        for text in ["", "As far as I"] {
+            assert_eq!(
+                judge_generation(&outcome(
+                    text,
+                    Some(agiworkforce_llm::GenerationStop::Refusal),
+                    vec![],
+                )),
+                GenerationVerdict::Failed(IncompleteTurnCause::RefusedBySafety),
+                "a refusal is a refusal whether or not words arrived first"
+            );
+        }
+    }
+
+    #[test]
+    fn a_generation_with_no_text_and_no_tool_call_fails_the_turn() {
+        for stop in [
+            None,
+            Some(agiworkforce_llm::GenerationStop::EndOfTurn),
+            Some(agiworkforce_llm::GenerationStop::StopSequence),
+            Some(agiworkforce_llm::GenerationStop::Unrecognized(
+                "pause_turn".to_string(),
+            )),
+        ] {
+            assert_eq!(
+                judge_generation(&outcome("   \n ", stop.clone(), vec![])),
+                GenerationVerdict::Failed(IncompleteTurnCause::NoResponse),
+                "whitespace is not an answer, whatever the provider called the stop"
+            );
+        }
+    }
+
+    #[test]
+    fn an_output_limit_that_produced_nothing_is_a_failure_not_a_delivery() {
+        assert_eq!(
+            judge_generation(&outcome(
+                "",
+                Some(agiworkforce_llm::GenerationStop::OutputLimit),
+                vec![],
+            )),
+            GenerationVerdict::Failed(IncompleteTurnCause::OutputLimitReached),
+        );
+    }
+
+    #[test]
+    fn tool_calls_continue_the_turn_whatever_the_stop_reason_says() {
+        for stop in [
+            agiworkforce_llm::GenerationStop::ToolUse,
+            agiworkforce_llm::GenerationStop::OutputLimit,
+            agiworkforce_llm::GenerationStop::EndOfTurn,
+        ] {
+            assert_eq!(
+                judge_generation(&outcome(
+                    "",
+                    Some(stop),
+                    vec![live_call("call-1", "read_file", serde_json::json!({}))],
+                )),
+                GenerationVerdict::Continues,
+            );
+        }
+    }
+
+    #[test]
+    fn a_whole_answer_is_delivered_untouched() {
+        assert_eq!(
+            judge_generation(&outcome(
+                "Here is the answer.",
+                Some(agiworkforce_llm::GenerationStop::EndOfTurn),
+                vec![],
+            )),
+            GenerationVerdict::Delivered,
+        );
+    }
+
+    /// The fixture endpoint a retry is allowed to reach: the same route that
+    /// just answered, never another model and never a paid one.
+    async fn local_completion_fixture(
+        bodies: Vec<&'static str>,
+    ) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use axum::{
+            http::header,
+            response::IntoResponse,
+            routing::{get, post},
+            Json, Router,
+        };
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex};
+
+        let hits = Arc::new(AtomicUsize::new(0));
+        let hits_for_route = Arc::clone(&hits);
+        let remaining = Arc::new(Mutex::new(std::collections::VecDeque::from(bodies)));
+        let router = Router::new()
+            .route(
+                "/v1/models",
+                get(|| async {
+                    Json(serde_json::json!({
+                        "object": "list",
+                        "data": [{"id": "agi-e2e-local-fixture"}]
+                    }))
+                }),
+            )
+            .route(
+                "/v1/chat/completions",
+                post(move || {
+                    let hits = Arc::clone(&hits_for_route);
+                    let remaining = Arc::clone(&remaining);
+                    async move {
+                        hits.fetch_add(1, Ordering::SeqCst);
+                        let body = remaining
+                            .lock()
+                            .expect("fixture body queue")
+                            .pop_front()
+                            .expect("the turn asked for more completions than were scripted");
+                        ([(header::CONTENT_TYPE, "text/event-stream")], body).into_response()
+                    }
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind completion fixture");
+        let address = listener.local_addr().expect("fixture address");
+        tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("serve completion fixture");
+        });
+        (format!("http://{address}/v1"), hits)
+    }
+
+    fn fixture_config(base_url: &str) -> CliConfig {
+        let mut config = CliConfig::default();
+        config.providers.insert(
+            "lmstudio".to_string(),
+            crate::config::ProviderConfig {
+                api_key_env: None,
+                base_url: Some(base_url.to_string()),
+            },
+        );
+        config
+    }
+
+    const EMPTY_STREAM: &str = concat!(
+        "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+        "data: [DONE]\n\n"
+    );
+    const ANSWERED_STREAM: &str = concat!(
+        "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"second attempt\"},\"finish_reason\":null}]}\n\n",
+        "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+        "data: [DONE]\n\n"
+    );
+
+    async fn settle_through_fixture(
+        session: &mut AgentSession,
+        config: &CliConfig,
+        first: models::CompletionResult,
+    ) -> Result<Completion> {
+        let mut adapter = TurnHostAdapter {
+            session,
+            config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::new(),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 64,
+            first_on_chunk: None,
+            hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
+            incomplete: None,
+        };
+        let settled = adapter
+            .settle_generation(completion_from_result(first))
+            .await;
+        if settled.is_ok() {
+            assert!(
+                !adapter.completion_usage.is_empty(),
+                "a provider request that was paid for stays on the turn's ledger"
+            );
+        }
+        settled
+    }
+
+    fn empty_generation() -> models::CompletionResult {
+        models::CompletionResult {
+            text: String::new(),
+            tool_calls: Vec::new(),
+            input_tokens: 7,
+            output_tokens: 0,
+            cache_read_input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            via_subscription: false,
+            stop_reason: Some("stop".to_string()),
+            stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
+            reasoning_output_tokens: 0,
+        }
+    }
+
+    fn fixture_session(session: &mut AgentSession) {
+        session.provider = crate::models::lmstudio_provider();
+        session.model = "agi-e2e-local-fixture".to_string();
+    }
+
+    #[tokio::test]
+    async fn an_empty_generation_is_sent_once_more_on_the_same_route() {
+        let (base_url, hits) = local_completion_fixture(vec![ANSWERED_STREAM]).await;
+        let config = fixture_config(&base_url);
+        let mut session = live_session();
+        fixture_session(&mut session);
+        let route_before = (session.provider.clone(), session.model.clone());
+
+        let settled = settle_through_fixture(&mut session, &config, empty_generation())
+            .await
+            .expect("the second attempt answered, so the turn is delivered");
+
+        assert_eq!(settled.outcome.text, "second attempt");
+        assert_eq!(
+            hits.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "exactly one more attempt, never a second retry"
+        );
+        assert_eq!(
+            (session.provider.clone(), session.model.clone()),
+            route_before,
+            "a retry never rotates the model or the provider"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_second_empty_generation_fails_the_turn_rather_than_delivering_nothing() {
+        let (base_url, hits) = local_completion_fixture(vec![EMPTY_STREAM]).await;
+        let config = fixture_config(&base_url);
+        let mut session = live_session();
+        fixture_session(&mut session);
+
+        let error = settle_through_fixture(&mut session, &config, empty_generation())
+            .await
+            .expect_err("nothing came back twice, so the turn failed");
+
+        let cli = crate::errors::cli_cause(&error).expect("a typed failure a client can branch on");
+        assert_eq!(cli.kind(), "empty_response");
+        assert_eq!(
+            cli.turn_failure().code,
+            agiworkforce_protocol::developer_session::TurnFailureCode::ProviderUnavailable,
+        );
+        assert_eq!(
+            hits.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "one retry, not a loop"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refusal_fails_the_turn_without_sending_it_again() {
+        let (base_url, hits) = local_completion_fixture(Vec::new()).await;
+        let config = fixture_config(&base_url);
+        let mut session = live_session();
+        fixture_session(&mut session);
+        let refused = models::CompletionResult {
+            stop_reason: Some("content_filter".to_string()),
+            stop: Some(agiworkforce_llm::GenerationStop::Refusal),
+            ..empty_generation()
+        };
+
+        let error = settle_through_fixture(&mut session, &config, refused)
+            .await
+            .expect_err("a stopped response is not a finished turn");
+
+        let cli = crate::errors::cli_cause(&error).expect("a typed failure");
+        assert_eq!(cli.kind(), "refused_by_safety");
+        assert_eq!(
+            hits.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "a refusal reproduces itself; sending it again spends a request for the same answer"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_truncated_answer_is_delivered_and_the_turn_says_so() {
+        let (base_url, hits) = local_completion_fixture(Vec::new()).await;
+        let config = fixture_config(&base_url);
+        let mut session = live_session();
+        fixture_session(&mut session);
+        let truncated = models::CompletionResult {
+            text: "Half an ans".to_string(),
+            stop_reason: Some("length".to_string()),
+            stop: Some(agiworkforce_llm::GenerationStop::OutputLimit),
+            ..empty_generation()
+        };
+
+        let mut adapter = TurnHostAdapter {
+            session: &mut session,
+            config: &config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::new(),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 64,
+            first_on_chunk: None,
+            hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
+            incomplete: None,
+        };
+        let settled = adapter
+            .settle_generation(completion_from_result(truncated))
+            .await
+            .expect("the words the model did produce are kept");
+
+        assert_eq!(settled.outcome.text, "Half an ans");
+        assert_eq!(
+            adapter.incomplete,
+            Some(IncompleteTurnCause::OutputLimitReached),
+            "the turn carries the reason to every surface that renders it"
+        );
+        assert_eq!(
+            hits.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "sending the identical turn again reproduces the identical truncation"
+        );
+    }
+
+    /// While ratatui owns the terminal a raw stderr write lands outside its
+    /// buffer, so the reader of a cut answer would be told nothing at all.
+    #[tokio::test]
+    async fn the_truncation_notice_reaches_the_tui_transcript() {
+        let (base_url, _hits) = local_completion_fixture(Vec::new()).await;
+        let config = fixture_config(&base_url);
+        let mut session = live_session();
+        fixture_session(&mut session);
+        let truncated = models::CompletionResult {
+            text: "Half an ans".to_string(),
+            stop_reason: Some("length".to_string()),
+            stop: Some(agiworkforce_llm::GenerationStop::OutputLimit),
+            ..empty_generation()
+        };
+        let mut adapter = TurnHostAdapter {
+            session: &mut session,
+            config: &config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::new(),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 64,
+            first_on_chunk: None,
+            hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
+            incomplete: None,
+        };
+
+        let _ = crate::tui::drain_tui_notices();
+        crate::tui::set_tui_active(true);
+        let settled = adapter
+            .settle_generation(completion_from_result(truncated))
+            .await;
+        let queued = crate::tui::drain_tui_notices();
+        crate::tui::set_tui_active(false);
+
+        assert!(settled.is_ok());
+        assert!(
+            queued
+                .iter()
+                .any(|notice| notice == &IncompleteTurnCause::OutputLimitReached.notice()),
+            "the TUI must be told the answer was cut; queued: {queued:?}"
         );
     }
 }

@@ -151,3 +151,38 @@ describe('sendSupportEmail', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('email from a deployment that is not production', () => {
+  const delivered = () =>
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'msg-1' }),
+      text: async () => '',
+    });
+
+  it('mails nobody from a preview, which may run on a restored copy of production', async () => {
+    delivered();
+    vi.stubEnv('VERCEL_ENV', 'preview');
+
+    const result = await sendSupportEmail(input());
+
+    expect(result.delivered).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends from a preview whose operator opted in', async () => {
+    delivered();
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    vi.stubEnv('AGI_ALLOW_NON_PRODUCTION_EMAIL', '1');
+
+    await expect(sendSupportEmail(input())).resolves.toMatchObject({ delivered: true });
+  });
+
+  it('sends from production as before', async () => {
+    delivered();
+    vi.stubEnv('VERCEL_ENV', 'production');
+
+    await expect(sendSupportEmail(input())).resolves.toMatchObject({ delivered: true });
+  });
+});

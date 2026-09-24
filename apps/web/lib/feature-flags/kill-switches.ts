@@ -29,6 +29,9 @@ export type KillSwitchCapability = PlatformCapability | ExtraKillSwitchCapabilit
 export const COMPUTER_USE_CAPABILITY: KillSwitchCapability = 'canUseDesktopAutomation';
 export const BROWSER_CAPABILITY: KillSwitchCapability = 'canUseBrowserAutomation';
 export const WORK_CAPABILITY: KillSwitchCapability = 'work';
+export const DICTATION_CAPABILITY: KillSwitchCapability = 'dictation';
+export const SCREEN_SHARE_CAPABILITY: KillSwitchCapability = 'screen_share';
+export const DESKTOP_UPDATE_CAPABILITY: KillSwitchCapability = 'desktop_update';
 
 export function capabilityFlagSuffix(capability: KillSwitchCapability): string {
   return capability.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);

@@ -1,7 +1,13 @@
 import 'server-only';
 
+import { X509Certificate } from 'node:crypto';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import {
+  auditStreamContinuity,
+  type AuditStreamContinuity,
+} from '@/lib/services/audit-streaming-service';
 import { getEffectiveOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import {
   readOrganizationKeyStatus,
@@ -26,6 +32,31 @@ import { DATA_REGIONS, DEFAULT_DATA_REGION } from '@agiworkforce/compliance';
 export type PostureEnforcement = 'enforced' | 'stated' | 'unconfigured';
 
 export type PostureState = 'ok' | 'attention' | 'off';
+
+/**
+ * A workspace with one owner is one lost account away from nobody being able to
+ * change its billing, policy or membership. Support cannot promote an owner for
+ * a workspace it has no member of, so this is recovered by nobody.
+ */
+export const MIN_RECOMMENDED_OWNERS = 2;
+
+/**
+ * How long before an identity provider's signing certificate expires the
+ * workspace is told. An expired certificate does not degrade sign-in, it ends
+ * it for every member at once, and reissuing one is an IdP-side change with its
+ * own change window.
+ */
+export const CERTIFICATE_ATTENTION_DAYS = 30;
+
+/**
+ * A data key that has never been rotated is the one an auditor asks about, and
+ * the answer "we can, nobody has" is only visible if the age is measured. The
+ * window is the annual rotation the compliance frameworks this product is sold
+ * against expect.
+ */
+export const KEY_ROTATION_ATTENTION_DAYS = 365;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface PostureSignal {
   id: string;
@@ -104,6 +135,7 @@ interface SsoRow {
   is_active: boolean;
   domain_verified_at: string | Date | null;
   clerk_connection_id: string | null;
+  metadata_xml: string | null;
 }
 
 interface DirectoryRow {
@@ -158,6 +190,7 @@ export async function readWorkspacePosture(
     spendLimitRows,
     connectorPolicyRows,
     modelPolicyRows,
+    streamContinuity,
     policy,
     keyStatus,
     regionState,
@@ -181,7 +214,7 @@ export async function readWorkspacePosture(
       [organizationId],
     ),
     db.query<SsoRow>(
-      `select domain, provider_type, is_active, domain_verified_at, clerk_connection_id
+      `select domain, provider_type, is_active, domain_verified_at, clerk_connection_id, metadata_xml
          from public.sso_connections
         where organization_id = $1
         order by created_at desc`,
@@ -273,6 +306,7 @@ export async function readWorkspacePosture(
         limit 1`,
       [organizationId],
     ),
+    auditStreamContinuity(db, new Date(), organizationId),
     getEffectiveOrganizationPolicy(db, organizationId),
     readOrganizationKeyStatus(db, organizationId),
     readOrganizationRegion(db, organizationId),
@@ -281,8 +315,11 @@ export async function readWorkspacePosture(
 
   const org = orgRows[0] ?? null;
   const memberCount = roleRows.reduce((sum, row) => sum + toCount(row), 0);
+  const ownerCount = roleRows
+    .filter((row) => row.role === 'owner')
+    .reduce((sum, row) => sum + toCount(row), 0);
   const adminCount = roleRows
-    .filter((row) => row.role === 'owner' || row.role === 'admin')
+    .filter((row) => row.role === 'admin')
     .reduce((sum, row) => sum + toCount(row), 0);
   const pendingInvitations = toCount(invitationRows[0]);
   const licensedSeats = org?.licensed_seats ?? null;
@@ -372,6 +409,7 @@ export async function readWorkspacePosture(
               : 'Verify a domain you own before an SSO connection can be activated on it.',
           href: '/workspace/identity',
         },
+        certificateSignal(activeSso),
       ],
     },
     {
@@ -437,9 +475,10 @@ export async function readWorkspacePosture(
           value: plural(memberCount, 'member', 'members'),
           state: 'ok',
           enforcement: 'enforced',
-          detail: `${plural(adminCount, 'owner or admin', 'owners and admins')}. Only current workspace members receive workspace access.`,
+          detail: `${plural(ownerCount, 'owner', 'owners')} and ${plural(adminCount, 'admin', 'admins')}. Only current workspace members receive workspace access.`,
           href: '/workspace/people',
         },
+        ownersSignal(ownerCount),
         {
           id: 'invitations',
           label: 'Pending invitations',
@@ -662,30 +701,7 @@ export async function readWorkspacePosture(
             : 'Export is refused for this workspace, and the refusal is recorded in the trail.',
           href: '/workspace/audit',
         },
-        {
-          id: 'siem',
-          label: 'SIEM streaming',
-          value:
-            auditDestination === null
-              ? 'Not configured'
-              : !auditDestination.enabled
-                ? 'Configured, paused'
-                : auditDestination.consecutive_failures > 0
-                  ? `Failing (${auditDestination.consecutive_failures} in a row)`
-                  : 'Delivering',
-          state:
-            auditDestination === null
-              ? 'off'
-              : auditDestination.enabled && auditDestination.consecutive_failures === 0
-                ? 'ok'
-                : 'attention',
-          enforcement: auditDestination === null ? 'unconfigured' : 'enforced',
-          detail:
-            auditDestination === null
-              ? 'No endpoint is configured. Pull the JSONL export on a schedule, or point us at an HTTPS endpoint and events will be delivered signed.'
-              : 'Events are POSTed with an HMAC-SHA256 signature over the timestamp and body, drained on a schedule rather than written during the audited action, an unreachable endpoint must never stop the thing it records. A failed delivery holds the cursor, so events are retried rather than dropped.',
-          href: '/workspace/audit',
-        },
+        siemSignal(auditDestination, streamContinuity[0] ?? null),
       ],
     },
   ];
@@ -701,7 +717,217 @@ export async function readWorkspacePosture(
       activeDirectoryCount: activeDirectory.length,
       verifiedDomainCount: verifiedDomains.length,
       syncErrors,
+      ownerCount,
     }),
+  };
+}
+
+const SIEM_DELIVERY_DETAIL =
+  'Events are POSTed with an HMAC-SHA256 signature over the timestamp and body, drained on a ' +
+  'schedule rather than written during the audited action, an unreachable endpoint must never ' +
+  'stop the thing it records. A failed delivery holds the cursor, so events are retried rather ' +
+  'than dropped.';
+
+/**
+ * A destination that answers nothing and a destination that answers 2xx and
+ * files nothing look the same from the failure counter, so the backlog is read
+ * too: it is the only signal that separates "delivering" from "silent".
+ */
+function siemSignal(
+  destination: AuditDestinationRow | null,
+  continuity: AuditStreamContinuity | null,
+): PostureSignal {
+  if (destination === null) {
+    return {
+      id: 'siem',
+      label: 'SIEM streaming',
+      value: 'Not configured',
+      state: 'off',
+      enforcement: 'unconfigured',
+      detail:
+        'No endpoint is configured. Pull the JSONL export on a schedule, or point us at an ' +
+        'HTTPS endpoint and events will be delivered signed.',
+      href: '/workspace/audit',
+    };
+  }
+
+  if (!destination.enabled) {
+    return {
+      id: 'siem',
+      label: 'SIEM streaming',
+      value: 'Configured, paused',
+      state: 'attention',
+      enforcement: 'enforced',
+      detail: SIEM_DELIVERY_DETAIL,
+      href: '/workspace/audit',
+    };
+  }
+
+  if (destination.consecutive_failures > 0) {
+    return {
+      id: 'siem',
+      label: 'SIEM streaming',
+      value: `Failing (${destination.consecutive_failures} in a row)`,
+      state: 'attention',
+      enforcement: 'enforced',
+      detail: SIEM_DELIVERY_DETAIL,
+      href: '/workspace/audit',
+    };
+  }
+
+  if (continuity?.alerting) {
+    return {
+      id: 'siem',
+      label: 'SIEM streaming',
+      value: `Behind by ${plural(continuity.behindMinutes ?? 0, 'minute', 'minutes')}`,
+      state: 'attention',
+      enforcement: 'enforced',
+      detail:
+        `${plural(continuity.buffered, 'event', 'events')} are held and none has been ` +
+        'accepted for longer than the alerting window. Nothing is lost: they are sent when ' +
+        'your receiver reads again, and until then the copy in your SIEM is not current. ' +
+        `${SIEM_DELIVERY_DETAIL}`,
+      href: '/workspace/audit',
+    };
+  }
+
+  return {
+    id: 'siem',
+    label: 'SIEM streaming',
+    value: 'Delivering',
+    state: 'ok',
+    enforcement: 'enforced',
+    detail: SIEM_DELIVERY_DETAIL,
+    href: '/workspace/audit',
+  };
+}
+
+function ownersSignal(ownerCount: number): PostureSignal {
+  if (ownerCount === 0) {
+    return {
+      id: 'owners',
+      label: 'Owners',
+      value: 'None',
+      state: 'attention',
+      enforcement: 'enforced',
+      detail:
+        'No member holds the owner role, so nothing in this workspace can be transferred, ' +
+        'rebilled or closed by anybody inside it. Promote an owner.',
+      href: '/workspace/people',
+    };
+  }
+
+  const healthy = ownerCount >= MIN_RECOMMENDED_OWNERS;
+  return {
+    id: 'owners',
+    label: 'Owners',
+    value: plural(ownerCount, 'owner', 'owners'),
+    state: healthy ? 'ok' : 'attention',
+    enforcement: 'enforced',
+    detail: healthy
+      ? 'More than one account can change billing, policy and membership, so losing one of ' +
+        'them does not leave the workspace unadministered.'
+      : 'One account holds every owner power. If it is lost, disabled by your identity ' +
+        'provider, or leaves, nobody remaining can change billing, policy or membership, and ' +
+        'no one outside the workspace can grant it back. Promote a second owner.',
+    href: '/workspace/people',
+  };
+}
+
+const X509_IN_METADATA = /<(?:[A-Za-z0-9_.-]+:)?X509Certificate>([\sA-Za-z0-9+/=]+?)<\//g;
+
+/**
+ * When the IdP's metadata was uploaded, its signing certificates are held here
+ * and their expiry is a fact about this workspace rather than a setting. The
+ * earliest one is what matters: sign-in ends on the first expiry, not the last.
+ */
+function earliestCertificateExpiry(metadataXml: string | null): Date | null {
+  if (!metadataXml) return null;
+  let earliest: Date | null = null;
+  for (const match of metadataXml.matchAll(X509_IN_METADATA)) {
+    const encoded = (match[1] ?? '').replace(/\s+/g, '');
+    if (encoded.length === 0) continue;
+    let validTo: Date;
+    try {
+      validTo = new Date(new X509Certificate(Buffer.from(encoded, 'base64')).validTo);
+    } catch {
+      continue;
+    }
+    if (!Number.isFinite(validTo.getTime())) continue;
+    if (earliest === null || validTo < earliest) earliest = validTo;
+  }
+  return earliest;
+}
+
+function certificateSignal(activeSso: readonly SsoRow[]): PostureSignal {
+  const saml = activeSso.filter((row) => row.provider_type === 'saml');
+  if (saml.length === 0) {
+    return {
+      id: 'sso-certificate',
+      label: 'Signing certificate',
+      value: 'Not applicable',
+      state: 'ok',
+      enforcement: 'unconfigured',
+      detail:
+        'No SAML connection is active, so no identity provider certificate has to stay valid ' +
+        'for members to sign in.',
+      href: '/workspace/identity',
+    };
+  }
+
+  const expiries = saml
+    .map((row) => earliestCertificateExpiry(row.metadata_xml))
+    .filter((value): value is Date => value !== null);
+
+  if (expiries.length < saml.length) {
+    return {
+      id: 'sso-certificate',
+      label: 'Signing certificate',
+      value: 'Not verified',
+      state: 'attention',
+      enforcement: 'unconfigured',
+      detail:
+        'At least one active connection was set up from a metadata URL, so its signing ' +
+        'certificate is not held here and its expiry cannot be checked from this page. Upload ' +
+        'the metadata document instead, or track the expiry date with your identity provider: ' +
+        'when it passes, every member stops being able to sign in at once.',
+      href: '/workspace/identity',
+    };
+  }
+
+  const earliest = expiries.reduce((a, b) => (a < b ? a : b));
+  const daysLeft = Math.floor((earliest.getTime() - Date.now()) / DAY_MS);
+  const on = earliest.toUTCString();
+
+  if (daysLeft < 0) {
+    return {
+      id: 'sso-certificate',
+      label: 'Signing certificate',
+      value: `Expired ${on}`,
+      state: 'attention',
+      enforcement: 'enforced',
+      detail:
+        'The certificate that signs this connection’s assertions has expired. Sign-in ' +
+        'through it fails for every member until your identity provider issues a new one and ' +
+        'its metadata is uploaded here.',
+      href: '/workspace/identity',
+    };
+  }
+
+  return {
+    id: 'sso-certificate',
+    label: 'Signing certificate',
+    value: daysLeft <= CERTIFICATE_ATTENTION_DAYS ? `Expires ${on}` : `Valid until ${on}`,
+    state: daysLeft <= CERTIFICATE_ATTENTION_DAYS ? 'attention' : 'ok',
+    enforcement: 'enforced',
+    detail:
+      daysLeft <= CERTIFICATE_ATTENTION_DAYS
+        ? `${plural(daysLeft, 'day', 'days')} left. Rotating a certificate is a change your ` +
+          'identity provider makes and you upload here; until that happens, the expiry ends ' +
+          'sign-in for every member at once.'
+        : 'Read from the metadata this workspace uploaded. It is checked on every read of this ' +
+          'page, so an approaching expiry is flagged here before it stops sign-in.',
+    href: '/workspace/identity',
   };
 }
 
@@ -711,11 +937,28 @@ export async function readWorkspacePosture(
  * than falling back to the platform key, so an administrator has to be able to
  * see that refusal here rather than discover it as a failed request.
  */
+function keyRotationAge(lastRotatedAt: string | null): number | null {
+  if (lastRotatedAt === null) return null;
+  const rotatedAt = new Date(lastRotatedAt);
+  if (!Number.isFinite(rotatedAt.getTime())) return null;
+  return Math.floor((Date.now() - rotatedAt.getTime()) / DAY_MS);
+}
+
 function encryptionKeySignal(keyStatus: OrganizationKeyStatus): PostureSignal {
   const { availability } = keyStatus;
   const rotated = keyStatus.lastRotatedAt
     ? ` Last rotated ${new Date(keyStatus.lastRotatedAt).toUTCString()}.`
     : '';
+  const rotationAge = keyRotationAge(keyStatus.lastRotatedAt);
+  const stale = rotationAge === null || rotationAge > KEY_ROTATION_ATTENTION_DAYS;
+  const staleness =
+    rotationAge === null
+      ? ' This key has never been rotated, so its age is the age of the workspace. Rotate it ' +
+        'in your KMS and reactivate to start the clock.'
+      : rotationAge > KEY_ROTATION_ATTENTION_DAYS
+        ? ` It was last rotated ${plural(rotationAge, 'day', 'days')} ago, past the ` +
+          `${KEY_ROTATION_ATTENTION_DAYS}-day window an annual rotation commitment implies.`
+        : '';
 
   if (availability.state === 'platform_unconfigured') {
     return {
@@ -781,13 +1024,15 @@ function encryptionKeySignal(keyStatus: OrganizationKeyStatus): PostureSignal {
   return {
     id: 'encryption-key',
     label: 'Encryption key',
-    value: `Customer-managed (${availability.descriptor.provider})`,
-    state: 'ok',
+    value: stale
+      ? `Customer-managed (${availability.descriptor.provider}), rotation overdue`
+      : `Customer-managed (${availability.descriptor.provider})`,
+    state: stale ? 'attention' : 'ok',
     enforcement: 'enforced',
     detail:
       'The key that wraps this workspace’s data key lives in your own KMS and is never held ' +
       `here. Version ${availability.keyVersion}, in ${availability.descriptor.region}. ` +
-      `Revoking our grant on it ends our ability to read your data.${rotated}`,
+      `Revoking our grant on it ends our ability to read your data.${rotated}${staleness}`,
     href: '/workspace/data',
   };
 }
@@ -841,8 +1086,19 @@ function buildRecommendations(input: {
   activeDirectoryCount: number;
   verifiedDomainCount: number;
   syncErrors: number;
+  ownerCount: number;
 }): PostureRecommendation[] {
   const out: PostureRecommendation[] = [];
+
+  if (input.ownerCount < MIN_RECOMMENDED_OWNERS) {
+    out.push({
+      id: 'second-owner',
+      title: 'Promote a second owner',
+      body: 'A workspace with a single owner cannot be administered if that account is lost, and nobody outside it can restore the role.',
+      href: '/workspace/people',
+      cta: 'Review people',
+    });
+  }
 
   if (!input.configured) {
     out.push({

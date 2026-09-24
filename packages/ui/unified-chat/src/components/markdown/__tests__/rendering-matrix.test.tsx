@@ -247,9 +247,12 @@ describe('code blocks', () => {
 
   it('keeps an inline span inline rather than opening a block', () => {
     const container = renderMarkdown('Call `useMenuKeyboard` before shipping.');
+    const inline = container.querySelector('p code');
 
     expect(container.querySelector('.code-block-container')).toBeNull();
-    expect(container.querySelector('p code')?.textContent).toBe('useMenuKeyboard');
+    expect(inline?.textContent).toBe('useMenuKeyboard');
+    expect(inline?.className).toContain('bg-[var(--chat-surface-hover)]');
+    expect(inline?.className).toContain('text-[var(--chat-text-primary)]');
   });
 
   it('names the code block for a screen reader that lands on the scroll region', () => {

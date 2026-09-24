@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
+import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { useChatStream } from './useChatStream';
 
 const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
@@ -129,6 +130,11 @@ function messageWrites(captured: CapturedRequest[]): Array<Record<string, unknow
   return captured.filter((call) => call.url.includes('/messages')).map((call) => call.body);
 }
 
+function userAdmission(captured: CapturedRequest[]): Record<string, unknown> | undefined {
+  return captured.find((call) => isCompletionsTurn(call.url))?.body['user_message'] as
+    Record<string, unknown> | undefined;
+}
+
 describe('useChatStream, variant-aware context assembly', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
@@ -144,6 +150,44 @@ describe('useChatStream, variant-aware context assembly', () => {
   });
 
   describe('the send path', () => {
+    it('keeps a failed new user turn visible and retryable after a threaded conversation', async () => {
+      seedBranchedConversation(ANSWER_ONE);
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        if (isCompletionsTurn(String(input))) {
+          return new Response(JSON.stringify({ error: { message: 'rate limited' } }), {
+            status: 429,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        return new Response(JSON.stringify({ message: { id: body.id } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('new free prompt', {
+          conversationId: CONVERSATION.id,
+          userMessageId: NEW_ASSISTANT,
+        });
+      });
+
+      const visible = useChatStore.getState().messages;
+      expect(visible.map((row) => row.content)).toContain('new free prompt');
+      expect(visible.at(-1)).toMatchObject({ role: 'assistant', error: true });
+      expect(useChatStore.getState().activeLeafByConversation[CONVERSATION.id]).toBe(
+        visible.at(-1)?.id,
+      );
+      expect(retryableUserMessageId(visible, false)).toBe(NEW_ASSISTANT);
+      const savedRoles = vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) => String(url).includes('/messages'))
+        .map(([, init]) => JSON.parse(String(init?.body)).role);
+      expect(savedRoles).toEqual(['user', 'assistant']);
+    });
+
     it('builds the prompt from the active path only', async () => {
       seedBranchedConversation(USER_TWO);
       const captured = captureRequests();
@@ -184,10 +228,9 @@ describe('useChatStream, variant-aware context assembly', () => {
         await result.current.sendMessage('thanks', { conversationId: CONVERSATION.id });
       });
 
-      const writes = messageWrites(captured);
-      const userWrite = writes.find((body) => body['role'] === 'user');
-      const assistantWrite = writes.find((body) => body['role'] === 'assistant');
-      expect(userWrite?.['parentId']).toBe(USER_TWO);
+      const userWrite = userAdmission(captured);
+      const assistantWrite = messageWrites(captured).find((body) => body['role'] === 'assistant');
+      expect(userWrite?.['parent_id']).toBe(USER_TWO);
       expect(assistantWrite?.['parentId']).toBe(userWrite?.['id']);
     });
   });
@@ -206,6 +249,9 @@ describe('useChatStream, variant-aware context assembly', () => {
       });
 
       expect(messageWrites(captured).some((body) => body['role'] === 'user')).toBe(false);
+      expect(
+        captured.find((call) => isCompletionsTurn(call.url))?.body['assistant_parent_id'],
+      ).toBe(USER_ONE);
       const assistantWrite = messageWrites(captured).find((body) => body['role'] === 'assistant');
       expect(assistantWrite?.['parentId']).toBe(USER_ONE);
     });
@@ -318,9 +364,8 @@ describe('useChatStream, variant-aware context assembly', () => {
         });
       });
 
-      const writes = messageWrites(captured);
-      const userWrite = writes.find((body) => body['role'] === 'user');
-      expect(userWrite?.['parentId']).toBe(ANSWER_ONE);
+      const userWrite = userAdmission(captured);
+      expect(userWrite?.['parent_id']).toBe(ANSWER_ONE);
       expect(useChatStore.getState().messages.map((row) => row.content)).toEqual([
         'what is the capital of france',
         'Paris.',
@@ -398,8 +443,7 @@ describe('useChatStream, variant-aware context assembly', () => {
           });
         });
 
-        const userWrite = messageWrites(captured).find((body) => body['role'] === 'user');
-        expect(userWrite).toHaveProperty('parentId', null);
+        expect(userAdmission(captured)).toHaveProperty('parent_id', null);
       });
 
       it('converts the conversation on the client the way the server does', async () => {

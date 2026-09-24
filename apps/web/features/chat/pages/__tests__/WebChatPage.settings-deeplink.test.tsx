@@ -1,19 +1,19 @@
 import type { ReactNode } from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  settingsParam: null as string | null,
+  queryString: '',
+  sessionId: null as string | null,
   routerReplace: vi.fn(),
   openSettings: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.routerReplace, push: vi.fn(), back: vi.fn() }),
-  useParams: () => ({}),
-  useSearchParams: () =>
-    new URLSearchParams(mocks.settingsParam === null ? '' : [['settings', mocks.settingsParam]]),
-  usePathname: () => '/chat',
+  useParams: () => (mocks.sessionId ? { sessionId: mocks.sessionId } : {}),
+  useSearchParams: () => new URLSearchParams(mocks.queryString),
+  usePathname: () => (mocks.sessionId ? `/chat/${mocks.sessionId}` : '/chat'),
 }));
 
 vi.mock('@clerk/nextjs', () => ({
@@ -41,8 +41,10 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: async () => ({ browserReplyReady: true }),
+  readAutonomousToolApprovalsAllowed: async () => false,
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));
 
@@ -53,7 +55,7 @@ vi.mock('@/lib/hooks/useConversations', async () => {
       conversations: useChatStore((state) => state.conversations),
       isLoading: false,
       createConversation: vi.fn(),
-      loadConversation: vi.fn(),
+      loadConversation: vi.fn(async () => true),
       deleteConversation: vi.fn(),
       updateConversation: vi.fn(async () => true),
       setActiveConversation: vi.fn(),
@@ -170,6 +172,11 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 vi.mock('../../components/dialogs/GlobalSearchDialog', () => ({ GlobalSearchDialog: () => null }));
+vi.mock('../../components/share/ShareConversationDialog', () => ({
+  ShareConversationDialog: ({ open }: { open: boolean }) => (
+    <div data-testid="share-conversation-dialog" data-open={open ? 'true' : 'false'} />
+  ),
+}));
 vi.mock('../../components/dialogs/KeyboardShortcutsDialog', () => ({
   KeyboardShortcutsDialog: () => null,
 }));
@@ -183,7 +190,10 @@ vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
   UpgradeConfirmDialog: () => null,
 }));
 vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
-vi.mock('../../components/ConversationTitleMenu', () => ({ ConversationTitleMenu: () => null }));
+vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/ConversationTitleMenu')>()),
+  ConversationTitleMenu: () => null,
+}));
 vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
 vi.mock('../../components/work-session/WorkSessionPanel', () => ({
   hasWorkSession: () => false,
@@ -206,7 +216,8 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 
 describe('WebChatPage settings deep link query parameter', () => {
   beforeEach(() => {
-    mocks.settingsParam = null;
+    mocks.queryString = '';
+    mocks.sessionId = null;
     mocks.routerReplace.mockClear();
     mocks.openSettings.mockClear();
     useChatStore.getState().reset();
@@ -221,7 +232,7 @@ describe('WebChatPage settings deep link query parameter', () => {
   });
 
   it('opens the settings modal at the section named by ?settings= and strips the query', async () => {
-    mocks.settingsParam = 'archived';
+    mocks.queryString = 'settings=archived';
 
     render(<WebChatPage />);
 
@@ -232,7 +243,7 @@ describe('WebChatPage settings deep link query parameter', () => {
   });
 
   it('ignores a settings query key the web modal cannot render', async () => {
-    mocks.settingsParam = 'not-a-real-section';
+    mocks.queryString = 'settings=not-a-real-section';
 
     render(<WebChatPage />);
 
@@ -241,12 +252,27 @@ describe('WebChatPage settings deep link query parameter', () => {
   });
 
   it('does nothing when no settings query key is present', async () => {
-    mocks.settingsParam = null;
+    mocks.queryString = '';
 
     render(<WebChatPage />);
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(mocks.openSettings).not.toHaveBeenCalled();
     expect(mocks.routerReplace).not.toHaveBeenCalledWith('/chat', { scroll: false });
+  });
+
+  it('opens Share for the selected conversation and consumes the one-time intent', async () => {
+    mocks.sessionId = '00000000-0000-4000-8000-000000000123';
+    mocks.queryString = 'share=true';
+
+    render(<WebChatPage />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('share-conversation-dialog')).toHaveAttribute('data-open', 'true'),
+    );
+    expect(mocks.routerReplace).toHaveBeenCalledWith(
+      '/chat/00000000-0000-4000-8000-000000000123',
+      { scroll: false },
+    );
   });
 });

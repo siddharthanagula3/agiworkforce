@@ -29,7 +29,7 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 function when(iso: string): string {
@@ -57,7 +57,7 @@ function OutcomeChip({ sweep }: { sweep: RetentionSweepRecord }) {
         color: alarming ? 'var(--settings-destructive-text)' : 'var(--text-2)',
         border: `1px solid ${alarming ? 'currentColor' : 'var(--settings-border)'}`,
         borderRadius: 'var(--radius-sm)',
-        padding: '2px 6px',
+        padding: 'var(--space-1) var(--space-2)',
       }}
     >
       {label}
@@ -253,7 +253,7 @@ export function WorkspaceDataControls() {
     return (
       <div
         role="status"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         Loading legal holds…
       </div>
@@ -262,7 +262,7 @@ export function WorkspaceDataControls() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load your legal holds
         </p>
@@ -283,7 +283,7 @@ export function WorkspaceDataControls() {
 
   if (data === null) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           You do not administer this workspace
         </p>

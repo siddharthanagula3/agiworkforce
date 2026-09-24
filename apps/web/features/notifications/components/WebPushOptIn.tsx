@@ -86,7 +86,7 @@ export function WebPushOptIn() {
 
   return (
     <div
-      className="fixed bottom-4 right-4 z-40 w-[min(22rem,calc(100vw-2rem))]"
+      className="fixed bottom-4 right-4 z-[var(--z-panel)] w-[min(22rem,calc(100vw-2rem))]"
       role="region"
       aria-label="Run notifications"
     >

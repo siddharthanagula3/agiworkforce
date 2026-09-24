@@ -11,7 +11,9 @@ export {
   UPLOADED_IMAGE_REFUSAL,
   moderateGeneratedMedia,
   moderateUploadedImage,
+  recordGeneratedMediaProviderRefusal,
   type GeneratedMediaModeration,
+  type OutputModerationReason,
 } from './output-moderation';
 
 export interface ManagedPromptModerationInput {

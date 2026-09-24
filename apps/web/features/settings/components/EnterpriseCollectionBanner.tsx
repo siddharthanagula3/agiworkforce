@@ -20,7 +20,7 @@ const STAGE_TONE: Partial<Record<CollectionStage, BannerTone>> = {
 };
 
 const WARNING_STYLE: React.CSSProperties = {
-  padding: '10px 12px',
+  padding: 'var(--space-3) var(--space-3)',
   borderRadius: 'var(--radius-md)',
   border: '1px solid var(--chat-warning-border)',
   background: 'var(--chat-warning-bg)',
@@ -30,7 +30,7 @@ const WARNING_STYLE: React.CSSProperties = {
 };
 
 const DESTRUCTIVE_STYLE: React.CSSProperties = {
-  padding: '10px 12px',
+  padding: 'var(--space-3) var(--space-3)',
   borderRadius: 'var(--radius-md)',
   border: '1px solid var(--settings-destructive-text)',
   color: 'var(--settings-destructive-text)',

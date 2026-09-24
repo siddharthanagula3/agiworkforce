@@ -8,7 +8,12 @@ const state = vi.hoisted(() => ({
   workspaces: [] as WorkspaceSummary[],
   isLoading: false,
   isError: false,
+  switchPending: false,
+  switchError: null as Error | null,
+  switchVariables: undefined as string | null | undefined,
+  interruptions: [] as { kind: string; description: string }[],
   mutate: vi.fn(),
+  reset: vi.fn(),
   refetch: vi.fn(),
 }));
 
@@ -27,7 +32,21 @@ vi.mock('@/features/workspaces/hooks/use-workspaces', () => ({
     isError: state.isError,
     refetch: state.refetch,
   }),
-  useSelectWorkspace: () => ({ mutate: state.mutate, isPending: false }),
+  useSelectWorkspace: () => ({
+    mutate: state.mutate,
+    reset: state.reset,
+    isPending: state.switchPending,
+    isError: state.switchError !== null,
+    error: state.switchError,
+    variables: state.switchVariables,
+  }),
+}));
+
+vi.mock('@/features/workspaces/lib/workspace-switch-interruptions', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/workspaces/lib/workspace-switch-interruptions')
+  >()),
+  useWorkspaceSwitchInterruptions: () => state.interruptions,
 }));
 
 vi.mock('@agiworkforce/ui', () => ({
@@ -78,8 +97,21 @@ describe('WorkspaceMenuItems', () => {
     state.workspaces = [];
     state.isLoading = false;
     state.isError = false;
+    state.switchPending = false;
+    state.switchError = null;
+    state.switchVariables = undefined;
+    state.interruptions = [];
     vi.clearAllMocks();
   });
+
+  function twoWorkspaces() {
+    state.scope = 'organization';
+    state.activeWorkspaceId = ORG_ONE;
+    state.workspaces = [
+      organizationWorkspace(ORG_ONE, 'Current Team', 'owner'),
+      organizationWorkspace(ORG_TWO, 'Invited Team', 'member'),
+    ];
+  }
 
   it('shows Personal as the selected durable scope and opens management', () => {
     const onManage = vi.fn();
@@ -140,5 +172,67 @@ describe('WorkspaceMenuItems', () => {
     render(<WorkspaceMenuItems onManage={vi.fn()} />);
 
     expect(screen.getByRole('status')).toBeVisible();
+  });
+
+  it('switches without a confirmation when nothing would be interrupted', () => {
+    twoWorkspaces();
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Invited Team member/i }));
+
+    expect(state.mutate).toHaveBeenCalledWith(ORG_TWO);
+    expect(screen.queryByRole('button', { name: 'Switch anyway' })).toBeNull();
+  });
+
+  it('names the work a switch would end before it ends it', () => {
+    twoWorkspaces();
+    state.interruptions = [
+      { kind: 'draft', description: 'You have an unsent message.' },
+      { kind: 'upload', description: 'A file is still uploading.' },
+    ];
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Invited Team member/i }));
+
+    expect(state.mutate).not.toHaveBeenCalled();
+    expect(screen.getByText('Invited Team')).toBeVisible();
+    expect(screen.getByText('You have an unsent message.')).toBeVisible();
+    expect(screen.getByText('A file is still uploading.')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch anyway' }));
+    expect(state.mutate).toHaveBeenCalledWith(ORG_TWO);
+  });
+
+  it('leaves the workspace unchanged when the interruption warning is declined', () => {
+    twoWorkspaces();
+    state.interruptions = [{ kind: 'reply', description: 'A reply is still being written.' }];
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Invited Team member/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stay in this workspace' }));
+
+    expect(state.mutate).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Invited Team member/i })).toBeVisible();
+  });
+
+  it('shows the switch in progress rather than closing onto the old workspace', () => {
+    twoWorkspaces();
+    state.switchPending = true;
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    expect(screen.getByText('Switching workspace')).toBeVisible();
+    expect(screen.getByRole('button', { name: /Invited Team member/i })).toBeDisabled();
+  });
+
+  it('reports a failed switch instead of leaving the user in the old workspace silently', () => {
+    twoWorkspaces();
+    state.switchError = new Error('We could not switch workspaces. Try again.');
+    state.switchVariables = ORG_TWO;
+    render(<WorkspaceMenuItems onManage={vi.fn()} />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('We could not switch workspaces.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try switching again' }));
+    expect(state.mutate).toHaveBeenCalledWith(ORG_TWO);
   });
 });

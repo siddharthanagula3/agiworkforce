@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { CreditService } from '../credit-service';
+import {
+  CreditService,
+  creditBalanceHasAvailableMicrousd,
+  type CreditBalance,
+} from '../credit-service';
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -22,6 +26,47 @@ const operation = {
   metadata: { requestId: 'req-123', type: 'reconciliation' },
   idempotencyKey: 'user-123:reconciliation:req-123',
 };
+
+const balance: CreditBalance = {
+  account_id: 'account-1',
+  period_start: '2026-09-01T00:00:00.000Z',
+  period_end: '2026-10-01T00:00:00.000Z',
+  credits_allocated_microusd: 1_000,
+  credits_used_microusd: 200,
+  credits_remaining_microusd: 800,
+  daily_limit_microusd: 500,
+  daily_used_microusd: 100,
+  daily_remaining_microusd: 400,
+  credits_allocated_cents: 0,
+  credits_used_cents: 0,
+  credits_remaining_cents: 0,
+};
+
+describe('creditBalanceHasAvailableMicrousd', () => {
+  it('uses one balance snapshot for both period and daily limits', () => {
+    expect(creditBalanceHasAvailableMicrousd(balance, 400)).toBe(true);
+    expect(creditBalanceHasAvailableMicrousd(balance, 401)).toBe(false);
+    expect(
+      creditBalanceHasAvailableMicrousd({ ...balance, daily_remaining_microusd: undefined }, 800),
+    ).toBe(true);
+  });
+
+  it('fails closed without an account or with an invalid amount', () => {
+    expect(creditBalanceHasAvailableMicrousd(null, 1)).toBe(false);
+    expect(creditBalanceHasAvailableMicrousd({ ...balance, account_id: '' }, 1)).toBe(false);
+    expect(creditBalanceHasAvailableMicrousd(balance, -1)).toBe(false);
+  });
+
+  it('lets the service reuse the loaded snapshot without a second database read', async () => {
+    const query = vi.fn();
+
+    await expect(
+      CreditService.checkAvailableMicrousd(databaseWithQuery(query), 'user-123', 400, balance),
+    ).resolves.toBe(true);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+});
 
 describe('CreditService.settleCreditsDurably', () => {
   beforeEach(() => {

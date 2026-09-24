@@ -81,18 +81,46 @@ export interface FileInputBlock {
  * `EmptyProviderResponseError`, so an error crossing a package boundary is
  * still recognised when two copies of the module exist.
  */
+/**
+ * Why the file cannot be inlined, which is the only thing that decides the
+ * sentence the user reads. `not_text` is not a property of the route: no model
+ * can read bytes that are not characters, so a refusal that named a capability
+ * would send the reader to change a model that would refuse it too.
+ */
+export type UnsupportedFileInputReason =
+  | { readonly kind: 'model_cannot_read'; readonly capability: string }
+  | { readonly kind: 'not_text' };
+
+function unsupportedFileInputMessage(
+  filename: string,
+  mediaType: string,
+  reason: UnsupportedFileInputReason,
+): string {
+  if (reason.kind === 'not_text') {
+    return (
+      `${filename} is labelled ${mediaType} but its bytes are not valid text, so it cannot be ` +
+      'read. Save it as UTF-8 and attach it again.'
+    );
+  }
+  return (
+    `${filename} is a ${mediaType} file, which this model cannot read: ${reason.capability}. ` +
+    'Choose a model that accepts documents, or attach the content as text.'
+  );
+}
+
 export class UnsupportedFileInputError extends Error {
   override readonly name = UNSUPPORTED_FILE_INPUT_ERROR_NAME;
   readonly filename: string;
   readonly mediaType: string;
+  readonly reason: UnsupportedFileInputReason['kind'];
 
-  constructor(filename: string, mediaType: string, capability: string) {
-    super(
-      `${filename} is a ${mediaType} file, which this model cannot read: ${capability}. ` +
-        'Choose a model that accepts documents, or attach the content as text.',
-    );
+  constructor(filename: string, mediaType: string, reason: string | UnsupportedFileInputReason) {
+    const resolved: UnsupportedFileInputReason =
+      typeof reason === 'string' ? { kind: 'model_cannot_read', capability: reason } : reason;
+    super(unsupportedFileInputMessage(filename, mediaType, resolved));
     this.filename = filename;
     this.mediaType = mediaType;
+    this.reason = resolved.kind;
   }
 }
 
@@ -112,8 +140,34 @@ export function isTextLikeFileMediaType(mediaType: string): boolean {
   return STRUCTURED_TEXT_SUFFIXES.some((suffix) => bare.endsWith(suffix));
 }
 
+/**
+ * A byte order mark is the file stating its own encoding, which is the only
+ * case read as anything but UTF-8. An encoding is never guessed from content: a
+ * wrong guess turns names into other names and nothing downstream can tell.
+ */
+function encodingStatedByBom(bytes: Uint8Array): 'utf-8' | 'utf-16le' | 'utf-16be' {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le';
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be';
+  return 'utf-8';
+}
+
+/**
+ * Decoding refuses rather than repairs. A lenient decode turns every byte it
+ * does not understand into U+FFFD, so a file in the wrong encoding, or one that
+ * is not text at all under a text media type, reached the model as fluent
+ * nonsense and was answered as though it said something.
+ *
+ * @throws UnsupportedFileInputError when the bytes are not valid UTF-8.
+ */
 export function decodeTextFileBlock(block: FileInputBlock): string {
-  return Buffer.from(block.source.data, 'base64').toString('utf8');
+  const bytes = Buffer.from(block.source.data, 'base64');
+  try {
+    return new TextDecoder(encodingStatedByBom(bytes), { fatal: true }).decode(bytes);
+  } catch {
+    throw new UnsupportedFileInputError(block.filename, block.source.mediaType, {
+      kind: 'not_text',
+    });
+  }
 }
 
 /**

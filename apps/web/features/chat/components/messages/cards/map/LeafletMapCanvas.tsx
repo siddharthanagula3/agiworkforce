@@ -217,11 +217,11 @@ export function LeafletMapCanvas({
         aria-label={label}
         data-testid="places-map-canvas"
         data-tiles-dimmed={tileStyle.dim ? 'true' : undefined}
-        className="absolute inset-0 z-0 bg-[var(--chat-surface-hover)]"
+        className="absolute inset-0 z-[var(--z-base)] bg-[var(--chat-surface-hover)]"
         style={tileStyle.dim ? { filter: DIMMED_TILE_FILTER } : undefined}
       />
 
-      <div className="pointer-events-none absolute inset-0 z-10">
+      <div className="pointer-events-none absolute inset-0 z-[var(--z-control)]">
         {points.map((point) => {
           const projected = projections[point.key];
           if (!projected) return null;
@@ -237,7 +237,7 @@ export function LeafletMapCanvas({
         })}
       </div>
 
-      <div className="absolute bottom-3 left-3 z-20 flex flex-col gap-1">
+      <div className="absolute bottom-3 left-3 z-[var(--z-content-sticky)] flex flex-col gap-1">
         <button
           type="button"
           onClick={() => changeZoom(1)}

@@ -11,8 +11,10 @@ import { readJsonBody } from '@/lib/read-json-body';
 import type { ScimGroupRow } from '@/lib/server/neon-types';
 import {
   getScimGroupMembers,
+  groupRevocationPayload,
   reconcileGroupMembers,
   recordSyncEvent,
+  revokeCredentialsAfterScimRemoval,
   type ProvisionedRole,
 } from '@/lib/server/scim/scim-provisioning-service';
 import { isDirectorySyncAccessFailure, requireDirectorySyncAdmin } from '../directory-sync-access';
@@ -154,7 +156,7 @@ export async function PATCH(request: NextRequest) {
       organizationId: access.organizationId,
     };
 
-    const reconciledMembers = await db.transaction(async (tx) => {
+    const { reconciledMembers, revokedUserIds } = await db.transaction(async (tx) => {
       await tx.execute(
         `update scim_groups
             set mapped_role = $3, version = version + 1
@@ -163,13 +165,21 @@ export async function PATCH(request: NextRequest) {
       );
 
       const members = await getScimGroupMembers(tx, ctx, groupId);
-      await reconcileGroupMembers(
-        tx,
-        ctx,
-        members.map((member) => member.id),
-      );
-      return members.length;
+      return {
+        reconciledMembers: members.length,
+        revokedUserIds: await reconcileGroupMembers(
+          tx,
+          ctx,
+          members.map((member) => member.id),
+        ),
+      };
     });
+
+    const revocationWarnings = await revokeCredentialsAfterScimRemoval(
+      db,
+      access.organizationId,
+      revokedUserIds,
+    );
 
     await recordSyncEvent(db, ctx, {
       eventType: 'group.role_mapping_changed',
@@ -179,6 +189,7 @@ export async function PATCH(request: NextRequest) {
         previousRole: existing.mapped_role,
         mappedRole: nextRole,
         membersReconciled: reconciledMembers,
+        ...groupRevocationPayload(revokedUserIds, revocationWarnings),
       },
     });
 

@@ -51,7 +51,7 @@ describe('sidebar Code control', () => {
     expect(code.className).toContain('h-8');
     expect(code.className).toContain('w-8');
     expect(code.className).toContain('rounded-lg');
-    expect(code.className).toContain('bg-[hsl(var(--muted))]');
+    expect(code.className).toContain('bg-muted');
   });
 
   it('renders in the collapsed icon rail, immediately after New chat', () => {

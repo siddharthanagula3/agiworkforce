@@ -270,6 +270,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 conversation operations per minute
     failClosed: false,
   },
+  'chat-conversation-read': {
+    limit: 120,
+    window: '1 m',
+    failClosed: false,
+  },
   'chat-conversation-list': {
     // The sidebar reads this list on every page load, on every navigation, and
     // again whenever a conversation changes, while `chat-conversation` is a
@@ -798,6 +803,7 @@ const TIER_SCALED_KEYS: ReadonlySet<RateLimitKey> = new Set<RateLimitKey>([
   'llm-completion',
   'chat-message',
   'chat-conversation',
+  'chat-conversation-read',
   'chat-conversation-list',
   'prompt-completion',
   'image-generation',

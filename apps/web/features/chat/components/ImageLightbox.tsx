@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Download, ZoomIn, ZoomOut, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 
 export interface LightboxImage {
   src: string;
@@ -22,6 +23,7 @@ const MAX_ZOOM = 3;
 const DEFAULT_ZOOM = 1;
 
 export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightboxProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const count = images.length;
   const [index, setIndex] = useState(() =>
@@ -42,9 +44,7 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      } else if (e.key === 'ArrowLeft' && canNavigate) {
+      if (e.key === 'ArrowLeft' && canNavigate) {
         setIndex((i) => (i - 1 + count) % count);
         setZoom(DEFAULT_ZOOM);
       } else if (e.key === 'ArrowRight' && canNavigate) {
@@ -58,8 +58,10 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
         setZoom(DEFAULT_ZOOM);
       }
     },
-    [onClose, canNavigate, count],
+    [canNavigate, count],
   );
+
+  useDialogKeyboard({ open: true, onClose, panelRef });
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -95,14 +97,15 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
 
   return (
     <div
+      ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-label="Image preview"
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/80 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
       {/* Toolbar */}
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+      <div className="absolute top-4 right-4 z-[var(--z-control)] flex items-center gap-2">
         {/* Position in the set. Only meaningful with somewhere to go. */}
         {canNavigate && (
           <span
@@ -199,7 +202,7 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
             type="button"
             onClick={() => goTo(index - 1)}
             className={cn(
-              'absolute left-4 top-1/2 z-10 -translate-y-1/2',
+              'absolute left-4 top-1/2 z-[var(--z-control)] -translate-y-1/2',
               'flex h-11 w-11 items-center justify-center rounded-full',
               'bg-white/10 text-white hover:bg-white/20 transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60',
@@ -212,7 +215,7 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
             type="button"
             onClick={() => goTo(index + 1)}
             className={cn(
-              'absolute right-4 top-1/2 z-10 -translate-y-1/2',
+              'absolute right-4 top-1/2 z-[var(--z-control)] -translate-y-1/2',
               'flex h-11 w-11 items-center justify-center rounded-full',
               'bg-white/10 text-white hover:bg-white/20 transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60',
@@ -230,7 +233,7 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
           key={current.src}
           src={current.src}
           alt={current.alt ?? 'Image preview'}
-          className="transition-transform duration-200 ease-out"
+          className="transition-transform duration-quick ease-standard"
           style={{
             transform: `scale(${zoom})`,
             maxWidth: '90vw',

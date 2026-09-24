@@ -1,8 +1,12 @@
 # Leading AI product clients: primary-source reference
 
-Status: Current
+Status: Historical snapshot
 Owner: Repository maintainers
 Last updated: 2026-09-14
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. The primary-source findings
+below remain the September 14 record; later vendor changes use the newer file.
 
 Every fact is sourced from an official document (vendor docs/help center, changelog, release notes, extension-store listing, or official blog) read on 2026-09-14; URL and access date follow each claim. Where an official source could not be reached or confirmed, the claim is marked UNVERIFIED rather than asserted. No specific AI model name or version appears anywhere below. Model pickers are described only as generic controls ("model picker," "effort levels"); effort-level names (e.g. low/medium/high) are not model names and are listed where documented.
 

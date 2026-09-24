@@ -26,7 +26,7 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 const secondaryButtonClass =
@@ -118,7 +118,7 @@ export function WorkspaceAuditStreaming() {
     return (
       <div
         className="flex items-center gap-2"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         <Spinner size="sm" />
         Loading audit streaming…
@@ -128,7 +128,7 @@ export function WorkspaceAuditStreaming() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load audit streaming
         </p>

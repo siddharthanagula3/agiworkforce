@@ -53,7 +53,7 @@ const DEFAULT_SECTIONS: ShortcutSection[] = [
 
 function KeyBadge({ label }: { label: string }) {
   return (
-    <kbd className="bg-white/10 border border-white/20 rounded px-2 py-0.5 text-xs font-mono">
+    <kbd className="bg-white/10 border border-white/20 rounded-compact px-2 py-0.5 text-xs font-mono">
       {label}
     </kbd>
   );
@@ -62,12 +62,12 @@ function KeyBadge({ label }: { label: string }) {
 function ShortcutRow({ description, keys }: ShortcutItem) {
   return (
     <div className="flex items-center justify-between gap-4 py-2 px-3 rounded-md hover:bg-white/5 transition-colors">
-      <span className="text-sm text-[hsl(var(--foreground))]/80">{description}</span>
+      <span className="text-sm text-muted-foreground">{description}</span>
       <div className="flex items-center gap-1 shrink-0">
         {keys.map((key, idx) => (
           <span key={idx} className="flex items-center gap-0.5">
             {idx > 0 && (
-              <span className="text-[hsl(var(--muted-foreground))] text-xs mx-0.5">+</span>
+              <span className="text-muted-foreground text-xs mx-0.5">+</span>
             )}
             <KeyBadge label={key} />
           </span>
@@ -79,13 +79,13 @@ function ShortcutRow({ description, keys }: ShortcutItem) {
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[hsl(var(--border))] overflow-hidden">
-      <div className="px-3 py-2 bg-[hsl(var(--muted))]/40 border-b border-[hsl(var(--border))]">
-        <span className="text-xs font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="px-3 py-2 bg-muted/40 border-b border-border">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {title}
         </span>
       </div>
-      <div className="divide-y divide-[hsl(var(--border))]/50">{children}</div>
+      <div className="divide-y divide-border/50">{children}</div>
     </div>
   );
 }
@@ -132,7 +132,7 @@ export function KeyboardShortcutsOverlay({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[var(--z-modal)] bg-black/60 backdrop-blur-sm"
             onClick={onClose}
             aria-hidden="true"
           />
@@ -147,17 +147,17 @@ export function KeyboardShortcutsOverlay({
             aria-modal="true"
             aria-label="Keyboard shortcuts"
             className={cn(
-              'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
+              'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[var(--z-modal)]',
               'w-full max-w-2xl max-h-[85vh]',
-              'bg-[hsl(var(--card))] border border-[hsl(var(--border))]',
+              'bg-card border border-border',
               'rounded-2xl shadow-2xl flex flex-col overflow-hidden',
             )}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))] shrink-0">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
-                <Keyboard className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
-                <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">
+                <Keyboard className="h-5 w-5 text-muted-foreground" />
+                <h2 className="text-base font-semibold text-foreground">
                   Keyboard Shortcuts
                 </h2>
               </div>
@@ -166,7 +166,7 @@ export function KeyboardShortcutsOverlay({
                 size="icon"
                 onClick={onClose}
                 aria-label="Close shortcuts overlay"
-                className="h-8 w-8 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -186,10 +186,10 @@ export function KeyboardShortcutsOverlay({
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-3 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30 flex items-center justify-between shrink-0">
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            <div className="px-5 py-3 border-t border-border bg-muted/30 flex items-center justify-between shrink-0">
+              <p className="text-xs text-muted-foreground">
                 Press{' '}
-                <kbd className="bg-[hsl(var(--muted))] border border-[hsl(var(--border))] rounded px-1.5 py-0.5 text-[12px] font-mono">
+                <kbd className="bg-muted border border-border rounded-compact px-1.5 py-0.5 text-caption font-mono">
                   Esc
                 </kbd>{' '}
                 to close
@@ -201,7 +201,7 @@ export function KeyboardShortcutsOverlay({
                     onClose();
                     onOpenSettings();
                   }}
-                  className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] underline underline-offset-2 transition-colors"
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                 >
                   Customize shortcuts in Settings
                 </button>

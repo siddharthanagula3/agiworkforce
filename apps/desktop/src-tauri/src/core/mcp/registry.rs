@@ -530,6 +530,26 @@ impl McpToolRegistry {
         }
     }
 
+    pub fn select_tool_definitions(
+        &self,
+        turn_text: &str,
+    ) -> crate::core::mcp::schema_budget::ToolSchemaSelection {
+        let mut tools = self.mcp_client.list_all_tools();
+        tools.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.name.cmp(&b.1.name)));
+        let candidates = tools
+            .into_iter()
+            .map(|(server_name, mcp_tool)| {
+                let definition = self.to_tool_definition(&server_name, &mcp_tool);
+                crate::core::mcp::schema_budget::ToolSchemaCandidate {
+                    server_name,
+                    tool_name: mcp_tool.name,
+                    definition,
+                }
+            })
+            .collect();
+        crate::core::mcp::schema_budget::select_tool_schemas(candidates, turn_text)
+    }
+
     pub fn get_all_tool_definitions(&self) -> Vec<crate::core::llm::ToolDefinition> {
         let tools = self.mcp_client.list_all_tools();
         tools

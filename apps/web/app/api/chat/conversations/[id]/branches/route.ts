@@ -23,7 +23,7 @@ export const runtime = 'nodejs';
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleGet(request: NextRequest, context: RouteContext): Promise<NextResponse> {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation-read');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id: conversationId } = await context.params;

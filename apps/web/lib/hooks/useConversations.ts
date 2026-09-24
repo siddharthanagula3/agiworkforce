@@ -5,10 +5,14 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { useSession } from '@/lib/identity/client';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
 import { useChatStore, type Conversation, type Message } from '@shared/stores/web-chat-store';
+import { useModelStore } from '@shared/stores/model-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { resolveNewChatTemporary } from '@/lib/temporary-chat-policy';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
+import { readPersistedRouteLane } from '@/features/chat/lib/routeLane';
+import { hasPendingDraftClear } from '@/features/chat/lib/pending-draft-clear';
+import { observeConversationDraftRevision } from '@/features/chat/services/conversation-draft';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE,
@@ -159,6 +163,7 @@ export function toWebConversation(
     id: conversation.id,
     title: conversation.title,
     model: conversation.model ?? null,
+    selectedRouteId: conversation.selectedRouteId ?? null,
     projectId: conversation.projectId,
     isPinned: conversation.pinned,
     isStarred: conversation.starred,
@@ -194,7 +199,7 @@ interface UseConversationsReturn {
     title?: string,
     model?: string,
     projectId?: string | null,
-    options?: { isTemporary?: boolean },
+    options?: { isTemporary?: boolean; selectedRouteId?: string | null },
   ) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (
@@ -202,6 +207,7 @@ interface UseConversationsReturn {
     updates: {
       title?: string;
       model?: string;
+      selectedRouteId?: string | null;
       projectId?: string | null;
       pinned?: boolean;
       starred?: boolean;
@@ -420,19 +426,25 @@ export function useConversations(): UseConversationsReturn {
       title?: string,
       model?: string,
       projectId?: string | null,
-      options?: { isTemporary?: boolean },
+      options?: { isTemporary?: boolean; selectedRouteId?: string | null },
     ): Promise<Conversation | null> => {
       setIsCreatingConversation(true);
       setError(null);
 
       try {
         const headers = await addCsrfHeaders(await getAuthHeaders());
+        const selectedModelState = useModelStore.getState();
+        const selectedRouteId =
+          options?.selectedRouteId === undefined && model === selectedModelState.selectedModelId
+            ? selectedModelState.selectedRouteId
+            : options?.selectedRouteId;
         const response = await fetch('/api/chat/conversations', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             title: title || 'New conversation',
             model,
+            ...(selectedRouteId ? { selectedRouteId } : {}),
             ...(projectId ? { projectId } : {}),
             // Sent AT CREATION, not applied afterwards. Marking a conversation
             // temporary in a follow-up write races the first message's save,
@@ -452,6 +464,16 @@ export function useConversations(): UseConversationsReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
+          if (response.status === 429) {
+            const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
+            const seconds =
+              retryAfterMs === null ? null : Math.max(1, Math.ceil(retryAfterMs / 1000));
+            const retryMessage =
+              seconds === null
+                ? 'This account is sending requests too quickly. Wait a moment and try again.'
+                : `This account is sending requests too quickly. Try again in about ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`;
+            throw Object.assign(new Error(retryMessage), { status: response.status });
+          }
           throw httpResponseError(response, errorData);
         }
 
@@ -530,13 +552,16 @@ export function useConversations(): UseConversationsReturn {
         }
         const loadedConversation = toWebConversation(loadedConversationWire);
         upsertConversation(loadedConversation);
+        observeConversationDraftRevision(id, loadedConversationWire.draft_updated_at);
 
         // A draft this device has not seen belongs in the composer: it was
         // typed on another machine, or before a reload here. A draft already
         // parked locally wins, because it is what the person in front of this
         // composer typed most recently.
         const serverDraft = loadedConversationWire.draft?.trim() ?? '';
-        if (serverDraft && !useChatStore.getState().getDraftContent(id)) {
+        if (hasPendingDraftClear(id) && !useChatStore.getState().getDraftContent(id)) {
+          useChatStore.getState().clearDraftContent(id);
+        } else if (serverDraft && !useChatStore.getState().getDraftContent(id)) {
           useChatStore.getState().setDraftContent(serverDraft, id);
         }
 
@@ -554,6 +579,7 @@ export function useConversations(): UseConversationsReturn {
             parentId: m.parent_id ?? null,
             model: m.model ?? undefined,
             provider: m.provider ?? undefined,
+            routeLane: readPersistedRouteLane(metadata),
             isStreaming: resumesVideo,
             attachments: readPersistedAttachments(metadata?.attachments),
             metadata,
@@ -604,6 +630,7 @@ export function useConversations(): UseConversationsReturn {
       updates: {
         title?: string;
         model?: string;
+        selectedRouteId?: string | null;
         projectId?: string | null;
         pinned?: boolean;
         starred?: boolean;
@@ -631,6 +658,7 @@ export function useConversations(): UseConversationsReturn {
         updateConversationInStore(id, {
           title: data.conversation.title ?? 'Untitled',
           model: data.conversation.model ?? undefined,
+          selectedRouteId: data.conversation.selected_route_id ?? null,
           projectId: data.conversation.project_id ?? null,
           isPinned: data.conversation.pinned ?? false,
           isStarred: data.conversation.starred ?? false,

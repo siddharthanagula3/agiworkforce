@@ -27,7 +27,7 @@ function formatDate(value: string): string {
 }
 
 const actionButtonStyle = {
-  padding: '6px 12px',
+  padding: 'var(--space-2) var(--space-3)',
   fontSize: 12,
   fontWeight: 600,
   color: 'var(--text-2)',
@@ -96,7 +96,7 @@ export function SharedLinksSection() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <div>
         <SettingsSectionLink
           section="privacy"
@@ -117,7 +117,7 @@ export function SharedLinksSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '10px 0 4px',
+            margin: 'var(--space-3) 0 var(--space-1)',
           }}
         >
           Shared links
@@ -151,24 +151,24 @@ export function SharedLinksSection() {
         }}
       >
         {loading ? (
-          <p style={{ margin: 0, padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+          <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading shared links…
           </p>
         ) : error ? (
-          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               Shared links could not be loaded
             </div>
-            <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+            <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
               This is not the same as having no shared links. Retry above to load them.
             </p>
           </div>
         ) : shares.length === 0 ? (
-          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               No shared links
             </div>
-            <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+            <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
               Links you create from a conversation will appear here.
             </p>
           </div>
@@ -179,12 +179,12 @@ export function SharedLinksSection() {
               <div
                 key={share.token}
                 style={{
-                  padding: '16px 20px',
+                  padding: 'var(--space-4) var(--space-5)',
                   borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 16,
+                  gap: 'var(--space-4)',
                 }}
               >
                 <div style={{ minWidth: 0 }}>
@@ -200,7 +200,9 @@ export function SharedLinksSection() {
                   >
                     {share.title}
                   </div>
-                  <div style={{ marginTop: 3, color: 'var(--text-3)', fontSize: 12 }}>
+                  <div
+                    style={{ marginTop: 'var(--space-1)', color: 'var(--text-3)', fontSize: 12 }}
+                  >
                     {share.messageCount} {share.messageCount === 1 ? 'message' : 'messages'} ·{' '}
                     {share.visibility === 'organization'
                       ? 'Workspace only'
@@ -208,7 +210,7 @@ export function SharedLinksSection() {
                     · {share.expired ? 'Expired' : `Expires ${formatDate(share.expiresAt)}`}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
                   <a
                     href={share.shareUrl}
                     target="_blank"

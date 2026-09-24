@@ -119,7 +119,9 @@ describe('ComposerFooter · model selector integration', () => {
 
   it('renders the model selector button with aria-label', () => {
     render(<ComposerFooter />);
-    expect(screen.getByRole('button', { name: /change model/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /change model/i })).toHaveClass(
+      'pointer-coarse:min-h-11',
+    );
   });
 
   it('hides model selector when showModelSelector=false', () => {

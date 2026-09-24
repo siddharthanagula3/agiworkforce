@@ -1,32 +1,31 @@
 use agiworkforce_app_server::{DeveloperSessionHost, DeveloperSessionHostError};
 use agiworkforce_protocol::agent_events::{
-    AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventFileChangeKind,
-    AgentEventFileChanged, AgentEventProgressStatus, AgentEventProgressUpdate,
-    AgentEventToolExecutionEnd, AgentEventToolExecutionQueued, AgentEventToolExecutionStart,
-    AgentEventTurnDiff,
+    AgentEvent, AgentEventArtifactProduced, AgentEventCommandStarted, AgentEventError,
+    AgentEventFileChangeKind, AgentEventFileChanged, AgentEventProgressStatus,
+    AgentEventProgressUpdate, AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
+    AgentEventToolExecutionQueued, AgentEventToolExecutionStart, AgentEventTurnDiff,
 };
 use agiworkforce_protocol::developer_session::{
     agent_event_notification, task_state_notification, AccountLoginOutcome, AccountLoginResponse,
     AccountLoginWaitParams, AccountLoginWaitResponse, AccountSource, AccountStatusParams,
     AccountStatusResponse, AccountTokenResponse, ActiveTurnSnapshot, AppServerCapabilities,
     AppServerClientInfo, AppServerNotification, ApprovalResponseParams, ContextInstructionsParams,
-    ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome,
-    DeveloperFileChangeKind, DeveloperMessage, DeveloperReasoningEffort, DeveloperRoutingTaskType,
-    DeveloperSessionApproval, DeveloperSessionFileChange, DeveloperSessionHandoff,
-    DeveloperSessionSource, DeveloperSessionTrustMode, DeveloperSessionWriter,
-    DeveloperSessionWriterChange, HandoffAdmission, HandoffAdmissionContext, HandoffEnvironment,
-    HandoffLastTurn, HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookListResponse,
-    HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
-    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    ModelListParams, PendingApprovalSnapshot, PluginListResponse, PluginSetEnabledParams,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillListResponse, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
-    ThreadWriterChangedNotification, ThreadWriterConflictData, TurnEndedNotification, TurnFailure,
-    TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus,
-    TurnSteerParams, TurnSummary,
+    ContextInstructionsResponse, DeveloperAgentMode, DeveloperApprovalOutcome, DeveloperMessage,
+    DeveloperReasoningEffort, DeveloperRoutingTaskType, DeveloperSessionApproval,
+    DeveloperSessionHandoff, DeveloperSessionSource, DeveloperSessionTrustMode,
+    DeveloperSessionWriter, DeveloperSessionWriterChange, HandoffAdmission,
+    HandoffAdmissionContext, HandoffEnvironment, HandoffLastTurn, HandoffLocalResource,
+    HandoffRefusal, HandoffTurnState, HookListResponse, HostModelSummary, LocalModelListResponse,
+    LocalModelProvider, LocalModelSummary, McpLoginParams, McpLoginResponse,
+    McpServerConfiguredStatus, McpServerListResponse, ModelListParams, PendingApprovalSnapshot,
+    PluginListResponse, PluginSetEnabledParams, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillListResponse, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadStartParams,
+    ThreadStatus, ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
+    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
+    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -48,6 +47,7 @@ use crate::context;
 use crate::models::{self, ContentBlock};
 use crate::models::{OllamaMode, Provider};
 use crate::platform::policy::{PolicyDecision, PolicyEngine};
+use crate::runtime::change_reason::ChangeReason;
 use crate::runtime::session::{
     ManagedSession, ManagedSessionApprovalOutcome, ManagedSessionAutoRouting,
     ManagedSessionFileChangeKind,
@@ -57,7 +57,9 @@ use crate::runtime::session_control::{
     ManagedSessionReference, ManagedSessionStore, ManagedSessionSummary,
     ResolvedManagedSessionReference,
 };
-use crate::runtime::session_handoff::{developer_session_handoff, HandoffContext};
+use crate::runtime::session_handoff::{
+    developer_session_handoff, file_change_record, HandoffContext,
+};
 use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
 
@@ -1350,6 +1352,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         managed.fallback_model_ids = (!resolved_model.fallback_model_ids.is_empty())
             .then_some(resolved_model.fallback_model_ids);
         managed.workspace_root = Some(self.workspace_root.clone());
+        managed.architecture = crate::runtime::architecture::discover(&self.workspace_root);
         managed.created_by = Some(source_to_stored(source).to_string());
         managed.client = Some(client.name.clone());
         let git = workspace_git_state(&self.workspace_root);
@@ -2051,6 +2054,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut final_status = TurnStatus::Completed;
             let mut final_error: Option<String> = None;
             let mut final_failure: Option<TurnFailure> = None;
+            let mut final_incomplete: Option<crate::errors::IncompleteTurnCause> = None;
             let mut last_response = String::new();
             let mut cumulative_input_tokens = 0u32;
             let mut cumulative_output_tokens = 0u32;
@@ -2146,6 +2150,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 match result {
                     Ok(turn) => {
                         last_response = turn.response;
+                        final_incomplete = turn.incomplete;
                         cumulative_input_tokens =
                             cumulative_input_tokens.saturating_add(turn.input_tokens);
                         cumulative_output_tokens =
@@ -2241,6 +2246,37 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         summary: progress_summary.to_string(),
                         detail: progress_detail,
                         status: progress_status,
+                    }),
+                );
+                // A delivered answer the provider cut short is diagnostic
+                // detail followed by a terminal stop, the two-step shape this
+                // envelope documents, not a failed turn: the text is real.
+                if let Some(cause) = final_incomplete {
+                    emit_agent_event(
+                        &task_thread_id,
+                        &task_turn_id,
+                        &task_event_sequence,
+                        &task_notifications,
+                        AgentEvent::Error(AgentEventError {
+                            message: cause.notice(),
+                            code: Some(cause.kind().to_string()),
+                            retryable: Some(cause.code().is_retryable()),
+                            retry_after_seconds: None,
+                            request_id: None,
+                        }),
+                    );
+                }
+                emit_agent_event(
+                    &task_thread_id,
+                    &task_turn_id,
+                    &task_event_sequence,
+                    &task_notifications,
+                    AgentEvent::Stop(AgentEventStop {
+                        reason: settled_stop_reason(
+                            final_status,
+                            final_failure.as_ref(),
+                            final_incomplete,
+                        ),
                     }),
                 );
             }
@@ -2944,21 +2980,6 @@ fn approval_record(
     }
 }
 
-fn file_change_record(
-    change: &crate::runtime::session::ManagedSessionFileChange,
-) -> DeveloperSessionFileChange {
-    DeveloperSessionFileChange {
-        path: change.path.display().to_string(),
-        kind: match change.kind {
-            ManagedSessionFileChangeKind::Created => DeveloperFileChangeKind::Created,
-            ManagedSessionFileChangeKind::Modified => DeveloperFileChangeKind::Modified,
-        },
-        tool: change.tool.clone(),
-        tool_call_id: change.tool_call_id.clone(),
-        changed_at: change.changed_at.to_rfc3339(),
-    }
-}
-
 fn artifact_mime_type(path: &Path) -> String {
     mime_guess::from_path(path)
         .first_or_octet_stream()
@@ -3001,11 +3022,14 @@ fn approval_callback(
         let notifications = notifications.clone();
         Box::pin(async move {
             let request_id = request.id.to_string();
+            let risk = request.kind.risk();
             let snapshot = PendingApprovalSnapshot {
                 request_id: request_id.clone(),
                 kind: format!("{:?}", request.kind),
                 summary: request.summary.clone(),
                 detail: request.detail.join("\n"),
+                risk_level: Some(risk.level),
+                reversible: Some(risk.reversible),
             };
             let (sender, receiver) = oneshot::channel();
             pending.lock().await.insert(
@@ -3034,6 +3058,8 @@ fn approval_callback(
                     "kind": snapshot.kind,
                     "summary": snapshot.summary,
                     "detail": snapshot.detail,
+                    "riskLevel": snapshot.risk_level,
+                    "reversible": snapshot.reversible,
                 }),
             ) {
                 let _ = notifications.send(notification);
@@ -3236,6 +3262,12 @@ fn changed_files(activity: &SharedSessionActivity, call_id: &str) -> Vec<AgentEv
                 ManagedSessionFileChangeKind::Created => AgentEventFileChangeKind::Created,
                 ManagedSessionFileChangeKind::Modified => AgentEventFileChangeKind::Modified,
             },
+            reason: change.reason.as_ref().map(ChangeReason::describe),
+            notices: change
+                .reason
+                .as_ref()
+                .map(|reason| reason.notices.clone())
+                .unwrap_or_default(),
         })
         .collect()
 }
@@ -3487,6 +3519,40 @@ fn apply_agent_controls(
 
 /// Classify the error that ended a turn into the protocol's closed set.
 ///.
+/// The terminal stop reason for a turn that has settled.
+///
+/// Nothing in this process produced an [`AgentEventStopReason`] before, so
+/// every client branch for a truncation or a refusal was unreachable and each
+/// one arrived as an ordinary end of turn.
+fn settled_stop_reason(
+    status: TurnStatus,
+    failure: Option<&TurnFailure>,
+    incomplete: Option<crate::errors::IncompleteTurnCause>,
+) -> AgentEventStopReason {
+    match status {
+        TurnStatus::Completed => match incomplete {
+            Some(crate::errors::IncompleteTurnCause::OutputLimitReached) => {
+                AgentEventStopReason::MaxTokens
+            }
+            Some(crate::errors::IncompleteTurnCause::RefusedBySafety) => {
+                AgentEventStopReason::Refusal
+            }
+            Some(crate::errors::IncompleteTurnCause::NoResponse) | None => {
+                AgentEventStopReason::EndTurn
+            }
+        },
+        TurnStatus::Interrupted => AgentEventStopReason::Cancelled,
+        // `Running` is not terminal and never reaches here; a turn that
+        // settles in it is as broken as one that settled `Failed`.
+        TurnStatus::Failed | TurnStatus::Running => match failure.map(|failure| failure.code) {
+            Some(TurnFailureCode::OutputLimitReached) => AgentEventStopReason::MaxTokens,
+            Some(TurnFailureCode::RefusedBySafety) => AgentEventStopReason::Refusal,
+            Some(TurnFailureCode::Interrupted) => AgentEventStopReason::Cancelled,
+            _ => AgentEventStopReason::Error,
+        },
+    }
+}
+
 fn classify_turn_failure(error: &anyhow::Error) -> TurnFailure {
     for cause in error.chain() {
         if let Some(cli) = cause.downcast_ref::<crate::errors::CliError>() {
@@ -3665,6 +3731,7 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 mod tests {
     use super::*;
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
+    use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
     use agiworkforce_protocol::agent_events::AgentEventToolCategory;
     use agiworkforce_protocol::developer_session::TurnFailureAction;
     use tempfile::tempdir;
@@ -5416,6 +5483,11 @@ mod tests {
             notification.params["detail"], "cargo test\nworkspace: project",
             "the typed JSONL client requires one display string"
         );
+        // The CLI classifies the call before it asks. Sending the four display
+        // fields alone left an editor's approval card asking the user to judge
+        // `rm -rf build` and `ls` by eye.
+        assert_eq!(notification.params["riskLevel"], "medium");
+        assert_eq!(notification.params["reversible"], false);
 
         let approval = pending
             .lock()
@@ -6768,6 +6840,8 @@ mod tests {
                     kind: "Exec".to_string(),
                     summary: "Run the test suite".to_string(),
                     detail: "cargo test".to_string(),
+                    risk_level: Some(AgentEventApprovalRiskLevel::Medium),
+                    reversible: Some(false),
                 },
                 responder,
             },
@@ -6889,6 +6963,11 @@ mod tests {
                 tool: "write_file".to_string(),
                 tool_call_id: "call-1".to_string(),
                 changed_at: now,
+                reason: Some(crate::runtime::change_reason::classify_change(
+                    std::path::Path::new("report.md"),
+                    "",
+                    "# Report\n",
+                )),
             });
         store.save(&session).expect("save session");
         let host = CliDeveloperSessionHost::new_with_store(
@@ -6916,7 +6995,14 @@ mod tests {
             DeveloperApprovalOutcome::AllowSession
         );
         assert_eq!(read.file_changes.len(), 1);
-        assert_eq!(read.file_changes[0].kind, DeveloperFileChangeKind::Created);
+        assert_eq!(
+            read.file_changes[0].kind,
+            agiworkforce_protocol::developer_session::DeveloperFileChangeKind::Created
+        );
+        assert_eq!(
+            read.file_changes[0].subject,
+            Some(agiworkforce_protocol::developer_session::FileChangeSubject::Documentation)
+        );
         assert_eq!(
             read.file_changes[0].path,
             workspace_root.join("report.md").display().to_string()
@@ -6942,5 +7028,74 @@ mod tests {
         );
         assert_eq!(repository_without_credentials("bad\nremote"), None);
         assert_eq!(repository_without_credentials("  "), None);
+    }
+
+    /// Nothing in this process produced a stop reason before, so every client
+    /// branch for a truncation, a refusal or a cancellation was unreachable.
+    #[test]
+    fn a_settled_turn_always_names_why_it_stopped() {
+        assert_eq!(
+            settled_stop_reason(TurnStatus::Completed, None, None),
+            AgentEventStopReason::EndTurn
+        );
+        assert_eq!(
+            settled_stop_reason(
+                TurnStatus::Completed,
+                None,
+                Some(crate::errors::IncompleteTurnCause::OutputLimitReached)
+            ),
+            AgentEventStopReason::MaxTokens,
+            "a delivered answer cut at the model's limit is not an ordinary end of turn"
+        );
+        assert_eq!(
+            settled_stop_reason(TurnStatus::Interrupted, None, None),
+            AgentEventStopReason::Cancelled
+        );
+        for (code, reason) in [
+            (
+                TurnFailureCode::OutputLimitReached,
+                AgentEventStopReason::MaxTokens,
+            ),
+            (
+                TurnFailureCode::RefusedBySafety,
+                AgentEventStopReason::Refusal,
+            ),
+            (
+                TurnFailureCode::Interrupted,
+                AgentEventStopReason::Cancelled,
+            ),
+            (TurnFailureCode::Network, AgentEventStopReason::Error),
+            (
+                TurnFailureCode::ProviderUnavailable,
+                AgentEventStopReason::Error,
+            ),
+        ] {
+            let failure = TurnFailure::new(code, "test");
+            assert_eq!(
+                settled_stop_reason(TurnStatus::Failed, Some(&failure), None),
+                reason,
+                "{code:?} must not be announced as an ordinary end of turn"
+            );
+        }
+    }
+
+    /// Every member of the protocol's closed set answers, so a code added
+    /// later cannot quietly settle a turn with no stop reason at all.
+    #[test]
+    fn every_failure_code_settles_to_a_stop_reason() {
+        for code in agiworkforce_protocol::developer_session::TURN_FAILURE_CODES {
+            let failure = TurnFailure::new(*code, "test");
+            let reason = settled_stop_reason(TurnStatus::Failed, Some(&failure), None);
+            assert!(
+                matches!(
+                    reason,
+                    AgentEventStopReason::MaxTokens
+                        | AgentEventStopReason::Refusal
+                        | AgentEventStopReason::Cancelled
+                        | AgentEventStopReason::Error
+                ),
+                "{code:?} settled as {reason:?}, which is not a failure's stop reason"
+            );
+        }
     }
 }

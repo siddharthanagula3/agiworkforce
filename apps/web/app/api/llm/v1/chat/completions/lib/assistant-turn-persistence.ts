@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import {
   INTERACTIVE_CARDS_METADATA_KEY,
   PROJECT_FILE_CITATIONS_METADATA_KEY,
@@ -17,10 +18,13 @@ import {
 import { resolveSourceUrlMetadataRedirects } from '@/lib/web-search/source-url-metadata';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import {
+  assertParentInConversation,
+  conversationIsUnbranched,
   lockConversationThread,
   messageExists,
   resolveAnsweredParentId,
   setActiveLeaf,
+  stampLinearParents,
 } from '@/app/api/chat/conversations/[id]/messages/lib/message-thread';
 import type {
   PersistedTurnCitation,
@@ -244,13 +248,20 @@ export async function persistAssistantTurn(params: {
   }
 
   const metadata: Record<string, unknown> = {
+    artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
     serverPersisted: true,
     requestId: processed.requestId,
     provider: snapshot.provider,
+    routeLane: processed.routeLane ?? null,
     // Asserted on every write, never spread conditionally: a Continue reuses
     // this message id, and a key left out would keep the cancelled attempt's.
     truncated: snapshot.truncated,
     truncationReason: snapshot.truncated ? TRUNCATED_ASSISTANT_TURN_REASON : null,
+    // The keys the reader renders the move from, asserted for the same reason
+    // as truncated: a second attempt that stayed on the pinned model must not
+    // inherit the first attempt's disclosure.
+    movedFromModel: processed.movedFromModel ?? null,
+    movedReason: processed.movedFromModel ? (processed.movedReason ?? null) : null,
     ...buildAssistantTurnAttribution(processed, snapshot),
     ...(snapshot.runReference ? { cloudAgentRun: snapshot.runReference } : {}),
     // The on-conflict set-list merges with `||`, so a client save that lands
@@ -311,21 +322,32 @@ export async function persistAssistantTurn(params: {
     // A conversation nobody has branched takes the single statement it always
     // has, and a conversation this request cannot see falls through it to the
     // same zero-row no-op rather than to a lock that would throw.
+    const explicitParentId = processed.assistantParentId;
     const affected =
-      (conversation?.active_leaf_message_id ?? null) === null
+      !explicitParentId && (conversation?.active_leaf_message_id ?? null) === null
         ? await db.execute(INSERT_ASSISTANT_TURN_SQL, insertParams(null))
         : await db.transaction(async (tx) => {
             const lockedLeafMessageId = await lockConversationThread(tx, threadScope);
-            // The branch this request read was undone before it owned the lock,
-            // so the conversation is linear again and takes the linear write.
-            if (lockedLeafMessageId === null) {
+            if (explicitParentId) {
+              await assertParentInConversation(tx, conversationId, explicitParentId);
+              if (
+                lockedLeafMessageId === null &&
+                (await conversationIsUnbranched(tx, conversationId))
+              ) {
+                await stampLinearParents(tx, conversationId);
+              }
+            } else if (lockedLeafMessageId === null) {
               return tx.execute(INSERT_ASSISTANT_TURN_SQL, insertParams(null));
             }
 
             // Probed before the insert: afterwards the row exists either way,
             // and a replay is no longer distinguishable from a first write.
             const alreadyWritten = await messageExists(tx, conversationId, messageId);
-            const parentId = await resolveAnsweredParentId(tx, conversationId, lockedLeafMessageId);
+            const parentId =
+              explicitParentId ??
+              (lockedLeafMessageId
+                ? await resolveAnsweredParentId(tx, conversationId, lockedLeafMessageId)
+                : null);
             const written = await tx.execute(INSERT_ASSISTANT_TURN_SQL, insertParams(parentId));
 
             // A replay must not drag the visible path back onto a turn the
@@ -351,6 +373,7 @@ export async function persistAssistantTurn(params: {
         conversationId,
         messageId,
         content: snapshot.content,
+        artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
       });
     }
   } catch (error) {

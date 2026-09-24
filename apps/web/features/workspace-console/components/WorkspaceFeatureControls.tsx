@@ -71,7 +71,7 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '4px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 const primaryButton =

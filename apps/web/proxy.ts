@@ -132,13 +132,17 @@ const isProtectedAppRoute = identityMiddleware.createRouteMatcher(
   routeMatcherPatterns(PRODUCT_ROUTE_PREFIXES),
 );
 
-const isPublicApiRoute = identityMiddleware.createRouteMatcher([
+// Served without the identity proxy: a route here that reads the caller's identity
+// fails every request (public-api-routes-read-no-identity.test.ts).
+export const PUBLIC_API_ROUTE_PATTERNS = [
   '/api/health',
-  '/api/download(.*)',
-  '/api/download-beta(.*)',
+  '/api/download',
+  '/api/download/(.*)',
   '/api/models',
-  '/api/waitlist(.*)',
-]);
+  '/api/waitlist/public',
+] as const;
+
+const isPublicApiRoute = identityMiddleware.createRouteMatcher([...PUBLIC_API_ROUTE_PATTERNS]);
 
 const isIdentitySessionRoute = identityMiddleware.createRouteMatcher([
   ...routeMatcherPatterns(SESSION_AUTH_ROUTE_PREFIXES),

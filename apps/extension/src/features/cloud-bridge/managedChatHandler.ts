@@ -102,6 +102,8 @@ export type ChromeManagedChatResult =
         | 'routing_unavailable'
         | Extract<FreeTrialChunk, { type: 'error' }>['code'];
       message: string;
+      retryAfterSeconds?: number;
+      requestId?: string;
       routing?: ChromeManagedRoutingResult;
     };
 
@@ -133,10 +135,10 @@ export type ChromeManagedApprovalResult =
   | {
       status: 'error';
       code:
-        | 'invalid_request'
-        | 'auth_required'
-        | Extract<FreeTrialChunk, { type: 'error' }>['code'];
+        'invalid_request' | 'auth_required' | Extract<FreeTrialChunk, { type: 'error' }>['code'];
       message: string;
+      retryAfterSeconds?: number;
+      requestId?: string;
     };
 
 export interface ChromeManagedApprovalDependencies {
@@ -518,6 +520,10 @@ export async function executeChromeManagedChat(
         status: 'error',
         code: chunk.code,
         message: chunk.message,
+        ...(chunk.retryAfterSeconds !== undefined
+          ? { retryAfterSeconds: chunk.retryAfterSeconds }
+          : {}),
+        ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
         routing: routingResult,
       };
     }
@@ -593,7 +599,15 @@ export async function executeChromeManagedApproval(
       continue;
     }
     if (chunk.type === 'error') {
-      return { status: 'error', code: chunk.code, message: chunk.message };
+      return {
+        status: 'error',
+        code: chunk.code,
+        message: chunk.message,
+        ...(chunk.retryAfterSeconds !== undefined
+          ? { retryAfterSeconds: chunk.retryAfterSeconds }
+          : {}),
+        ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
+      };
     }
     return { status: 'success' };
   }

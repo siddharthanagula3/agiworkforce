@@ -3,6 +3,15 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { recordFailure } from '@/lib/observability/metrics';
 
+export const SSE_HEARTBEAT_INTERVAL_MS = 2_000;
+
+export const SSE_RESPONSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  Connection: 'keep-alive',
+  'X-Accel-Buffering': 'no',
+} as const;
+
 export interface SseDisconnect {
   /** Bytes forwarded before the reader went away, so a drop at zero is visible. */
   bytesDelivered: number;
@@ -19,7 +28,7 @@ function reportSseDisconnect(disconnect: SseDisconnect): void {
 
 export function withSseHeartbeat(
   source: ReadableStream<Uint8Array>,
-  intervalMs = 15_000,
+  intervalMs = SSE_HEARTBEAT_INTERVAL_MS,
   onDisconnect: SseDisconnectObserver = reportSseDisconnect,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();

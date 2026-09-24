@@ -332,7 +332,7 @@ export function ScheduleCard({
                   ref={menuPanelRef}
                   role="menu"
                   aria-label={`Actions for ${schedule.name}`}
-                  className="absolute right-0 top-full z-20 mt-1 min-w-[190px] rounded-lg border border-border bg-popover py-1 shadow-lg"
+                  className="absolute right-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[190px] rounded-lg border border-border bg-popover py-1 shadow-lg"
                 >
                   <button
                     type="button"

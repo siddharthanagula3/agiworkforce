@@ -2165,6 +2165,10 @@ pub async fn speech_start_recording(
 ) -> Result<(), String> {
     let voice_state = state.lock().await;
 
+    if let Some(reason) = voice_state.wake.read().await.remote_block_reason() {
+        return Err(reason);
+    }
+
     // Check if a recording is already in progress
     {
         let guard = voice_state

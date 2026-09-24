@@ -227,6 +227,39 @@ export function restoreFrame(
   return newest ? clampFrameToWorkArea(newest, primary.workArea) : null;
 }
 
+export interface WindowFrameReading {
+  destroyed: boolean;
+  minimized: boolean;
+  fullScreen: boolean;
+  maximized: boolean;
+  bounds: { x: number; y: number; width: number; height: number };
+  workArea: WorkArea;
+}
+
+export interface RememberedFrame {
+  bounds: { x: number; y: number; width: number; height: number };
+  maximized: boolean;
+}
+
+/**
+ * What a window is worth remembering as. A minimized, full-screen or torn-down
+ * window reports bounds that are not a size the user chose, so the previous
+ * reading is kept; a zoomed one is remembered as zoomed rather than as the size
+ * it happens to fill, which is what made a remembered window creep outwards on
+ * every launch.
+ */
+export function frameWorthRemembering(
+  previous: RememberedFrame,
+  reading: WindowFrameReading,
+  fills: (bounds: WorkArea, workArea: WorkArea) => boolean,
+): RememberedFrame {
+  if (reading.destroyed || reading.minimized || reading.fullScreen) return previous;
+  if (reading.maximized || fills(reading.bounds, reading.workArea)) {
+    return { bounds: previous.bounds, maximized: true };
+  }
+  return { bounds: reading.bounds, maximized: false };
+}
+
 /**
  * Whether the account that recorded the route is still the account this shell
  * last saw. Anything else is another account's private content.

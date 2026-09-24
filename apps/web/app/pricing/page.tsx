@@ -1,5 +1,6 @@
 'use client';
 
+import { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@/lib/compliance/free-plan-training-disclosure';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -195,7 +196,6 @@ const UPGRADE_SETTLE_ATTEMPTS = 6;
 const UPGRADE_SETTLE_INTERVAL_MS = 1_000;
 
 const TRAINING_DATA_DISCLOSURE = 'No';
-const FREE_PLAN_TRAINING_DATA_DISCLOSURE = 'Not by AGI. Free model providers may.';
 
 function formatLimit(limit: BillingPlanLimit, singular: string, plural: string): string {
   if (limit === 'unlimited') return 'Unlimited';
@@ -844,14 +844,22 @@ export default function PricingPage() {
         <section
           className="agi-page-hero"
           aria-labelledby="pricing-hero-title"
-          style={{ borderBottom: 'none', paddingTop: 48, paddingBottom: 24 }}
+          style={{
+            borderBottom: 'none',
+            paddingTop: 'var(--space-7)',
+            paddingBottom: 'var(--space-5)',
+          }}
         >
           <h1 id="pricing-hero-title" className="agi-fl-h1">
             {t('pageTitle')}
           </h1>
           <p className="agi-fl-section-lede">{t('heroLede')}</p>
           {!CHECKOUT_ENABLED ? (
-            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
+            <p
+              role="status"
+              className="agi-fl-section-lede"
+              style={{ marginTop: 'var(--space-2)' }}
+            >
               Checkout is temporarily unavailable. Please try again later. Existing plans and
               Enterprise contact are unaffected.
             </p>
@@ -863,8 +871,8 @@ export default function PricingPage() {
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
-            gap: 12,
-            marginBottom: 32,
+            gap: 'var(--space-3)',
+            marginBottom: 'var(--space-6)',
           }}
         >
           <div
@@ -940,7 +948,10 @@ export default function PricingPage() {
           style={{ paddingTop: 0 }}
         >
           <h2 className="sr-only">{t('audienceBusiness')}</h2>
-          <div className="agi-tier-grid agi-tier-grid--featured" style={{ marginTop: 24 }}>
+          <div
+            className="agi-tier-grid agi-tier-grid--featured"
+            style={{ marginTop: 'var(--space-5)' }}
+          >
             <Reveal as="article" className="agi-tier agi-tier--featured">
               <span className="agi-tier-badge">{t('teamBadge')}</span>
               <h3 id="pricing-team-title" className="agi-tier-name">
@@ -951,7 +962,7 @@ export default function PricingPage() {
                   className="agi-tier-toggle"
                   role="group"
                   aria-label="Team billing cadence"
-                  style={{ marginBottom: 16 }}
+                  style={{ marginBottom: 'var(--space-4)' }}
                 >
                   <button
                     type="button"
@@ -997,8 +1008,8 @@ export default function PricingPage() {
               <p
                 className="agi-tier-seats-total"
                 style={{
-                  marginTop: -8,
-                  marginBottom: 16,
+                  marginTop: 'calc(var(--space-2) * -1)',
+                  marginBottom: 'var(--space-4)',
                   fontSize: 13,
                   color: 'var(--agi-ink-quiet)',
                 }}
@@ -1032,7 +1043,7 @@ export default function PricingPage() {
               </ul>
               <div
                 className="agi-tier-seats"
-                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}
               >
                 <label
                   className="agi-tier-seats-label"
@@ -1053,10 +1064,10 @@ export default function PricingPage() {
                   style={{
                     width: 88,
                     minHeight: 36,
-                    padding: '6px 10px',
+                    padding: 'var(--space-2) var(--space-3)',
                     background: 'var(--agi-bg-2)',
                     border: '1px solid var(--agi-rule)',
-                    borderRadius: 6,
+                    borderRadius: 'var(--corner-control)',
                     color: 'var(--agi-ink)',
                     fontSize: 14,
                     fontFamily: 'inherit',
@@ -1130,22 +1141,34 @@ export default function PricingPage() {
           <h2 className="sr-only">{t('audienceIndividual')}</h2>
 
           {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
-            <p role="status" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+            <p
+              role="status"
+              className="agi-fl-section-lede"
+              style={{ marginTop: 'var(--space-4)' }}
+            >
               Loading checkout availability…
             </p>
           ) : null}
           {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
-            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 16 }}>
+            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
               Checkout availability could not be verified. Refresh this page to try again.
             </p>
           ) : null}
           {unavailableCheckoutPlans.map((plan) => (
-            <p key={plan} role="status" className="agi-fl-section-lede" style={{ marginTop: 8 }}>
+            <p
+              key={plan}
+              role="status"
+              className="agi-fl-section-lede"
+              style={{ marginTop: 'var(--space-2)' }}
+            >
               {BILLING_PLAN_PRICING[plan].label} checkout is not available in your region yet.
             </p>
           ))}
 
-          <div className="agi-tier-grid agi-tier-grid--four" style={{ marginTop: 24 }}>
+          <div
+            className="agi-tier-grid agi-tier-grid--four"
+            style={{ marginTop: 'var(--space-5)' }}
+          >
             <Reveal as="article" className="agi-tier">
               <h3 className="agi-tier-name">{BILLING_PLAN_PRICING.free.label}</h3>
               <p className="agi-tier-price">
@@ -1331,7 +1354,7 @@ export default function PricingPage() {
               aria-label="Scrollable plan comparison"
               role="region"
               tabIndex={0}
-              style={{ overflowX: 'auto', marginTop: 24 }}
+              style={{ overflowX: 'auto', marginTop: 'var(--space-5)' }}
             >
               <table
                 aria-label="Plan capabilities"
@@ -1350,7 +1373,7 @@ export default function PricingPage() {
                         scope="col"
                         style={{
                           textAlign: 'left',
-                          padding: '10px 16px',
+                          padding: 'var(--space-3) var(--space-4)',
                           borderBottom: '1px solid var(--agi-rule-strong)',
                           color: 'var(--agi-ink-quiet)',
                           fontSize: 12,
@@ -1380,7 +1403,7 @@ export default function PricingPage() {
                     >
                       <td
                         style={{
-                          padding: '14px 16px',
+                          padding: 'var(--space-4) var(--space-4)',
                           borderBottom: '1px solid var(--agi-rule)',
                           fontWeight: 600,
                           color: row.highlighted ? 'var(--agi-amber)' : 'var(--agi-ink)',
@@ -1391,7 +1414,7 @@ export default function PricingPage() {
                       </td>
                       <td
                         style={{
-                          padding: '14px 16px',
+                          padding: 'var(--space-4) var(--space-4)',
                           borderBottom: '1px solid var(--agi-rule)',
                           color: 'var(--agi-ink)',
                         }}
@@ -1400,7 +1423,7 @@ export default function PricingPage() {
                       </td>
                       <td
                         style={{
-                          padding: '14px 16px',
+                          padding: 'var(--space-4) var(--space-4)',
                           borderBottom: '1px solid var(--agi-rule)',
                           color: 'var(--agi-ink-2)',
                         }}
@@ -1409,7 +1432,7 @@ export default function PricingPage() {
                       </td>
                       <td
                         style={{
-                          padding: '14px 16px',
+                          padding: 'var(--space-4) var(--space-4)',
                           borderBottom: '1px solid var(--agi-rule)',
                           color: 'var(--agi-ink-2)',
                         }}
@@ -1431,7 +1454,7 @@ export default function PricingPage() {
                         <td
                           key={`${row.planId}-capability-${index}`}
                           style={{
-                            padding: '14px 16px',
+                            padding: 'var(--space-4) var(--space-4)',
                             borderBottom: '1px solid var(--agi-rule)',
                             color: 'var(--agi-ink-2)',
                             whiteSpace: 'nowrap',
@@ -1442,7 +1465,7 @@ export default function PricingPage() {
                       ))}
                       <td
                         style={{
-                          padding: '14px 16px',
+                          padding: 'var(--space-4) var(--space-4)',
                           borderBottom: '1px solid var(--agi-rule)',
                           color: 'var(--agi-ink-2)',
                         }}
@@ -1472,7 +1495,7 @@ export default function PricingPage() {
             aria-label="Scrollable model access by plan"
             role="region"
             tabIndex={0}
-            style={{ overflowX: 'auto', marginTop: 36 }}
+            style={{ overflowX: 'auto', marginTop: 'var(--space-6)' }}
           >
             <table
               aria-label="Model access by plan"
@@ -1489,7 +1512,7 @@ export default function PricingPage() {
                     scope="col"
                     style={{
                       textAlign: 'left',
-                      padding: '10px 16px',
+                      padding: 'var(--space-3) var(--space-4)',
                       borderBottom: '1px solid var(--agi-rule-strong)',
                       color: 'var(--agi-ink-quiet)',
                       fontSize: 12,
@@ -1508,7 +1531,7 @@ export default function PricingPage() {
                       scope="col"
                       style={{
                         textAlign: 'left',
-                        padding: '10px 16px',
+                        padding: 'var(--space-3) var(--space-4)',
                         borderBottom: '1px solid var(--agi-rule-strong)',
                         color: 'var(--agi-ink-quiet)',
                         fontSize: 12,
@@ -1532,7 +1555,7 @@ export default function PricingPage() {
                   >
                     <td
                       style={{
-                        padding: '14px 16px',
+                        padding: 'var(--space-4) var(--space-4)',
                         borderBottom: '1px solid var(--agi-rule)',
                         fontWeight: 600,
                         color: 'var(--agi-ink)',
@@ -1545,7 +1568,7 @@ export default function PricingPage() {
                       <td
                         key={`${row.provider}-${MODEL_ACCESS_COLUMNS[columnIndex]?.label}`}
                         style={{
-                          padding: '14px 16px',
+                          padding: 'var(--space-4) var(--space-4)',
                           borderBottom: '1px solid var(--agi-rule)',
                           color: 'var(--agi-ink-2)',
                           whiteSpace: 'nowrap',

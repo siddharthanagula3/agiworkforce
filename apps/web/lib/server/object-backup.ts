@@ -86,19 +86,33 @@ export interface ObjectBackupReadiness {
   configured: boolean;
   missing: string[];
   crossRegion: boolean;
+  independentCredential: boolean;
+}
+
+/**
+ * A backup the primary's own key can delete is lost with that key, so the
+ * copy is only independent when it is written under a credential of its own.
+ */
+export function backupSharesPrimaryCredential(env: Environment = environment()): boolean {
+  const backupKeyId = env[BACKUP_ACCESS_KEY_ID_ENV]?.trim();
+  if (!backupKeyId) return false;
+  return resolveObjectStorageConfig(env).accessKeyId?.trim() === backupKeyId;
 }
 
 /**
  * What a production host can answer about its own backup without holding a
- * credential: which variables are unset by name, and whether the copy leaves
- * the primary's failure domain. Names only, never values.
+ * credential: which variables are unset by name, whether the copy leaves the
+ * primary's failure domain, and whether the primary's key can reach it. Names
+ * only, never values.
  */
 export function objectBackupReadiness(env: Environment = environment()): ObjectBackupReadiness {
   const missing = missingBackupEnv(env);
+  const configured = missing.length === 0;
   return {
-    configured: missing.length === 0,
+    configured,
     missing,
-    crossRegion: missing.length === 0 && isCrossRegionBackup(env),
+    crossRegion: configured && isCrossRegionBackup(env),
+    independentCredential: configured && !backupSharesPrimaryCredential(env),
   };
 }
 
@@ -248,12 +262,16 @@ export async function replicasDueForReconciliation(limit: number): Promise<strin
  * objects keep sitting in the backup bucket.
  */
 export async function requeueReplicasAfterRestore(): Promise<number> {
-  const rows = await getNeonDb().query<{ object_key: string }>(
-    `update public.${REPLICA_TABLE}
-        set verified_at = 'epoch'::timestamptz
-      returning object_key`,
+  // Counted in SQL: the table holds every backed up object, too many to return.
+  const rows = await getNeonDb().query<{ requeued: string | number }>(
+    `with requeued as (
+       update public.${REPLICA_TABLE}
+          set verified_at = 'epoch'::timestamptz
+        returning 1
+     )
+     select count(*) as requeued from requeued`,
   );
-  return rows.length;
+  return Number(rows[0]?.requeued ?? 0);
 }
 
 export async function markReplicaVerified(key: string): Promise<void> {

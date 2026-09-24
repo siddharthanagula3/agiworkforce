@@ -20,7 +20,7 @@ function NavigationMenu({ className, children, ref, ...props }: NavigationMenuPr
   return (
     <NavigationMenuPrimitive.Root
       ref={ref}
-      className={cn('relative z-10 flex max-w-max flex-1 items-center justify-center', className)}
+      className={cn('relative z-[var(--z-control)] flex max-w-max flex-1 items-center justify-center', className)}
       {...props}
     >
       {children}
@@ -64,7 +64,7 @@ function NavigationMenuTrigger({ className, children, ref, ...props }: Navigatio
     >
       {children}{' '}
       <ChevronDown
-        className="relative top-[1px] ml-1 h-3 w-3 transition duration-200 group-data-[state=open]:rotate-180"
+        className="relative top-[1px] ml-1 h-3 w-3 transition duration-quick group-data-[state=open]:rotate-180"
         aria-hidden="true"
       />
     </NavigationMenuPrimitive.Trigger>
@@ -127,7 +127,7 @@ function NavigationMenuIndicator({ className, ref, ...props }: NavigationMenuInd
     <NavigationMenuPrimitive.Indicator
       ref={ref}
       className={cn(
-        'top-full z-[1] flex h-1.5 items-end justify-center overflow-hidden data-[state=visible]:animate-in data-[state=hidden]:animate-out data-[state=hidden]:fade-out data-[state=visible]:fade-in',
+        'top-full z-[var(--z-content)] flex h-1.5 items-end justify-center overflow-hidden data-[state=visible]:animate-in data-[state=hidden]:animate-out data-[state=hidden]:fade-out data-[state=visible]:fade-in',
         className,
       )}
       {...props}

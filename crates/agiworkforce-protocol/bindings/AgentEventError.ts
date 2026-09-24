@@ -5,4 +5,13 @@ export type AgentEventError = {
   code?: string;
   retryable?: boolean;
   retryAfterSeconds?: number;
+  /**
+   * Mirrors `StreamChunkError.requestId`: the id the server logged this
+   * failure under. A failure that happens after streaming has started never
+   * reaches a status code or a JSON error body, so without this field it is
+   * the one class of failure a reader can quote nothing about. The surfaces
+   * that read this envelope, rather than the web wire, had no id at all
+   * until it existed here.
+   */
+  requestId?: string;
 };

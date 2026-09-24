@@ -4,6 +4,12 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import {
+  moderateGeneratedMedia,
+  recordGeneratedMediaProviderRefusal,
+  type OutputModerationReason,
+} from '@/lib/moderation';
+import { recordMediaSafety } from '@/lib/observability/media-telemetry';
+import {
   authenticatedMediaUrl,
   deleteStoredMedia,
   isVideoStorageConfigured,
@@ -34,6 +40,7 @@ import { VIDEO_PROVIDER_TASK_ATTACHMENT_GRACE_MS } from '@/lib/workflows/video-g
 import { syncVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import { deliverVideoCompletionNotice } from './video-completion-notice-service';
 
+const VIDEO_OPERATION = 'generate';
 const PROVIDER_POLL_SECONDS = 10;
 const MAX_RECONCILIATION_FAILURES = 5;
 const PROVIDER_SUBMISSION_GRACE_MS = 2 * 60 * 1_000;
@@ -58,10 +65,7 @@ export interface PublicVideoJobStatus {
   error?: string;
   cancel_requested?: true;
   cancellation_state?:
-    | 'requested'
-    | 'provider_request_acknowledged'
-    | 'unsupported'
-    | 'unconfirmed';
+    'requested' | 'provider_request_acknowledged' | 'unsupported' | 'unconfirmed';
 }
 
 export function publicVideoJobStatus(job: VideoGenerationJob): PublicVideoJobStatus {
@@ -105,6 +109,22 @@ class VideoAssetCompensationError extends Error {
   }
 }
 
+/**
+ * The output floor said no. Carried as a throw so the staged download is
+ * removed by the same `finally` that cleans up a successful delivery, and
+ * answered outside persistence, where a refusal ends the job instead of
+ * earning another attempt.
+ */
+class GeneratedVideoRefusedError extends Error {
+  constructor(
+    readonly refusal: string,
+    readonly moderationReason: OutputModerationReason,
+  ) {
+    super('The generated video was refused by the output safety floor.');
+    this.name = 'GeneratedVideoRefusedError';
+  }
+}
+
 interface PersistedVideoAsset {
   assetId: string;
   pathname: string;
@@ -143,6 +163,7 @@ async function finishFailed(
   job: VideoGenerationJob,
   claimToken: string,
   publicError: string,
+  undeliveredProviderCostCents?: number,
 ): Promise<VideoGenerationJob> {
   const finalized = await finalizeVideoGenerationJob({
     db,
@@ -150,9 +171,33 @@ async function finishFailed(
     claimToken,
     outcome: 'failed',
     publicError,
+    ...(undeliveredProviderCostCents === undefined ? {} : { undeliveredProviderCostCents }),
   });
   if (!finalized) throw new Error('Video job disappeared during failure settlement.');
   return finalized;
+}
+
+/**
+ * A refused result is terminal and released: it is never stored, so there is
+ * nothing to deliver and nothing to retry, and the reservation goes back
+ * rather than settling against a video the account never received.
+ */
+async function finishRefused(
+  db: DatabaseAdapter,
+  job: VideoGenerationJob,
+  claimToken: string,
+  refusal: string,
+  reason: OutputModerationReason,
+  undeliveredProviderCostCents?: number,
+): Promise<VideoGenerationJob> {
+  recordMediaSafety({
+    media: 'video',
+    decision: 'blocked',
+    reason,
+    provider: job.provider,
+    surface: job.sourceSurface,
+  });
+  return finishFailed(db, job, claimToken, refusal, undeliveredProviderCostCents);
 }
 
 async function persistCompletedVideo(
@@ -169,6 +214,18 @@ async function persistCompletedVideo(
 
   const downloaded = await downloadVideoProviderOutput(job, output);
   try {
+    const screened = await moderateGeneratedMedia({
+      userId: job.userId,
+      media: 'video',
+      operation: VIDEO_OPERATION,
+      filePath: downloaded.filePath,
+      mimeType: downloaded.contentType,
+      prompt: job.prompt,
+    });
+    if (!screened.allowed) {
+      throw new GeneratedVideoRefusedError(screened.refusal, screened.reason);
+    }
+
     const plannedPathname = videoStoragePathname({
       userId: job.userId,
       storageId: job.id,
@@ -413,6 +470,7 @@ async function reconcileVideoGenerationJobCore(
   }
 
   let persistedAsset: PersistedVideoAsset | undefined;
+  let completedProviderCostCents: number | undefined;
   try {
     const provider = await pollVideoProvider(claimed);
     if (provider.status === 'queued' || provider.status === 'processing') {
@@ -433,14 +491,16 @@ async function reconcileVideoGenerationJobCore(
     }
     if (provider.status === 'failed') {
       if (provider.moderated) {
-        return markClaimedVideoGenerationOutcomeUnknown(
-          db,
-          claimed,
-          claimToken,
-          claimed.providerTaskId,
-          'The provider safety system could not deliver this video. The incident was recorded; contact support if you need help with the charge.',
-          provider.providerFailureCode,
-        );
+        const refusal = recordGeneratedMediaProviderRefusal({
+          userId: claimed.userId,
+          media: 'video',
+          operation: VIDEO_OPERATION,
+          prompt: claimed.prompt,
+          ...(provider.providerFailureCode
+            ? { providerFailureCode: provider.providerFailureCode }
+            : {}),
+        });
+        return finishRefused(db, claimed, claimToken, refusal, 'output_provider_safety');
       }
       return finishFailed(db, claimed, claimToken, provider.error);
     }
@@ -454,12 +514,14 @@ async function reconcileVideoGenerationJobCore(
         true,
       );
     }
+    completedProviderCostCents = provider.actualCostCents ?? claimed.estimatedCostCents;
     if (claimed.provider === 'runway' && claimed.cancelRequestedAt) {
       return finishFailed(
         db,
         claimed,
         claimToken,
         'Runway completed after cancellation was requested. AGI did not deliver the result.',
+        completedProviderCostCents,
       );
     }
     const beforePersistence = await getVideoGenerationJobForSystem(db, claimed.id);
@@ -516,6 +578,16 @@ async function reconcileVideoGenerationJobCore(
     }
 
     if (current && isTerminal(current)) return current;
+    if (error instanceof GeneratedVideoRefusedError) {
+      return finishRefused(
+        db,
+        claimed,
+        claimToken,
+        error.refusal,
+        error.moderationReason,
+        completedProviderCostCents,
+      );
+    }
     if (error instanceof VideoAssetCompensationError) {
       return deferVideoGenerationJob({
         db,

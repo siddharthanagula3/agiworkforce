@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { PINO_LEVELS, resolveLogLevel } from './logger';
+import { PINO_LEVELS, resolveLogLevel, shouldUsePrettyLogTransport } from './logger';
 
 describe('log level resolution', () => {
   it('refuses a level below info outside development', () => {
@@ -29,5 +29,19 @@ describe('log level resolution', () => {
       expect(resolveLogLevel(requested, false), String(requested)).toBe('info');
       expect(resolveLogLevel(requested, true), String(requested)).toBe('debug');
     }
+  });
+});
+
+describe('development log transport', () => {
+  it('uses structured JSON only when a developer opts in', () => {
+    expect(shouldUsePrettyLogTransport(true, undefined)).toBe(true);
+    expect(shouldUsePrettyLogTransport(true, 'pretty')).toBe(true);
+    expect(shouldUsePrettyLogTransport(true, ' JSON ')).toBe(false);
+  });
+
+  it('never adds the development pretty transport in deployed environments', () => {
+    expect(shouldUsePrettyLogTransport(false, undefined)).toBe(false);
+    expect(shouldUsePrettyLogTransport(false, 'json')).toBe(false);
+    expect(shouldUsePrettyLogTransport(false, 'pretty')).toBe(false);
   });
 });

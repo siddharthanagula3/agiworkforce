@@ -93,9 +93,9 @@ export function TeamInvitationAcceptance() {
     border: '1px solid var(--agi-rule-strong)',
     borderRadius: 'var(--agi-radius-frame)',
     boxShadow: '0 24px 80px var(--agi-shadow)',
-    margin: '72px auto 96px',
+    margin: 'var(--space-8) auto var(--space-9)',
     maxWidth: 560,
-    padding: 'clamp(24px, 5vw, 42px)',
+    padding: 'clamp(var(--space-5), 5vw, var(--space-7))',
   } as const;
 
   return (
@@ -111,12 +111,12 @@ export function TeamInvitationAcceptance() {
                   alignItems: 'center',
                   background: 'var(--agi-ground-2)',
                   border: '1px solid var(--agi-rule)',
-                  borderRadius: 16,
+                  borderRadius: 'var(--corner-panel)',
                   color: 'var(--agi-ink)',
                   display: 'flex',
                   height: 48,
                   justifyContent: 'center',
-                  marginBottom: 22,
+                  marginBottom: 'var(--space-5)',
                   width: 48,
                 }}
               >
@@ -134,7 +134,7 @@ export function TeamInvitationAcceptance() {
               </p>
             ) : completion ? (
               <Stack gap="tight">
-                <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
+                <div style={{ alignItems: 'center', display: 'flex', gap: 'var(--space-3)' }}>
                   {completion.action === 'accept' ? (
                     <CheckCircle2 color="var(--agi-success)" size={22} />
                   ) : (
@@ -199,9 +199,9 @@ export function TeamInvitationAcceptance() {
                     color: 'var(--agi-ink-2)',
                     display: 'flex',
                     fontSize: 13,
-                    gap: 10,
+                    gap: 'var(--space-3)',
                     lineHeight: 1.55,
-                    padding: 14,
+                    padding: 'var(--space-4)',
                   }}
                 >
                   <ShieldCheck size={18} style={{ flexShrink: 0 }} />

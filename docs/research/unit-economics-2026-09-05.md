@@ -1,8 +1,13 @@
 # Unit economics per user profile
 
-Status: Current
+Status: Historical calculation snapshot
 Owner: Fable (architect)
 Last updated: 2026-09-05
+
+The calculations below describe the September 5 catalogs and assumptions. Run
+the cited script against current executable catalogs before using a number for
+pricing, cost, launch, or capacity decisions. Paid acquisition is currently
+waitlist/access-code gated.
 
 Model families and routing tiers only below, no model ids or display names,
 per AGENTS.md 10. The script this doc reports on is

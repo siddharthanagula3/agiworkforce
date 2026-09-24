@@ -32,7 +32,7 @@ export function PlacePhotoCarousel({ photos, placeName }: PlacePhotoCarouselProp
         className="h-24 w-full bg-[var(--chat-surface-hover)] object-cover"
       />
       {current.attribution ? (
-        <span className="absolute bottom-1 right-1 max-w-[70%] truncate rounded bg-[var(--chat-surface-overlay)] px-1.5 py-0.5 text-xs text-[color:var(--chat-text-secondary)]">
+        <span className="absolute bottom-1 right-1 max-w-[70%] truncate rounded-compact bg-[var(--chat-surface-overlay)] px-1.5 py-0.5 text-xs text-[color:var(--chat-text-secondary)]">
           {current.attribution}
         </span>
       ) : null}

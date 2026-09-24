@@ -20,7 +20,10 @@ vi.mock('@/lib/logger', () => ({
 import { persistAssistantTurn } from './assistant-turn-persistence';
 import type { ProcessedRequest } from './request-processor';
 import { logger } from '@/lib/logger';
-import { deriveArtifacts } from '@agiworkforce/artifacts';
+import {
+  deriveArtifacts,
+  EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+} from '@agiworkforce/artifacts';
 
 const CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
 const MESSAGE_ID = '33333333-3333-4333-8333-333333333333';
@@ -30,6 +33,7 @@ const HTML_ARTIFACT_CONTENT = [
   'Here is your page:',
   '',
   '```html',
+  '<!-- @artifact -->',
   '<!doctype html><title>Report</title><h1>Hi</h1>',
   '```',
 ].join('\n');
@@ -78,6 +82,7 @@ describe('persistAssistantTurn -> artifact indexing', () => {
     const expected = deriveArtifacts(HTML_ARTIFACT_CONTENT, {
       conversationId: CONVERSATION_ID,
       messageId: MESSAGE_ID,
+      include: 'explicit-renderable',
     });
     expect(expected.length).toBeGreaterThan(0);
 
@@ -90,6 +95,24 @@ describe('persistAssistantTurn -> artifact indexing', () => {
     expect(params[1]).toBe(USER_ID);
     expect(params[2]).toBe(CONVERSATION_ID);
     expect(params[3]).toBe(MESSAGE_ID);
+  });
+
+  it('persists the explicit policy and does not index unmarked fenced HTML', async () => {
+    await persistAssistantTurn(
+      baseParams('```html\n<script>alert("inert")</script>\n```'),
+    );
+    await flushMicrotasks();
+
+    const messageInsert = mocks.execute.mock.calls.find((c) =>
+      String(c[0]).includes('insert into web_messages'),
+    );
+    const metadata = JSON.parse(String((messageInsert?.[1] as unknown[] | undefined)?.[7]));
+    expect(metadata.artifactDerivation).toBe(EXPLICIT_ARTIFACT_DERIVATION_POLICY);
+    const artifactCalls = mocks.execute.mock.calls.filter((c) =>
+      String(c[0]).includes('web_artifact_index'),
+    );
+    expect(artifactCalls).toHaveLength(1);
+    expect(String(artifactCalls[0]![0])).toContain('delete from web_artifact_index');
   });
 
   it('does not fail or delay persistence when the indexer fails', async () => {

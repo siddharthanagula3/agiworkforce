@@ -33,6 +33,7 @@ import {
   type PersistedTurnSource,
 } from './assistant-turn-sources';
 import { buildPersistedTurnResearch, type PersistedTurnResearch } from './assistant-turn-research';
+import { isEmptyTurnOutput } from './turn-completeness';
 import { enqueueJob } from '@/lib/jobs/job-service';
 import {
   recordResearchReportSettledCost,
@@ -143,7 +144,7 @@ export function buildManagedAgentStream(
     if (state !== undefined) lastTaskState = state;
   };
 
-  const persistTurn = async (truncated: boolean): Promise<void> => {
+  const persistTurn = async (failed: boolean): Promise<void> => {
     if (!persistable || turnPersisted || !input.userId) return;
     turnPersisted = true;
     const serving = input.getServingRequest?.() ?? input.processed;
@@ -153,6 +154,19 @@ export function buildManagedAgentStream(
     const codeExecutionResult = sourceCollector.codeExecutionSnapshot();
     const generatedFiles = sourceCollector.generatedFilesSnapshot();
     const researchReport = input.getResearchReport?.() ?? null;
+    const content = assistantText + publicText.flush();
+    // A run that streamed no answer, no card and no artifact left the reader
+    // with a blank bubble. Recording it as a complete turn is what made a
+    // reload show a header and an action bar with nothing between them.
+    const truncated =
+      failed ||
+      isEmptyTurnOutput({
+        text: content,
+        interactiveCards: interactiveCards.size,
+        otherVisibleOutput: Boolean(
+          sources || citations || codeExecutionResult || generatedFiles || researchReport,
+        ),
+      });
     const research: PersistedTurnResearch | null = researchReport
       ? buildPersistedTurnResearch(
           researchReport,
@@ -163,7 +177,7 @@ export function buildManagedAgentStream(
       processed: input.processed,
       userId: input.userId,
       snapshot: {
-        content: assistantText + publicText.flush(),
+        content,
         model: serving.chatRequest.model,
         provider: serving.provider,
         inputTokens: input.usage.inputTokens,

@@ -108,7 +108,7 @@ export function CommandPalette({
             >
               <Text
                 style={{
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: '700',
                   color: colors.teal,
                   textTransform: 'uppercase',

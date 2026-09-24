@@ -166,7 +166,7 @@ export function DirectoryCard({
             aria-label={`${trailingLabel} ${entry.name}`}
             title={trailingLabel}
             className={cn(
-              'relative z-10',
+              'relative z-[var(--z-control)]',
               DIRECTORY_ICON_BUTTON,
               !entry.installed && DIRECTORY_ADD_BUTTON,
               DIRECTORY_FOCUS_RING,
@@ -221,8 +221,8 @@ export function DirectoryGrid({
             <div className="flex items-start gap-3">
               <div className="size-11 shrink-0 animate-pulse rounded-xl bg-foreground/10" />
               <div className="min-w-0 flex-1 space-y-2">
-                <div className="h-3.5 w-2/5 animate-pulse rounded bg-foreground/10" />
-                <div className="h-3 w-4/5 animate-pulse rounded bg-foreground/[0.07]" />
+                <div className="h-3.5 w-2/5 animate-pulse rounded-compact bg-foreground/10" />
+                <div className="h-3 w-4/5 animate-pulse rounded-compact bg-foreground/[0.07]" />
               </div>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const metadata: Metadata = {
   title: 'Welcome',
@@ -6,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function WelcomeLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

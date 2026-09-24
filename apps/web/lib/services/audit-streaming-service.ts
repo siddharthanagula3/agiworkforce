@@ -334,6 +334,7 @@ const MINUTE_MS = 60 * 1_000;
 export async function auditStreamContinuity(
   db: DatabaseAdapter,
   now: Date = new Date(),
+  organizationId?: string,
 ): Promise<AuditStreamContinuity[]> {
   const rows = await db.query<ContinuityRow>(
     `select d.organization_id,
@@ -349,7 +350,9 @@ export async function auditStreamContinuity(
           or (e.created_at, e.id) > (d.last_delivered_at, d.last_delivered_id)
         )
       where d.enabled = true
+        ${organizationId === undefined ? '' : 'and d.organization_id = $1'}
       group by d.organization_id, d.consecutive_failures`,
+    organizationId === undefined ? [] : [organizationId],
   );
 
   return rows.map((row) => {

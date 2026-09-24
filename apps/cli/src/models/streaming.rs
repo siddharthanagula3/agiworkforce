@@ -130,7 +130,8 @@ fn map_llm_error(err: LlmError) -> anyhow::Error {
             provider,
             message,
             retryable,
-        } => CliError::stream_error(provider, message, retryable).into(),
+            detail,
+        } => CliError::stream_failure(provider, message, retryable, detail).into(),
         LlmError::RateLimited {
             provider,
             retry_after,
@@ -160,6 +161,7 @@ fn completion_result_from(outcome: ChatOutcome) -> CompletionResult {
         cache_creation_input_tokens: outcome.usage.cache_creation_input_tokens,
         via_subscription: false,
         stop_reason: outcome.stop_reason,
+        stop: outcome.stop,
         reasoning_output_tokens: outcome.usage.reasoning_output_tokens,
     }
 }

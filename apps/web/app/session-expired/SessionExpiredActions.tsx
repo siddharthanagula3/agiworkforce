@@ -24,7 +24,9 @@ export function SessionExpiredActions() {
 
   return (
     <ButtonRow>
-      <Button href={`/login?redirectTo=${encodeURIComponent(returnTo)}`}>Sign in again</Button>
+      <Button href={`/login/complete?redirectTo=${encodeURIComponent(returnTo)}`}>
+        Sign in again
+      </Button>
     </ButtonRow>
   );
 }

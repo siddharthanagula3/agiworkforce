@@ -424,6 +424,13 @@ function buildCatalog(curation, synced, familyCatalog, defaultsCatalog) {
         `${key}: thinking configuration requires a chat protocol`,
       );
     }
+    if (offering.quotaChatImageInput !== undefined) {
+      assert(
+        offering.quotaProbeProtocol === 'chat' &&
+          offering.quotaChatImageInput === true,
+        `${key}: image input requires a verified chat protocol`,
+      );
+    }
     if (offering.quotaImageSize !== undefined) {
       assert.ok(
         offering.quotaProbeProtocol === 'image-sync' && /^\d+\*\d+$/.test(offering.quotaImageSize),
@@ -2472,6 +2479,12 @@ function buildNormalizedRegistry(
         ...lifecycle,
         replacedBy: resolveReplacement(modelKey, lifecycle, familyIndex[modelKey], catalog),
       },
+      ...(model.webSearchToolOfferPolicy
+        ? { webSearchToolOfferPolicy: model.webSearchToolOfferPolicy }
+        : {}),
+      ...(model.transientSameRouteRetries
+        ? { transientSameRouteRetries: model.transientSameRouteRetries }
+        : {}),
       residencyRegions: governance[model.provider]?.residencyRegions ?? UNKNOWN_RESIDENCY_REGIONS,
       evidenceRefs: Array.isArray(model.evidenceRefs) ? model.evidenceRefs : [],
     };
@@ -2524,6 +2537,7 @@ function buildNormalizedRegistry(
       contextTokens: positiveIntegerOrUndefined(model.contextWindow),
       maxInputTokens: positiveIntegerOrUndefined(model.maxInputTokens),
       maxOutputTokens: positiveIntegerOrUndefined(model.maxOutputTokens),
+      responseBudgetFloorTokens: positiveIntegerOrUndefined(model.responseBudgetFloorTokens),
       knowledgeCutoff: model.knowledgeCutoff,
       embeddingDimensions: positiveIntegerOrUndefined(model.embeddingDimensions),
       videoGeneration: videoGeneration

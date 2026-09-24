@@ -27,6 +27,17 @@ export interface ManagedCloudChatAttachmentUploadOptions {
   conversationId?: string;
   /** The composer is in Temporary Chat, so the upload is not a Library file. */
   temporary?: boolean;
+  onStatus?: (status: ManagedCloudChatAttachmentUploadStatus) => void;
+}
+
+export type ManagedCloudChatAttachmentUploadPhase =
+  'preparing' | 'uploading' | 'verifying' | 'complete' | 'failed';
+
+export interface ManagedCloudChatAttachmentUploadStatus {
+  index: number;
+  fileName: string;
+  phase: ManagedCloudChatAttachmentUploadPhase;
+  error?: string;
 }
 
 export interface ManagedCloudChatAttachmentsClient {
@@ -55,6 +66,17 @@ function assertNotAborted(signal?: AbortSignal): void {
 
 function normalizeBaseUrl(baseUrl: string): string {
   return stripTrailingSlashes(baseUrl);
+}
+
+function reportStatus(
+  listener: ManagedCloudChatAttachmentUploadOptions['onStatus'],
+  status: ManagedCloudChatAttachmentUploadStatus,
+): void {
+  try {
+    listener?.(status);
+  } catch {
+    return;
+  }
 }
 
 async function responseError(response: Response, fallback: string): Promise<Error> {
@@ -104,7 +126,7 @@ export function createManagedCloudChatAttachmentsClient(
 
   return {
     async upload(files, options = {}) {
-      const { signal, conversationId, temporary } = options;
+      const { signal, conversationId, temporary, onStatus } = options;
       assertNotAborted(signal);
       if (files.length > MAX_CHAT_ATTACHMENT_COUNT) {
         throw new Error(`Attach at most ${MAX_CHAT_ATTACHMENT_COUNT} files per message.`);
@@ -115,71 +137,86 @@ export function createManagedCloudChatAttachmentsClient(
       }
 
       const uploaded: ManagedCloudChatAttachment[] = [];
-      for (const file of files) {
-        assertNotAborted(signal);
-        const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
-        if (!mimeType || !isSupportedChatAttachment(file.name, mimeType)) {
-          throw new Error(
-            `${file.name} is not supported. Attach an image, PDF, or text/code file instead.`,
+      for (const [index, file] of files.entries()) {
+        try {
+          assertNotAborted(signal);
+          reportStatus(onStatus, { index, fileName: file.name, phase: 'preparing' });
+          const mimeType = resolveChatAttachmentMimeType(file.name, file.type);
+          if (!mimeType || !isSupportedChatAttachment(file.name, mimeType)) {
+            throw new Error(
+              `${file.name} is not supported. Attach an image, PDF, or text/code file instead.`,
+            );
+          }
+
+          const presignRequest = ManagedCloudChatAttachmentPresignRequestSchema.parse({
+            kind: 'chat-attachment',
+            fileName: file.name,
+            mimeType,
+            byteCount: file.size,
+          });
+          const presignResponse = await post(
+            MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
+            presignRequest,
+            signal,
           );
-        }
-
-        const presignRequest = ManagedCloudChatAttachmentPresignRequestSchema.parse({
-          kind: 'chat-attachment',
-          fileName: file.name,
-          mimeType,
-          byteCount: file.size,
-        });
-        const presignResponse = await post(
-          MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
-          presignRequest,
-          signal,
-        );
-        if (!presignResponse.ok) {
-          throw await responseError(presignResponse, `Could not upload ${file.name}.`);
-        }
-        const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
-          await presignResponse.json(),
-        );
-        const uploadUrl = new URL(presign.uploadUrl);
-        const sameOrigin = typeof location !== 'undefined' && uploadUrl.origin === location.origin;
-        if (uploadUrl.protocol !== 'https:' && !sameOrigin) {
-          throw new Error(`Refusing an insecure upload destination for ${file.name}.`);
-        }
-
-        const putResponse = await uploadFetchImpl(uploadUrl.toString(), {
-          method: presign.uploadMethod,
-          headers: presign.uploadHeaders,
-          body: file,
-          signal,
-        });
-        if (!putResponse.ok) {
-          throw new ManagedCloudChatAttachmentHttpError(
-            `Could not upload ${file.name} to storage.`,
-            putResponse.status,
+          if (!presignResponse.ok) {
+            throw await responseError(presignResponse, `Could not upload ${file.name}.`);
+          }
+          const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
+            await presignResponse.json(),
           );
-        }
+          const uploadUrl = new URL(presign.uploadUrl);
+          const sameOrigin =
+            typeof location !== 'undefined' && uploadUrl.origin === location.origin;
+          if (uploadUrl.protocol !== 'https:' && !sameOrigin) {
+            throw new Error(`Refusing an insecure upload destination for ${file.name}.`);
+          }
 
-        const completeRequest = ManagedCloudChatAttachmentCompleteRequestSchema.parse({
-          storageKey: presign.storageKey,
-          fileName: file.name,
-          mimeType,
-          byteCount: file.size,
-          ...(conversationId ? { conversationId } : {}),
-          ...(temporary ? { temporary } : {}),
-        });
-        const completionResponse = await post(
-          MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
-          completeRequest,
-          signal,
-        );
-        if (!completionResponse.ok) {
-          throw await responseError(completionResponse, `Could not verify ${file.name}.`);
+          reportStatus(onStatus, { index, fileName: file.name, phase: 'uploading' });
+          const putResponse = await uploadFetchImpl(uploadUrl.toString(), {
+            method: presign.uploadMethod,
+            headers: presign.uploadHeaders,
+            body: file,
+            signal,
+          });
+          if (!putResponse.ok) {
+            throw new ManagedCloudChatAttachmentHttpError(
+              `Could not upload ${file.name} to storage.`,
+              putResponse.status,
+            );
+          }
+
+          reportStatus(onStatus, { index, fileName: file.name, phase: 'verifying' });
+          const completeRequest = ManagedCloudChatAttachmentCompleteRequestSchema.parse({
+            storageKey: presign.storageKey,
+            fileName: file.name,
+            mimeType,
+            byteCount: file.size,
+            ...(conversationId ? { conversationId } : {}),
+            ...(temporary ? { temporary } : {}),
+          });
+          const completionResponse = await post(
+            MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
+            completeRequest,
+            signal,
+          );
+          if (!completionResponse.ok) {
+            throw await responseError(completionResponse, `Could not verify ${file.name}.`);
+          }
+          const completed = ManagedCloudChatAttachmentCompleteResponseSchema.parse(
+            await completionResponse.json(),
+          );
+          uploaded.push(completed.attachment);
+          reportStatus(onStatus, { index, fileName: file.name, phase: 'complete' });
+        } catch (error) {
+          reportStatus(onStatus, {
+            index,
+            fileName: file.name,
+            phase: 'failed',
+            error: error instanceof Error ? error.message : `Could not upload ${file.name}.`,
+          });
+          throw error;
         }
-        const completed = ManagedCloudChatAttachmentCompleteResponseSchema.parse(
-          await completionResponse.json(),
-        );
-        uploaded.push(completed.attachment);
       }
       return uploaded;
     },

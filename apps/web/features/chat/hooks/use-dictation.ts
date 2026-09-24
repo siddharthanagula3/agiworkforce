@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { useBillingStore } from '@shared/stores/web-auth-store';
+import type { MeDisabledFeature } from '@agiworkforce/cloud-contracts';
+import { DICTATION_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import {
   ANALYSER_FFT_SIZE,
@@ -30,6 +33,19 @@ const ANNOUNCEMENT = {
 const FALLBACK_CAPTURE_ERROR = 'The microphone could not be started. Try again.';
 const FALLBACK_TRANSCRIBE_ERROR = 'That recording could not be transcribed. Try again.';
 const EMPTY_TRANSCRIPT_ERROR = 'Nothing was heard in that recording. Try again.';
+const DICTATION_SWITCHED_OFF =
+  'Dictation is temporarily switched off while we investigate a problem with it.';
+const DICTATION_SWITCHED_OFF_FOR_VERSION = 'Dictation is switched off for this version.';
+
+export function dictationSwitchedOffReason(
+  disabledFeatures: readonly MeDisabledFeature[],
+): string | null {
+  const closed = disabledFeatures.find((feature) => feature.capability === DICTATION_CAPABILITY);
+  if (!closed) return null;
+  return closed.reason
+    ? `${DICTATION_SWITCHED_OFF_FOR_VERSION} ${closed.reason}`
+    : DICTATION_SWITCHED_OFF;
+}
 
 export interface DictationController {
   status: DictationStatus;
@@ -73,6 +89,11 @@ export function useDictation({ onInsert, onSend }: UseDictationOptions): Dictati
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
     dispatch({ type: DICTATION_EVENT.start });
+    const switchedOff = dictationSwitchedOffReason(useBillingStore.getState().disabledFeatures);
+    if (switchedOff) {
+      dispatch({ type: DICTATION_EVENT.fail, message: switchedOff });
+      return;
+    }
     setWaveform(createWaveform());
     setAnnouncement(ANNOUNCEMENT.recording);
     const store = useVoiceInputStore.getState();

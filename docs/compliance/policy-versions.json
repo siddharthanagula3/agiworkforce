@@ -1,0 +1,350 @@
+{
+  "note": "The dated version history of every canonical policy page in apps/web/lib/legal-constants.ts. The last version of each must match the text the page publishes and the date it prints; scripts/check-policy-versions.mjs fails when either moves alone. A change that leaves the date where it is appends a version with a note saying why it is editorial. The workflow is in docs/compliance/README.md.",
+  "documents": {
+    "terms": {
+      "page": "apps/web/app/terms/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-11",
+          "digest": "e0bc0cf6cfb2437c",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; this date is also the terms version every acceptance records, so moving it asks every account to accept again, which is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "1000ae1c69856cfa",
+          "note": "Discloses the founder-approved Experiential Labs promotional route, its Free-plan content capture and potential provider use, with a new terms acceptance version."
+        },
+        {
+          "date": "2026-09-23",
+          "digest": "27a6295cfa3d2a5d",
+          "note": "Adds current provider terms links and explains how gateway, serving-provider and BYOK terms apply to the selected route; records the existing September 23 Terms acceptance version."
+        },
+        {
+          "date": "2026-09-23",
+          "digest": "efbff32c5dfc4e75",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "privacy": {
+      "page": "apps/web/app/privacy/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-21",
+          "digest": "8a047905eaa64a87",
+          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "8a047905eaa64a87",
+          "note": "Adds Experiential Labs Free-plan capture and potential provider use to the privacy notice. The copy-digest instrument does not detect the new JSX text, so this explicit version records the substantive change."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "0423a664d94b8c05",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "acceptableUse": {
+      "page": "apps/web/app/acceptable-use/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-05",
+          "digest": "64f11534492e5e42",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "021c9f2af163b821",
+          "note": "Discloses the founder-requested website Skip approvals default and the approval boundaries that still require review."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "d03a2be0d91b4997",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "dpa": {
+      "page": "apps/web/app/dpa/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-17",
+          "digest": "0a100093a7c7ea17",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-17",
+          "digest": "7d3aa1d11380dbf7",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "cookies": {
+      "page": "apps/web/app/cookies/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-12",
+          "digest": "4d05f010c7c2e9e8",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; this date is part of the cookie notice version, so moving it asks every visitor to choose again, which is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-09-23",
+          "digest": "5d2ea7656cc0eada",
+          "note": "Corrects the identity-provider source and removes an obsolete browser storage claim; includes the semicolon-bearing JSX fingerprint migration. The founder approved a new notice version and re-prompting visitors on 2026-09-23."
+        }
+      ]
+    },
+    "subprocessors": {
+      "page": "apps/web/app/subprocessors/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-21",
+          "digest": "c1b0cefecd9999c0",
+          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "31cc4fe511514a62",
+          "note": "Corrects the Experiential Labs processor row against its current platform privacy and data-controls documents and records the founder-approved Free promotional route."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "ee9ba9957878071f",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "security": {
+      "page": "apps/web/app/security/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-14",
+          "digest": "a4324ec37abd0af3",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; the page prints it as the day it was reviewed, and nobody has re-reviewed every row since, so it is not moved here."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "3c80b8fc321b9d27",
+          "note": "Targeted 2026-09-23 corrections align protected-route coverage, connector and built-in-tool logging limits, public Desktop release status, and the host-neutral restore drill with current code. The printed date remains the last full-page review; these targeted checks do not establish a new whole-page review."
+        }
+      ]
+    },
+    "sla": {
+      "page": "apps/web/app/sla/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-04",
+          "digest": "ad38dd6547823cce",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-09-04",
+          "digest": "870e997d7ff7d480",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "refunds": {
+      "page": "apps/web/app/refund-policy/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-13",
+          "digest": "b1a51c19bdcf0712",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-13",
+          "digest": "d13877c05d7e454d",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "accessibility": {
+      "page": "apps/web/app/accessibility/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-05",
+          "digest": "d4104614a41f0815",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-05",
+          "digest": "4b97930441a18d89",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "trust": {
+      "page": "apps/web/app/trust/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-21",
+          "digest": "b91459df778d4e39",
+          "note": "Every row re-checked against its evidence on 2026-09-21 and recorded in docs/compliance/trust-claims.json."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "8d5c308c0f0e5462",
+          "note": "Records the already-reviewed September 21 Trust claim corrections and the semicolon-bearing JSX fingerprint migration. The 39 row-level evidence records pass their separate guard; this does not claim a new whole-page review date."
+        }
+      ]
+    },
+    "legalIndex": {
+      "page": "apps/web/app/legal/page.tsx",
+      "versions": [
+        {
+          "date": null,
+          "digest": "97b03ff73183bccc",
+          "note": "The index prints no date of its own; recorded so that a change to it is still a recorded version."
+        },
+        {
+          "date": null,
+          "digest": "0db69193fc02515b",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "euRepresentative": {
+      "page": "apps/web/app/legal/eu-representative/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-05",
+          "digest": "67ba6a4cf5fff759",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-05",
+          "digest": "b52daf2d8996f936",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "mobile": {
+      "page": "apps/web/app/mobile/legal/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-21",
+          "digest": "e809c74693e2470f",
+          "note": "Baseline recorded 2026-09-21 from the text published that day, which matches this date."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "c215d548ab4086a0",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "copyright": {
+      "page": "apps/web/app/copyright/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-06",
+          "digest": "b41e49a54799af0b",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-06",
+          "digest": "98d82c8636dca659",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "modelLicenses": {
+      "page": "apps/web/app/model-licenses/page.tsx",
+      "versions": [
+        {
+          "date": null,
+          "digest": "19dc795298011dd8",
+          "note": "The page prints the model registry’s own date, not a policy constant, and /legal now shows the same one; recorded so a change to its text is a recorded version."
+        },
+        {
+          "date": null,
+          "digest": "dabe9054035b1e61",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "indiaPrivacy": {
+      "page": "apps/web/app/privacy/india/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-13",
+          "digest": "8f3aae556646d7e2",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-13",
+          "digest": "2de459738bb63789",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "dataRights": {
+      "page": "apps/web/app/privacy/requests/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-13",
+          "digest": "a784889f1eb80f69",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-13",
+          "digest": "336470ef3ff5976a",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "dataUse": {
+      "page": "apps/web/app/data-use/page.tsx",
+      "versions": [
+        {
+          "date": "2026-08-14",
+          "digest": "a6b198b6758f48a1",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "9691f4040992a311",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "disclaimer": {
+      "page": "apps/web/app/disclaimer/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-02",
+          "digest": "b89308ba89f3a35c",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-09-02",
+          "digest": "d7e9011441f8ccf3",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    },
+    "agentPermissions": {
+      "page": "apps/web/app/agent-permissions/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-02",
+          "digest": "2ad16ca175bea5b0",
+          "note": "Baseline recorded 2026-09-21 from the text published that day. The text changed after this date without a new one; it is a published legal instrument, so moving its date is the founder’s decision, reported 2026-09-21."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "782677e1c104ce25",
+          "note": "Updates the published website default authority to match the new account policy while retaining fail-closed and workspace boundaries."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "da7e6a030b7ddea4",
+          "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        }
+      ]
+    }
+  }
+}

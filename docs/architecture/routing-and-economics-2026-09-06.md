@@ -1,8 +1,15 @@
 # Model routing and economics: the whole system, as built and as intended
 
-Status: Current
+Status: Dated routing/economics design; current only where re-verified against code
 Owner: Fable (architect), founder decides the gated items in §6
-Last updated: 2026-09-06
+Last updated: 2026-09-22
+
+This document preserves the September 6 routing and economics analysis. Current
+model identity, route admission, prices, entitlements, and commercial gates
+come from executable catalogs and the current implementation. In particular,
+Managed Free is available after sign-in while new paid subscriptions and
+upgrades remain waitlist/access-code gated; older statements below about open
+paid acquisition do not override `docs/product/commercial.md`.
 
 The founder's direction on 2026-09-06, in one sentence: the user buys a model
 at its official price in AGI Credits, the company buys the compute from

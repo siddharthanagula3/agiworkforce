@@ -32,6 +32,7 @@ function fullLine(): Required<CollectedProviderLine> {
     line: 'data: {"choices":[{"delta":{"content":"hi"}}]}\n',
     publicTextDelta: 'hi',
     reasoningDelta: 'hi',
+    toolCallDelta: true,
     serverToolStart: { toolCallId: 'call-1', name: 'web_search' },
     serverToolResults: [
       {
@@ -85,6 +86,29 @@ function fullStepResult(): Required<ToolLoopProviderStepResult> {
         },
       ],
     },
+    providerTrace: {
+      chunks: 3,
+      textChunks: 1,
+      textChars: 19,
+      thinkingChunks: 0,
+      thinkingChars: 0,
+      toolStarts: 1,
+      stopChunks: 1,
+      wireEvents: 3,
+      upstreamModel: 'fixture-flash-model',
+      upstreamProvider: 'anthropic',
+      upstreamFrameShape: {
+        frames: 2,
+        contentFrames: 1,
+        contentChars: 19,
+        reasoningFrames: 0,
+        reasoningChars: 0,
+        reasoningDetailFrames: 0,
+        reasoningDetailItems: 0,
+        toolCallFrames: 0,
+        finishFrames: 1,
+      },
+    },
   };
 }
 
@@ -100,6 +124,21 @@ describe('parseCloudAgentProviderStepResult', () => {
     Object.assign(observation, { routeId: 42 });
     expect(() => parseCloudAgentProviderStepResult(result)).toThrow();
   });
+
+  it('rejects malformed provider trace counts instead of discarding the result later', () => {
+    const result = fullStepResult();
+    if (!result.providerTrace) throw new Error('fixture missing provider trace');
+    Object.assign(result.providerTrace, { textChunks: -1 });
+    expect(() => parseCloudAgentProviderStepResult(result)).toThrow();
+  });
+
+  it('rejects malformed upstream frame counts', () => {
+    const result = fullStepResult();
+    if (!result.providerTrace?.upstreamFrameShape)
+      throw new Error('fixture missing upstream shape');
+    Object.assign(result.providerTrace.upstreamFrameShape, { reasoningChars: -1 });
+    expect(() => parseCloudAgentProviderStepResult(result)).toThrow();
+  });
 });
 
 describe('parseCloudAgentToolResult', () => {
@@ -107,6 +146,7 @@ describe('parseCloudAgentToolResult', () => {
     return {
       content: 'done',
       isError: false,
+      searchOutcome: 'no_results',
       unavailable: false,
       unavailableFamily: 'execution',
       source: { url: 'https://example.com', title: 'Example', snippet: 'a snippet' },

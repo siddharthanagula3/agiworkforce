@@ -106,6 +106,19 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe('route-lane reload provenance', () => {
+  it('writes the served lane where the transcript reload path reads it', async () => {
+    await persistAssistantTurn({
+      processed: { ...processed, routeLane: 'free' },
+      userId: USER_ID,
+      snapshot: snapshot(),
+    });
+
+    expect(storedMetadata()['routeLane']).toBe('free');
+    expect((storedMetadata()['requestedRoute'] as { lane?: unknown }).lane).toBe('free');
+  });
+});
+
 /**
  * Stop then Continue reuses the same assistant_message_id, so the completing
  * write lands on the cancelled attempt's row rather than on a fresh one.

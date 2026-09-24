@@ -608,6 +608,23 @@
       "taskRouting": {},
       "canonicalization": {}
     },
+    "experientiallabs": {
+      "label": "Experiential Labs",
+      "sseDelimiter": "\n\n",
+      "tokenMultiplier": {
+        "prompt": 1,
+        "completion": 1
+      },
+      "defaultPricing": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0
+      },
+      "modelPrefixes": [],
+      "aliases": ["experientiallabs", "experiential-labs"],
+      "defaultModel": "",
+      "taskRouting": {},
+      "canonicalization": {}
+    },
     "ollama": {
       "label": "Ollama (Local)",
       "sseDelimiter": "\n",
@@ -3806,6 +3823,10 @@
       "apiModelId": "openrouter/free",
       "openRouterSlug": "openrouter/free",
       "name": "OpenRouter Free Auto",
+      "maxOutputTokens": 8192,
+      "responseBudgetFloorTokens": 1024,
+      "transientSameRouteRetries": 1,
+      "webSearchToolOfferPolicy": "required_only",
       "provider": "open_router",
       "modelType": "chat",
       "role": "router",
@@ -4060,6 +4081,46 @@
     "ollama"
   ],
   "providerOfferings": {
+    "experientiallabs-free-claude-opus-5.5": {
+      "provider": "experientiallabs",
+      "providerModelId": "claude-opus-5.5",
+      "displayName": "Claude Opus 5.5 · Experiential Labs Free",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "experientiallabs-free-gpt-6-luna": {
+      "provider": "experientiallabs",
+      "providerModelId": "gpt-6-luna",
+      "displayName": "GPT-6 Luna · Experiential Labs Free",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "experientiallabs-free-gpt-6-sol": {
+      "provider": "experientiallabs",
+      "providerModelId": "gpt-6-sol",
+      "displayName": "GPT-6 Sol · Experiential Labs Free",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "experientiallabs-free-gpt-5.6-luna": {
+      "provider": "experientiallabs",
+      "providerModelId": "gpt-5.6-luna",
+      "displayName": "GPT-5.6 Luna · Experiential Labs Free",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
+    "experientiallabs-free-nemotron-3-ultra-550b-a55b": {
+      "provider": "experientiallabs",
+      "providerModelId": "nemotron-3-ultra-550b-a55b",
+      "displayName": "Nemotron 3 Ultra · Experiential Labs Free",
+      "category": "chat",
+      "identityStatus": "exact",
+      "quotaProbeProtocol": "chat"
+    },
     "qwen-quota-001": {
       "provider": "qwen",
       "providerModelId": "qwen3.8-max",
@@ -4597,7 +4658,8 @@
       "displayName": "qwen3-vl-flash",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "quotaChatImageInput": true
     },
     "qwen-quota-072": {
       "provider": "qwen",
@@ -4605,7 +4667,8 @@
       "displayName": "qwen3-vl-flash-2026-01-22",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "quotaChatImageInput": true
     },
     "qwen-quota-073": {
       "provider": "qwen",
@@ -4613,7 +4676,8 @@
       "displayName": "qwen3-vl-flash-2025-10-15",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "quotaChatImageInput": true
     },
     "qwen-quota-074": {
       "provider": "qwen",
@@ -4621,7 +4685,8 @@
       "displayName": "qwen3-vl-plus",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "quotaChatImageInput": true
     },
     "qwen-quota-075": {
       "provider": "qwen",
@@ -4629,7 +4694,8 @@
       "displayName": "qwen3-vl-plus-2025-12-19",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "quotaChatImageInput": true
     },
     "qwen-quota-076": {
       "provider": "qwen",
@@ -4637,7 +4703,8 @@
       "displayName": "qwen3-vl-plus-2025-09-23",
       "category": "chat",
       "identityStatus": "exact",
-      "quotaProbeProtocol": "chat"
+      "quotaProbeProtocol": "chat",
+      "quotaChatImageInput": true
     },
     "qwen-quota-077": {
       "provider": "qwen",

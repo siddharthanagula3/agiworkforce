@@ -28,6 +28,8 @@ describe('Sheet', () => {
     const sheet = screen.getByRole('dialog');
     expect(sheet.getAttribute('aria-modal')).toBe('true');
     expect(sheet.getAttribute('data-state')).toBe('open');
+    expect(sheet.className).toContain('max-h-[100dvh]');
+    expect(sheet.className).toContain('h-[100dvh]');
   });
 
   it('lets a call site drop aria-modal for a non-modal sheet', () => {

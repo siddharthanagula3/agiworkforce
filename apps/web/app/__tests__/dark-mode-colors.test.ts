@@ -196,6 +196,17 @@ describe('Dark mode color tokens', () => {
         );
       }
     });
+
+    it('paints transcript prose and inline code from chat tokens', () => {
+      const body = cssContent.match(/\.message-text\s*\{([^}]+)\}/)?.[1] ?? '';
+      const inlineCode =
+        cssContent.match(/\.message-text code:not\(pre code\)\s*\{([^}]+)\}/)?.[1] ?? '';
+
+      expect(body).toContain('color: var(--chat-text-primary)');
+      expect(inlineCode).toContain('background: var(--chat-surface-hover)');
+      expect(inlineCode).toContain('color: var(--chat-text-primary)');
+      expect(`${body}\n${inlineCode}`).not.toMatch(/(?:gray|grey|zinc|neutral|slate)-\d+/);
+    });
   });
 
   describe('CSS variable completeness', () => {

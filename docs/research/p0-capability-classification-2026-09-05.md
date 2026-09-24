@@ -1,8 +1,12 @@
 # P0 capability classification, 2026-09-05
 
-Status: Current
+Status: Historical snapshot
 Owner: Fable (architect) with the founder
 Last updated: 2026-09-05
+
+Superseded for current competitor behavior and current AGI implementation on
+2026-09-21 by `chatgpt-claude-ecosystem-delta-2026-09-21.md` and the live
+re-audit ledgers. Preserve this file as the September 5 classification record.
 
 Method: Fable walked chatgpt.com and claude.ai personally in the founder's browser (every page, menu and control, one identical run on each) and then the same on our web app and the desktop shell. Captures live in the session scratchpad (product-audit/ref and product-audit/ours); the observation notes are in the session research folder and the durable parts are summarised here. Statuses use the goal vocabulary: PASS (at parity), POLISH (present, visibly rougher), PARTIAL (present, a leader behaviour missing), BROKEN (present, failed in the live run), MISSING (absent), BLOCKER (founder or vendor gated). Model names are omitted by rule.
 

@@ -4,13 +4,16 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../..');
-const WEB_CSS = 'apps/web/app/globals.css';
-const DESKTOP_CSS = 'apps/desktop/src/styles/globals.css';
-const CONSUMER_ROOTS = ['apps/web', 'packages/ui/ui/src'];
+const FOUNDATION_CSS = 'packages/ui/design-tokens/src/foundation.css';
+const CONSUMER_ROOTS = ['apps/web', 'packages/ui/ui/src', 'packages/ui/unified-chat/src'];
+const OWNERSHIP_ROOTS = ['apps/web', 'apps/desktop/src', 'packages/ui'];
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'coverage', 'out', '__tests__']);
 
-const LAYER_DECLARATION = /^[^\S\n]*--z-([a-z-]+)\s*:\s*(\d+)\s*;/gm;
+const LAYER_DECLARATION = /^[^\S\n]*--z-([a-z-]+)\s*:\s*(-?\d+)\s*;/gm;
+const HAS_LAYER_DECLARATION = /^[^\S\n]*--z-[a-z-]+\s*:\s*-?\d+\s*;/m;
 const LAYER_REFERENCE = /var\(\s*--z-([a-z-]+)\s*(?:,\s*(\d+)\s*)?\)/g;
+const RAW_LAYER = /(?<![\w-])-?z-(?:\d+|\[(?!var\()[^\]]+\])/g;
+const RAW_STYLE_LAYER = /\bzIndex\s*:\s*['"`]?-?\d+|z-index\s*:\s*-?\d+/g;
 
 function declaredLayers(relPath: string): Map<string, number> {
   const css = readFileSync(join(REPO_ROOT, relPath), 'utf8');
@@ -26,7 +29,7 @@ function sourceFiles(relDir: string, out: string[] = []): string[] {
     const rel = `${relDir}/${entry.name}`;
     if (entry.isDirectory()) {
       if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) sourceFiles(rel, out);
-    } else if (/\.tsx?$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) {
+    } else if (/\.(?:tsx?|css)$/.test(entry.name) && !/\.(test|spec)\.tsx?$/.test(entry.name)) {
       out.push(rel);
     }
   }
@@ -39,7 +42,7 @@ function layerReferences(): Reference[] {
   const found: Reference[] = [];
   for (const root of CONSUMER_ROOTS) {
     for (const file of sourceFiles(root)) {
-      readFileSync(join(REPO_ROOT, file), 'utf8')
+      stripComments(readFileSync(join(REPO_ROOT, file), 'utf8'))
         .split('\n')
         .forEach((line, index) => {
           for (const match of line.matchAll(LAYER_REFERENCE)) {
@@ -56,53 +59,62 @@ function layerReferences(): Reference[] {
   return found;
 }
 
-const web = declaredLayers(WEB_CSS);
-const desktop = declaredLayers(DESKTOP_CSS);
+function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '))
+    .replace(
+      /(^|[^:])\/\/[^\n]*/g,
+      (match, lead: string) => lead + ' '.repeat(match.length - lead.length),
+    );
+}
+
+const layers = declaredLayers(FOUNDATION_CSS);
 const references = layerReferences();
 
 describe('overlay stacking contract', () => {
-  it('keeps the z-index scale out of TypeScript, so CSS stays its only owner', () => {
-    const declarations = sourceFiles('apps/web')
-      .concat(sourceFiles('packages/ui/ui/src'))
-      .filter((file) => /\bzIndex\s*:/.test(readFileSync(join(REPO_ROOT, file), 'utf8')))
-      .filter(
-        (file) =>
-          !/zIndex\s*:\s*['"`]?var\(\s*--z-/.test(readFileSync(join(REPO_ROOT, file), 'utf8')),
-      );
-    expect(declarations, 'z-index values must come from a --z-* custom property').toEqual([]);
+  it('has one canonical owner for every z-index rung', () => {
+    const owners = OWNERSHIP_ROOTS.flatMap((root) => sourceFiles(root))
+      .filter((file) => file.endsWith('.css'))
+      .filter((file) => HAS_LAYER_DECLARATION.test(readFileSync(join(REPO_ROOT, file), 'utf8')));
+    expect(owners).toEqual([FOUNDATION_CSS]);
   });
 
-  it('declares every layer web renders and nothing speculative', () => {
-    expect(web.size).toBeGreaterThan(0);
-    const referenced = new Set(references.map((reference) => reference.layer));
-    for (const layer of web.keys()) {
-      expect(referenced, `--z-${layer} is declared in ${WEB_CSS} but nothing renders it`).toContain(
-        layer,
-      );
-    }
-  });
-
-  it('matches every inline fallback to the declared layer', () => {
-    for (const reference of references) {
-      if (reference.fallback === null) continue;
-      for (const [css, layers] of [
-        [WEB_CSS, web],
-        [DESKTOP_CSS, desktop],
-      ] as const) {
-        const declared = layers.get(reference.layer);
-        if (declared === undefined) continue;
-        expect(
-          reference.fallback,
-          `${reference.file}:${reference.line} falls back to ${reference.fallback} for --z-${reference.layer}, but ${css} declares ${declared}. The two must agree or the layer moves when the stylesheet loads.`,
-        ).toBe(declared);
+  it('rejects numeric Tailwind, arbitrary and CSS rungs in production source', () => {
+    const violations: string[] = [];
+    for (const root of CONSUMER_ROOTS) {
+      for (const file of sourceFiles(root)) {
+        stripComments(readFileSync(join(REPO_ROOT, file), 'utf8'))
+          .split('\n')
+          .forEach((line, index) => {
+            for (const match of line.matchAll(RAW_LAYER)) {
+              violations.push(`${file}:${index + 1} ${match[0]}`);
+            }
+            for (const match of line.matchAll(RAW_STYLE_LAYER)) {
+              violations.push(`${file}:${index + 1} ${match[0]}`);
+            }
+          });
       }
+    }
+    expect(violations, 'stacking must consume a named --z-* rung from foundation.css').toEqual([]);
+  });
+
+  it('declares every referenced layer and uses no numeric fallback', () => {
+    for (const reference of references) {
+      expect(
+        layers.has(reference.layer),
+        `${reference.file}:${reference.line} reads --z-${reference.layer}, which ${FOUNDATION_CSS} does not declare`,
+      ).toBe(true);
+      expect(
+        reference.fallback,
+        `${reference.file}:${reference.line} carries a numeric fallback instead of failing closed on the canonical stylesheet`,
+      ).toBeNull();
     }
   });
 
   it('keeps popover and tooltip above modal', () => {
-    const modal = web.get('modal');
-    const popover = web.get('popover');
-    const tooltip = web.get('tooltip');
+    const modal = layers.get('modal');
+    const popover = layers.get('popover');
+    const tooltip = layers.get('tooltip');
     expect([modal, popover, tooltip]).not.toContain(undefined);
     // A Select or Tooltip opened from inside a Dialog is a sibling of it under
     // <body>, so it disappears behind the dialog unless it outranks --z-modal.
@@ -110,14 +122,32 @@ describe('overlay stacking contract', () => {
     expect(tooltip as number).toBeGreaterThan(popover as number);
   });
 
-  it('agrees with the desktop scale on every shared layer', () => {
-    for (const [layer, value] of web) {
-      const other = desktop.get(layer);
-      if (other === undefined) continue;
-      expect(
-        other,
-        `--z-${layer} is ${value} in ${WEB_CSS} but ${other} in ${DESKTOP_CSS}; the shared primitives ship one fallback for both.`,
-      ).toBe(value);
-    }
+  it('keeps every named rung in one monotonic ladder', () => {
+    const ordered = [
+      'behind-far',
+      'behind',
+      'base',
+      'content',
+      'content-raised',
+      'control',
+      'content-sticky',
+      'panel-backdrop',
+      'panel',
+      'panel-raised',
+      'dropdown',
+      'navigation',
+      'navigation-sticky',
+      'sticky',
+      'overlay',
+      'overlay-panel',
+      'modal',
+      'popover',
+      'tooltip',
+      'notification',
+      'fullscreen',
+      'skip-link',
+    ].map((layer) => layers.get(layer));
+    expect(ordered).not.toContain(undefined);
+    expect(ordered).toEqual([...ordered].sort((a, b) => (a as number) - (b as number)));
   });
 });

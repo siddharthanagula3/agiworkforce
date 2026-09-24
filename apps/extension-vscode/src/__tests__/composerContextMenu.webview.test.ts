@@ -91,12 +91,18 @@ describe('composer context menu', () => {
     executeWebviewScript();
 
     openPlusMenu();
-    expect(postedMessages).toContainEqual({ type: 'requestContextMenuState' });
+    expect(postedMessages).toContainEqual({
+      origin: 'chat',
+      epoch: 0,
+      type: 'requestContextMenuState',
+    });
 
     postedMessages = [];
     openPlusMenu();
     openPlusMenu();
     expect(postedMessages.filter((m) => m !== null)).toContainEqual({
+      origin: 'chat',
+      epoch: 0,
       type: 'requestContextMenuState',
     });
   });
@@ -145,6 +151,8 @@ describe('composer context menu', () => {
     contextItem('problems')?.click();
 
     expect(postedMessages).toContainEqual({
+      origin: 'chat',
+      epoch: 0,
       type: 'attachContext',
       payload: { kind: 'problems' },
     });
@@ -167,6 +175,8 @@ describe('composer context menu', () => {
     chip?.querySelector<HTMLButtonElement>('.attachment-chip__remove')?.click();
 
     expect(postedMessages).toContainEqual({
+      origin: 'chat',
+      epoch: 0,
       type: 'removePendingAttachment',
       payload: { id: 'att-4' },
     });

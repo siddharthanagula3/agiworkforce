@@ -105,7 +105,7 @@ const SUBMENU_ROW_CLASS =
   'flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm transition-colors hover:bg-muted/60';
 const NESTED_ROW_CLASS =
   'flex w-full items-center gap-3 rounded-lg py-2 pl-12 pr-3 text-left text-sm transition-colors hover:bg-muted/60';
-const SUBMENU_EMPTY_CLASS = 'px-3 py-2 pl-8 text-[12px] text-muted-foreground';
+const SUBMENU_EMPTY_CLASS = 'px-3 py-2 pl-8 text-caption text-muted-foreground';
 const SUBMENU_MANAGE_CLASS =
   'flex w-full items-center gap-3 rounded-lg py-2 pl-8 pr-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted/60';
 const BADGE_CHECKING = 'Checking';
@@ -125,15 +125,15 @@ const ROW_HOVER_CLASS = 'hover:bg-muted/60';
 const ROW_DISABLED_CLASS = 'cursor-not-allowed opacity-50';
 const GLYPH_CLASS = 'h-4 w-4 shrink-0';
 const BADGE_BASE_CLASS =
-  'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide';
+  'shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold uppercase tracking-wide';
 const BADGE_MUTED_CLASS = 'bg-muted text-muted-foreground';
 const BADGE_UPGRADE_CLASS = 'bg-primary/10 text-primary';
 const DIVIDER_CLASS = 'my-1 border-t border-border/30';
-const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 pl-10 text-[12px] text-muted-foreground';
+const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 pl-10 text-caption text-muted-foreground';
 const SECTION_HEADING_CLASS =
-  'px-3 pb-1 pt-2 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground';
+  'px-3 pb-1 pt-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =
-  'sticky -bottom-px z-10 -mx-1.5 mt-1 border-t border-border/30 bg-popover px-1.5 pb-2 pt-1';
+  'sticky -bottom-px z-[var(--z-control)] -mx-1.5 mt-1 border-t border-border/30 bg-popover px-1.5 pb-2 pt-1';
 const PALETTE_PANEL_CLASS = 'w-80 px-1.5 pt-1.5';
 const CHAT_PANEL_CLASS = 'w-64 p-1.5';
 const PALETTE_ITEM_SELECTOR =
@@ -306,7 +306,7 @@ function MenuToggleRow({
     >
       <Icon className="h-4 w-4 text-muted-foreground" />
       <span className="flex-1 text-left">{label}</span>
-      {checked && <Check className="h-3.5 w-3.5 text-foreground" />}
+      {checked && <Check className="h-4 w-4 text-foreground" />}
     </button>
   );
 
@@ -420,12 +420,12 @@ function PaletteConnectorRow({
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{connector.label}</span>
         {connector.description && (
-          <span className="truncate text-[12px] text-muted-foreground">
+          <span className="truncate text-caption text-muted-foreground">
             {connector.description}
           </span>
         )}
       </span>
-      {checked && <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground" />}
+      {checked && <Check className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />}
     </button>
   );
 }
@@ -453,7 +453,7 @@ function PaletteCatalogRow({
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{label}</span>
         {description && (
-          <span className="truncate text-[12px] text-muted-foreground">{description}</span>
+          <span className="truncate text-caption text-muted-foreground">{description}</span>
         )}
       </span>
     </button>
@@ -478,6 +478,7 @@ export interface ComposerPlusMenuProps {
    * `mediaModeActive`, which still governs the rows that only chat can use.
    */
   attachmentsUnavailable: boolean;
+  attachmentUnavailableTitle?: string;
 
   billingPolicyReady: boolean;
   billingPolicyError: boolean;
@@ -650,7 +651,8 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
       disabled={props.attachmentsUnavailable}
       title={
         props.attachmentsUnavailable
-          ? `${props.mediaModeNoun} generation works from your prompt only. Leave ${props.mediaModeNoun.toLowerCase()} mode to attach files.`
+          ? (props.attachmentUnavailableTitle ??
+            `${props.mediaModeNoun} generation works from your prompt only. Leave ${props.mediaModeNoun.toLowerCase()} mode to attach files.`)
           : undefined
       }
       className={cn(ROW_CLASS, props.attachmentsUnavailable ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
@@ -658,7 +660,12 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
       <Paperclip className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
       <span className="flex-1 text-left">{ROW_LABEL_ATTACH}</span>
       {props.attachmentsUnavailable && (
-        <RowBadge badge={{ label: BADGE_NOT_USED_HERE, upgrade: false }} />
+        <RowBadge
+          badge={{
+            label: props.attachmentUnavailableTitle ? BADGE_NOT_SUPPORTED : BADGE_NOT_USED_HERE,
+            upgrade: false,
+          }}
+        />
       )}
     </button>
   );
@@ -783,14 +790,14 @@ function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?
             event.stopPropagation();
             props.onClearFolder();
           }}
-          className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+          className="shrink-0 rounded-compact p-0.5 text-muted-foreground hover:text-foreground"
           aria-label="Clear working folder"
         >
-          <X className="h-3 w-3" />
+          <X className="h-4 w-4" />
         </button>
       )}
       {!canPickFolder && (
-        <span className="text-[12px] text-muted-foreground">{BADGE_NOT_SUPPORTED}</span>
+        <span className="text-caption text-muted-foreground">{BADGE_NOT_SUPPORTED}</span>
       )}
     </button>
   );
@@ -894,13 +901,13 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         <span className="flex-1 text-left">{props.selectedSkillName ?? ROW_LABEL_SKILLS}</span>
         <ChevronRight
           className={cn(
-            'h-3.5 w-3.5 text-muted-foreground transition-transform',
+            'h-4 w-4 text-muted-foreground transition-transform',
             skillsOpen && 'rotate-90',
           )}
         />
       </button>
       {skillsOpen && (
-        <div role="menu" aria-label={ROW_LABEL_SKILLS} className="space-y-0.5 pb-1">
+        <div role="group" aria-label={ROW_LABEL_SKILLS} className="space-y-0.5 pb-1">
           {ownSkills.length === 0 ? (
             <p className={SUBMENU_EMPTY_CLASS}>{SKILLS_EMPTY_COPY}</p>
           ) : (
@@ -942,15 +949,15 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         <span className="flex-1 text-left">{ROW_LABEL_CONNECTORS}</span>
         <ChevronRight
           className={cn(
-            'h-3.5 w-3.5 text-muted-foreground transition-transform',
+            'h-4 w-4 text-muted-foreground transition-transform',
             props.connectorsSubmenuOpen && 'rotate-90',
           )}
         />
       </button>
       {props.connectorsSubmenuOpen && (
-        <div role="menu" aria-label={ROW_LABEL_CONNECTORS} className="space-y-0.5 pb-1">
+        <div role="group" aria-label={ROW_LABEL_CONNECTORS} className="space-y-0.5 pb-1">
           {props.connectors.length === 0 ? (
-            <p className="px-3 py-2 pl-8 text-[12px] text-muted-foreground">
+            <p className="px-3 py-2 pl-8 text-caption text-muted-foreground">
               {CONNECTORS_EMPTY_COPY}
             </p>
           ) : (
@@ -999,13 +1006,13 @@ function ChatMenu(props: ComposerPlusMenuProps) {
         <span className="flex-1 text-left">{ROW_LABEL_PLUGINS}</span>
         <ChevronRight
           className={cn(
-            'h-3.5 w-3.5 text-muted-foreground transition-transform',
+            'h-4 w-4 text-muted-foreground transition-transform',
             pluginsOpen && 'rotate-90',
           )}
         />
       </button>
       {pluginsOpen && (
-        <div role="menu" aria-label={ROW_LABEL_PLUGINS} className="space-y-0.5 pb-1">
+        <div role="group" aria-label={ROW_LABEL_PLUGINS} className="space-y-0.5 pb-1">
           {installedPlugins === null ? (
             <div className="flex justify-center py-2">
               <Spinner size="sm" aria-label={PLUGINS_LOADING_LABEL} />
@@ -1028,7 +1035,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
                     <span className="flex-1 truncate">{plugin.name}</span>
                     <ChevronRight
                       className={cn(
-                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
+                        'h-4 w-4 text-muted-foreground transition-transform',
                         expanded && 'rotate-90',
                       )}
                     />
@@ -1279,12 +1286,12 @@ function WorkPalette(props: ComposerPlusMenuProps) {
       {props.connectorsLoading ? (
         <div className="flex items-center gap-3 px-3 py-2">
           <Spinner size="sm" aria-label={t('agiWork.compose.palette.connectorsLoading')} />
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             {t('agiWork.compose.palette.connectorsLoading')}
           </span>
         </div>
       ) : visibleConnectors.length === 0 ? (
-        <p className="px-3 py-2 text-[12px] text-muted-foreground">
+        <p className="px-3 py-2 text-caption text-muted-foreground">
           {searching ? t('agiWork.compose.palette.noMatches') : CONNECTORS_EMPTY_COPY}
         </p>
       ) : (
@@ -1363,7 +1370,7 @@ function WorkPalette(props: ComposerPlusMenuProps) {
       )}
 
       {searching && !hasResults && (
-        <p className="px-3 py-2 text-[12px] text-muted-foreground">
+        <p className="px-3 py-2 text-caption text-muted-foreground">
           {t('agiWork.compose.palette.noMatches')}
         </p>
       )}

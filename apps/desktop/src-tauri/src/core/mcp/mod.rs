@@ -16,6 +16,7 @@ pub mod manifest;
 pub mod oauth;
 pub mod protocol;
 pub mod registry;
+pub mod schema_budget;
 pub mod server;
 pub mod session;
 pub mod tool_executor;

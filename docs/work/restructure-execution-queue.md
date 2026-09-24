@@ -1,12 +1,16 @@
 # Restructure execution queue
 
-Status: Current
+Status: Historical execution snapshot; superseded for current sequencing
 Owner: Founder
-Last updated: 2026-08-28
+Last updated: 2026-09-22
 
-Split out of root `PLAN.md` on 2026-08-28. `PLAN.md` keeps the standing
-strategy and phase structure; this file carries the dated queue, which is
-expected to go stale and be deleted when the phase closes.
+Split out of root `PLAN.md` on 2026-08-28. This file preserves the dated queue
+and its evidence; it is not the current resume point. The September 21
+rebaseline moved execution to one platform at a time, starting with Web. Use
+`docs/specs/website-launch/PROGRESS.md`, `WEB_PUBLIC_RELEASE_AUDIT.md`, and the
+current product/architecture documents for present status. Statements below
+about sequencing, public Desktop shells, Chrome conversation ownership, or
+launch readiness remain historical evidence and do not override those owners.
 
 ## Frontend UI/UX redesign: phase state
 

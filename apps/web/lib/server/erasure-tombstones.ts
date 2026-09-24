@@ -6,7 +6,11 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
 
-import { resolveObjectBackupTarget, type BackupTarget } from './object-backup';
+import {
+  requeueReplicasAfterRestore,
+  resolveObjectBackupTarget,
+  type BackupTarget,
+} from './object-backup';
 
 /**
  * The ledger lives in the backup bucket, not in Postgres. A Neon point-in-time
@@ -152,6 +156,8 @@ export interface ErasureLedgerSyncReport {
   reArmed: string[];
   /** The evidence row written when the database had lost tombstones. */
   replayId: string | null;
+  /** Backup replicas marked due again, because the same restore rolled their record back. */
+  replicasRequeued: number;
 }
 
 export const ERASURE_REPLAY_ACTOR = 'cron/purge-deleted-accounts';
@@ -193,14 +199,15 @@ export async function syncErasureLedger(
   if (changed) await writeErasureLedger(merged, { target });
 
   const replay = await replayErasureTombstones(db, { target, ledger: merged, tombstones });
-  const replayId =
-    replay.reArmed.length > 0
-      ? await recordErasureReplay(db, {
-          restorePoint: null,
-          performedBy: options.performedBy ?? ERASURE_REPLAY_ACTOR,
-          report: replay,
-        })
-      : null;
+  const restored = replay.reArmed.length > 0;
+  const replayId = restored
+    ? await recordErasureReplay(db, {
+        restorePoint: null,
+        performedBy: options.performedBy ?? ERASURE_REPLAY_ACTOR,
+        report: replay,
+      })
+    : null;
+  const replicasRequeued = restored ? await requeueReplicasAfterRestore() : 0;
 
   return {
     tombstones: tombstones.length,
@@ -210,6 +217,7 @@ export async function syncErasureLedger(
     written: changed,
     reArmed: replay.reArmed,
     replayId,
+    replicasRequeued,
   };
 }
 

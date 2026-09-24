@@ -1,8 +1,12 @@
 # claude.ai code surface reference (observed 2026-09-05)
 
-Status: Current
+Status: Historical snapshot
 Owner: Product (founder) and the parity agents
 Last updated: 2026-09-05
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. Preserve this as a dated live
+observation of the September 5 code surface.
 
 Every statement here was observed first hand in the founder's signed-in claude.ai session in Chrome on 2026-09-05, driven by the orchestrating agent, after the founder connected GitHub to that account. It fills the gap `claude-ai-ui-reference-2026-09-03.md` left open ("the Code surface was not observed") and is the evidence base for the web Code page rebuild. Model names shown in that product's pickers are omitted on purpose; our surface reads them from the registry.
 

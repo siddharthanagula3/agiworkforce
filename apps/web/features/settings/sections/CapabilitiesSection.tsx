@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Switch } from '@agiworkforce/ui';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
 import {
@@ -13,7 +14,7 @@ import {
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 export function CapabilitiesSection() {
-  const { settings, saving, saveError, savedAt, loadError, retry, setBoolean } =
+  const { settings, saving, saveError, savedAt, loadError, retry, retrySave, setBoolean } =
     useCapabilitiesPreferences();
   const localModeHost = useLocalModeHost();
 
@@ -36,9 +37,9 @@ export function CapabilitiesSection() {
         </p>
         {/* AUDIT-FIX PAR-32: report a failed load instead of falling through
           to 'Synced to your account' while the toggles show local defaults. */}
-        <p
+        <SaveStatusLine
+          failed={saveError !== null || loadError !== null}
           className={`mt-2 text-xs ${loadError ? 'text-danger' : 'text-muted-foreground'}`}
-          role="status"
         >
           {saving
             ? 'Saving...'
@@ -49,7 +50,7 @@ export function CapabilitiesSection() {
                 : savedAt
                   ? 'Saved'
                   : 'Synced to your account'}
-        </p>
+        </SaveStatusLine>
         {loadError && (
           <button
             type="button"
@@ -59,6 +60,15 @@ export function CapabilitiesSection() {
             Try again
           </button>
         )}
+        {saveError && retrySave ? (
+          <button
+            type="button"
+            onClick={retrySave}
+            className="mt-2 rounded-md border border-border/60 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/60"
+          >
+            Try saving again
+          </button>
+        ) : null}
       </div>
 
       <section className="flex flex-col gap-4">

@@ -381,6 +381,7 @@ describe('cloud agent workflow input', () => {
       userId: 'user-1',
       requestId: 'agi-work-request-1',
       reservedMicrousd: 4_200,
+      unmetered: true,
       eventBudget: { reservedMicrousd: 4_200 },
     };
     const processed = makeProcessed();

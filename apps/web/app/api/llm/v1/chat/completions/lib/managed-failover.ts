@@ -63,7 +63,7 @@ import {
   MAX_SAME_PROVIDER_RETRIES_FOR_GROUNDED_REQUEST,
 } from '@agiworkforce/provider-runtime';
 import { resilienceScopeForCategory, type ResilienceScope } from '@agiworkforce/routing';
-import { isAutoModeModelId } from '@agiworkforce/types';
+import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
 import { canAccessModel } from '@/lib/model-tiers';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 import { canFailoverToOpenRouter } from '@/lib/services/aggregator-routing';
@@ -175,6 +175,7 @@ function isBillingRotationAllowed(
 
 export interface FailoverStepContext {
   step: number;
+  sameRouteRetrySafe?: boolean;
 }
 
 /**
@@ -222,6 +223,17 @@ export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): b
   // ECONNRESET, and on a timeout - the exact failures cross-provider failover
   // exists to absorb. Rotation is decided by category alone.
   return FAILOVER_ELIGIBLE_CATEGORIES.has(classified.category);
+}
+
+export function isFreePostToolSameRouteRetryEligible(error: unknown): boolean {
+  const { category, retryAfterSeconds } = classifyError(error);
+  if (retryAfterSeconds !== undefined && retryAfterSeconds > 0) return false;
+  return (
+    category === 'connection' ||
+    category === 'api_timeout' ||
+    category === 'server_error' ||
+    category === 'server_overload'
+  );
 }
 
 export interface FailoverAttempt {
@@ -415,6 +427,9 @@ export function createFailoverPlan(
     ...(options.onCredentialRejected ? { onCredentialRejected: options.onCredentialRejected } : {}),
   });
   const freeLane = processed.freeLane;
+  const transientSameRouteRetries =
+    getModelMetadataById(processed.requestedModel)?.transientSameRouteRetries ?? 0;
+  let transientSameRouteRetriesUsed = 0;
   const freeLaneAttempted: string[] = freeLane ? [freeLane.dispatchedRouteId] : [];
   let latestView: ProcessedRequest = processed;
   let latestRouteId: string | null = freeLane ? freeLane.dispatchedRouteId : null;
@@ -595,6 +610,55 @@ export function createFailoverPlan(
   };
 
   let routeRetryUsed = false;
+  const sameRouteRetryAttempt = (
+    category: string,
+    retryAfterSeconds: number | undefined,
+    context: FailoverStepContext | undefined,
+  ): FailoverAttempt | null => {
+    if (!context?.sameRouteRetrySafe || context.step !== FIRST_PROVIDER_STEP) return null;
+    if (freeLane || isAutoModeModelId(processed.requestedModel)) return null;
+    if (transientSameRouteRetriesUsed >= transientSameRouteRetries) return null;
+    if (
+      category !== 'server_overload' &&
+      category !== 'empty_response' &&
+      category !== 'connection'
+    )
+      return null;
+    if (retryAfterSeconds !== undefined && retryAfterSeconds > 0) return null;
+    if (
+      latestView.provider !== processed.provider ||
+      latestView.chatRequest.model !== processed.chatRequest.model
+    ) {
+      return null;
+    }
+    if (credentialFailover.blocksRoute(latestView.provider)) return null;
+    if (
+      options.isCandidateBreakerOpen?.({
+        modelKey: latestView.chatRequest.model,
+        provider: latestView.provider,
+      }) ||
+      options.isCredentialCooling?.({
+        modelKey: latestView.chatRequest.model,
+        provider: latestView.provider,
+      }) ||
+      !options.isProviderDispatchable(latestView.provider)
+    ) {
+      return null;
+    }
+
+    transientSameRouteRetriesUsed += 1;
+    const attemptView: ProcessedRequest = {
+      ...latestView,
+      retries: (latestView.retries ?? 0) + 1,
+    };
+    latestView = attemptView;
+    return {
+      model: attemptView.chatRequest.model,
+      provider: attemptView.provider,
+      processed: attemptView,
+    };
+  };
+
   const routeRetryAttempt = (): FailoverAttempt | null => {
     if (routeRetryUsed) return null;
     const apiModelId = toProviderApiModelId(processed.llmRequest.model);
@@ -740,6 +804,21 @@ export function createFailoverPlan(
             : 'Free-lane failover: the stage has no further zero-cost route; refusing to rotate onto paid capacity',
         );
         return viaFreeLane;
+      }
+
+      const viaSameRoute = sameRouteRetryAttempt(category, classified.retryAfterSeconds, context);
+      if (viaSameRoute) {
+        logger.warn(
+          {
+            requestId: processed.requestId,
+            provider: viaSameRoute.provider,
+            model: viaSameRoute.model,
+            category,
+            attempt: transientSameRouteRetriesUsed + 1,
+          },
+          'Managed failover: retrying transient failure on the same route',
+        );
+        return viaSameRoute;
       }
 
       const viaRoute = routeRetryAttempt();

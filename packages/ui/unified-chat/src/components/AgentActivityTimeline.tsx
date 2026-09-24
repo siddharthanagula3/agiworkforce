@@ -666,7 +666,7 @@ function StaticRow({
         />
         <p className="text-sm text-foreground">{entry.summary}</p>
         {entry.beforeTokens !== undefined && entry.afterTokens !== undefined && (
-          <p className="mt-0.5 text-[12px] text-muted-foreground">
+          <p className="mt-0.5 text-caption text-muted-foreground">
             {TOKEN_NUMBER_FORMAT.format(entry.beforeTokens)} →{' '}
             {TOKEN_NUMBER_FORMAT.format(entry.afterTokens)} tokens
           </p>
@@ -680,7 +680,7 @@ function StaticRow({
       <AlertCircle className="absolute left-0 top-2 h-4 w-4 text-danger" aria-hidden="true" />
       <p className="break-words text-sm text-danger">{entry.message}</p>
       {entry.retryable && (
-        <p className="mt-0.5 text-[12px] text-muted-foreground">Retry available</p>
+        <p className="mt-0.5 text-caption text-muted-foreground">Retry available</p>
       )}
     </div>
   );
@@ -784,18 +784,19 @@ export function AgentActivityTimeline({
   const isAgiWork = workMode === AGI_WORK_MODE;
   const settledStatus = settledActivityStatus(activity);
   const isActive = settledStatus === 'running' || settledStatus === 'awaiting-approval';
-  const isLocalStartingActivity =
-    activity.lastSequence === -1 &&
-    activity.entries.length === 1 &&
-    activity.entries[0]?.kind === 'progress' &&
-    activity.entries[0].progressId === 'local-starting';
   const hasConnectRequest = useMemo(
     () => activity.entries.some((e) => e.kind === 'tool' && connectRequestFor(e) !== null),
     [activity.entries],
   );
+  const isStreamingCollapsed =
+    !isAgiWork &&
+    settledStatus === 'running' &&
+    isSearchOnlyRun(activity.entries) &&
+    !hasConnectRequest;
   const isOpen = userForcedClosed
     ? false
-    : (isActive && !isLocalStartingActivity) || hasConnectRequest || expanded;
+    : !isStreamingCollapsed &&
+      (settledStatus === 'awaiting-approval' || hasConnectRequest || expanded);
 
   const prevActive = useRef(isActive);
   useEffect(() => {
@@ -840,6 +841,7 @@ export function AgentActivityTimeline({
   }, [activity.turnId, isActive, isOpen]);
 
   const handleToggle = () => {
+    if (isStreamingCollapsed) return;
     if (isOpen) {
       if (isActive) setUserForcedClosed(true);
       else setExpanded(false);
@@ -883,7 +885,15 @@ export function AgentActivityTimeline({
   // A failure gets ONE row. The reason rides on the run's own summary line and
   // the actions sit beside it, so the transcript never carries a status row and
   // a separate reason line saying the same thing twice.
-  const failureLead = failureReason ? `${summary}: ${failureReason}` : summary;
+  const unavailableToolExplainsFailure = activity.entries.some(
+    (entry) =>
+      entry.kind === 'tool' &&
+      entry.status === 'failed' &&
+      entry.unavailable === true &&
+      entry.summary === summary,
+  );
+  const failureLead =
+    failureReason && !unavailableToolExplainsFailure ? `${summary}: ${failureReason}` : summary;
   const announcement = buildAgentActivityAnnouncement(activity, failureLead);
   // The first plan step renders as the plan line above the rows, so the row it
   // would otherwise occupy is dropped rather than printed twice. The goal
@@ -906,6 +916,20 @@ export function AgentActivityTimeline({
       .filter((entry) => !restatesSummary(entry, rowEntries.length, summary)),
   );
   const expandable = visibleEntries.length > 0 || hiddenEntryCount > 0;
+  const canExpand = expandable && !isStreamingCollapsed;
+  const completedSearchOnly = settledStatus === 'completed' && isSearchOnlyRun(rowEntries);
+  const lastVisibleSearchId = completedSearchOnly
+    ? visibleEntries.reduce<string | undefined>(
+        (last, entry) =>
+          entry.kind === 'tool' &&
+          entry.category === 'web-search' &&
+          entry.status !== 'failed' &&
+          entry.status !== 'cancelled'
+            ? entry.id
+            : last,
+        undefined,
+      )
+    : undefined;
 
   if (
     (settledStatus === 'completed' || settledStatus === 'cancelled') &&
@@ -923,14 +947,18 @@ export function AgentActivityTimeline({
         <button
           type="button"
           onClick={handleToggle}
-          disabled={!expandable}
-          aria-expanded={expandable ? isOpen : undefined}
-          aria-label={`${isOpen ? 'Hide' : 'Show'} agent activity: ${failureLead}`}
+          disabled={!canExpand}
+          aria-expanded={canExpand ? isOpen : undefined}
+          aria-label={
+            canExpand
+              ? `${isOpen ? 'Hide' : 'Show'} agent activity: ${failureLead}`
+              : `Agent activity: ${failureLead}`
+          }
           className="group flex min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:text-muted-foreground"
         >
           <RunStatusIcon status={settledStatus} spinnerless={isAgiWork} />
           <span className="min-w-0 flex-1 truncate">{failureLead}</span>
-          {expandable && (
+          {canExpand && (
             <ChevronRight
               className={cn(
                 'h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none',
@@ -993,7 +1021,7 @@ export function AgentActivityTimeline({
                   <ToolCallCard
                     id={entry.toolCallId}
                     name={traceRowName(entry)}
-                    status={toToolStatus(entry)}
+                    status={entry.id === lastVisibleSearchId ? 'complete' : toToolStatus(entry)}
                     requiresApproval={entry.status === 'awaiting-approval'}
                     args={asRecord(entry.input)}
                     result={connectRequest ? undefined : asResult(entry.output)}
@@ -1011,6 +1039,7 @@ export function AgentActivityTimeline({
                     onReject={onReject}
                     onCancel={onCancel}
                     onResend={onResend}
+                    completionLabel={entry.id === lastVisibleSearchId ? 'Done' : undefined}
                   />
                   {screenAction || screenshot ? (
                     <ComputerUseStepCard
@@ -1032,7 +1061,7 @@ export function AgentActivityTimeline({
             }
             return <StaticRow key={entry.id} entry={entry} />;
           })}
-          {settledStatus === 'completed' && (
+          {settledStatus === 'completed' && !lastVisibleSearchId && (
             <div className="relative pl-8 py-1.5 text-sm text-muted-foreground">
               <CheckCircle2
                 className="absolute left-0 top-2 h-4 w-4 text-muted-foreground"

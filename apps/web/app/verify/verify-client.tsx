@@ -6,6 +6,9 @@ import { useState } from 'react';
 import { Button } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 
+const SESSION_CHECK_FAILED = 'Your session could not be confirmed. Reload this page and try again.';
+const DEVICE_REQUEST_FAILED = 'This device request could not be updated. Try again.';
+
 function getErrorMessage(data: { error?: unknown } | null): string {
   const error = data?.error;
   if (typeof error === 'string') return error;
@@ -13,7 +16,7 @@ function getErrorMessage(data: { error?: unknown } | null): string {
     const message = (error as { message?: unknown }).message;
     if (typeof message === 'string' && message.trim()) return message;
   }
-  return 'Request failed';
+  return DEVICE_REQUEST_FAILED;
 }
 
 export function VerifyDeviceClient({ code }: { code: string }) {
@@ -39,7 +42,7 @@ export function VerifyDeviceClient({ code }: { code: string }) {
       const csrfRes = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
       const csrfJson = (await csrfRes.json().catch(() => null)) as { token?: string } | null;
       if (!csrfRes.ok || !csrfJson?.token) {
-        throw new Error('Failed to acquire CSRF token');
+        throw new Error(SESSION_CHECK_FAILED);
       }
 
       const res = await fetch('/api/device/approve', {
@@ -73,7 +76,7 @@ export function VerifyDeviceClient({ code }: { code: string }) {
     } catch (e) {
       setMessage({
         type: 'error',
-        text: toUserMessage(e, 'Unexpected error'),
+        text: toUserMessage(e, DEVICE_REQUEST_FAILED),
       });
     } finally {
       setLoading(null);
@@ -87,9 +90,9 @@ export function VerifyDeviceClient({ code }: { code: string }) {
           role="alert"
           style={{
             border: '1px solid var(--agi-rule)',
-            borderRadius: 8,
+            borderRadius: 'var(--corner-field)',
             color: 'var(--agi-error)',
-            padding: '12px 14px',
+            padding: 'var(--space-3) var(--space-4)',
             fontSize: 14,
           }}
         >
@@ -114,9 +117,9 @@ export function VerifyDeviceClient({ code }: { code: string }) {
           role={message.type === 'error' ? 'alert' : 'status'}
           style={{
             border: '1px solid var(--agi-rule)',
-            borderRadius: 8,
+            borderRadius: 'var(--corner-field)',
             color: message.type === 'success' ? 'var(--agi-success)' : 'var(--agi-error)',
-            padding: '12px 14px',
+            padding: 'var(--space-3) var(--space-4)',
             fontSize: 14,
           }}
         >

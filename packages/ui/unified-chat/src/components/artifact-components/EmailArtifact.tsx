@@ -127,7 +127,7 @@ export function EmailArtifact({ artifact, className }: EmailArtifactProps) {
             type="button"
             onClick={() => void handleCopy()}
             aria-label={copied ? 'Copied' : 'Copy email as text'}
-            className="flex h-7 shrink-0 items-center gap-1.5 rounded px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="flex h-7 shrink-0 items-center gap-1.5 rounded-compact px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             {copied ? (
               <Check className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />

@@ -5,6 +5,7 @@ use agiworkforce_protocol::code_domain::{
 };
 use agiworkforce_protocol::developer_session::{
     DeveloperRoutingTaskType, DeveloperSessionSource, DeveloperSessionTrustMode,
+    HandoffArchitecture,
 };
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
@@ -16,6 +17,7 @@ use std::path::{Path, PathBuf};
 use crate::cli_options::PermissionMode;
 use crate::features::plan::plan_mode::Plan;
 use crate::models::Message;
+use crate::platform::runtime::change_reason::ChangeReason;
 use crate::platform::runtime::validation_run::ValidationKind;
 
 /// Write `contents` to `target` via a tempfile-then-rename so partial writes
@@ -312,6 +314,10 @@ pub struct ManagedSessionFileChange {
     pub tool: String,
     pub tool_call_id: String,
     pub changed_at: DateTime<Utc>,
+    /// Why the file changed, read from the text the write replaced. Absent on
+    /// sessions written before the recorder classified its own writes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<ChangeReason>,
 }
 
 /// How a check the session ran came out. `Interrupted` is a run that started
@@ -342,6 +348,7 @@ pub struct ManagedSessionValidation {
 pub struct SessionWorkingState<'a> {
     pub objective: Option<&'a str>,
     pub decisions: &'a [ManagedSessionApproval],
+    pub architecture: Option<&'a HandoffArchitecture>,
     pub plan: Option<&'a Plan>,
     pub modified_files: &'a [ManagedSessionFileChange],
     pub validations: &'a [ManagedSessionValidation],
@@ -420,6 +427,11 @@ pub struct ManagedSession {
     /// it came in on is compacted away; this is not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub objective: Option<String>,
+    /// What the session established about the repository it works in. Read
+    /// once from the workspace rather than re-derived from the transcript, so
+    /// compaction cannot take it either.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub architecture: Option<HandoffArchitecture>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub archived_at: Option<DateTime<Utc>>,
     // --- v2 session-state fields (all optional for backward compat with v1 files) ---
@@ -489,6 +501,8 @@ struct ManagedSessionJsonlHeader {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     objective: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    architecture: Option<HandoffArchitecture>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     archived_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     permission_mode: Option<PermissionMode>,
@@ -541,6 +555,7 @@ impl ManagedSession {
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
+            architecture: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -633,6 +648,7 @@ impl ManagedSession {
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
+            architecture: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -701,6 +717,7 @@ impl ManagedSession {
         SessionWorkingState {
             objective: self.objective.as_deref().or(self.title.as_deref()),
             decisions: &self.approvals,
+            architecture: self.architecture.as_ref(),
             plan: self.current_plan.as_ref(),
             modified_files: &self.file_changes,
             validations: &self.validations,
@@ -982,6 +999,7 @@ impl ManagedSession {
                         file_changes: record.file_changes,
                         validations: record.validations,
                         objective: record.objective,
+                        architecture: record.architecture,
                         archived_at: record.archived_at,
                         permission_mode: record.permission_mode,
                         plan_mode: record.plan_mode,
@@ -1173,6 +1191,7 @@ impl ManagedSession {
             file_changes: self.file_changes.clone(),
             validations: self.validations.clone(),
             objective: self.objective.clone(),
+            architecture: self.architecture.clone(),
             archived_at: self.archived_at,
             permission_mode: self.permission_mode,
             plan_mode: self.plan_mode,
@@ -1383,6 +1402,7 @@ mod tests {
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
+            architecture: None,
             archived_at: None,
             permission_mode,
             plan_mode,
@@ -1437,6 +1457,7 @@ mod tests {
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
+            architecture: None,
             archived_at: None,
             permission_mode,
             plan_mode,

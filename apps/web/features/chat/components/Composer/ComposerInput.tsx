@@ -30,8 +30,8 @@ const MESSAGE_INPUT_LABEL = 'Message input';
  * ~131px at 390px against ChatGPT's ~87px, so every vertical value below the
  * `sm` breakpoint is its own step. The row heights below feed a one-row
  * rest state (plus, textbox, right cluster all on one flex-nowrap line): a
- * 36px content row at `sm:` plus the card's 8px inner padding lands on the
- * 52px rest-height target in an existing chat; the empty (home) row stays
+ * 36px content row plus the card's compact inset lands inside the 48-52px
+ * rest-height target in an existing chat; the empty (home) row stays
  * 40px, its own second row (mode toggle) absorbed separately.
  */
 export const COMPOSER_INPUT_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[36px] sm:py-1.5';
@@ -54,7 +54,7 @@ export const COMPOSER_INPUT_EMPTY_ROW_CLASS = 'min-h-[36px] py-1 sm:min-h-[40px]
 const INPUT_PLACEHOLDER_CLASS =
   'placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap placeholder:text-muted-foreground';
 const INPUT_SHARED_CLASS =
-  'relative z-10 block max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50';
+  'relative z-[var(--z-control)] block max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50';
 /** 16px/24px everywhere: home and chat, desktop and phone (parity target). */
 const INPUT_TEXT_SIZE_CLASS = 'text-base leading-6';
 const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
@@ -65,7 +65,7 @@ const INPUT_EMPTY_TEXT_SIZE_CLASS = 'text-base leading-6';
  * contenteditable that the textarea gets from its own utilities.
  */
 const EDITOR_SHARED_CLASS =
-  'relative z-10 [&_.ProseMirror]:max-h-[240px] [&_.composer-editor\\_\\_placeholder]:max-w-full [&_.composer-editor\\_\\_placeholder]:overflow-hidden [&_.composer-editor\\_\\_placeholder]:text-ellipsis [&_.composer-editor\\_\\_placeholder]:whitespace-nowrap';
+  'relative z-[var(--z-control)] [&_.ProseMirror]:max-h-[240px] [&_.composer-editor\\_\\_placeholder]:max-w-full [&_.composer-editor\\_\\_placeholder]:overflow-hidden [&_.composer-editor\\_\\_placeholder]:text-ellipsis [&_.composer-editor\\_\\_placeholder]:whitespace-nowrap';
 const EDITOR_ROW_CLASS =
   '[&_.ProseMirror]:min-h-[36px] [&_.ProseMirror]:py-1 sm:[&_.ProseMirror]:min-h-[36px] sm:[&_.ProseMirror]:py-1.5';
 const EDITOR_EMPTY_ROW_CLASS =

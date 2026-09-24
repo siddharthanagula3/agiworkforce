@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
+import { saveDisplayName, savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { GeneralSection } from './GeneralSection';
 import { ACCENT_COLORS } from '@shared/stores/web-settings-store';
 
@@ -509,5 +509,29 @@ describe('GeneralSection preference save ordering', () => {
         .mock.calls.find(([namespace]) => namespace === 'personalization')
         ?.slice(0, 2),
     ).toEqual(['personalization', expect.objectContaining({ style: 'formal' })]);
+  });
+
+  it('saves an edited full name to the account, trimmed', async () => {
+    render(<GeneralSection />);
+    const fullName = screen.getByRole('textbox', { name: 'Full name' });
+    await waitFor(() => expect(fullName).toBeEnabled());
+
+    await userEvent.clear(fullName);
+    await userEvent.type(fullName, '  Ada Lovelace  ');
+    await userEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    await screen.findByText('Saved');
+    expect(vi.mocked(saveDisplayName)).toHaveBeenLastCalledWith('Ada Lovelace');
+  });
+
+  it('keeps Save profile unavailable while the full name is empty', async () => {
+    render(<GeneralSection />);
+    const fullName = screen.getByRole('textbox', { name: 'Full name' });
+    await waitFor(() => expect(fullName).toBeEnabled());
+
+    await userEvent.clear(fullName);
+
+    expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
+    expect(vi.mocked(saveDisplayName)).not.toHaveBeenCalled();
   });
 });

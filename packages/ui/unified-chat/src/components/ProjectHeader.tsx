@@ -76,7 +76,7 @@ function MetaRow({ presentation }: { presentation: ProjectHeaderPresentation }) 
   return (
     <div
       data-testid="project-header-meta-row"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--chat-text-muted)]"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-[var(--chat-text-muted)]"
     >
       {items.map((item, index) => (
         <span key={item + index} className="inline-flex items-center gap-1">
@@ -98,7 +98,7 @@ function SurfaceChips({ presentation }: { presentation: ProjectHeaderPresentatio
         <span
           key={label}
           className={cn(
-            'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[12px] uppercase tracking-wide',
+            'inline-flex items-center rounded-md border px-1.5 py-0.5 text-caption uppercase tracking-wide',
             'border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]',
           )}
         >
@@ -134,14 +134,17 @@ export function ProjectHeader({ presentation, className, compact = false }: Proj
           <IconCircle presentation={presentation} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-base font-semibold text-[var(--chat-text-primary)]">
+              <h2
+                title={presentation.title}
+                className="truncate text-base font-semibold text-[var(--chat-text-primary)]"
+              >
                 {presentation.title}
               </h2>
               {presentation.importedFromLabel ? (
                 <span
                   data-testid="project-header-imported-from"
                   className={cn(
-                    'inline-flex items-center rounded-full border px-1.5 py-0.5 text-[12px] uppercase tracking-wide',
+                    'inline-flex items-center rounded-full border px-1.5 py-0.5 text-caption uppercase tracking-wide',
                     'border-violet-500/40 bg-violet-500/10 text-violet-300',
                   )}
                 >

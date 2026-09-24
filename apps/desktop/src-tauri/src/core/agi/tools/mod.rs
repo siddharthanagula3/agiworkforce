@@ -6,7 +6,7 @@ use super::*;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 pub struct ToolRegistry {
     tools: Mutex<HashMap<String, Tool>>,
@@ -4035,21 +4035,6 @@ impl ToolRegistry {
         })?;
 
         Ok(())
-    }
-
-    pub async fn load_mcp_tools(
-        &self,
-        mcp_registry: Arc<crate::core::mcp::McpToolRegistry>,
-    ) -> Result<usize> {
-        let mcp_tools = mcp_registry.get_all_tool_schemas();
-        let count = mcp_tools.len();
-
-        for tool in mcp_tools {
-            self.register_tool(tool)?;
-        }
-
-        tracing::info!("Loaded {} MCP tools into AGI tool registry", count);
-        Ok(count)
     }
 
     pub fn register_tool(&self, tool: Tool) -> Result<()> {

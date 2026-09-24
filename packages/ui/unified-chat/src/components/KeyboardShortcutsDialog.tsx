@@ -75,7 +75,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50"
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-[var(--z-modal)]"
           />
 
           {/* Dialog */}
@@ -85,30 +85,30 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.2 }}
             className={cn(
-              'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
+              'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[var(--z-modal)]',
               'w-full max-w-md max-h-[80vh] overflow-hidden',
-              'rounded-2xl border border-[hsl(var(--border))]',
-              'bg-[hsl(var(--card))] shadow-2xl',
+              'rounded-2xl border border-border',
+              'bg-card shadow-2xl',
             )}
             role="dialog"
             aria-modal="true"
             aria-label="Keyboard shortcuts"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div className="flex items-center gap-2">
                 <Keyboard className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">
+                <h2 className="text-lg font-semibold text-foreground">
                   Keyboard Shortcuts
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 hover:bg-[hsl(var(--accent))] rounded-lg transition-colors"
+                className="p-1.5 hover:bg-accent rounded-lg transition-colors"
                 aria-label="Close keyboard shortcuts dialog"
               >
-                <X className="h-5 w-5 text-[hsl(var(--muted-foreground))]" />
+                <X className="h-5 w-5 text-muted-foreground" />
               </button>
             </div>
 
@@ -116,7 +116,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
             <div className="p-5 overflow-y-auto max-h-[60vh] space-y-6">
               {SHORTCUT_GROUPS.map((group) => (
                 <div key={group.title}>
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))] mb-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
                     {group.title}
                   </h3>
                   <div className="space-y-2">
@@ -125,7 +125,7 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
                         key={shortcut.description}
                         className="flex items-center justify-between py-1.5"
                       >
-                        <span className="text-sm text-[hsl(var(--foreground))]">
+                        <span className="text-sm text-foreground">
                           {shortcut.description}
                         </span>
                         <div className="flex items-center gap-1">
@@ -133,17 +133,17 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
                             <span key={idx}>
                               <kbd
                                 className={cn(
-                                  'px-2 py-1 text-xs font-medium rounded',
-                                  'bg-[hsl(var(--muted))]',
-                                  'border border-[hsl(var(--border))]',
-                                  'text-[hsl(var(--foreground))]',
+                                  'px-2 py-1 text-xs font-medium rounded-compact',
+                                  'bg-muted',
+                                  'border border-border',
+                                  'text-foreground',
                                   'shadow-xs',
                                 )}
                               >
                                 {key}
                               </kbd>
                               {idx < shortcut.keys.length - 1 && (
-                                <span className="mx-0.5 text-[hsl(var(--muted-foreground))]">
+                                <span className="mx-0.5 text-muted-foreground">
                                   +
                                 </span>
                               )}
@@ -158,10 +158,10 @@ export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDi
             </div>
 
             {/* Footer */}
-            <div className="px-5 py-3 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted))]">
-              <p className="text-xs text-center text-[hsl(var(--muted-foreground))]">
+            <div className="px-5 py-3 border-t border-border bg-muted">
+              <p className="text-xs text-center text-muted-foreground">
                 Press{' '}
-                <kbd className="px-1.5 py-0.5 bg-[hsl(var(--muted))] rounded border border-[hsl(var(--border))] text-[12px]">
+                <kbd className="px-1.5 py-0.5 bg-muted rounded-compact border border-border text-caption">
                   Escape
                 </kbd>{' '}
                 to close

@@ -163,6 +163,21 @@ impl From<CancelErr> for AgiworkforceErr {
 }
 
 impl AgiworkforceErr {
+    /// The id the service recorded this failure under, for a reader to quote.
+    ///
+    /// Three of these errors have carried one all along, buried in the
+    /// diagnostic line their `Display` writes. Reading it structurally is what
+    /// lets a surface put it where a reader will look instead of leaving them
+    /// to find it in a sentence about HTTP statuses.
+    pub fn request_id(&self) -> Option<&str> {
+        match self {
+            AgiworkforceErr::UnexpectedStatus(status) => status.request_id.as_deref(),
+            AgiworkforceErr::ResponseStreamFailed(failed) => failed.request_id.as_deref(),
+            AgiworkforceErr::RetryLimit(retry) => retry.request_id.as_deref(),
+            _ => None,
+        }
+    }
+
     pub fn is_retryable(&self) -> bool {
         match self {
             AgiworkforceErr::TurnAborted
@@ -464,6 +479,16 @@ pub struct UsageLimitReachedError {
     pub resets_at: Option<DateTime<Utc>>,
     pub rate_limits: Option<Box<RateLimitSnapshot>>,
     pub promo_message: Option<String>,
+}
+
+impl UsageLimitReachedError {
+    /// The wait, in seconds, that the reset instant the service sent amounts
+    /// to at `now`. A reset already past is no wait at all, so a surface that
+    /// asks gets nothing to state rather than a negative figure to render.
+    pub fn seconds_until_reset(&self, now: DateTime<Utc>) -> Option<u64> {
+        let seconds = (self.resets_at? - now).num_seconds();
+        u64::try_from(seconds).ok().filter(|seconds| *seconds > 0)
+    }
 }
 
 impl std::fmt::Display for UsageLimitReachedError {

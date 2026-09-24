@@ -53,15 +53,31 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 24,
+        padding: 'var(--space-5)',
       }}
     >
       <div style={{ maxWidth: 440, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, margin: '0 0 8px', color: 'var(--text-1)' }}>
+        <h2
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            margin: '0 0 var(--space-2)',
+            color: 'var(--text-1)',
+          }}
+        >
           {title}
         </h2>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 20px' }}>{description}</p>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 var(--space-5)' }}>
+          {description}
+        </p>
+        <div
+          style={{
+            display: 'flex',
+            gap: 'var(--space-3)',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
           <button
             type="button"
             onClick={onRetry}
@@ -71,7 +87,7 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
               border: '1px solid var(--settings-border)',
               background: 'var(--chat-accent-primary)',
               color: 'var(--chat-accent-on-primary)',
-              padding: '8px 16px',
+              padding: 'var(--space-2) var(--space-4)',
               fontSize: 14,
               cursor: 'pointer',
             }}
@@ -87,7 +103,7 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--settings-border)',
               color: 'var(--text-2)',
-              padding: '8px 16px',
+              padding: 'var(--space-2) var(--space-4)',
               fontSize: 14,
               textDecoration: 'none',
             }}
@@ -96,7 +112,7 @@ export function ChatFailureNotice({ error, onRetry }: ChatFailureNoticeProps) {
           </a>
         </div>
         {error.digest && (
-          <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-3)' }}>
+          <p style={{ marginTop: 'var(--space-4)', fontSize: 12, color: 'var(--text-3)' }}>
             Error ID: {error.digest}
           </p>
         )}

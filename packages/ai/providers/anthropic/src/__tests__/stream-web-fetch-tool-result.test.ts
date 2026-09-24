@@ -16,6 +16,12 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
   return out;
 }
 
+const TURN_CLOSED = {
+  type: 'message_delta',
+  delta: { stop_reason: 'end_turn' },
+  usage: { output_tokens: 1 },
+} as unknown as Event;
+
 describe('translateAnthropicStream, native web_fetch tool result (P1-1)', () => {
   it('yields a server-tool-result chunk for a web_fetch_tool_result block, not vendor-raw', async () => {
     const block = {
@@ -34,6 +40,7 @@ describe('translateAnthropicStream, native web_fetch tool result (P1-1)', () => 
         index: 0,
         content_block: block,
       } as unknown as Event,
+      TURN_CLOSED,
     ];
 
     const out = await collect(translateAnthropicStream(fromArray(events)));
@@ -62,6 +69,7 @@ describe('translateAnthropicStream, native web_fetch tool result (P1-1)', () => 
         index: 0,
         content_block: block,
       } as unknown as Event,
+      TURN_CLOSED,
     ];
 
     const out = await collect(translateAnthropicStream(fromArray(events)));

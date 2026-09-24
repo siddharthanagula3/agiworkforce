@@ -118,6 +118,44 @@ describe('cloudStreamDeltas, every x_* delta key the wire can emit', () => {
     expect(sink.getStreamError()).toEqual({ message: 'rate limited' });
   });
 
+  it('x_stream_error: keeps the wait and the reference that ride the same frame', () => {
+    const { sink } = makeSink();
+    sink.onEvent(
+      payload({
+        x_stream_error: {
+          message: 'This model is overloaded right now. Try again in about 2 minutes.',
+          code: 'provider_overloaded',
+          retryable: true,
+          retryAfterSeconds: 120,
+          requestId: 'req_desktop_overload',
+        },
+      }),
+    );
+    const captured = {
+      message: 'This model is overloaded right now. Try again in about 2 minutes.',
+      code: 'provider_overloaded',
+      retryable: true,
+      retryAfterSeconds: 120,
+      requestId: 'req_desktop_overload',
+    };
+    expect(sink.getStreamError()).toEqual(captured);
+    expect(sink.getMessageProjection().streamError).toEqual(captured);
+  });
+
+  it('x_stream_error: states no wait and no reference the gateway did not send', () => {
+    const { sink } = makeSink();
+    sink.onEvent(
+      payload({
+        x_stream_error: {
+          message: 'The model could not be reached.',
+          retryAfterSeconds: 200_000,
+          requestId: 42,
+        },
+      }),
+    );
+    expect(sink.getStreamError()).toEqual({ message: 'The model could not be reached.' });
+  });
+
   it('x_tool_approval_request: emits a tool_approval_request event and registers the pending call', () => {
     const { sink, events } = makeSink();
     sink.onEvent(

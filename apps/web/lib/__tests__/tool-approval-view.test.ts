@@ -6,8 +6,8 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { TOOL_CALL_GATE_RANKS } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
 import {
-  DEFAULT_TOOL_APPROVAL_POLICY,
   TOOL_APPROVAL_POLICIES,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
   toolApprovalPolicyOption,
 } from '@shared/types/toolApprovalPolicy';
 import {
@@ -94,17 +94,21 @@ describe('the published account defaults are the settings the product offers', (
 
   it('marks as the default the policy a new account actually gets', () => {
     expect(rows.filter((row) => row.isDefault).map((row) => row.policy)).toEqual([
-      DEFAULT_TOOL_APPROVAL_POLICY,
+      WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
     ]);
   });
 
-  it('says nothing runs without asking under the default, because nothing does', () => {
-    const fallback = rows.find((row) => row.policy === DEFAULT_TOOL_APPROVAL_POLICY)!;
-    expect(fallback.runsWithoutAsking).toEqual([]);
-    expect(toolApprovalPolicySentence(fallback)).toContain('No built-in tool runs without asking.');
-    for (const name of Object.keys(PLATFORM_TOOL_METADATA)) {
-      expect(policyAutoApprovesTool(DEFAULT_TOOL_APPROVAL_POLICY, name), name).toBe(false);
-    }
+  it('shows the built-ins the website default runs and still excludes irreversible writes', () => {
+    const defaultRow = rows.find((row) => row.policy === WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY)!;
+    expect(defaultRow.runsWithoutAsking).toContain('Web search');
+    expect(defaultRow.runsWithoutAsking).toContain('Fetch a page');
+    expect(defaultRow.runsWithoutAsking).not.toContain('Write a file');
+    expect(policyAutoApprovesTool(WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY, 'web_search')).toBe(
+      true,
+    );
+    expect(policyAutoApprovesTool(WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY, 'write_file')).toBe(
+      false,
+    );
   });
 
   it('names a tool in a policy sentence only where that policy runs it', () => {

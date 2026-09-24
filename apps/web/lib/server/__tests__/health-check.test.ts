@@ -36,10 +36,19 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 vi.mock('@/lib/jobs/job-service', () => ({ readJobQueueStats: mocks.readJobQueueStats }));
 
+import { createMemoryKeyValueStore } from '@agiworkforce/key-value';
+
 import { runHealthChecks } from '../health-check';
 
 const ROUTED_PROVIDER = 'provider-under-test';
 const OTHER_PROVIDER = 'second-provider';
+
+const RETRIEVAL_READY = {
+  missing_relations: 0,
+  full_text_index: true,
+  embedding_index: true,
+  vector_extension: true,
+} as const;
 
 function healthyQueue(queue: string) {
   return { queue, queued: 0, running: 0, dead: 0, oldestQueuedAgeMs: 0, stuck: 0 };
@@ -52,9 +61,9 @@ beforeEach(() => {
   process.env['UPSTASH_REDIS_REST_TOKEN'] = 'test-token';
   process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_health';
   process.env['CLERK_SECRET_KEY'] = 'sk_test_health';
-  mocks.getKeyValueStore.mockReturnValue(null);
+  mocks.getKeyValueStore.mockReturnValue(createMemoryKeyValueStore());
   mocks.neonQuery.mockImplementation(async (sql: string) =>
-    sql.includes('to_regclass') ? [{ missing: 0 }] : [{ '?column?': 1 }],
+    sql.includes('missing_relations') ? [RETRIEVAL_READY] : [{ '?column?': 1 }],
   );
   mocks.getDefaultModelFor.mockReturnValue('model-under-test');
   mocks.getModelMetadataById.mockReturnValue({ id: 'model-under-test' });

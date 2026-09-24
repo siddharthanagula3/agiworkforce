@@ -8,6 +8,7 @@ import {
 import { Switch } from '@agiworkforce/ui';
 import { useWebPushToggle } from '@/features/notifications';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 
 const NAMESPACE = 'notifications';
 
@@ -94,7 +95,7 @@ const SELECT_STYLE = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 13,
-  padding: '0 8px',
+  padding: '0 var(--space-2)',
 } as const;
 
 export function NotificationsSection() {
@@ -164,7 +165,7 @@ export function NotificationsSection() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <div>
         <h1
           style={{
@@ -172,13 +173,16 @@ export function NotificationsSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Notifications
         </h1>
         {loading || saving || saveError || hasChanged ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }} role="status">
+          <SaveStatusLine
+            failed={saveError !== null}
+            style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}
+          >
             {loading
               ? 'Loading account settings...'
               : saving
@@ -186,7 +190,7 @@ export function NotificationsSection() {
                 : saveError
                   ? `${loadError ? 'Could not load preferences' : 'Changes were not saved'}: ${saveError}`
                   : 'Saved'}
-          </p>
+          </SaveStatusLine>
         ) : null}
         {saveError && !loading && !saving ? (
           <button
@@ -222,15 +226,15 @@ export function NotificationsSection() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 16,
-                padding: '14px 0',
+                gap: 'var(--space-4)',
+                padding: 'var(--space-4) 0',
                 borderBottom: '1px solid var(--settings-border)',
                 flexWrap: 'wrap',
               }}
             >
               <div style={{ minWidth: 0, maxWidth: 480 }}>
                 <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{event.heading}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                   {event.subheading}
                 </div>
               </div>
@@ -270,13 +274,13 @@ function AgentRunRow() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 16,
-        padding: '14px 0',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-4) 0',
       }}
     >
       <div style={{ minWidth: 0, maxWidth: 480 }}>
         <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{AGENT_RUN_HEADING}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
           {unavailable ? description : AGENT_RUN_SCOPE_NOTE}
         </div>
       </div>

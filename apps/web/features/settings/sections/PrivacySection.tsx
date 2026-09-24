@@ -24,6 +24,7 @@ import {
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 
 const NAMESPACE = 'privacy';
 
@@ -96,7 +97,7 @@ function ExpandableSection({ title, children }: { title: string; children: React
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '12px 20px',
+          padding: 'var(--space-3) var(--space-5)',
           background: 'transparent',
           border: 'none',
           cursor: 'pointer',
@@ -112,7 +113,7 @@ function ExpandableSection({ title, children }: { title: string; children: React
       {open && (
         <div
           style={{
-            padding: '0 20px 14px',
+            padding: '0 var(--space-5) var(--space-4)',
             fontSize: 13,
             color: 'var(--text-3)',
             lineHeight: 1.6,
@@ -345,7 +346,7 @@ export function PrivacySection() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {destructiveConfirmDialog}
       <div>
         <h1
@@ -354,13 +355,16 @@ export function PrivacySection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Privacy
         </h1>
         {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+          <SaveStatusLine
+            failed={preferenceError !== null}
+            style={{ margin: 'var(--space-1) 0 0', fontSize: 12, color: 'var(--text-3)' }}
+          >
             {loadingPreferences
               ? 'Loading account settings...'
               : savingPreferences
@@ -368,7 +372,7 @@ export function PrivacySection() {
                 : preferenceError
                   ? preferenceError
                   : 'Saved'}
-          </p>
+          </SaveStatusLine>
         ) : null}
         {preferenceError ? (
           <button
@@ -392,8 +396,8 @@ export function PrivacySection() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
-            padding: '14px 0',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
           }}
         >
@@ -406,7 +410,7 @@ export function PrivacySection() {
               fontSize: 13,
               color: 'var(--text-2)',
               textDecoration: 'none',
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
             }}
@@ -416,7 +420,7 @@ export function PrivacySection() {
         </div>
 
         <ExpandableSection title="How we protect your data">
-          <p style={{ margin: '0 0 8px' }}>
+          <p style={{ margin: '0 0 var(--space-2)' }}>
             {/*
               Named by surface deliberately. Read on a WEB settings screen, the
               unqualified version implied this browser could keep a conversation
@@ -447,7 +451,7 @@ export function PrivacySection() {
         </ExpandableSection>
 
         <ExpandableSection title="How we use your data">
-          <p style={{ margin: '0 0 8px' }}>
+          <p style={{ margin: '0 0 var(--space-2)' }}>
             Browser crash reports and consent-gated usage counts help us fix bugs faster. Sensitive
             request fields are removed before error reports are sent. This setting does not control
             server operational logs.
@@ -467,22 +471,24 @@ export function PrivacySection() {
           <div
             key={spec.id}
             style={{
-              padding: '14px 0',
+              padding: 'var(--space-4) 0',
               borderBottom: '1px solid var(--settings-border)',
               display: 'flex',
               alignItems: 'flex-start',
               justifyContent: 'space-between',
-              gap: 16,
+              gap: 'var(--space-4)',
               opacity: spec.managedOnly && !hasHostedCloud ? 0.65 : 1,
             }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 1 }}
+            >
               <span style={{ fontSize: 14, color: 'var(--text-1)' }}>
                 {spec.label}
                 {spec.managedOnly ? (
                   <span
                     style={{
-                      marginLeft: 8,
+                      marginLeft: 'var(--space-2)',
                       fontSize: 12,
                       fontWeight: 700,
                       color: 'var(--text-3)',
@@ -517,19 +523,19 @@ export function PrivacySection() {
       <div>
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Shared links
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Review and revoke links created from Web conversations.
             </div>
           </div>
@@ -539,7 +545,7 @@ export function PrivacySection() {
               fontSize: 13,
               color: 'var(--text-2)',
               textDecoration: 'none',
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
             }}
@@ -550,19 +556,19 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Archived chats
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Restore archived chats or move them to Recently deleted.
             </div>
           </div>
@@ -572,7 +578,7 @@ export function PrivacySection() {
               fontSize: 13,
               color: 'var(--text-2)',
               textDecoration: 'none',
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
             }}
@@ -583,19 +589,19 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderTop: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Recently deleted
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Put back a chat you deleted by mistake.
             </div>
           </div>
@@ -605,7 +611,7 @@ export function PrivacySection() {
               fontSize: 13,
               color: 'var(--text-2)',
               textDecoration: 'none',
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
             }}
@@ -616,19 +622,19 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Archive all chats in this workspace
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Move every chat out of the sidebar. You can restore them later.
             </div>
           </div>
@@ -637,7 +643,7 @@ export function PrivacySection() {
             onClick={() => void handleArchiveAllChats()}
             disabled={bulkAction !== null}
             style={{
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               fontSize: 12,
               fontWeight: 600,
               color: 'var(--text-1)',
@@ -653,19 +659,19 @@ export function PrivacySection() {
 
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Delete all chats in this workspace
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Remove every active and archived conversation in this workspace from history. Restore
               them from Recently deleted.
             </div>
@@ -675,7 +681,7 @@ export function PrivacySection() {
             onClick={() => void handleDeleteAllChats()}
             disabled={bulkAction !== null || streamingConversationIds.length > 0}
             style={{
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               fontSize: 12,
               fontWeight: 600,
               color: 'var(--chat-accent-primary-text)',
@@ -696,7 +702,7 @@ export function PrivacySection() {
           <div
             role={conversationActionError ? 'alert' : 'status'}
             style={{
-              padding: '10px 20px',
+              padding: 'var(--space-3) var(--space-5)',
               borderBottom: '1px solid var(--settings-border)',
               color: conversationActionError ? 'var(--chat-accent-primary)' : 'var(--text-2)',
               fontSize: 12,
@@ -719,19 +725,19 @@ export function PrivacySection() {
         */}
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Start new chats as temporary
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               No message from a temporary conversation is written to your history. The conversation
               and any attachment are removed after 30 days. You can still turn a single chat back on
               from the composer.
@@ -747,7 +753,7 @@ export function PrivacySection() {
               flexShrink: 0,
               width: 44,
               height: 24,
-              borderRadius: 999,
+              borderRadius: 'var(--corner-pill)',
               border: 'none',
               cursor: 'pointer',
               background: newChatsTemporary
@@ -779,26 +785,26 @@ export function PrivacySection() {
         */}
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Privacy requests
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Review your consent record, or ask us to access, correct, or erase your data.
             </div>
           </div>
           <a
             href="/privacy/requests"
             style={{
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               fontSize: 12,
               fontWeight: 600,
               color: 'var(--text-1)',
@@ -824,19 +830,19 @@ export function PrivacySection() {
         */}
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Uploaded files
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Files you uploaded and media generated for you. Review them, or delete individual
               items, in your Library.
             </div>
@@ -844,7 +850,7 @@ export function PrivacySection() {
           <a
             href="/chat/library"
             style={{
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               fontSize: 12,
               fontWeight: 600,
               color: 'var(--text-1)',
@@ -863,27 +869,27 @@ export function PrivacySection() {
         <div
           id="export-data"
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Export data</div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Download a copy of your account data as JSON. Store it somewhere private.
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <button
               type="button"
               onClick={handleExport}
               disabled={exporting}
               style={{
-                padding: '6px 14px',
+                padding: 'var(--space-2) var(--space-4)',
                 fontSize: 12,
                 fontWeight: 600,
                 color: exporting ? 'var(--text-3)' : 'var(--text-1)',
@@ -917,7 +923,7 @@ export function PrivacySection() {
           data-testid="browser-sync-statement"
           style={{
             margin: 0,
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             fontSize: 12,
             color: 'var(--text-3)',
             lineHeight: 1.55,
@@ -929,7 +935,7 @@ export function PrivacySection() {
         {/* Memory preferences row */}
         <div
           style={{
-            padding: '14px 0',
+            padding: 'var(--space-4) 0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -944,7 +950,7 @@ export function PrivacySection() {
               fontSize: 13,
               color: 'var(--text-2)',
               textDecoration: 'none',
-              padding: '6px 14px',
+              padding: 'var(--space-2) var(--space-4)',
               border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
             }}
@@ -965,7 +971,7 @@ export function PrivacySection() {
       <div aria-label="Account deletion availability">
         <p
           style={{
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--chat-accent-primary-text)',

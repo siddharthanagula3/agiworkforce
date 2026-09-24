@@ -58,7 +58,12 @@ per-document revision dates, canonical routes and their aliases) come from
 6. **Managed Cloud is in public alpha** and open by default since 2026-06-27
    (`apps/web/lib/managed-compute-gate.ts`). Say so where it bears on a
    commitment.
-7. Update the document's date in `POLICY_LAST_UPDATED` in the same change.
+7. Version the published text in `policy-versions.json` in the same change.
+   Update its `POLICY_LAST_UPDATED` date when the policy is revised. The
+   `/security` page labels its date as the last full-page review; a targeted
+   factual correction that does not re-review every row keeps that date and
+   records why in a same-date version entry. Do not present a targeted check as
+   a fresh review of the whole page.
 
 `apps/web/app/__tests__/legal-policy-set.test.ts` enforces 1, parts of 2, 4 and 7
 mechanically, including a prohibited-claim guard that fails if a removed claim

@@ -229,7 +229,7 @@ function AttachmentThumbnail({
           }}
         >
           <RotateCcw size={16} color={colors.textPrimary} />
-          <Text style={{ fontSize: 9, fontWeight: '600', color: colors.textPrimary }}>Retry</Text>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.textPrimary }}>Retry</Text>
         </Pressable>
       ) : null}
 
@@ -251,7 +251,9 @@ function AttachmentThumbnail({
           }}
         >
           <AlertCircle size={16} color={colors.agentError} />
-          <Text style={{ fontSize: 9, fontWeight: '600', color: colors.agentError }}>Not sent</Text>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: colors.agentError }}>
+            Not sent
+          </Text>
         </View>
       ) : null}
 
@@ -274,14 +276,12 @@ function AttachmentThumbnail({
             borderColor: colors.border,
           }}
         >
-          <Lock size={8} color={colors.textPrimary} />
+          <Lock size={11} color={colors.textPrimary} />
           <Text
             style={{
-              fontSize: 8,
-              fontWeight: '700',
+              fontSize: 11,
+              fontWeight: '600',
               color: colors.textPrimary,
-              textTransform: 'uppercase',
-              letterSpacing: 0.4,
             }}
           >
             {privacyShortLabel}

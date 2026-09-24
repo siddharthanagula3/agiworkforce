@@ -32,7 +32,7 @@ import { toUserMessage } from '@/lib/user-error-message';
  */
 
 const actionButtonStyle = {
-  padding: '6px 12px',
+  padding: 'var(--space-2) var(--space-3)',
   fontSize: 12,
   fontWeight: 600,
   color: 'var(--text-2)',
@@ -115,7 +115,7 @@ export function PublishedArtifactsSection() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div>
         <h2
           style={{
@@ -123,7 +123,7 @@ export function PublishedArtifactsSection() {
             fontSize: 18,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Published artifacts
@@ -150,22 +150,25 @@ export function PublishedArtifactsSection() {
         }}
       >
         {loading ? (
-          <p style={{ margin: 0, padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+          <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading published artifacts…
           </p>
         ) : error ? (
-          <div role="alert" style={{ padding: 20, color: 'var(--text-2)', fontSize: 13 }}>
+          <div
+            role="alert"
+            style={{ padding: 'var(--space-5)', color: 'var(--text-2)', fontSize: 13 }}
+          >
             {error}{' '}
             <button type="button" onClick={() => void load()} style={actionButtonStyle}>
               Retry
             </button>
           </div>
         ) : artifacts.length === 0 ? (
-          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               No published artifacts
             </div>
-            <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+            <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
               Publish an artifact from the artifacts panel and it will appear here.
             </p>
           </div>
@@ -176,12 +179,12 @@ export function PublishedArtifactsSection() {
               <div
                 key={artifact.token}
                 style={{
-                  padding: '16px 20px',
+                  padding: 'var(--space-4) var(--space-5)',
                   borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 16,
+                  gap: 'var(--space-4)',
                 }}
               >
                 <div style={{ minWidth: 0 }}>
@@ -197,7 +200,9 @@ export function PublishedArtifactsSection() {
                   >
                     {artifact.title || artifact.artifactId}
                   </div>
-                  <div style={{ marginTop: 3, color: 'var(--text-3)', fontSize: 12 }}>
+                  <div
+                    style={{ marginTop: 'var(--space-1)', color: 'var(--text-3)', fontSize: 12 }}
+                  >
                     {artifact.kind} · {formatSize(artifact.contentChars)} · Published{' '}
                     {formatDate(artifact.createdAt)}
                     {/* State the serving mode, because it is the security
@@ -205,7 +210,7 @@ export function PublishedArtifactsSection() {
                     {artifact.sandboxed ? ' · runs in a sandboxed frame' : ''}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
                   <a
                     href={artifact.shareUrl}
                     target="_blank"

@@ -28,6 +28,14 @@ export const Sparkles = createIcon(
   </>,
 );
 
+export const Lightbulb = createIcon(
+  'Lightbulb',
+  <>
+    <path d="M9 17v-2l-3-4V8l2.5-4h7L18 8v3l-3 4v2z" />
+    <path d="M9 17h6M10 20h4" />
+  </>,
+);
+
 const RING = { cx: '12', cy: '12', r: '9' } as const;
 
 export const CircleCheck = createIcon(

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-08-28
+Last updated: 2026-09-22
 
 `AGENTS.md` is the operating contract and applies to humans too. This file
 covers the mechanics of getting a change in.

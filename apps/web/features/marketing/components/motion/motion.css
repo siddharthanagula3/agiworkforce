@@ -172,7 +172,7 @@
   content: '';
   position: absolute;
   inset: 10% -2% -8%;
-  border-radius: 28px;
+  border-radius: var(--corner-hero);
   background: var(--agi-shadow);
   filter: blur(28px);
   opacity: 0.55;

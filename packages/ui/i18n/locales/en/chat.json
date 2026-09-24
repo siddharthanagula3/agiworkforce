@@ -65,6 +65,7 @@
     "untitled": "Published artifact",
     "publishedOn": "Published {{date}}",
     "sharedFrom": "Shared from AGI",
+    "sharedWithWorkspace": "Shared with your workspace",
     "renderFailed": "This artifact failed to render: {{error}}",
     "svgUnavailable": "This SVG contained nothing that could be safely displayed."
   },

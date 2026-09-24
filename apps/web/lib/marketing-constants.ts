@@ -24,9 +24,9 @@ export const LAUNCH = {
 export const POSITIONING = {
   wedge: 'Try AGI on the web. Run Local and BYOK from the CLI. Managed cloud, open by default.',
   trustBoundary:
-    'Website users can use AGI managed cloud, with a small free Auto Economy cap and higher-capacity paid plans rolling out. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.',
+    'Website users can use AGI managed cloud. The Free plan runs on the free models providers give away, and paid plans with more capacity are opening in stages, so an upgrade needs an access code or a place on the upgrade waitlist. The released CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed cloud is open by default, not invite-only.',
   cloudInvite:
-    'Managed cloud is open by default; higher capacity is a paid subscription, not an invite.',
+    'Managed cloud is open by default. Higher capacity is a paid subscription, and paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
 } as const;
 
 const BYOK_SURFACE_IDS = ['cli', 'vscode'] as const;

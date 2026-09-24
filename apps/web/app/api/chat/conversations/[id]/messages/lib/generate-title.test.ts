@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  getRegistryRoute,
+  listCanonicalModels,
+  listManagedRoutesForModel,
+} from '@agiworkforce/types';
 
 vi.mock('next/server', async (importOriginal) => {
   const actual = await importOriginal<typeof import('next/server')>();
@@ -33,6 +38,10 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
 const drainToLlmResponseMock = vi.fn();
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: (...args: unknown[]) => drainToLlmResponseMock(...args),
+}));
+
+const buildServerProviderAdapterMock = vi.fn((_provider: string) => ({
+  stream: () => (async function* () {})(),
 }));
 
 const recordSettledProviderCostMock = vi.fn(async (..._args: unknown[]) => {});
@@ -70,7 +79,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
-  buildServerProviderAdapter: () => ({ stream: () => (async function* () {})() }),
+  buildServerProviderAdapter: (provider: string) => buildServerProviderAdapterMock(provider),
   toGenericUpstreamError: (provider: string) => new Error(`upstream ${provider}`),
   buildProtocolRouteAdapter: vi.fn(),
 }));
@@ -143,6 +152,29 @@ beforeEach(() => {
 });
 
 describe('exact-response cache integration', () => {
+  it('maps a selected OpenRouter route to the dispatch adapter key', async () => {
+    const managedOpenRouterRoute = listCanonicalModels()
+      .flatMap((model) => listManagedRoutesForModel(model.id))
+      .find((route) => route.provider === 'open_router');
+    if (!managedOpenRouterRoute) throw new Error('Managed OpenRouter route fixture is missing');
+    const registryRoute = getRegistryRoute(managedOpenRouterRoute.routeId);
+    if (!registryRoute) throw new Error('Managed OpenRouter registry route fixture is missing');
+
+    resolveAutoRouteMock.mockReturnValueOnce({
+      ...SELECTED_ROUTE,
+      modelKey: registryRoute.modelKey,
+      provider: registryRoute.provider,
+      providerModelId: registryRoute.providerModelId,
+      routeId: managedOpenRouterRoute.routeId,
+      harnessId: registryRoute.harnessId,
+    });
+
+    scheduleConversationTitleGeneration(scheduleInput(fakeDb()));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(buildServerProviderAdapterMock).toHaveBeenCalledWith('openrouter');
+  });
+
   it('calls the provider on the first request and reuses the cached title on an identical second request', async () => {
     const dbFirst = fakeDb();
     scheduleConversationTitleGeneration(scheduleInput(dbFirst));

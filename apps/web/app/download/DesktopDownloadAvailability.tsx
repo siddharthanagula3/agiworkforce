@@ -209,10 +209,10 @@ export function DesktopDownloadAvailability() {
         Desktop installer availability
       </h2>
       <Prose>
-        AGI Desktop ships for macOS as one notarized installer per architecture. A download control
-        appears here only once the release API confirms a signed build for that architecture.
-        Windows and Linux installers have not been published, and no release date is available for
-        them.
+        The public Desktop release channel targets one signed and notarized macOS installer per
+        architecture. A download control appears here only once the release API confirms a build for
+        that architecture. Windows and Linux installers have not been published, and no release date
+        is available for them.
       </Prose>
 
       <ul className="agi-ds-ledger agi-ds-availability" aria-label="Desktop platforms">
@@ -320,7 +320,7 @@ export function DesktopDownloadAvailability() {
         <div style={{ marginTop: '2rem' }}>
           <Eyebrow>Install it</Eyebrow>
           <ol
-            className="mt-4 list-decimal space-y-2 pl-5 text-sm"
+            className="mt-4 list-decimal space-y-2 ps-5 text-sm"
             aria-label="Install AGI Desktop on macOS"
           >
             {INSTALL_STEPS.map((step) => (

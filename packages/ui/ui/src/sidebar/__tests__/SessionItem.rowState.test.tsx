@@ -82,7 +82,7 @@ describe('a Recents row says which conversation it is', () => {
     expect(row.getAttribute('aria-current')).toBe('page');
     const shell = container.querySelector('[data-sidebar-session-index]')
       ?.firstElementChild as HTMLElement;
-    expect(shell.getAttribute('class')).toContain('bg-[hsl(var(--accent))]');
+    expect(shell.getAttribute('class')).toContain('bg-accent');
   });
 
   it('leaves a conversation that is not on screen unmarked', () => {

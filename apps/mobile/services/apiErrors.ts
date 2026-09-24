@@ -1,3 +1,9 @@
+import {
+  statableRetryAfterSeconds,
+  statedWait,
+  withoutExternalPurchaseSteering,
+} from './failureCopy';
+
 export type ApiPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing';
 
 const PAYWALL_BODY_KIND = 'paywall';
@@ -23,7 +29,7 @@ export class ApiPaywallError extends Error {
     this.name = 'ApiPaywallError';
     this.feature = feature;
     this.requiredTier = requiredTier;
-    this.reason = reason;
+    this.reason = withoutExternalPurchaseSteering(reason);
     this.code = code;
     this.recoveryAction = recoveryActionForPaywallCode(code);
   }
@@ -45,15 +51,29 @@ export class ApiFreeCapacityError extends Error {
   }
 }
 
+export interface ApiHttpErrorContext {
+  retryAfterSeconds?: number;
+  requestId?: string;
+}
+
 export class ApiHttpError extends Error {
   readonly status: number;
   readonly code: string | null;
+  readonly retryAfterSeconds: number | undefined;
+  readonly requestId: string | undefined;
 
-  constructor(message: string, status: number, code: string | null = null) {
-    super(message);
+  constructor(
+    message: string,
+    status: number,
+    code: string | null = null,
+    context: ApiHttpErrorContext = {},
+  ) {
+    super(withoutExternalPurchaseSteering(message));
     this.name = 'ApiHttpError';
     this.status = status;
     this.code = code;
+    this.retryAfterSeconds = context.retryAfterSeconds;
+    this.requestId = context.requestId;
   }
 }
 
@@ -64,12 +84,21 @@ const NO_MODEL_SWITCH_CODES = new Set([
   'request_cancelled',
   'max_output_tokens_exceeded',
   'tool_call_invalid',
+  'client_update_required',
   FREE_CAPACITY_UNAVAILABLE_CODE,
+  // The Free plan has one model, so another model is not a way out of its spent pool.
+  'free_allowance_exhausted',
 ]);
 
 export function offersModelSwitch(code: string | null | undefined): boolean {
   return typeof code === 'string' && code.length > 0 && !NO_MODEL_SWITCH_CODES.has(code);
 }
+
+const CLIENT_UPDATE_REQUIRED_STATUS = 426;
+export const CLIENT_UPDATE_REQUIRED_CODE = 'client_update_required';
+// Retrying cannot help a build the service no longer answers, so the sentence says what can.
+export const CLIENT_UPDATE_REQUIRED_MESSAGE =
+  'This version of the app is too old for the service. Update AGI Workforce from your app store, then try again.';
 
 export function httpErrorFrom(status: number, body: string): ApiHttpError {
   if (status === 401) return new ApiHttpError(CLOUD_SIGN_IN_MESSAGE, status, 'auth_required');
@@ -77,18 +106,35 @@ export function httpErrorFrom(status: number, body: string): ApiHttpError {
   const candidate = parsed?.error ?? parsed?.message;
   let message: string | null = null;
   let code: string | null = null;
+  let retryAfterSeconds: number | undefined;
   if (typeof candidate === 'string' && candidate.trim()) {
     message = candidate;
   } else if (candidate && typeof candidate === 'object') {
-    const nested = candidate as { code?: unknown; message?: unknown };
+    const nested = candidate as {
+      code?: unknown;
+      message?: unknown;
+      retry_after_seconds?: unknown;
+    };
     if (typeof nested.code === 'string') code = nested.code;
     if (typeof nested.message === 'string' && nested.message.trim()) message = nested.message;
+    retryAfterSeconds = statableRetryAfterSeconds(nested.retry_after_seconds);
   }
-  return new ApiHttpError(message ?? fallbackHttpMessage(status), status, code);
+  const requestId = parsed?.['requestId'];
+  if (status === CLIENT_UPDATE_REQUIRED_STATUS) code ??= CLIENT_UPDATE_REQUIRED_CODE;
+  return new ApiHttpError(message ?? fallbackHttpMessage(status, retryAfterSeconds), status, code, {
+    ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+    ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+  });
 }
 
-function fallbackHttpMessage(status: number): string {
-  if (status === 429) return 'Too many requests right now. Please wait a moment and try again.';
+function fallbackHttpMessage(status: number, retryAfterSeconds?: number): string {
+  if (status === 429) {
+    const wait = statedWait(retryAfterSeconds);
+    return wait
+      ? `Too many requests right now. Try again in ${wait}.`
+      : 'Too many requests right now. Please wait a moment and try again.';
+  }
+  if (status === CLIENT_UPDATE_REQUIRED_STATUS) return CLIENT_UPDATE_REQUIRED_MESSAGE;
   if (status >= 500) return 'The server hit a problem handling this request. Please try again.';
   return `Request failed (HTTP ${status}). Please try again.`;
 }

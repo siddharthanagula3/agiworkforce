@@ -1815,6 +1815,44 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "beta\n");
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_write_through_a_symlink_changes_its_target_and_keeps_the_link() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let target = tmp.path().join("notes.md");
+        let link = tmp.path().join("linked-notes.md");
+        std::fs::write(&target, "alpha\n").expect("write target");
+        std::os::unix::fs::symlink("notes.md", &link).expect("symlink");
+        let link_arg = || {
+            let mut args = HashMap::new();
+            args.insert("path".to_string(), link.display().to_string());
+            args
+        };
+        assert!(execute_read_file(&link_arg()).await.unwrap().success);
+
+        let mut edit_args = link_arg();
+        edit_args.insert("old_string".to_string(), "alpha".to_string());
+        edit_args.insert("new_string".to_string(), "beta".to_string());
+        let edited = execute_edit_file(&edit_args, false, None).await.unwrap();
+        assert!(edited.success, "{}", edited.output);
+
+        let mut write_args = link_arg();
+        write_args.insert("content".to_string(), "gamma\n".to_string());
+        let written = execute_write_file(&write_args, false, None).await.unwrap();
+        assert!(written.success, "{}", written.output);
+
+        let link_meta = std::fs::symlink_metadata(&link).expect("link metadata");
+        assert!(
+            link_meta.file_type().is_symlink(),
+            "the write replaced the link with a regular file"
+        );
+        assert_eq!(
+            std::fs::read_link(&link).expect("read link"),
+            Path::new("notes.md")
+        );
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "gamma\n");
+    }
+
     #[tokio::test]
     async fn multiedit_requires_read_state_for_existing_file() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
