@@ -6,6 +6,11 @@ import {
   PeriodicExportingMetricReader,
 } from '@opentelemetry/sdk-metrics';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  DECISION_COMPARISON_KEYS,
+  DECISION_CONFIDENCE_BINS,
+  DECISION_KIND_IDS,
+} from '@/lib/services/semantic-decisions/kinds';
 
 import { OBSERVABILITY_ATTRIBUTE, resetDeploymentAttributesCache } from '../attributes';
 import { METRIC_LABEL_BOUND, resetLabelCardinality } from '../cardinality';
@@ -35,6 +40,8 @@ import {
   recordQueueWait,
   recordRejection,
   recordRoutingDecision,
+  recordSemanticDecision,
+  recordSemanticDecisionComparison,
   recordSpanMetrics,
   recordToolOutcome,
   recordTurnOutcome,
@@ -149,6 +156,18 @@ async function emitEverySignal(): Promise<void> {
     trustMode: 'managed',
     region: 'us',
     surface: 'web',
+  });
+  recordSemanticDecision({
+    kind: DECISION_KIND_IDS[0],
+    mode: 'shadow',
+    outcome: 'shadow',
+    latencyMs: 8,
+  });
+  recordSemanticDecisionComparison({
+    kind: DECISION_KIND_IDS[0],
+    question: DECISION_COMPARISON_KEYS[0],
+    agree: false,
+    confidenceBin: DECISION_CONFIDENCE_BINS[0],
   });
   recordToolOutcome({ category: 'mcp', status: 'failed', durationMs: 9, surface: 'web' });
   recordCompletion({

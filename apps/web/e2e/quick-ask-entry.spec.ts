@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mockAuthProvider } from './lib/mock-auth-provider';
 
 const SESSION_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -29,6 +30,7 @@ test.describe('Quick Ask entry routes', () => {
         }
       });
 
+      await mockAuthProvider(page);
       await page.goto(route);
 
       await expect(page).toHaveURL(/\/login(?:\?|$)/u);

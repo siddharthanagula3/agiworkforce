@@ -62,6 +62,9 @@ use crate::core::llm::Provider;
 /// this list fails the oracle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Exception {
+    /// The Gemini bridge preserves the legacy terminal safety error after
+    /// emitting the usage that the old parser discarded.
+    UsageBeforeTerminalError,
     /// One old per-SSE-event merged chunk corresponds to a consecutive run of
     /// finer-grained new chunks whose fold (under the exact
     /// `consume_llm_stream` merge rules) equals the old chunk. Downstream
@@ -236,6 +239,14 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
         &[Exception::SplitGranularity, Exception::UsageFieldShape],
     ),
     (
+        "anthropic_truncated_at_output_limit",
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
+    ),
+    (
+        "anthropic_refusal_stops_the_response",
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
+    ),
+    (
         "anthropic_multibyte_split_2_2",
         &[Exception::SynthesizedEnd],
     ),
@@ -256,6 +267,14 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     (
         "gemini_function_call_complete",
         &[Exception::SplitGranularity, Exception::GeminiToolId],
+    ),
+    (
+        "gemini_truncated_at_output_limit",
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
+    ),
+    (
+        "gemini_blocked_by_the_safety_family",
+        &[Exception::UsageBeforeTerminalError],
     ),
     ("gemini_multibyte_split_2_1", &[Exception::SynthesizedEnd]),
     // ---- openai (chat completions) ----
@@ -282,6 +301,18 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
         "non_object_tool_args_get_marker",
         &[Exception::SplitGranularity],
     ),
+    (
+        "openai_truncated_at_output_limit",
+        &[
+            Exception::SplitGranularity,
+            Exception::RedundantTerminalDone,
+            Exception::UsageFieldShape,
+        ],
+    ),
+    (
+        "openai_refused_by_content_filter",
+        &[Exception::RedundantTerminalDone],
+    ),
     ("usage_only_final_chunk", &[Exception::UsageFieldShape]),
     ("done_marker_only", &[]),
     ("keepalive_comment_then_text", &[]),
@@ -299,6 +330,14 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     ),
     (
         "incomplete_normalizes_reason_and_usage",
+        &[
+            Exception::SynthesizedEnd,
+            Exception::UsageFieldShape,
+            Exception::FinishReasonRecovered,
+        ],
+    ),
+    (
+        "openai_responses_refused_by_content_filter",
         &[
             Exception::SynthesizedEnd,
             Exception::UsageFieldShape,
@@ -329,6 +368,10 @@ const FIXTURE_EXCEPTIONS: &[(&str, &[Exception])] = &[
     ),
     (
         "ollama_trailing_done_without_newline",
+        &[Exception::SplitGranularity, Exception::UsageFieldShape],
+    ),
+    (
+        "ollama_truncated_at_output_limit",
         &[Exception::SplitGranularity, Exception::UsageFieldShape],
     ),
     (
@@ -1323,7 +1366,7 @@ fn canonicalize_outcome(name: &str, o: &mut Outcome, side: &str, fired: &mut Fir
 // responses finish / tool-call / swallowed-error recovery (old had no handler for
 // responses-native events); ollama eager-tool-finish (old's per-line synthesis left
 // a wrong final "stop"), no-id determinism, invalid-tool-args wrapping, and usage
-// null≡all-zeros shape. All 26 fixtures GREEN across 5 dialects; runs in the normal
+// null≡all-zeros shape. The whole fixture corpus runs across 5 dialects in the normal
 // suite as a permanent parity regression guard.
 #[tokio::test]
 async fn c2a_old_vs_new_decode_identity() {
@@ -1357,6 +1400,47 @@ async fn c2a_old_vs_new_decode_identity() {
                      stale entries must be removed",
                     fixture.name
                 );
+            } else if declared_set == [Exception::UsageBeforeTerminalError] {
+                assert_eq!(
+                    old_items.len(),
+                    1,
+                    "[{}] old refusal shape changed",
+                    fixture.name
+                );
+                assert!(matches!(
+                    &old_items[0],
+                    Item::Error(message) if message == "Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings."
+                ));
+                assert_eq!(
+                    new_items.len(),
+                    2,
+                    "[{}] new refusal shape changed",
+                    fixture.name
+                );
+                assert!(matches!(
+                    &new_items[0],
+                    Item::Chunk(value)
+                        if value["done"] == json!(false)
+                            && value["content"] == json!("")
+                            && value["usage"]["prompt_tokens"] == json!(12)
+                            && value["usage"]["completion_tokens"] == json!(0)
+                            && value["usage"]["total_tokens"] == json!(12)
+                ));
+                assert!(matches!(
+                    &new_items[1],
+                    Item::Error(message) if message == "Response was blocked by Google's safety filters. Try rephrasing your request or adjusting safety settings."
+                ));
+                let new_outcome = consume_fold(&new_items);
+                assert_eq!(new_outcome.content, "");
+                assert_eq!(new_outcome.reasoning, "");
+                assert!(new_outcome.finish_reason.is_none());
+                assert!(new_outcome.tool_calls.is_empty());
+                assert!(new_outcome.credits.is_none());
+                assert_eq!(
+                    new_outcome.terminal_error,
+                    consume_fold(&old_items).terminal_error
+                );
+                fired.fire(Exception::UsageBeforeTerminalError);
             } else {
                 verify_aligned(&fixture.name, &old_items, &new_items, &mut fired);
 

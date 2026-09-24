@@ -158,20 +158,46 @@ test('every surface baseline names a deploy job that actually exists', () => {
   }
 });
 
-test('shared build inputs conservatively rebuild every deployable lane', () => {
+test('shared JavaScript build inputs do not rebuild native binaries', () => {
   const scope = classifyDeployScope(['pnpm-lock.yaml']);
   assert.deepEqual(scope, {
     web: true,
     signaling: true,
     sandbox: true,
     desktop: true,
-    native: true,
+    native: false,
     extension: true,
     vscode: true,
     mobile: true,
   });
   assert.match(formatGithubOutputs(scope), /^web=true$/m);
-  assert.match(formatGithubOutputs(scope), /^native=true$/m);
+  assert.match(formatGithubOutputs(scope), /^native=false$/m);
+});
+
+test('Rust builds run only for native inputs and cross-language sync parity', () => {
+  for (const file of [
+    'Cargo.lock',
+    'Cargo.toml',
+    'deny.toml',
+    'rust-toolchain.toml',
+    'apps/cli/src/main.rs',
+    'apps/desktop/src-tauri/src/lib.rs',
+    'crates/agiworkforce-protocol/src/lib.rs',
+    'packages/client/sync/src/cursor.ts',
+  ]) {
+    assert.equal(classifyDeployScope([file]).native, true, file);
+  }
+
+  for (const file of [
+    '.github/workflows/ci.yml',
+    'package.json',
+    'pnpm-lock.yaml',
+    'apps/cli/npm/bin/agi.js',
+    'packages/ai/model-registry/catalog/models.curation.json',
+    'packages/ai/routing/src/index.ts',
+  ]) {
+    assert.equal(classifyDeployScope([file]).native, false, file);
+  }
 });
 
 test('documentation-only changes do not allocate deploy or native work', () => {

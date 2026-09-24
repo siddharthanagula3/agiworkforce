@@ -332,12 +332,8 @@ jobs:
         # npm-publish staging package, not a workspace member) and has zero
         # dependencies, so this needs no install, it guards bin/agi.js, the
         # actual entrypoint every `npx agi`/`npm i -g` install resolves to.
-        # Lives in js-verify (unconditional), not rust-desktop-cli, on
-        # purpose: apps/cli/npm/** DOES set rust-desktop-cli's
-        # native_changed gate too (production-deploy-scope.mjs's `isWithin`
-        # prefix-matches all of apps/cli, Rust crate and npm folder alike),
-        # but a check for a JS file should not depend on a Rust-named job's
-        # scope classifier to be the one thing keeping it alive.
+        # Lives in js-verify (unconditional), because npm wrapper changes do
+        # not compile the Rust CLI and do not select the native lanes.
         working-directory: apps/cli/npm
         run: node --test test/agi.test.mjs
 

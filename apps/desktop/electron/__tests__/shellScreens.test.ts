@@ -52,7 +52,8 @@ describe('the page the shell draws when it cannot show the app', () => {
     const html = decode(
       shellScreenUrl(offlineScreen(-106), 'https://agiworkforce.com/chat?x=1', false),
     );
-    expect(html).toContain('location.href="https://agiworkforce.com/chat?x=1"');
+    expect(html).toContain('data-retry-url="https://agiworkforce.com/chat?x=1"');
+    expect(html).toContain("location.href=document.getElementById('retry').dataset.retryUrl");
   });
 
   it('retries the route that failed instead of resetting the window to chat', () => {
@@ -76,6 +77,18 @@ describe('the page the shell draws when it cannot show the app', () => {
     );
     expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('keeps the retry destination inside the button attribute', () => {
+    const html = decode(
+      shellScreenUrl(
+        offlineScreen(-106),
+        'https://agiworkforce.com/?q="</script><script>alert(1)</script>',
+        true,
+      ),
+    );
+    expect(html).toContain('data-retry-url="https://agiworkforce.com/?q=&quot;&lt;/script&gt;');
+    expect(html).not.toContain('</script><script>alert(1)</script>');
   });
 
   it('paints each appearance its own ground rather than one colour for both', () => {

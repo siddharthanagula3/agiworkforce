@@ -250,8 +250,7 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
   // carries the query beside it.
   await expect(
     assistant.getByRole('button', {
-      name: 'Searching official sources · AGI official documentation',
-      exact: true,
+      name: /Searching official sources · AGI official documentation, Done/u,
     }),
   ).toBeVisible();
   // The result rows themselves stay out of the transcript. One source list
