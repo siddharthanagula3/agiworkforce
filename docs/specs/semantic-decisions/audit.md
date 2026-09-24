@@ -1,8 +1,9 @@
 # Semantic decision audit and Jev evaluation
 
-Status: In progress. Foundation and development evaluation complete; production rollout withheld
+Status: In progress; foundation, managed host, four shadow consumers and a held-out live
+benchmark implemented; every decision kind is disabled and no production request evaluates one
 Owner: AI platform maintainers
-Last updated: 2026-09-20
+Last updated: 2026-09-23
 
 ## Decision
 
@@ -184,6 +185,65 @@ its existing routing trace, while arbitrary personal candidate values must stay 
 No cross-user cache has been added. Any future cache must include tenant, trust, policy,
 question version, candidate version and input identity; cost alone does not justify it.
 
+## Managed host implemented
+
+`apps/web/lib/services/semantic-decisions/` is the one service a managed request asks
+through. `kinds.ts` is the closed registry of decision kinds, each with an owner, a question
+version and a failure policy; `turn_signals` is the only member. `config.ts` turns four
+environment keys into typed configuration and reports the transport unconfigured when any is
+missing, when the base URL names a host outside the decision-transport allowlist in
+`provider-runtime/base-url.ts`, or when the price is unusable. It never throws.
+`eligibility.ts` is the three-part AND. `policy.ts` maps the flag to a `DecisionPolicy` and a
+cohort. `host.ts` holds one provider and one evaluator per kind per process, reading the
+in-flight policy from request-scoped storage so two subjects do not share one. `trace-service.ts`
+persists the comparison and sweeps it. `questions.ts` is the versioned question module.
+
+Rollout is a new reserved, server-only flag namespace. `decision.<kind>` serves `off`,
+`shadow` or `enabled` and defaults to `off`; `decision.kill` forces every kind to disabled.
+Both are held back from `clientVisibleFlags`. The cohort is seeded exactly as the flag
+evaluator seeds its own bucket, so the evaluator's sample gate selects the population the
+flag already selected rather than squaring the rollout percentage.
+
+Eligibility is computed by the host from facts the turn already read: the session's canonical
+`PrivacyMode` is `managed`; a `zeroDataRetentionOnly` workspace is excluded because the new
+`typesafe` governance record says zero retention is available on request rather than by
+default, which is an agreement this deployment does not hold; a workspace whose supplier
+allow-list does not name the transport is excluded, and it cannot name it, because the
+transport is deliberately not a registered `Provider`; a workspace pinned away from the
+processing region is excluded, because the record publishes no processing region.
+
+Metering is the `decision` COGS capability added in migration 0294, with `billedCents` zero
+and no customer figure attached, so a decision moves margin and never a balance. The same
+migration creates `semantic_decision_traces`: bounded labels and bins only, no state and no
+candidate text, RLS on and forced.
+
+The trace carries no subject or tenant column of its own, and it is not anonymous. Two of its
+columns join out to rows that do carry one, and both joins are deliberate, because a
+disagreement that cannot be priced against the route actually served is not worth recording.
+`request_id` joins `routing_decision_traces.request_id`, which carries `user_id` and
+`organization_id`; both tables are swept on the same retention window by the model-rollout
+cron, so that join closes when the two rows retire together, and account erasure deletes a
+subject's routing traces outright, so it closes with the account as well. `decision_id` is the
+`source_ref` of the same evaluation's `provider_cost_events` row, which also carries `user_id`
+and `organization_id`; that ledger row has no maximum age and is anonymised rather than
+deleted on account erasure, so this join outlives the trace's own window while naming nobody
+once the subject is erased. The trace is therefore linkable to a subject for exactly as long
+as a row naming that subject survives, and not afterwards. It is deliberately absent from
+`USER_SCOPED_TABLES` and from both erasure cascades: it has no column for them to act on, and
+each table it joins to is erased or anonymised in its own right.
+
+The first consumer is `turn_signals`, shadow only. At the point the managed chat turn has
+already classified and recorded its task family, it schedules one batch under Next `after()`
+carrying the user's own words and at most the previous user message: the dominant task family
+as a Choice over `TASK_FAMILIES` imported from the router, three independent Nouls for current
+information, external tools and code understanding, and a Score for semantic complexity. It
+records the classifier's family against the candidate's, and the others as bins. It changes no
+route, no latency and nothing a user sees, and it skips a turn the deterministic guards own
+outright, recording a bounded reason: an attachment, an explicitly named model, or no text.
+
+Every default is off. With no flag written, the host returns before the transport is built and
+records no metric, no ledger row and no trace.
+
 The response validator accounts for independent two-decimal provider rounding. A live score
 returned 1.99 with probabilities [0.01, 0.08, 0.84, 0.07], whose rounded weighted sum is 1.97.
 The permitted error is derived from per-value rounding, not an arbitrary large epsilon.
@@ -247,25 +307,133 @@ changed downstream routes and tails require end-to-end traces. For skill/RAG con
 measure final serialized prompt tokens and provider cache usage, not the count of shortlist
 items. The present selector already shortlists skills, so the sign of savings is unknown.
 
+## Second sweep and held-out benchmark
+
+A six-slice read of every model-driven decision followed the lexical inventory above, which
+its own text says cannot see wrapped calls, direct `fetch` inference or injected runners.
+It produced 95 findings and 64 rejections, and 68 of the findings were absent from
+`inventory.csv`. The per-slice evidence is in `tools/evals/semantic-decisions/` alongside
+the suites; the ranking rule was deterministic code first, then a cached result, then a
+semantic decision, then a cheap model, then the model in use today.
+
+Three conclusions changed the plan.
+
+1. **The largest savings needed no model.** The browser agent loop resent every screenshot
+   and DOM observation on every step, so input grew with the square of the run length.
+   `pruneObservationHistory` keeps the newest two of each and stubs the rest: on a synthetic
+   20-step run the bytes resent at step 20 fall from 1,643,104 to 258,299, the whole run from
+   16.98 MB to 4.73 MB, and the text part (what is billed as input tokens) by 97.7 percent.
+   The CLI deferred its own tool schemas behind `tool_search` but never MCP tools; it now
+   defers those beyond a 16-tool budget. The router docstring promised a model fallback
+   below 0.6 confidence that exists nowhere; it says so now.
+2. **The managed chat path calls no model to classify anything.** Intent, freshness, skill
+   relevance, connector tool selection and memory selection are regex or lexical. A semantic
+   decision there adds a call, so it earns its place only by shrinking what the primary
+   model reads, by gating a real model call, or by fixing a measured quality failure.
+3. **The native candidates are parked.** Every closed-set model call in the Tauri layer
+   (intent detector, process classifier, criterion check, plan review, keyword tiering,
+   thinking budget) runs under Local or BYOK trust, which a hosted decision service may not
+   receive, and that layer is not reachable from the Electron shell that ships.
+
+### Method
+
+Six suites, 576 cases, under `tools/evals/semantic-decisions/suites/`. Inputs mirror the
+production call sites exactly and use real material where it exists: the repository's
+connector catalogs, real diff chunks from this repository's history, the extension's own
+element-list format. Every suite carries plain cases, near misses that share vocabulary
+with a positive, negation, indirect phrasing, non-English including CJK, inputs carrying an
+instruction aimed at the classifier, long irrelevant input and deliberately ambiguous
+cases. Each production baseline is the real production function run over the same inputs.
+
+Ground truth is two blind labellers. The second never saw the author's labels, the
+baselines or the provenance files. `suites/adjudicate.mjs` scores a case only where they
+agree; contested and ambiguous cases are reported and never counted as errors for either
+side. For set-valued decisions the agreed items are the core that recall is measured on,
+single-vote items are neutral, and everything else counts against precision. Agreement was
+98.8 percent on the memory gate, 96.8 on the review gate, 99.1 on element resolution, 97 on
+each boolean turn signal and 86 on task family; 8 of the 12 contested families were the same
+pair, `extended_thinking` against `general_chat`, which is evidence that the pair should not
+be asked as a choice at all. The rule was fixed before any model output existed.
+
+`bench.mts` builds every request through the production question modules, judges every
+response with the production validator, chooses thresholds on the calibration split only
+and evaluates once on held-out. The run on 2026-09-20 against `jev-1.13.0` made 551 calls:
+550 answered, 1 invalid response, no provider error, timeout or rate limit, 1,205,581 input
+tokens, $0.0506. Raw per-case answers are in `results/`.
+
+### Held-out results
+
+| Decision                   | Production today                                                       | Semantic decision, gated                                                                               | Cost per 1,000               | p50 / p95    |
+| -------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------- | ------------ |
+| `memory_worth_extracting`  | 62.2 percent; 7 durable facts missed, 10 wasted extraction calls in 45 | 97.8 percent; 0 missed, 1 wasted                                                                       | $0.018                       | 165 / 229 ms |
+| `review_security_gate`     | security pass on every chunk: 39 of 59 unnecessary                     | path rule then Noul: 35 of 39 skipped, 0 of 20 needed passes skipped                                   | $0.061                       | 162 / 224 ms |
+| `connector_tool_shortlist` | 65.2 percent recall of needed tools in 6,788 bytes                     | 73.9 percent recall in 399 bytes; precision 4.2 to 79.6 percent                                        | $0.201                       | 199 / 284 ms |
+| `element_resolution`       | lexical floor 53.0 percent; production spends a reasoning round trip   | ungated 93.9 percent; gated acts on 72 percent with no wrong index, escalates 28                       | $0.068                       | 170 / 219 ms |
+| `memory_relevance`         | everything injected, precision 10.8 percent                            | recall 1.00, no standing instruction dropped, 44 percent of characters removed, only at confidence 0.9 | $0.176                       | 189 / 330 ms |
+| `turn_signals` freshness   | 85.3 percent, recall 27.3 (8 of 11 missed)                             | 96.7 percent, recall 100                                                                               | $0.048 for the whole battery | 184 / 330 ms |
+| `turn_signals` needs tools | 66.1 percent, recall 10.5 (17 of 19 missed)                            | 87.1 percent, recall 68.4                                                                              | same call                    | same call    |
+| `turn_signals` task family | 50.0 percent                                                           | 69.6 percent ungated                                                                                   | same call                    | same call    |
+
+Non-English and CJK were not a weak slice in any suite, which is the opposite of the
+regexes they were compared with and most of why the numbers move. The weak slices are
+indirect phrasing for the tool shortlist (56.5 percent recall), near misses for the memory
+gate (81 percent) and `needs_code`, which has two positives in 97 cases and is unmeasurable.
+
+### How to read these numbers
+
+They are small held-out sets built by us, not production traffic. Zero misses among 20
+positives bounds the true miss rate only below roughly 14 percent at 95 percent
+confidence. That is an acceptable prior for a memory gate, where a miss costs one
+unremembered fact, and not for a security gate, where a miss hides a finding. No kind
+leaves shadow on this evidence alone; shadow on real traffic is what supplies the volume.
+
+Cost has to be read against what is removed. The tool shortlist spends about 4,800 input
+tokens at $0.042 per million ($0.0002) to remove about 6,400 bytes, roughly 1,600 input
+tokens, from every connector turn of a primary model priced two orders of magnitude
+higher, and raises recall while doing it. The memory gate spends $0.00002 to decide
+whether a cheap-model extraction call runs, and recovers the facts the regex loses. Memory
+relevance is the marginal one: about 4,200 tokens per decision, most of it instruction
+text repeated per memory, to remove a few hundred characters at the suite's memory sizes.
+It pays only for accounts with large memory sets, so code should gate it on unpinned
+memory volume, and the question should be restructured before it is judged again.
+
+### Recommendation per kind
+
+| Kind                       | Next step                                                                                                                                  | Exit gate to `enabled`                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory_worth_extracting`  | shadow on real traffic now; it is post-turn, so latency is free                                                                            | wasted-call and lost-fact rates from the trace match the benchmark over a week                                                                        |
+| `connector_tool_shortlist` | shadow now                                                                                                                                 | core-tool recall at or above the lexical shortlist on real turns, measured by whether a deferred tool had to be loaded through `load_connector_tools` |
+| `turn_signals`             | shadow now, freshness and needs-tools only; drop `needs_code`, and replace the `extended_thinking` family option with the complexity score | fewer forced searches that returned nothing used, fewer answers that needed a search and did not get one                                              |
+| `review_security_gate`     | wire the consumer in shadow; never skip under security-sensitive paths                                                                     | zero skipped chunks that the security pass, still running in shadow, produced a finding for, over several hundred reviewed PRs                        |
+| `element_resolution`       | needs a managed endpoint, because the extension holds no key; pilot behind the existing approval and post-action checks                    | wrong-index rate of zero on a recorded browser task set, fewer reasoning round trips per task                                                         |
+| `memory_relevance`         | restructure the question to cut per-memory instruction overhead, gate on memory volume in code, benchmark again                            | standing instructions never dropped; net input saved above decision cost                                                                              |
+| `skill_offer`              | full-catalog suite still to build                                                                                                          | as `connector_tool_shortlist`                                                                                                                         |
+
 ## Rollout and remaining work
 
-1. P0: retain tested shared runner/adapter and explicit eval tools. Keep all customer traffic
-   disabled. Add TypeSafe to the canonical internal model/route metadata only alongside a
-   real host integration; do not expose it in chat model pickers or use an alias behind a
-   version-calibrated policy.
+1. P0: done. The shared runner, adapter and eval tools are retained and all customer traffic
+   is disabled. TypeSafe was NOT added to the model catalog: it carries a governance record
+   and nothing else, so it appears in no picker, no `tierAllowedModels`, no `taskRouting`, no
+   `defaultModel`, no `modelPresets` and no routing policy, and it is not a registered
+   `Provider`. The pinned version is host configuration read through the env contract, never
+   an alias.
 2. P1: build independently reviewed held-out sets for full-catalog skill selection, routing
    including multi-turn/attachments, and private-index retrieval. Include uncertainty,
    adversarial descriptions, multilingual inputs and missing candidates. Compare baseline,
    ungated candidate and fallback policy with false-positive/negative counts and calibration.
-3. Before any customer shadow: establish tenant/provider/region/retention eligibility,
-   bounded fleet-level rate budget and metered internal spend; wire existing runtime flags
-   and kill switch. Scope allowance must come from host policy, not a model or client boolean.
-   Managed Cloud alone is not blanket permission to add a subprocessor. Local and BYOK stay
-   excluded. Native eligibility needs explicit session trust and host-owned egress.
-4. Shadow eligible managed decisions concurrently with existing preparation, retaining the
-   baseline response. Record bounded disagreement/confidence bins plus actual final route,
-   usage, context size and user-visible latency. Use durable/host lifecycle support for
-   background shadow tasks; never leave unawaited promises in serverless invocations.
+3. Done for the web host: tenant/provider/region/retention eligibility, metered internal
+   spend, the `decision.` flag namespace and the `decision.kill` switch all exist and are
+   tested. Scope allowance comes from host policy alone. Local and BYOK are excluded, and a
+   contract test in `apps/web/__tests__/trust-boundary.test.ts` proves a non-managed session
+   never reaches the provider. Still outstanding: a fleet-level rate budget. The evaluator's
+   concurrency bound is per instance, so a fleet of instances multiplies it; a shared budget
+   is required before a kind is switched past shadow for a real cohort. Native eligibility
+   still needs explicit session trust and host-owned egress.
+4. Partly done. `turn_signals` shadows the task-family classification and records bounded
+   disagreement and confidence bins under Next `after()`, which holds the invocation open
+   past the response flush; no unawaited promise is left in a serverless invocation. The
+   trace does not yet carry the final route, usage, context size or user-visible latency of
+   the turn it shadowed, so a disagreement cannot yet be joined to what that turn cost.
 5. Choose thresholds from training/calibration cases, evaluate once on held-out cases, then
    use a small stable tenant cohort only if quality, p95 latency and total cost satisfy the
    baseline. Explicit selections, hard gates and security controls remain authoritative.
@@ -288,15 +456,10 @@ held-out validation are requirements for completion, not silently waived accepta
 
 ## Validation
 
-The affected agent-core and provider-runtime suites, package typechecks and package lint
-pass (67 agent-core tests and 211 provider-runtime tests). The full `check:trust-boundaries`
-command passes across all configured surfaces, including native routing and cloud sync.
-The eval harness has a separate TypeScript check; offline and real-network runs were
-executed. Boundary and model-ID guards pass. `check:hardcoded-endpoints` fails on the existing
-Google endpoint in `apps/web/app/api/media/image/lib/image-generation-provider.ts` and a stale
-budget for the previous image route; neither file is modified here. No full repository build
-or production load test was performed.
-
-The reference-integrity findings from the earlier baseline were resolved before integration.
-Repository organization, provider-adapter boundary, doc status and non-Markdown artifact checks pass.
-Spec-artifact and lock-drift checks skip because their optional input directories are absent.
+The affected agent-core and provider-runtime suites, package typechecks and package lint pass
+(67 agent-core tests and 226 provider-runtime tests). The Web typecheck and the full
+`check:trust-boundaries` command pass across all configured surfaces, including native routing
+and cloud sync. The eval harness TypeScript check passes; its Vitest run passes 304 tests and
+skips three explicitly marked cases. Boundary, model-ID, hardcoded-endpoint, reference-integrity,
+repository-organization, provider-adapter, documentation-registry and non-Markdown artifact
+guards pass. No production load test was performed.

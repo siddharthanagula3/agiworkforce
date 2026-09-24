@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Website launch preparation
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 
 This is the entry point for current work. Historical audit artifacts remain immutable. Their local paths and fingerprints are
 recorded in [QA_COVERAGE.json](QA_COVERAGE.json); they are not tracked documentation links.
@@ -13,6 +13,16 @@ Read [LAUNCH_PLAN.md](LAUNCH_PLAN.md), [QA_COVERAGE.json](QA_COVERAGE.json),
 and [PRODUCTION_REMAINING.md](PRODUCTION_REMAINING.md) before continuing.
 
 ## Current state
+
+The 2026-09-23 re-audit reconciled the separately named worktrees and run
+directories with current main. None contains an item-level reassessment of the
+9,597 historical partial requirements: the 700-row current-verification
+overlay covers only the historical unverified cohort. Consequently zero
+partial rows currently have a proved completion decision and the completed
+total is unknown. The worktree ancestry, broad validation results, persistent
+web failures and concrete resolution sequence are maintained in
+[ACTIVE_ISSUES.md](../../../ACTIVE_ISSUES.md#checklist-reaudit-2026-09-23).
+This does not change the historical counts or grant launch approval.
 
 Source identity and preexisting dirty file hashes: [source-baseline.json](source-baseline.json).
 No existing changes discarded. Production migrations 0249–0273 applied on 2026-09-20
@@ -823,7 +833,7 @@ conversation hydration restores it, and the transcript can also recover the olde
 Four focused Web files passed 53 tests, the Cloud message-metadata projection passed 10 tests,
 focused ESLint passed, and Web typecheck passed. Live localhost verification used a tagged
 synthetic conversation under the authenticated account with `routeLane: free`; the assistant
-displayed “OpenRouter Free Auto · via free pool” before and after a full Browser reload. No model
+displayed the configured free router with “via free pool” before and after a full Browser reload. No model
 request or quota was used. The exact synthetic conversation and its cascade messages were then
 deleted, and the Browser returned to the pre-existing localhost chat. The open-flaw and
 active-issue rows were removed while the original discovery evidence remains historical.
@@ -1223,7 +1233,7 @@ removed while the original audit evidence remains historical.
 
 ### 2026-09-22: Live chat latency and response-protocol disposition
 
-- Closed `WEB-053`. Three opt-in, zero-cost OpenRouter Free Auto turns used the
+- Closed `WEB-053`. Three opt-in, zero-cost configured free-router turns used the
   signed-in localhost composer and the real completion route. The cold
   development sample measured fetch-to-first-chunk at 6,135ms. Two warm
   samples measured 1,124ms and 813ms; their submit-to-first-paint proxies were
@@ -1279,7 +1289,7 @@ removed while the original audit evidence remains historical.
 - Closed `WEB-102`. Every chat SSE endpoint consumes the canonical response
   headers with `X-Accel-Buffering: no`, and the idle heartbeat interval is 2s.
 - Eleven focused files passed 143 tests. Focused ESLint and the Web typecheck
-  passed. An authenticated zero-cost OpenRouter Free Auto run on
+  passed. An authenticated zero-cost configured free-router run on
   `localhost:3100` asserted the real anti-buffering header and measured a 26ms
   durable first event, 331ms route response, 375ms fetch-to-first-chunk,
   2,087ms submit-to-first-paint and 2,137ms submit-to-done. The first browser
@@ -1299,7 +1309,7 @@ removed while the original audit evidence remains historical.
 - Forty-four request, route and service test files passed 420 tests. The new
   regressions reject a mismatched verified bearer and prove that a supplied
   balance snapshot causes no database query. Focused ESLint and Web typecheck
-  passed. An authenticated OpenRouter Free Auto run on `localhost:3100`
+  passed. An authenticated configured free-router run on `localhost:3100`
   completed successfully with a 6ms identity phase, 34ms durable first event,
   500ms admitted chat turn and 614ms browser fetch-to-first-chunk.
 

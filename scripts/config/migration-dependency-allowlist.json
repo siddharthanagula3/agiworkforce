@@ -205,6 +205,31 @@
       "file": "apps/web/lib/services/deletion-manifest.ts",
       "migration": 288,
       "reason": "Deletes from and classifies the table this migration creates. The production deploy runs the migration verify step, which refuses to promote while a migration is pending, so this code cannot reach production before the table exists."
+    },
+    {
+      "file": "apps/web/lib/services/semantic-decisions/trace-service.ts",
+      "migration": 294,
+      "reason": "Writes and sweeps semantic decision traces only after the decision host opens a configured shadow or enabled gate. The production deploy verifies pending migrations before promotion, and the fire-and-forget writer drops an unmigrated write without failing the user turn."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
+      "migration": 293,
+      "reason": "Reads the optional route pin through to_jsonb, which returns null before the column exists, and writes it only after information_schema confirms the migration is present. A requested pin is refused with 503 while the migration is pending."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/route.ts",
+      "migration": 293,
+      "reason": "Reads the optional route pin through to_jsonb, which returns null before the column exists, and includes the column in an insert only after information_schema confirms the migration is present. A requested pin is refused with 503 while the migration is pending."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts",
+      "migration": 293,
+      "reason": "Reads the optional route pin through to_jsonb(web_conversations), so a deployment ahead of the additive migration receives null instead of referencing a missing column."
+    },
+    {
+      "file": "apps/web/lib/server/neon-chat.ts",
+      "migration": 293,
+      "reason": "Declares the optional route pin in a TypeScript row shape only; it does not issue SQL or require the column at runtime."
     }
   ]
 }

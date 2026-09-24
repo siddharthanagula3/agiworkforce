@@ -583,7 +583,7 @@
       "owner": "packages/ai/routing",
       "capabilities": [],
       "concepts": [],
-      "tables": ["routing_decision_traces"]
+      "tables": ["routing_decision_traces", "semantic_decision_traces"]
     },
     {
       "name": "prompt-registry",

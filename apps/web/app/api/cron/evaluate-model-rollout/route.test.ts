@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   readCohortMetrics: vi.fn(async (_start: Date, _end: Date) => [] as unknown[]),
   recordRolloutBenchmarks: vi.fn(async (_metrics: unknown, _start: Date, _end: Date) => 2),
   purgeExpiredRoutingTraces: vi.fn(async (_config: unknown, _nowMs: number) => 11),
+  purgeExpiredSemanticDecisionTraces: vi.fn(async (_config: unknown, _nowMs: number) => 4),
   pageOnCall: vi.fn(async (_severity: string, _subject: string, _text: string) => 'paged'),
   sendSupportEmail: vi.fn(async (_input: unknown) => ({ delivered: true })),
   storeSet: vi.fn(async (_key: string, _value: unknown, _options?: unknown) => true),
@@ -55,6 +56,17 @@ vi.mock('@/lib/services/model-rollout/rollout-evaluation-service', async () => {
   };
 });
 
+vi.mock('@/lib/services/semantic-decisions/trace-service', async () => {
+  const actual = await vi.importActual<
+    typeof import('@/lib/services/semantic-decisions/trace-service')
+  >('@/lib/services/semantic-decisions/trace-service');
+  return {
+    ...actual,
+    purgeExpiredSemanticDecisionTraces: (config: unknown, nowMs: number) =>
+      mocks.purgeExpiredSemanticDecisionTraces(config, nowMs),
+  };
+});
+
 import { GET } from './route';
 
 function cohort(overrides: Record<string, unknown>) {
@@ -82,6 +94,7 @@ beforeEach(() => {
   mocks.readCohortMetrics.mockResolvedValue([]);
   mocks.recordRolloutBenchmarks.mockResolvedValue(2);
   mocks.purgeExpiredRoutingTraces.mockResolvedValue(11);
+  mocks.purgeExpiredSemanticDecisionTraces.mockResolvedValue(4);
   mocks.pageOnCall.mockResolvedValue('paged');
   mocks.sendSupportEmail.mockResolvedValue({ delivered: true });
   mocks.storeSet.mockResolvedValue(true);
@@ -104,9 +117,11 @@ describe('model rollout cron', () => {
     expect(await response.json()).toMatchObject({
       benchmarks: 2,
       purged: 11,
+      purgedDecisions: 4,
       alerts: 0,
       paged: 'not_needed',
     });
+    expect(mocks.purgeExpiredSemanticDecisionTraces).toHaveBeenCalledTimes(1);
     expect(mocks.pageOnCall).not.toHaveBeenCalled();
   });
 

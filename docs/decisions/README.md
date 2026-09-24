@@ -176,7 +176,7 @@ Archived source material:
     It preserves provider HTTP status and lets managed failover rotate before
     response headers are committed. The standard managed-chat workflow already
     opens its durable response independently of visible model text, and three
-    zero-cost OpenRouter Free Auto localhost samples on 2026-09-22 measured
+    zero-cost configured free-router localhost samples on 2026-09-22 measured
     fetch-to-first-chunk at 6,135 ms with cold development compilation, then
     1,124 ms and 813 ms warm. The two warm samples reached the first-paint proxy
     at 2,635 ms and 2,016 ms. That evidence does not justify replacing real
@@ -199,7 +199,7 @@ Archived source material:
     one animation frame, never paced for presentation. Authenticated localhost
     evidence on 2026-09-22 measured the durable first event at 26 ms, route
     response at 331 ms, browser fetch-to-first-chunk at 375 ms and completion at
-    2,137 ms on a zero-cost OpenRouter Free Auto turn.
+    2,137 ms on a zero-cost configured free-router turn.
     Evidence: `apps/web/lib/workflows/durable-stream-liveness.ts`,
     `apps/web/app/api/llm/v1/chat/completions/lib/sse-heartbeat.ts`,
     `apps/web/lib/client/frame-coalesced-appender.ts`,

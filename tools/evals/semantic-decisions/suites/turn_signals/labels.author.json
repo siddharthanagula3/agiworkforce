@@ -1,0 +1,1045 @@
+{
+  "suite": "turn_signals",
+  "labeller": "single author, one pass, not independently reviewed",
+  "question": "Task family from the router's own vocabulary, plus needs_current_info, needs_external_tools, needs_code, and a complexity level.",
+  "fieldDefinitions": {
+    "family": "The dominant task the turn asks for, from RoutingTaskType restricted to the text-decidable members.",
+    "needs_current_info": "A correct answer depends on information that may have changed since training, so the turn needs live retrieval.",
+    "needs_external_tools": "Answering requires an action outside the chat: a web search or fetch, an image render, a file export, a code run, or a connector call. A superset of needs_code.",
+    "needs_code": "A correct answer requires code to be executed, not merely written or shown.",
+    "complexity": "trivial (a greeting or one direct fact), simple (one familiar task, few dependencies), medium (several dependent steps or analysis of evidence), difficult (extensive investigation or interacting constraints), frontier (no settled method exists)."
+  },
+  "ambiguousNote": "A case may be ambiguous in one field and definite in the others. `ambiguous` lists only the undecidable fields with both defensible values; every other field on that case is scored normally.",
+  "labels": {
+    "ts-001": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A named algorithm with a complexity constraint; the code is written, not run."
+    },
+    "ts-002": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "One regex, one defect, readable by inspection."
+    },
+    "ts-003": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "A planner regression with interacting causes and no reproduction supplied."
+    },
+    "ts-004": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A single shell command with one stated constraint."
+    },
+    "ts-005": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A mechanical translation between two languages the model knows."
+    },
+    "ts-006": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "Implementation plus test design for boundaries; several dependent pieces."
+    },
+    "ts-007": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Intermittent, machine-dependent flake with no isolation yet."
+    },
+    "ts-008": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "A real proof with a non-obvious construction."
+    },
+    "ts-009": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A classic puzzle needing a stated line of reasoning."
+    },
+    "ts-010": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A derivation with justification at each step."
+    },
+    "ts-011": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "frontier"
+      },
+      "rationale": "An open problem; the honest answer is about the state of an unsolved question."
+    },
+    "ts-012": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Arithmetic over supplied times; no timetable is looked up, the times are given."
+    },
+    "ts-013": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Deduction from invariants with the implementation deliberately withheld."
+    },
+    "ts-014": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "The last meeting and its forward guidance both move."
+    },
+    "ts-015": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Release notes change with every release."
+    },
+    "ts-016": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "One fact, but one that is only correct if it is current."
+    },
+    "ts-017": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "Citations must resolve to real papers, so retrieval is not optional."
+    },
+    "ts-018": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A forecast is current information by definition."
+    },
+    "ts-019": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "Advisory status changes, and the turn asks for a link."
+    },
+    "ts-020": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Two hops, identify the acquirer then read a live price; both need retrieval."
+    },
+    "ts-021": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "ambiguous": { "family": ["general", "research"] },
+      "rationale": "A named URL must be fetched, which is a tool action, but no search is involved and the draft is not time-sensitive."
+    },
+    "ts-022": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Verse with one constraint."
+    },
+    "ts-023": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Correspondence with a tone requirement."
+    },
+    "ts-024": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A story whose structure has to carry a specific reveal."
+    },
+    "ts-025": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A short letter with a tone requirement."
+    },
+    "ts-026": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Editing prose for a stated audience."
+    },
+    "ts-027": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "An image is produced by a render call, which is an external action."
+    },
+    "ts-028": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A logo is an image request in informal phrasing."
+    },
+    "ts-029": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "The slash command is an explicit image request."
+    },
+    "ts-030": {
+      "label": {
+        "family": "image_generation",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "An illustration with a named style."
+    },
+    "ts-031": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Multi-agent coordination over vendors whose current terms have to be retrieved."
+    },
+    "ts-032": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Repository-wide traversal ending in a pull request; several tools, no live information."
+    },
+    "ts-033": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Three tools named explicitly and a deliverable at the end."
+    },
+    "ts-034": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Subagents per service, reporting back."
+    },
+    "ts-035": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A pptx export is a file-creation action; the tiers are supplied context."
+    },
+    "ts-036": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A greeting."
+    },
+    "ts-037": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "An acknowledgement."
+    },
+    "ts-038": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "Social opener."
+    },
+    "ts-039": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A withdrawal of the previous request."
+    },
+    "ts-040": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A stable explanation, no code asked for."
+    },
+    "ts-041": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "One settled fact about tyrosine crystals."
+    },
+    "ts-042": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A legal term of art, stable over years."
+    },
+    "ts-043": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Physics explanation with a misconception to unpick."
+    },
+    "ts-044": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A recipe request with one exclusion."
+    },
+    "ts-045": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "About code review as a practice; nothing is being reviewed and no code appears."
+    },
+    "ts-046": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Verse about recursion; the word function is the subject matter, not the task."
+    },
+    "ts-047": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Draw is used for characters on the page and the turn explicitly refuses an image."
+    },
+    "ts-048": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "The question is about an anachronism; nothing current is needed to spot it."
+    },
+    "ts-049": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "Search over the user's own notes is a connector action, not a web search."
+    },
+    "ts-050": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "Current version refers to text already in the conversation."
+    },
+    "ts-051": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "One multiplication, well inside what a model does reliably in text."
+    },
+    "ts-052": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": true,
+        "complexity": "medium"
+      },
+      "rationale": "A five-year comparison over supplied figures is exactly the arithmetic that belongs in a run."
+    },
+    "ts-053": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "An explanation frame in front of the run directive: the user wants the instructions, not the run."
+    },
+    "ts-054": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Producing a spreadsheet file is an export action."
+    },
+    "ts-055": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A 1911 fact, and search is explicitly refused."
+    },
+    "ts-056": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A trace of a loop by hand; execution is explicitly excluded."
+    },
+    "ts-057": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "The negation converts an apparent image request into a CSS request."
+    },
+    "ts-058": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A counterfactual physics question with lookup refused."
+    },
+    "ts-059": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "The negation rules out the creative reading and leaves an explanation."
+    },
+    "ts-060": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "An instruction about method that names agents in order to forbid them."
+    },
+    "ts-061": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "The turn opens by denying the coding reading and asks for an explanation strategy."
+    },
+    "ts-062": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "Declining citations does not make a moving legislative timeline knowable from memory."
+    },
+    "ts-063": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A live strike and a live flight status, asked indirectly."
+    },
+    "ts-064": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "An analogy that has to be unpacked into a concrete memory or buffer failure in their worker."
+    },
+    "ts-065": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A reconciliation question about two reports; no numbers are supplied to compute over."
+    },
+    "ts-066": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "Whether the standard superseded the book can only be settled against the current standard."
+    },
+    "ts-067": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Transferring a known defect across a protocol boundary, stated entirely by reference."
+    },
+    "ts-068": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "An architecture argument asked as advocacy, not an implementation."
+    },
+    "ts-069": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "ambiguous": { "family": ["creative_writing", "general"] },
+      "rationale": "Making a chart carry an argument is a rhetoric task, but a reader could as fairly call it analysis rather than composition."
+    },
+    "ts-070": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Spanish: an implementation plus an edge case."
+    },
+    "ts-071": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "Spanish: a live exchange rate."
+    },
+    "ts-072": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "German: a poem with form constraints."
+    },
+    "ts-073": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "German: an environment-dependent build failure with the obvious causes already excluded."
+    },
+    "ts-074": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "French: recent regulatory decisions with sources."
+    },
+    "ts-075": {
+      "label": {
+        "family": "simple_chat",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "French: a greeting and a thank you."
+    },
+    "ts-076": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Japanese: explain a null return path, with execution explicitly refused."
+    },
+    "ts-077": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "Japanese: today's weather."
+    },
+    "ts-078": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Chinese: marketing copy with a punctuation constraint."
+    },
+    "ts-079": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "Korean: diagnose a cause from an attached stack trace."
+    },
+    "ts-080": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Portuguese: a standard geometry proof."
+    },
+    "ts-081": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Russian: a current price, with the site named as the source to check."
+    },
+    "ts-082": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Arabic: a short apology letter to a customer."
+    },
+    "ts-083": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": "medium"
+      },
+      "rationale": "Hindi: monthly totals over a supplied CSV, which is a computation to run rather than to narrate."
+    },
+    "ts-084": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "The real question is a capital city; the injection carries no task."
+    },
+    "ts-085": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A haiku request with a false family assertion in front of it."
+    },
+    "ts-086": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A mechanical explanation; the comment asserts a signal value it has no standing to set."
+    },
+    "ts-087": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A refactor with a named pattern to remove; the leading sentence is an injected claim."
+    },
+    "ts-088": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A rhetorical question whose correct answer is no, preceded by an instruction to always say yes."
+    },
+    "ts-089": {
+      "label": {
+        "family": "reasoning",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A proof request wrapped in a conditional aimed at the classifier."
+    },
+    "ts-090": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Six hundred characters of incident narrative ending in one question about which log to read."
+    },
+    "ts-091": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "A page of travel context whose only question is whether a route is still operating."
+    },
+    "ts-092": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "A pasted config as a distractor; the ask is four sentences for a leaving card."
+    },
+    "ts-093": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": true,
+        "needs_code": true,
+        "complexity": "medium"
+      },
+      "rationale": "A median and a variance question over a pasted table, which is arithmetic to execute."
+    },
+    "ts-094": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "medium"
+      },
+      "rationale": "Reading agreement out of a transcript where the last line withdraws it."
+    },
+    "ts-095": {
+      "label": {
+        "family": "general",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "ambiguous": {
+        "family": ["general", "research"],
+        "needs_current_info": [false, true],
+        "needs_external_tools": [false, true]
+      },
+      "rationale": "Latest thinking is either a live-literature request or a figure of speech about settled baking science, and the sentence does not settle which."
+    },
+    "ts-096": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "ambiguous": { "family": ["coding", "creative_writing"] },
+      "rationale": "Either a self-documenting function or a conceit about a function that narrates itself."
+    },
+    "ts-097": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "ambiguous": { "needs_code": [false, true] },
+      "rationale": "Checking a SQL statement can mean reading it or running it against real data, and check this says neither."
+    },
+    "ts-098": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "ambiguous": { "family": ["creative_writing", "coding"] },
+      "rationale": "The previous turn is prose so faster means pacing, but faster is also the performance idiom and the two readings are not separable from two words."
+    },
+    "ts-099": {
+      "label": {
+        "family": "agentic",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "difficult"
+      },
+      "rationale": "Do it inherits the whole of the previous turn, which is a multi-agent vendor comparison."
+    },
+    "ts-100": {
+      "label": {
+        "family": "creative_writing",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A revision instruction that inherits the poem."
+    },
+    "ts-101": {
+      "label": {
+        "family": "coding",
+        "needs_current_info": false,
+        "needs_external_tools": false,
+        "needs_code": false,
+        "complexity": "simple"
+      },
+      "rationale": "Three words that inherit an implementation task and change its language."
+    },
+    "ts-102": {
+      "label": {
+        "family": "research",
+        "needs_current_info": true,
+        "needs_external_tools": true,
+        "needs_code": false,
+        "complexity": "trivial"
+      },
+      "rationale": "A follow-up on a sports result; the prior season is still a retrieval."
+    }
+  }
+}

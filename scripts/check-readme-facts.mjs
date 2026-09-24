@@ -58,6 +58,7 @@ const PROVIDER_LABELS = {
   groq: 'Groq',
   nvidia_nim: 'NVIDIA NIM',
   open_router: 'OpenRouter',
+  experientiallabs: 'Experiential Labs',
   workers_ai: 'Cloudflare Workers AI',
   vercel_gateway: 'Vercel AI Gateway',
   ollama: 'Ollama',

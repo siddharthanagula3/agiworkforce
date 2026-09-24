@@ -101,6 +101,10 @@ import {
 import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
+import { scheduleMemoryRelevanceShadow } from '@/lib/services/semantic-decisions/consumers/memory-relevance';
+import { canonicalPrivacyMode } from '@/lib/services/semantic-decisions/eligibility';
+import type { SemanticDecisionScope } from '@/lib/services/semantic-decisions/shadow';
+import { scheduleTurnSignalsShadow } from '@/lib/services/semantic-decisions/turn-signals';
 import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
 import {
   evaluateModelAccess,
@@ -241,6 +245,7 @@ import {
   loadProjectMemoryScope,
   loadSuppressedMemorySources,
   type ManagedMemoryContextDb,
+  type ManagedMemoryContextItem,
   type ManagedMemoryPolicy,
 } from '@/lib/services/managed-memory-context-service';
 import { resolvePastChatContext } from '@/lib/services/past-chat-context-service';
@@ -895,6 +900,8 @@ export type ProcessedRequest = {
    */
   modelPolicy?: ModelAccessPolicy | null;
   zeroDataRetentionOnly?: boolean;
+  /** Eligibility and subject facts for any semantic decision this turn schedules. */
+  decisionScope?: SemanticDecisionScope;
   secretRedactionCount?: number;
   subscriptionTier?: string;
   /**
@@ -1186,8 +1193,10 @@ export async function enrichManagedMemoryContext(params: {
   isTemporary: boolean;
   projectId?: string | null;
   organizationId?: string | null;
-}): Promise<void> {
-  if (params.isTemporary || params.chatRequest.memory_enabled === false) return;
+  // Returned rather than only injected, so a later consumer judges the rows
+  // this turn actually carried instead of querying for them a second time.
+}): Promise<ManagedMemoryContextItem[]> {
+  if (params.isTemporary || params.chatRequest.memory_enabled === false) return [];
 
   const [suppressedSources, scope] = await Promise.all([
     loadSuppressedMemorySources(params.db, { userId: params.userId }),
@@ -1204,6 +1213,11 @@ export async function enrichManagedMemoryContext(params: {
   });
   const prompt = formatManagedMemorySystemPrompt(memories);
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
+  return memories.map((memory) => ({
+    content: memory.content,
+    category: memory.category,
+    pinned: memory.pinned,
+  }));
 }
 
 export async function enrichPastChatContext(params: {
@@ -2886,6 +2900,7 @@ export async function processRequest(
     }
   }
 
+  let loadedManagedMemories: readonly ManagedMemoryContextItem[] = [];
   if (managedMemoryPolicy.enabled) {
     try {
       const scoped = await scopedDbPromise;
@@ -2894,7 +2909,7 @@ export async function processRequest(
       // project set to exclude global memory must not see the account pool.
       // `conversationProjectId` is the ownership lookup's row, not a fresh
       // query, so the scoping answers to the same read as the 404 check above.
-      await timePhase(CHAT_TURN_PHASE.memoryEnrichment, () =>
+      loadedManagedMemories = await timePhase(CHAT_TURN_PHASE.memoryEnrichment, () =>
         enrichManagedMemoryContext({
           db: scoped.db,
           userId,
@@ -3380,16 +3395,56 @@ export async function processRequest(
       ? [semanticResponseAssessment.trace.promptStamp]
       : []),
   ];
+  const tracedWorkspaceId = (await scopedDbPromise).organizationId;
   persistRoutingDecision({
     trace: routingTrace,
     requestId,
     userId,
-    organizationId: (await scopedDbPromise).organizationId,
+    organizationId: tracedWorkspaceId,
     surface: chatSurface,
     kind: 'served',
     flagVariants: rolloutInputs.flagVariants,
     promptIds: routingPromptIds,
   });
+
+  // Read once where every fact is known, then handed to whichever shadow runs
+  // later. Local and BYOK never reach this route; eligibility rechecks it.
+  const decisionScope: SemanticDecisionScope = {
+    request,
+    requestId,
+    userId,
+    plan: subscription.plan_tier ?? null,
+    surface: chatSurface,
+    privacyMode: canonicalPrivacyMode(MANAGED_WEB_CLOUD_TRUST_MODE),
+    workspaceId: tracedWorkspaceId,
+    zeroDataRetentionOnly,
+    workspaceModelPolicy,
+    residencyRegion,
+  };
+
+  // Shadow only: the family above is already decided and already used, and the
+  // work is deferred past the response inside the schedule call. Both closures
+  // capture references; nothing inside them runs unless the kind is switched on.
+  scheduleTurnSignalsShadow({
+    scope: decisionScope,
+    derive: () => ({
+      modelSelection: routeSelection,
+      latestUserMessage: lastUserText,
+      previousUserMessage:
+        routingHistory.filter((message) => message.role === 'user').at(-1)?.content ?? null,
+      hasAttachments: (routingAttachments?.length ?? 0) > 0,
+      baselineTaskFamily: routeTaskFamily,
+    }),
+  });
+
+  // The rows the turn already loaded, judged after the response. Nothing is
+  // dropped from this turn's prompt and nothing is touched in storage.
+  if (loadedManagedMemories.length > 0) {
+    scheduleMemoryRelevanceShadow({
+      scope: decisionScope,
+      derive: () => ({ latestUserMessage: lastUserText, memories: loadedManagedMemories }),
+    });
+  }
 
   if (routeDecision.status === 'unavailable') {
     const explicitRefusal = isAutoModeModelId(requestedModel)
@@ -4603,6 +4658,7 @@ export async function processRequest(
     ...(deviceHost ? { deviceHost } : {}),
     organizationId,
     zeroDataRetentionOnly,
+    decisionScope,
     managedUsage,
     chatRequest,
     callerToolFields,

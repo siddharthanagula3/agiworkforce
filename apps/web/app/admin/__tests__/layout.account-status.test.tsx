@@ -89,7 +89,7 @@ describe('admin layout account-status gate', () => {
 
     expect(mockAssertAccountActive).toHaveBeenCalledWith(ADMIN_ID);
     expect(redirectedTo).toBeNull();
-    expect(rendered).toBe(CHILDREN);
+    expect(rendered).toMatchObject({ props: { children: CHILDREN } });
   });
 
   it('still sends a lapsed session to the recovery page before any status read', async () => {

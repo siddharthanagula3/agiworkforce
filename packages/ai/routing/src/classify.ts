@@ -6,9 +6,9 @@
  *   2. Token-budget guard that forces `long_context` past 50K cumulative tokens.
  *   3. 5-turn sticky-pivot logic that boosts confidence on the running mode.
  *
- * Heuristics aim for 75–85% accuracy on their own; the LLM fallback (a
- * registry-selected lightweight call wired in a higher layer) handles the remainder
- * when `confidence < 0.6`.
+ * There is no model fallback: the returned confidence is advisory and every
+ * caller routes on `type` alone. Measured on held-out inputs the heuristics are
+ * far weaker than their old 75 to 85 percent claim (see docs/specs/semantic-decisions).
  *
  * Vercel React Best Practices applied:
  *   - `js-hoist-regexp`, every regex is module-scoped (compiled once).

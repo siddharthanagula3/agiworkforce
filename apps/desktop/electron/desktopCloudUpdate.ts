@@ -1,5 +1,5 @@
-import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
 import type { HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
+import { platformRequestHeaders } from '../src/lib/platformHeaders';
 
 export const DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL =
   'https://agiworkforce.com/api/releases/desktop-cloud/latest';
@@ -137,7 +137,7 @@ export async function checkDesktopCloudUpdate(
   try {
     response = await fetchImpl(DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL, {
       method: 'GET',
-      headers: { Accept: 'application/json', [CLIENT_VERSION_HEADER]: currentVersion },
+      headers: { Accept: 'application/json', ...platformRequestHeaders(currentVersion) },
       cache: 'no-store',
       signal: AbortSignal.timeout(10_000),
     });

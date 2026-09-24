@@ -129,7 +129,7 @@ describe('/admin segment layout admits operators and org admins', () => {
     const { redirectedTo, rendered } = await renderLayout();
 
     expect(redirectedTo).toBeNull();
-    expect(rendered).toBe('admin segment');
+    expect(rendered).toMatchObject({ props: { children: 'admin segment' } });
   });
 
   it('keeps the org-scoped pages reachable for an org owner who is not an operator', async () => {
@@ -139,7 +139,7 @@ describe('/admin segment layout admits operators and org admins', () => {
     const { redirectedTo, rendered } = await renderLayout();
 
     expect(redirectedTo).toBeNull();
-    expect(rendered).toBe('admin segment');
+    expect(rendered).toMatchObject({ props: { children: 'admin segment' } });
   });
 
   it('sends away a caller who is neither an operator nor an org admin', async () => {

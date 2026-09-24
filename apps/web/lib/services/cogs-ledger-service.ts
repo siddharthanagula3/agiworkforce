@@ -42,6 +42,7 @@ export const COGS_CAPABILITIES = [
   'connector',
   'artifact',
   'visual',
+  'decision',
 ] as const;
 
 export const COGS_UNIT_BASES = [
@@ -183,6 +184,7 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   code_compute: 'code_compute',
   connector: 'connector',
   artifact: 'artifact',
+  decision: 'decision',
   [VISUAL_USAGE_OPERATION]: 'visual',
 };
 
@@ -207,6 +209,7 @@ const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
   connector: 'request',
   artifact: 'gibibyte_month',
   visual: 'minute',
+  decision: 'token',
 };
 
 /**

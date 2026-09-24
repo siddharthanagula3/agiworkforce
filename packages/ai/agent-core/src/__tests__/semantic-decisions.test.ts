@@ -8,6 +8,7 @@ import {
 } from '../semantic-decisions';
 import { buildCandidateDecision, selectDecisionCandidate } from '../candidate-decisions';
 
+const KIND = 'test_signals';
 const policy: DecisionPolicy = {
   mode: 'enabled',
   model: 'test-version',
@@ -17,7 +18,7 @@ const policy: DecisionPolicy = {
   maxConcurrent: 1,
   sampleRate: 1,
 };
-const scope: DecisionScope = { trustMode: 'managed_cloud', providerAllowed: true, cohort: 0 };
+const scope: DecisionScope = { trustMode: 'managed', providerAllowed: true, cohort: 0 };
 const request: DecisionRequest = {
   state: 'synthetic',
   questions: {
@@ -42,7 +43,11 @@ afterEach(() => vi.useRealTimers());
 describe('semantic decision isolation', () => {
   it.each(['local', 'byok'] as const)('never invokes the provider for %s', async (trustMode) => {
     const evaluate = vi.fn();
-    const run = createDecisionEvaluator({ provider: { evaluate }, policy: () => policy });
+    const run = createDecisionEvaluator({
+      kind: KIND,
+      provider: { evaluate },
+      policy: () => policy,
+    });
     expect(await run(request, { ...scope, trustMode })).toMatchObject({
       status: 'fallback',
       reason: 'policy',
@@ -57,23 +62,30 @@ describe('semantic decision isolation', () => {
     [{ ...policy, maxRequestBytes: 1 }, scope, 'invalid_request'],
   ] as const)('bypasses before transport for policy %#', async (configured, context, reason) => {
     const evaluate = vi.fn();
-    const run = createDecisionEvaluator({ provider: { evaluate }, policy: () => configured });
+    const run = createDecisionEvaluator({
+      kind: KIND,
+      provider: { evaluate },
+      policy: () => configured,
+    });
     expect(await run(request, context)).toMatchObject({ status: 'fallback', reason });
     expect(evaluate).not.toHaveBeenCalled();
   });
   it('returns shadow observations without actionable acceptance and excludes state from telemetry', async () => {
     const observe = vi.fn();
     const run = createDecisionEvaluator({
+      kind: KIND,
       provider: { evaluate: async () => result },
       policy: () => ({ ...policy, mode: 'shadow' }),
       observe,
     });
     expect(await run(request, scope)).toMatchObject({ status: 'shadow' });
+    expect(observe.mock.calls[0]?.[0]).toMatchObject({ kind: KIND, status: 'shadow' });
     expect(JSON.stringify(observe.mock.calls)).not.toContain('synthetic');
     expect(JSON.stringify(observe.mock.calls)).not.toContain('answers');
   });
   it('contains provider and telemetry failures', async () => {
     const run = createDecisionEvaluator({
+      kind: KIND,
       provider: {
         evaluate: async () => {
           throw new Error('secret');
@@ -91,12 +103,17 @@ describe('semantic decision isolation', () => {
   });
   it('contains malformed runtime configuration and request shapes before transport', async () => {
     const evaluate = vi.fn();
-    const run = createDecisionEvaluator({ provider: { evaluate }, policy: () => policy });
+    const run = createDecisionEvaluator({
+      kind: KIND,
+      provider: { evaluate },
+      policy: () => policy,
+    });
     expect(await run({ state: 'synthetic' } as DecisionRequest, scope)).toMatchObject({
       status: 'fallback',
       reason: 'invalid_request',
     });
     const misconfigured = createDecisionEvaluator({
+      kind: KIND,
       provider: { evaluate },
       policy: () => ({ ...policy, model: null }) as unknown as DecisionPolicy,
     });
@@ -113,7 +130,11 @@ describe('semantic decision isolation', () => {
       providerSignal = signal;
       return new Promise(() => {});
     });
-    const run = createDecisionEvaluator({ provider: { evaluate }, policy: () => policy });
+    const run = createDecisionEvaluator({
+      kind: KIND,
+      provider: { evaluate },
+      policy: () => policy,
+    });
     const pending = run(request, { ...scope, signal: controller.signal });
     await Promise.resolve();
     controller.abort();
@@ -133,7 +154,11 @@ describe('semantic decision isolation', () => {
           resolve = done;
         }),
     );
-    const run = createDecisionEvaluator({ provider: { evaluate }, policy: () => policy });
+    const run = createDecisionEvaluator({
+      kind: KIND,
+      provider: { evaluate },
+      policy: () => policy,
+    });
     const pending = run(request, scope);
     await vi.advanceTimersByTimeAsync(51);
     expect(await pending).toMatchObject({ reason: 'timeout' });
@@ -145,6 +170,7 @@ describe('semantic decision isolation', () => {
   it('discards a response after a kill switch changes', async () => {
     let current = policy;
     const run = createDecisionEvaluator({
+      kind: KIND,
       provider: {
         evaluate: async () => {
           current = { ...policy, mode: 'disabled' };

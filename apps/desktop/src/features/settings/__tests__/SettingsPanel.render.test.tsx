@@ -313,7 +313,7 @@ describe('SettingsPanel render stability', () => {
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
     const nav = screen.getByRole('navigation', { name: 'Settings sections' });
 
-    expect(dialog.className).toContain('max-h-[calc(100vh-2rem)]');
+    expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
     expect(nav.className).toContain('md:w-64');
     expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeInTheDocument();
   });

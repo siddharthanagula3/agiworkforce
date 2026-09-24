@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getOptionalEnv } from '@shared/utils/env';
@@ -9,7 +8,7 @@ import {
   DESKTOP_CLOUD_TAG_PREFIX,
   fetchLatestDesktopRelease,
 } from '@/lib/releases/github-desktop-releases';
-import { desktopUpdateHeld } from '@/lib/releases/desktop-update-hold';
+import { DESKTOP_UPDATE_VARY_HEADER, desktopUpdateHeld } from '@/lib/releases/desktop-update-hold';
 
 const UPDATES_HELD_MESSAGE = 'Updates for this version are paused while we look into a problem.';
 
@@ -58,7 +57,7 @@ async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise
     {
       headers: {
         'Cache-Control': 'public, max-age=300, s-maxage=300',
-        Vary: CLIENT_VERSION_HEADER,
+        Vary: DESKTOP_UPDATE_VARY_HEADER,
       },
     },
   );

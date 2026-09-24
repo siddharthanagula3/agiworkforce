@@ -1,0 +1,2301 @@
+{
+  "runDate": "2026-09-20",
+  "live": true,
+  "scoredFromRecordedRun": true,
+  "model": "jev-1.13.0",
+  "usdPerMillionInputTokens": 0.042,
+  "gitSha": "420e825fa60a2da17e60185d01c737fe05f16772",
+  "concurrency": 4,
+  "timeoutMs": 60000,
+  "sdkRetries": 0,
+  "suite": "review_security_gate",
+  "objective": "maximise chunks skipped subject to zero false negatives on calibration, per the suite README asymmetry",
+  "questionVersion": 1,
+  "fixtureSha256": "9cb09cc0112ae5aa1d1445f609b059a2f84a72d097e6f75d94038c60845f1b6a",
+  "budget": {
+    "maxQuestions": 1,
+    "maxRequestBytes": 24000
+  },
+  "chosen": {
+    "skipBelow": 0.1
+  },
+  "sweep": [
+    {
+      "threshold": 0,
+      "objective": 7
+    },
+    {
+      "threshold": 0.05,
+      "objective": 10
+    },
+    {
+      "threshold": 0.1,
+      "objective": 17
+    },
+    {
+      "threshold": 0.15,
+      "objective": 17
+    },
+    {
+      "threshold": 0.2,
+      "objective": 17
+    },
+    {
+      "threshold": 0.25,
+      "objective": null
+    },
+    {
+      "threshold": 0.3,
+      "objective": null
+    },
+    {
+      "threshold": 0.35,
+      "objective": null
+    },
+    {
+      "threshold": 0.4,
+      "objective": null
+    },
+    {
+      "threshold": 0.45,
+      "objective": null
+    },
+    {
+      "threshold": 0.5,
+      "objective": null
+    },
+    {
+      "threshold": 0.55,
+      "objective": null
+    },
+    {
+      "threshold": 0.6,
+      "objective": null
+    },
+    {
+      "threshold": 0.65,
+      "objective": null
+    },
+    {
+      "threshold": 0.7,
+      "objective": null
+    },
+    {
+      "threshold": 0.75,
+      "objective": null
+    },
+    {
+      "threshold": 0.8,
+      "objective": null
+    },
+    {
+      "threshold": 0.85,
+      "objective": null
+    },
+    {
+      "threshold": 0.9,
+      "objective": null
+    },
+    {
+      "threshold": 0.95,
+      "objective": null
+    },
+    {
+      "threshold": 1,
+      "objective": null
+    }
+  ],
+  "production": {
+    "all": {
+      "scored": 92,
+      "truePositives": 35,
+      "falsePositives": 57,
+      "trueNegatives": 0,
+      "falseNegatives": 0,
+      "accuracy": 0.3804,
+      "precision": 0.3804,
+      "recall": 1,
+      "f1": 0.5512,
+      "fallbackRate": 0
+    },
+    "calibration": {
+      "scored": 33,
+      "truePositives": 15,
+      "falsePositives": 18,
+      "trueNegatives": 0,
+      "falseNegatives": 0,
+      "accuracy": 0.4545,
+      "precision": 0.4545,
+      "recall": 1,
+      "f1": 0.625,
+      "fallbackRate": 0
+    },
+    "heldout": {
+      "scored": 59,
+      "truePositives": 20,
+      "falsePositives": 39,
+      "trueNegatives": 0,
+      "falseNegatives": 0,
+      "accuracy": 0.339,
+      "precision": 0.339,
+      "recall": 1,
+      "f1": 0.5063,
+      "fallbackRate": 0
+    }
+  },
+  "ungated": {
+    "all": {
+      "scored": 92,
+      "truePositives": 32,
+      "falsePositives": 1,
+      "trueNegatives": 56,
+      "falseNegatives": 3,
+      "accuracy": 0.9565,
+      "precision": 0.9697,
+      "recall": 0.9143,
+      "f1": 0.9412,
+      "fallbackRate": 0
+    },
+    "calibration": {
+      "scored": 33,
+      "truePositives": 12,
+      "falsePositives": 0,
+      "trueNegatives": 18,
+      "falseNegatives": 3,
+      "accuracy": 0.9091,
+      "precision": 1,
+      "recall": 0.8,
+      "f1": 0.8889,
+      "fallbackRate": 0
+    },
+    "heldout": {
+      "scored": 59,
+      "truePositives": 20,
+      "falsePositives": 1,
+      "trueNegatives": 38,
+      "falseNegatives": 0,
+      "accuracy": 0.9831,
+      "precision": 0.9524,
+      "recall": 1,
+      "f1": 0.9756,
+      "fallbackRate": 0
+    }
+  },
+  "gated": {
+    "all": {
+      "scored": 92,
+      "truePositives": 35,
+      "falsePositives": 5,
+      "trueNegatives": 52,
+      "falseNegatives": 0,
+      "accuracy": 0.9457,
+      "precision": 0.875,
+      "recall": 1,
+      "f1": 0.9333,
+      "fallbackRate": 0
+    },
+    "calibration": {
+      "scored": 33,
+      "truePositives": 15,
+      "falsePositives": 1,
+      "trueNegatives": 17,
+      "falseNegatives": 0,
+      "accuracy": 0.9697,
+      "precision": 0.9375,
+      "recall": 1,
+      "f1": 0.9677,
+      "fallbackRate": 0
+    },
+    "heldout": {
+      "scored": 59,
+      "truePositives": 20,
+      "falsePositives": 4,
+      "trueNegatives": 35,
+      "falseNegatives": 0,
+      "accuracy": 0.9322,
+      "precision": 0.8333,
+      "recall": 1,
+      "f1": 0.9091,
+      "fallbackRate": 0
+    }
+  },
+  "reliability": [
+    {
+      "lower": 0,
+      "upper": 0.2,
+      "count": 10,
+      "observedAccuracy": 0.9
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.4,
+      "count": 6,
+      "observedAccuracy": 0.5
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.6,
+      "count": 4,
+      "observedAccuracy": 1
+    },
+    {
+      "lower": 0.6,
+      "upper": 0.8,
+      "count": 10,
+      "observedAccuracy": 0.9
+    },
+    {
+      "lower": 0.8,
+      "upper": 1,
+      "count": 39,
+      "observedAccuracy": 1
+    }
+  ],
+  "byTag": {
+    "ambiguous": {
+      "scored": 0,
+      "truePositives": 0,
+      "falsePositives": 0,
+      "trueNegatives": 0,
+      "falseNegatives": 0,
+      "accuracy": null,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "fallbackRate": 0
+    },
+    "cjk": {
+      "scored": 3,
+      "truePositives": 0,
+      "falsePositives": 0,
+      "trueNegatives": 3,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "fallbackRate": 0
+    },
+    "embedded_instruction": {
+      "scored": 5,
+      "truePositives": 3,
+      "falsePositives": 0,
+      "trueNegatives": 2,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "indirect": {
+      "scored": 10,
+      "truePositives": 8,
+      "falsePositives": 0,
+      "trueNegatives": 2,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "long_irrelevant": {
+      "scored": 6,
+      "truePositives": 0,
+      "falsePositives": 3,
+      "trueNegatives": 3,
+      "falseNegatives": 0,
+      "accuracy": 0.5,
+      "precision": 0,
+      "recall": null,
+      "f1": null,
+      "fallbackRate": 0
+    },
+    "near_miss": {
+      "scored": 37,
+      "truePositives": 3,
+      "falsePositives": 5,
+      "trueNegatives": 29,
+      "falseNegatives": 0,
+      "accuracy": 0.8649,
+      "precision": 0.375,
+      "recall": 1,
+      "f1": 0.5455,
+      "fallbackRate": 0
+    },
+    "negation": {
+      "scored": 3,
+      "truePositives": 3,
+      "falsePositives": 0,
+      "trueNegatives": 0,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "non_english": {
+      "scored": 11,
+      "truePositives": 0,
+      "falsePositives": 0,
+      "trueNegatives": 11,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "fallbackRate": 0
+    },
+    "plain": {
+      "scored": 54,
+      "truePositives": 31,
+      "falsePositives": 0,
+      "trueNegatives": 23,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    }
+  },
+  "extra": {
+    "falseNegativeIds": [],
+    "calls": {
+      "all": {
+        "chunks": 104,
+        "reviewed": 46,
+        "skipped": 58,
+        "modelCallsPerChunk": 1.442
+      },
+      "calibration": {
+        "chunks": 38,
+        "reviewed": 19,
+        "skipped": 19,
+        "modelCallsPerChunk": 1.5
+      },
+      "heldout": {
+        "chunks": 66,
+        "reviewed": 27,
+        "skipped": 39,
+        "modelCallsPerChunk": 1.409
+      }
+    },
+    "decidedByPath": [
+      "rs-058",
+      "rs-059",
+      "rs-060",
+      "rs-061",
+      "rs-062",
+      "rs-063",
+      "rs-064",
+      "rs-065",
+      "rs-066",
+      "rs-067",
+      "rs-069",
+      "rs-070",
+      "rs-071",
+      "rs-072",
+      "rs-073",
+      "rs-074",
+      "rs-075",
+      "rs-076",
+      "rs-077",
+      "rs-078",
+      "rs-079",
+      "rs-203",
+      "rs-204"
+    ]
+  },
+  "cost": {
+    "cases": 104,
+    "answered": 81,
+    "p50Ms": 161.79462500000227,
+    "p95Ms": 223.86383300000307,
+    "p99Ms": 278.0847500000018,
+    "meanInputTokens": 1441,
+    "totalInputTokens": 116724,
+    "totalOutputTokens": 1944,
+    "usdPer1000Decisions": 0.060524,
+    "usdPerMillionDecisions": 60.52,
+    "totalUsd": 0.004902
+  },
+  "errors": {
+    "providerErrors": 0,
+    "invalidResponses": 0,
+    "timeouts": 0,
+    "aborted": 0,
+    "capacity": 0,
+    "otherFallbacks": 0,
+    "retries": 0,
+    "rateLimited": 0,
+    "overBudget": 0,
+    "decidedByCode": 23,
+    "skipped": 0
+  },
+  "rows": [
+    {
+      "id": "rs-001",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 180.25366700000086,
+      "inputTokens": 2792,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7150,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "rs-002",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 182.87454100000105,
+      "inputTokens": 1295,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3266,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.59
+        }
+      }
+    },
+    {
+      "id": "rs-003",
+      "split": "calibration",
+      "tags": ["near_miss", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 167.84320800000205,
+      "inputTokens": 794,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2110,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-004",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 164.80208299999867,
+      "inputTokens": 562,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1344,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.38
+        }
+      }
+    },
+    {
+      "id": "rs-005",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.12016700000095,
+      "inputTokens": 2671,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7128,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.87
+        }
+      }
+    },
+    {
+      "id": "rs-006",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.83466699999917,
+      "inputTokens": 626,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1590,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-007",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 190.64970800000083,
+      "inputTokens": 2395,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 6628,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.93
+        }
+      }
+    },
+    {
+      "id": "rs-008",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 169.42391700000007,
+      "inputTokens": 1566,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4196,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.59
+        }
+      }
+    },
+    {
+      "id": "rs-009",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 186.73495800000092,
+      "inputTokens": 2440,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 6560,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.92
+        }
+      }
+    },
+    {
+      "id": "rs-010",
+      "split": "heldout",
+      "tags": ["near_miss", "negation", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 144.71074999999837,
+      "inputTokens": 765,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1983,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-011",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 208.0811250000006,
+      "inputTokens": 919,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2293,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.81
+        }
+      }
+    },
+    {
+      "id": "rs-012",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 136.00929100000212,
+      "inputTokens": 1127,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3144,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.68
+        }
+      }
+    },
+    {
+      "id": "rs-013",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 140.05487500000163,
+      "inputTokens": 1555,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4195,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.84
+        }
+      }
+    },
+    {
+      "id": "rs-014",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 161.8562920000004,
+      "inputTokens": 909,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2427,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.07
+        }
+      }
+    },
+    {
+      "id": "rs-015",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 162.9285409999975,
+      "inputTokens": 2826,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7158,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.63
+        }
+      }
+    },
+    {
+      "id": "rs-016",
+      "split": "calibration",
+      "tags": ["near_miss", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 160.161415999999,
+      "inputTokens": 834,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2035,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "rs-017",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 161.79775000000154,
+      "inputTokens": 1880,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4987,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.52
+        }
+      }
+    },
+    {
+      "id": "rs-018",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 141.93858399999954,
+      "inputTokens": 722,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1735,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.56
+        }
+      }
+    },
+    {
+      "id": "rs-019",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 156.7871669999986,
+      "inputTokens": 622,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1415,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.47
+        }
+      }
+    },
+    {
+      "id": "rs-020",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 177.93345799999952,
+      "inputTokens": 1257,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3317,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.86
+        }
+      }
+    },
+    {
+      "id": "rs-021",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 160.19195799999943,
+      "inputTokens": 632,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1478,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.88
+        }
+      }
+    },
+    {
+      "id": "rs-022",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 202.0122080000001,
+      "inputTokens": 704,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1659,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.49
+        }
+      }
+    },
+    {
+      "id": "rs-023",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 215.98495799999728,
+      "inputTokens": 1995,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7092,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.32
+        }
+      }
+    },
+    {
+      "id": "rs-024",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 153.8032920000005,
+      "inputTokens": 2268,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7092,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.62
+        }
+      }
+    },
+    {
+      "id": "rs-026",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 177.9541250000002,
+      "inputTokens": 730,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1739,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.21
+        }
+      }
+    },
+    {
+      "id": "rs-027",
+      "split": "heldout",
+      "tags": ["negation", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 177.77237500000047,
+      "inputTokens": 816,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2169,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.73
+        }
+      }
+    },
+    {
+      "id": "rs-028",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 159.13424999999916,
+      "inputTokens": 2359,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7396,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.94
+        }
+      }
+    },
+    {
+      "id": "rs-030",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 270.59712500000023,
+      "inputTokens": 1193,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3024,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.78
+        }
+      }
+    },
+    {
+      "id": "rs-031",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 141.61508299999696,
+      "inputTokens": 1520,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3932,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-032",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 155.6572079999969,
+      "inputTokens": 2420,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 6627,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "rs-033",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 131.1807919999992,
+      "inputTokens": 1410,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3730,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-034",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 180.0775829999984,
+      "inputTokens": 988,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2525,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.53
+        }
+      }
+    },
+    {
+      "id": "rs-035",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 125.92383400000108,
+      "inputTokens": 2737,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7189,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.88
+        }
+      }
+    },
+    {
+      "id": "rs-036",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 161.37804099999994,
+      "inputTokens": 783,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1852,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.77
+        }
+      }
+    },
+    {
+      "id": "rs-037",
+      "split": "calibration",
+      "tags": ["near_miss", "long_irrelevant", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 124.36899999999878,
+      "inputTokens": 2256,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7099,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.57
+        }
+      }
+    },
+    {
+      "id": "rs-038",
+      "split": "heldout",
+      "tags": ["plain", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 162.22187499999927,
+      "inputTokens": 1502,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4285,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.24
+        }
+      }
+    },
+    {
+      "id": "rs-039",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 215.32841700000063,
+      "inputTokens": 2205,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7090,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.9
+        }
+      }
+    },
+    {
+      "id": "rs-040",
+      "split": "heldout",
+      "tags": ["near_miss", "long_irrelevant"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 156.0612910000018,
+      "inputTokens": 2320,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7091,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.58
+        }
+      }
+    },
+    {
+      "id": "rs-041",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 148.36870799999815,
+      "inputTokens": 2216,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7079,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.89
+        }
+      }
+    },
+    {
+      "id": "rs-042",
+      "split": "heldout",
+      "tags": ["near_miss", "long_irrelevant"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 158.66749999999956,
+      "inputTokens": 2253,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7091,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.39
+        }
+      }
+    },
+    {
+      "id": "rs-043",
+      "split": "heldout",
+      "tags": ["plain", "negation", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 162.0846249999995,
+      "inputTokens": 1589,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4390,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.89
+        }
+      }
+    },
+    {
+      "id": "rs-044",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 187.82279199999903,
+      "inputTokens": 1877,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 5994,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.52
+        }
+      }
+    },
+    {
+      "id": "rs-045",
+      "split": "heldout",
+      "tags": ["plain", "negation", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.2220410000009,
+      "inputTokens": 989,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2763,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.95
+        }
+      }
+    },
+    {
+      "id": "rs-046",
+      "split": "calibration",
+      "tags": ["near_miss", "long_irrelevant"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 143.1427079999994,
+      "inputTokens": 1270,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3813,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.32
+        }
+      }
+    },
+    {
+      "id": "rs-047",
+      "split": "heldout",
+      "tags": ["near_miss", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 223.86383300000307,
+      "inputTokens": 1023,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2904,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "rs-048",
+      "split": "heldout",
+      "tags": ["plain", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 159.2646670000031,
+      "inputTokens": 2398,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7127,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.9
+        }
+      }
+    },
+    {
+      "id": "rs-049",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 278.0847500000018,
+      "inputTokens": 1594,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4347,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.92
+        }
+      }
+    },
+    {
+      "id": "rs-050",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 233.74437500000204,
+      "inputTokens": 2533,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 6697,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.87
+        }
+      }
+    },
+    {
+      "id": "rs-051",
+      "split": "calibration",
+      "tags": ["plain", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 132.72804199999882,
+      "inputTokens": 912,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2362,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.53
+        }
+      }
+    },
+    {
+      "id": "rs-052",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 174.32279200000266,
+      "inputTokens": 2585,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7149,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.52
+        }
+      }
+    },
+    {
+      "id": "rs-055",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 131.96208399999887,
+      "inputTokens": 1200,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3049,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.17
+        }
+      }
+    },
+    {
+      "id": "rs-056",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 131.8412500000013,
+      "inputTokens": 2459,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7113,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.77
+        }
+      }
+    },
+    {
+      "id": "rs-057",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 152.85279100000116,
+      "inputTokens": 1063,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2964,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.08
+        }
+      }
+    },
+    {
+      "id": "rs-058",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-059",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-060",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-061",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-062",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-063",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-064",
+      "split": "heldout",
+      "tags": ["plain", "long_irrelevant"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-065",
+      "split": "heldout",
+      "tags": ["near_miss", "long_irrelevant"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-066",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-067",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-069",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-070",
+      "split": "heldout",
+      "tags": ["near_miss", "indirect"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-071",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-072",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-073",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-074",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-075",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-076",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-077",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-078",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-079",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-082",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 179.83079200000066,
+      "inputTokens": 793,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1989,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "rs-083",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 223.88083299999926,
+      "inputTokens": 1592,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3867,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-084",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 154.7828750000008,
+      "inputTokens": 2425,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 6374,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.02
+        }
+      }
+    },
+    {
+      "id": "rs-085",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 154.96900000000096,
+      "inputTokens": 1865,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 5024,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-086",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 149.57987499999945,
+      "inputTokens": 1370,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3577,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "rs-087",
+      "split": "heldout",
+      "tags": ["plain", "long_irrelevant"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 147.98379099999875,
+      "inputTokens": 2730,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7155,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-088",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 158.49937499999942,
+      "inputTokens": 1061,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2680,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "rs-089",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 139.3277080000007,
+      "inputTokens": 1723,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4486,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "rs-090",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 147.6331250000003,
+      "inputTokens": 953,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2413,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.02
+        }
+      }
+    },
+    {
+      "id": "rs-091",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 196.41120899999805,
+      "inputTokens": 1717,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4218,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-093",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 181.8577089999999,
+      "inputTokens": 636,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1523,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-094",
+      "split": "heldout",
+      "tags": ["near_miss", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 150.05904199999713,
+      "inputTokens": 856,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 2190,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "rs-096",
+      "split": "calibration",
+      "tags": ["near_miss", "ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 166.81754200000069,
+      "inputTokens": 1699,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 4838,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.61
+        }
+      }
+    },
+    {
+      "id": "rs-099",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 149.70779200000106,
+      "inputTokens": 639,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1463,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.04
+        }
+      }
+    },
+    {
+      "id": "rs-101",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 110.92808400000285,
+      "inputTokens": 687,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1566,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-102",
+      "split": "calibration",
+      "tags": ["non_english", "cjk", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 147.8477079999975,
+      "inputTokens": 658,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1493,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.07
+        }
+      }
+    },
+    {
+      "id": "rs-103",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 213.6742090000007,
+      "inputTokens": 648,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1449,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.07
+        }
+      }
+    },
+    {
+      "id": "rs-104",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 176.1274169999997,
+      "inputTokens": 696,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1579,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "rs-105",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 127.8639170000024,
+      "inputTokens": 722,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1721,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-106",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 118.94200000000274,
+      "inputTokens": 649,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1492,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-107",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 155.92370799999844,
+      "inputTokens": 640,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1512,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-108",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 141.60466599999927,
+      "inputTokens": 648,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1501,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-109",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 173.68604200000118,
+      "inputTokens": 642,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1494,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-110",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 184.8844579999968,
+      "inputTokens": 764,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1690,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-111",
+      "split": "calibration",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 172.03700000000026,
+      "inputTokens": 640,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 1482,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "rs-201",
+      "split": "calibration",
+      "tags": ["embedded_instruction", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 131.67370899999878,
+      "inputTokens": 2228,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 7199,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.91
+        }
+      }
+    },
+    {
+      "id": "rs-202",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 223.83958300000086,
+      "inputTokens": 1274,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 3398,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.91
+        }
+      }
+    },
+    {
+      "id": "rs-203",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-204",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "status": "decided_by_code",
+      "reason": null,
+      "latencyMs": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 0,
+      "requestBytes": 0,
+      "codeAnswer": "no",
+      "answers": {}
+    },
+    {
+      "id": "rs-205",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 161.79462500000227,
+      "inputTokens": 2413,
+      "outputTokens": 24,
+      "questionCount": 1,
+      "requestBytes": 6710,
+      "codeAnswer": null,
+      "answers": {
+        "changes_a_trust_boundary": {
+          "kind": "boolean",
+          "probability": 0.91
+        }
+      }
+    }
+  ]
+}

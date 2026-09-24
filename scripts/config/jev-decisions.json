@@ -1,6 +1,0 @@
-{
-  "maxInputBytes": 131072,
-  "timeoutMs": 30000,
-  "maxRetries": 2,
-  "probabilitySumTolerance": 0.000001
-}

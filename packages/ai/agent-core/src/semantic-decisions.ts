@@ -1,3 +1,5 @@
+import type { PrivacyMode } from '@agiworkforce/types';
+
 export type DecisionQuestion =
   | { kind: 'boolean'; instruction: string }
   | { kind: 'choice'; instruction: string; options: Record<string, string> }
@@ -35,29 +37,35 @@ export interface DecisionPolicy {
 }
 
 export interface DecisionScope {
-  trustMode: 'local' | 'byok' | 'managed_cloud';
+  trustMode: PrivacyMode;
   providerAllowed: boolean;
   cohort: number;
   signal?: AbortSignal;
 }
 
-export type DecisionFallbackReason =
-  | 'disabled'
-  | 'policy'
-  | 'sampled_out'
-  | 'invalid_request'
-  | 'capacity'
-  | 'aborted'
-  | 'timeout'
-  | 'provider_error'
-  | 'invalid_response'
-  | 'policy_changed';
+export const DECISION_FALLBACK_REASONS = [
+  'disabled',
+  'policy',
+  'sampled_out',
+  'invalid_request',
+  'capacity',
+  'aborted',
+  'timeout',
+  'provider_error',
+  'invalid_response',
+  'policy_changed',
+] as const;
+
+export type DecisionFallbackReason = (typeof DECISION_FALLBACK_REASONS)[number];
+
+export const DECISION_STATUSES = ['accepted', 'shadow', 'fallback'] as const;
 
 export type DecisionOutcome =
   | { status: 'accepted' | 'shadow'; result: DecisionResult; latencyMs: number }
   | { status: 'fallback'; reason: DecisionFallbackReason; latencyMs: number };
 
 export interface DecisionObservation {
+  kind: string;
   status: DecisionOutcome['status'];
   reason?: DecisionFallbackReason;
   latencyMs: number;
@@ -141,6 +149,12 @@ export function isDecisionResult(
   });
 }
 
+// One predicate, so a caller that pre-filters a subject to avoid building a
+// request it cannot send filters on exactly what the evaluator would apply.
+export function decisionSampledIn(cohort: number, sampleRate: number): boolean {
+  return probability(cohort) && cohort < sampleRate;
+}
+
 function validRequest(request: DecisionRequest, policy: DecisionPolicy): boolean {
   const questions = Object.values(request.questions);
   return (
@@ -172,6 +186,7 @@ function validPolicy(policy: DecisionPolicy): boolean {
 }
 
 export function createDecisionEvaluator(options: {
+  kind: string;
   provider: DecisionProvider;
   policy: () => DecisionPolicy;
   observe?: (event: DecisionObservation) => void;
@@ -182,6 +197,7 @@ export function createDecisionEvaluator(options: {
     const finish = (outcome: DecisionOutcome): DecisionOutcome => {
       try {
         options.observe?.({
+          kind: options.kind,
           status: outcome.status,
           latencyMs: outcome.latencyMs,
           questionCount: Object.keys(request.questions).length,
@@ -208,10 +224,8 @@ export function createDecisionEvaluator(options: {
       return fallback('policy');
     }
     if (policy.mode === 'disabled') return fallback('disabled');
-    if (scope.trustMode !== 'managed_cloud' || scope.providerAllowed !== true)
-      return fallback('policy');
-    if (!probability(scope.cohort) || scope.cohort >= policy.sampleRate)
-      return fallback('sampled_out');
+    if (scope.trustMode !== 'managed' || scope.providerAllowed !== true) return fallback('policy');
+    if (!decisionSampledIn(scope.cohort, policy.sampleRate)) return fallback('sampled_out');
     if (scope.signal?.aborted) return fallback('aborted');
     try {
       if (!validRequest(request, policy)) return fallback('invalid_request');

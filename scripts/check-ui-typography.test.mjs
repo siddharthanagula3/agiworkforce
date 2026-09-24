@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   CHAT_TOKENS_PATH,
+  FOUNDATION_TOKENS_PATH,
   GLOBALS_PATH,
   MIN_FONT_SIZE_PX,
   REPO_ROOT,
@@ -18,7 +19,7 @@ import {
 } from './check-ui-typography.mjs';
 
 const roots = [];
-const COPIED = [GLOBALS_PATH, CHAT_TOKENS_PATH, SETTINGS_STORE_PATH];
+const COPIED = [GLOBALS_PATH, FOUNDATION_TOKENS_PATH, CHAT_TOKENS_PATH, SETTINGS_STORE_PATH];
 
 function fixture(edits = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'agi-ui-typography-'));
@@ -59,7 +60,16 @@ test('the repository declares a reading measure, a distinct mono family and a co
 
 test('dropping the reading measure is reported', () => {
   const root = fixture({
-    [GLOBALS_PATH]: (source) => source.replace(/max-width:\s*\d+(?:\.\d+)?ch/g, 'max-width: 100%'),
+    [GLOBALS_PATH]: (source) =>
+      source.replace(/max-width:\s*(?:\d+(?:\.\d+)?ch|var\(--measure-prose\))/g, 'max-width: 100%'),
+  });
+  assert.ok(readingSystemFailures(root).some((line) => line.includes('measure in ch')));
+});
+
+test('a reading-measure token must resolve to a ch value', () => {
+  const root = fixture({
+    [FOUNDATION_TOKENS_PATH]: (source) =>
+      source.replace(/--measure-prose:\s*\d+(?:\.\d+)?ch/, '--measure-prose: 100%'),
   });
   assert.ok(readingSystemFailures(root).some((line) => line.includes('measure in ch')));
 });

@@ -26,6 +26,7 @@ import 'server-only';
 import {
   getPlanMaxSandboxes,
   getPlanSandboxTtlMs,
+  isFreeBillingPlanTier,
   type CloudCodeNetworkAccess,
   type NotebookCellOutput,
 } from '@agiworkforce/types';
@@ -775,7 +776,7 @@ export const getE2BExecutor = tracedCodeAction(
         return unavailable('no-capacity');
       }
       if (
-        planTier === 'free' &&
+        isFreeBillingPlanTier(planTier) &&
         scope.templateId &&
         harnessCredentialSpecs(scope.templateId).length > 0 &&
         !scope.explicitCredential

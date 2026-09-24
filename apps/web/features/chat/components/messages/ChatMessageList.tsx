@@ -21,7 +21,7 @@ import {
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { settledActivityStatus } from '@agiworkforce/unified-chat';
 import { hasUnavailableWebSearch, type AgentActivityState } from '@agiworkforce/client-runtime';
-import { formatUsageResetIn } from '@agiworkforce/types';
+import { formatUsageResetIn, isFreeBillingPlanTier } from '@agiworkforce/types';
 import { isAccountWideUsageBlock } from '@features/chat/stores/account-usage-block';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
 import type { VariantInfo, VariantInfoByMessageId } from '@/features/chat/lib/messageThread';
@@ -1635,7 +1635,7 @@ const ChatMessageListComponent = ({
     return (
       <>
         {streamErrorNeedsModelSwitch(lastMessage) &&
-          (currentTier !== 'free' ||
+          (!isFreeBillingPlanTier(currentTier) ||
             hasCompatibleFreeErrorRecoveryModel(
               lastUserMessage,
               lastMessage.model,

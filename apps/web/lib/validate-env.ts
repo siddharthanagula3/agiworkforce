@@ -531,6 +531,11 @@ function isPositiveNumber(value: string): string | null {
   return Number.isFinite(parsed) && parsed > 0 ? null : 'it is not a positive number';
 }
 
+function isNonNegativeNumber(value: string): string | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? null : 'it is not a non-negative number';
+}
+
 function oneOf(...allowed: readonly string[]): (value: string) => string | null {
   return (value) =>
     allowed.includes(value.trim().toLowerCase()) ? null : `it is not one of ${allowed.join(', ')}`;
@@ -980,6 +985,36 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     defaultValue: null,
     requiredIn: [],
     description: 'the credential a container file download authenticates to OpenAI with',
+  }),
+  secret('TYPESAFE_API_KEY', {
+    type: 'string',
+    owner: 'apps/web/lib/services/semantic-decisions',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the credential the optional semantic decision transport authenticates with',
+  }),
+  published('TYPESAFE_BASE_URL', {
+    type: 'url',
+    owner: 'apps/web/lib/services/semantic-decisions',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isUrl,
+    description: 'the admitted origin for the optional semantic decision transport',
+  }),
+  published('TYPESAFE_MODEL', {
+    type: 'string',
+    owner: 'apps/web/lib/services/semantic-decisions',
+    defaultValue: null,
+    requiredIn: [],
+    description: 'the versioned model configured for the optional semantic decision transport',
+  }),
+  published('TYPESAFE_INPUT_MICROUSD_PER_MTOK', {
+    type: 'integer',
+    owner: 'apps/web/lib/services/semantic-decisions',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isNonNegativeNumber,
+    description: 'the input-token cost used to meter the optional semantic decision transport',
   }),
   secret('GEMINI_API_KEY', {
     type: 'string',

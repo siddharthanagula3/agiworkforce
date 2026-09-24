@@ -311,6 +311,54 @@ export const SERVICE_DASHBOARDS: readonly ServiceDashboard[] = [
     ],
   },
   {
+    id: 'semantic-decisions',
+    title: 'Semantic decisions',
+    panels: [
+      {
+        id: 'semantic-decision-rate',
+        title: 'Decisions by kind, mode, and outcome',
+        metric: METRIC_NAME.semanticDecisions,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionKind),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionMode),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionOutcome),
+        ],
+      },
+      {
+        id: 'semantic-decision-latency-p95',
+        title: 'Decision latency p95',
+        metric: METRIC_NAME.semanticDecisionDuration,
+        aggregation: 'p95',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionKind),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionMode),
+        ],
+      },
+      {
+        id: 'semantic-decision-latency-p99',
+        title: 'Decision latency p99',
+        metric: METRIC_NAME.semanticDecisionDuration,
+        aggregation: 'p99',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionKind),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionMode),
+        ],
+      },
+      {
+        id: 'semantic-decision-disagreement-rate',
+        title: 'Shadow disagreements by question and confidence',
+        metric: METRIC_NAME.semanticDecisionDisagreements,
+        aggregation: 'rate',
+        groupBy: [
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionKind),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionQuestion),
+          attributeKey(OBSERVABILITY_ATTRIBUTE.decisionConfidenceBin),
+        ],
+      },
+    ],
+  },
+  {
     id: 'completion-truth',
     title: 'Completion truth',
     panels: [

@@ -62,6 +62,7 @@ describe('Chat Messages API', () => {
   const mockConversation = {
     id: 'conv-1',
     model: 'auto',
+    active_leaf_message_id: null,
   };
 
   const mockUserMessage = {

@@ -167,7 +167,7 @@ describe('runToolLoop AGI Work failover', () => {
   }
 
   it('offers the planning turn to the failover ladder as the first dispatch', async () => {
-    const contexts: Array<{ step: number } | undefined> = [];
+    const contexts: Array<{ step: number; sameRouteRetrySafe?: boolean } | undefined> = [];
     const rotated = makeAgiWorkProcessed({ goal: 'Summarise the topic' });
     rotated.provider = 'anthropic';
     mockBuildToolLoopStream
@@ -189,7 +189,7 @@ describe('runToolLoop AGI Work failover', () => {
       }),
     );
 
-    expect(contexts).toEqual([{ step: 0 }]);
+    expect(contexts).toEqual([{ step: 0, sameRouteRetrySafe: false }]);
     expect(mockBuildToolLoopStream.mock.calls[1]?.[0]).toBe('anthropic');
     expect(deltas(output).some((d) => 'x_agiwork_plan' in d)).toBe(true);
     expect(output).toContain('Done.');

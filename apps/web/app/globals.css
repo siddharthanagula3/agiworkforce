@@ -1865,49 +1865,9 @@ html[data-contrast='more'] *:focus-visible {
 }
 
 .chat-composer-container {
-  container-type: inline-size;
   /* No consent inset here on purpose: the /chat shell already ends at
      `--agi-consent-inset`, so adding it again would double the gap. */
   padding-bottom: 1rem;
-}
-
-@container (max-width: 520px) {
-  .chat-composer-row {
-    flex-wrap: wrap;
-  }
-
-  .chat-composer-field {
-    flex: 1 0 100%;
-  }
-
-  .chat-composer-controls {
-    display: flex;
-    width: 100%;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 0.25rem;
-  }
-
-  .chat-composer-controls > :last-child {
-    margin-left: auto;
-  }
-
-  .chat-composer-style-selector {
-    display: none;
-  }
-
-  .chat-composer-mode-inline button {
-    width: 1.5rem;
-    padding-inline: 0;
-  }
-
-  .chat-composer-mode-inline button > svg {
-    display: block;
-  }
-
-  .chat-composer-mode-inline button > span {
-    display: none;
-  }
 }
 
 /* ─── Print ─────────────────────────────────────────────────────────────────

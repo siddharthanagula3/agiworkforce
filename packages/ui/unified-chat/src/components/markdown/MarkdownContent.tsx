@@ -522,12 +522,17 @@ function MarkdownContentImpl({
   linkifyNumericCitations = true,
   literalHtml,
 }: MarkdownContentProps) {
-  const processedContent = useMemo(() => {
-    const base = skipPreprocess ? content : preprocessMath(content);
-    return !isStreaming && linkifyNumericCitations && citations && citations.length > 0
-      ? linkifyCitationMarkers(base, citations.length)
-      : base;
-  }, [content, isStreaming, skipPreprocess, citations, linkifyNumericCitations]);
+  const mathContent = useMemo(
+    () => (skipPreprocess ? content : preprocessMath(content)),
+    [content, skipPreprocess],
+  );
+  const processedContent = useMemo(
+    () =>
+      !isStreaming && linkifyNumericCitations && citations && citations.length > 0
+        ? linkifyCitationMarkers(mathContent, citations.length)
+        : mathContent,
+    [mathContent, isStreaming, citations, linkifyNumericCitations],
+  );
   return (
     <StreamTailContext.Provider value={Boolean(isStreaming)}>
       <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>

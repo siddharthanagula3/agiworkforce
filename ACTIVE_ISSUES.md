@@ -8,6 +8,63 @@ The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
 
+## CHECKLIST-REAUDIT-2026-09-23
+
+The frozen independent checklist audit at commit `c8ed5c617` remains the
+historical baseline: 29,115 requirements, comprising 7,803 done, 9,597 partial,
+5,076 missing and 6,639 unverified, with a GLOBAL NO-GO result. The later
+current-verification overlay contains 700 decisions drawn only from the
+historical unverified cohort. It contains no decision for any of the 9,597
+historical partial rows. Therefore zero partial rows have been proved complete
+by the current overlay, and the actual number completed since the frozen audit
+is unknown. Changed files, merged branches and passing broad guards are useful
+impact evidence, but are not item-level completion decisions.
+
+The similarly named directories do not supply that missing mapping.
+`agiworkforce-partials` is a clean worktree whose `local/post-launch` tip is
+already an ancestor of main; the older `partials/reaudit` branch changed eight
+observability and environment-validation files and was merged into the launch
+line. It is not a reaudit of all partial rows. `agiworkforce-launch`,
+`agiworkforce-e2e-0156` and `agiworkforce-security` are historical worktrees
+whose tips are already represented in main. `agiworkforce-verify` is behind
+main and its only patch-unique one-line import deletion conflicts with newer
+usage, so it is superseded rather than unmerged work. `agiworkforce-jev` has
+unmerged historical decision-primitive commits, but main now has a later
+semantic-decisions implementation; it requires conceptual comparison, not a
+blind cherry-pick. `agiworkforce-security-run` and `agiworkforce-prod-deploy`
+are old run/source artifacts rather than Git worktrees. They may contain
+sensitive deployment material and must not be treated as current source or
+copied into documentation.
+
+Current broad evidence is encouraging but not atomic. All 199 commands behind
+`check:llm-operability` passed individually after removing an untracked Finder
+metadata file and rerunning the socket-dependent CI guard with appropriate
+permissions. Protocol generation, all 62 typecheck tasks and extension lint
+passed. Web lint passed when its ignored experiment cache was excluded; the
+root lint currently includes that cache and reports 11 `no-explicit-any`
+errors. A full test run passed 59 of 60 workspace tasks. Web reported 134
+failed files and 356 failed tests, but an isolated rerun reduced that set to 10
+persistent files and 11 failed tests (120 files and 2,097 tests passed; five
+tests were pending). Four paths recorded by the first run no longer existed by
+the rerun. Main advanced during the full run and the staged worktree changed
+during the rerun, so neither result proves one immutable source fingerprint.
+
+The persistent web failures cover stale settings-provider structure, an E2E CI
+manifest count mismatch, a missing dark `--ring` token, a loading-state
+invariant that no longer finds its expected spinner, stale generated trust-page
+counts, missing Playwright Chromium or an equivalent harness timeout, two admin
+account-status fixture/shape mismatches, global composer-density ownership and
+a send-pending state regression. Resolve those at their canonical owners,
+install and verify the browser harness, and make root web lint exclude the
+declared cache rather than editing generated experiments. Then freeze a clean
+commit and index fingerprint; map all 9,597 partial IDs to current owners and
+evidence; require a focused test or live proof before promoting each row; rerun
+guards, lint, typecheck, tests, builds and native checks at that same
+fingerprint; and only then publish replacement counts. Jev classification was
+not used for this pass because it required permission to transmit internal
+repository state and abstained without it; deterministic repository evidence
+was collected without silently substituting a semantic decision.
+
 ## WEB-MIGRATION-STATUS-2026-09-23
 
 A read-only `pnpm db:migrate -- status` using the local environment's configured
@@ -69,22 +126,19 @@ explicit Terms confirmation when Clerk does not preserve the completed signup
 resource across the return navigation; that fallback has not been live-tested
 with a new account.
 
-The wider web suite was stopped after roughly ten minutes across a 2,501-file
-test inventory, not reported as passing. Two deterministic failures from that
-run were reproduced and corrected in isolation: the Code approval-menu test
-assumed the first option was selected instead of resolving the website's
-configured default, and the canonical routing test mocked the older DB helper
-instead of the verified-bearer helper its route now calls. The isolated files
-now pass 99 and 15 tests respectively. Other files in the interrupted suite
-remain unassessed by that run.
+The later repository-wide run and isolated web rerun are recorded in
+`CHECKLIST-REAUDIT-2026-09-23` above and supersede the earlier stopped-run
+claim. They were not atomic because main and the staged worktree changed while
+validation was running, so they do not close this signup section's live-test
+gaps.
 The mock-export guard now reports zero factories missing an export used by a
 subject or direct dependency. Web whole-module mocks are back at their
 recorded ceiling of 4,331 after preserving real exports in the affected
 chat, Free-provider, search-allowance, failover and device-link test factories.
 Their focused suites pass 124 tests, the guard's own 20 tests pass, targeted
-Web lint and Web typecheck pass. The repository-wide guard is still red on
-Desktop whole-module drift (273 versus 271), outside this website pass; this
-is an open validation gate, not evidence of a production runtime failure.
+Web lint and Web typecheck pass. The later individual repository guard run
+passed every command with the permissions noted above; that broader result is
+not a substitute for the still-missing authenticated signup workflow.
 
 ## WEB-QUICK-ASK-ROUTES-2026-09-23
 
@@ -121,7 +175,7 @@ selection back to the Free workhorse. The menu now filters to the canonical
 Free-entitled set and selectable promotional chat offerings; paid accounts
 retain their model choices. Jev selected this at confidence 1.00, request
 `bfff9951dc2629684f060d8e87d02e89f017d82296fbfc1ac1fcbca23527c305`.
-The live Free menu now showed only OpenRouter Free Auto, with no paid options.
+The live Free menu now showed only the configured free router, with no paid options.
 
 Switching a previously branched Free conversation to a QwenCloud promotional
 model exposed two durability failures. A pre-stream provider error deleted the
@@ -144,10 +198,10 @@ idempotently persists the failed user row before saving its error reply, so a
 retry does not lose the parent. Jev selected that at confidence 0.94, request
 `bd1e363cc09bca8793f2bc576f995ca75c8d2ade799bc26c892e21037e6178d2`.
 
-Live QwenCloud `qwen3.8-max` returned `QWEN_FREE_PERSIST_OK` through
+The live QwenCloud flagship promotion returned `QWEN_FREE_PERSIST_OK` through
 `/api/models/free-quota/completions`, with the prompt and answer both present
 after reload and no persistence warning. Experiential Labs' picker reported
-five ready promotions, but GPT-6 Luna's live completion first refused the
+five ready promotions, but one advertised promotion's live completion first refused the
 promotion and then returned a provider error. Its failed prompt and error
 now survive reload; this does not establish a working Experiential route or
 accurate promotion availability. The model-switch warning also no longer calls
@@ -242,7 +296,7 @@ image response took noticeably longer than the PDF response; this single
 success does not prove multimodal route reliability or that every Free Auto
 choice can consume images.
 A capability-class switch revealed a further dead end. After those historical
-attachments, selecting text-only QwenCloud `qwen3-vl-flash` and sending a new
+attachments, selecting a text-only QwenCloud vision-branded promotion and sending a new
 unrelated text prompt failed because the chat adapter forwarded earlier
 `file`/`image_url` parts to a text-only promotional route. The adapter now
 keeps earlier text, replaces historical attachment parts with an explicit
@@ -253,9 +307,9 @@ request `be8c7245f9657dbf31864c236d951e4dcb5044cfa0922053c2a812c114cbea46`.
 Retrying the exact failed Qwen turn in localhost answered
 `QWEN_VL_TEXT_AFTER_IMAGE` via the free pool and survived reload. The three
 adjacent adapter, compatibility, and chat-stream suites pass 81 tests;
-targeted lint and Web typecheck pass. A subsequent basic Qwen `qwen3-8b`
-turn answered `BASIC_QWEN_FREE_OK`, and reasoning Qwen
-`qwen3-30b-a3b-thinking-2507` answered `17*19=323`; both used the Free pool
+targeted lint and Web typecheck pass. A subsequent basic Qwen promotion
+answered `BASIC_QWEN_FREE_OK`, and a reasoning Qwen promotion answered
+`17*19=323`; both used the Free pool
 and persisted after reload. These representative successes do not establish
 the availability of every listed Qwen offering.
 An empty `.txt` selected in the live Free composer initially appeared as a
@@ -281,7 +335,7 @@ contents. The attachment link and answer survived reload. This proves one
 small text-file path; image/PDF inputs, size limits, corrupt files, and upload
 failure recovery remain unverified live.
 The same account uploaded a synthetic four-bar PNG and the image appeared in
-the submitted turn, but OpenRouter Free Auto returned a Free-model overload
+the submitted turn, but the configured free router returned a provider overload
 before answering. One manual regeneration returned the same overload. Image
 understanding is therefore not verified, and the currently selectable
 promotional Free routes are text-only by product policy, leaving no tested
@@ -408,7 +462,7 @@ preventing a text-only model from inventing an executed result. Jev selected
 preflight with an explicit switch at confidence 0.99, request
 `54164e3efad1103511685874c4aa5b8771387d74a03dbb655a3aafd46b4dac15`.
 Four focused selection, composer, and provider-route suites pass 156 tests;
-targeted lint and Web typecheck pass. In localhost, Qwen `qwen3.8-max` showed
+targeted lint and Web typecheck pass. In localhost, the QwenCloud flagship promotion showed
 the inline warning and disabled Send for the same IANA search, then clicking
 Use Free Auto preserved the prompt and admitted the send. The resulting Free
 Auto turn returned the official IANA URL and a rendered source citation; the
@@ -416,7 +470,7 @@ answer and Free Auto selection persisted after reload. Complex implied tool
 intent and all provider-specific tool paths remain open. A second live Qwen
 draft requesting Python execution showed the same pre-send guard; after an
 explicit Free Auto switch, agent activity showed an actual `print(17 * 19)`
-call and stdout `323`. A fresh, ordinary Qwen `qwen3.8-max` text turn remained
+call and stdout `323`. A fresh, ordinary QwenCloud flagship text turn remained
 enabled and returned `QWEN_PLAIN_AFTER_PREFLIGHT_OK` via the free pool.
 
 Both promotional Free chat routes could previously accept an HTTP 200 stream
@@ -663,7 +717,7 @@ free-quota text model and received the exact requested `QWEN_FREE_OK` answer,
 attributed in the UI to the free pool. A sandbox request on that promotional
 route was blocked before submission with a specific explanation and a
 `Use Free Auto` action that retained the draft; using it ran real Python and
-displayed `QWEN_PROMO_TOOL_CHECK` stdout. An OpenRouter Free Auto turn also
+displayed `QWEN_PROMO_TOOL_CHECK` stdout. A configured free-router turn also
 uploaded a synthetic 47-byte text file, answered its exact `BLUE-HARBOR-27`
 canary, and kept both the attachment and answer after reload. The synthetic
 local fixture was removed after the check. These are one-route, one-file
@@ -672,7 +726,7 @@ An image attachment of the repository's public logo initially received an
 actionable upstream Free-model overload, then a user retry returned the
 correct non-white spoke color, `Orange`. That verifies one small PNG/vision
 path, while also reproducing the need for a manual retry under provider load.
-The OpenRouter Free Auto model has one configured same-route transient retry
+The configured free router has one same-route transient retry
 and a focused overload regression; the observed live overload still required
 one user retry, and its server-side attempt count was not captured. Free
 provider outage and retry effectiveness remain launch gates.
@@ -761,20 +815,20 @@ The promotion-parser test first exposed and then closed a malformed-entry
 failure that would have turned a provider `null` item into a server error.
 
 On 2026-09-23, a fresh localhost Free conversation exposed drift between the
-public promotion feed and this organization's grants: the picker marked GPT-6
-Sol ready, but the free-only completion returned HTTP 502. A direct synthetic
+public promotion feed and this organization's grants: the picker marked one
+advertised promotion ready, but the free-only completion returned HTTP 502. A direct synthetic
 free-only provider request identified upstream `model_not_granted` (403); the
-authenticated `/api/v1/models` list granted only the GPT-5.6 Luna and Nemotron
-3 Ultra free aliases among the five curated promotions. Both granted aliases
+authenticated `/api/v1/models` list granted only the lightweight and Nemotron
+free aliases among the five curated promotions. Both granted aliases
 answered direct free-only probes. The catalogue and completion route now use
 one loader that intersects public promotions with authenticated `:free`
 grants, failing closed if either source is unreadable; send-time validation
 protects stale picker selections. Jev selected this approach at confidence
 0.96, request
 `298d00b26b2b84b873f482ead2fef41452d2217dbb6bbe96f6be336b88a331ed`.
-After the change, localhost disabled Claude Opus 5.5, GPT-6 Luna and GPT-6
-Sol as “Not available right now,” left the two granted aliases selectable,
-and switching the failed conversation to GPT-5.6 Luna produced
+After the change, localhost disabled the three ungranted promotions as “Not
+available right now,” left the two granted aliases selectable, and switching
+the failed conversation to the lightweight alias produced
 `EXP_LUNA_FREE_OK` with `via free pool`. Switching again to Nemotron 3 Ultra
 produced `EXP_NEMO_FREE_OK` with the same Free-pool attribution. The
 promotion-parser and completion
@@ -783,7 +837,7 @@ quota exhaustion, stale grants during an in-flight call and multi-turn
 reliability remain open. This is a local repair, not deployment.
 In a later localhost Free QA conversation
 `d4a8e914-b8d2-4648-ba35-347bb423777e`, the same two granted aliases
-answered consecutive exact-reply turns after a QwenCloud turn: GPT-5.6 Luna
+answered consecutive exact-reply turns after a QwenCloud turn: the lightweight alias
 returned `EXPERIENTIAL_PROMO_OK`, then Nemotron 3 Ultra returned
 `NEMOTRON_FREE_OK`. Both replies, their source prompts, the selected Nemotron
 model, and the `via free pool` attribution survived reload. The three other
@@ -951,7 +1005,7 @@ halves. [OpenRouter's current routing documentation](https://openrouter.ai/docs/
 describes those request filters, but its
 [terms](https://openrouter.ai/terms) make customers responsible for the
 underlying models' individual terms and allow the available models to change.
-The [Free-router page](https://openrouter.ai/openrouter/free) says it selects
+The provider's Free-router page says it selects
 among the currently available zero-price members. The managed key's effective
 account settings and every current or newly admitted member's terms have not
 been verified for production third-party serving. The site's stricter request
@@ -976,7 +1030,7 @@ upstream per-minute and per-member capacity, permissible production serving,
 and a load-tested all-free route pool before a public launch. Do not work
 around limits with extra keys or quietly use paid inference.
 
-The OpenRouter Free Auto route sometimes returns a successful upstream stream
+The configured OpenRouter free route sometimes returns a successful upstream stream
 with `finish_reason: stop` and no visible answer. A short response budget could
 also be spent entirely on hidden reasoning; the catalog now gives this route a
 1,024-token response floor, and the website only offers its web-search tool
@@ -988,8 +1042,8 @@ maximum-output-length failure, so the free route's live search reliability is
 also unproven with the new budget floor.
 On 2026-09-23 another short, authenticated Free Auto search failed first with
 an upstream overload and then, on user retry, with a maximum-output-length
-error before search ran. The [current Free Router page](https://openrouter.ai/openrouter/free)
-says it randomly chooses among compatible zero-price Free models, so a single
+error before search ran. The provider's current Free Router page says it
+randomly chooses among compatible zero-price Free models, so a single
 member's reasoning behavior cannot be assumed for every turn. Jev selected
 a one-time pre-answer output-limit retry with a doubled output budget, capped
 by the catalog's model output limit, at confidence 0.59 (request
@@ -1238,7 +1292,7 @@ confidence 0.83, request
 `88c6ff47507b5913b20e83fef1939e5220b3a0f7e51b286d08d8ffc7a51ae8f4`.
 
 A later authenticated localhost public IANA search captured a real clean-empty
-provider step. The OpenRouter Free Auto upstream selected an Inclusion AI free
+provider step. The configured OpenRouter free router selected an Inclusion AI free
 model through Novita and emitted 22 raw data frames: 20 reasoning frames (205
 reasoning characters), zero content frames, zero tool-call frames, and two
 finish frames. The adapted trace likewise had zero public text and zero tool
@@ -1350,8 +1404,8 @@ answer; its test explicitly encodes that behavior. The live transcript proves
 the final text was not a structured tool call, but does not identify which
 upstream free model produced it or prove whether the one retry ran.
 
-[OpenRouter's Free Router page](https://openrouter.ai/openrouter/free/) currently
-documents feature filtering for tool-calling requests, not a guarantee that
+OpenRouter's Free Router page currently documents feature filtering for
+tool-calling requests, not a guarantee that
 every selected model will issue a valid tool call. Jev selected a deterministic
 platform search before answer generation, reusing the existing tool approval,
 charging, source and audit path rather than parsing provider-authored pseudo

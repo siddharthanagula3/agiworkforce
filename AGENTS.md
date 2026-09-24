@@ -26,9 +26,6 @@ value below points to the thing that enforces it.
   counted as the product's, a check that passed over an input it never read.
 - **A second opinion sharing the first one's question is not independent.**
   Verification catches fabrication, not a premise both parties assumed.
-- Use Jev for explicit task classification, skill selection, prioritization, and approach choices
-  via `pnpm -s agent:decide`; follow [the workflow](docs/development/agent-workflow.md#jev-decisions).
-  Failed or abstained decisions pause; never silently replace them with your own selection.
 
 ## 2. Source-of-truth precedence
 

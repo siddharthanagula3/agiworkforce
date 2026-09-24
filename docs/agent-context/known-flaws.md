@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 
 Every defect this repository knows about and has not fixed, one section per surface,
 open rows only. Check it before reporting a bug as new.
@@ -117,7 +117,7 @@ No open rows.
 | GEMINI-FUNCTIONCALL-THOUGHT-SIGNATURE-01  | Medium   | gemini functioncall thought signature                                                                                               | `packages/ai/providers/google/src/translate.ts`             | 2026-07-10 | Web lead                | `packages/ai/providers/google/src/translate.ts` read 2026-09-07; the entry's own status still records the open half and the cited file is present                                                                     |
 | PROVIDER-ANTHROPIC-PAUSE-TURN-01          | Low      | provider anthropic pause turn                                                                                                       | `packages/ai/providers/anthropic/src/stream.ts`             | 2026-08-17 | Provider lead           | `packages/ai/providers/anthropic/src/stream.ts` read 2026-09-07; the entry's own status still records the open half and the cited file is present                                                                     |
 | CONTRACTS-TOOL-USE-LADDER-DOC-INVERTED-01 | Low      | The `allowToolUse` field doc says "(Free=false, lower tiers)" but the `free` tier sets `allowToolUse: true`.                        | `packages/contracts/types/src/model-catalog.ts`             | undated    | Platform                | `packages/contracts/types/src/model-catalog.ts` read 2026-09-07; the entry's own status still records the open half and the cited file is present                                                                     |
-| WEB-FREE-ROUTER-EMPTY-2026-09-22          | Medium   | OpenRouter Free Auto intermittently ends a successful stream without visible answer content.                                        | `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts` | 2026-09-22 | Web + routing           | Budget-floor and search-tool changes reduced two triggers but a live exact-reply turn still returned clean-empty; root cause and bounded recovery are tracked in `ACTIVE_ISSUES.md#web-free-router-empty-2026-09-22`. |
+| WEB-FREE-ROUTER-EMPTY-2026-09-22          | Medium   | The configured OpenRouter free router intermittently ends a successful stream without visible answer content.                       | `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts` | 2026-09-22 | Web + routing           | Budget-floor and search-tool changes reduced two triggers but a live exact-reply turn still returned clean-empty; root cause and bounded recovery are tracked in `ACTIVE_ISSUES.md#web-free-router-empty-2026-09-22`. |
 
 ## Connectors
 
@@ -129,9 +129,7 @@ No open rows.
 
 ## Documentation
 
-| id      | severity | summary                                                                                      | where                              | first seen | owner | still open because                                                                                                                         |
-| ------- | -------- | -------------------------------------------------------------------------------------------- | ---------------------------------- | ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| DOCS-12 | High     | No single machine-readable capability registry exists, so every 'current' document disagrees | `docs/agent-context/repo-map.json` | 2026-08-30 | Docs  | no capability registry exists under `docs/generated` or `packages/contracts`, so each current document states capability status on its own |
+No open rows.
 
 ## How to use this file
 

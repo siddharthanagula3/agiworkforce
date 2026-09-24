@@ -82,6 +82,7 @@ import {
   DEFAULT_COMPOSER_TOGGLES,
   PENDING_CONVERSATION_KEY,
   selectDraftContent,
+  selectDeferredUnsentDraft,
   selectParkedSends,
   firstParkedSend,
   type ComposerToggleState,
@@ -752,6 +753,8 @@ const ChatComposerNewComponent = ({
   const setDraftContent = useChatStore((state) => state.setDraftContent);
   const clearDraftContent = useChatStore((state) => state.clearDraftContent);
   const parkedDraft = useChatStore(selectDraftContent(conversationId));
+  const deferredUnsentDraft = useChatStore(selectDeferredUnsentDraft(conversationId));
+  const clearDeferredUnsentDraft = useChatStore((state) => state.clearDeferredUnsentDraft);
   const seenParkedDraftRef = useRef(parkedDraft);
   const parkedSends = useChatStore(selectParkedSends);
   const clearParkedSend = useChatStore((state) => state.clearParkedSend);
@@ -3257,8 +3260,8 @@ const ChatComposerNewComponent = ({
   useEffect(() => {
     if (parkedDraft !== seenParkedDraftRef.current) {
       seenParkedDraftRef.current = parkedDraft;
-      setSendPendingFlag(false);
       if (parkedDraft) {
+        setSendPendingFlag(false);
         deferredHandbackRef.current = {
           conversationId: conversationId ?? null,
           content: parkedDraft,
@@ -3277,6 +3280,20 @@ const ChatComposerNewComponent = ({
     setLocalNotice(RESTORED_DRAFT_NOTICE);
     clearDraftContent(conversationId);
   }, [clearDraftContent, conversationId, message, parkedDraft, writeComposerMessage]);
+
+  useEffect(() => {
+    if (!deferredUnsentDraft || messageRef.current.trim()) return;
+    setSendPendingFlag(false);
+    writeComposerMessage(deferredUnsentDraft);
+    setLocalNotice(RESTORED_DRAFT_NOTICE);
+    clearDeferredUnsentDraft(conversationId);
+  }, [
+    clearDeferredUnsentDraft,
+    conversationId,
+    deferredUnsentDraft,
+    message,
+    writeComposerMessage,
+  ]);
 
   /**
    * A send the guard refused is parked in the store under its own fingerprint,

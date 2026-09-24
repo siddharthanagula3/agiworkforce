@@ -1,6 +1,7 @@
 # Product architecture for semantic decisions and bounded execution
 
-Status: Proposed; shared evaluator exists, production integrations are not enabled
+Status: Partly implemented; phase 1 and the host half of phase 3 exist on the managed web
+host, every decision kind is disabled, and phases 2 and 4 to 6 are not started
 Owner: AI platform maintainers
 Last updated: 2026-09-20
 
@@ -53,7 +54,7 @@ changed requirements need replanning. There is no forced Jev latency tax on ever
 | Session/trust contracts            | `packages/contracts`, Rust protocol crate                     | Version cross-host observation/action envelopes only when needed; generate TS from Rust protocol types |
 | Decision contracts and composition | `packages/ai/agent-core`                                      | Reuse the new evaluator; add domain-specific builders and fallback composition after evidence          |
 | Model eligibility and economics    | `packages/ai/routing`, model registry                         | Resolve semantic signals against exact capability, provider, cost and user-selection rules             |
-| Jev transport                      | `@agiworkforce/provider-runtime/decisions`                    | Host-supplied configuration and tracing; credentials remain on an authorized host                      |
+| Jev transport                      | `packages/ai/provider-runtime/src/typesafe-decisions.ts`      | Host-supplied configuration and tracing; credentials remain on an authorized host                      |
 | Managed request hosting            | `apps/web` services and durable workflows                     | Authenticate, scope payloads, reserve spend, execute bounded work, persist progress and settle usage   |
 | Browser execution                  | Extension `agentLoop.ts` and `cdpDriver.ts`                   | Add bounded action selection using the existing observation, ownership and approval paths              |
 | Desktop execution                  | Electron dispatcher/permissions and Tauri registered commands | Keep distinct bridges; expose proven native capabilities through the correct shell                     |
@@ -219,8 +220,18 @@ when the real volume and cost evidence justify it.
 ## Current status
 
 Existing infrastructure includes shared routing/provider packages, platform execution,
-managed usage accounting, flags and durable workflows. The working tree additionally has
-a tested semantic evaluator, TypeSafe adapter, candidate helper and small live development
-evaluations. Production hosts do not yet use Jev, the action loop is not implemented, and
-product-wide improvement is unproven. This document specifies that integration work; it
-does not claim it is complete.
+managed usage accounting, flags and durable workflows, plus the tested semantic evaluator,
+TypeSafe adapter, candidate helper and small live development evaluations.
+
+The managed web host now binds those to its own configuration, trace and spend owners, which
+is phase 1, and carries the host half of phase 3: eligibility, metering, durable lifetime
+through Next `after()`, a per-decision cohort flag and a kill switch. One shadow consumer,
+`turn_signals`, exercises the whole path end to end against the deterministic task-family
+classifier. Every decision kind is disabled by default and every default is off, so no
+production request evaluates one; the exit evidence phase 3 asks for, representative
+disagreement and calibration data, has not been gathered because nothing is switched on.
+
+What is specified here and does not exist: the fleet-level rate budget (the evaluator's
+concurrency bound is per instance), the browser pilot of phase 2 and its bounded action loop,
+controlled activation, the additional domains, and native expansion. No route, latency or
+user-visible behaviour has changed, and no product-wide improvement is claimed.

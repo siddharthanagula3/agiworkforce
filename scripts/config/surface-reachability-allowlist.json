@@ -238,6 +238,10 @@
         {
           "pathPrefix": "apps/web/shared/components/agi/AgiChatDemo.tsx",
           "reason": "Retained as an anchor for the marketing model-catalog scan; the current landing surface renders the canonical HeroAppWindow preview instead."
+        },
+        {
+          "pathPrefix": "apps/web/features/support/",
+          "reason": "The deployment-gated support widget is intentionally not mounted in the Web v1 public root so its client graph stays out of public bundles; independently routed help, settings and operator support modules remain reachable from their own entry points."
         }
       ],
       "unreachableDebt": {

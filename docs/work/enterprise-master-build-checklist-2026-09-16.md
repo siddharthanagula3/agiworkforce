@@ -2699,8 +2699,8 @@ _§54: 8 of 13 done._
       <br>_`apps/web/app/device-auth`, `apps/web/app/api/auth/device`, `apps/web/lib/server/device-signin-policy.ts`_
       <br>⛔ Deploy risk: apps/web/app/api/auth/device/token/route.ts:143-145 inserts device_refresh_tokens.organization_id from 0187 (header line 3: NOT YET APPLIED); token redemption fails if unapplied
 - [x] Desktop callbacks
-      <br>_`apps/web/app/api/auth/desktop-token/route.ts`_
-      <br>⛔ Deploy risk: apps/desktop/src/services/desktopNativeSignIn.ts:95 desktop sign-in redeems via /api/auth/device/token, whose insert needs 0187 organization_id column (NOT YET APPLIED)
+      <br>_`apps/desktop/src/services/desktopNativeSignIn.ts` redeems through `apps/web/app/api/auth/device/token/route.ts`; the former desktop-token callback was removed on 2026-09-23._
+      <br>Current migration state and drift are tracked in `ACTIVE_ISSUES.md`; the historical claim that migration 0187 was unapplied is no longer current.
 - [x] Mobile callbacks _(revised)_ ⛔ **not live**
       <br>_apps/mobile/app/(auth)/login.tsx:6-7 uses Clerk native AuthView (@clerk/expo/native), which completes OAuth/SSO callbacks in-app; apps/mobile/app/_layout.tsx:640-654 routes auth deep links (reset-password)._
       <br>⛔ Release check: The mobile app has never been released (release-mobile.yml never run; no App Store or Google Play listing).

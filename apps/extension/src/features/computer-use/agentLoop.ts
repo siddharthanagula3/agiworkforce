@@ -14,6 +14,7 @@ import {
   type AgentMessage,
   type ToolCall,
 } from './cloudAgentClient';
+import { DOM_SUMMARY_HEADING, pruneObservationHistory } from './historyBudget';
 import {
   formatConsoleEntries,
   readConsoleEntries,
@@ -431,7 +432,7 @@ async function executeTool(
       return {
         result:
           `Searching for: ${String(description)}\n\n` +
-          `Current page DOM summary (use this to find the element):\n${domContent}`,
+          `${DOM_SUMMARY_HEADING} (use this to find the element):\n${domContent}`,
         verification: {
           check: 'the page returned a dom summary to search',
           passed: domContent.length > 0,
@@ -505,7 +506,7 @@ export async function runAgentLoop(
           type: 'text',
           text:
             `Goal: ${goal}\n\n` +
-            `Current page DOM summary:\n${initialDom}\n\n` +
+            `${DOM_SUMMARY_HEADING}:\n${initialDom}\n\n` +
             'I have also attached a screenshot of the current page state.',
         },
         {
@@ -524,8 +525,10 @@ export async function runAgentLoop(
       stepNumber++;
 
       const token = await resolveCredential(options);
+      // Observations older than the newest few are resent verbatim otherwise,
+      // so a 20-step run pays for every screenshot it ever took on every step.
       const { message, isDone, tokensUsed } = await callCloud(
-        history,
+        pruneObservationHistory(history),
         token,
         gatewayBase,
         options.signal,

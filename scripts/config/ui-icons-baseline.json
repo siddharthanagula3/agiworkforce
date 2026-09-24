@@ -3,39 +3,39 @@
   "sources": ["lucide-react", "@agiworkforce/icons"],
   "entries": [
     {
-      "key": "apps/web/app/gallery/GalleryClient.tsx:194:🌐",
+      "key": "apps/web/app/gallery/GalleryClient.tsx:195:🌐",
       "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
     },
     {
-      "key": "apps/web/app/gallery/GalleryClient.tsx:200:📄",
+      "key": "apps/web/app/gallery/GalleryClient.tsx:201:📄",
       "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
     },
     {
-      "key": "apps/web/app/gallery/GalleryClient.tsx:206:🎮",
+      "key": "apps/web/app/gallery/GalleryClient.tsx:207:🎮",
       "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
     },
     {
-      "key": "apps/web/app/gallery/GalleryClient.tsx:212:⚡",
+      "key": "apps/web/app/gallery/GalleryClient.tsx:213:⚡",
       "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
     },
     {
-      "key": "apps/web/app/gallery/GalleryClient.tsx:218:✨",
+      "key": "apps/web/app/gallery/GalleryClient.tsx:219:✨",
       "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
     },
     {
-      "key": "apps/web/app/gallery/GalleryClient.tsx:224:📝",
+      "key": "apps/web/app/gallery/GalleryClient.tsx:225:📝",
       "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
     },
     {
-      "key": "apps/web/app/gallery/GalleryClient.tsx:230:🔲",
+      "key": "apps/web/app/gallery/GalleryClient.tsx:231:🔲",
       "reason": "the artifact category icons are emoji literals in a data table rather than icon components; apps/web/app is outside this lane"
     },
     {
-      "key": "apps/web/app/providers/page.tsx:115:✓",
+      "key": "apps/web/app/providers/page.tsx:100:✓",
       "reason": "inside a terminal transcript shown as a code sample, not a control: the glyph is the literal output being quoted"
     },
     {
-      "key": "apps/web/app/providers/page.tsx:120:✗",
+      "key": "apps/web/app/providers/page.tsx:105:✗",
       "reason": "inside a terminal transcript shown as a code sample, not a control: the glyph is the literal output being quoted"
     }
   ],

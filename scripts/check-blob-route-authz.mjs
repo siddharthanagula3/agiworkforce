@@ -61,6 +61,7 @@ const AUTHORIZATION_CALLS = [
   'assertAccountActive',
   'createClaimedUserScopedDb',
   'requireOrganizationAdmin',
+  'runAuthGate',
 ];
 
 const CRON_AUTHORIZATION_CALLS = ['verifyCronRequest'];
@@ -88,7 +89,7 @@ function stripComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
-const IMPORT_PATTERN = /import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'([^']+)'/g;
+const IMPORT_PATTERN = /import\s+(type\s+)?\{([^}]*)\}\s*from\s*'([^']+)'/g;
 
 function importedNames(clause) {
   return clause
@@ -108,9 +109,10 @@ function importedNames(clause) {
 function blobImports(file, source, seen = new Set()) {
   const named = [];
   for (const match of source.matchAll(IMPORT_PATTERN)) {
-    const specifier = match[2];
+    if (match[1]) continue;
+    const specifier = match[3];
     if (STORAGE_MODULES.includes(specifier)) {
-      for (const name of importedNames(match[1])) {
+      for (const name of importedNames(match[2])) {
         if (!METADATA_ONLY_IMPORTS.has(name)) named.push(name);
       }
       continue;
@@ -123,7 +125,7 @@ function blobImports(file, source, seen = new Set()) {
       if (seen.has(candidate) || !fs.existsSync(absolute)) continue;
       seen.add(candidate);
       const source2 = stripComments(fs.readFileSync(absolute, 'utf8'));
-      if (blobImports(candidate, source2, seen).length > 0) named.push(...importedNames(match[1]));
+      if (blobImports(candidate, source2, seen).length > 0) named.push(...importedNames(match[2]));
       break;
     }
   }

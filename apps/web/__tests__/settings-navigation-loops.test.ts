@@ -200,11 +200,11 @@ describe('CRIT-008 settings modal entry points', () => {
   });
 
   it('keeps the CommandPalette exception honest: it is outside the settings provider', () => {
-    const providers = readFileSync(join(WEB_DIR, 'app', 'providers.tsx'), 'utf8');
+    const providers = readFileSync(join(WEB_DIR, 'app', 'ProductRuntimeProviders.tsx'), 'utf8');
     const runtime = readFileSync(join(WEB_DIR, 'app', 'AppRuntimeMounts.tsx'), 'utf8');
     expect(runtime).toMatch(/<CommandPaletteProvider\s*\/>/u);
     expect(providers).toMatch(
-      /<AppRuntimeMounts\s*\/>\}\s*<SettingsModalProvider>\{children\}<\/SettingsModalProvider>/u,
+      /<AppRuntimeMounts\s*\/>\s*<SettingsModalProvider>\{children\}<\/SettingsModalProvider>/u,
     );
   });
 

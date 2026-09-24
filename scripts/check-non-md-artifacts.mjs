@@ -115,6 +115,8 @@ const allowedLiveNonMarkdownFiles = new Set([
   'audit/ui-gaps.csv',
   'audit/theme-only-text-colours.json',
   'audit/raw-error-to-user.json',
+  'docs/compliance/policy-versions.json',
+  'docs/compliance/trust-claims.json',
   'docs/security/security-claims.json',
   'docs/product/surface-feature-matrix.json',
 ]);

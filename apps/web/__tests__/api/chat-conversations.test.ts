@@ -44,6 +44,11 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
+vi.mock('@/lib/server/model-catalogue', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/model-catalogue')>()),
+  isConfiguredManagedModelRoute: vi.fn(() => true),
+}));
+
 import { GET, POST } from '@/app/api/chat/conversations/route';
 
 describe('Chat Conversations API', () => {
@@ -300,6 +305,56 @@ describe('Chat Conversations API', () => {
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_conversations'),
           expect.arrayContaining([CHAT_MODEL]),
+        );
+      });
+
+      it('refuses a provider pin until its additive migration is present', async () => {
+        mockQuery.mockResolvedValueOnce([{ supported: false }]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model: CHAT_MODEL, selectedRouteId: 'provider/route' }),
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(503);
+        await expect(response.json()).resolves.toMatchObject({
+          error: { code: 'route_pin_not_ready' },
+        });
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('information_schema.columns'),
+        );
+      });
+
+      it('persists a provider pin after its additive migration is present', async () => {
+        const newConv = {
+          id: 'new-conv',
+          title: 'New conversation',
+          model: CHAT_MODEL,
+          selected_route_id: 'provider/route',
+        };
+        mockQuery.mockResolvedValueOnce([{ supported: true }]).mockResolvedValueOnce([newConv]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ model: CHAT_MODEL, selectedRouteId: 'provider/route' }),
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(201);
+        expect(mockQuery).toHaveBeenNthCalledWith(
+          2,
+          expect.stringContaining('selected_route_id'),
+          expect.arrayContaining(['provider/route']),
         );
       });
 

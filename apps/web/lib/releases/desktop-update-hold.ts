@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
 import type { NextRequest } from 'next/server';
 
 import { readKillSwitchGate } from '@/lib/feature-flags/capability-gate';
@@ -11,6 +12,8 @@ import { DESKTOP_UPDATE_CAPABILITY } from '@/lib/feature-flags/kill-switches';
 
 const UPDATE_FEED_SUBJECT_ID = 'anonymous';
 const DESKTOP_SURFACE = 'desktop';
+
+export const DESKTOP_UPDATE_VARY_HEADER = CLIENT_VERSION_HEADER;
 
 /**
  * Whether an operator is holding desktop updates back from the build asking.

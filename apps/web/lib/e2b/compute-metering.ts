@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import {
   FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD,
   getProviderComputePricing,
+  isFreeBillingPlanTier,
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -189,7 +190,7 @@ export async function reserveSandboxComputeInterval(
   const estimatedCostMicrousd = Math.ceil(ttlSeconds * Math.max(0, input.microusdPerSecond));
   const model = input.templateId?.trim() || E2B_COMPUTE_PROVIDER_ID;
   try {
-    if (input.planTier === 'free') {
+    if (isFreeBillingPlanTier(input.planTier)) {
       const store = getKeyValueStore();
       if (!store) {
         throw new ManagedUsageRequestError(

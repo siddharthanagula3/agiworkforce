@@ -69,6 +69,10 @@
     ],
     "edges": [
       {
+        "from": "@agiworkforce/agent-core",
+        "to": "@agiworkforce/types"
+      },
+      {
         "from": "@agiworkforce/artifacts",
         "to": "@agiworkforce/cloud-contracts"
       },
@@ -683,6 +687,10 @@
       {
         "from": "@agiworkforce/utils",
         "to": "@agiworkforce/types"
+      },
+      {
+        "from": "@agiworkforce/web",
+        "to": "@agiworkforce/agent-core"
       },
       {
         "from": "@agiworkforce/web",

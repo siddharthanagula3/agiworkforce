@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { buildLocalToByokHandoffDraft } from '@agiworkforce/utils';
+import { createDecisionEvaluator, type DecisionPolicy } from '@agiworkforce/agent-core';
+import { evaluateDecisionEligibility } from '@/lib/services/semantic-decisions/eligibility';
+import { DECISION_KIND_IDS } from '@/lib/services/semantic-decisions/kinds';
 import {
   LocalInferenceRefused,
   isLocalModelId,
@@ -219,6 +222,82 @@ describe('local models on the desktop shell', () => {
       { role: 'assistant', content: 'answered in the cloud' },
       { role: 'assistant', content: 'answered here' },
     ]);
+  });
+});
+
+describe('semantic decisions stay inside managed cloud', () => {
+  const policy: DecisionPolicy = {
+    mode: 'enabled',
+    model: 'pinned-version',
+    timeoutMs: 1_000,
+    maxRequestBytes: 10_000,
+    maxQuestions: 8,
+    maxConcurrent: 1,
+    sampleRate: 1,
+  };
+  const request = {
+    state: 'a request that would otherwise be evaluated',
+    questions: { needed: { kind: 'boolean' as const, instruction: 'Needed?' } },
+  };
+
+  it.each(['local', 'byok'] as const)(
+    'CRITICAL: a %s session is refused by the host before the transport exists',
+    (privacyMode) => {
+      expect(
+        evaluateDecisionEligibility({
+          privacyMode,
+          workspaceId: 'workspace-1',
+          zeroDataRetentionOnly: false,
+          workspaceModelPolicy: null,
+          residencyRegion: null,
+        }),
+      ).toEqual({ eligible: false, reason: 'trust_mode' });
+    },
+  );
+
+  it.each(['local', 'byok'] as const)(
+    'CRITICAL: a %s session never reaches the decision provider even if the host let it through',
+    async (trustMode) => {
+      const evaluate = vi.fn();
+      const run = createDecisionEvaluator({
+        kind: 'turn_signals',
+        provider: { evaluate },
+        policy: () => policy,
+      });
+
+      const outcome = await run(request, { trustMode, providerAllowed: true, cohort: 0 });
+
+      expect(outcome).toMatchObject({ status: 'fallback', reason: 'policy' });
+      expect(evaluate).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['local', 'byok'] as const)(
+    'CRITICAL: no decision kind evaluates for a %s session',
+    async (trustMode) => {
+      const evaluate = vi.fn();
+      for (const kind of DECISION_KIND_IDS) {
+        const run = createDecisionEvaluator({ kind, provider: { evaluate }, policy: () => policy });
+
+        expect(await run(request, { trustMode, providerAllowed: true, cohort: 0 })).toMatchObject({
+          status: 'fallback',
+          reason: 'policy',
+        });
+      }
+      expect(evaluate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('CRITICAL: managed cloud alone is not permission; the workspace must admit it too', () => {
+    expect(
+      evaluateDecisionEligibility({
+        privacyMode: 'managed',
+        workspaceId: 'workspace-1',
+        zeroDataRetentionOnly: true,
+        workspaceModelPolicy: null,
+        residencyRegion: null,
+      }),
+    ).toEqual({ eligible: false, reason: 'zero_data_retention' });
   });
 });
 

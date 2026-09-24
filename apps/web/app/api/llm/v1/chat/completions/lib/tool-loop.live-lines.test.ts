@@ -162,7 +162,7 @@ describe('runToolLoop, provider lines reach the client while the step is still r
     expect(output.indexOf('"content":"first"')).toBeLessThan(output.indexOf('"content":"second"'));
   });
 
-  it('surfaces the stream error instead of failing over once a thinking delta has shipped', async () => {
+  it('fails over without leaking a leading thinking trace that was held from the client', async () => {
     const provider = openStream();
     mockBuildToolLoopStream
       .mockResolvedValueOnce(provider.stream)
@@ -176,9 +176,14 @@ describe('runToolLoop, provider lines reach the client while the step is still r
     provider.fail(new Error('provider dropped the connection'));
     await reader.done;
 
-    expect(failover.next).not.toHaveBeenCalled();
-    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
-    expect(reader.seen()).toContain('x_stream_error');
+    expect(failover.next).toHaveBeenCalledWith(expect.any(Error), {
+      step: 1,
+      sameRouteRetrySafe: true,
+    });
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    expect(reader.seen()).toContain('"content":"rescued"');
+    expect(reader.seen()).not.toContain('weighing the options');
+    expect(reader.seen()).not.toContain('x_stream_error');
   });
 
   it('emits a canonical reasoning-delta agent event for text inside a thinking block', async () => {
@@ -212,7 +217,7 @@ describe('runToolLoop, provider lines reach the client while the step is still r
     expect(output).toContain('"content":"the answer"');
   });
 
-  it('does not fail over once a citation line has shipped', async () => {
+  it('fails over without leaking a leading citation that was held from the client', async () => {
     const provider = openStream();
     mockBuildToolLoopStream
       .mockResolvedValueOnce(provider.stream)
@@ -227,9 +232,14 @@ describe('runToolLoop, provider lines reach the client while the step is still r
     provider.fail(new Error('provider dropped the connection'));
     await reader.done;
 
-    expect(failover.next).not.toHaveBeenCalled();
-    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
-    expect(reader.seen()).toContain('x_stream_error');
+    expect(failover.next).toHaveBeenCalledWith(expect.any(Error), {
+      step: 1,
+      sameRouteRetrySafe: true,
+    });
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    expect(reader.seen()).toContain('"content":"rescued"');
+    expect(reader.seen()).not.toContain('https://example.com');
+    expect(reader.seen()).not.toContain('x_stream_error');
   });
 
   it('still fails over when the stream dies before any line reaches the client', async () => {
@@ -244,7 +254,10 @@ describe('runToolLoop, provider lines reach the client while the step is still r
     provider.fail(new Error('provider dropped the connection'));
     await reader.done;
 
-    expect(failover.next).toHaveBeenCalledWith(expect.any(Error), { step: 1 });
+    expect(failover.next).toHaveBeenCalledWith(expect.any(Error), {
+      step: 1,
+      sameRouteRetrySafe: true,
+    });
     expect(reader.seen()).toContain('"content":"rescued"');
     expect(reader.seen()).not.toContain('x_stream_error');
   });

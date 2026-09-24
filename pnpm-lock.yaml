@@ -111,9 +111,6 @@ importers:
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.5
-      '@typesafe-ai/sdk':
-        specifier: 0.6.0
-        version: 0.6.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.57.2
         version: 8.70.0(@typescript-eslint/parser@8.70.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
@@ -1006,6 +1003,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@agiworkforce/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/ai/agent-core
       '@agiworkforce/apply-patch':
         specifier: workspace:*
         version: link:../../packages/tools/apply-patch
@@ -1461,6 +1461,10 @@ importers:
   infrastructure/sandbox: {}
 
   packages/ai/agent-core:
+    dependencies:
+      '@agiworkforce/types':
+        specifier: workspace:*
+        version: link:../../contracts/types
     devDependencies:
       vitest:
         specifier: ^4.1.11

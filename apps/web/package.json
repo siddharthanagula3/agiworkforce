@@ -22,6 +22,7 @@
     "verify:object-storage": "tsx scripts/verify-object-storage.ts"
   },
   "dependencies": {
+    "@agiworkforce/agent-core": "workspace:*",
     "@agiworkforce/apply-patch": "workspace:*",
     "@agiworkforce/artifacts": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",

@@ -414,9 +414,9 @@ pub fn handle_key(
 mod tests {
     use super::*;
     use crate::agents::AgentDefinition;
-    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
+    use ratatui::Terminal;
     use std::path::PathBuf;
 
     fn make_agent(name: &str, description: &str) -> AgentDefinition {
