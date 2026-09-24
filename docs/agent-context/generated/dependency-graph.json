@@ -314,6 +314,10 @@
       },
       {
         "from": "@agiworkforce/provider-runtime",
+        "to": "@agiworkforce/agent-core"
+      },
+      {
+        "from": "@agiworkforce/provider-runtime",
         "to": "@agiworkforce/types"
       },
       {
