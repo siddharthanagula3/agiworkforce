@@ -13,15 +13,15 @@ import { RouteFlow } from '@/features/marketing/components/RouteFlow';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { ApprovalWindow, DiffWindow } from '@/features/marketing/components/ShowcaseScenes';
 import {
-  CapabilityGrid,
-  DevBand,
-  FlagshipHero,
+  LandingCapabilityGrid,
+  LandingDevBand,
+  LandingHero,
+  LandingSurfaceIndex,
+  LandingSurfaceTicker,
+  LandingTrustTriptych,
   LatestBlock,
   ProofRow,
   StartCards,
-  SurfaceIndex,
-  SurfaceTicker,
-  TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
 import { RELEASES } from '@/lib/changelog-entries';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
@@ -46,13 +46,16 @@ export function MarketingLanding() {
     <div data-design="agi">
       <Header />
       <main id="main-content" tabIndex={-1} className="agi-shell">
-        <FlagshipHero
+        <LandingHero
           brand="AGI"
           eyebrow="the AI application suite"
+          titleLines={[]}
+          em=""
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Try AGI Web' },
             { href: '/download', label: 'Get AGI Desktop' },
           ]}
+          modeRibbon={[]}
           visual={<MobileHeroVisual />}
           announcement={{
             tag: 'New',
@@ -61,7 +64,7 @@ export function MarketingLanding() {
           }}
         />
 
-        <SurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
+        <LandingSurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
 
         <ProofRow
           label="Product facts"
@@ -85,7 +88,7 @@ export function MarketingLanding() {
           lede="Ask for a model by name and that model answers. Leave it on Auto and the router reads the intent of each request, takes the cheapest route that fits it, and prints the label under the answer. Run it local, on your keys, or in AGI Cloud."
         />
 
-        <SurfaceIndex
+        <LandingSurfaceIndex
           eyebrow="The suite"
           title="Six surfaces."
           lede="Start anywhere. Your projects and artifacts follow. The rule never changes: you see where work runs."
@@ -195,7 +198,7 @@ export function MarketingLanding() {
           ]}
         />
 
-        <TrustTriptych
+        <LandingTrustTriptych
           eyebrow="Trust modes"
           title="Choose the route before work leaves your device."
           lede="Three routes, separate by design. A Local thread stays Local. Moving work anywhere else takes a label and your consent."
@@ -242,7 +245,7 @@ export function MarketingLanding() {
           ]}
         />
 
-        <CapabilityGrid
+        <LandingCapabilityGrid
           eyebrow="Capabilities"
           title="An application suite, not a one-screen chatbot."
           items={[
@@ -285,7 +288,7 @@ export function MarketingLanding() {
           ]}
         />
 
-        <DevBand
+        <LandingDevBand
           eyebrow="For developers"
           title="Serious about the terminal."
           body="AGI Code spans the CLI and VS Code. Sessions resume and fork. Execution is sandboxed. It all runs offline on local models."
@@ -301,7 +304,7 @@ export function MarketingLanding() {
           }
         />
 
-        <DevBand
+        <LandingDevBand
           eyebrow="Approvals"
           title="Choose when AGI asks."
           body="In the CLI, choose whether file edits and shell commands need your approval. Modes that accept edits or run automatically can skip individual prompts. Use Shift+Tab to change modes."

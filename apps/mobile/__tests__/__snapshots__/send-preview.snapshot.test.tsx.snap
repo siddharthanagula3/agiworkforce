@@ -65,7 +65,7 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
         style={
           {
             "color": "rgba(244, 244, 244, 0.74)",
-            "fontSize": 9,
+            "fontSize": 11,
             "fontWeight": "700",
             "letterSpacing": 0.5,
             "textTransform": "uppercase",
@@ -155,7 +155,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
         style={
           {
             "color": "rgba(244, 244, 244, 0.74)",
-            "fontSize": 9,
+            "fontSize": 11,
             "fontWeight": "700",
             "letterSpacing": 0.5,
             "textTransform": "uppercase",
@@ -237,7 +237,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
       style={
         {
           "color": "rgba(244, 244, 244, 0.56)",
-          "fontSize": 9,
+          "fontSize": 11,
           "fontWeight": "700",
           "letterSpacing": 0.5,
           "textTransform": "uppercase",
@@ -315,7 +315,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
         style={
           {
             "color": "rgba(244, 244, 244, 0.74)",
-            "fontSize": 9,
+            "fontSize": 11,
             "fontWeight": "700",
             "letterSpacing": 0.5,
             "textTransform": "uppercase",

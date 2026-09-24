@@ -176,6 +176,15 @@ export {
   UNTRUSTED_MEMORY_CONTEXT_RULES,
 } from './fence';
 
+export {
+  DEFAULT_IMAGE_ORIENTATION,
+  IMAGE_METADATA_FORMATS,
+  detectImageFormat,
+  readExifOrientation,
+  stripImageMetadata,
+} from './imageMetadata';
+export type { ImageMetadataFormat, ImageMetadataResult } from './imageMetadata';
+
 export { formatThinkingDuration, deriveReasoningPhrase } from './reasoning';
 
 export { normalizeDisplayName, resolveAccountDisplayName, accountInitial } from './displayName';

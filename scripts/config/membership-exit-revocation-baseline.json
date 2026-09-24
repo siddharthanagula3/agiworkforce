@@ -1,0 +1,8 @@
+{
+  "unrevoked": {
+    "apps/web/lib/server/scim/scim-provisioning-service.ts::reconcileMembership <- apps/web/lib/server/scim/scim-sign-in-linking.ts::linkPendingScimUsersAtSignIn": {
+      "kind": "cannot-end",
+      "reason": "linkPendingScimUsersAtSignIn passes only rows it locked with active = true, and reconcileMembership deletes a membership only for a row that is not active, so this caller can grant and never end one."
+    }
+  }
+}

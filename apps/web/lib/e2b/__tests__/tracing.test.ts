@@ -1,10 +1,50 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { outboundTraceparent } from '@/lib/observability/trace-propagation';
 import { runWithTraceContext } from '@/lib/observability/trace-context';
 
+const spans: Array<Record<string, unknown>> = [];
+
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  logger: {
+    info: (record: Record<string, unknown>) => spans.push(record),
+    error: (record: Record<string, unknown>) => spans.push(record),
+    warn: (record: Record<string, unknown>) => spans.push(record),
+    debug: (record: Record<string, unknown>) => spans.push(record),
+  },
+}));
+
 import { traceSandboxExecutor } from '../tracing';
-import type { E2BExecutor, ExecutionResult } from '../types';
+import type {
+  CommandExecutionResult,
+  E2BExecutor,
+  E2BGitExecutor,
+  ExecutionResult,
+} from '../types';
+
+const GIT_OPERATIONS = [
+  'clone',
+  'createBranch',
+  'add',
+  'currentBranch',
+  'status',
+  'diff',
+  'commit',
+  'push',
+] as const;
+
+const COMMAND_OK: CommandExecutionResult = {
+  ok: true,
+  output: 'done',
+  stdout: 'done',
+  stderr: '',
+  exitCode: 0,
+};
+
+beforeEach(() => {
+  spans.length = 0;
+});
 
 const CONTEXT = {
   traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
@@ -94,5 +134,55 @@ describe('traceSandboxExecutor', () => {
     await traced.git?.status({ path: '/tmp' });
 
     expect(status).toHaveBeenCalledWith({ path: '/tmp' });
+  });
+
+  it('opens a span for every operation a sandbox offers, git included', async () => {
+    const emitted: string[] = [];
+    const git = Object.fromEntries(
+      GIT_OPERATIONS.map((name) => [name, vi.fn(async () => COMMAND_OK)]),
+    ) as unknown as E2BGitExecutor;
+    const executor = executorStub({
+      runCommand: vi.fn(async () => COMMAND_OK),
+      listFiles: vi.fn(async () => []),
+      readFileBytes: vi.fn(async () => new Uint8Array()),
+      pause: vi.fn(async () => {}),
+      git,
+    });
+    const traced = traceSandboxExecutor(executor, SCOPE);
+    const untraced: string[] = [];
+
+    // The names are not predicted: an operation is traced when calling it opens
+    // exactly one sandbox span, whatever that span ended up being called.
+    const drive = async (name: string, call: () => Promise<unknown>): Promise<void> => {
+      spans.length = 0;
+      await call();
+      emitted.push(name);
+      const opened = spans.filter((span) => String(span['span_name'] ?? '').startsWith('sandbox.'));
+      if (opened.length !== 1) untraced.push(`${name} opened ${opened.length} spans`);
+    };
+
+    for (const [name, member] of Object.entries(traced)) {
+      if (typeof member !== 'function') continue;
+      await drive(name, () =>
+        (member as (input: unknown) => Promise<unknown>)({
+          path: '/tmp',
+          code: '',
+          command: 'ls',
+          content: '',
+          language: 'python',
+        }),
+      );
+    }
+    for (const name of GIT_OPERATIONS) {
+      const member = (traced.git as unknown as Record<string, () => Promise<unknown>>)[name];
+      if (!member) {
+        untraced.push(`git.${name} is missing from the traced executor`);
+        continue;
+      }
+      await drive(`git.${name}`, () => member());
+    }
+
+    expect(untraced).toEqual([]);
+    expect(emitted.length).toBe(Object.keys(executor).length - 1 + GIT_OPERATIONS.length);
   });
 });

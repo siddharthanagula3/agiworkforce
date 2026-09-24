@@ -1,5 +1,6 @@
 /**
- * The theme bootstrap, inlined into <head> so it runs BEFORE first paint.
+ * The theme bootstrap, inlined as the first child of <body> so it runs before
+ * page content is parsed and before first paint.
  *
  * It must not be fetched. Loading it as an external file, which is what
  * `next/script src="/theme-init.js"` did, costs a network round-trip the
@@ -8,9 +9,11 @@
  * than merely likely.
  *
  * It also must not go through `next/script` at all. `strategy="beforeInteractive"`
- * hoists the tag into <head> during SSR, where it landed on top of the JSON-LD
+ * hoists the tag into <head> during SSR, where it collided with the JSON-LD
  * block already rendered there; React then reconciled the two <script> elements
- * against each other and the whole tree failed hydration.
+ * against each other and the whole tree failed hydration. The root layout
+ * deliberately leaves <head> to the App Router and places this inline script
+ * first in <body>.
  *
  * `public/theme-init.js` stays the published artifact, /cookies cites that path
  * as the source of the only pre-consent storage read, and the behaviour tests

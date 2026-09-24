@@ -241,7 +241,7 @@ export function VoiceModeSurface({
       <div
         className={cn(
           'flex items-center justify-center',
-          focusMode && 'pointer-events-none fixed inset-0 z-[var(--z-overlay,200)]',
+          focusMode && 'pointer-events-none fixed inset-0 z-[var(--z-overlay)]',
         )}
       >
         {orb}

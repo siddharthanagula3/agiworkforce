@@ -7,8 +7,14 @@ import {
   R2_SECRET_ACCESS_KEY_ENV,
 } from '@agiworkforce/object-storage/config';
 
+import webSearchProviders from '@/lib/web-search/web-search-providers.json';
+
 import type { FeatureRequirement } from './optional-features';
 import type { EnvironmentSource } from './runtime-environment';
+
+const WEB_SEARCH_KEY_ENVS: readonly string[] = (
+  webSearchProviders as { providers: { apiKeyEnv: string }[] }
+).providers.map((provider) => provider.apiKeyEnv);
 
 export const PROBE_SURFACES = [
   'api/health',
@@ -93,10 +99,7 @@ export const PRODUCTION_DEPENDENCIES: readonly ProductionDependency[] = [
       any('UPSTASH_REDIS_REST_TOKEN', 'KV_REST_API_TOKEN'),
     ],
     criticality: 'core',
-    liveProbe: null,
-    liveProbeGap:
-      'the health probe writes its own failure streak to Redis, so a Redis outage is visible ' +
-      'in that route but is not reported as a named check by api/health',
+    liveProbe: 'api/health',
     region: 'multi-region',
     dataClass: 'customer-metadata',
     availability: 'the vendor plan is the only commitment; the product claims none of its own',
@@ -265,10 +268,7 @@ export const PRODUCTION_DEPENDENCIES: readonly ProductionDependency[] = [
     owner: 'context-engine',
     requires: [],
     criticality: 'core',
-    liveProbe: null,
-    liveProbeGap:
-      'it resolves context in process against the database it is handed, so it has no ' +
-      'configuration and no endpoint of its own to probe',
+    liveProbe: 'api/health',
     region: 'home-region',
     dataClass: 'customer-content',
     availability: 'in process; it is as available as the deployment itself',
@@ -278,6 +278,124 @@ export const PRODUCTION_DEPENDENCIES: readonly ProductionDependency[] = [
     failureBehaviour: 'it throws into the turn that asked, which is answered as a failed turn',
     lifecycle: 'in-use',
     replacement: 'it is a workspace package with no vendor behind it',
+  },
+  {
+    id: 'web_search',
+    label: 'Web search provider',
+    owner: null,
+    requires: [any(...WEB_SEARCH_KEY_ENVS)],
+    criticality: 'degradable',
+    liveProbe: null,
+    liveProbeGap: 'every query is billed, so a standing probe would be a standing charge',
+    region: 'multi-region',
+    dataClass: 'customer-content',
+    availability: 'the vendor plan is the only commitment; the product claims none of its own',
+    timeoutMs: 30_000,
+    retry: 'shared-policy',
+    circuitBreaker: false,
+    failureBehaviour:
+      'the search tool answers unavailable and the turn is told to answer without it',
+    lifecycle: 'in-use',
+    replacement:
+      'providers are declared in web-search-providers.json with their host and key, so a second one is an entry',
+  },
+  {
+    id: 'push_delivery',
+    label: 'Device push delivery',
+    owner: null,
+    requires: [
+      all('WEB_PUSH_VAPID_PUBLIC_KEY', 'WEB_PUSH_VAPID_PRIVATE_KEY', 'WEB_PUSH_VAPID_SUBJECT'),
+    ],
+    criticality: 'optional',
+    liveProbe: null,
+    liveProbeGap:
+      'the endpoint belongs to each subscriber browser or to Expo; there is nothing common to probe',
+    region: 'multi-region',
+    dataClass: 'customer-metadata',
+    availability: 'best effort; the device vendor makes no commitment to this deployment',
+    timeoutMs: 20_000,
+    retry: 'shared-policy',
+    circuitBreaker: false,
+    failureBehaviour:
+      'the notification stays in the in-app inbox and the email channel still sends',
+    lifecycle: 'in-use',
+    replacement:
+      'delivery goes through one push service per channel, so a transport is a swap there',
+  },
+  {
+    id: 'signaling',
+    label: 'Device pairing service',
+    owner: null,
+    requires: [all('SIGNALING_HTTP_URL', 'SIGNALING_INTERNAL_SECRET')],
+    criticality: 'optional',
+    liveProbe: null,
+    liveProbeGap: 'reachability is only known from a pairing attempt, which mints a device session',
+    region: 'multi-region',
+    dataClass: 'customer-metadata',
+    availability: 'a first-party service promoted on its own; it is not the web deployment',
+    timeoutMs: 10_000,
+    retry: 'none',
+    circuitBreaker: false,
+    failureBehaviour:
+      'a remote or browser action is refused at admission rather than held for a device that cannot be reached',
+    lifecycle: 'in-use',
+    replacement: 'the pairing service is reached over one http boundary with its own secret',
+  },
+  {
+    id: 'paired_browser',
+    label: 'Paired browser',
+    owner: null,
+    requires: [],
+    criticality: 'optional',
+    liveProbe: null,
+    liveProbeGap: 'it runs on the reader device, not in the deployment, so it has no server probe',
+    region: 'operator-device',
+    dataClass: 'customer-content',
+    availability: 'whatever the reader device and its extension offer; nothing is promised for it',
+    timeoutMs: null,
+    retry: 'none',
+    circuitBreaker: false,
+    failureBehaviour: 'a browser action is refused and says the browser was not reachable',
+    lifecycle: 'in-use',
+    replacement: 'the browser is driven through the device step boundary rather than a vendor api',
+  },
+  {
+    id: 'connector_providers',
+    label: 'Connector providers',
+    owner: null,
+    requires: [all('CONNECTOR_OAUTH_PROVIDERS_JSON')],
+    criticality: 'optional',
+    liveProbe: null,
+    liveProbeGap:
+      'each provider is a different third party reached with one reader grant; there is no common endpoint',
+    region: 'multi-region',
+    dataClass: 'customer-content',
+    availability: 'per provider; a connector is treated as able to fail or revoke at any time',
+    timeoutMs: 30_000,
+    retry: 'shared-policy',
+    circuitBreaker: false,
+    failureBehaviour:
+      'the connector tool refuses, the grant is dropped when it was revoked and the reader is told to reconnect',
+    lifecycle: 'in-use',
+    replacement: 'providers are entries in the connector oauth registry rather than code paths',
+  },
+  {
+    id: 'marketing_analytics',
+    label: 'Marketing analytics script',
+    owner: null,
+    requires: [all('NEXT_PUBLIC_GA_TRACKING_ID')],
+    criticality: 'optional',
+    liveProbe: null,
+    liveProbeGap: 'the browser loads it directly on the public pages; the server never calls it',
+    region: 'multi-region',
+    dataClass: 'operational',
+    availability: 'best effort; nothing a reader does waits on it',
+    timeoutMs: null,
+    retry: 'none',
+    circuitBreaker: false,
+    failureBehaviour: 'the public pages render without it and nothing signed in is affected',
+    lifecycle: 'in-use',
+    replacement: 'absent property id means no script; product analytics is first party in Postgres',
   },
   {
     id: 'transactional_email',
@@ -325,4 +443,53 @@ export function unreadyCoreDependencies(
   return resolveDependencyReadiness(env).filter(
     (state) => !state.ready && state.dependency.criticality === 'core',
   );
+}
+
+export interface DependencyCategory {
+  readonly category: string;
+  /** the registry ids that answer for this category, in registry spelling */
+  readonly dependencies: readonly string[];
+  /** required when the list is empty: why this product depends on nothing here */
+  readonly absent?: string;
+}
+
+/**
+ * The kinds of third party a deployment of this product can rest on. A kind
+ * with nothing behind it is an answered question rather than an omission, so a
+ * reader can tell "we do not use one" from "nobody wrote it down".
+ */
+export const DEPENDENCY_CATEGORIES: readonly DependencyCategory[] = [
+  { category: 'model_providers', dependencies: ['model_providers', 'local_llm'] },
+  { category: 'auth', dependencies: ['identity'] },
+  { category: 'database', dependencies: ['database'] },
+  { category: 'cache', dependencies: ['key_value'] },
+  { category: 'storage', dependencies: ['object_storage', 'artifacts'] },
+  { category: 'search', dependencies: ['web_search', 'context_engine'] },
+  { category: 'vector', dependencies: ['database', 'context_engine'] },
+  { category: 'billing', dependencies: ['billing'] },
+  { category: 'email', dependencies: ['transactional_email'] },
+  { category: 'push', dependencies: ['push_delivery'] },
+  { category: 'browser', dependencies: ['paired_browser', 'signaling'] },
+  { category: 'sandbox', dependencies: ['code_execution'] },
+  { category: 'analytics', dependencies: ['marketing_analytics'] },
+  { category: 'observability', dependencies: ['observability'] },
+  { category: 'signaling', dependencies: ['signaling'] },
+  { category: 'connector_providers', dependencies: ['connector_providers'] },
+];
+
+/** Category ids naming a dependency the registry does not declare. */
+export function uncategorizedDependencies(): readonly string[] {
+  const claimed = new Set(DEPENDENCY_CATEGORIES.flatMap((entry) => entry.dependencies));
+  return PRODUCTION_DEPENDENCIES.filter((dependency) => !claimed.has(dependency.id)).map(
+    (dependency) => dependency.id,
+  );
+}
+
+export function unknownCategoryDependencies(): readonly string[] {
+  const known = new Set(PRODUCTION_DEPENDENCIES.map((dependency) => dependency.id));
+  return [
+    ...new Set(
+      DEPENDENCY_CATEGORIES.flatMap((entry) => entry.dependencies).filter((id) => !known.has(id)),
+    ),
+  ];
 }

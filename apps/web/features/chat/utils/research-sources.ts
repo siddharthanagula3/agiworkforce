@@ -8,7 +8,7 @@ const FAVICON_SERVICE_ORIGIN = 'https://www.google.com/s2/favicons';
 const FAVICON_SERVICE_SIZE = 32;
 
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
-const MARKER = /(?<!\])\[(\d{1,3})\](?![([:])/g;
+const MARKER = /(?<!\[)\[(\d{1,3})\](?![(:]|\[(?!\d{1,3}\]))/g;
 
 function splitInlineCode(segment: string): string[] {
   return segment.split(/(`+[^`]*`+)/);

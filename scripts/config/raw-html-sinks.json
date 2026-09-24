@@ -1,0 +1,72 @@
+{
+  "structuralSanitizers": [
+    {
+      "name": "sanitizeSvg",
+      "module": "packages/ui/unified-chat/src/components/ArtifactRenderer.tsx",
+      "test": "packages/ui/unified-chat/src/components/__tests__/sanitizeSvg.xss.test.ts",
+      "reason": "An element and attribute allowlist over the parsed SVG tree with a URL scheme check on every href, not DOMPurify; the test drives script, handler, foreignObject, script-URL, animation and style vectors through it."
+    }
+  ],
+  "sinks": [
+    {
+      "file": "apps/web/app/api/mcp-apps/sandbox/route.ts",
+      "kind": "srcdoc-assignment",
+      "count": 1,
+      "reason": "The MCP Apps proxy page assigns the app's HTML to an inner iframe that the same page declares with sandbox=\"allow-scripts allow-forms\" and no allow-same-origin, served under the CSP this route builds; the host may narrow the sandbox but the proxy never widens it past what the host sends."
+    },
+    {
+      "file": "apps/web/shared/components/seo/JsonLd.tsx",
+      "kind": "dangerously-set-inner-html",
+      "count": 1,
+      "reason": "A type=application/ld+json script body built from JSON.stringify of server-built schema objects with every '<' escaped to \\u003c, so no value can close the script element or open a tag."
+    },
+    {
+      "file": "apps/desktop/src/features/artifacts/ArtifactRendererView.tsx",
+      "kind": "srcdoc-attribute",
+      "count": 1,
+      "reason": "The web artifact frame's sandbox comes from getWebSandboxPermissions, which keeps only members of SAFE_WEB_SANDBOX_PERMISSIONS and drops allow-scripts unless the artifact enables scripts; it is computed, so the literal check cannot read it."
+    },
+    {
+      "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
+      "kind": "inner-html-assignment",
+      "count": 4,
+      "reason": "Three assistant sinks take renderAssistant(), which returns window.agiRender (markdown-it then DOMPurify, apps/extension-vscode/src/webview/render.ts) or an entity-escaped fallback; the composer hint joins fixed kbd markup with a label chosen from constants. The webview script is a string, so its imports cannot be resolved."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MathBlock.tsx",
+      "kind": "inner-html-assignment",
+      "count": 1,
+      "reason": "Inside the KaTeX WebView document: the value is JSON.stringify of errorHtml with a fixed 'Math error' message, interpolated when the document is built, never model text."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MathBlock.tsx",
+      "kind": "webview-html-document",
+      "count": 2,
+      "reason": "The KaTeX document renders in a WebView whose navigation is refused for everything except about:blank and about:srcdoc, with DOM storage off and media autoplay off, so the page cannot leave the view or reach app state."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+      "kind": "webview-html-document",
+      "count": 1,
+      "reason": "Artifact previews render in an incognito WebView with cache and DOM storage off, JavaScript enabled only for mermaid, an origin allowlist of the mermaid CDN or nothing, and navigation limited by isAllowedPreviewNavigation."
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts",
+      "kind": "inner-html-assignment",
+      "count": 1,
+      "reason": "Inside the mermaid preview document: r.svg comes from mermaid.render with securityLevel strict under a CSP meta tag, in the WebView SafeArtifactPreview locks down."
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/artifact-components/ArtifactSandboxFrame.tsx",
+      "kind": "srcdoc-attribute",
+      "count": 1,
+      "reason": "The fallback frame's sandbox is the fallbackSandbox prop; its two callers pass ARTIFACT_SANDBOX_ATTR (allow-scripts allow-modals) and 'allow-scripts', neither with allow-same-origin, which a prop cannot show to a per-file check."
+    },
+    {
+      "file": "packages/ui/unified-chat/src/components/markdown/MermaidDiagram.tsx",
+      "kind": "dangerously-set-inner-html",
+      "count": 1,
+      "reason": "state.svg is set only from sanitizeSvg(bakeTextAnchor(svg)) in the render effect or from the render cache, which rememberSvg fills with that same sanitized value; it reaches the sink through component state, which a per-expression check cannot follow."
+    }
+  ]
+}

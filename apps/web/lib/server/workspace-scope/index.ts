@@ -6,6 +6,16 @@ import {
   type MembershipStatus,
 } from '@agiworkforce/types';
 
+import { WORKSPACE_SWITCH_SURFACES } from './switch-surfaces';
+
+export {
+  WORKSPACE_SWITCH_SURFACES,
+  workspaceSwitchSurface,
+  workspaceSwitchTables,
+  type WorkspaceSwitchEffect,
+  type WorkspaceSwitchSurface,
+} from './switch-surfaces';
+
 /**
  * The content tables 0110 made mutually exclusive between Personal (NULL) and
  * each organization. A privileged connection bypasses those policies, so a
@@ -119,6 +129,15 @@ export function workspaceAdminVisiblePredicate(
 
 export function isWorkspaceScopedContentTable(table: string): table is WorkspaceScopedContentTable {
   return (WORKSPACE_SCOPED_CONTENT_TABLES as readonly string[]).includes(table);
+}
+
+/**
+ * The switch surface a content table belongs to, so a caller that must treat a
+ * table as the reader's own material reads that from the same place the switch
+ * semantics are declared instead of deciding it again.
+ */
+export function workspaceSurfaceForTable(table: string): string | null {
+  return WORKSPACE_SWITCH_SURFACES.find((entry) => entry.tables.includes(table))?.surface ?? null;
 }
 
 /**

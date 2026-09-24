@@ -70,7 +70,7 @@ const MessageSearchComponent = ({
       exit={{ opacity: 0, y: -12 }}
       transition={{ duration: 0.15 }}
       className={cn(
-        'absolute inset-x-0 top-0 z-20 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur-sm',
+        'absolute inset-x-0 top-0 z-[var(--z-content-sticky)] border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur-sm',
         className,
       )}
       role="search"
@@ -91,7 +91,7 @@ const MessageSearchComponent = ({
             onKeyDown={handleKeyDown}
             placeholder="Search messages..."
             aria-label="Search messages"
-            className="w-full rounded-md border border-border bg-muted/50 py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            className="w-full rounded-md border border-border bg-muted/50 py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-focus-ring/50"
           />
         </div>
 
@@ -113,7 +113,7 @@ const MessageSearchComponent = ({
             type="button"
             onClick={onPrev}
             disabled={totalMatches === 0}
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-compact p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
             title="Previous match (Shift+Enter)"
             aria-label="Go to previous match"
           >
@@ -123,7 +123,7 @@ const MessageSearchComponent = ({
             type="button"
             onClick={onNext}
             disabled={totalMatches === 0}
-            className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-compact p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
             title="Next match (Enter)"
             aria-label="Go to next match"
           >
@@ -135,7 +135,7 @@ const MessageSearchComponent = ({
         <button
           type="button"
           onClick={onClose}
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="rounded-compact p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           title="Close search (Escape)"
           aria-label="Close search"
         >

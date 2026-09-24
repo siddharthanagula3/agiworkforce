@@ -46,8 +46,10 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: async () => ({ browserReplyReady: false }),
+  readAutonomousToolApprovalsAllowed: async () => false,
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));
 
@@ -202,7 +204,8 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 }));
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
-vi.mock('../../components/ConversationTitleMenu', () => ({
+vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/ConversationTitleMenu')>()),
   ConversationTitleMenu: ({ onExport }: { onExport?: () => void }) =>
     onExport ? (
       <button type="button" data-testid="conversation-export" onClick={onExport}>

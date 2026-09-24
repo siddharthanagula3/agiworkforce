@@ -1,8 +1,15 @@
 # Enterprise checklist completion plan
 
-Status: Current
+Status: Historical planning snapshot; superseded for product sequencing and Desktop scope
 Owner: Repository maintainers
-Last updated: 2026-09-16
+Last updated: 2026-09-22
+
+This plan preserves the September 16 interpretation of the enterprise audit.
+The September 21 product rebaseline supersedes its all-at-once sequencing and
+its proposal to ship Tauri as a second public Desktop. Current work proceeds
+Web first, then Mobile/Desktop, Chrome, and CLI/VS Code; Electron is the public
+Desktop and retained Tauri code is internal. The row evidence below remains a
+dated input and must be re-verified before implementation.
 
 ## Context
 
@@ -45,7 +52,7 @@ passing, the §130 enterprise smoke test automated and green, confirmed by a fou
   per feat; a wiring fix is 1 commit (<150 lines); an isolated feature 1 feat + 2–5 fixes over 1–3 days; a cross-surface
   subsystem 10–50 commits over 3–13 days with ~20 follow-ups when it touches protocol or auth.
 - **Production configuration lacks** Sentry DSN, OTel endpoint, VAPID keys, any email provider, `AGI_AUTH_PROVIDERS`,
-  support widget flag, routing canary; the Remote Control relay host `signaling.agiworkforce.com` returns
+  and routing canary; the Web v1 support widget is intentionally out of launch scope. The Remote Control relay host `signaling.agiworkforce.com` returns
   DEPLOYMENT_NOT_FOUND while the Fly app is healthy.
 
 ## Ledger and tracking (set up on day 1)
@@ -87,24 +94,24 @@ passing, the §130 enterprise smoke test automated and green, confirmed by a fou
 
 ### Founder actions (engineering prepares exact click-paths)
 
-| #   | Action                                                                                                                                                                                                                      | Unblocks                                   |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| F1  | Cancel run 34549878676 and August runs 31290571636, 31283553796; approve the next `deploy-production` run for the reviewed sha                                                                                              | ~390 web commits live                      |
-| F2  | Confirm migrations 0183–0193 applied in production, or approve applying them before F1                                                                                                                                      | 7 sign-in/deprovision rows, project memory |
-| F3  | Run `gh secret list` with admin rights (or grant the token) so secrets can be audited                                                                                                                                       | every release                              |
-| F4  | Create environments `macos-release`, `vscode-marketplace`, `chrome-web-store`, `mobile-store-release`, `production-fly` and allow their tag patterns                                                                        | desktop, extensions, mobile, relay         |
-| F5  | Apple Developer: certificate + password, App Store Connect API key (id, issuer, private key)                                                                                                                                | Electron + Tauri macOS, iOS                |
-| F6  | Windows signing: Azure Artifact Signing endpoint/account/profile vars + client secret/tenant                                                                                                                                | Windows desktop                            |
-| F7  | VS Code Marketplace publisher + Entra OIDC client/tenant vars; Open VSX token                                                                                                                                               | §119, §34                                  |
-| F8  | Chrome Web Store publisher id, extension id, GCP workload identity provider, service account; Clerk vars for the extension build                                                                                            | §119, §35                                  |
-| F9  | Expo token, ASC key, Google Play service account, Android app-links fingerprints                                                                                                                                            | §118, §94                                  |
-| F10 | npm token for `@agiworkforce/cli`; Homebrew tap write access                                                                                                                                                                | §33, §127 broken updates                   |
-| F11 | Relay: point `signaling.agiworkforce.com` at the Fly app or set `RAILWAY_PUBLIC_URL`/`RAILWAY_TOKEN`                                                                                                                        | §39, §40, §127 sync                        |
-| F12 | Production env: Sentry DSN, OTel endpoint, VAPID keys, email provider key + from address, `AGI_AUTH_PROVIDERS` with Apple and Microsoft Clerk connections, `SIGNALING_HTTP_URL`, support widget flag, `PAGER_WEBHOOK_URL`   | §55, §84, §86, §88, §91, §114              |
-| F13 | Enable branch protection on `main` (after Wave 1 CI stabilization)                                                                                                                                                          | §0, §106                                   |
-| F14 | QA enterprise tenant: Clerk org with test SAML/OIDC IdP, SCIM token, CI-usable QA sign-in credential                                                                                                                        | authenticated E2E in CI, §130              |
-| F15 | Vendor contracts and budget: SOC 2 auditor + compliance automation platform, ISO 27001 body, pen-test firm, paging vendor, product analytics vendor, KMS (AWS/GCP), EU hosting (Neon EU project, R2 EU jurisdiction bucket) | Waves 4–6                                  |
-| F16 | Product decisions: Web Remote controller (§2/§39 currently N/A), Primary Owner semantics (§58), trial length and plans (§70)                                                                                                | respective rows                            |
+| #   | Action                                                                                                                                                                                                                                                     | Unblocks                                   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| F1  | Cancel run 34549878676 and August runs 31290571636, 31283553796; approve the next `deploy-production` run for the reviewed sha                                                                                                                             | ~390 web commits live                      |
+| F2  | Confirm migrations 0183–0193 applied in production, or approve applying them before F1                                                                                                                                                                     | 7 sign-in/deprovision rows, project memory |
+| F3  | Run `gh secret list` with admin rights (or grant the token) so secrets can be audited                                                                                                                                                                      | every release                              |
+| F4  | Create environments `macos-release`, `vscode-marketplace`, `chrome-web-store`, `mobile-store-release`, `production-fly` and allow their tag patterns                                                                                                       | desktop, extensions, mobile, relay         |
+| F5  | Apple Developer: certificate + password, App Store Connect API key (id, issuer, private key)                                                                                                                                                               | Electron + Tauri macOS, iOS                |
+| F6  | Windows signing: Azure Artifact Signing endpoint/account/profile vars + client secret/tenant                                                                                                                                                               | Windows desktop                            |
+| F7  | VS Code Marketplace publisher + Entra OIDC client/tenant vars; Open VSX token                                                                                                                                                                              | §119, §34                                  |
+| F8  | Chrome Web Store publisher id, extension id, GCP workload identity provider, service account; Clerk vars for the extension build                                                                                                                           | §119, §35                                  |
+| F9  | Expo token, ASC key, Google Play service account, Android app-links fingerprints                                                                                                                                                                           | §118, §94                                  |
+| F10 | npm token for `@agiworkforce/cli`; Homebrew tap write access                                                                                                                                                                                               | §33, §127 broken updates                   |
+| F11 | Relay: point `signaling.agiworkforce.com` at the Fly app or set `RAILWAY_PUBLIC_URL`/`RAILWAY_TOKEN`                                                                                                                                                       | §39, §40, §127 sync                        |
+| F12 | Production env: Sentry DSN, OTel endpoint, VAPID keys, email provider key + from address, `AGI_AUTH_PROVIDERS` with Apple and Microsoft Clerk connections, `SIGNALING_HTTP_URL`, `PAGER_WEBHOOK_URL`; confirm that `contact@agiworkforce.com` is monitored | §55, §84, §86, §88, §91, §114              |
+| F13 | Enable branch protection on `main` (after Wave 1 CI stabilization)                                                                                                                                                                                         | §0, §106                                   |
+| F14 | QA enterprise tenant: Clerk org with test SAML/OIDC IdP, SCIM token, CI-usable QA sign-in credential                                                                                                                                                       | authenticated E2E in CI, §130              |
+| F15 | Vendor contracts and budget: SOC 2 auditor + compliance automation platform, ISO 27001 body, pen-test firm, paging vendor, product analytics vendor, KMS (AWS/GCP), EU hosting (Neon EU project, R2 EU jurisdiction bucket)                                | Waves 4–6                                  |
+| F16 | Product decisions: Web Remote controller (§2/§39 currently N/A), Primary Owner semantics (§58), trial length and plans (§70)                                                                                                                               | respective rows                            |
 
 ### Engineering in parallel
 

@@ -4,7 +4,7 @@ title: Run a task with AGI Work
 path: /agi-work
 category: work
 tags: agi work, work, agent, task, autonomous, session dock, outputs, progress, sources, approvals, work history, deliverables
-updated: 2026-09-17
+updated: 2026-09-22
 scope: public
 ---
 
@@ -32,12 +32,12 @@ created in that chat, and does not claim to be a Work session.
 
 ## Approvals during a session
 
-What a session may do on its own follows your tool-approval default. On the
-default, **Ask before every action**, every connector, plugin and tool action
-waits for you, reads included. If you switched to **Run read-only actions
-without asking**, the session shows a notice saying so: read-only actions run
-without asking, and anything that writes, runs code, searches the web, or
-reaches outside AGI, including your connectors, pauses for your approval.
+What a session may do on its own follows your Tool Approvals setting. The
+website starts with **Skip approvals** for eligible tools. You can choose
+**Ask before every action** or **Run read-only actions without asking** instead.
+When automatic approvals are active, the session shows a notice and a link to
+review them. Destructive or unknown actions, saved Ask and Deny choices, and
+workspace restrictions still apply.
 
 ## Finding past sessions
 

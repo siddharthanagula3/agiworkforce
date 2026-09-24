@@ -208,4 +208,17 @@ describe('orderSourcesByCitation', () => {
     expect(cited.map((s) => s.citationIndex)).toEqual([1, 2]);
     expect(more.map((s) => s.citationIndex)).toEqual([3]);
   });
+
+  it('counts adjacent markers after a model-authored source list is reconciled', () => {
+    const pool: ResearchSource[] = [
+      { url: 'https://example.com/first', title: 'First', citationIndex: 1 },
+      { url: 'https://example.com/second', title: 'Second', citationIndex: 2 },
+      { url: 'https://example.com/third', title: 'Third', citationIndex: 3 },
+    ];
+
+    const { cited, more } = orderSourcesByCitation('Both pages [2][3].', pool, pool);
+
+    expect(cited.map((source) => source.citationIndex)).toEqual([2, 3]);
+    expect(more.map((source) => source.citationIndex)).toEqual([1]);
+  });
 });

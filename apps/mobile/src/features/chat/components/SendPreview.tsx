@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, Lock } from 'lucide-react-native';
@@ -209,7 +208,7 @@ export function SendPreview({
                 <Lock size={10} color={colors.textSecondary} />
                 <Text
                   style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     fontWeight: '700',
                     color: colors.textSecondary,
                     textTransform: 'uppercase',
@@ -271,7 +270,7 @@ export function SendPreview({
           <Lock size={10} color={colors.textSecondary} />
           <Text
             style={{
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: '700',
               color: colors.textSecondary,
               textTransform: 'uppercase',
@@ -304,7 +303,7 @@ export function SendPreview({
           )}
           <Text
             style={{
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: '700',
               color: colors.textMuted,
               textTransform: 'uppercase',

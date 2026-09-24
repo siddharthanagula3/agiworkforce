@@ -7,6 +7,7 @@ import { getModelMetadataById, isExecutableImageModel } from '@agiworkforce/type
 import { logger } from '@/lib/logger';
 import { recordMediaSafety, withMediaAttemptSpan } from '@/lib/observability/media-telemetry';
 import { moderateGeneratedMedia, type GeneratedMediaModeration } from '@/lib/moderation';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { markProviderDegraded } from '@/lib/services/provider-availability-service';
 import {
@@ -97,6 +98,31 @@ function usageFor(
     attempt: job.attempts,
     ...extra,
   };
+}
+
+/** The provider charged for output the account is released from; keyed per attempt,
+ * because a retry pays the provider again. */
+async function recordUndeliveredImageCost(
+  job: ImageGenerationJob,
+  generatedCount: number,
+  reason: string,
+): Promise<void> {
+  const providerCostMicrousd = estimateImageCostMicrousd(
+    job.provider,
+    generatedCount,
+    job.plan.quality,
+    job.model,
+  );
+  await recordSettledProviderCost({
+    userId: job.userId,
+    provider: job.provider,
+    model: job.model,
+    actualCostCents: ledgerCentsFromMicrousd(providerCostMicrousd),
+    sourceRef: `image_job:${job.id}:attempt:${job.attempts}`,
+    taskOutcome: 'undelivered',
+    taskRef: `image_job:${job.id}`,
+    usage: usageFor(job, { reason, outputCount: generatedCount }),
+  });
 }
 
 async function settleFailure(
@@ -645,6 +671,7 @@ async function executeImageGenerationJobAttempt(input: {
   const refusal = resolveFailures.length > 0 ? null : await screenGeneratedImages(job, resolved);
   if (refusal) {
     recordMediaSafety({ media: 'image', decision: 'blocked', reason: refusal.reason });
+    await recordUndeliveredImageCost(job, result.images.length, 'output_moderation');
     const failed = await closeAttemptAsFailed({
       db: input.db,
       job,
@@ -692,6 +719,7 @@ async function executeImageGenerationJobAttempt(input: {
       { userId: job.userId, jobId: job.id, failures: persistenceFailures },
       'Generated image persistence failed; the reservation is not settled against this attempt',
     );
+    await recordUndeliveredImageCost(job, result.images.length, 'image_persistence_failed');
     const failed = await closeAttemptAsFailed({
       db: input.db,
       job,

@@ -28,6 +28,51 @@
  * };
  * ```
  */
+/**
+ * What kind of thing was cited. A URL is where a source was found, not what it
+ * is: a paper keeps its identity when the link moves, a news claim is only
+ * checkable with its publication and dateline, and a citation into a document
+ * is unverifiable without the page it is on. Flattening all three into a link
+ * is what makes a citation impossible to follow a month later.
+ */
+export const PUBLIC_SOURCE_TYPES = [
+  'web_page',
+  'news_article',
+  'academic_paper',
+  'pdf_document',
+] as const;
+
+export type PublicSourceType = (typeof PUBLIC_SOURCE_TYPES)[number];
+
+/**
+ * The locator that survives the link. Each variant carries only what its own
+ * kind of source is identified by, so a missing one is a gap the reader can
+ * see rather than an empty string that reads as an answer.
+ */
+export type PublicSourceLocator =
+  | { readonly type: 'web_page'; readonly siteName?: string }
+  | {
+      readonly type: 'news_article';
+      readonly publication: string;
+      /** The dateline. A news claim without one cannot be checked against it. */
+      readonly publishedDate: string;
+      readonly section?: string;
+    }
+  | {
+      readonly type: 'academic_paper';
+      /** A DOI or an arXiv id. One of the two is what makes it findable. */
+      readonly doi?: string;
+      readonly arxivId?: string;
+      readonly venue?: string;
+      readonly peerReviewed?: boolean;
+    }
+  | {
+      readonly type: 'pdf_document';
+      /** One-based, as the document numbers its own pages for a reader. */
+      readonly page?: number;
+      readonly totalPages?: number;
+    };
+
 export interface Citation {
   id: string;
 
@@ -46,6 +91,38 @@ export interface Citation {
   accessedAt: string;
 
   relevance?: number;
+
+  /** Absent means nothing classified it, which is not the same as a web page. */
+  locator?: PublicSourceLocator;
+}
+
+export function isPublicSourceType(value: string): value is PublicSourceType {
+  return (PUBLIC_SOURCE_TYPES as readonly string[]).includes(value);
+}
+
+export function citationSourceType(citation: Citation): PublicSourceType | null {
+  return citation.locator?.type ?? null;
+}
+
+/**
+ * Whether the citation can be followed back to the same claim by someone else.
+ * A paper needs an identifier that outlives the link, a news article needs the
+ * publication and the day, and a document citation needs its page. A bare web
+ * page is reproducible by its URL alone, which is all a web page ever has.
+ */
+export function citationIsReproducible(citation: Citation): boolean {
+  const locator = citation.locator;
+  if (locator === undefined) return citation.url.length > 0;
+  switch (locator.type) {
+    case 'academic_paper':
+      return (locator.doi ?? locator.arxivId ?? '').length > 0;
+    case 'news_article':
+      return locator.publication.length > 0 && locator.publishedDate.length > 0;
+    case 'pdf_document':
+      return locator.page !== undefined && locator.page >= 1;
+    case 'web_page':
+      return citation.url.length > 0;
+  }
 }
 
 /**

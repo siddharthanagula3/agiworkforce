@@ -12,7 +12,11 @@ import {
   normalizeModelId,
   type ModelMetadata,
 } from '@shared/config/llm';
-import { getAutoRoutingProfiles, getModelsForTierAndSurface } from '@agiworkforce/types';
+import {
+  getAutoRoutingProfiles,
+  getModelsForTierAndSurface,
+  listManagedRoutesForModel,
+} from '@agiworkforce/types';
 
 export interface AIModel {
   id: string;
@@ -53,6 +57,7 @@ export type { RoutingTaskType };
 type PersistedModelState = {
   selectedModelId: string;
   selectedProvider: string | null;
+  selectedRouteId: string | null;
 };
 
 /**
@@ -71,7 +76,7 @@ interface ModelState extends PersistedModelState {
   selectedModel: string;
   availableModels: AIModel[];
   loading: boolean;
-  setSelectedModelId: (id: string) => void;
+  setSelectedModelId: (id: string, routeId?: string | null) => void;
   setSelectedModel: (id: string, provider?: string | null) => void;
   selectModel: (id: string, provider?: string | null) => Promise<void>;
   setSelectedProvider: (provider: string | null) => void;
@@ -258,9 +263,9 @@ export function findSelectableModel(modelId: string | null | undefined): AIModel
     return {
       id: modelId,
       name: free.displayName,
-      provider: 'QwenCloud',
+      provider: PROVIDER_LABELS[free.provider] ?? free.provider,
       providerKey: free.provider,
-      description: 'Free quota · QwenCloud',
+      description: `Free quota · ${PROVIDER_LABELS[free.provider] ?? free.provider}`,
     };
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
   return (
@@ -323,14 +328,19 @@ export function describeModelSubstitution(
 function applyModelSelection(
   modelId: string,
   explicitProvider?: string | null,
-): Pick<ModelState, 'selectedModelId' | 'selectedModel' | 'selectedProvider'> {
+  routeId?: string | null,
+): Pick<ModelState, 'selectedModelId' | 'selectedModel' | 'selectedProvider' | 'selectedRouteId'> {
   const canonicalModelId = resolveSelectableModelId(modelId);
-  const provider = resolveProvider(canonicalModelId, explicitProvider);
+  const route = routeId
+    ? listManagedRoutesForModel(canonicalModelId).find((entry) => entry.routeId === routeId)
+    : null;
+  const provider = route?.provider ?? resolveProvider(canonicalModelId, explicitProvider);
 
   return {
     selectedModelId: canonicalModelId,
     selectedModel: canonicalModelId,
     selectedProvider: provider,
+    selectedRouteId: route?.routeId ?? null,
   };
 }
 
@@ -341,10 +351,10 @@ export const useModelStore = create<ModelState>()(
       availableModels: AVAILABLE_MODELS,
       loading: false,
 
-      setSelectedModelId: (id) => {
+      setSelectedModelId: (id, routeId) => {
         set((state) => ({
           ...state,
-          ...applyModelSelection(id),
+          ...applyModelSelection(id, null, routeId),
         }));
       },
 
@@ -363,7 +373,7 @@ export const useModelStore = create<ModelState>()(
       },
 
       setSelectedProvider: (provider) => {
-        set({ selectedProvider: provider });
+        set({ selectedProvider: provider, selectedRouteId: null });
       },
 
       getSelectedModel: () => {
@@ -377,17 +387,19 @@ export const useModelStore = create<ModelState>()(
       name: 'agi-model-store',
       // AUDIT-FIX CMP-24: v5 drops the duplicated thinking fields from the
       // persisted payload; `useThinkingStore` owns that state.
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => localStorage),
       partialize: (state): PersistedModelState => ({
         selectedModelId: state.selectedModelId,
         selectedProvider: state.selectedProvider,
+        selectedRouteId: state.selectedRouteId,
       }),
       migrate: (persistedState: unknown) => {
         const state = (persistedState as Partial<PersistedModelState>) ?? {};
         return applyModelSelection(
           state.selectedModelId ?? DEFAULT_MODEL_ID,
           state.selectedProvider,
+          state.selectedRouteId,
         );
       },
       // Zustand only calls `migrate` when a stored version differs. Validate in
@@ -396,7 +408,11 @@ export const useModelStore = create<ModelState>()(
         const state = (persistedState as Partial<PersistedModelState>) ?? {};
         return {
           ...currentState,
-          ...applyModelSelection(state.selectedModelId ?? DEFAULT_MODEL_ID, state.selectedProvider),
+          ...applyModelSelection(
+            state.selectedModelId ?? DEFAULT_MODEL_ID,
+            state.selectedProvider,
+            state.selectedRouteId,
+          ),
         };
       },
     },

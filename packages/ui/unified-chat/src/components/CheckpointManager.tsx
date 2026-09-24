@@ -79,7 +79,7 @@ function MiniDialog({ open, title, onClose, children }: MiniDialogProps) {
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50"
     >
       <div
         ref={panelRef}
@@ -381,7 +381,7 @@ export function CheckpointManager({
                         aria-label="Restore to this checkpoint"
                         disabled={restoring}
                         onClick={() => confirmRestore(checkpoint)}
-                        className="rounded p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        className="rounded-compact p-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
                       >
                         <RotateCcw className="h-4 w-4" />
                       </button>
@@ -391,7 +391,7 @@ export function CheckpointManager({
                           title="Fork from this checkpoint"
                           aria-label="Fork from this checkpoint"
                           onClick={() => handleFork(checkpoint)}
-                          className="rounded p-1 text-muted-foreground hover:text-foreground"
+                          className="rounded-compact p-1 text-muted-foreground hover:text-foreground"
                         >
                           <GitBranch className="h-4 w-4" />
                         </button>
@@ -401,7 +401,7 @@ export function CheckpointManager({
                         title="Delete checkpoint"
                         aria-label="Delete checkpoint"
                         onClick={() => confirmDelete(checkpoint)}
-                        className="rounded p-1 text-muted-foreground hover:text-danger"
+                        className="rounded-compact p-1 text-muted-foreground hover:text-danger"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

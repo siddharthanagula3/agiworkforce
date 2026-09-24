@@ -1,15 +1,17 @@
 # Release Readiness: Single Source of Truth
 
-Status: ACTIVE, release-execution session
+Status: Historical release-execution snapshot; not current release authority
 Owner: Release lead (orchestrator)
 Branch: `release/readiness-2026-08-25`
-Last updated: 2026-09-07
+Last updated: 2026-09-22
 
-The one consolidated task list for taking every supported app to public release.
-It supersedes the scattered control docs; every item here is grounded in code,
-git, or a live run. Supported surfaces: **web, mobile, desktop, CLI, VS Code
-extension, browser extension, backend services + shared packages.**
-The Slack and GitHub apps are future surfaces, OUT OF SCOPE.
+This is the preserved task list from the August 25 release-execution session.
+It no longer supersedes current control documents. The September 21 rebaseline
+made Web the active release surface and established separate Account Cloud and
+Host Developer continuity domains. Use `docs/specs/website-launch/PROGRESS.md`,
+`WEB_PUBLIC_RELEASE_AUDIT.md`, `ACTIVE_ISSUES.md`, and
+`docs/work/implementation-status.md` for current status. Counts, blockers,
+branch state, and sequencing below remain dated evidence only.
 
 Guiding lens (founder): ship functional, stable, polished, secure. Fix what is
 broken before building what is merely missing; defer/document speculative work.

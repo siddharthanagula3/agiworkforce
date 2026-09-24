@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentActivityTimeline } from '../AgentActivityTimeline';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
@@ -98,6 +98,7 @@ describe('AgentActivityTimeline in AGI Work', () => {
 
   it('prints the plan sentence once, not again as an activity row', () => {
     render(<AgentActivityTimeline activity={runningRun()} workMode="agiwork" />);
+    fireEvent.click(screen.getByRole('button', { name: /show agent activity/i }));
 
     expect(
       screen.getAllByText(/I will check each vendor pricing page and summarise the tiers\./),
@@ -120,6 +121,7 @@ describe('AgentActivityTimeline in AGI Work', () => {
     ];
 
     render(<AgentActivityTimeline activity={withGoal} workMode="agiwork" />);
+    fireEvent.click(screen.getByRole('button', { name: /show agent activity/i }));
 
     expect(screen.queryByText('Compare vendor pricing tiers and produce a table.')).toBeNull();
     expect(screen.getByText('2. Draft the comparison table.')).not.toBeNull();

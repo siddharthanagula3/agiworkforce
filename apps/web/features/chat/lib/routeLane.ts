@@ -27,6 +27,22 @@ export function readRouteLane(value: string | null | undefined): ChatRouteLane |
   return lane && CHAT_ROUTE_LANE_VALUES.has(lane) ? (lane as ChatRouteLane) : undefined;
 }
 
+export function readPersistedRouteLane(value: unknown): ChatRouteLane | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const metadata = value as Record<string, unknown>;
+  const directLane = readRouteLane(
+    typeof metadata['routeLane'] === 'string' ? metadata['routeLane'] : undefined,
+  );
+  if (directLane) return directLane;
+
+  const requestedRoute = metadata['requestedRoute'];
+  if (!requestedRoute || typeof requestedRoute !== 'object' || Array.isArray(requestedRoute)) {
+    return undefined;
+  }
+  const attributedLane = (requestedRoute as Record<string, unknown>)['lane'];
+  return readRouteLane(typeof attributedLane === 'string' ? attributedLane : undefined);
+}
+
 export function isFreeRouteLane(value: string | null | undefined): boolean {
   return readRouteLane(value) === CHAT_ROUTE_LANES.free;
 }

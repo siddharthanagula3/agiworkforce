@@ -38,7 +38,7 @@ function EffectiveChip({ state }: { state: Effective }) {
 
   return (
     <span
-      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[12px] uppercase tracking-[0.08em]"
+      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-caption uppercase tracking-[0.08em]"
       style={{
         color: alarming ? 'var(--settings-destructive-text)' : 'var(--text-3)',
         borderColor: alarming ? 'currentColor' : 'var(--settings-border)',
@@ -56,7 +56,7 @@ const MCP_HOST_PATTERN =
 const inputClass =
   'min-w-0 flex-1 rounded-md border bg-transparent px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 const smallButtonClass =
-  'rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
+  'rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50';
 
 function withEntry(list: string[], value: string): string[] {
   const lower = value.trim().toLowerCase();
@@ -85,7 +85,7 @@ function EntryList({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-[12px] uppercase tracking-[0.08em]" style={{ color: 'var(--text-3)' }}>
+      <p className="text-caption uppercase tracking-[0.08em]" style={{ color: 'var(--text-3)' }}>
         {label}
       </p>
       {entries.length === 0 ? (
@@ -355,7 +355,7 @@ export function WorkspaceConnectorPolicy() {
     return (
       <div
         role="status"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         Loading connector policy…
       </div>
@@ -364,7 +364,7 @@ export function WorkspaceConnectorPolicy() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load your connector policy
         </p>
@@ -385,7 +385,7 @@ export function WorkspaceConnectorPolicy() {
 
   if (data === null || !draft) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           Connector governance is not available for this workspace
         </p>
@@ -432,7 +432,7 @@ export function WorkspaceConnectorPolicy() {
             onChange={(event) =>
               setDraft({ ...draft, allowCustomConnectors: event.target.checked })
             }
-            style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0 }}
+            style={{ width: 16, height: 16, marginTop: 'var(--space-1)', flexShrink: 0 }}
           />
         </div>
       </section>
@@ -501,7 +501,7 @@ export function WorkspaceConnectorPolicy() {
                           ),
                         })
                       }
-                      className="rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                       style={{
                         borderColor: explicitlyAllowed ? 'currentColor' : 'var(--settings-border)',
                         color: explicitlyAllowed ? 'var(--text-1)' : 'var(--text-3)',
@@ -523,7 +523,7 @@ export function WorkspaceConnectorPolicy() {
                           ),
                         })
                       }
-                      className="rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                       style={{
                         borderColor: explicitlyBlocked ? 'currentColor' : 'var(--settings-border)',
                         color: explicitlyBlocked

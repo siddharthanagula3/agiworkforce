@@ -379,6 +379,11 @@ vi.mock('@/lib/hooks/useConversations', () => ({
   }),
 }));
 
+vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
+  useManagedUsageSummary: () => ({ usage: shellState.usage }),
+  getWorstUsagePercent: (usage: { percent: number } | null) => usage?.percent ?? 0,
+}));
+
 vi.mock('@shared/stores/web-chat-store', () => ({
   useChatStore: (selector: (state: { updateConversation: () => void }) => unknown) =>
     selector({ updateConversation: vi.fn() }),
@@ -460,6 +465,7 @@ beforeEach(() => {
   shellState.updateConversation = vi.fn().mockResolvedValue(true);
   shellState.deleteConversation = vi.fn().mockResolvedValue(true);
   shellState.projects = [];
+  shellState.usage = null;
   toastState.error.mockReset();
   confirmStub.confirm.mockClear();
   useUIStore.getState().setSidebarCollapsed(false);
@@ -877,8 +883,21 @@ describe('WebAppShell responsive navigation', () => {
     expect(settingsModalState.openSettings).toHaveBeenCalledWith('billing');
   });
 
+  it('free tier: does not render an account usage meter', () => {
+    shellState.usage = { percent: 68 };
+
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.getByTestId('app-sidebar-usage')).toHaveAttribute('data-shown', 'false');
+  });
+
   it('paid tier: shows the catalog plan label and no upgrade nudge', async () => {
     shellState.billing.subscription = { tier: 'pro' };
+    shellState.usage = { percent: 68 };
     const { getBillingPlanPricing } = await import('@agiworkforce/types');
 
     render(
@@ -890,6 +909,7 @@ describe('WebAppShell responsive navigation', () => {
     expect(screen.queryByText('Free plan')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Upgrade' })).toBeNull();
     expect(screen.getByText(getBillingPlanPricing('pro').label)).toBeInTheDocument();
+    expect(screen.getByTestId('app-sidebar-usage')).toHaveAttribute('data-shown', 'true');
   });
 
   it('unknown plan (401 from /api/me): claims no tier and sells no upgrade', async () => {
@@ -898,6 +918,7 @@ describe('WebAppShell responsive navigation', () => {
     // pitch aimed at a paying subscriber.
     shellState.billing.subscription = null;
     shellState.billing.unauthenticated = true;
+    shellState.usage = { percent: 68 };
     const { getBillingPlanPricing } = await import('@agiworkforce/types');
 
     render(
@@ -909,6 +930,7 @@ describe('WebAppShell responsive navigation', () => {
     expect(screen.queryByText('Free plan')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Upgrade' })).toBeNull();
     expect(screen.queryByText(getBillingPlanPricing('free').label)).toBeNull();
+    expect(screen.getByTestId('app-sidebar-usage')).toHaveAttribute('data-shown', 'false');
   });
 
   it('resize from desktop to narrow swaps the persistent sidebar for the trigger', () => {

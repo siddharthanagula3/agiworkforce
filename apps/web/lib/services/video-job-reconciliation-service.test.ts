@@ -1,4 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VideoGenerationJob } from '@/lib/server/video-generation-jobs';
 
 vi.mock('server-only', () => ({}));
@@ -25,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   claimNotice: vi.fn(),
   notify: vi.fn(),
   cleanup: vi.fn(),
+  safety: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -67,6 +73,13 @@ vi.mock('@/lib/server/media-assets', () => ({
   deleteVideoMediaAsset: (...args: unknown[]) => mocks.deleteAsset(...args),
   upsertVideoMediaAsset: (...args: unknown[]) => mocks.upsertAsset(...args),
 }));
+vi.mock('@/lib/observability/media-telemetry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/observability/media-telemetry')>();
+  return {
+    ...actual,
+    recordMediaSafety: (...args: unknown[]) => mocks.safety(...args),
+  };
+});
 vi.mock('@/lib/server/video-generation-transcript', () => ({
   syncVideoGenerationTranscript: (...args: unknown[]) => mocks.transcriptSync(...args),
 }));
@@ -74,6 +87,8 @@ vi.mock('./video-completion-notice-service', () => ({
   deliverVideoCompletionNotice: (...args: unknown[]) => mocks.notify(...args),
 }));
 
+import { logger } from '@/lib/logger';
+import { GENERATED_OUTPUT_REFUSAL } from '@/lib/moderation';
 import {
   publicVideoJobStatus,
   reconcileDueVideoGenerationJobs,
@@ -126,23 +141,42 @@ function job(overrides: Partial<VideoGenerationJob> = {}): VideoGenerationJob {
   };
 }
 
+const STAGED_BYTES = Buffer.concat([
+  Buffer.from('00000018667479706d70343200000000', 'hex'),
+  Buffer.alloc(4096, 0x2f),
+]);
+const STAGED_DIGEST = createHash('sha256').update(STAGED_BYTES).digest('hex');
+
 describe('video job reconciliation', () => {
-  beforeEach(() => {
+  let stagingDirectory: string;
+  let stagedFilePath: string;
+
+  afterEach(async () => {
+    await rm(stagingDirectory, { recursive: true, force: true });
+    delete process.env['MODERATION_HASH_DENYLIST'];
+  });
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    delete process.env['MODERATION_HASH_DENYLIST'];
+    stagingDirectory = await mkdtemp(path.join(tmpdir(), 'agi-video-reconcile-'));
+    stagedFilePath = path.join(stagingDirectory, 'provider-output');
+    await writeFile(stagedFilePath, STAGED_BYTES);
     const active = job();
     mocks.claim.mockResolvedValue(active);
     mocks.getSystem.mockResolvedValue(active);
     mocks.storageConfigured.mockReturnValue(true);
-    mocks.download.mockResolvedValue({
-      filePath: '/tmp/provider-video',
-      byteSize: 16,
+    mocks.cleanup.mockImplementation(() => rm(stagingDirectory, { recursive: true, force: true }));
+    mocks.download.mockImplementation(async () => ({
+      filePath: stagedFilePath,
+      byteSize: STAGED_BYTES.byteLength,
       contentType: 'video/mp4',
       cleanup: mocks.cleanup,
-    });
+    }));
     mocks.storeFile.mockResolvedValue({
       url: 'https://r2.example/internal-object',
       pathname: `media/video/user-1/${JOB_ID}.mp4`,
-      byteSize: 16,
+      byteSize: STAGED_BYTES.byteLength,
       contentType: 'video/mp4',
     });
     mocks.upsertAsset.mockResolvedValue(JOB_ID);
@@ -201,7 +235,6 @@ describe('video job reconciliation', () => {
       }),
     );
     mocks.deferFailure.mockResolvedValue(job({ reconcileFailures: 1 }));
-    mocks.cleanup.mockResolvedValue(undefined);
     mocks.transcriptSync.mockResolvedValue('updated');
     mocks.notify.mockResolvedValue(true);
   });
@@ -216,7 +249,7 @@ describe('video job reconciliation', () => {
 
     expect(result.status).toBe('completed');
     expect(mocks.storeFile).toHaveBeenCalledWith(
-      expect.objectContaining({ storageId: JOB_ID, filePath: '/tmp/provider-video' }),
+      expect.objectContaining({ storageId: JOB_ID, filePath: stagedFilePath }),
     );
     expect(mocks.upsertAsset).toHaveBeenCalledWith(
       expect.objectContaining({ id: JOB_ID }),
@@ -412,7 +445,7 @@ describe('video job reconciliation', () => {
     expect(JSON.stringify(publicVideoJobStatus(result))).not.toContain(diagnostic);
   });
 
-  it('records a charged Runway moderation failure as outcome_unknown for operator review', async () => {
+  it('settles a provider safety refusal as a released refusal, not as an ambiguous charge', async () => {
     const runway = job({
       provider: 'runway',
       providerTaskId: 'runway-task',
@@ -428,14 +461,109 @@ describe('video job reconciliation', () => {
 
     const result = await reconcileVideoGenerationJob(db, runway);
 
-    expect(result.status).toBe('outcome_unknown');
-    expect(mocks.markUnknown).toHaveBeenCalledWith(
+    expect(result.status).toBe('failed');
+    expect(result.billingOutcome).toBe('released');
+    expect(mocks.markUnknown).not.toHaveBeenCalled();
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', publicError: GENERATED_OUTPUT_REFUSAL }),
+    );
+    expect(mocks.safety).toHaveBeenCalledWith(
+      expect.objectContaining({ media: 'video', decision: 'blocked' }),
+    );
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
       expect.objectContaining({
-        providerTaskId: 'runway-task',
-        providerFailureCode: 'SAFETY.INPUT.TEXT',
+        surface: 'generated-output',
+        action: 'block',
+        ruleIds: expect.arrayContaining(['providerFailureCode:SAFETY.INPUT.TEXT']),
+      }),
+      expect.any(String),
+    );
+    expect(publicVideoJobStatus(result).error).toBe(GENERATED_OUTPUT_REFUSAL);
+  });
+
+  it('refuses a denylisted generated video before anything is stored, and releases the hold', async () => {
+    process.env['MODERATION_HASH_DENYLIST'] = `ncmec:${STAGED_DIGEST}`;
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+
+    const result = await reconcileVideoGenerationJob(db, job());
+
+    expect(mocks.storeFile).not.toHaveBeenCalled();
+    expect(mocks.upsertAsset).not.toHaveBeenCalled();
+    expect(result.status).toBe('failed');
+    expect(result.billingOutcome).toBe('released');
+    expect(result.assetId).toBeNull();
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', publicError: GENERATED_OUTPUT_REFUSAL }),
+    );
+    expect(mocks.deferFailure).not.toHaveBeenCalled();
+    expect(mocks.markUnknown).not.toHaveBeenCalled();
+    expect(mocks.cleanup).toHaveBeenCalledTimes(1);
+    expect(existsSync(stagedFilePath)).toBe(false);
+    expect(mocks.safety).toHaveBeenCalledWith(
+      expect.objectContaining({
+        media: 'video',
+        decision: 'blocked',
+        reason: 'output_hash_denylist',
       }),
     );
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: 'generated-output',
+        action: 'block',
+        contentSha256: STAGED_DIGEST,
+        ruleIds: ['managed-video.output.hash-denylist', 'operation:generate'],
+      }),
+      expect.any(String),
+    );
+    expect(publicVideoJobStatus(result).video_url).toBeUndefined();
+    expect(publicVideoJobStatus(result).error).toBe(GENERATED_OUTPUT_REFUSAL);
+  });
+
+  it('delivers a video the denylist does not name exactly as before', async () => {
+    process.env['MODERATION_HASH_DENYLIST'] = `ncmec:${'c'.repeat(64)}`;
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+
+    const result = await reconcileVideoGenerationJob(db, job());
+
+    expect(result.status).toBe('completed');
+    expect(mocks.storeFile).toHaveBeenCalledWith(
+      expect.objectContaining({ storageId: JOB_ID, filePath: stagedFilePath }),
+    );
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'completed', assetId: JOB_ID }),
+    );
+    expect(mocks.safety).not.toHaveBeenCalled();
+  });
+
+  it('never stores a video whose screening could not be completed, and leaves the job retryable', async () => {
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+    mocks.download.mockImplementation(async () => {
+      await rm(stagedFilePath, { force: true });
+      return {
+        filePath: stagedFilePath,
+        byteSize: STAGED_BYTES.byteLength,
+        contentType: 'video/mp4',
+        cleanup: mocks.cleanup,
+      };
+    });
+
+    const result = await reconcileVideoGenerationJob(db, job());
+
+    expect(mocks.storeFile).not.toHaveBeenCalled();
+    expect(mocks.upsertAsset).not.toHaveBeenCalled();
     expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.deferFailure).toHaveBeenCalledOnce();
+    expect(result.status).not.toBe('completed');
+    expect(mocks.cleanup).toHaveBeenCalledTimes(1);
   });
 
   it('refunds and records a cost incident when a completed result cannot be stored', async () => {
@@ -897,5 +1025,108 @@ describe('video job reconciliation', () => {
       active: 1,
       errors: 0,
     });
+  });
+
+  it('meters what the provider charged for a video the output floor refused, and releases the account', async () => {
+    process.env['MODERATION_HASH_DENYLIST'] = `ncmec:${STAGED_DIGEST}`;
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+
+    const result = await reconcileVideoGenerationJob(db, job());
+
+    expect(result.billingOutcome).toBe('released');
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', undeliveredProviderCostCents: 240 }),
+    );
+  });
+
+  it('meters the provider-reported charge, not the estimate, when the provider reported one', async () => {
+    process.env['MODERATION_HASH_DENYLIST'] = `ncmec:${STAGED_DIGEST}`;
+    const openRouter = job({ provider: 'openrouter', model: 'synthetic-openrouter-video-model' });
+    mocks.claim.mockResolvedValue(openRouter);
+    mocks.getSystem.mockResolvedValue(openRouter);
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://openrouter.example/video' },
+      actualCostCents: 310,
+    });
+
+    await reconcileVideoGenerationJob(db, openRouter);
+
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', undeliveredProviderCostCents: 310 }),
+    );
+  });
+
+  it('meters a Runway result that completed after cancellation without delivering or billing it', async () => {
+    const cancelling = job({
+      provider: 'runway',
+      model: 'synthetic-runway-video-model',
+      providerTaskId: 'runway-task',
+      cancelRequestedAt: new Date().toISOString(),
+      providerCancelAttemptedAt: new Date().toISOString(),
+      cancelAttempts: 1,
+    });
+    mocks.claim.mockResolvedValue(cancelling);
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://dnznrvs05pmza.cloudfront.net/result.mp4' },
+    });
+
+    await reconcileVideoGenerationJob(db, cancelling);
+
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed', undeliveredProviderCostCents: 240 }),
+    );
+  });
+
+  it('meters nothing for a task the provider failed without producing a result', async () => {
+    mocks.poll.mockResolvedValue({ status: 'failed', error: 'The provider could not render it.' });
+
+    await reconcileVideoGenerationJob(db, job());
+
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    expect(mocks.finalize.mock.calls[0]?.[0]).not.toHaveProperty('undeliveredProviderCostCents');
+  });
+
+  it('keeps holding a cancelled task the provider cannot stop, then bills the delivered video once', async () => {
+    const cancelling = job({ cancelRequestedAt: new Date().toISOString() });
+    mocks.claim.mockResolvedValue(cancelling);
+    mocks.getSystem.mockResolvedValue(cancelling);
+    mocks.poll.mockResolvedValueOnce({ status: 'processing', progress: 80 });
+
+    const stillRunning = await reconcileVideoGenerationJob(db, cancelling);
+    expect(stillRunning.status).toBe('processing');
+    expect(mocks.finalize).not.toHaveBeenCalled();
+
+    mocks.poll.mockResolvedValueOnce({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+    const settled = await reconcileVideoGenerationJob(db, cancelling);
+
+    expect(settled.status).toBe('completed');
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'completed', actualCostCents: 240 }),
+    );
+  });
+
+  it('releases a cancelled task the provider cannot stop exactly once when the provider fails it', async () => {
+    const cancelling = job({ provider: 'openrouter', cancelRequestedAt: new Date().toISOString() });
+    mocks.claim.mockResolvedValue(cancelling);
+    mocks.getSystem.mockResolvedValue(cancelling);
+    mocks.poll.mockResolvedValue({ status: 'failed', error: 'The provider could not render it.' });
+
+    const settled = await reconcileVideoGenerationJob(db, cancelling);
+
+    expect(settled.billingOutcome).toBe('released');
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
+    expect(mocks.cancelProvider).not.toHaveBeenCalled();
   });
 });

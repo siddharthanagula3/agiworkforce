@@ -73,7 +73,7 @@ export function ComparisonResponse({
               aria-controls={`comparison-panel-${tab}`}
               tabIndex={isActive ? 0 : -1}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-150',
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-quick',
                 isActive
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',

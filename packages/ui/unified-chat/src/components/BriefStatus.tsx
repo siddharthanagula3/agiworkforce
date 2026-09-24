@@ -98,7 +98,7 @@ export function FloatingBriefStatus({ status, className }: FloatingBriefStatusPr
         exit={{ opacity: 0, y: -20 }}
         transition={{ type: 'spring', stiffness: 400, damping: 30 }}
         className={cn(
-          'fixed top-4 left-1/2 -translate-x-1/2 z-50',
+          'fixed top-4 left-1/2 -translate-x-1/2 z-[var(--z-notification)]',
           'flex items-center gap-2 px-4 py-2 rounded-full',
           'text-sm font-medium',
           'bg-card/95 backdrop-blur-xs',

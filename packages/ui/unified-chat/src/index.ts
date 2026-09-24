@@ -5,6 +5,7 @@ export * from './lib/hostBridge';
 export * from './lib/capabilities';
 export * from './lib/utils';
 export * from './lib/greetings';
+export { useOnlineStatus } from './hooks/use-online-status';
 export {
   buildSandboxedHtml,
   ARTIFACT_SANDBOX_ATTR,
@@ -54,6 +55,8 @@ export {
   isMessageContinuable,
   hasStreamError,
   getStreamErrorMessage,
+  getStreamErrorNotice,
+  getStreamErrorReference,
   CONTINUE_GENERATION_INSTRUCTION,
   looksTruncated,
   hasVisibleContent,

@@ -1,10 +1,12 @@
 pub mod clerk_native;
 
+use crate::features::speech::wake::{RemoteSpeechGate, VoiceWake};
 use crate::sys::api::{ApiClient, ApiRequest, ApiResponse, AuthType, HttpMethod};
+use crate::sys::commands::voice::VoiceState;
 use crate::sys::commands::{security::SecretManagerState, ApiState};
 use crate::sys::security::SecretManager;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 /// Deserialize an optional API timestamp from the canonical `/api/me` wire shape.
 ///
@@ -440,6 +442,7 @@ pub async fn device_link_poll(
 #[tauri::command]
 pub async fn fetch_user_profile(
     access_token: String,
+    app: AppHandle,
     state: State<'_, ApiState>,
 ) -> Result<UserProfile, String> {
     let api_base = get_api_base_url();
@@ -452,6 +455,10 @@ pub async fn fetch_user_profile(
         auth: AuthType::Bearer {
             token: access_token,
         },
+        headers: std::collections::HashMap::from([(
+            CLIENT_VERSION_HEADER.to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+        )]),
         ..Default::default()
     };
 
@@ -475,7 +482,27 @@ pub async fn fetch_user_profile(
         ));
     }
 
-    parse_json_response(&response)
+    let profile: UserProfile = parse_json_response(&response)?;
+    if let Some(voice) = app.try_state::<std::sync::Arc<tokio::sync::Mutex<VoiceState>>>() {
+        let voice = voice.lock().await;
+        let wake = voice.wake.read().await;
+        apply_server_speech_gate(&wake, &profile.feature_flags);
+    }
+    Ok(profile)
+}
+
+/// Mirrors `CLIENT_VERSION_HEADER` in packages/contracts/cloud-contracts, so a
+/// switch the server closes for one build range reaches this build.
+const CLIENT_VERSION_HEADER: &str = "x-agi-client-version";
+
+pub(crate) fn apply_server_speech_gate(
+    wake: &VoiceWake,
+    feature_flags: &std::collections::HashMap<String, bool>,
+) {
+    wake.apply_remote_gate(RemoteSpeechGate::from_feature_flags(
+        feature_flags,
+        env!("CARGO_PKG_VERSION"),
+    ));
 }
 
 pub async fn oauth_refresh(
@@ -1734,5 +1761,44 @@ mod tests {
 
         assert_eq!(signed_in.subject(), Some("account-a".to_string()));
         assert_eq!(ManagedAccessTokenState::empty().subject(), None);
+    }
+
+    fn profile_with_flags(flags: &str) -> UserProfile {
+        serde_json::from_str(&format!(
+            r#"{{
+                "id":"user_123",
+                "email":null,
+                "name":"Demo",
+                "avatar_url":null,
+                "created_at":null,
+                "updated_at":1785361122,
+                "plan":{{"tier":"free","display_name":"Free","status":"none","current_period_end":null}},
+                "feature_flags":{flags}
+            }}"#
+        ))
+        .expect("profile fixture should deserialize")
+    }
+
+    #[test]
+    fn a_profile_refresh_carries_the_dictation_switch_to_the_detector() {
+        let wake = crate::features::speech::wake::VoiceWake::default();
+
+        super::apply_server_speech_gate(
+            &wake,
+            &profile_with_flags(r#"{"capability.dictation":false}"#).feature_flags,
+        );
+        assert!(
+            wake.remote_block_reason().is_some(),
+            "a closed switch in /api/me must stop dictation on this build"
+        );
+
+        super::apply_server_speech_gate(
+            &wake,
+            &profile_with_flags(r#"{"advanced_model_access":true}"#).feature_flags,
+        );
+        assert!(
+            wake.remote_block_reason().is_none(),
+            "a profile that no longer closes dictation must reopen it"
+        );
     }
 }

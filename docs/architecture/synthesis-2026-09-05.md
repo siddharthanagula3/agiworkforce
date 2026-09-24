@@ -1,8 +1,15 @@
 # Stage 2 synthesis, 2026-09-05
 
-Status: Current
+Status: Historical architecture synthesis; superseded for current product status
 Owner: Fable (architect)
-Last updated: 2026-09-05
+Last updated: 2026-09-22
+
+This document preserves the September 5 synthesis. Current product status,
+surface sequencing, continuity domains, Desktop scope, and commercial gates
+come from `docs/product/definition.md`, `docs/architecture/overview.md`,
+`docs/architecture/trust-boundaries.md`, `docs/product/commercial.md`, and
+`docs/work/implementation-status.md`. Re-verify any implementation claim below
+against current code before acting on it.
 
 What the three Stage 1 documents say when read together, and the risk maps
 the founder asked for. Inputs, each verified today: the system map

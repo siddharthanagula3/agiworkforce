@@ -13,6 +13,7 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import { remoteControlRefusal } from '@/lib/feature-flags/remote-control-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
@@ -64,6 +65,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     resolveCloudChatSurface(request),
   );
   if (featureGate) return featureGate;
+
+  const switchedOff = await remoteControlRefusal(request, userId);
+  if (switchedOff) return switchedOff;
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];
   const signalingSecret = process.env['SIGNALING_INTERNAL_SECRET'];

@@ -11,6 +11,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildBubbleWithTools } from '../src/features/side-panel/bubbles';
 import {
   applyStreamFailure,
+  statedWait,
+  streamFailureText,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 
@@ -123,5 +125,57 @@ describe('failed stream presentation', () => {
       'upstream connection reset',
     );
     expect(node.querySelector('.sp-bubble-retry-btn')).toBeNull();
+  });
+});
+
+describe('the wait and the reference the gateway put on the failure frame', () => {
+  it('states a wait the sentence itself left out', () => {
+    expect(
+      streamFailureText('This model is overloaded right now.', { retryAfterSeconds: 120 }),
+    ).toBe('This model is overloaded right now. Try again in about 2 minutes.');
+  });
+
+  it('never states the same wait twice', () => {
+    const sentence = 'The free model is busy right now. Try again in about 45 seconds.';
+    expect(streamFailureText(sentence, { retryAfterSeconds: 45 })).toBe(sentence);
+  });
+
+  it('states no wait nobody measured, and none nobody could believe', () => {
+    expect(streamFailureText('It failed.')).toBe('It failed.');
+    expect(streamFailureText('It failed.', { retryAfterSeconds: 200_000 })).toBe('It failed.');
+    expect(streamFailureText('It failed.', { retryAfterSeconds: 0 })).toBe('It failed.');
+  });
+
+  it('ends the sentence with the id the gateway logged, and only then', () => {
+    expect(streamFailureText('It failed.', { requestId: 'req_ext_1' })).toBe(
+      'It failed. Reference: req_ext_1',
+    );
+    expect(streamFailureText('It failed.', { requestId: '' })).toBe('It failed.');
+  });
+
+  it('reads the wait in the same units the web app uses', () => {
+    expect(statedWait(1)).toBe('about 1 second');
+    expect(statedWait(89)).toBe('about 89 seconds');
+    expect(statedWait(90)).toBe('about 2 minutes');
+    expect(statedWait(3_600)).toBe('about 60 minutes');
+    expect(statedWait(5_400)).toBe('about 2 hours');
+    expect(statedWait(undefined)).toBeUndefined();
+  });
+
+  it('puts the whole sentence in the failure footer a reader sees', () => {
+    const messages: SidePanelChatMessage[] = [];
+    applyStreamFailure(
+      messages,
+      'stream-wait',
+      streamFailureText('This model is overloaded right now.', {
+        retryAfterSeconds: 120,
+        requestId: 'req_ext_2',
+      }),
+      4,
+    );
+    const node = buildBubbleWithTools(messages.at(-1)!, { onRetry: vi.fn() });
+    expect(node.querySelector('.sp-bubble-error-text')?.textContent).toBe(
+      'This model is overloaded right now. Try again in about 2 minutes. Reference: req_ext_2',
+    );
   });
 });

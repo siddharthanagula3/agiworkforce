@@ -104,7 +104,7 @@ export function InvoiceList() {
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">Your invoices, newest first</caption>
         <thead>
-          <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+          <tr className="border-b border-border text-start text-xs uppercase tracking-wider text-muted-foreground">
             <th scope="col" className="whitespace-nowrap px-4 py-3 font-semibold">
               Date
             </th>
@@ -117,7 +117,7 @@ export function InvoiceList() {
             <th scope="col" className="whitespace-nowrap px-4 py-3 font-semibold">
               Status
             </th>
-            <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-semibold">
+            <th scope="col" className="whitespace-nowrap px-4 py-3 text-end font-semibold">
               Receipt
             </th>
           </tr>
@@ -133,7 +133,7 @@ export function InvoiceList() {
                 {formatAmount(invoice.amount, invoice.currency)}
               </td>
               <td className="px-4 py-3 capitalize text-muted-foreground">{invoice.status}</td>
-              <td className="whitespace-nowrap px-4 py-3 text-right">
+              <td className="whitespace-nowrap px-4 py-3 text-end">
                 {invoice.hosted_invoice_url ? (
                   <a
                     href={invoice.hosted_invoice_url}
@@ -149,7 +149,7 @@ export function InvoiceList() {
                     href={invoice.invoice_pdf}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-3 underline underline-offset-2"
+                    className="ms-3 underline underline-offset-2"
                   >
                     PDF
                   </a>

@@ -10,6 +10,9 @@
 /** Joins one client request to the server's answer, in both sets of logs. */
 export const REQUEST_ID_HEADER = 'x-request-id';
 
+/** Names the shipped client build making the request. */
+export const CLIENT_VERSION_HEADER = 'x-agi-client-version';
+
 /** Makes a retry of a mutating request apply once rather than twice. */
 export const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 

@@ -49,13 +49,7 @@
       }
     ],
     "keybinding-tolerates-no-args": [],
-    "menu-honours-keyboard-contract": [
-      {
-        "id": "packages/ui/ui/src/sidebar/Menu.tsx",
-        "reason": "This component implements the menu keyboard pattern inline rather than calling useMenuKeyboard: it owns focusTrigger, menuItems, focusItem and its own arrow, Escape and Tab handling, plus viewport flipping the hook does not do. Folding it onto the hook is a refactor, not a defect; declared so no NEW unguarded role=\"menu\" panel can land.",
-        "trackedBy": "SIX-32"
-      }
-    ],
+    "menu-honours-keyboard-contract": [],
     "dialog-answers-the-keyboard": []
   }
 }

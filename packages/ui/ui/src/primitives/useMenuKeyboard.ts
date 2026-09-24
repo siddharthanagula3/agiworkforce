@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, type RefObject } from 'react';
 
 const NAV_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /**
  * The WAI-ARIA menu keyboard contract for any hand-rolled `role="menu"` panel.
@@ -47,13 +48,12 @@ export function useMenuKeyboard({
     [items],
   );
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!open || !autoFocusFirstItem) return;
-    const id = window.setTimeout(() => focusItem(0), 0);
-    return () => window.clearTimeout(id);
+    focusItem(0);
   }, [open, autoFocusFirstItem, focusItem]);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {

@@ -133,7 +133,23 @@ pub fn build_chat_tools(
     tool_registry: Option<&Arc<ToolRegistry>>,
     mcp_state: Option<&McpState>,
 ) -> Vec<ToolDefinition> {
+    build_chat_tools_for_turn(tool_registry, mcp_state, "").tools
+}
+
+pub struct ChatToolSet {
+    pub tools: Vec<ToolDefinition>,
+    pub deferred_mcp: Vec<crate::core::mcp::schema_budget::DeferredToolSchema>,
+}
+
+/// Connected MCP schemas are ranked against `turn_text` and bounded the way the
+/// web bounds them; the ones left out are returned so the prompt can name them.
+pub fn build_chat_tools_for_turn(
+    tool_registry: Option<&Arc<ToolRegistry>>,
+    mcp_state: Option<&McpState>,
+    turn_text: &str,
+) -> ChatToolSet {
     let mut tools = Vec::new();
+    let mut deferred_mcp = Vec::new();
 
     // Add core tools from registry
     if let Some(registry) = tool_registry {
@@ -148,17 +164,20 @@ pub fn build_chat_tools(
         }
     }
 
-    // Add MCP tools if available
     if let Some(mcp) = mcp_state {
-        let mcp_tools = mcp.registry.get_all_tool_definitions();
-        tools.extend(mcp_tools);
+        let selection = mcp.registry.select_tool_definitions(turn_text);
+        tools.extend(selection.tools);
+        deferred_mcp = selection.deferred;
     }
 
     // Ensure unique tool names after merging built-in + MCP tool definitions.
     let mut seen = HashSet::new();
     tools.retain(|tool| seen.insert(tool.name.clone()));
 
-    tools
+    ChatToolSet {
+        tools,
+        deferred_mcp,
+    }
 }
 
 /// Create a ToolRegistry specifically for schema generation.

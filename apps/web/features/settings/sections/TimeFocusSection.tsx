@@ -15,6 +15,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SaveStatusLine } from '../components/SaveStatusLine';
 
 interface StatusMessage {
   text: string;
@@ -122,7 +123,7 @@ export function TimeFocusSection() {
           : 'Saved';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <header>
         <h1
           style={{
@@ -130,7 +131,7 @@ export function TimeFocusSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Time and focus
@@ -138,9 +139,12 @@ export function TimeFocusSection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Optional boundaries you choose for yourself. Reminders never lock you out of AGI.
         </p>
-        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+        <SaveStatusLine
+          failed={message !== null}
+          style={{ margin: 'var(--space-2) 0 0', fontSize: 12, color: 'var(--text-3)' }}
+        >
           {status}
-        </p>
+        </SaveStatusLine>
       </header>
 
       <div
@@ -148,15 +152,15 @@ export function TimeFocusSection() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 16,
-          padding: '14px 0',
+          gap: 'var(--space-4)',
+          padding: 'var(--space-4) 0',
           borderBottom: '1px solid var(--settings-border)',
           flexWrap: 'wrap',
         }}
       >
         <div>
           <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Break reminder</div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
             Get one gentle nudge after this much visible time in AGI each day.
           </div>
         </div>
@@ -180,7 +184,7 @@ export function TimeFocusSection() {
             background: 'var(--bg-base)',
             color: 'var(--text-1)',
             fontSize: 13,
-            padding: '0 8px',
+            padding: '0 var(--space-2)',
           }}
         >
           <option value="">Off</option>
@@ -200,8 +204,8 @@ export function TimeFocusSection() {
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
-            gap: 16,
-            padding: '14px 0',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
           }}
         >
@@ -209,7 +213,7 @@ export function TimeFocusSection() {
             <div id="quiet-hours-heading" style={{ fontSize: 14, color: 'var(--text-1)' }}>
               Quiet hours
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Add light friction when you open AGI during time you set aside.
             </div>
           </div>
@@ -228,8 +232,8 @@ export function TimeFocusSection() {
           style={{
             borderBottom: '1px solid var(--settings-border)',
             display: 'grid',
-            gap: 16,
-            padding: '14px 0',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-4) 0',
             opacity: draft.quietHours.enabled ? 1 : 0.5,
           }}
         >
@@ -238,11 +242,16 @@ export function TimeFocusSection() {
             style={{ border: 0, margin: 0, padding: 0 }}
           >
             <legend
-              style={{ marginBottom: 8, fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}
+              style={{
+                marginBottom: 'var(--space-2)',
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--text-2)',
+              }}
             >
               Days
             </legend>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
               {DAYS.map((day) => {
                 const selected = draft.quietHours.days.includes(day.value);
                 return (
@@ -255,7 +264,7 @@ export function TimeFocusSection() {
                     style={{
                       width: 36,
                       height: 36,
-                      borderRadius: 18,
+                      borderRadius: 'var(--corner-panel)',
                       border: '1px solid var(--settings-border)',
                       background: selected ? 'hsl(var(--accent))' : 'var(--bg-base)',
                       color: selected ? 'white' : 'var(--text-2)',
@@ -270,9 +279,20 @@ export function TimeFocusSection() {
           </fieldset>
 
           <div
-            style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 180px))', gap: 12 }}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 180px))',
+              gap: 'var(--space-3)',
+            }}
           >
-            <label style={{ display: 'grid', gap: 6, fontSize: 12, color: 'var(--text-2)' }}>
+            <label
+              style={{
+                display: 'grid',
+                gap: 'var(--space-2)',
+                fontSize: 12,
+                color: 'var(--text-2)',
+              }}
+            >
               Start
               <input
                 type="time"
@@ -287,15 +307,22 @@ export function TimeFocusSection() {
                 }
                 style={{
                   height: 38,
-                  borderRadius: 8,
+                  borderRadius: 'var(--corner-field)',
                   border: '1px solid var(--settings-border)',
                   background: 'var(--bg-base)',
                   color: 'var(--text-1)',
-                  padding: '0 10px',
+                  padding: '0 var(--space-3)',
                 }}
               />
             </label>
-            <label style={{ display: 'grid', gap: 6, fontSize: 12, color: 'var(--text-2)' }}>
+            <label
+              style={{
+                display: 'grid',
+                gap: 'var(--space-2)',
+                fontSize: 12,
+                color: 'var(--text-2)',
+              }}
+            >
               End
               <input
                 type="time"
@@ -310,11 +337,11 @@ export function TimeFocusSection() {
                 }
                 style={{
                   height: 38,
-                  borderRadius: 8,
+                  borderRadius: 'var(--corner-field)',
                   border: '1px solid var(--settings-border)',
                   background: 'var(--bg-base)',
                   color: 'var(--text-1)',
-                  padding: '0 10px',
+                  padding: '0 var(--space-3)',
                 }}
               />
             </label>

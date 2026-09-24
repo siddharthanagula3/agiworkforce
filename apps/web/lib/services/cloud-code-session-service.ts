@@ -26,6 +26,7 @@ import {
   type NotebookCellOutput,
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { redactSecrets } from '@/lib/security/secrets-audit';
 import {
   CLOUD_CODE_COMMAND_DEADLINE_MS,
   resolveCloudCodeCommandDeadlineMs,
@@ -194,6 +195,78 @@ export class CloudCodeUnavailableError extends Error {
  * `runtime_id` not yet added.
  */
 const SCHEMA_NOT_MIGRATED_CODES = new Set(['42P01', '42703']);
+
+export type GitFailureKind =
+  | 'credentials'
+  | 'repository_not_found'
+  | 'branch_behind'
+  | 'branch_protected'
+  | 'network'
+  | 'unknown';
+
+/** First match wins; each pattern is git's or GitHub's own fixed wording. */
+const GIT_FAILURE_PATTERNS: ReadonlyArray<readonly [GitFailureKind, RegExp]> = [
+  ['branch_protected', /protected branch|GH006|required status check|pull request is required/i],
+  [
+    'branch_behind',
+    /non-fast-forward|fetch first|failed to push some refs|tip of your current branch is behind/i,
+  ],
+  [
+    'repository_not_found',
+    /repository not found|does not appear to be a git repository|not found/i,
+  ],
+  [
+    'credentials',
+    /authentication failed|could not read username|invalid username or password|bad credentials|permission to .* denied|HTTP 40[13]|returned error: 40[13]/i,
+  ],
+  [
+    'network',
+    /could not resolve host|failed to connect|connection timed out|connection reset|timed out|returned error: 5\d\d|HTTP 5\d\d/i,
+  ],
+];
+
+const GIT_FAILURE_NEXT_MOVE: Readonly<Record<GitFailureKind, string>> = {
+  credentials:
+    'GitHub did not accept the connection for this repository. Check that the GitHub app still has access to it, then try again.',
+  repository_not_found:
+    'The repository could not be found with this connection. Check that it still exists and that the GitHub app can see it.',
+  branch_behind:
+    'The remote branch has commits this session does not have. Ask the agent to pull them in, then push again.',
+  branch_protected:
+    'This branch is protected and does not take a direct push. Push to another branch and open a pull request.',
+  network: 'The repository host could not be reached. Try again in a moment.',
+  unknown: 'Try again. If it keeps failing, start a new session.',
+};
+
+export function classifyGitFailure(output: string): GitFailureKind {
+  return GIT_FAILURE_PATTERNS.find(([, pattern]) => pattern.test(output))?.[0] ?? 'unknown';
+}
+
+const URL_USERINFO = /(\bhttps?:\/\/)[^\s/@]+@/gi;
+
+/**
+ * A git step that failed is reported as the step and the one move that fixes
+ * it. `stderr` carries sandbox paths, remote URLs and curl internals, so it goes
+ * to the log only, with credentials and URL userinfo removed first.
+ */
+function gitStepFailure(
+  step: string,
+  outcome: { error?: string; stderr?: string },
+  context: Readonly<Record<string, unknown>>,
+): CloudCodeUnavailableError {
+  const output = outcome.error || outcome.stderr || '';
+  const kind = classifyGitFailure(output);
+  logger.warn(
+    {
+      ...context,
+      step,
+      kind,
+      reason: redactSecrets(output.replace(URL_USERINFO, '$1')).slice(0, 500),
+    },
+    '[code] git step failed',
+  );
+  return new CloudCodeUnavailableError(`${step}. ${GIT_FAILURE_NEXT_MOVE[kind]}`);
+}
 
 export function isCloudCodeSchemaUnavailable(error: unknown): boolean {
   let current: unknown = error;
@@ -1222,9 +1295,10 @@ export const createCloudCodeSession = tracedCodeAction(
           timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
         });
         if (!clone.ok) {
-          throw new CloudCodeUnavailableError(
-            clone.error || clone.stderr || 'Repository setup failed',
-          );
+          throw gitStepFailure('Repository setup failed', clone, {
+            userId: owner.userId,
+            sessionId,
+          });
         }
         // Read the base before branching: afterwards HEAD is the working branch.
         const baseBranch =
@@ -1236,9 +1310,10 @@ export const createCloudCodeSession = tracedCodeAction(
           branch: workingBranch,
         });
         if (!branched.ok) {
-          throw new CloudCodeUnavailableError(
-            branched.error || branched.stderr || 'Working branch could not be created',
-          );
+          throw gitStepFailure('Working branch could not be created', branched, {
+            userId: owner.userId,
+            sessionId,
+          });
         }
         await recordSessionBranches(db, owner, sessionId, { workingBranch, baseBranch });
       }
@@ -1918,11 +1993,14 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     try {
       const add = await executor.git.add({ path: claim.session.workspacePath, all: true });
       if (!add.ok) {
-        throw new CloudCodeUnavailableError(add.error || add.stderr || 'Staging changes failed');
+        throw gitStepFailure('Staging changes failed', add, {
+          userId: owner.userId,
+          sessionId,
+        });
       }
       const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
       if (!commit.ok) {
-        throw new CloudCodeUnavailableError(commit.error || commit.stderr || 'Commit failed');
+        throw gitStepFailure('Commit failed', commit, { userId: owner.userId, sessionId });
       }
       const push = await executor.git.push({
         path: claim.session.workspacePath,
@@ -1932,7 +2010,7 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
         timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
       });
       if (!push.ok) {
-        throw new CloudCodeUnavailableError(push.error || push.stderr || 'Push failed');
+        throw gitStepFailure('Push failed', push, { userId: owner.userId, sessionId });
       }
       const released = await releaseCloudCodeSessionAfterRun(
         db,
@@ -2119,9 +2197,10 @@ export const readCloudCodeSessionChanges = tracedCodeAction(
       const workspacePath = claim.session.workspacePath;
       const status = await executor.git.status({ path: workspacePath });
       if (!status.ok) {
-        throw new CloudCodeUnavailableError(
-          status.error || status.stderr || 'Workspace status could not be read',
-        );
+        throw gitStepFailure('Workspace status could not be read', status, {
+          userId: owner.userId,
+          sessionId,
+        });
       }
       const baseRef = sessionBaseRef(claim.session);
       let base = cloudCodeSessionBaseBranch(claim.session);
@@ -2136,9 +2215,10 @@ export const readCloudCodeSessionChanges = tracedCodeAction(
         diff = await executor.git.diff({ path: workspacePath });
       }
       if (!diff.ok) {
-        throw new CloudCodeUnavailableError(
-          diff.error || diff.stderr || 'Workspace diff could not be read',
-        );
+        throw gitStepFailure('Workspace diff could not be read', diff, {
+          userId: owner.userId,
+          sessionId,
+        });
       }
       const released = await releaseCloudCodeSessionAfterRun(
         db,

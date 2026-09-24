@@ -35,6 +35,11 @@ import {
 
 export const ANONYMOUS_PLAN_TIER = normalizeBillingPlanTier(null);
 
+export function isConfiguredManagedModelRoute(modelId: string, routeId: string): boolean {
+  const route = listManagedRoutesForModel(modelId).find((entry) => entry.routeId === routeId);
+  return route !== undefined && listAvailableManagedProviderIds().has(route.provider);
+}
+
 export type ModelCatalogueRouteStatus = 'available' | 'degraded' | 'not_configured';
 export type ModelCatalogueFreeInventory = 'promotional' | 'recurring';
 
@@ -140,8 +145,8 @@ export interface ModelCatalogueEntry {
   openWeight: boolean;
   contextTokens: number | null;
   maxOutputTokens: number | null;
-  inputPerMillion: number;
-  outputPerMillion: number;
+  // No per million price: with the usage meter it lets a plan's allowance be
+  // worked back into tokens (founder, 2026-09-21). The band is relative.
   priceBand: ModelPickerPriceBand | null;
   capabilities: ModelCatalogueCapabilities;
   admitted: boolean;
@@ -221,8 +226,6 @@ function toCatalogueEntry(
     openWeight: model.openWeight === true,
     contextTokens: model.contextWindow ?? null,
     maxOutputTokens: model.maxOutputTokens ?? null,
-    inputPerMillion: model.inputCost,
-    outputPerMillion: model.outputCost,
     priceBand: getModelPriceBand(model.id),
     capabilities: projectCapabilities(facts.capabilities),
     admitted,

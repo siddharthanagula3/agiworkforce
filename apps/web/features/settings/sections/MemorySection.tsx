@@ -47,15 +47,17 @@ function memoryRow(title: string, description: string, control: ReactNode) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 16,
-        padding: '12px 16px',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-3) var(--space-4)',
         border: '1px solid var(--settings-border)',
         borderRadius: 'var(--radius-md)',
       }}
     >
       <div>
         <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: 0 }}>{title}</p>
-        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>{description}</p>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
+          {description}
+        </p>
       </div>
       {control}
     </div>
@@ -92,7 +94,7 @@ export function MemorySection() {
   }, [memoryCount, confirm, clearAllMemories]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {confirmDialog}
       <div>
         <h1
@@ -101,7 +103,7 @@ export function MemorySection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Memory
@@ -116,11 +118,11 @@ export function MemorySection() {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 12,
+          gap: 'var(--space-3)',
           border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
-          padding: 16,
+          padding: 'var(--space-4)',
         }}
       >
         {organizationMemoryAllowed ? null : (
@@ -128,7 +130,7 @@ export function MemorySection() {
             role="status"
             style={{
               margin: 0,
-              padding: '10px 16px',
+              padding: 'var(--space-3) var(--space-4)',
               border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
               color: 'var(--text-1)',
@@ -146,8 +148,8 @@ export function MemorySection() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 16,
-              padding: '10px 16px',
+              gap: 'var(--space-4)',
+              padding: 'var(--space-3) var(--space-4)',
               border: '1px solid var(--settings-destructive)',
               borderRadius: 'var(--radius-md)',
               color: 'var(--settings-destructive-text)',
@@ -161,7 +163,7 @@ export function MemorySection() {
                 onClick={retrySave}
                 style={{
                   height: CONTROL_HEIGHT,
-                  padding: '0 10px',
+                  padding: '0 var(--space-3)',
                   fontSize: 12,
                   fontWeight: 500,
                   color: 'var(--settings-destructive-text)',
@@ -195,20 +197,20 @@ export function MemorySection() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
-            padding: '4px 16px',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-1) var(--space-4)',
           }}
         >
           <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }} role="status">
             {memoryCount} saved {memoryCount === 1 ? 'memory' : 'memories'}
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
             <button
               type="button"
               onClick={importDialog.open}
               style={{
                 height: CONTROL_HEIGHT,
-                padding: '0 10px',
+                padding: '0 var(--space-3)',
                 fontSize: 12,
                 fontWeight: 500,
                 color: 'var(--text-1)',
@@ -228,7 +230,7 @@ export function MemorySection() {
               disabled={memoryCount === 0}
               style={{
                 height: CONTROL_HEIGHT,
-                padding: '0 10px',
+                padding: '0 var(--space-3)',
                 fontSize: 12,
                 fontWeight: 500,
                 color: 'var(--text-1)',
@@ -249,7 +251,7 @@ export function MemorySection() {
               disabled={memoryCount === 0}
               style={{
                 height: CONTROL_HEIGHT,
-                padding: '0 10px',
+                padding: '0 var(--space-3)',
                 fontSize: 12,
                 fontWeight: 500,
                 color: 'var(--settings-destructive-text)',
@@ -268,7 +270,7 @@ export function MemorySection() {
         </div>
       </section>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
         {memoryRow(
           'Generate from past chats',
           'Use conversation history to generate better responses',
@@ -308,11 +310,11 @@ export function MemorySection() {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 'var(--space-2)',
           border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
-          padding: 16,
+          padding: 'var(--space-4)',
         }}
       >
         <h2
@@ -321,13 +323,13 @@ export function MemorySection() {
         >
           Where a memory applies
         </h2>
-        <dl style={{ display: 'flex', flexDirection: 'column', gap: 8, margin: 0 }}>
+        <dl style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', margin: 0 }}>
           {MEMORY_SCOPE_EXPLANATION.map((entry) => (
             <div key={entry.scope}>
               <dt style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>
                 {entry.scope}
               </dt>
-              <dd style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>
+              <dd style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
                 {entry.meaning}
               </dd>
             </div>

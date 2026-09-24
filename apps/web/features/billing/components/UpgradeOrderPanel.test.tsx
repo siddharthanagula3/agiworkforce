@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const paymentMocks = vi.hoisted(() => ({
   previewUpgrade: vi.fn(),
@@ -111,6 +111,66 @@ describe('UpgradeOrderPanel', () => {
     expect(screen.getByRole('button', { name: 'Add' })).toBeVisible();
   });
 
+  it('says the payment method could not be read instead of claiming none is on file', async () => {
+    paymentMocks.fetchSavedPaymentMethods.mockRejectedValue(
+      new Error('We could not load your payment method.'),
+    );
+    renderPanel();
+
+    const payment = await screen.findByRole('region', { name: 'Payment method' });
+    expect(await within(payment).findByRole('alert')).toHaveTextContent(
+      'We could not load your payment method.',
+    );
+    expect(screen.queryByText('No payment method on file')).toBeNull();
+    expect(within(payment).getByRole('button', { name: 'Change' })).toBeVisible();
+  });
+
+  it('holds the order summary busy while it is priced, then releases it to be announced', async () => {
+    let resolvePreview: (value: typeof PRORATED_PREVIEW) => void = () => {};
+    paymentMocks.previewUpgrade.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePreview = resolve;
+      }),
+    );
+    renderPanel();
+
+    const order = screen.getByRole('region', { name: 'Order details' });
+    expect(order).toHaveAttribute('aria-live', 'polite');
+    expect(order).toHaveAttribute('aria-busy', 'true');
+    expect(order).toHaveTextContent('Calculating your prorated cost');
+
+    resolvePreview(PRORATED_PREVIEW);
+
+    await waitFor(() => expect(order).toHaveAttribute('aria-busy', 'false'));
+    expect(order).toHaveTextContent('$92.56');
+  });
+
+  it('pairs every figure in the order with the label that says what it is', async () => {
+    renderPanel();
+    const order = await screen.findByRole('region', { name: 'Order details' });
+    await waitFor(() => expect(order).toHaveAttribute('aria-busy', 'false'));
+
+    const terms = within(order).getAllByRole('term');
+    const definitions = within(order).getAllByRole('definition');
+    expect(terms.map((term) => term.textContent)).toEqual([
+      'Unused time on Pro',
+      'Remaining time on Max',
+      'Subtotal',
+      'Tax',
+      'Total due today',
+    ]);
+    expect(definitions).toHaveLength(terms.length);
+    expect(definitions.at(-1)).toHaveTextContent('$92.56');
+  });
+
+  it('states the yearly interval next to a yearly price', async () => {
+    render(<UpgradeOrderPanel plan="max" billingInterval="yearly" returnPath="/upgrade/max" />);
+
+    const notice = await screen.findByText(/auto renew/i);
+    expect(notice).toHaveTextContent(/\/year \+ tax/);
+    expect(notice).not.toHaveTextContent('/month');
+  });
+
   it('returns from the portal to the order screen it was opened from', async () => {
     renderPanel();
 
@@ -138,6 +198,8 @@ describe('UpgradeOrderPanel', () => {
       );
 
       expect(await screen.findByText('$7.00')).toBeVisible();
+      expect(screen.getByRole('definition')).toHaveTextContent('$7.00');
+      expect(screen.getByRole('term')).not.toHaveTextContent(/total/i);
       expect(screen.getByText(/tax is calculated at checkout/i)).toBeVisible();
       // Quoting "$7.00 total due today" would understate the actual charge.
       expect(screen.queryByText(/total due today/i)).toBeNull();

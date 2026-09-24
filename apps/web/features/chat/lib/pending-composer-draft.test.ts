@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearPendingDraft,
   parkPendingDraft,
@@ -69,5 +69,26 @@ describe('pending composer draft', () => {
     stepBack();
 
     expect(restorablePendingDraft(NOTHING_IN_MEMORY)).toBe('');
+  });
+
+  it('marks a history arrival before an existing router listener can render it', async () => {
+    vi.resetModules();
+    let freshDrafts: typeof import('./pending-composer-draft');
+    const consumed: string[] = [];
+    const consumeDuringRouting = () => {
+      consumed.push(freshDrafts.restorablePendingDraft(NOTHING_IN_MEMORY));
+    };
+    window.addEventListener('popstate', consumeDuringRouting);
+
+    try {
+      freshDrafts = await import('./pending-composer-draft');
+      freshDrafts.parkPendingDraft(DRAFT);
+
+      stepBack();
+
+      expect(consumed).toEqual([DRAFT]);
+    } finally {
+      window.removeEventListener('popstate', consumeDuringRouting);
+    }
   });
 });

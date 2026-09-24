@@ -42,7 +42,7 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 async function authed(path: string, init?: RequestInit): Promise<Response> {
@@ -123,7 +123,7 @@ export function WorkspaceSpendLimit() {
 
   if (isPending) {
     return (
-      <section style={{ ...cardStyle, padding: 20 }} role="status">
+      <section style={{ ...cardStyle, padding: 'var(--space-5)' }} role="status">
         Loading the monthly spend limit…
       </section>
     );
@@ -131,7 +131,7 @@ export function WorkspaceSpendLimit() {
 
   if (isError || data === undefined) {
     return (
-      <section style={{ ...cardStyle, padding: 20 }} role="alert">
+      <section style={{ ...cardStyle, padding: 'var(--space-5)' }} role="alert">
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load the monthly spend limit
         </p>

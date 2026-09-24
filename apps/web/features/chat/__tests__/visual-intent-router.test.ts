@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { detectArtifactType, isRenderableArtifact } from '@agiworkforce/artifacts';
 
-import { classifyVisualIntent } from '../lib/visual-intent';
+import { classifyVisualIntent, explicitlyRequestsArtifact } from '../lib/visual-intent';
 import {
   routeVisualRequest,
   structuredVisualArtifactTarget,
@@ -18,6 +18,7 @@ const STRUCTURED_PROMPTS: ReadonlyArray<[string, string]> = [
   ['an svg icon of a paper plane', 'vector'],
   ['an interactive chart I can hover', 'interactive'],
   ['a wireframe of the settings page', 'interactive'],
+  ['an HTML artifact for the settings page', 'interactive'],
 ];
 
 const PHOTOGRAPHIC_PROMPTS: readonly string[] = [
@@ -81,6 +82,11 @@ describe('classifyVisualIntent', () => {
     expect(decision.destination).toBe('image-generation');
     expect(decision.reason).toBe('no-signal');
   });
+
+  it('distinguishes an explicit HTML artifact request from a generic artifact mention', () => {
+    expect(explicitlyRequestsArtifact('Create an HTML artifact for settings')).toBe(true);
+    expect(explicitlyRequestsArtifact('Streaming markdown probe: artifact')).toBe(false);
+  });
 });
 
 describe('routeVisualRequest', () => {
@@ -91,6 +97,15 @@ describe('routeVisualRequest', () => {
     expect(route.target.artifactType).toBe('mermaid');
     expect(route.prompt).toContain('a flowchart of the signup funnel');
     expect(route.prompt).toContain(route.target.directive);
+    expect(route.prompt).toContain('%% @artifact');
+  });
+
+  it('marks HTML previews explicitly so fenced instructional HTML stays inert', () => {
+    const route = routeVisualRequest({ prompt: 'an HTML artifact for the settings page' });
+    expect(route.destination).toBe('artifact');
+    if (route.destination !== 'artifact') throw new Error('expected an artifact route');
+    expect(route.target.artifactType).toBe('html');
+    expect(route.prompt).toContain('<!-- @artifact -->');
   });
 
   it('returns no artifact target for a photorealistic request', () => {

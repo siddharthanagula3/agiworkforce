@@ -192,8 +192,8 @@ describe('sidebar behaviour', () => {
     expect(projectRow).toBeTruthy();
     for (const button of projectRow.querySelectorAll('button')) {
       if (/(?<![-\w])h-6\b/.test(button.className)) {
-        expect(button.className).toContain('[@media(hover:none)]:h-9');
-        expect(button.className).toContain('[@media(hover:none)]:w-9');
+        expect(button.className).toContain('pointer-coarse:h-11');
+        expect(button.className).toContain('pointer-coarse:w-11');
       }
     }
     expect(actions.length).toBe(0);

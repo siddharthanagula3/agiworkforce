@@ -18,7 +18,7 @@ async function collect(stream: AsyncIterable<StreamChunk>): Promise<StreamChunk[
 }
 
 describe('translateAnthropicStream, truncation safety (P1-2)', () => {
-  it('emits a fallback stop chunk when the SDK iterator drains without message_delta', async () => {
+  it('reports a failure when the SDK iterator drains without message_delta, keeping the text', async () => {
     const events: Event[] = [
       {
         type: 'message_start',
@@ -50,10 +50,16 @@ describe('translateAnthropicStream, truncation safety (P1-2)', () => {
       } as unknown as Event,
     ];
 
-    const out = await collect(translateAnthropicStream(fromArray(events)));
-    const stops = out.filter((c) => c.type === 'stop');
-    expect(stops).toHaveLength(1);
-    expect(stops[0]).toEqual({ type: 'stop', reason: 'end_turn' });
+    const out: StreamChunk[] = [];
+    let caught: unknown = null;
+    try {
+      for await (const c of translateAnthropicStream(fromArray(events))) out.push(c);
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(out.filter((c) => c.type === 'stop')).toEqual([]);
     const texts = out.filter((c) => c.type === 'text-delta');
     expect(texts).toHaveLength(1);
   });

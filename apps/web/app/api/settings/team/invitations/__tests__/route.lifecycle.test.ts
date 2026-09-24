@@ -77,6 +77,7 @@ import { GET, POST } from '../route';
 import { DELETE as REVOKE, POST as RESEND } from '../[invitationId]/route';
 import { POST as ACCEPT } from '../accept/route';
 import { hashInvitationToken } from '@/lib/services/organization-invitation-service';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
@@ -251,7 +252,9 @@ describe('organization invitation lifecycle routes', () => {
         };
 
         expect(body.delivery.emailSent).toBe(false);
-        expect(body.delivery.reason).toContain('rejected');
+        expect(body.delivery.reason).toContain('could not be delivered');
+        // The provider's own code and detail stay in the log, never in the reader's sentence.
+        expect(body.delivery.reason).not.toMatch(/rejected|422|domain not verified/);
         expect(body.inviteToken).toMatch(/^[A-Za-z0-9_-]{20,}$/);
       } finally {
         delete process.env['RESEND_API_KEY'];
@@ -407,6 +410,17 @@ describe('organization invitation lifecycle routes', () => {
       expect(String(update?.[0])).toContain('resend_count = resend_count + 1');
       expect((update?.[1] as unknown[])[0]).toBe(hashInvitationToken(body.inviteToken));
       expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(false);
+      expect(recordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'member_invited',
+          organizationId: ORG_A,
+          detail: expect.objectContaining({
+            resourceType: 'organization_invitation',
+            resourceId: INVITE_ID,
+            reason: 'invitation_resent',
+          }),
+        }),
+      );
     });
 
     it('refuses to resend an invitation that belongs to another organization', async () => {

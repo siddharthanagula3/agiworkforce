@@ -6,6 +6,14 @@ import { getModelsForTierAndSurface } from '@agiworkforce/types';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
 import {
+  clearPendingDraftClear,
+  markPendingDraftClear,
+} from '@/features/chat/lib/pending-draft-clear';
+import {
+  clearObservedConversationDraftRevisions,
+  saveConversationDraft,
+} from '@/features/chat/services/conversation-draft';
+import {
   __resetConversationListLoadForTests,
   useConversations,
   useProjectConversations,
@@ -109,6 +117,7 @@ function findPostBody(): Record<string, unknown> {
 describe('useConversations.createConversation', () => {
   beforeEach(() => {
     __resetConversationListLoadForTests();
+    clearObservedConversationDraftRevisions();
     useChatStore.getState().reset();
     useSettingsStore.getState().setNewChatsTemporary(false);
     useChatProjectStore.setState({ projects: [], activeProjectId: null });
@@ -142,6 +151,32 @@ describe('useConversations.createConversation', () => {
     });
 
     expect(findPostBody()).not.toHaveProperty('projectId');
+  });
+
+  it('explains a conversation-creation rate limit using the server retry window', async () => {
+    const normalFetch = mockFetchRoutes();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'POST' && String(input) === '/api/chat/conversations') {
+          return new Response(JSON.stringify({ error: { code: 'RATE_LIMIT_EXCEEDED' } }), {
+            status: 429,
+            headers: { 'retry-after': '60' },
+          });
+        }
+        return normalFetch(input, init);
+      }),
+    );
+
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+    let created: Conversation | null = null;
+    await act(async () => {
+      created = await result.current.createConversation('New Chat', 'auto');
+    });
+
+    expect(created).toBeNull();
+    expect(useChatStore.getState().error).toMatch(/try again in about 60 seconds/i);
   });
 
   it('inherits the temporary default when there is no per-chat choice', async () => {
@@ -322,6 +357,105 @@ describe('useConversations.loadConversation pagination races', () => {
     useChatStore.getState().reset();
     useSettingsStore.getState().setNewChatsTemporary(false);
     authMocks.getToken.mockResolvedValue('session-token');
+    clearPendingDraftClear(DEEP_LINK_CONVERSATION.id);
+  });
+
+  it('does not resurrect a cleared local draft from an older server snapshot after reload', async () => {
+    markPendingDraftClear(DEEP_LINK_CONVERSATION.id);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes(DEEP_LINK_CONVERSATION.id)
+          ? new Response(
+              JSON.stringify({
+                conversation: { ...DEEP_LINK_CONVERSATION, draft: 'cleared before refresh' },
+                messages: [],
+                total: 0,
+                hasMore: false,
+              }),
+              { status: 200 },
+            )
+          : conversationListResponse([WIRE_CONVERSATION]),
+      ),
+    );
+    const { result } = renderHook(() => useConversations());
+
+    await act(async () => {
+      expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+    });
+
+    expect(useChatStore.getState().getDraftContent(DEEP_LINK_CONVERSATION.id)).toBe('');
+    expect(useChatStore.getState().draftsByConversation[DEEP_LINK_CONVERSATION.id]).toBe('');
+  });
+
+  it('carries the loaded server draft revision into the next save', async () => {
+    const revision = '2026-09-23T00:00:00.000Z';
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return new Response(
+          JSON.stringify({ saved: true, draftUpdatedAt: '2026-09-23T00:00:01.000Z' }),
+          { status: 200 },
+        );
+      }
+      return String(input).includes(DEEP_LINK_CONVERSATION.id)
+        ? new Response(
+            JSON.stringify({
+              conversation: {
+                ...DEEP_LINK_CONVERSATION,
+                draft: 'an earlier draft',
+                draft_updated_at: revision,
+              },
+              messages: [],
+              total: 0,
+              hasMore: false,
+            }),
+            { status: 200 },
+          )
+        : conversationListResponse([WIRE_CONVERSATION]);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useConversations());
+
+    await act(async () => {
+      expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+    });
+    expect(
+      await saveConversationDraft(DEEP_LINK_CONVERSATION.id, 'edited draft', async () => ({})),
+    ).toBe('saved');
+
+    const putCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(putCall).toBeDefined();
+    expect(JSON.parse(String(putCall![1]?.body)).draftUpdatedAt).toBe(revision);
+  });
+
+  it('does not erase a live local draft when another tab has a pending clear marker', async () => {
+    markPendingDraftClear(DEEP_LINK_CONVERSATION.id);
+    useChatStore.getState().setDraftContent('newer text in this tab', DEEP_LINK_CONVERSATION.id);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes(DEEP_LINK_CONVERSATION.id)
+          ? new Response(
+              JSON.stringify({
+                conversation: { ...DEEP_LINK_CONVERSATION, draft: 'older server text' },
+                messages: [],
+                total: 0,
+                hasMore: false,
+              }),
+              { status: 200 },
+            )
+          : conversationListResponse([WIRE_CONVERSATION]),
+      ),
+    );
+    const { result } = renderHook(() => useConversations());
+
+    await act(async () => {
+      expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+    });
+
+    expect(useChatStore.getState().getDraftContent(DEEP_LINK_CONVERSATION.id)).toBe(
+      'newer text in this tab',
+    );
   });
 
   it('upserts a deep-linked detail after the first sidebar page has loaded', async () => {

@@ -4,21 +4,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Cookie, X } from 'lucide-react';
-import { useSession } from '@/lib/identity/client';
+import { Button } from '@agiworkforce/ui/button';
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  Label,
-  Switch,
-} from '@agiworkforce/ui';
+} from '@agiworkforce/ui/dialog';
+import { Label } from '@agiworkforce/ui/label';
+import { Switch } from '@agiworkforce/ui/switch';
 import {
   ALL_ACCEPTED_PREFERENCES,
   COOKIE_CONSENT_OPEN_EVENT,
+  COOKIE_CONSENT_STORAGE_KEY,
+  COOKIE_CONSENT_UPDATED_EVENT,
   NECESSARY_ONLY_PREFERENCES,
+  isAnalyticsLockedByOptOutSignal,
   readCookiePreferences,
   writeCookiePreferences,
   type CookiePreferences,
@@ -29,26 +31,45 @@ const COOKIE_ICON_SIZE = 20;
 const PROMPT_DELAY_MS = 1000;
 
 export const CookieConsent = () => {
-  const { isLoaded, isSignedIn } = useSession();
   const reducedMotion = useReducedMotion();
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [preferences, setPreferences] = useState<CookiePreferences>(NECESSARY_ONLY_PREFERENCES);
+  const [optedOutBySignal, setOptedOutBySignal] = useState(false);
   const bannerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!isLoaded || isSignedIn) {
-      setShowBanner(false);
-      return undefined;
-    }
+    setOptedOutBySignal(isAnalyticsLockedByOptOutSignal());
+  }, []);
+
+  useEffect(() => {
     const stored = readCookiePreferences();
     if (stored) {
       setPreferences(stored);
       return undefined;
     }
-    const timer = setTimeout(() => setShowBanner(true), PROMPT_DELAY_MS);
+    const timer = setTimeout(() => {
+      if (!readCookiePreferences()) setShowBanner(true);
+    }, PROMPT_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [isLoaded, isSignedIn]);
+  }, []);
+
+  useEffect(() => {
+    const syncPreferences = () => {
+      const stored = readCookiePreferences();
+      setPreferences(stored ?? NECESSARY_ONLY_PREFERENCES);
+      setShowBanner(stored === null);
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === COOKIE_CONSENT_STORAGE_KEY || event.key === null) syncPreferences();
+    };
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener(COOKIE_CONSENT_UPDATED_EVENT, syncPreferences);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener(COOKIE_CONSENT_UPDATED_EVENT, syncPreferences);
+    };
+  }, []);
 
   useEffect(() => {
     const openSettings = () => {
@@ -103,7 +124,7 @@ export const CookieConsent = () => {
             animate={{ y: 0, opacity: 1 }}
             exit={reducedMotion ? { opacity: 0 } : { y: 24, opacity: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-4 sm:justify-start sm:p-6"
+            className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--z-notification)] flex justify-center p-4 sm:justify-start sm:p-6"
             role="region"
             aria-label="Cookie consent"
           >
@@ -196,8 +217,8 @@ export const CookieConsent = () => {
               <div className="flex-1">
                 <Label className="font-medium">Necessary</Label>
                 <p className="text-sm text-muted-foreground">
-                  Auth session, CSRF token and locale. Required for the site to work, so this cannot
-                  be switched off.
+                  Sign-in session, a request-integrity marker for signed-out browsers, and your
+                  language. Required for the site to work, so this cannot be switched off.
                 </p>
               </div>
               <Switch checked disabled aria-label="Necessary cookies (always on)" />
@@ -208,18 +229,23 @@ export const CookieConsent = () => {
                 <Label className="font-medium" htmlFor="cookie-analytics">
                   Analytics
                 </Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground" id="cookie-analytics-description">
                   Aggregated page views (Google Analytics 4), with no personally identifying
                   information. Off by default.
+                  {optedOutBySignal
+                    ? ' Your browser is sending Global Privacy Control, so this stays off here and the switch cannot be turned on.'
+                    : ''}
                 </p>
               </div>
               <Switch
                 id="cookie-analytics"
-                checked={preferences.analytics}
+                checked={optedOutBySignal ? false : preferences.analytics}
+                disabled={optedOutBySignal}
                 onCheckedChange={(checked) =>
                   setPreferences({ necessary: true, analytics: checked })
                 }
                 aria-label="Analytics cookies"
+                aria-describedby="cookie-analytics-description"
               />
             </div>
           </div>

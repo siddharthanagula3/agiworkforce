@@ -1,21 +1,21 @@
-# AGI Workforce Production Restructure
+# AGI Workforce Production Strategy
 
-Status: Active
+Status: Current; mechanical restructure complete, website launch remediation active
 Owner: Founder + platform lead
-Last updated: 2026-08-28
+Last updated: 2026-09-22
 Detailed plan: retired. `docs/plans/monorepo-restructure-2026-07-08.md` was
 deleted once its phases landed; the mechanical restructure it described is
 complete (see the phase note below) and `docs/architecture/overview.md`
 now carries the package/crate ownership it defined.
 
-> **Phase note (2026-07-26).** The mechanical restructure below is complete.
-> every wave is landed and the repository is structurally coherent (baseline:
-> 10,272 passing tests, 27 green operability guardrails). The active phase is now
-> **surface production quality**: Desktop Cloud and Mobile Cloud to the standard
-> Web already meets, and the VS Code and Chrome extensions to the frontend UI/UX
-> standard of ChatGPT's equivalents. The executable queue for that phase lives in
-> `docs/work/restructure-execution-queue.md`. The objective and boundaries below
-> still govern; only the sequencing has moved on.
+> **Phase note (2026-09-21).** The mechanical restructure is complete. The
+> active phase is **website launch readiness**. Work one public platform at a
+> time: Web first; Mobile and Desktop next; Chrome after those; CLI and VS Code
+> last. Shared contract/package repairs are allowed when they are required by
+> the active platform and make the later surfaces inherit the correction.
+> Current execution lives in `docs/specs/website-launch/PROGRESS.md` and
+> `WEB_PUBLIC_RELEASE_AUDIT.md`. The older queue in
+> `docs/work/restructure-execution-queue.md` is a historical checkpoint.
 
 ## Objective
 
@@ -34,24 +34,30 @@ final success criterion is the full platform outcome.
 ## Locked Product And Trust Boundaries
 
 - Web is Managed Cloud only.
-- Desktop is one product surface with two installed shells (founder decision,
-  2026-08-03). The Tauri shell keeps the isolated Local, BYOK, and Managed
-  Cloud composition roots unchanged. A cloud-only Electron shell
-  (`apps/desktop/electron/`) loads the hosted cloud web app by default
-  (Claude-desktop model), with the desktop cloud web build as a bundled
-  fallback renderer; it has no Local mode, no BYOK, and no local execution
-  plane, and lives entirely inside the Managed Cloud trust boundary (same
-  plane as Web). Local and BYOK remain Tauri-shell-only.
+- Public Desktop is the Electron product under `apps/desktop/electron`. It
+  combines the hosted Account Cloud client with a permissioned local host for
+  files, computer use, voice, and developer-session projection. Retained Tauri
+  code is internal implementation inventory, not a second public product and
+  not evidence of a public capability.
 - Mobile supports isolated on-device Local and Managed Cloud; it has no BYOK.
-- Web, Desktop Cloud, and Mobile Cloud share cloud conversations, projects,
-  memory, settings, account state, and managed artifact infrastructure.
-- CLI and VS Code share local developer sessions and workspace context.
-- Chrome owns browser-scoped conversations. Context leaves that boundary only
-  through an explicit selected and redacted transfer.
+- Web, Desktop Cloud, Mobile Cloud, and provenance-eligible Chrome Managed
+  Cloud share account-owned chats/messages, projects, cloud memory,
+  files/artifacts, connected tools/apps, OAuth connection metadata, settings,
+  personalization, and one effective entitlement.
+- Desktop Code, CLI, and VS Code share host-owned local developer sessions,
+  transcripts, tools/extensions, permissions, repositories/files, and
+  credential references. Mobile or Web may project an authorized host session;
+  they do not become the authority for local execution or files.
+- Chrome page/browser state remains browser-scoped. Eligible Managed Cloud
+  conversations participate in Account Cloud; local browser-task history does
+  not silently become account chat history.
 - Local data never reaches BYOK or Managed Cloud without an explicit fork,
   context selection, secret scan, payload preview, consent, and visible target.
 - Managed artifact sandboxes serve Web, Desktop Cloud, and Mobile Cloud and
   never leak into Local or developer runtimes.
+- Managed Free is available after sign-in. New paid subscriptions and upgrades
+  remain waitlist/access-code gated; the gate is one account policy rather than
+  a separate membership per client.
 
 ## Canonical Ownership Rules
 
@@ -90,9 +96,10 @@ consumer.
 
 ## Execution queue
 
-The dated queue, resume point and evidence commands live in
-[`docs/work/restructure-execution-queue.md`](docs/work/restructure-execution-queue.md).
-This file carries the standing strategy and phase structure only.
+The current Web queue, resume point, and evidence commands live in
+[`docs/specs/website-launch/PROGRESS.md`](docs/specs/website-launch/PROGRESS.md)
+and [`WEB_PUBLIC_RELEASE_AUDIT.md`](WEB_PUBLIC_RELEASE_AUDIT.md). The dated
+restructure queue is retained only as historical evidence.
 
 ## Completion Gate
 

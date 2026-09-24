@@ -10,6 +10,7 @@ import {
   PLATFORM_ADMIN_ENV_VAR,
   isPlatformAdmin,
 } from '@/features/admin/lib/platform-admin-access';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,5 +47,5 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     redirect('/');
   }
 
-  return children;
+  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   ComposerEditorHandle,
@@ -12,6 +12,7 @@ import {
   COMPOSER_EDITOR_QUERY_PARAM,
 } from '@features/chat/lib/composer-editor-gate';
 import { ChatComposerNew } from './ChatComposerNew';
+import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 
 /**
  * The empty-state and in-conversation composers are different positions in
@@ -131,11 +132,13 @@ beforeEach(() => {
   // into the next would be a reload none of them performed.
   window.localStorage.clear();
   window.sessionStorage.clear();
+  __resetComposerDraftStorageForTests();
   useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
   useChatStore.setState({
     draftsByConversation: {},
     draftContent: '',
     composerTogglesByConversation: {},
+    activeConversationId: null,
   });
 });
 
@@ -146,13 +149,33 @@ afterEach(() => {
 });
 
 describe('draft survives a composer remount · textarea arm', () => {
-  it('parks what was typed when the composer unmounts', () => {
+  it('makes an open conversation draft available for server sync while typing', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+
+    typeInTextarea(DRAFT);
+
+    expect(draftFor('conv-1')).toBe(DRAFT);
+  });
+
+  it('does not stage temporary chat text for server sync', () => {
+    useChatStore.setState({
+      activeConversationId: 'conv-1',
+      conversations: [{ id: 'conv-1', isTemporary: true }] as never,
+    });
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+
+    typeInTextarea(DRAFT);
+
+    expect(draftFor('conv-1')).toBe('');
+  });
+
+  it('parks what was typed when the composer unmounts', async () => {
     const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
 
     typeInTextarea(DRAFT);
     view.unmount();
 
-    expect(draftFor('conv-1')).toBe(DRAFT);
+    await waitFor(() => expect(draftFor('conv-1')).toBe(DRAFT));
   });
 
   it('restores the parked draft when the same conversation mounts again', () => {
@@ -165,7 +188,7 @@ describe('draft survives a composer remount · textarea arm', () => {
     expect(textarea().value).toBe(DRAFT);
   });
 
-  it('leaves the composer empty when the remount lands on another conversation', () => {
+  it('leaves the composer empty when the remount lands on another conversation', async () => {
     const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
     typeInTextarea(DRAFT);
     view.unmount();
@@ -173,7 +196,7 @@ describe('draft survives a composer remount · textarea arm', () => {
     render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-2" />);
 
     expect(textarea().value).toBe('');
-    expect(draftFor('conv-1')).toBe(DRAFT);
+    await waitFor(() => expect(draftFor('conv-1')).toBe(DRAFT));
   });
 
   it('keeps a private draft out of the new chat the user opened next', () => {
@@ -207,7 +230,7 @@ describe('draft survives a composer remount · textarea arm', () => {
     expect(draftFor('conv-1')).toBe(DRAFT);
   });
 
-  it('still swaps drafts when the mounted composer switches conversation', () => {
+  it('still swaps drafts when the mounted composer switches conversation', async () => {
     useChatStore.getState().setDraftContent('waiting in the other chat', 'conv-2');
     const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
     typeInTextarea(DRAFT);
@@ -215,7 +238,7 @@ describe('draft survives a composer remount · textarea arm', () => {
     view.rerender(<ChatComposerNew onSend={vi.fn()} conversationId="conv-2" />);
 
     expect(textarea().value).toBe('waiting in the other chat');
-    expect(draftFor('conv-1')).toBe(DRAFT);
+    await waitFor(() => expect(draftFor('conv-1')).toBe(DRAFT));
   });
 });
 
@@ -286,10 +309,35 @@ describe('a send that never reached a model hands the text back', () => {
     expect(textarea().value).toBe(DRAFT);
     expect(draftFor('conv-1')).toBe('');
   });
+
+  it('clears a restored failed-send draft after the user submits it again', () => {
+    const onSend = vi.fn();
+    const view = render(<ChatComposerNew onSend={onSend} conversationId="conv-1" />);
+
+    act(() => parkUnsentDraft('conv-1', DRAFT));
+    expect(textarea().value).toBe(DRAFT);
+
+    fireEvent.keyDown(textarea(), { key: 'Enter' });
+
+    expect(onSend).toHaveBeenCalled();
+    expect(textarea().value).toBe('');
+    expect(screen.queryByText("Couldn't send. Restored here so you can try again.")).toBeNull();
+    view.unmount();
+    render(<ChatComposerNew onSend={onSend} conversationId="conv-1" />);
+    expect(textarea().value).toBe('');
+  });
 });
 
 describe('draft survives a composer remount · editor arm', () => {
   beforeEach(pinEditorArm);
+
+  it('makes an open conversation draft available for server sync while typing', () => {
+    render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
+
+    typeInEditor(DRAFT);
+
+    expect(draftFor('conv-1')).toBe(DRAFT);
+  });
 
   it('routes a handback through the editor handle', () => {
     render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
@@ -300,13 +348,13 @@ describe('draft survives a composer remount · editor arm', () => {
     expect(editorHandle.setText).toHaveBeenCalledWith(DRAFT);
   });
 
-  it('parks what was typed when the composer unmounts', () => {
+  it('parks what was typed when the composer unmounts', async () => {
     const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
 
     typeInEditor(DRAFT);
     view.unmount();
 
-    expect(draftFor('conv-1')).toBe(DRAFT);
+    await waitFor(() => expect(draftFor('conv-1')).toBe(DRAFT));
   });
 
   it('routes the restore through the editor handle on the next mount', () => {

@@ -8,7 +8,7 @@ import { ResearchStatusChip, readMessageResearchStatus } from './ResearchStatusC
 import {
   isMessageContinuable,
   hasStreamError,
-  getStreamErrorMessage,
+  getStreamErrorNotice,
 } from '../lib/continue-generation';
 import type { Artifact, MessageArtifactProjection, MessageRouting } from '../lib/types';
 
@@ -243,9 +243,9 @@ export function MessageList({
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
               <span>
-                {getStreamErrorMessage(lastMessage)
+                {getStreamErrorNotice(lastMessage)
                   ? t('list.incompleteWithReason', 'Response may be incomplete: {{reason}}', {
-                      reason: getStreamErrorMessage(lastMessage),
+                      reason: getStreamErrorNotice(lastMessage),
                     })
                   : t(
                       'list.incomplete',
@@ -281,7 +281,7 @@ export function MessageList({
               : t('list.scrollToLatest', 'Scroll to latest')
           }
           className="
-            absolute bottom-4 left-1/2 z-10 -translate-x-1/2
+            absolute bottom-4 left-1/2 z-[var(--z-control)] -translate-x-1/2
             inline-flex items-center gap-2
             rounded-full border px-3 py-1.5
             text-xs font-medium
@@ -298,7 +298,7 @@ export function MessageList({
         >
           {unreadCount > 0 ? (
             <span
-              className="inline-flex items-center justify-center rounded-full px-1.5 text-[12px] font-semibold leading-tight"
+              className="inline-flex items-center justify-center rounded-full px-1.5 text-caption font-semibold leading-tight"
               style={{
                 background: 'var(--chat-accent-primary)',
                 color: 'var(--chat-surface-elevated)',

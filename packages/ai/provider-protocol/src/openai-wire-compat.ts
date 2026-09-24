@@ -75,10 +75,7 @@ export interface OpenAIWireToolDefinition {
 }
 
 export type OpenAIWireToolChoice =
-  | 'auto'
-  | 'none'
-  | 'required'
-  | { type: 'function'; function: { name: string } };
+  'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
 
 export interface OpenAIWireChatRequest {
   model: string;
@@ -376,6 +373,8 @@ export class OpenAIWireAssembler {
   private errorMessage: string | null = null;
   private errorCode: string | null = null;
   private errorRetryable: boolean | null = null;
+  private errorRetryAfterSeconds: number | null = null;
+  private errorRequestId: string | null = null;
 
   private insideThinking = false;
   private readonly citations: unknown[] = [];
@@ -431,12 +430,24 @@ export class OpenAIWireAssembler {
     };
   }
 
-  private streamErrorPayload(): { message: string; code?: string; retryable?: boolean } | null {
+  // The wait and the reference ride the same frame as the message, or the client
+  // can neither state a real reset time nor give support anything to search for.
+  private streamErrorPayload(): {
+    message: string;
+    code?: string;
+    retryable?: boolean;
+    retryAfterSeconds?: number;
+    requestId?: string;
+  } | null {
     if (this.errorMessage === null) return null;
     return {
       message: this.errorMessage,
       ...(this.errorCode !== null ? { code: this.errorCode } : {}),
       ...(this.errorRetryable !== null ? { retryable: this.errorRetryable } : {}),
+      ...(this.errorRetryAfterSeconds !== null
+        ? { retryAfterSeconds: this.errorRetryAfterSeconds }
+        : {}),
+      ...(this.errorRequestId !== null ? { requestId: this.errorRequestId } : {}),
     };
   }
 
@@ -571,6 +582,8 @@ export class OpenAIWireAssembler {
         this.errorMessage = chunk.message;
         this.errorCode = chunk.code ?? null;
         this.errorRetryable = chunk.retryable ?? null;
+        this.errorRetryAfterSeconds = chunk.retryAfterSeconds ?? null;
+        this.errorRequestId = chunk.requestId ?? null;
         this.finishReason = 'stop';
         this.legacyFinishReason = 'stop';
         return;

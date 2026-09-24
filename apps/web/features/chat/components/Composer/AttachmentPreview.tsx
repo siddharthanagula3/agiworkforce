@@ -12,10 +12,19 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 import type { AttachmentPreview as AttachmentPreviewData } from '@features/chat/hooks/use-attachments';
+import type { ManagedCloudChatAttachmentUploadPhase } from '@agiworkforce/cloud-contracts';
+
+export interface AttachmentUploadVisualStatus {
+  phase: ManagedCloudChatAttachmentUploadPhase | 'ready';
+  error?: string;
+}
 
 interface AttachmentPreviewProps {
   previews: AttachmentPreviewData[];
   onRemove: (index: number) => void;
+  statuses?: AttachmentUploadVisualStatus[];
+  onRetry?: (index: number) => void;
+  disableRemove?: boolean;
   className?: string;
   privacyShortLabel?: string;
 }
@@ -48,7 +57,15 @@ const itemVariants = {
   exit: { opacity: 0, scale: 0.8, y: 8 },
 };
 
-function RemoveButton({ onClick, label }: { onClick: () => void; label: string }) {
+function RemoveButton({
+  onClick,
+  label,
+  disabled = false,
+}: {
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -57,20 +74,22 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
         onClick();
       }}
       className={cn(
-        'absolute -right-1.5 -top-1.5 z-10',
+        'absolute -right-1.5 -top-1.5 z-[var(--z-control)]',
         // 20px was under the 24px target minimum this repository already
         // states. The dot stays small because it sits on the corner of a
         // thumbnail; the pseudo-element gives the finger a 40px target without
         // changing what is drawn or how the row lays out.
         'flex h-6 w-6 items-center justify-center rounded-full',
         "before:absolute before:-inset-2 before:content-['']",
-        'bg-background/90 border border-border shadow-sm',
+        'bg-background/90 border border-border shadow-e1',
         'text-muted-foreground hover:text-foreground hover:bg-muted',
-        'transition-colors duration-100',
+        'transition-colors duration-instant',
+        disabled && 'cursor-not-allowed opacity-50',
       )}
       aria-label={label}
+      disabled={disabled}
     >
-      <X className="h-3.5 w-3.5" />
+      <X className="h-4 w-4" />
     </button>
   );
 }
@@ -78,10 +97,60 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
 function PrivacyChip({ label }: { label: string }) {
   return (
     <div
-      className="absolute -bottom-1 left-1 z-10 flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-foreground shadow-sm"
+      className="absolute -bottom-1 left-1 z-[var(--z-control)] flex items-center gap-0.5 rounded-full border border-border bg-background/90 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-foreground shadow-e1"
       aria-label={`Outbound destination: ${label}`}
     >
-      <Lock className="h-2.5 w-2.5" />
+      <Lock className="h-4 w-4" />
+      {label}
+    </div>
+  );
+}
+
+function UploadStatus({
+  fileName,
+  status,
+  onRetry,
+}: {
+  fileName: string;
+  status?: AttachmentUploadVisualStatus;
+  onRetry?: () => void;
+}) {
+  if (!status || status.phase === 'ready' || status.phase === 'complete') return null;
+  if (status.phase === 'failed') {
+    return (
+      <div className="mt-1 flex min-w-0 items-center gap-1" role="alert">
+        <span className="truncate text-caption text-destructive" title={status.error}>
+          Upload failed
+        </span>
+        {onRetry ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onRetry();
+            }}
+            className="shrink-0 rounded-sm text-caption font-semibold text-primary underline underline-offset-2"
+            aria-label={`Retry upload for ${fileName}`}
+          >
+            Retry
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+  const label =
+    status.phase === 'verifying'
+      ? 'Verifying…'
+      : status.phase === 'uploading'
+        ? 'Uploading…'
+        : 'Preparing…';
+  return (
+    <div
+      className="mt-1 truncate text-caption text-muted-foreground"
+      role="progressbar"
+      aria-label={`${label.replace('…', '')} ${fileName}`}
+      aria-valuetext={label}
+    >
       {label}
     </div>
   );
@@ -91,11 +160,17 @@ function ImageThumbnail({
   preview,
   index,
   onRemove,
+  status,
+  onRetry,
+  disableRemove,
   privacyShortLabel,
 }: {
   preview: AttachmentPreviewData;
   index: number;
   onRemove: (index: number) => void;
+  status?: AttachmentUploadVisualStatus;
+  onRetry?: (index: number) => void;
+  disableRemove?: boolean;
   privacyShortLabel?: string;
 }) {
   return (
@@ -108,7 +183,11 @@ function ImageThumbnail({
       transition={{ duration: 0.15, ease: 'easeOut' }}
       className="relative flex-shrink-0"
     >
-      <RemoveButton onClick={() => onRemove(index)} label={`Remove ${preview.file.name}`} />
+      <RemoveButton
+        onClick={() => onRemove(index)}
+        label={`Remove ${preview.file.name}`}
+        disabled={disableRemove}
+      />
       {privacyShortLabel ? <PrivacyChip label={privacyShortLabel} /> : null}
       <div className="h-14 w-14 overflow-hidden rounded-lg border border-border/50 bg-muted/30">
         <img
@@ -118,6 +197,11 @@ function ImageThumbnail({
           draggable={false}
         />
       </div>
+      <UploadStatus
+        fileName={preview.file.name}
+        status={status}
+        onRetry={onRetry ? () => onRetry(index) : undefined}
+      />
     </motion.div>
   );
 }
@@ -126,11 +210,17 @@ function DocumentChip({
   preview,
   index,
   onRemove,
+  status,
+  onRetry,
+  disableRemove,
   privacyShortLabel,
 }: {
   preview: AttachmentPreviewData;
   index: number;
   onRemove: (index: number) => void;
+  status?: AttachmentUploadVisualStatus;
+  onRetry?: (index: number) => void;
+  disableRemove?: boolean;
   privacyShortLabel?: string;
 }) {
   const Icon = getDocIcon(preview.file.type);
@@ -147,7 +237,11 @@ function DocumentChip({
       transition={{ duration: 0.15, ease: 'easeOut' }}
       className="relative flex-shrink-0"
     >
-      <RemoveButton onClick={() => onRemove(index)} label={`Remove ${name}`} />
+      <RemoveButton
+        onClick={() => onRemove(index)}
+        label={`Remove ${name}`}
+        disabled={disableRemove}
+      />
       <div
         className={cn(
           'flex items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2',
@@ -160,19 +254,24 @@ function DocumentChip({
             {displayName}
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[12px] text-muted-foreground">
+            <span className="text-caption text-muted-foreground">
               {formatSize(preview.file.size)}
             </span>
             {privacyShortLabel ? (
               <span
-                className="inline-flex items-center gap-0.5 rounded-full border border-border/60 px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground"
+                className="inline-flex items-center gap-0.5 rounded-full border border-border/60 px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground"
                 aria-label={`Outbound destination: ${privacyShortLabel}`}
               >
-                <Lock className="h-2.5 w-2.5" />
+                <Lock className="h-4 w-4" />
                 {privacyShortLabel}
               </span>
             ) : null}
           </div>
+          <UploadStatus
+            fileName={name}
+            status={status}
+            onRetry={onRetry ? () => onRetry(index) : undefined}
+          />
         </div>
       </div>
     </motion.div>
@@ -182,6 +281,9 @@ function DocumentChip({
 function AttachmentPreviewComponent({
   previews,
   onRemove,
+  statuses,
+  onRetry,
+  disableRemove,
   className,
   privacyShortLabel,
 }: AttachmentPreviewProps) {
@@ -197,6 +299,9 @@ function AttachmentPreviewComponent({
               preview={preview}
               index={index}
               onRemove={onRemove}
+              status={statuses?.[index]}
+              onRetry={onRetry}
+              disableRemove={disableRemove}
               privacyShortLabel={privacyShortLabel}
             />
           ) : (
@@ -205,6 +310,9 @@ function AttachmentPreviewComponent({
               preview={preview}
               index={index}
               onRemove={onRemove}
+              status={statuses?.[index]}
+              onRetry={onRetry}
+              disableRemove={disableRemove}
               privacyShortLabel={privacyShortLabel}
             />
           ),

@@ -77,6 +77,17 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 const { POST } = await import('./route');
 const { LIVE_SESSION_BLOCK_MINUTES, liveSessionCostCents } =
   await import('@/lib/voice/live-voice-billing');
+const { ManagedUsageRequestError } = await import('@/lib/services/managed-usage-request-service');
+
+interface ManagedUsageReservationCall {
+  idempotencyKey: string;
+  requestHash: string;
+}
+
+async function errorCode(response: Response): Promise<string | undefined> {
+  const body = (await response.json()) as { error?: { code?: string } };
+  return body.error?.code;
+}
 
 const OFFER = 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\n';
 const RESERVATION = {
@@ -374,5 +385,145 @@ describe('POST /api/voice/live/sessions', () => {
     const response = await POST(request({ voice: 'marin' }));
     expect(response.status).toBe(400);
     expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/voice/live/sessions replayed', () => {
+  const SECOND_OFFER = 'v=0\r\no=- 2 1 IN IP4 127.0.0.1\r\n';
+  let ledger: Map<string, { requestHash: string; settled: boolean }>;
+
+  function requestWithKey(body: unknown, idempotencyKey?: string): NextRequest {
+    return new NextRequest('http://localhost/api/voice/live/sessions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function sessionAccepted(id: string): Response {
+    return new Response(
+      JSON.stringify({ session: { id }, transport: { type: 'webrtc', sdp: 'answer' } }),
+      { status: 201 },
+    );
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ledger = new Map();
+    vi.stubGlobal('fetch', mocks.fetch);
+    mocks.requireEnv.mockReturnValue('sk-test-openai-key');
+    mocks.userScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
+    mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    mocks.assertTierUnitAllowance.mockResolvedValue(undefined);
+    mocks.providerStarted.mockResolvedValue(undefined);
+    mocks.fetch.mockImplementation(async () => sessionAccepted(`live_${ledger.size}`));
+
+    // What the ledger does with a key it has already seen: a different request
+    // body is a conflict, a live hold is in progress, and a hold that reached a
+    // terminal state is a replay. None of them opens a second hold.
+    mocks.reserve.mockImplementation(async (input: ManagedUsageReservationCall) => {
+      const held = ledger.get(input.idempotencyKey);
+      if (held) {
+        if (held.requestHash !== input.requestHash) {
+          throw new ManagedUsageRequestError('different body', 409, 'idempotency_conflict');
+        }
+        throw new ManagedUsageRequestError(
+          'already held',
+          409,
+          held.settled ? 'idempotency_replay' : 'idempotency_in_progress',
+        );
+      }
+      ledger.set(input.idempotencyKey, { requestHash: input.requestHash, settled: false });
+      return {
+        ...RESERVATION,
+        idempotencyKey: input.idempotencyKey,
+        requestHash: input.requestHash,
+      };
+    });
+    mocks.finalize.mockImplementation(async (input: ManagedUsageReservationCall) => {
+      const held = ledger.get(input.idempotencyKey);
+      if (held) held.settled = true;
+      return {};
+    });
+  });
+
+  it('holds one live session once when the same offer is sent twice', async () => {
+    const first = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    const second = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(409);
+    expect(await errorCode(second)).toBe('idempotency_in_progress');
+    expect(ledger.size).toBe(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('derives the same key from the same offer and a different key from a new one', async () => {
+    await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    const keys = mocks.reserve.mock.calls.map(
+      (call) => (call[0] as ManagedUsageReservationCall).idempotencyKey,
+    );
+
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[0]).toMatch(/^agi\.voice\.live\.[0-9a-f]{48}$/);
+  });
+
+  it('opens a second hold for a session the user deliberately starts', async () => {
+    const first = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    const second = await POST(request({ sdp: SECOND_OFFER, voice: 'quartz' }));
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(ledger.size).toBe(2);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a retry of an attempt that already settled rather than charging again', async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'server_error' } }), { status: 500 }),
+    );
+    const failed = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+
+    expect(failed.status).not.toBe(201);
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+
+    const retry = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+
+    expect(retry.status).toBe(409);
+    expect(await errorCode(retry)).toBe('idempotency_replay');
+    expect(ledger.size).toBe(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes the client at its word when it supplies its own key', async () => {
+    const first = await POST(requestWithKey({ sdp: OFFER }, 'client-key-0001'));
+    const second = await POST(requestWithKey({ sdp: SECOND_OFFER }, 'client-key-0001'));
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(409);
+    expect(await errorCode(second)).toBe('idempotency_conflict');
+    expect(ledger.size).toBe(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives two client keys two holds for the same offer', async () => {
+    await POST(requestWithKey({ sdp: OFFER }, 'client-key-0001'));
+    await POST(requestWithKey({ sdp: OFFER }, 'client-key-0002'));
+
+    expect(ledger.size).toBe(2);
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a malformed client key before any hold is opened', async () => {
+    const response = await POST(requestWithKey({ sdp: OFFER }, 'short'));
+
+    expect(response.status).toBe(400);
+    expect(await errorCode(response)).toBe('invalid_idempotency_key');
+    expect(ledger.size).toBe(0);
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });

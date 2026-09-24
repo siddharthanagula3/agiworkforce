@@ -54,7 +54,7 @@ function EffectiveChip({ state }: { state: Effective }) {
 
   return (
     <span
-      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[12px] uppercase tracking-[0.08em]"
+      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-caption uppercase tracking-[0.08em]"
       style={{
         color: alarming ? 'var(--settings-destructive-text)' : 'var(--text-3)',
         borderColor: alarming ? 'currentColor' : 'var(--settings-border)',
@@ -113,7 +113,7 @@ export function WorkspaceModelPolicy() {
     return (
       <div
         role="status"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         Loading model policy…
       </div>
@@ -122,7 +122,7 @@ export function WorkspaceModelPolicy() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load your model policy
         </p>
@@ -143,7 +143,7 @@ export function WorkspaceModelPolicy() {
 
   if (data === null || !draft) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           Model governance is not available for this workspace
         </p>
@@ -216,7 +216,7 @@ export function WorkspaceModelPolicy() {
                         ),
                       })
                     }
-                    className="rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                     style={{
                       borderColor: allowed ? 'currentColor' : 'var(--settings-border)',
                       color: allowed ? 'var(--text-1)' : 'var(--text-3)',
@@ -238,7 +238,7 @@ export function WorkspaceModelPolicy() {
                         ),
                       })
                     }
-                    className="rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                     style={{
                       borderColor: blocked ? 'currentColor' : 'var(--settings-border)',
                       color: blocked ? 'var(--settings-destructive-text)' : 'var(--text-3)',
@@ -283,7 +283,7 @@ export function WorkspaceModelPolicy() {
               background: 'var(--bg-base)',
               color: 'var(--text-1)',
               fontSize: 12,
-              padding: '4px 8px',
+              padding: 'var(--space-1) var(--space-2)',
             }}
           />
         </div>
@@ -315,7 +315,7 @@ export function WorkspaceModelPolicy() {
                     <span className="truncate text-sm" style={{ color: 'var(--text-1)' }}>
                       {model.name}
                     </span>
-                    <span className="truncate text-[12px]" style={{ color: 'var(--text-3)' }}>
+                    <span className="truncate text-caption" style={{ color: 'var(--text-3)' }}>
                       {model.provider.replace(/_/g, ' ')}
                       {model.live ? '' : ' · not live'}
                     </span>
@@ -335,7 +335,7 @@ export function WorkspaceModelPolicy() {
                           ),
                         })
                       }
-                      className="rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                       style={{
                         borderColor: explicitlyAllowed ? 'currentColor' : 'var(--settings-border)',
                         color: explicitlyAllowed ? 'var(--text-1)' : 'var(--text-3)',
@@ -356,7 +356,7 @@ export function WorkspaceModelPolicy() {
                           ),
                         })
                       }
-                      className="rounded-md border px-2.5 py-1 text-[12px] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      className="rounded-md border px-2.5 py-1 text-caption transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                       style={{
                         borderColor: explicitlyBlocked ? 'currentColor' : 'var(--settings-border)',
                         color: explicitlyBlocked

@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { listCanonicalModels } from '@agiworkforce/types';
+
+const TRANSIENT_RETRY_MODEL = listCanonicalModels().find(
+  (model) => model.transientSameRouteRetries === 1,
+)?.id;
+if (!TRANSIENT_RETRY_MODEL) {
+  throw new Error('Canonical transient same-route retry fixture is missing');
+}
 
 const admitManagedTurnSlot = () => ({
   admitted: true,
@@ -66,6 +74,8 @@ const providerControl = vi.hoisted(() => ({
   anthropicChunks: [] as Array<Record<string, unknown>>,
   anthropicCalls: 0,
   openaiCalls: 0,
+  openrouterRuns: [] as Array<Array<Record<string, unknown>>>,
+  openrouterCalls: 0,
 }));
 
 vi.mock('@agiworkforce/providers-anthropic', () => ({
@@ -135,7 +145,21 @@ vi.mock('@agiworkforce/providers-minimax', () => inertCompatAdapter('Minimax'));
 vi.mock('@agiworkforce/providers-moonshot', () => inertCompatAdapter('Moonshot'));
 vi.mock('@agiworkforce/providers-zhipu', () => inertCompatAdapter('Zhipu'));
 vi.mock('@agiworkforce/providers-qwen', () => inertCompatAdapter('Qwen'));
-vi.mock('@agiworkforce/providers-openrouter', () => inertCompatAdapter('OpenRouter'));
+vi.mock('@agiworkforce/providers-openrouter', () => ({
+  createOpenRouterAdapter: vi.fn(() => ({
+    id: 'openrouter',
+    label: 'OpenRouter',
+    auth: [],
+    config: {},
+    async catalog() {
+      return [];
+    },
+    async *stream() {
+      providerControl.openrouterCalls += 1;
+      for (const chunk of providerControl.openrouterRuns.shift() ?? []) yield chunk;
+    },
+  })),
+}));
 vi.mock('@agiworkforce/providers-deepseek', () => inertCompatAdapter('DeepSeek'));
 vi.mock('@agiworkforce/providers-xai', () => inertCompatAdapter('XAI'));
 vi.mock('@agiworkforce/providers-perplexity', () => inertCompatAdapter('Perplexity'));
@@ -168,6 +192,7 @@ const rlsMocks = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: rlsMocks.getUserScopedDb,
+  getVerifiedBearerUserScopedDb: rlsMocks.getUserScopedDb,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
@@ -285,6 +310,8 @@ beforeEach(() => {
   providerControl.anthropicChunks = [];
   providerControl.anthropicCalls = 0;
   providerControl.openaiCalls = 0;
+  providerControl.openrouterRuns = [];
+  providerControl.openrouterCalls = 0;
 
   tierMocks.canAccessModel.mockReturnValue(true);
   mockGetClerkAuthUser.mockResolvedValue({
@@ -429,6 +456,39 @@ describe('managed failover, non-streaming', () => {
 });
 
 describe('managed failover, streaming', () => {
+  it('retries an overloaded configured exact route once before any response bytes', async () => {
+    providerControl.openrouterRuns = [
+      [
+        { type: 'error', code: '529', message: 'overloaded_error', retryable: true },
+        { type: 'stop', reason: 'error' },
+      ],
+      [
+        { type: 'text-delta', delta: 'Answered on the same route.' },
+        { type: 'usage', inputTokens: 10, outputTokens: 6 },
+        { type: 'stop', reason: 'end_turn' },
+      ],
+    ];
+    mockGetProviderFromModel.mockImplementation((model: string) =>
+      model === TRANSIENT_RETRY_MODEL ? 'openrouter' : providerOfTestModel(model),
+    );
+    routingMocks.resolveAutoRoute.mockImplementation((input: { selection: string }) =>
+      input.selection === TRANSIENT_RETRY_MODEL
+        ? { ...selectedRoute(TRANSIENT_RETRY_MODEL, []), provider: 'openrouter' }
+        : selectedRoute(PRIMARY, [FALLBACK]),
+    );
+
+    const response = await POST(makeRequest(TRANSIENT_RETRY_MODEL, true));
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(providerControl.openrouterCalls).toBe(2);
+    expect(providerControl.openaiCalls).toBe(0);
+    expect(body).toContain('Answered on the same route.');
+    expect(body).not.toContain('overloaded_error');
+    expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
+    expect(managedUsageMocks.finalize).toHaveBeenCalledTimes(1);
+  });
+
   it('success-after-fallback: the fallback serves the SSE stream, stamped with the actual serving model; no failed-attempt text leaks', async () => {
     anthropicFailsWith('503', 'upstream unavailable');
 

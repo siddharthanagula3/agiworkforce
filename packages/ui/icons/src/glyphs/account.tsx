@@ -27,6 +27,14 @@ export const CreditCard = createIcon(
   </>,
 );
 
+export const Mail = createIcon(
+  'Mail',
+  <>
+    <path d="M4.5 5h15L21 6.5v11L19.5 19h-15L3 17.5v-11z" />
+    <path d="m3.5 7 8.5 7 8.5-7" />
+  </>,
+);
+
 export const Bell = createIcon(
   'Bell',
   <>

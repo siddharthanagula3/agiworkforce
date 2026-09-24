@@ -286,6 +286,7 @@ fn completion(text: &str, tool_calls: Vec<ToolCall>) -> ScriptedCompletion {
             tool_calls,
             usage: Usage::default(),
             stop_reason: Some("end_turn".to_string()),
+            stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
         },
         via_subscription: false,
         stream: Vec::new(),

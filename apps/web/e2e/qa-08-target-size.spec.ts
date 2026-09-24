@@ -78,3 +78,43 @@ test.describe('WCAG 2.2 target size', () => {
     });
   }
 });
+
+test.describe('coarse-pointer primary controls', () => {
+  test.use({
+    hasTouch: true,
+    viewport: { width: 390, height: 844 },
+  });
+
+  test('composer and sidebar controls provide 44px touch targets', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/chat', { waitUntil: 'domcontentloaded', timeout: 45_000 });
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined);
+
+    await page.getByRole('textbox', { name: 'Message input' }).fill('touch target probe');
+    const composerControl = page.getByRole('button', { name: 'Send message', exact: true });
+    await expect(composerControl).toBeVisible();
+    const composerBox = await composerControl.boundingBox();
+    expect(composerBox?.width).toBeGreaterThanOrEqual(44);
+    expect(composerBox?.height).toBeGreaterThanOrEqual(44);
+
+    const modelControl = page.getByRole('button', { name: 'Change model' });
+    await expect(modelControl).toBeVisible();
+    const modelBox = await modelControl.boundingBox();
+    expect(modelBox?.height).toBeGreaterThanOrEqual(44);
+
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+    const drawer = page.getByTestId('chat-mobile-nav-drawer');
+    const sidebarRow = drawer.locator('[data-sidebar-session-index]').first();
+    await expect(
+      sidebarRow,
+      'no conversation in the sidebar, the account fixture this spec needs is gone',
+    ).toBeVisible();
+    const rowBox = await sidebarRow.getByRole('link').boundingBox();
+    expect(rowBox?.height).toBeGreaterThanOrEqual(44);
+
+    const sidebarAction = sidebarRow.getByRole('button', { name: /^More options for / });
+    const sidebarBox = await sidebarAction.boundingBox();
+    expect(sidebarBox?.width).toBeGreaterThanOrEqual(44);
+    expect(sidebarBox?.height).toBeGreaterThanOrEqual(44);
+  });
+});

@@ -42,18 +42,18 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-[hsl(var(--popover))] border border-[hsl(var(--border))] shadow-lg overflow-hidden z-50"
+            className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-lg overflow-hidden z-[var(--z-dropdown)]"
             role="listbox"
             aria-label="Prompt suggestions"
             aria-expanded={isVisible}
           >
             {/* Header */}
-            <div className="px-3 py-2 bg-[hsl(var(--muted))] border-b border-[hsl(var(--border))]/50">
+            <div className="px-3 py-2 bg-muted border-b border-border/50">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   Suggestions
                 </span>
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                <span className="text-xs text-muted-foreground">
                   (Tab to accept, Esc to dismiss)
                 </span>
               </div>
@@ -67,8 +67,8 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                   onClick={() => onSelectSuggestion(suggestion)}
                   onMouseEnter={() => onMouseEnterSuggestion?.(index)}
                   className={cn(
-                    'w-full text-left px-4 py-3 transition-colors border-b border-[hsl(var(--border))]/50 last:border-b-0 flex items-center justify-between gap-3 group',
-                    index === selectedIndex ? 'bg-primary/10' : 'hover:bg-[hsl(var(--accent))]',
+                    'w-full text-left px-4 py-3 transition-colors border-b border-border/50 last:border-b-0 flex items-center justify-between gap-3 group',
+                    index === selectedIndex ? 'bg-primary/10' : 'hover:bg-accent',
                   )}
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
@@ -82,11 +82,11 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                       {suggestion.icon && (
                         <span className="text-lg shrink-0">{suggestion.icon}</span>
                       )}
-                      <span className="text-sm font-medium text-[hsl(var(--foreground))] truncate">
+                      <span className="text-sm font-medium text-foreground truncate">
                         {suggestion.text}
                       </span>
                     </div>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                    <div className="text-xs text-muted-foreground">
                       {suggestion.description}
                     </div>
                   </div>
@@ -97,7 +97,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
                       className={cn(
                         'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
                         TYPE_CLASS[suggestion.type] ??
-                          'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
+                          'bg-muted text-muted-foreground',
                       )}
                     >
                       {suggestion.type}
@@ -108,7 +108,7 @@ const PromptSuggestionsDropdownComponent: React.FC<PromptSuggestionsDropdownProp
             </div>
 
             {/* Footer */}
-            <div className="px-3 py-2 bg-[hsl(var(--muted))] border-t border-[hsl(var(--border))]/50 text-xs text-[hsl(var(--muted-foreground))] flex items-center justify-between">
+            <div className="px-3 py-2 bg-muted border-t border-border/50 text-xs text-muted-foreground flex items-center justify-between">
               <span>Select suggestion and press Tab</span>
               <ChevronRight size={14} className="opacity-50" />
             </div>

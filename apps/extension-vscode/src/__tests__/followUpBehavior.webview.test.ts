@@ -76,6 +76,8 @@ describe('VS Code active-turn Queue and Steer composer', () => {
       ([message]) => message.type === 'sendMessage' && message.payload.text === 'Queued follow-up',
     )?.[0];
     expect(queuedCall).toEqual({
+      origin: 'chat',
+      epoch: 0,
       type: 'sendMessage',
       payload: {
         text: 'Queued follow-up',
@@ -93,6 +95,8 @@ describe('VS Code active-turn Queue and Steer composer', () => {
 
     sendWithEnter(input, 'One-turn steer', true);
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'sendMessage',
       payload: {
         text: 'One-turn steer',
@@ -122,7 +126,7 @@ describe('VS Code active-turn Queue and Steer composer', () => {
     ).toBe('running');
 
     stopButton.click();
-    expect(postMessage).toHaveBeenCalledWith({ type: 'cancel' });
+    expect(postMessage).toHaveBeenCalledWith({ origin: 'chat', epoch: 0, type: 'cancel' });
   });
 
   it('separates a new provider thread while retaining only its submitted prompt', () => {

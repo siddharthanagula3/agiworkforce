@@ -128,6 +128,18 @@ describe('a computer-use run that dies with the worker ends visibly', () => {
     );
   });
 
+  it('reports that the install is alive in its first turn, not on a timer', () => {
+    expect(background).toMatch(/^void sendChromeHeartbeatIfDue\(\);$/m);
+    expect(background).toContain(
+      "import { sendChromeHeartbeatIfDue } from './features/cloud-bridge/deviceHeartbeat';",
+    );
+  });
+
+  it('drains the automation receipts a previous worker did not live to send', () => {
+    expect(background).toMatch(/^void flushAutomationAuditOutbox\(\);$/m);
+    expect(background).toMatch(/completion\.finally\(\(\) => flushAutomationAuditOutbox\(\)/);
+  });
+
   it("treats Chrome's own debugger Cancel as a stop, not a hiccup", () => {
     expect(background).toMatch(
       /onDebuggerDetachedByUser: \(\) => \{[\s\S]*cancelActiveComputerUseRun\('debugger_detached', lease\.runId\)/,

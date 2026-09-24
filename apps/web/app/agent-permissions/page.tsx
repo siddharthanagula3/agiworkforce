@@ -29,7 +29,7 @@ export const metadata = buildMetadata({
 });
 
 const SECTIONS = [
-  { label: 'By default, the agent asks', id: 'default-authority' },
+  { label: 'Website default: Skip approvals', id: 'default-authority' },
   { label: 'These always ask', id: 'always-ask' },
   { label: 'What the injection escalation does not catch', id: 'honest-limits' },
   { label: 'A block is enforced on the server', id: 'blocking' },
@@ -113,15 +113,16 @@ export default function AgentPermissionsPage() {
                   <div>
                     <Eyebrow>Managed Cloud · default authority</Eyebrow>
                     <h2 className="agi-ds-h2" id="agi-perm-default-title">
-                      By default, the agent asks.
+                      On the website, eligible tools run automatically by default.
                     </h2>
                     <Prose>
                       One account-wide setting decides what may run without asking, and it governs
-                      our own built-in tools as well as connectors. A new account is set to
-                      &ldquo;Ask before every action&rdquo;, so in Managed Cloud every tool call
-                      waits for you, the built-in tools below included. A built-in tool runs with no
-                      prompt only once you choose one of the other two settings, or save
-                      &ldquo;Always allow&rdquo; for that one tool.
+                      our own built-in tools as well as connectors. A new website account uses
+                      &ldquo;Skip approvals&rdquo; unless you save another setting. Eligible reads,
+                      searches, sandboxed code, and reversible actions can run without a prompt.
+                      Destructive or unknown actions, saved per-tool choices, and workspace
+                      restrictions still apply. If the account policy cannot be read, the server
+                      falls back to asking.
                     </Prose>
                   </div>
                   <Ledger

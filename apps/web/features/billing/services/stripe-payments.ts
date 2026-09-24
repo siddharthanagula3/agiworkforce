@@ -71,13 +71,18 @@ interface PaymentMethodApiEntry {
  */
 export async function fetchSavedPaymentMethods(): Promise<SavedPaymentMethod[]> {
   const authToken = await getAuthToken();
-  if (!authToken) return [];
+  if (!authToken) {
+    throw new Error('Your session has expired. Sign in again to see your payment method.');
+  }
 
   const response = await fetch('/api/billing/payment-methods', {
     headers: { Authorization: `Bearer ${authToken}` },
     cache: 'no-store',
   });
-  if (!response.ok) return [];
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    throw new Error(extractErrorMessage(body, 'We could not load your payment method.'));
+  }
 
   const body = (await response.json().catch(() => ({}))) as {
     payment_methods?: PaymentMethodApiEntry[];

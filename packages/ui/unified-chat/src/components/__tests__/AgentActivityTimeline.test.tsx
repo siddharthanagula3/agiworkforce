@@ -169,26 +169,37 @@ describe('AgentActivityTimeline', () => {
     );
   });
 
-  it('auto-expands a running run live and collapses on a manual toggle', () => {
-    render(<AgentActivityTimeline activity={activity()} />);
+  it('keeps a streaming run to one line, then makes the completed trace expandable', () => {
+    const { rerender } = render(<AgentActivityTimeline activity={activity()} defaultExpanded />);
 
-    const trigger = screen.getByRole('button', { name: /hide agent activity/i });
-    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    const trigger = screen.getByRole('button', { name: /agent activity/i });
+    expect(trigger.hasAttribute('aria-expanded')).toBe(false);
+    expect((trigger as HTMLButtonElement).disabled).toBe(true);
     expect(trigger.textContent).toContain('Reading 1 source');
     expect(trigger.textContent).not.toMatch(/Working for|\bs\b · |Done in/i);
-    expect(screen.getByText(/Searching official sources · agent documentation/)).toBeTruthy();
+    expect(screen.queryByText(/Searching official sources · agent documentation/)).toBeNull();
     expect(screen.queryByText('Official agent documentation')).toBeNull();
     expect(screen.queryByText('example.com')).toBeNull();
 
     fireEvent.click(trigger);
-    const collapsed = screen.getByRole('button', { name: /show agent activity/i });
-    expect(collapsed.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByText(/Searching official sources · agent documentation/)).toBeNull();
+    expect(screen.queryByTestId('agent-activity-rows')).toBeNull();
+
+    rerender(
+      <AgentActivityTimeline activity={activity({ status: 'completed', completedAtMs: 2_000 })} />,
+    );
+    const completed = screen.getByRole('button', { name: /show agent activity/i });
+    expect((completed as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(completed);
+    expect(screen.getByText(/Searching official sources · agent documentation/)).toBeTruthy();
+    expect(completed.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('keeps search results out of the transcript, naming the query on the trace row', () => {
-    render(<AgentActivityTimeline activity={activity()} />);
+    render(
+      <AgentActivityTimeline activity={activity({ status: 'completed', completedAtMs: 2_000 })} />,
+    );
 
+    fireEvent.click(screen.getByRole('button', { name: /show agent activity/i }));
     expect(screen.getByText(/Searching official sources · agent documentation/)).toBeTruthy();
     expect(screen.queryByText('Official agent documentation')).toBeNull();
     expect(screen.queryByRole('link', { name: /Official agent documentation/ })).toBeNull();
@@ -220,6 +231,7 @@ describe('AgentActivityTimeline', () => {
           category: 'web-search',
           summary: 'Searching the web',
           status: 'completed',
+          input: { query: 'example domains' },
           startedAtMs: 1_100,
           completedAtMs: 1_500,
           sources: [
@@ -234,6 +246,50 @@ describe('AgentActivityTimeline', () => {
     const trigger = screen.getByRole('button', { name: /show agent activity/i });
     expect(trigger.textContent).toContain('Searched the web');
     expect(trigger.textContent).not.toContain('Searching the web');
+    fireEvent.click(trigger);
+    const searchRow = screen.getByRole('button', { name: 'Searching the web, Done' });
+    expect(searchRow.textContent).toContain('Done');
+    expect(screen.getByTestId('agent-activity-rows').textContent?.match(/Done/g)).toHaveLength(1);
+    expect(searchRow.parentElement?.className).toContain('grid');
+    expect(searchRow.nextElementSibling?.className).toContain('inline-tool-call__action');
+    expect(searchRow.querySelector('.inline-tool-call__chevron')).toBeTruthy();
+    expect(searchRow.className).toContain('focus-visible:ring-2');
+    expect(searchRow.className).toContain('pointer-coarse:min-h-11');
+    const copy = screen.getByRole('button', { name: 'Copy' });
+    expect(copy.className).toContain('pointer-coarse:h-11');
+    expect(copy.parentElement?.className).toContain('[@media(hover:none)]:opacity-100');
+  });
+
+  it('places Done beside the search icon when the completed run retains a running child', () => {
+    render(
+      <AgentActivityTimeline
+        activity={activity({
+          status: 'completed',
+          completedAtMs: 2_000,
+          entries: [
+            {
+              kind: 'tool',
+              id: 'tool:search-1',
+              toolCallId: 'search-1',
+              name: 'web_search',
+              category: 'web-search',
+              summary: 'Searching the web',
+              status: 'running',
+              input: { query: 'example domains' },
+              startedAtMs: 1_100,
+              sources: [{ url: 'https://example.com/a', title: 'A' }],
+            },
+          ],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /show agent activity/i }));
+    const searchRow = screen.getByRole('button', { name: 'Searching the web, Done' });
+    expect(searchRow.querySelector('[data-badge-kind="glyph"]')).toBeTruthy();
+    expect(searchRow.textContent).toContain('Done');
+    expect(searchRow.textContent).not.toContain('Running');
+    expect(screen.getByTestId('agent-activity-rows').textContent?.match(/Done/g)).toHaveLength(1);
   });
 
   it('phrases a stuck-running search entry as searched once the turn has stopped, even outcome-partial', () => {
@@ -852,6 +908,7 @@ describe('AgentActivityTimeline connector badges', () => {
     const { container } = render(
       <AgentActivityTimeline activity={connectorActivity('mcp__github__get_pull_request_diff')} />,
     );
+    fireEvent.click(screen.getByRole('button', { name: /show agent activity/i }));
     const badge = container.querySelector('[data-badge-kind="letter"]');
     expect(badge?.getAttribute('data-badge-letter')).toBe('G');
   });
@@ -860,6 +917,7 @@ describe('AgentActivityTimeline connector badges', () => {
     const { container } = render(
       <AgentActivityTimeline activity={connectorActivity('mcp__custom-a1b2c3d4e5__do_thing')} />,
     );
+    fireEvent.click(screen.getByRole('button', { name: /show agent activity/i }));
     const badge = container.querySelector('[data-badge-kind="letter"]');
     expect(badge?.getAttribute('data-badge-letter')).not.toBe('C');
     expect(badge?.getAttribute('data-badge-letter')).toBe('M');
@@ -992,6 +1050,29 @@ describe('AgentActivityTimeline · connector authorization required', () => {
 describe('AgentActivityTimeline height reservation', () => {
   const ROWS_HEIGHT_PX = 180;
 
+  function approvalActivity(status: 'awaiting-approval' | 'completed'): AgentActivityState {
+    return activity({
+      status,
+      ...(status === 'completed' ? { completedAtMs: 2_000 } : {}),
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:approval-1',
+          toolCallId: 'approval-1',
+          name: 'execute_code',
+          category: 'code-execution',
+          summary: 'Review code execution',
+          status,
+          startedAtMs: 1_100,
+          approval:
+            status === 'completed'
+              ? { id: 'approval-1', decision: 'approved' }
+              : { id: 'approval-1' },
+        },
+      ],
+    });
+  }
+
   function stubRowHeight(height: number) {
     return vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
       this: HTMLElement,
@@ -1000,10 +1081,10 @@ describe('AgentActivityTimeline height reservation', () => {
     });
   }
 
-  it('keeps the tallest measured height while the run is live', () => {
+  it('keeps the tallest measured height while an approval is open', () => {
     const spy = stubRowHeight(ROWS_HEIGHT_PX);
     try {
-      render(<AgentActivityTimeline activity={activity()} />);
+      render(<AgentActivityTimeline activity={approvalActivity('awaiting-approval')} />);
       const rows = screen.getByTestId('agent-activity-rows');
       expect(rows.style.minHeight).toBe(`${ROWS_HEIGHT_PX}px`);
     } finally {
@@ -1014,15 +1095,12 @@ describe('AgentActivityTimeline height reservation', () => {
   it('releases the reserved height once the run has finished', () => {
     const spy = stubRowHeight(ROWS_HEIGHT_PX);
     try {
-      const { rerender } = render(<AgentActivityTimeline activity={activity()} />);
+      const { rerender } = render(
+        <AgentActivityTimeline activity={approvalActivity('awaiting-approval')} />,
+      );
       expect(screen.getByTestId('agent-activity-rows').style.minHeight).toBe(`${ROWS_HEIGHT_PX}px`);
 
-      rerender(
-        <AgentActivityTimeline
-          activity={activity({ status: 'completed', completedAtMs: 2_000 })}
-          defaultExpanded
-        />,
-      );
+      rerender(<AgentActivityTimeline activity={approvalActivity('completed')} defaultExpanded />);
       const trigger = screen.getByRole('button', { name: /show agent activity/i });
       fireEvent.click(trigger);
       expect(screen.getByTestId('agent-activity-rows').style.minHeight).toBe('');
@@ -1065,6 +1143,39 @@ describe('AgentActivityTimeline failure row', () => {
     const trigger = screen.getByRole('button', { name: /agent activity/i });
     expect(trigger.textContent).toContain(`Response failed: ${REASON}`);
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
+  it('does not append a generic failure to a precise unavailable-tool summary', () => {
+    const notice = 'Web search unavailable: 20 included searches used in the last 30 days.';
+    const run = activity({
+      status: 'failed',
+      completedAtMs: 3_000,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:search',
+          toolCallId: 'search',
+          name: 'web_search',
+          category: 'web-search',
+          summary: notice,
+          status: 'failed',
+          unavailable: true,
+          startedAtMs: 1_000,
+          completedAtMs: 2_000,
+        },
+      ],
+    });
+
+    render(
+      <AgentActivityTimeline
+        activity={run}
+        failureReason="Web search returned no usable sources, so this answer could not be verified."
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: /show agent activity/i });
+    expect(trigger.textContent).toContain(notice);
+    expect(trigger.textContent).not.toContain('no usable sources');
   });
 
   it('keeps the actions outside the disclosure button', () => {
@@ -1147,6 +1258,7 @@ describe('AgentActivityTimeline failure row', () => {
     });
 
     render(<AgentActivityTimeline activity={two} />);
+    fireEvent.click(screen.getByRole('button', { name: /show agent activity/i }));
 
     expect(screen.getByText('Reading the brief')).toBeTruthy();
     expect(screen.getAllByText('Writing response').length).toBeGreaterThanOrEqual(1);

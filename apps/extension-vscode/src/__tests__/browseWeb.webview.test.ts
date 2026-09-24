@@ -66,6 +66,8 @@ describe('VS Code Browse the web context', () => {
     (document.getElementById('sendBtn') as HTMLButtonElement).click();
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'sendMessage',
       payload: {
         text: 'What changed in the latest Rust release?',

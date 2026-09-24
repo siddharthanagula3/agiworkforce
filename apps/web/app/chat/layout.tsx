@@ -5,6 +5,7 @@ import { ChatStreamRuntimeProvider } from '@/features/chat/components/ChatStream
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,5 +21,9 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
 
   await requireCurrentTermsAcceptance(userId, redirectTo);
 
-  return <ChatStreamRuntimeProvider>{children}</ChatStreamRuntimeProvider>;
+  return (
+    <ProductRuntimeProviders>
+      <ChatStreamRuntimeProvider>{children}</ChatStreamRuntimeProvider>
+    </ProductRuntimeProviders>
+  );
 }

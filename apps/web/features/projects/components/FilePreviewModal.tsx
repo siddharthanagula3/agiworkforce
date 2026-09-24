@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { isTextAttachmentMeta, type ProjectKnowledgeFile } from '@agiworkforce/types';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 
 interface Props {
@@ -105,7 +106,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
 
   if (error) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', width: '100%' }}>
+      <div style={{ padding: 'var(--space-6)', textAlign: 'center', width: '100%' }}>
         <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0 }}>
           Failed to load file contents.
         </p>
@@ -115,7 +116,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
 
   if (text === null) {
     return (
-      <div style={{ padding: 32, textAlign: 'center', width: '100%' }}>
+      <div style={{ padding: 'var(--space-6)', textAlign: 'center', width: '100%' }}>
         <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 0 }}>Loading...</p>
       </div>
     );
@@ -128,7 +129,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
       <div
         style={{
           width: '100%',
-          padding: '16px 20px',
+          padding: 'var(--space-4) var(--space-5)',
           color: 'var(--agi-ink)',
           fontSize: 13,
           lineHeight: 1.65,
@@ -149,7 +150,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
       <div
         style={{
           width: '100%',
-          padding: '8px 12px',
+          padding: 'var(--space-2) var(--space-3)',
           boxSizing: 'border-box',
         }}
       >
@@ -163,7 +164,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
       style={{
         width: '100%',
         margin: 0,
-        padding: '16px 20px',
+        padding: 'var(--space-4) var(--space-5)',
         fontFamily: 'var(--mono)',
         fontSize: 12,
         color: 'var(--agi-ink)',
@@ -181,15 +182,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
 
 export function FilePreviewModal({ file, onClose, page }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!file) return;
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [file, onClose]);
+  useDialogKeyboard({ open: file !== null, onClose, panelRef: dialogRef });
 
   useEffect(() => {
     if (!file) return;
@@ -233,6 +226,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Preview: ${file.fileName}`}
@@ -245,14 +239,13 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
         alignItems: 'center',
         justifyContent: 'center',
         background: 'rgba(0,0,0,0.7)',
-        padding: 16,
+        padding: 'var(--space-4)',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        ref={dialogRef}
         style={{
           position: 'relative',
           width: '100%',
@@ -260,7 +253,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
           maxHeight: '90vh',
           background: 'var(--agi-bg-3)',
           border: '1px solid var(--agi-rule-strong)',
-          borderRadius: 16,
+          borderRadius: 'var(--corner-panel)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -272,7 +265,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '14px 20px',
+            padding: 'var(--space-4) var(--space-5)',
             borderBottom: '1px solid var(--agi-rule)',
             flexShrink: 0,
           }}
@@ -292,12 +285,18 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
             >
               {file.fileName}
             </p>
-            <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: '2px 0 0' }}>
+            <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', margin: 'var(--space-1) 0 0' }}>
               {file.mimeType} &middot; {formatSize(file.byteCount)}
             </p>
           </div>
           <div
-            style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-2)',
+              flexShrink: 0,
+              marginLeft: 'var(--space-3)',
+            }}
           >
             <button
               type="button"
@@ -306,8 +305,8 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
               style={{
                 background: 'transparent',
                 border: '1px solid var(--agi-rule-strong)',
-                borderRadius: 8,
-                padding: '4px 10px',
+                borderRadius: 'var(--corner-field)',
+                padding: 'var(--space-1) var(--space-3)',
                 fontSize: 12,
                 color: 'var(--agi-ink-2)',
                 cursor: 'pointer',
@@ -322,8 +321,8 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
               style={{
                 background: 'transparent',
                 border: '1px solid var(--agi-rule-strong)',
-                borderRadius: 8,
-                padding: '4px 10px',
+                borderRadius: 'var(--corner-field)',
+                padding: 'var(--space-1) var(--space-3)',
                 fontSize: 12,
                 color: 'var(--agi-ink-2)',
                 cursor: 'pointer',
@@ -353,7 +352,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
                 maxWidth: '100%',
                 maxHeight: '70vh',
                 objectFit: 'contain',
-                borderRadius: 8,
+                borderRadius: 'var(--corner-field)',
               }}
             />
           )}
@@ -376,7 +375,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
           )}
 
           {!isImage && !isPdf && !isText && (
-            <div style={{ padding: 32, textAlign: 'center', width: '100%' }}>
+            <div style={{ padding: 'var(--space-6)', textAlign: 'center', width: '100%' }}>
               <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
                 Preview is not available for this file type.
               </p>
@@ -384,7 +383,7 @@ export function FilePreviewModal({ file, onClose, page }: Props) {
                 style={{
                   fontSize: 12,
                   color: 'color-mix(in srgb, var(--agi-ink) 58%, transparent)',
-                  margin: '8px 0 0',
+                  margin: 'var(--space-2) 0 0',
                 }}
               >
                 {file.mimeType}

@@ -174,6 +174,50 @@ describe('useOrganizationSettings · renderHook (GET /api/settings/organization)
   });
 });
 
+describe('useWorkspaceAudit · interactive session', () => {
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await setupMocks();
+  });
+
+  it('uses the same-origin cookie without sending a Clerk token as a workspace API key', async () => {
+    const { getAuthToken } = await import('@shared/lib/get-auth-token');
+    vi.mocked(getAuthToken).mockResolvedValue(null);
+    fetchMock.mockResolvedValue(
+      makeResponse({ organizationId: 'org-1', events: [], nextCursor: null }),
+    );
+
+    const { useWorkspaceAudit } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useWorkspaceAudit({}), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings/organization/audit?facets=true', {
+      credentials: 'same-origin',
+    });
+    expect(getAuthToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps a forbidden member view empty without treating it as a failed session', async () => {
+    fetchMock.mockResolvedValue(makeResponse({ error: 'Forbidden' }, 403));
+
+    const { useWorkspaceAudit } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useWorkspaceAudit({}), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeNull();
+  });
+
+  it('surfaces an expired interactive session instead of silently hiding the audit trail', async () => {
+    fetchMock.mockResolvedValue(makeResponse({ error: 'Authentication required' }, 401));
+
+    const { useWorkspaceAudit } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useWorkspaceAudit({}), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error?.message).toContain('Authentication required');
+  });
+});
+
 describe('team administration mutations · renderHook', () => {
   beforeEach(async () => {
     fetchMock.mockReset();

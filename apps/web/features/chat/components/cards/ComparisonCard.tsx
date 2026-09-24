@@ -54,15 +54,7 @@ function parseComparison(content: string): ParsedComparison {
   }
 
   type Section =
-    | 'none'
-    | 'item0'
-    | 'item1'
-    | 'pros0'
-    | 'cons0'
-    | 'pros1'
-    | 'cons1'
-    | 'winner'
-    | 'table';
+    'none' | 'item0' | 'item1' | 'pros0' | 'cons0' | 'pros1' | 'cons1' | 'winner' | 'table';
   let currentSection: Section = 'none';
   const extraSections: ExtraSection[] = [];
   let currentHeading = '';
@@ -261,7 +253,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className="font-semibold text-sm">{item.name}</h4>
                   {winner === item.name && (
-                    <Badge className="gap-1 border-0 bg-[var(--chat-warning-bg)] text-[12px] text-[var(--chat-warning-fg)]">
+                    <Badge className="gap-1 border-0 bg-[var(--chat-warning-bg)] text-caption text-[var(--chat-warning-fg)]">
                       <Trophy className="h-3 w-3" aria-hidden="true" />
                       Winner
                     </Badge>

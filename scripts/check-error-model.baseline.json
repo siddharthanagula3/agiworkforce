@@ -4,11 +4,6 @@
       "file": "apps/web/shared/lib/error-utils.ts",
       "why": "toAppError infers the code and the retryable flag from substrings of the message text, so a server that answered retryable:false is overruled whenever its sentence happens to contain the word timeout.",
       "fix": "read the code and the retryable flag off the error envelope the route returned, and fall back to isRetryableErrorCode from error-taxonomy rather than to the message text."
-    },
-    {
-      "file": "apps/web/shared/stores/query-client.ts",
-      "why": "the query client retries anything that is not a 4xx three times, so a rate limit is abandoned after one attempt and a refused policy that answered 503 is hammered.",
-      "fix": "retry on the envelope's retryable flag, which classifyErrorCode derives from the class the server decided on."
     }
   ]
 }

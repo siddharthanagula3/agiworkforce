@@ -323,7 +323,9 @@ async function handleRename(
   }
   const parsed = DeviceRenameRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    throw createError.validation('A device name is 1 to 120 characters');
+    throw createError.validation(
+      'A device name is 1 to 120 characters. Send no name to go back to the generated one.',
+    );
   }
   const { name } = parsed.data;
 

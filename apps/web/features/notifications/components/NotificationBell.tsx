@@ -45,7 +45,7 @@ function NotificationRow({ item, onOpen }: NotificationRowProps) {
         type="button"
         onClick={() => onOpen(item)}
         data-unread={item.read ? undefined : ''}
-        className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left outline-none transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+        className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left outline-none transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
       >
         <span className="mt-1.5 flex h-2 w-2 shrink-0 items-center justify-center" aria-hidden>
           {!item.read && <span className="h-2 w-2 rounded-full bg-[var(--chat-accent-primary)]" />}
@@ -117,7 +117,7 @@ export function NotificationBell() {
           type="button"
           aria-label={bellLabel(feed.unreadCount)}
           data-testid="notification-bell"
-          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--chat-text-secondary)] outline-none transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] pointer-coarse:h-11 pointer-coarse:w-11"
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--chat-text-secondary)] outline-none transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:h-11 pointer-coarse:w-11"
         >
           <Bell className="h-4 w-4" aria-hidden />
           {feed.unreadCount > 0 && (
@@ -143,7 +143,7 @@ export function NotificationBell() {
             <button
               type="button"
               onClick={() => void markAll()}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-[var(--chat-text-secondary)] outline-none transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] pointer-coarse:min-h-11"
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-[var(--chat-text-secondary)] outline-none transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
             >
               <CheckCheck className="h-3.5 w-3.5" aria-hidden />
               Mark all as read
@@ -168,7 +168,7 @@ export function NotificationBell() {
               <button
                 type="button"
                 onClick={() => void feed.refresh()}
-                className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)] outline-none transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] pointer-coarse:min-h-11"
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--chat-text-primary)] outline-none transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
               >
                 Try again
               </button>

@@ -242,10 +242,83 @@ describe('cloud send: x_stream_error capture (mid-stream provider failure)', () 
     await useChatExecutionStore.getState().sendMessage(CONV_ID, 'answer this', CLOUD_MODEL);
 
     expect(lastAssistantMessage()?.metadata?.streamError).toEqual({
-      message: 'AGI Cloud returned an empty response. Try again.',
+      message: 'The model finished without returning a response. Try again.',
       code: 'empty_response',
       retryable: true,
     });
+  });
+
+  it('keeps the wait and the reference the gateway put on the same frame', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_stream_error: {
+          message: 'This model is overloaded right now. Try again in about 2 minutes.',
+          code: 'provider_overloaded',
+          retryable: true,
+          retryAfterSeconds: 120,
+          requestId: 'req_mobile_overload',
+        },
+        finish_reason: 'error',
+      });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
+
+    expect(lastAssistantMessage()?.metadata?.streamError).toEqual({
+      message: 'This model is overloaded right now. Try again in about 2 minutes.',
+      code: 'provider_overloaded',
+      retryable: true,
+      retryAfterSeconds: 120,
+      requestId: 'req_mobile_overload',
+    });
+  });
+
+  it('records neither field when the gateway sent neither', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ x_stream_error: { message: 'The model could not be reached.' } });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
+
+    expect(lastAssistantMessage()?.metadata?.streamError).toEqual({
+      message: 'The model could not be reached.',
+    });
+  });
+});
+
+describe('retrying a failed turn', () => {
+  it('sends the attachment again, because the reader attached it to this question', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ x_stream_error: { message: 'The model could not be reached.' } });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'what is in this', CLOUD_MODEL, [
+      {
+        id: 'att-1',
+        uri: 'https://files.example/a.png',
+        mimeType: 'image/png',
+        fileName: 'a.png',
+        assetId: 'asset-1',
+      },
+    ]);
+
+    const msgs = useChatCloudMessageStore.getState().messages[CONV_ID] ?? [];
+    const userMessage = msgs.find((m) => m.role === 'user');
+    expect(userMessage?.attachments?.[0]?.fileName).toBe('a.png');
+
+    mockStreamChat.mockClear();
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'a screenshot' });
+      callbacks.onDone();
+    });
+    useChatExecutionStore.getState().retryMessage(CONV_ID, userMessage!.id);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const resent = useChatCloudMessageStore.getState().messages[CONV_ID] ?? [];
+    expect(resent.find((m) => m.role === 'user')?.attachments?.[0]?.fileName).toBe('a.png');
   });
 });
 

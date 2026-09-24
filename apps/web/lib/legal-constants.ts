@@ -63,26 +63,25 @@ export function contactMailto(subject?: string): string {
 }
 
 export const POLICY_LAST_UPDATED = {
-  terms: '2026-08-11',
-  privacy: '2026-09-12',
-  acceptableUse: '2026-08-05',
+  terms: '2026-09-23',
+  privacy: '2026-09-22',
+  acceptableUse: '2026-09-22',
   dpa: '2026-08-17',
-  cookies: '2026-09-12',
-  subprocessors: '2026-09-12',
+  cookies: '2026-09-23',
+  subprocessors: '2026-09-22',
   security: '2026-08-14',
-  trust: '2026-09-12',
+  trust: '2026-09-21',
   sla: '2026-09-04',
   refunds: '2026-08-13',
   accessibility: '2026-08-05',
   euRepresentative: '2026-08-05',
-  mobile: '2026-08-13',
+  mobile: '2026-09-21',
   copyright: '2026-08-06',
-  modelLicenses: '2026-08-06',
   indiaPrivacy: '2026-08-13',
   dataRights: '2026-08-13',
   dataUse: '2026-08-14',
   disclaimer: '2026-09-02',
-  agentPermissions: '2026-09-02',
+  agentPermissions: '2026-09-22',
 } as const;
 
 export const CANONICAL_POLICY_ROUTES = {

@@ -42,7 +42,7 @@ import {
 } from '@/lib/services/cloud-agent-run-service';
 import { runCloudAgentTurn } from '@/lib/workflows/start-cloud-agent-workflow';
 import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
-import { withSseHeartbeat } from '../lib/sse-heartbeat';
+import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from '../lib/sse-heartbeat';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import {
   loadConnectorToolPermissions,
@@ -50,6 +50,7 @@ import {
 } from '../lib/connector-tool-permissions';
 import { loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
+import { checkpointRequestForResume } from '../lib/approval-checkpoint-request';
 
 const SECRET_IN_RESULT_MESSAGE =
   'This device result was blocked because it appears to contain a secret, such as an API key or access token.';
@@ -73,6 +74,7 @@ function publicCheckpointMessages(
 function buildSyntheticRequest(
   request: NextRequest,
   claim: ClaimedCloudAgentDeviceCheckpoint,
+  isFreeTierRequest: boolean,
 ): NextRequest {
   const headers = new Headers(request.headers);
   headers.delete('content-length');
@@ -80,7 +82,7 @@ function buildSyntheticRequest(
     method: 'POST',
     headers,
     body: JSON.stringify({
-      ...claim.checkpoint.request,
+      ...checkpointRequestForResume(claim.checkpoint.request, isFreeTierRequest),
       messages: publicCheckpointMessages(claim.checkpoint.messages),
       stream: true,
     }),
@@ -204,7 +206,10 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
     throw error;
   }
 
-  const processResult = await processRequest(buildSyntheticRequest(request, claim), authResult);
+  const processResult = await processRequest(
+    buildSyntheticRequest(request, claim, isFreeTierRequest),
+    authResult,
+  );
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);
     return processResult.response;
@@ -348,9 +353,7 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   }
 
   const streamHeaders: Record<string, string> = {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+    ...SSE_RESPONSE_HEADERS,
     'X-AGI-Tool-Loop': 'resume-device',
     'X-AGI-Agent-Run-Id': claim.checkpoint.runId,
     'X-AGI-Agent-Run-URL': `/api/llm/v1/chat/completions/runs/${encodeURIComponent(

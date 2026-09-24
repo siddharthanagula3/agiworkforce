@@ -1,10 +1,11 @@
+import { AUTOMATION_OUTCOME_MAX_BATCH } from '@agiworkforce/types';
 import { CLOUD_API_BASE_URL } from '../api/cloudApi';
 import { selectHasCloudAccountSession, useAuthStore } from '../stores/auth';
 import { invoke } from '../utils/ipc';
 import { desktopInstallId } from './deviceRegistryHeartbeat';
 import { createManagedCloudRequestContext } from './managedCloudRequestContext';
 
-const BATCH_SIZE = 200;
+const BATCH_SIZE = AUTOMATION_OUTCOME_MAX_BATCH;
 const FLUSH_INTERVAL_MS = 15_000;
 
 interface AutomationAuditOutboxRow {

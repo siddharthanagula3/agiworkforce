@@ -60,7 +60,7 @@ function ApprovalCard({
                 {request.name}
               </span>
               {request.detail ? (
-                <span className="block truncate font-mono text-[12px] text-muted-foreground">
+                <span className="block truncate font-mono text-caption text-muted-foreground">
                   {request.detail}
                 </span>
               ) : null}
@@ -83,7 +83,7 @@ function ApprovalCard({
         >
           {denyLabel}
         </Button>
-        {meta ? <span className="text-[12px] text-muted-foreground">{meta}</span> : null}
+        {meta ? <span className="text-caption text-muted-foreground">{meta}</span> : null}
       </div>
     </div>
   );

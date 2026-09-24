@@ -45,8 +45,15 @@ export function ProjectArtifactsPanel({ projectId, projectName }: ProjectArtifac
 
   if (artifacts.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--agi-ink)', margin: '0 0 6px' }}>
+      <div style={{ textAlign: 'center', padding: 'var(--space-7) var(--space-4)' }}>
+        <p
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--agi-ink)',
+            margin: '0 0 var(--space-2)',
+          }}
+        >
           No artifacts yet
         </p>
         <p
@@ -67,7 +74,13 @@ export function ProjectArtifactsPanel({ projectId, projectName }: ProjectArtifac
   return (
     <ul
       data-testid="project-artifacts-list"
-      style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 0, margin: 0 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-2)',
+        padding: 0,
+        margin: 0,
+      }}
     >
       {artifacts.map((artifact) => {
         const title = artifact.title?.trim() || 'Untitled artifact';
@@ -78,7 +91,7 @@ export function ProjectArtifactsPanel({ projectId, projectName }: ProjectArtifac
             style={{
               listStyle: 'none',
               border: '1px solid var(--agi-rule)',
-              borderRadius: 10,
+              borderRadius: 'var(--corner-menu)',
               overflow: 'hidden',
             }}
           >
@@ -89,12 +102,12 @@ export function ProjectArtifactsPanel({ projectId, projectName }: ProjectArtifac
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 12,
+                gap: 'var(--space-3)',
                 width: '100%',
                 minHeight: 44,
                 background: 'transparent',
                 border: 0,
-                padding: '10px 14px',
+                padding: 'var(--space-3) var(--space-4)',
                 textAlign: 'left',
                 cursor: 'pointer',
               }}

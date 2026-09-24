@@ -20,6 +20,8 @@ vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-toke
 
 import {
   endLiveVoiceSession,
+  keepVoiceSessionAcrossNavigation,
+  releaseVoiceSessionOnPageExit,
   useVoiceSession,
   RECONNECT_BASE_MS,
   RECONNECT_MAX_ATTEMPTS,
@@ -272,6 +274,38 @@ describe('useVoiceSession', () => {
       result.current.retry();
     });
     await waitFor(() => expect(live.start).toHaveBeenCalledTimes(2));
+  });
+
+  describe('leaving the page', () => {
+    it('ends the call when the surface unmounts without announcing a navigation', async () => {
+      const { result, unmount } = mount();
+      await enterAndStart(result);
+
+      await act(async () => {
+        releaseVoiceSessionOnPageExit();
+        unmount();
+      });
+
+      await waitFor(() => expect(live.close).toHaveBeenCalledTimes(1));
+    });
+
+    it('carries the call across an in-app navigation and resumes it on the next surface', async () => {
+      const { result, unmount } = mount();
+      await enterAndStart(result);
+
+      await act(async () => {
+        keepVoiceSessionAcrossNavigation();
+        releaseVoiceSessionOnPageExit();
+        unmount();
+      });
+      expect(live.close).not.toHaveBeenCalled();
+
+      const next = mount();
+      await act(async () => {});
+
+      expect(live.close).not.toHaveBeenCalled();
+      expect(next.result.current.state.status).toBe(VOICE_SESSION_STATUS.listening);
+    });
   });
 
   it('reports a session the provider ended as an error the user can retry', async () => {

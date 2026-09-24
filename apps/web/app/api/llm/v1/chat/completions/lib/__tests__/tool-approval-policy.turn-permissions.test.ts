@@ -46,6 +46,23 @@ describe('loadToolApprovalPolicy', () => {
     organizations.readOrganizationPolicy.mockReset();
   });
 
+  it('uses Skip approvals for a website account with no stored choice', async () => {
+    permitAutonomy(true);
+    const db = { query: vi.fn(async () => []) } as unknown as DatabaseAdapter;
+
+    await expect(loadToolApprovalPolicy(db, 'user_1')).resolves.toBe('autonomous');
+  });
+
+  it('asks when the account policy read fails', async () => {
+    const db = {
+      query: vi.fn(async () => {
+        throw new Error('database unavailable');
+      }),
+    } as unknown as DatabaseAdapter;
+
+    await expect(loadToolApprovalPolicy(db, 'user_1')).resolves.toBe('ask_every_time');
+  });
+
   it('returns the stored autonomous choice when every governing workspace permits it', async () => {
     permitAutonomy(true);
 
@@ -153,5 +170,22 @@ describe('loadTurnToolPermissions', () => {
     );
 
     expect(permissions.connectorPermissions).not.toBe(EMPTY_CONNECTOR_TOOL_PERMISSIONS);
+  });
+
+  it('performs no account reads when the admitted turn offers no tools or connectors', async () => {
+    const query = vi.fn(async () => []);
+    const db = { query } as unknown as DatabaseAdapter;
+
+    const permissions = await loadTurnToolPermissions(db, 'user_1', {
+      modelSupportsTools: true,
+      connectorPermissionsRequired: false,
+      toolApprovalPolicyRequired: false,
+    });
+
+    expect(query).not.toHaveBeenCalled();
+    expect(permissions).toEqual({
+      connectorPermissions: EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+      toolApprovalPolicy: 'ask_every_time',
+    });
   });
 });

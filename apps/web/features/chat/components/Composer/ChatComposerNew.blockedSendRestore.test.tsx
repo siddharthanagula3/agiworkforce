@@ -97,6 +97,18 @@ describe('a blocked send comes back into whichever composer is on screen (files-
     expect(parkedSendNow()).toBeNull();
   });
 
+  it('does not resurrect a restored send the user explicitly cleared', () => {
+    useChatStore.getState().parkBlockedSend(FINGERPRINT, BLOCKED_CONTENT);
+    const current = render(<ChatComposerNew onSend={vi.fn()} conversationId={REAL_ID} />);
+    expect(input()).toHaveValue(BLOCKED_CONTENT);
+
+    fireEvent.change(input(), { target: { value: '' } });
+    expect(parkedSendNow()).toBeNull();
+    current.unmount();
+    render(<ChatComposerNew onSend={vi.fn()} conversationId={REAL_ID} />);
+    expect(input()).toHaveValue('');
+  });
+
   it('never overwrites text the user typed while the send was blocked', () => {
     const { rerender } = render(<ChatComposerNew onSend={vi.fn()} conversationId={REAL_ID} />);
     fireEvent.change(input(), { target: { value: 'something else entirely' } });

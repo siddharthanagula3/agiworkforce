@@ -10,7 +10,7 @@ import {
   DialogTitle,
   Label,
 } from '@agiworkforce/ui';
-import { Camera, ImagePlus, MessageSquareText, X } from 'lucide-react';
+import { Camera, ImagePlus, MessageSquareText, X } from '@agiworkforce/icons';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { AGI_WORK_FEEDBACK_LABEL, AGI_WORK_LABEL } from '../../lib/agi-work';
@@ -311,7 +311,7 @@ export function ComposerFeedbackDialog({
                         aria-label="Remove screenshot"
                         className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-foreground"
                       >
-                        <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        <X className="h-4 w-4" aria-hidden="true" />
                       </button>
                     </div>
                   ) : (

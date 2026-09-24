@@ -126,6 +126,29 @@ describe('embedTextsMetered', () => {
     );
   });
 
+  it('fingerprints what was sent, so one key cannot cover two different texts', async () => {
+    mocks.gatewayEmbed.mockResolvedValue({ vectors: [[0.1]], promptTokens: 1 });
+    const call = (text: string) =>
+      embedTextsMetered({
+        db,
+        userId: 'user-1',
+        organizationId: null,
+        texts: [text],
+        purpose: 'query',
+        operationKey: 'user-1:message',
+      });
+
+    await call('alpha');
+    await call('gamma');
+    await call('alpha');
+
+    const hashes = mocks.reserve.mock.calls.map(
+      (call) => (call[0] as Record<string, unknown>)['requestHash'],
+    );
+    expect(hashes[0]).not.toBe(hashes[1]);
+    expect(hashes[0]).toBe(hashes[2]);
+  });
+
   it('releases the reservation and reports a provider failure', async () => {
     mocks.gatewayEmbed.mockRejectedValue(new Error('upstream down'));
 

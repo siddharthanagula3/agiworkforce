@@ -114,6 +114,8 @@ describe('VS Code sidebar recent-chats block', () => {
     (document.querySelectorAll('.recent-chat-row')[1] as HTMLButtonElement).click();
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openRecentConversation',
       payload: { threadId: 'thread-b' },
     });
@@ -127,6 +129,8 @@ describe('VS Code sidebar recent-chats block', () => {
 
     expect(document.getElementById('sessionsSheet')?.hidden).toBe(false);
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'requestSessions',
       payload: { source: 'local' },
     });

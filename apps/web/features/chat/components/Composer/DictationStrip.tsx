@@ -158,7 +158,7 @@ export function DictationStrip({
             aria-label={LABEL.stop}
             className={ROUND_CONTROL_CLASS}
           >
-            <Square className="h-3 w-3" fill="currentColor" aria-hidden="true" />
+            <Square className="h-4 w-4" fill="currentColor" aria-hidden="true" />
           </button>
 
           <SendButton

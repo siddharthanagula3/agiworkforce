@@ -3,6 +3,7 @@ import type { MermaidConfig } from 'mermaid';
 
 import { reportClientFailure } from '../../lib/client-failures';
 import { sanitizeSvg } from '../ArtifactRenderer';
+import { renderMermaidInOwnedHost } from './mermaid-render';
 
 type RenderState =
   | { phase: 'idle' }
@@ -22,6 +23,7 @@ const MERMAID_CONFIG: MermaidConfig = {
   themeVariables: { fontSize: '14px' },
   flowchart: { htmlLabels: false, useMaxWidth: true },
   class: { htmlLabels: false },
+  suppressErrorRendering: true,
 };
 
 const INLINE_TEXT_ANCHOR = /text-anchor:\s*([a-z]+)/i;
@@ -139,7 +141,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   const [showSource, setShowSource] = useState(false);
   const reactId = useId();
   const diagramId = useMemo(() => `mermaid-${reactId.replace(/[:]/g, '')}`, [reactId]);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const renderHostRef = useRef<HTMLDivElement>(null);
   const onRenderResultRef = useRef(onRenderResult);
   onRenderResultRef.current = onRenderResult;
 
@@ -166,12 +168,14 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     }
 
     let cancelled = false;
+    const renderHost = renderHostRef.current;
+    if (!renderHost) return;
     setState({ phase: 'rendering' });
 
     void (async () => {
       try {
         const { default: mermaid } = await loadMermaid();
-        const { svg } = await mermaid.render(diagramId, source);
+        const { svg } = await renderMermaidInOwnedHost(mermaid, diagramId, source, renderHost);
         if (cancelled) return;
         const sanitized = sanitizeSvg(bakeTextAnchor(svg));
         // A render that succeeds but sanitizes down to nothing (malformed
@@ -203,12 +207,13 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
       <code>{source}</code>
     </pre>
   );
+  const renderHost = <div ref={renderHostRef} aria-hidden="true" className="sr-only" />;
 
   if (state.phase === 'ready') {
     return (
       <figure className={className} data-mermaid="ready">
+        {renderHost}
         <div
-          ref={containerRef}
           className="mermaid-diagram"
           // llm-guardrail-allow: the markup is mermaid output passed through the
           // package's own sanitizeSvg, which is the canonical owner of SVG
@@ -234,6 +239,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   if (state.phase === 'failed') {
     return (
       <figure className={className} data-mermaid="failed">
+        {renderHost}
         <p role="status" className="mermaid-error">
           This diagram could not be drawn: {state.reason}. Its source is kept below.
         </p>
@@ -250,6 +256,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
       data-mermaid={ready ? 'rendering' : 'pending'}
       style={reservedHeight ? { minHeight: reservedHeight } : undefined}
     >
+      {renderHost}
       {ready ? (
         <p role="status" className="mermaid-pending">
           Drawing diagram…

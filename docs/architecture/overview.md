@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-18
+Last updated: 2026-09-22
 
 ## Monorepo Shape
 
@@ -42,15 +42,15 @@ Last updated: 2026-09-18
 
 ## Cross-Surface Data Ownership
 
-| Data class                | Source of truth                                                                                                  | Surfaces allowed to write                                              | Surfaces allowed to read                                        | Sync rule                                                                                     |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Projects                  | `packages/contracts/types` contract plus Web/Desktop/Mobile persistence adapters                                 | Web, Desktop, Mobile                                                   | Web, Desktop, Mobile                                            | Synced app data. CLI/VS Code/Chrome may hand off selected project context only.               |
-| App chat conversations    | Shared Cloud conversation contract plus Web/Desktop/Mobile adapters and Chrome's provenance-gated replica writer | Web, Desktop, Mobile, eligible Chrome Managed Cloud chats              | Web, Desktop, Mobile; Chrome keeps its local authoritative copy | Normal Cloud chat sync boundary; unknown/Local/BYOK Chrome turns never enter it.              |
-| Developer sessions        | CLI session store and future developer-session contract                                                          | CLI, VS Code                                                           | Owning developer surface                                        | Not synced to app chats unless the user creates a handoff draft.                              |
-| Artifacts/generated files | `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` in `packages/contracts/types`                          | Desktop first, Web managed compute later, Mobile as requester/receiver | Web, Desktop, Mobile                                            | Must carry privacy mode, owner session, checksum, TTL/retention, and source compute metadata. |
-| Memory                    | Local/BYOK/Managed memory stores keyed by privacy mode                                                           | Surface that collected consent                                         | Only surfaces within the same trust boundary                    | Local memory cannot be promoted to BYOK/Managed without preview and approval.                 |
-| Teams/orgs                | Enterprise control-plane tables and `packages/contracts/types/src/enterprise`                                    | Web admin routes                                                       | Web admin; other surfaces through scoped policy reads           | Managed/enterprise only; never required for Local/BYOK.                                       |
-| Billing/usage             | Enterprise control plane plus provider-cost ledger                                                               | Backend services only                                                  | Web/admin and usage-label surfaces                              | No client invents quota, reset, or credit values.                                             |
+| Data class                | Source of truth                                                                                                  | Surfaces allowed to write                                              | Surfaces allowed to read                                        | Sync rule                                                                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Projects                  | `packages/contracts/types` contract plus Web/Desktop/Mobile persistence adapters                                 | Web, Desktop, Mobile                                                   | Web, Desktop, Mobile                                            | Synced app data. CLI/VS Code/Chrome may hand off selected project context only.                              |
+| App chat conversations    | Shared Cloud conversation contract plus Web/Desktop/Mobile adapters and Chrome's provenance-gated replica writer | Web, Desktop, Mobile, eligible Chrome Managed Cloud chats              | Web, Desktop, Mobile; Chrome keeps its local authoritative copy | Normal Cloud chat sync boundary; unknown/Local/BYOK Chrome turns never enter it.                             |
+| Developer sessions        | Host-owned developer runtime and shared developer-session contract                                               | Desktop Code, CLI, VS Code                                             | Desktop Code, CLI, VS Code                                      | Same session identity within the host domain; never merged into app chats without an explicit handoff draft. |
+| Artifacts/generated files | `ComputeSession`, `GeneratedFile`, and `ArtifactManifest` in `packages/contracts/types`                          | Desktop first, Web managed compute later, Mobile as requester/receiver | Web, Desktop, Mobile                                            | Must carry privacy mode, owner session, checksum, TTL/retention, and source compute metadata.                |
+| Memory                    | Local/BYOK/Managed memory stores keyed by privacy mode                                                           | Surface that collected consent                                         | Only surfaces within the same trust boundary                    | Local memory cannot be promoted to BYOK/Managed without preview and approval.                                |
+| Teams/orgs                | Enterprise control-plane tables and `packages/contracts/types/src/enterprise`                                    | Web admin routes                                                       | Web admin; other surfaces through scoped policy reads           | Managed/enterprise only; never required for Local/BYOK.                                                      |
+| Billing/usage             | Enterprise control plane plus provider-cost ledger                                                               | Backend services only                                                  | Web/admin and usage-label surfaces                              | No client invents quota, reset, or credit values.                                                            |
 
 ## Cross-Device Sync Semantics
 
@@ -72,12 +72,13 @@ Three rules the registry encodes and every surface has to honour:
   asks `resourceAvailability` and can say which device holds it rather than
   showing a failure.
 
-Web, Desktop and Mobile are inside the boundary. CLI, VS Code and Chrome are
-outside it on purpose, and the reason differs per surface: CLI and VS Code own
-developer sessions whose source of truth is the local workspace, not an account
-row, and Chrome keeps an authoritative local copy because a page's turns may
-never be eligible for the cloud at all. None of the three is waiting for a sync
-client to be written.
+Account Cloud continuity includes Web, Mobile Cloud, Desktop Cloud and
+provenance-eligible Chrome Managed Cloud conversations. Chrome remains locally
+authoritative and excludes unknown, Local and BYOK turns from Cloud sync. Host
+Developer continuity separately joins Desktop Code, CLI and VS Code around the
+local workspace/runtime identity. The two domains share account entitlement
+but not conversation authority, secrets or storage; movement between them is an
+explicit handoff rather than background sync.
 
 ### Session continuation
 

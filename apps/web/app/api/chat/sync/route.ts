@@ -21,6 +21,7 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import {
   lockConversationThread,
   setActiveLeaf,
@@ -67,7 +68,7 @@ async function assertProjectsBelongToActiveWorkspace(
 }
 
 async function handlePull(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation-read');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId } = await getUserScopedDb(request);
@@ -611,10 +612,12 @@ async function handlePush(request: NextRequest) {
           id: string;
           conversation_id: string;
           content: string;
+          metadata: Record<string, unknown> | null;
         }>(
           `select message.id::text as id,
                   message.conversation_id::text as conversation_id,
-                  message.content
+                  message.content,
+                  message.metadata
              from web_messages as message
              join web_conversations as conversation
                on conversation.id = message.conversation_id
@@ -631,6 +634,9 @@ async function handlePush(request: NextRequest) {
             conversationId: row.conversation_id,
             messageId: row.id,
             content: row.content,
+            ...(row.metadata?.['artifactDerivation'] === EXPLICIT_ARTIFACT_DERIVATION_POLICY
+              ? { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY }
+              : {}),
           });
         }
       }

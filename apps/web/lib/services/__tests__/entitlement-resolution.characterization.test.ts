@@ -169,6 +169,50 @@ describe('entitlement resolution characterization', () => {
     });
   });
 
+  it('seats a contracted organization through the same resolver as a self-serve one', async () => {
+    mocks.getSubscription.mockResolvedValue(null);
+    mocks.privilegedQuery.mockResolvedValue([
+      seatCandidate({ organization_id: 'org-self-serve', billing_plan_tier: 'team' }),
+    ]);
+    const selfServe = await resolveEntitlementBundle(scopedDb, 'member-1');
+
+    mocks.privilegedQuery.mockResolvedValue([
+      seatCandidate({
+        organization_id: 'org-contracted',
+        billing_plan_tier: 'enterprise',
+        stripe_subscription_id: null,
+      }),
+    ]);
+    const contracted = await resolveEntitlementBundle(scopedDb, 'member-1');
+
+    expect(selfServe).toMatchObject({ plan: 'team', source: 'seat', entitled: true });
+    expect(contracted).toMatchObject({
+      plan: 'enterprise',
+      source: 'seat',
+      entitled: true,
+      seatSource: { organizationId: 'org-contracted' },
+    });
+    expect(mocks.readOrganizationCollectionState).toHaveBeenCalledTimes(1);
+    expect(mocks.readOrganizationCollectionState).toHaveBeenCalledWith(
+      expect.anything(),
+      'org-contracted',
+    );
+  });
+
+  it('holds a contracted seat on its collection state, which a self-serve seat never reads', async () => {
+    mocks.getSubscription.mockResolvedValue(null);
+    mocks.readOrganizationCollectionState.mockResolvedValue({ readOnly: true });
+    mocks.privilegedQuery.mockResolvedValue([
+      seatCandidate({ billing_plan_tier: 'enterprise', stripe_subscription_id: null }),
+    ]);
+
+    await expect(resolveEntitlementBundle(scopedDb, 'member-1')).resolves.toMatchObject({
+      plan: 'free',
+      source: 'none',
+      entitled: false,
+    });
+  });
+
   it('a failed seat lookup falls back to free rather than throwing', async () => {
     mocks.getSubscription.mockResolvedValue(null);
     mocks.privilegedQuery.mockRejectedValue(new Error('rls'));
@@ -178,6 +222,20 @@ describe('entitlement resolution characterization', () => {
       source: 'none',
       entitled: false,
     });
+  });
+
+  it('an unreadable own subscription fails the resolution rather than guessing a plan', async () => {
+    mocks.getSubscription.mockRejectedValue(new Error('subscriptions unavailable'));
+    mocks.privilegedQuery.mockResolvedValue([seatCandidate()]);
+
+    await expect(resolveEntitlementBundle(scopedDb, 'member-1')).rejects.toThrow(
+      'subscriptions unavailable',
+    );
+    await expect(resolveEffectiveSubscription(scopedDb, 'member-1')).rejects.toThrow(
+      'subscriptions unavailable',
+    );
+    expect(mocks.privilegedQuery).not.toHaveBeenCalled();
+    expect(mocks.getOrCreateAccount).not.toHaveBeenCalled();
   });
 
   it('includeSeats false stops at the user own row', async () => {

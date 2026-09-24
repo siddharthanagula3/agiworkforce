@@ -4,6 +4,8 @@ import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 
 const mockGetClerkAuthUser = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
+const mockExecute = vi.fn();
+const mockRecordAuditEvent = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: () => mockGetClerkAuthUser(),
@@ -45,11 +47,16 @@ vi.mock('@shared/utils/env', () => ({
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    execute: vi.fn().mockResolvedValue({}),
+    execute: mockExecute,
     query: vi.fn(async (sql: string) =>
       /select account_status from profiles/.test(sql) ? [{ account_status: 'active' }] : [],
     ),
   })),
+}));
+
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: (...args: unknown[]) => mockRecordAuditEvent(...args),
 }));
 
 import { POST, OPTIONS } from '@/app/api/device/link/route';
@@ -64,6 +71,8 @@ describe('Device Link API', () => {
     vi.clearAllMocks();
 
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123' });
+    mockExecute.mockResolvedValue({});
+    mockRecordAuditEvent.mockResolvedValue(undefined);
   });
 
   describe('POST /api/device/link', () => {
@@ -128,6 +137,42 @@ describe('Device Link API', () => {
         );
         expect(data.verify_url).toBeDefined();
         expect(data.expires_at).toBeDefined();
+      });
+
+      it('audits successful issuance without storing the pairing secret', async () => {
+        const request = new NextRequest('http://localhost/api/device/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validRequest),
+        });
+
+        const response = await POST(request);
+        const data = await response.json();
+
+        expect(response.status).toBe(200);
+        expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+        expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+          userId: 'user-123',
+          eventType: 'device_authorization_initiated',
+          request,
+          detail: { resourceType: 'device_authorization', subjectRef: data.device_id },
+        });
+        expect(JSON.stringify(mockRecordAuditEvent.mock.calls)).not.toContain(data.link_code);
+        expect(JSON.stringify(mockRecordAuditEvent.mock.calls)).not.toContain(data.verify_url);
+      });
+
+      it('does not audit issuance when inserting the pairing code fails', async () => {
+        mockExecute.mockRejectedValueOnce(new Error('database unavailable'));
+        const request = new NextRequest('http://localhost/api/device/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(validRequest),
+        });
+
+        const response = await POST(request);
+
+        expect(response.status).toBe(500);
+        expect(mockRecordAuditEvent).not.toHaveBeenCalled();
       });
     });
   });

@@ -136,6 +136,62 @@ describe('StreamingMarkdownContent, streamed markup equals one full parse', () =
   });
 });
 
+describe('StreamingMarkdownContent, GFM table stability', () => {
+  it('does not turn settled numeric markers into source links before the whole answer finishes', () => {
+    const citations = [{ url: 'https://example.com/source', title: 'Source' }];
+    const view = mountClient(
+      <StreamingMarkdownContent
+        content={'A claim [1].\n\nThe next paragraph is still streaming'}
+        citations={citations}
+        isStreaming
+      />,
+    );
+
+    expect(view.container.textContent).toContain('A claim [1].');
+    expect(view.container.querySelector('a[href="https://example.com/source"]')).toBeNull();
+
+    view.rerender(
+      <StreamingMarkdownContent
+        content={'A claim [1].\n\nThe next paragraph is still streaming'}
+        citations={citations}
+        isStreaming={false}
+      />,
+    );
+    expect(view.container.querySelector('a[href="https://example.com/source"]')).not.toBeNull();
+
+    view.unmount();
+  });
+
+  it('holds the header and partial delimiter until the delimiter row is valid', () => {
+    const view = mountClient(<StreamingMarkdownContent content="| Name | Value |" isStreaming />);
+    expect(view.container.querySelector('table')).toBeNull();
+    expect(view.container.querySelector('p')).toBeNull();
+
+    view.rerender(<StreamingMarkdownContent content={'| Name | Value |\n| --- |'} isStreaming />);
+    expect(view.container.querySelector('table')).toBeNull();
+    expect(view.container.querySelector('p')).toBeNull();
+
+    view.rerender(
+      <StreamingMarkdownContent content={'| Name | Value |\n| --- | --- |'} isStreaming />,
+    );
+    expect(view.container.querySelector('table')).not.toBeNull();
+    expect(view.container.querySelectorAll('th')).toHaveLength(2);
+
+    view.unmount();
+  });
+
+  it('renders an unfinished pipe line as prose when streaming finishes', () => {
+    const view = mountClient(
+      <StreamingMarkdownContent content="| This is unfinished |" isStreaming={false} />,
+    );
+
+    expect(view.container.querySelector('table')).toBeNull();
+    expect(view.container.querySelector('p')?.textContent).toContain('This is unfinished');
+
+    view.unmount();
+  });
+});
+
 describe('StreamingMarkdownContent, document-scoped definitions', () => {
   const REFERENCE_DOC = lines(
     'Claim with a [reference link][spec].',

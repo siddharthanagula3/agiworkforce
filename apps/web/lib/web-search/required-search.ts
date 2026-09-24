@@ -1,4 +1,4 @@
-import { detectExplicitWebSearchIntent } from '@agiworkforce/search';
+import { detectExplicitWebSearchIntent, hasExplicitWebSearchOptOut } from '@agiworkforce/search';
 
 import { annotateActiveSpan } from '@/lib/observability/span';
 import {
@@ -87,6 +87,7 @@ export type WebSearchRequirementInput = {
 function classifyWebSearchRequirement(input: WebSearchRequirementInput): WebSearchRequirement {
   if (input.webSearchEnabled === false) return NOT_REQUIRED;
   if (input.searchRequested === true) return { required: true, source: 'explicit_mode' };
+  if (hasExplicitWebSearchOptOut(input.userMessage)) return NOT_REQUIRED;
   if (input.agiWorkRun) return { required: true, source: 'work_mode' };
   if (detectExplicitWebSearchIntent(input.userMessage) !== null) {
     return { required: true, source: 'explicit_intent' };
@@ -115,6 +116,20 @@ export function resolveWebSearchRequirement(
     'web_search.source': requirement.source ?? 'none',
   });
   return requirement;
+}
+
+export function shouldOfferWebSearchForTurn(input: {
+  webSearchEnabled: boolean | undefined;
+  requirement: WebSearchRequirement;
+  modelPolicy: 'required_only' | undefined;
+  surface: string;
+  userOptOut?: boolean;
+}): boolean {
+  return (
+    input.webSearchEnabled === true &&
+    input.userOptOut !== true &&
+    (input.surface !== 'web' || input.modelPolicy !== 'required_only' || input.requirement.required)
+  );
 }
 
 export type AttachedSearchToolKind =

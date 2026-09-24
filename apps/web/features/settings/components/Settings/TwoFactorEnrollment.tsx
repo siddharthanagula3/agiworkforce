@@ -13,7 +13,7 @@ import {
   CardTitle,
   Input,
 } from '@agiworkforce/ui';
-import { Check, Copy, Download, Loader2, ShieldCheck, ShieldOff } from 'lucide-react';
+import { Check, Copy, Download, Loader2, Printer, ShieldCheck, ShieldOff } from 'lucide-react';
 import settingsService, {
   type TwoFactorStatus,
 } from '@features/settings/services/user-preferences';
@@ -27,6 +27,10 @@ type Stage =
   | { name: 'enrolling'; secret: string; otpauthUrl: string; pendingBackupCodes: string[] }
   /** Server confirmed the change · these codes are visible exactly once. */
   | { name: 'backup-codes'; codes: string[]; reason: 'enabled' | 'regenerated' };
+
+const BACKUP_CODES_PRINT_TITLE = 'AGI Workforce backup codes';
+const BACKUP_CODES_PRINT_NOTE =
+  'Each code works once, in place of a code from your authenticator app. Keep this page somewhere safe.';
 
 interface TwoFactorEnrollmentPanelProps {
   onStatusChange?: (status: TwoFactorStatus) => void;
@@ -81,6 +85,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
   const [qrDataUri, setQrDataUri] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
   const [copied, setCopied] = useState<'secret' | 'codes' | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
 
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
 
@@ -118,6 +123,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
     setActionError(null);
     setAcknowledged(false);
     setCopied(null);
+    setPrintError(null);
   }, []);
 
   const copyText = useCallback(async (text: string, what: 'secret' | 'codes') => {
@@ -214,6 +220,31 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
     resetFlow();
     await refreshStatus();
   }, [refreshStatus, resetFlow]);
+
+  const printCodes = useCallback((codes: string[]) => {
+    const printWindow = window.open('', '_blank', 'width=480,height=640');
+    if (!printWindow) {
+      setPrintError(
+        'Your browser blocked the print window. Allow pop-ups for this site, or download or copy the codes instead.',
+      );
+      return;
+    }
+    setPrintError(null);
+    const doc = printWindow.document;
+    const heading = doc.createElement('h1');
+    heading.textContent = BACKUP_CODES_PRINT_TITLE;
+    const note = doc.createElement('p');
+    note.textContent = BACKUP_CODES_PRINT_NOTE;
+    const list = doc.createElement('ul');
+    for (const code of codes) {
+      const item = doc.createElement('li');
+      item.textContent = code;
+      list.append(item);
+    }
+    doc.title = BACKUP_CODES_PRINT_TITLE;
+    doc.body.append(heading, note, list);
+    printWindow.print();
+  }, []);
 
   const downloadCodes = useCallback((codes: string[]) => {
     const blob = new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' });
@@ -314,7 +345,21 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
                 <Download className="mr-2 h-4 w-4" />
                 Download codes
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => printCodes(stage.codes)}
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Print codes
+              </Button>
             </div>
+            {printError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{printError}</AlertDescription>
+              </Alert>
+            ) : null}
             <label className="flex items-center gap-2 text-sm text-foreground">
               <input
                 type="checkbox"

@@ -22,6 +22,7 @@ import {
 } from '@/lib/observability/metrics';
 import { dependencySignal } from '@/lib/observability/signal-coverage';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { logger } from '@/lib/logger';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
@@ -86,6 +87,8 @@ export interface HealthCheckResult {
     work: CapabilityCheck;
     voice: CapabilityCheck;
     search: CapabilityCheck;
+    vector: CapabilityCheck;
+    cache: CapabilityCheck;
   };
   /**
    * One entry per PRODUCTION_DEPENDENCIES member, in registry order. Absent
@@ -97,6 +100,23 @@ export interface HealthCheckResult {
 }
 
 const SEARCH_INDEX_TABLES = ['retrieval_documents', 'retrieval_chunks'] as const;
+const FULL_TEXT_INDEX = 'public.idx_retrieval_chunks_search_vector';
+const EMBEDDING_INDEX = 'public.idx_retrieval_chunks_embedding';
+
+/**
+ * One read of one constant key, and nothing else. The store is billed and rate
+ * limited per command, and exhausting its quota is itself an outage, so the
+ * probe that watches for that must not be a meaningful share of the budget: a
+ * second command here would double the cost of watching.
+ */
+const CACHE_PROBE_KEY = 'health:probe';
+
+/**
+ * The public endpoint and the ten-minute pager both wait on this, so it is
+ * bounded well inside their own budgets. A store that has not answered in a
+ * second is not serving a request either.
+ */
+const CACHE_PROBE_TIMEOUT_MS = 1_000;
 
 function unhealthy(message: string): CapabilityCheck {
   return { status: 'unhealthy', message };
@@ -143,34 +163,108 @@ async function checkWorkQueues(): Promise<CapabilityCheck> {
   }
 }
 
-async function checkSearchIndex(): Promise<CapabilityCheck> {
+interface RetrievalChecks {
+  search: CapabilityCheck;
+  vector: CapabilityCheck;
+}
+
+/**
+ * Full text and semantic retrieval fail apart: the tables and the `tsvector`
+ * index can be present while the `vector` extension or the embedding index is
+ * not, which serves keyword results and silently returns nothing for every
+ * semantic query. One catalogue round trip answers for both, so naming them
+ * separately costs no extra statement.
+ */
+async function checkRetrieval(): Promise<RetrievalChecks> {
   try {
-    const rows = await getNeonDb().query<{ missing: number }>(
-      `select count(*)::int as missing
-         from unnest($1::text[]) as relation
-        where to_regclass('public.' || relation) is null`,
-      [[...SEARCH_INDEX_TABLES]],
+    const rows = await getNeonDb().query<{
+      missing_relations: number;
+      full_text_index: boolean;
+      embedding_index: boolean;
+      vector_extension: boolean;
+    }>(
+      `select
+         (select count(*)::int
+            from unnest($1::text[]) as relation
+           where to_regclass('public.' || relation) is null) as missing_relations,
+         to_regclass($2) is not null as full_text_index,
+         to_regclass($3) is not null as embedding_index,
+         exists (select 1 from pg_extension where extname = 'vector') as vector_extension`,
+      [[...SEARCH_INDEX_TABLES], FULL_TEXT_INDEX, EMBEDDING_INDEX],
     );
-    if ((rows[0]?.missing ?? SEARCH_INDEX_TABLES.length) > 0) {
-      return unhealthy('index schema missing');
-    }
+    const row = rows[0];
+    if (!row) return { search: unhealthy('unavailable'), vector: unhealthy('unavailable') };
+
+    const schemaPresent = row.missing_relations === 0;
+    return {
+      search: !schemaPresent
+        ? unhealthy('index schema missing')
+        : row.full_text_index
+          ? { status: 'healthy' }
+          : unhealthy('full text index missing'),
+      vector: !schemaPresent
+        ? unhealthy('index schema missing')
+        : !row.vector_extension
+          ? unhealthy('extension missing')
+          : row.embedding_index
+            ? { status: 'healthy' }
+            : unhealthy('embedding index missing'),
+    };
+  } catch (error) {
+    logger.error({ error }, 'Retrieval index health check failed');
+    return { search: unhealthy('unavailable'), vector: unhealthy('unavailable') };
+  }
+}
+
+function withProbeTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('probe timed out')), timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
+/**
+ * Whether the store answers a command, which is the thing that stops being
+ * true in the outage this watches for: a quota refusal accepts the connection
+ * and rejects the command. A key nobody wrote reads as empty, and empty is an
+ * answer, so only a throw or a stall is a fault. Nothing is configured here
+ * that the caller has to undo, and nothing this catches reaches the reader: the
+ * vendor's own words stay in the log line.
+ */
+async function checkCache(): Promise<CapabilityCheck> {
+  try {
+    const store = getKeyValueStore();
+    // Nothing to probe: a missing store is the environment check's finding in
+    // production, and a dev or CI runtime without one is not an outage.
+    if (!store) return { status: 'healthy', message: 'not configured' };
+    await withProbeTimeout(store.get<string>(CACHE_PROBE_KEY), CACHE_PROBE_TIMEOUT_MS);
     return { status: 'healthy' };
   } catch (error) {
-    logger.error({ error }, 'Search index health check failed');
+    logger.error({ error }, 'Cache health check failed');
     return unhealthy('unavailable');
   }
 }
 
 /**
- * Which check speaks for a dependency once its configuration is present.
+ * Which checks speak for a dependency once its configuration is present.
  * Configured and failing is a different state from never configured, and the
- * configuration gauge is the only place that difference is standing data.
+ * configuration gauge is the only place that difference is standing data. A
+ * dependency several checks answer for is failing when any one of them is, so
+ * half a working retrieval index never reads as a healthy context engine.
  */
-const DEPENDENCY_LIVE_CHECK: Readonly<Record<string, keyof HealthCheckResult['checks']>> = {
-  database: 'database',
-  billing: 'stripe',
-  context_engine: 'search',
-  model_providers: 'chat',
+export const DEPENDENCY_LIVE_CHECKS: Readonly<
+  Record<string, readonly (keyof HealthCheckResult['checks'])[]>
+> = {
+  database: ['database'],
+  key_value: ['cache'],
+  billing: ['stripe'],
+  context_engine: ['search', 'vector'],
+  model_providers: ['chat'],
 };
 
 /**
@@ -183,8 +277,8 @@ function observeDependencies(
   checks: HealthCheckResult['checks'],
 ): readonly DependencyStatus[] {
   return readiness.map((state) => {
-    const live = DEPENDENCY_LIVE_CHECK[state.dependency.id];
-    const failing = live !== undefined && checks[live].status !== 'healthy';
+    const live = DEPENDENCY_LIVE_CHECKS[state.dependency.id];
+    const failing = live !== undefined && live.some((name) => checks[name].status !== 'healthy');
     const observation: DependencyObservation = !state.ready
       ? 'unconfigured'
       : live === undefined
@@ -217,6 +311,8 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     work: { status: 'unhealthy' },
     voice: { status: 'unhealthy' },
     search: { status: 'unhealthy' },
+    vector: { status: 'unhealthy' },
+    cache: { status: 'unhealthy' },
   };
 
   const readiness = resolveDependencyReadiness();
@@ -250,7 +346,10 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
     logger.error({ error }, 'Database health check failed');
   }
 
-  checks.search = await checkSearchIndex();
+  const retrieval = await checkRetrieval();
+  checks.search = retrieval.search;
+  checks.vector = retrieval.vector;
+  checks.cache = await checkCache();
 
   try {
     const stripe = getStripeClientOrNull();
@@ -290,10 +389,17 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
   checks.work = work;
   checks.voice = voice;
 
+  // The cache sits with the database rather than with the degradable checks
+  // because the product's own answer to losing it is to fail closed: rate
+  // limiting and cached reads refuse rather than serve unlimited, so a turn
+  // cannot be served without it. Retrieval stays degradable: a missing index
+  // costs search over your own content and leaves a conversation working.
   const coreHealthy =
-    checks.database.status === 'healthy' && checks.environment.status === 'healthy';
+    checks.database.status === 'healthy' &&
+    checks.environment.status === 'healthy' &&
+    checks.cache.status === 'healthy';
 
-  const nonCoreHealthy = [checks.stripe, chat, work, voice, checks.search].every(
+  const nonCoreHealthy = [checks.stripe, chat, work, voice, checks.search, checks.vector].every(
     (check) => check.status === 'healthy',
   );
 

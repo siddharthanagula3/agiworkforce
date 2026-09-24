@@ -161,7 +161,7 @@ const ACCESS: { label: string; value: string }[] = [
   {
     label: 'Sessions and protected routes',
     value:
-      'Authentication is handled by Clerk. Fourteen route groups (chat, code, library, models, open, schedules, tasks, settings, billing, upgrade, admin, workspace, operator, and welcome) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
+      'Authentication is handled by Clerk. Fifteen route groups (chat, code, library, models, open, quick-ask, schedules, tasks, settings, billing, upgrade, admin, workspace, operator, and welcome) are checked at the edge before the page renders; a request without a session cookie is redirected to login carrying its intended destination, so a protected page never renders and then complains.',
   },
   {
     label: 'Administrative access',
@@ -265,7 +265,7 @@ const LOGGING: { label: string; value: string }[] = [
   {
     label: 'What it does not record',
     value:
-      'There is no hosted, user-visible journal of individual tool calls. Desktop keeps a local audit log of tool executions and permission requests; the hosted surface does not have an equivalent, and we are not going to describe one until it exists.',
+      'Individual built-in tool calls are not listed in the account activity feed. The security audit path records a tool’s name, category and outcome, plus duration when available; it does not store the call’s arguments or result. The connector permissions panel shows a separate recent call log with connector, tool, time and outcome. Audit and connector-log writes can fail, so neither log is a complete replayable transcript.',
   },
   {
     label: 'Error output',
@@ -336,12 +336,12 @@ const RELEASE: { label: string; value: string }[] = [
   {
     label: 'macOS builds',
     value:
-      'The release workflow hard-fails unless Apple signing and notarization credentials are present, and publishes a notarized universal disk image. You can verify the signature and the stapled notarization ticket yourself with codesign, spctl, and stapler.',
+      'The public Electron Desktop release workflow requires Apple signing and notarization credentials and verifies a separate disk image for each Mac architecture before publication. A configured workflow is not evidence that an installer has shipped; /download offers an asset only after the release API verifies it. You can verify an offered installer with codesign, spctl, and stapler.',
   },
   {
     label: 'Windows builds',
     value:
-      'The installer is signed through Azure Trusted Signing, and the workflow throws (before anything is published) if the signature does not verify as Valid.',
+      'No Windows installer is offered for the public Electron Desktop. A separate manual Windows signing workflow belongs to the retained Tauri codebase; it is not a public Desktop download or evidence that a Windows installer has shipped.',
   },
 ];
 
@@ -395,7 +395,7 @@ const NOT_DONE: { label: string; value: string }[] = [
   {
     label: 'Availability commitments',
     value:
-      'No published recovery point or recovery time objective, and no backup-restore test evidence. The planned targets on /sla are targets, not commitments.',
+      'No published recovery point or recovery time objective. A weekly host-neutral restore drill checks commands and schema against a disposable database, but there is no scheduled restore test against production data and no measured production recovery time. The planned targets on /sla are targets, not commitments.',
   },
   {
     label: 'On-call',
@@ -414,7 +414,7 @@ const NOT_DONE: { label: string; value: string }[] = [
   {
     label: 'Health-check coverage',
     value:
-      'The live check on /status covers Postgres reachability, the payments API, and required environment configuration. Authentication, object storage, the gateway, the rate limiter, and model routes are not covered by it.',
+      'The live check on /status covers required configuration, Postgres, the payments API, whether the default chat and voice routes have a live model and a working provider behind them, whether the background work queues are draining, and whether the search index is present. Authentication, object storage, the gateway, the rate limiter, and individual model routes are not covered by it.',
   },
   {
     label: 'India: DPDP Act, 2023',

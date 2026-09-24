@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use super::change_reason::classify_change;
 use super::session::{
     activity_text, push_bounded, ManagedSession, ManagedSessionApproval,
     ManagedSessionApprovalOutcome, ManagedSessionFileChange, ManagedSessionFileChangeKind,
@@ -204,6 +205,7 @@ impl SessionActivity {
             if !path.exists() {
                 continue;
             }
+            let mut reason = None;
             if let Some(after) = readable_text(&path) {
                 let before = pending.before.get(&path).cloned().unwrap_or_default();
                 if before != after {
@@ -212,6 +214,7 @@ impl SessionActivity {
                         crate::tools::generate_simple_diff(&before, &after),
                     ));
                 }
+                reason = Some(classify_change(&path, &before, &after));
             }
             let change = ManagedSessionFileChange {
                 path,
@@ -223,6 +226,7 @@ impl SessionActivity {
                 tool: pending.tool.clone(),
                 tool_call_id: activity_text(call_id),
                 changed_at,
+                reason,
             };
             recorded.push(change.clone());
             push_bounded(
@@ -458,6 +462,66 @@ mod tests {
         activity.write_to(&mut session);
         assert_eq!(session.file_changes.len(), 2);
         assert_eq!(session.file_changes[0].tool, "write_file");
+    }
+
+    /// A debugging aid the agent adds to a file it writes is recorded against
+    /// that write, from the text the write replaced.
+    #[test]
+    fn a_debugging_aid_the_agent_leaves_behind_is_recorded_against_the_write() {
+        use agiworkforce_protocol::developer_session::{FileChangeNotice, FileChangeSubject};
+
+        let workspace = tempdir().expect("workspace");
+        let source = workspace.path().join("importer.ts");
+        std::fs::write(&source, "export function run() {\n  return 1;\n}\n").unwrap();
+        let mut activity = SessionActivity::default();
+
+        activity.tool_started(
+            "call-1",
+            "edit_file",
+            &serde_json::json!({ "path": "importer.ts" }),
+            Some(workspace.path()),
+        );
+        std::fs::write(
+            &source,
+            "export function run() {\n  console.log('here');\n  return 1;\n}\n",
+        )
+        .unwrap();
+        let recorded = activity.tool_finished("call-1", true);
+
+        assert_eq!(recorded.len(), 1);
+        let reason = recorded[0]
+            .reason
+            .as_ref()
+            .expect("the recorder says why the file changed");
+        assert_eq!(reason.subject, FileChangeSubject::Source);
+        assert!(
+            reason
+                .notices
+                .contains(&FileChangeNotice::DebugInstrumentation),
+            "a debugging aid was left in the file and nothing recorded it: {reason:?}"
+        );
+
+        activity.tool_started(
+            "call-2",
+            "edit_file",
+            &serde_json::json!({ "path": "importer.ts" }),
+            Some(workspace.path()),
+        );
+        std::fs::write(
+            &source,
+            "export function run() {\n  console.log('here');\n  return 2;\n}\n",
+        )
+        .unwrap();
+        let unchanged = activity.tool_finished("call-2", true);
+        assert!(
+            !unchanged[0]
+                .reason
+                .as_ref()
+                .expect("classified")
+                .notices
+                .contains(&FileChangeNotice::DebugInstrumentation),
+            "a write was blamed for a debugging aid it did not add"
+        );
     }
 
     #[test]

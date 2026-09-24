@@ -108,8 +108,15 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
 
   if (state.runs.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--agi-ink)', margin: '0 0 6px' }}>
+      <div style={{ textAlign: 'center', padding: 'var(--space-7) var(--space-4)' }}>
+        <p
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--agi-ink)',
+            margin: '0 0 var(--space-2)',
+          }}
+        >
           No work yet
         </p>
         <p
@@ -130,7 +137,13 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
   return (
     <ul
       data-testid="project-work-list"
-      style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 0, margin: 0 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-2)',
+        padding: 0,
+        margin: 0,
+      }}
     >
       {state.runs.map((run) => {
         const title = run.conversationTitle?.trim() || 'Untitled run';
@@ -141,7 +154,7 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
             style={{
               listStyle: 'none',
               border: '1px solid var(--agi-rule)',
-              borderRadius: 10,
+              borderRadius: 'var(--corner-menu)',
               overflow: 'hidden',
             }}
           >
@@ -157,12 +170,12 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 12,
+                gap: 'var(--space-3)',
                 width: '100%',
                 minHeight: 44,
                 background: 'transparent',
                 border: 0,
-                padding: '10px 14px',
+                padding: 'var(--space-3) var(--space-4)',
                 textAlign: 'left',
                 cursor: run.conversationId ? 'pointer' : 'default',
               }}

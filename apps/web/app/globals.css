@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import '@agiworkforce/design-tokens/foundation.css';
 @import '@agiworkforce/design-tokens/chat.css';
+@import '@agiworkforce/design-tokens/tailwind.css';
 @import '@agiworkforce/unified-chat/composer-editor.css';
 @plugin "tailwindcss-animate";
 
@@ -74,26 +75,18 @@
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-elevated: var(--surface-elevated);
   --color-surface-hover: var(--surface-hover);
-  --color-surface-active: var(--surface-active);
-  --color-surface-selected: var(--surface-selected);
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
-  --color-text-disabled: var(--text-disabled);
-  --color-text-inverse: var(--text-inverse);
 
   --color-rule: var(--rule);
-  --color-rule-subtle: var(--rule-subtle);
-  --color-rule-strong: var(--rule-strong);
   --color-focus-ring: var(--focus-ring);
 
   --color-action-primary: var(--action-primary);
   --color-action-primary-foreground: var(--action-primary-foreground);
 
   --color-accent-text: var(--accent-text);
-  --color-accent-fill: var(--accent-fill);
-  --color-accent-on-fill: var(--accent-on-fill);
   --color-danger-text: var(--danger-text);
   --color-danger-fill: var(--danger-fill);
   --color-danger-on-fill: var(--danger-on-fill);
@@ -105,20 +98,7 @@
   --color-success-on-fill: var(--success-on-fill);
   --color-info-text: var(--info-text);
   --color-info-fill: var(--info-fill);
-  --color-info-on-fill: var(--info-on-fill);
 
-  --radius-control: var(--corner-control);
-  --radius-surface: var(--corner-surface);
-  --radius-pill: var(--corner-pill);
-
-  --shadow-e1: var(--elevation-1);
-  --shadow-e2: var(--elevation-2);
-  --shadow-e3: var(--elevation-3);
-  --shadow-e4: var(--elevation-4);
-
-  --ease-standard: var(--curve-standard);
-  --ease-exit: var(--curve-exit);
-  --ease-spring: var(--curve-spring);
   /* Sans and serif each name a role, not a hue: --font-sans is the product
      face every unscoped element inherits (chat shell, app chrome), sourced
      from the same chat.css tokens the chat surfaces themselves render with
@@ -151,15 +131,7 @@
 
   /* Status stamps, oxblood for "coming soon", phosphor for "ok". */
 
-  /* Motion tokens, operator-broadsheet redesign 2026-05-05.
-     Rule: enter at --dur-base, exit at ~70% of enter (~220ms) with --ease-in.
-     All scroll reveals: opacity 0→1 + translateY(8→0). Drop the 1000ms / 32px
-     pattern that signals dated AI-tool aesthetic. */
-  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0);
-  --dur-fast: 180ms;
-  --dur-base: 320ms;
-  --dur-slow: 520ms;
+  /* Scroll-reveal delays are sequence offsets, not interaction durations. */
   --stagger-tight: 40ms;
   --stagger-loose: 80ms;
 
@@ -167,44 +139,12 @@
 
   /* Custom colors - Charcoal */
 
-  /* Custom colors - Terra Cotta */
-  --color-terra-cotta: #da7756;
-  --color-terra-cotta-50: #f9e8e1;
-  --color-terra-cotta-100: #f5d4c8;
-  --color-terra-cotta-200: #ecad96;
-  --color-terra-cotta-300: #e38664;
-  --color-terra-cotta-400: #da7332;
-  --color-terra-cotta-500: #da7756;
-  --color-terra-cotta-600: #bd5d3a;
-  --color-terra-cotta-700: #743924;
-  --color-terra-cotta-800: #4d2618;
-  --color-terra-cotta-900: #27130c;
-
-  /* Custom colors - Warm Peach */
-  --color-warm-peach: #f5c1a9;
-  --color-warm-peach-50: #ffffff;
-  --color-warm-peach-100: #fef9f6;
-  --color-warm-peach-200: #fce8dd;
-  --color-warm-peach-300: #fad7c4;
-  --color-warm-peach-400: #f7c9b6;
-  --color-warm-peach-500: #f5c1a9;
-  --color-warm-peach-600: #f0a481;
-  --color-warm-peach-700: #eb8759;
-  --color-warm-peach-800: #e66a31;
-  --color-warm-peach-900: #c64f14;
-
   /* Custom colors - Teal */
   --color-teal: #21808d;
-  --color-teal-50: #8fd9e3;
-  --color-teal-100: #7dd3df;
-  --color-teal-200: #5ac7d7;
-  --color-teal-300: #3ab5c5;
   --color-teal-400: #2d9ba8;
   --color-teal-500: #21808d;
   --color-teal-600: #196068;
   --color-teal-700: #124043;
-  --color-teal-800: #0a201e;
-  --color-teal-900: #000000;
 
   /* Agent status colors */
   --color-agent-thinking: #a855f7;
@@ -224,8 +164,6 @@
   --color-popover-foreground: hsl(var(--popover-foreground));
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-primary-glow: hsl(var(--primary-glow));
-  --color-primary-muted: hsl(var(--primary-muted));
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
   --color-muted: hsl(var(--muted));
@@ -239,81 +177,31 @@
   --color-logo-on-surface: hsl(var(--logo-on-surface));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
+  --color-ring: var(--focus-ring);
 
   /* Brand colors - agent/workforce/status */
-  --color-agent: hsl(var(--agent));
-  --color-agent-foreground: hsl(var(--agent-foreground));
-  --color-agent-glow: hsl(var(--agent-glow));
-  --color-workforce: hsl(var(--workforce));
-  --color-workforce-foreground: hsl(var(--workforce-foreground));
-  --color-workforce-glow: hsl(var(--workforce-glow));
   --color-success: hsl(var(--success));
-  --color-success-foreground: hsl(var(--success-foreground));
-  --color-error: hsl(var(--error));
-  --color-error-foreground: hsl(var(--error-foreground));
   --color-warning: hsl(var(--warning));
-  --color-warning-foreground: hsl(var(--warning-foreground));
   --color-info: hsl(var(--info));
-
-  /* Sidebar colors */
-  --color-sidebar: hsl(var(--sidebar-background));
-  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
-  --color-sidebar-primary: hsl(var(--sidebar-primary));
-  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
-  --color-sidebar-accent: hsl(var(--sidebar-accent));
-  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-sidebar-ring: hsl(var(--sidebar-ring));
-
-  /* Chat surface color aliases - Tailwind utilities bg-chat-bg, bg-chat-sidebar, etc. */
-  --color-chat-bg: var(--chat-bg);
-  --color-chat-bg-elevated: var(--chat-bg-elevated);
-  --color-chat-sidebar: var(--chat-sidebar-bg);
-  --color-chat-input-bg: var(--chat-input-bg);
-  --color-chat-code-bg: var(--chat-code-bg);
-  --color-chat-accent: var(--chat-accent);
-  --color-chat-accent-secondary: var(--chat-accent-secondary);
-  --color-chat-glass: var(--chat-glass);
-  --color-chat-glass-border: var(--chat-glass-border);
-
-  /* Exact hex aliases for the four canonical surface values - matches desktop design system.
-     These allow bg-chat-bg-light, bg-chat-bg-dark, etc. as Tailwind utility classes. */
-  --color-chat-bg-light: #faf9f7;
-  --color-chat-bg-dark: hsl(var(--neutral-0));
-  --color-chat-sidebar-light: #f5f4f1;
-  --color-chat-sidebar-dark: hsl(var(--neutral-0));
-
-  /* Border radius */
-  --radius-sm: var(--corner-control);
-  --radius-md: var(--corner-field);
-  --radius-lg: var(--corner-surface);
-  --radius-xl: var(--corner-panel);
-  --radius-2xl: var(--corner-overlay);
-  --radius-3xl: var(--corner-hero);
 
   /* Box shadows */
   --shadow-floating-input: 0 8px 32px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
   --shadow-halo-focus: 0 0 0 4px rgba(33, 128, 141, 0.15);
 
   /* Animations */
-  --animate-hero-1: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
-  --animate-hero-2: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-  --animate-hero-3: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
-  --animate-hero-4: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
-  --animate-hero-5: hero-fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.65s both;
-  --animate-accordion-down: accordion-down 0.2s ease-out;
-  --animate-accordion-up: accordion-up 0.2s ease-out;
-  --animate-fade-in: fade-in 0.2s ease-out;
-  --animate-fade-out: fade-out 0.2s ease-out;
-  --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-slide-down: slide-down 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-hero-1: hero-fade-up var(--duration-reveal) var(--curve-reveal) 0.05s both;
+  --animate-hero-2: hero-fade-up var(--duration-reveal) var(--curve-reveal) 0.2s both;
+  --animate-hero-3: hero-fade-up var(--duration-reveal) var(--curve-reveal) 0.35s both;
+  --animate-hero-4: hero-fade-up var(--duration-reveal) var(--curve-reveal) 0.5s both;
+  --animate-hero-5: hero-fade-up var(--duration-reveal) var(--curve-reveal) 0.65s both;
+  --animate-accordion-down: accordion-down var(--duration-quick) var(--curve-standard);
+  --animate-accordion-up: accordion-up var(--duration-quick) var(--curve-exit);
+  --animate-fade-in: fade-in var(--duration-quick) var(--curve-standard);
+  --animate-fade-out: fade-out var(--duration-quick) var(--curve-exit);
+  --animate-slide-up: slide-up var(--duration-moved) var(--curve-standard);
+  --animate-slide-down: slide-down var(--duration-moved) var(--curve-standard);
   --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-shimmer: shimmer 2s infinite;
-
-  /* Transition timing functions */
-  --ease-spring-bouncy: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
 
   /* Backdrop blur */
   --blur-2xs: 2px;
@@ -369,7 +257,7 @@
   right: 12px !important;
   transform: translateY(-55%) !important;
   padding: 2px 9px !important;
-  border-radius: 999px !important;
+  border-radius: var(--corner-pill) !important;
   background: var(--agi-card) !important;
   border: 1px solid var(--agi-rule-strong) !important;
   color: color-mix(in srgb, var(--agi-ink) 72%, transparent) !important;
@@ -587,24 +475,6 @@
 } /* Base layer styles */
 @layer base {
   :root {
-    /* Z-index layers that web actually renders. Radix portals every overlay to
-       <body>, so they are siblings in one stacking context and their z-index is
-       only meaningful relative to each other: --z-popover and --z-tooltip sit
-       ABOVE --z-modal because a Select or Tooltip opened from inside a Dialog
-       has to clear it (see GlobalSearchDialog, which puts a Select inside a
-       DialogContent). Each value equals the inline fallback the corresponding
-       primitive in packages/ui/ui/src/primitives ships, so declaring them here
-       changes nothing today, they exist so the layers can be retuned from one
-       place instead of editing every primitive. Only rungs referenced by CSS
-       this app renders are declared; do not add speculative ones.
-       apps/desktop/src/styles/globals.css declares its own set; every layer
-       both surfaces declare has to hold the same number, because the shared
-       primitives ship one fallback for both. All of the above is enforced by
-       apps/web/shared/lib/__tests__/overlay-z-layers.test.ts. */
-    --z-modal: 300;
-    --z-popover: 350;
-    --z-tooltip: 380;
-
     color-scheme: light;
 
     --card: 0 0% 100%;
@@ -635,8 +505,6 @@
     --destructive-foreground: 210 40% 98%;
 
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-
     /* Brand colors */
     --primary-glow: 217 91% 80%;
     --primary-muted: 217 50% 90%;
@@ -692,7 +560,6 @@
     --chat-text-placeholder: #6e6e6e;
     --chat-accent: #21808d;
     --chat-accent-text: #1c6d78;
-    --chat-accent-secondary: #da7756;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
     --chat-accent-primary: #c8892a;
     --chat-accent-on-primary: var(--accent-swatch-default-on);
@@ -703,7 +570,7 @@
        Use this variant for CTA/link copy (e.g. the free-trial "Upgrade" link).
        Measures ~5.3-5.6:1 against light-mode chat surfaces. */
     --chat-accent-primary-text: #8b5f1d;
-    --chat-focus-ring: var(--chat-accent-primary-text);
+    --chat-focus-ring: var(--focus-ring);
     /* Accent-picker swatches: the solid fill each choice paints.
        Measured as text against the three light surfaces these actually render
        on - --chat-bg #f9f8f6, elevated #ffffff and the tinted #f8f1e5 - the
@@ -743,7 +610,7 @@
     --settings-destructive: hsl(var(--destructive));
     --settings-destructive-foreground: hsl(var(--destructive-foreground));
     --settings-destructive-text: hsl(var(--destructive-text));
-    --terracotta: var(--chat-accent-secondary);
+    --terracotta: var(--hue-terra-cotta);
     --chat-surface-elevated: hsl(var(--card));
     --serif: var(--font-heading);
     --sans: var(--font-sans);
@@ -784,9 +651,6 @@
     --destructive-foreground: 210 40% 98%;
 
     --input: var(--neutral-3);
-    /* 52% lightness → 3.24:1 on dark bg - WCAG AA for focus indicators */
-    --ring: 224.3 76.3% 52%;
-
     /* Brand colors */
     --primary-glow: 217 91% 75%;
     --primary-muted: 217 50% 20%;
@@ -844,14 +708,13 @@
     --chat-badge-neutral: hsl(var(--neutral-fg-3));
     --chat-accent: #21808d;
     --chat-accent-text: #3aa8b8;
-    --chat-accent-secondary: #da7756;
     /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
     --chat-accent-primary: #c8892a;
     --chat-accent-on-primary: var(--accent-swatch-default-on);
     /* On dark surfaces #c8892a already clears WCAG AA for text (~6.7:1 against
        --chat-bg #0a0a0a), so the text variant can reuse the same value. */
     --chat-accent-primary-text: #c8892a;
-    --chat-focus-ring: var(--chat-accent-primary-text);
+    --chat-focus-ring: var(--focus-ring);
     --accent-swatch-default: #c8892a;
     --accent-swatch-green: #10a37f;
     --accent-swatch-blue: #60a5fa;
@@ -999,7 +862,7 @@
   }
 
   .message-bubble {
-    animation: messageIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: messageIn var(--duration-moved) var(--curve-standard);
   }
 
   /* =====================================================
@@ -1037,7 +900,8 @@
   }
 
   .message-text {
-    @apply text-base text-gray-800 dark:text-gray-200;
+    @apply text-base;
+    color: var(--chat-text-primary);
     line-height: 1.625;
   }
 
@@ -1047,7 +911,9 @@
 
   /* Inline code - desktop .message-text code:not(pre code) */
   .message-text code:not(pre code) {
-    @apply px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-[13px] font-mono;
+    @apply rounded-md px-1.5 py-0.5 font-mono text-[13px];
+    background: var(--chat-surface-hover);
+    color: var(--chat-text-primary);
   }
 
   /* User message · right-aligned rounded bubble (ChatGPT/Claude pattern). Hugs its
@@ -1170,7 +1036,7 @@
   }
 
   .animate-fade-in {
-    animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fade-in var(--duration-moved) var(--curve-standard) forwards;
   }
 
   /* Mobile: max-width constraints for message bubbles */
@@ -1210,41 +1076,6 @@
     input[type='search'] {
       min-height: 40px;
       font-size: 16px; /* Prevent zoom-on-focus on iOS */
-    }
-  }
-
-  /* Sidebar collapse on mobile */
-  @media (max-width: 767px) {
-    [class*='sidebar'] {
-      position: absolute;
-      left: -100%;
-      transition: left 0.3s ease;
-    }
-
-    [class*='sidebar'][data-state='open'],
-    [class*='sidebar'].open {
-      left: 0;
-    }
-  }
-
-  /* Composer responsive layout */
-  @media (max-width: 640px) {
-    [class*='composer'] {
-      @apply flex-col gap-2;
-    }
-
-    [class*='send-button'] {
-      @apply w-full;
-    }
-  }
-
-  @media (min-width: 641px) {
-    [class*='composer'] {
-      @apply flex-row gap-2;
-    }
-
-    [class*='send-button'] {
-      @apply w-auto;
     }
   }
 
@@ -1368,7 +1199,7 @@
 /* Animation utilities */
 @layer utilities {
   .animate-fade-in-up {
-    animation: fade-in-up 0.4s ease-out;
+    animation: fade-in-up var(--duration-moved) var(--curve-standard);
   }
 
   .animate-shimmer {
@@ -1384,7 +1215,7 @@
   /* Stagger animations for lists */
   .stagger-item {
     opacity: 0;
-    animation: fade-in-up 0.4s ease-out forwards;
+    animation: fade-in-up var(--duration-moved) var(--curve-standard) forwards;
   }
 
   .stagger-item:nth-child(1) {
@@ -1432,7 +1263,7 @@
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 4px;
+  border-radius: var(--corner-compact);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -1442,34 +1273,36 @@
   background: hsl(var(--primary) / 0.2);
   color: hsl(var(--foreground));
 } /* Enhanced focus styles */
-*:focus-visible {
-  outline: 2px solid hsl(var(--primary));
-  outline-offset: 2px;
-  border-radius: 4px;
-} /* Chromium marks a text field :focus-visible on a plain pointer click, not
+@layer base {
+  *:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--corner-compact);
+  } /* Chromium marks a text field :focus-visible on a plain pointer click, not
    only on keyboard entry, because a caret makes the focus obvious either way.
    The generic rule above is tuned for controls where only :focus-visible
    discriminates modality (buttons, links, chips); painting its thick brand
    ring on every field click as well made a routine click read as an alert.
    Text fields get a one-step border strengthening instead, on every focus
    entry, and keep this same treatment for keyboard entry too. */
-:is(input, textarea, select, [contenteditable='true']):not([data-composer-textarea]):not(
-    .chat-quiet-field
-  ):focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 1.5px hsl(var(--foreground));
-} /* The chat composer renders its own accent-colored focus ring on the
+  :is(input, textarea, select, [contenteditable='true']):not([data-composer-textarea]):not(
+      .chat-quiet-field
+    ):focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1.5px hsl(var(--foreground));
+  } /* The chat composer renders its own accent-colored focus ring on the
    outer container (see ChatComposerNew.tsx `isFocused` state). Without
    this override the generic *:focus-visible rule above also paints a
    second, differently-colored outline directly on the textarea, producing
    a visible double focus ring. The container ring is sufficient focus
    affordance, so suppress the redundant inner outline here. */
-[data-composer-textarea]:focus-visible {
-  outline: none;
-}
+  [data-composer-textarea]:focus-visible {
+    outline: none;
+  }
 
-*:focus:not(:focus-visible) {
-  outline: none;
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
 } /*
  * Respect system contrast settings at the shipped CSS boundary, and give the
  * same treatment to the in-app High contrast switch (Settings → General), which
@@ -1486,7 +1319,7 @@
     --muted-foreground: 215 25% 28%;
     --border: 215 35% 38%;
     --input: 215 35% 38%;
-    --ring: 221 100% 32%;
+    --focus-ring: #0052a3;
     --chat-text-secondary: #303030;
     --chat-border-subtle: rgba(0, 0, 0, 0.45);
     --chat-border-strong: #4a4a4a;
@@ -1496,7 +1329,7 @@
     --muted-foreground: 210 30% 86%;
     --border: 0 0% 68%;
     --input: 0 0% 68%;
-    --ring: 210 100% 75%;
+    --focus-ring: #80bfff;
     --chat-text-secondary: #e5e7eb;
     --chat-border-subtle: rgba(255, 255, 255, 0.5);
     --chat-border-strong: #d1d5db;
@@ -1512,7 +1345,7 @@ html[data-contrast='more'] {
   --muted-foreground: 215 25% 28%;
   --border: 215 35% 38%;
   --input: 215 35% 38%;
-  --ring: 221 100% 32%;
+  --focus-ring: #0052a3;
   --chat-text-secondary: #303030;
   --chat-border-subtle: rgba(0, 0, 0, 0.45);
   --chat-border-strong: #4a4a4a;
@@ -1522,7 +1355,7 @@ html[data-contrast='more'].dark {
   --muted-foreground: 210 30% 86%;
   --border: 0 0% 68%;
   --input: 0 0% 68%;
-  --ring: 210 100% 75%;
+  --focus-ring: #80bfff;
   --chat-text-secondary: #e5e7eb;
   --chat-border-subtle: rgba(255, 255, 255, 0.5);
   --chat-border-strong: #d1d5db;
@@ -1614,7 +1447,7 @@ html[data-contrast='more'] *:focus-visible {
   *,
   *::before,
   *::after {
-    transition-duration: 120ms !important;
+    transition-duration: var(--duration-instant) !important;
   }
 }
 /* ──────────────────────────────────────────────────────────────────────
@@ -1713,22 +1546,22 @@ html[data-contrast='more'] *:focus-visible {
   --agi-section-y-md: 7rem;
   --agi-section-y-lg: 8.75rem;
 
-  --agi-radius-control: 4px;
-  --agi-radius-frame: 8px;
-  --agi-radius-window: 10px;
-  --agi-radius-pill: 999px;
+  --agi-radius-control: var(--corner-compact);
+  --agi-radius-frame: var(--corner-field);
+  --agi-radius-window: var(--corner-menu);
+  --agi-radius-pill: var(--corner-pill);
 
   --agi-shadow-none: none;
   --agi-shadow-panel: 0 0 0 1px var(--agi-rule), 0 18px 44px var(--agi-shadow);
 
-  --agi-dur-fast: 180ms;
-  --agi-dur-base: 380ms;
-  --agi-dur-slow: 720ms;
-  --agi-dur-hover: 150ms;
-  --agi-dur-hero: 700ms;
-  --agi-dur-fade: 160ms;
-  --agi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --agi-ease-expo: cubic-bezier(0.22, 1, 0.36, 1);
+  --agi-dur-fast: var(--duration-quick);
+  --agi-dur-base: var(--duration-moved);
+  --agi-dur-slow: var(--duration-reveal);
+  --agi-dur-hover: var(--duration-quick);
+  --agi-dur-hero: var(--duration-reveal);
+  --agi-dur-fade: var(--duration-quick);
+  --agi-ease-out: var(--curve-standard);
+  --agi-ease-expo: var(--curve-reveal);
 
   background: var(--agi-ground);
   color: var(--agi-ink);
@@ -1836,7 +1669,7 @@ html[data-contrast='more'] *:focus-visible {
 [data-design='agi'] .agi-chat {
   background: var(--agi-card);
   border: 1px solid var(--agi-rule);
-  border-radius: 14px;
+  border-radius: var(--corner-panel);
   overflow: hidden;
   box-shadow: 0 24px 60px var(--agi-shadow);
 }
@@ -1884,7 +1717,7 @@ html[data-contrast='more'] *:focus-visible {
   line-height: 1.62;
   color: var(--agi-ink);
   font-weight: 400;
-  max-width: 68ch;
+  max-width: var(--measure-prose);
 }
 [data-design='agi'] .agi-msg-text code {
   font-family: var(--agi-font-mono);
@@ -1894,7 +1727,7 @@ html[data-contrast='more'] *:focus-visible {
   font-size: max(0.92em, 12px);
   background: var(--agi-code-bg);
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--corner-compact);
   color: var(--agi-ink);
 }
 [data-design='agi'] .agi-msg-quiet .agi-msg-text {
@@ -1980,7 +1813,7 @@ html[data-contrast='more'] *:focus-visible {
   gap: 0;
   padding: 32px 32px 26px;
   border: 1px solid var(--agi-rule-strong);
-  border-radius: 16px;
+  border-radius: var(--corner-panel);
   background: var(--agi-ground-2);
   color: var(--agi-ink);
   box-shadow: 0 40px 120px var(--agi-shadow);
@@ -2015,7 +1848,7 @@ html[data-contrast='more'] *:focus-visible {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   font-size: 18px;
   font-weight: 700;
   color: var(--agi-ground);
@@ -2038,18 +1871,46 @@ html[data-contrast='more'] *:focus-visible {
   padding-bottom: 1rem;
 }
 
-.chat-composer-row {
-  flex-wrap: wrap;
+@container (max-width: 520px) {
+  .chat-composer-row {
+    flex-wrap: wrap;
+  }
+
+  .chat-composer-field {
+    flex: 1 0 100%;
+  }
+
+  .chat-composer-controls {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.25rem;
+  }
+
+  .chat-composer-controls > :last-child {
+    margin-left: auto;
+  }
+
+  .chat-composer-style-selector {
+    display: none;
+  }
+
+  .chat-composer-mode-inline button {
+    width: 1.5rem;
+    padding-inline: 0;
+  }
+
+  .chat-composer-mode-inline button > svg {
+    display: block;
+  }
+
+  .chat-composer-mode-inline button > span {
+    display: none;
+  }
 }
 
-.chat-composer-field {
-  order: -1;
-  flex-basis: 100%;
-}
-
-.chat-composer-leading-end {
-  margin-right: auto;
-} /* ─── Print ─────────────────────────────────────────────────────────────────
+/* ─── Print ─────────────────────────────────────────────────────────────────
  *
  * Printing a conversation produced the app chrome, sidebar, composer, floating
  * controls, and a virtualized transcript that only contained the handful of

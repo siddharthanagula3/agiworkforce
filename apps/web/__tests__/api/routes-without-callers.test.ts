@@ -60,8 +60,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
 
   // Another surface or the browser reaches these without naming the path in
   // committed source.
-  { url: '/api/auth/desktop-token', why: 'the desktop app exchanges its token here' },
-  { url: '/api/auth/set-token', why: 'paired with desktop-token, covered by b2-set-token.test.ts' },
+  {
+    url: '/api/auth/set-token',
+    why: 'stores a verified session token as an httpOnly cookie, covered by b2-set-token.test.ts',
+  },
   { url: '/api/auth/clear-token', why: 'the sign-out half of the set-token pair' },
   {
     url: '/api/uploads/chat-attachment/put',
@@ -69,6 +71,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   },
   { url: '/api/uploads/knowledge-file/put', why: 'the browser PUTs to the signed url this issues' },
   { url: '/api/interactive-cards/respond', why: 'an interactive card posts its response here' },
+  {
+    url: '/api/download-beta',
+    why: 'subscriber beta installer, reached by a link sent outside the product',
+  },
   { url: '/api/llm/v1/chat/completions/resume-input', why: 'a tool approval resumes a run here' },
 
   // Platform-admin procedures are deliberately API-only. They are used during
@@ -88,6 +94,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   {
     url: '/api/admin/support-access',
     why: 'two-operator break-glass procedure called from the production-access runbook',
+  },
+  {
+    url: '/api/models/free-quota/attestation',
+    why: 'platform-admin record of the QwenCloud free-quota-only console check, which the provider exposes to no API',
   },
 
   // Authenticated protocol endpoints support API and cross-surface clients.

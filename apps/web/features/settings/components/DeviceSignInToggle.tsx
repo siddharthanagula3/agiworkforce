@@ -74,7 +74,7 @@ export function DeviceSignInToggle() {
         border: '1px solid var(--settings-border)',
         borderRadius: 'var(--radius-lg)',
         background: 'var(--bg-elev)',
-        padding: '16px 20px',
+        padding: 'var(--space-4) var(--space-5)',
       }}
     >
       <div
@@ -82,11 +82,18 @@ export function DeviceSignInToggle() {
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
-          gap: 16,
+          gap: 'var(--space-4)',
         }}
       >
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text-2)',
+              marginBottom: 'var(--space-1)',
+            }}
+          >
             Approve sign-in from a device code
           </div>
           <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
@@ -106,7 +113,7 @@ export function DeviceSignInToggle() {
             flexShrink: 0,
             width: 44,
             height: 24,
-            borderRadius: 999,
+            borderRadius: 'var(--corner-pill)',
             border: 'none',
             cursor: !loaded || saving ? 'default' : 'pointer',
             opacity: loaded ? 1 : 0.5,
@@ -131,7 +138,11 @@ export function DeviceSignInToggle() {
       {error ? (
         <p
           role="alert"
-          style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--settings-destructive-text)' }}
+          style={{
+            margin: 'var(--space-2) 0 0',
+            fontSize: 12,
+            color: 'var(--settings-destructive-text)',
+          }}
         >
           {error}
         </p>

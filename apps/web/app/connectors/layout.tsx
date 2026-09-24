@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { buildMetadata } from '@/lib/seo/metadata';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const metadata = buildMetadata({
   title: 'Connectors | Bring your tools into AGI',
@@ -9,5 +10,5 @@ export const metadata = buildMetadata({
 });
 
 export default function ConnectorsLayout({ children }: { children: ReactNode }) {
-  return children;
+  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

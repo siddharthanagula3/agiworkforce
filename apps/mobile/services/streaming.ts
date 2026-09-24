@@ -97,7 +97,13 @@ export interface StreamDelta {
   x_research_plan?: unknown;
   x_generated_files?: { files?: StreamGeneratedFile[] };
   x_interactive_card?: unknown;
-  x_stream_error?: { message: string; code?: string; retryable?: boolean };
+  x_stream_error?: {
+    message: string;
+    code?: string;
+    retryable?: boolean;
+    retryAfterSeconds?: number;
+    requestId?: string;
+  };
   durableReplay?: true;
 }
 

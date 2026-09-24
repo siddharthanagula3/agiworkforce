@@ -78,15 +78,32 @@ runs at `agiworkforce-signaling.fly.dev`. The Railway deploy job is skipped beca
 ## [Production env] Error reporting, tracing, email, push and sign-in providers (F12)
 
 **Why founder assistance is required**
-Production (`vercel env ls production`, names only, 2026-09-16) has no Sentry DSN, OTel exporter endpoint, web push
-VAPID keys, email provider key or sender, `AGI_AUTH_PROVIDERS`, support widget flag or `PAGER_WEBHOOK_URL`. The code
-ships and silently does nothing without them.
-**Exact action** Create or confirm the vendor accounts and set: `NEXT_PUBLIC_SENTRY_DSN` and the Sentry release variables; `AGI_OTEL_EXPORTER_ENDPOINT`; `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`; `RESEND_API_KEY`, `AGI_NOTIFICATIONS_FROM_EMAIL`; enable Apple and Microsoft connections in Clerk and set `AGI_AUTH_PROVIDERS`; `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED=1`; `PAGER_WEBHOOK_URL`. In GitHub Actions secrets, set `SENTRY_DSN_DESKTOP` (desktop release workflows), `SENTRY_DSN_CHROME_EXTENSION` (Chrome release) and `SENTRY_DSN_CLI` (CLI release); each build reports nothing until its secret exists.
+Production (`vercel env ls production`, names only, 2026-09-16) has no Sentry
+DSN, OTel exporter endpoint, web push VAPID keys, email provider key or sender,
+`AGI_AUTH_PROVIDERS` or `PAGER_WEBHOOK_URL`. The code ships and silently does
+nothing without them. Decision 26 keeps the support widget out of Web v1 launch
+scope, so its flag is not a launch requirement.
+**Exact action** Create or confirm the vendor accounts and set:
+`NEXT_PUBLIC_SENTRY_DSN` and the Sentry release variables;
+`AGI_OTEL_EXPORTER_ENDPOINT`; `WEB_PUSH_VAPID_PUBLIC_KEY`,
+`WEB_PUSH_VAPID_PRIVATE_KEY`; `RESEND_API_KEY`,
+`AGI_NOTIFICATIONS_FROM_EMAIL`; enable Apple and Microsoft connections in Clerk
+and set `AGI_AUTH_PROVIDERS`; `PAGER_WEBHOOK_URL`. Confirm that mail sent to
+`contact@agiworkforce.com` arrives and name the person who monitors it before
+the Web launch. If signed-in ticket notifications will be relied on, also set
+`AGI_SUPPORT_FROM_EMAIL` and `AGI_SUPPORT_FALLBACK_EMAIL`. In GitHub Actions
+secrets, set `SENTRY_DSN_DESKTOP` (desktop release workflows),
+`SENTRY_DSN_CHROME_EXTENSION` (Chrome release) and `SENTRY_DSN_CLI` (CLI
+release); each build reports nothing until its secret exists.
 **Where** Vercel project environment, GitHub Actions secrets, Sentry, the tracing backend, Resend, Clerk.
 **Needed input** Vendor choices and about one hour.
-**How to verify completion** A test exception appears in Sentry with the release tag; a notification email arrives; the sign-in page shows Apple and Microsoft.
+**How to verify completion** A test exception appears in Sentry with the
+release tag; a notification email arrives; a message sent to
+`contact@agiworkforce.com` receives an owner-confirmed acknowledgement; the
+sign-in page shows Apple and Microsoft.
 **What remains after founder action** Live verification of each channel (agent).
-**Impact** FEATURE-BLOCKING (monitoring, notifications, enterprise sign-in)
+**Impact** RELEASE-BLOCKING for the Web support mailbox; FEATURE-BLOCKING for
+monitoring, notifications and enterprise sign-in
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [GitHub] Branch protection on main (F13)
@@ -208,6 +225,11 @@ Serving managed traffic through a re-hosting gateway is a commercial-terms and
 data-residency commitment the founder reserves, and each gateway needs a funded
 account. On main the DeepSeek defaults and the Moonshot flagship have no
 managed route since the abroad-endpoint exclusion, and the Zhipu default has one.
+On 2026-09-23, [CheaperInference's published terms](https://www.cheaperinference.com/legal/terms)
+were checked again: they prohibit resale, sublicensing, or shared access to the
+service or API keys except through a product or service expressly permitted by
+Keak in writing. A link in AGI's Terms does not supply that permission; retain
+the founder's commercial-terms gate for public managed traffic.
 **Exact action** Decide, per gateway, whether its terms allow AGI to resell the model to managed users (Vercel AI Gateway, Cloudflare Workers AI, Experiential Labs, DeepInfra, Together, Novita, Cheaper Inference); fund the accepted ones; set their `*_API_KEY` and `*_BASE_URL` variables in Vercel Production and `.env.local`. Say which of options (a) promote the Vercel gateway harness, (b) move DeepSeek's OpenRouter routes to the managed harness, (c) drop DeepSeek and Moonshot from the managed catalogue.
 **Where** `docs/decisions/2026-09-10-managed-gateway-routes.md`, each gateway's console, Vercel environment.
 **Needed input** Terms acceptance and funding per gateway.

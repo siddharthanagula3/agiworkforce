@@ -1,3 +1,5 @@
+import { PRODUCT_ANALYTICS_SURFACES, type ProductAnalyticsSurface } from '@agiworkforce/types';
+
 import { PRODUCTION_DEPENDENCIES } from '@/lib/config/dependency-readiness';
 
 import { METRIC_NAME, type FailureKind } from './metrics';
@@ -97,6 +99,43 @@ export const DEPENDENCY_SIGNALS: readonly DependencySignal[] = [
     metric: METRIC_NAME.notificationDeliveries,
     dashboardId: 'notification-delivery',
   },
+  {
+    dependency: 'web_search',
+    failureKind: 'tool',
+    metric: METRIC_NAME.toolDuration,
+    dashboardId: 'completion-truth',
+  },
+  {
+    dependency: 'push_delivery',
+    failureKind: 'notification',
+    metric: METRIC_NAME.notificationDeliveries,
+    dashboardId: 'notification-delivery',
+  },
+  {
+    dependency: 'signaling',
+    failureKind: 'remote',
+    metric: METRIC_NAME.failures,
+    dashboardId: 'failures',
+  },
+  {
+    dependency: 'paired_browser',
+    failureKind: 'browser',
+    metric: METRIC_NAME.browserTasks,
+    dashboardId: 'browser-health',
+  },
+  {
+    dependency: 'connector_providers',
+    failureKind: 'connector',
+    metric: METRIC_NAME.toolCalls,
+    dashboardId: 'connector-health',
+  },
+  {
+    dependency: 'marketing_analytics',
+    failureKind: null,
+    metric: METRIC_NAME.httpRequests,
+    dashboardId: 'http-traffic',
+    why: 'a script the browser loads on the public pages; the server never calls it, so no server-side fault class exists',
+  },
 ];
 
 export function dependencySignal(id: string): DependencySignal | null {
@@ -125,6 +164,63 @@ const SPAN_COVERAGE_TEST = 'apps/web/lib/__tests__/span-domain-coverage.test.ts'
 const INTEGRATION_SPAN_TEST = 'apps/web/lib/__tests__/span-domain-coverage.integrations.test.ts';
 const DATABASE_SPAN_TEST = 'apps/web/lib/observability/database-span.test.ts';
 const CODE_ACTION_SPAN_TEST = 'apps/web/lib/observability/__tests__/code-action-spans.test.ts';
+
+/**
+ * What installs a client-failure sink on each surface. The shared chat surface
+ * calls `reportClientFailure` for a render, copy, attachment or stall fault and
+ * drops it when its host installed no sink, so a surface with none contributes
+ * nothing to the client-health dashboard. That dashboard splits by surface,
+ * which is the trap this records: a surface that reports nothing draws the same
+ * empty bar as a surface with nothing to report.
+ */
+export interface ClientSurfaceEvidence {
+  readonly surface: ProductAnalyticsSurface;
+  /** Repository-relative path of the module that installs the sink, or null. */
+  readonly reportsVia: string | null;
+  /** Required when reportsVia is null. */
+  readonly why?: string;
+}
+
+export const CLIENT_SURFACE_EVIDENCE: readonly ClientSurfaceEvidence[] = [
+  { surface: 'web', reportsVia: 'apps/web/lib/observability/client-failure-transport.ts' },
+  { surface: 'desktop', reportsVia: 'apps/desktop/src/services/clientFailureReporting.ts' },
+  {
+    surface: 'mobile',
+    reportsVia: null,
+    why: 'it does not render the shared chat surface, so there is no report for a sink to carry',
+  },
+  {
+    surface: 'cli',
+    reportsVia: null,
+    why: 'it renders no document; the faults this counts are render, copy and attachment faults of a browser surface',
+  },
+  {
+    surface: 'vscode',
+    reportsVia: null,
+    why: 'its webview does not render the shared chat surface, so there is no report for a sink to carry',
+  },
+  {
+    surface: 'chrome',
+    reportsVia: null,
+    why: 'the extension does not render the shared chat surface, so there is no report for a sink to carry',
+  },
+  {
+    surface: 'api',
+    reportsVia: null,
+    why: 'it is a caller rather than a rendered client; a fault there is an HTTP status, which the failure counter already carries',
+  },
+];
+
+export function clientSurfacesWithoutReporting(): readonly ProductAnalyticsSurface[] {
+  return CLIENT_SURFACE_EVIDENCE.filter((evidence) => evidence.reportsVia === null).map(
+    (evidence) => evidence.surface,
+  );
+}
+
+export function unaccountedClientSurfaces(): readonly string[] {
+  const accounted = new Set(CLIENT_SURFACE_EVIDENCE.map((evidence) => evidence.surface));
+  return PRODUCT_ANALYTICS_SURFACES.filter((surface) => !accounted.has(surface));
+}
 
 export const SPAN_DOMAIN_EVIDENCE: readonly SpanDomainEvidence[] = [
   { domain: 'approval', provenBy: SPAN_COVERAGE_TEST },

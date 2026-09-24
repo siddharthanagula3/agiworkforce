@@ -52,10 +52,25 @@ describe('inline citation markers', () => {
     expect(link.textContent).toContain('+2');
   });
 
-  it('clamps a marker past the source list onto the last source rather than leaving it dead', () => {
-    render(<MarkdownContent content="Unverified claim [9]." citations={sources} />);
-    const link = screen.getByRole('link', { name: 'Source 3: x.ai releases an update' });
-    expect(link.getAttribute('href')).toBe('https://x.ai/news/three');
+  it('shows a marker past the source list as plain text that links to no source', () => {
+    const { container } = render(
+      <MarkdownContent content="Unverified claim [9]." citations={sources} />,
+    );
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(container.textContent).toBe('Unverified claim [9].');
+  });
+
+  it('links only the delivered sources in a run that also names a missing one', () => {
+    const { container } = render(
+      <MarkdownContent content="Mixed claim [1][9][2]." citations={sources} />,
+    );
+    const links = screen.getAllByRole('link');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      'https://www.anthropic.com/news/one',
+      'https://blog.google/technology/two',
+    ]);
+    expect(screen.queryByRole('link', { name: /x\.ai/ })).toBeNull();
+    expect(container.textContent).toContain('[9]');
   });
 });
 

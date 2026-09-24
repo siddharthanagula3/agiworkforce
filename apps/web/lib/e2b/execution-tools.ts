@@ -66,9 +66,9 @@ export function e2bExecutionToolDefs(): Array<{
       function: {
         name: EXECUTE_CODE_TOOL,
         description:
-          'Execute code in a secure sandbox and return its stdout/stderr. Use for ' +
-          'computation, data processing, and running scripts. Runs in an isolated ' +
-          'environment with resource limits.',
+          'Execute code in a secure, persistent notebook-style sandbox. Use for ' +
+          'computation, data processing, and running scripts. Returns cell output ' +
+          'or an exception traceback; notebook cells do not have process exit codes.',
         parameters: {
           type: 'object',
           properties: {

@@ -111,4 +111,5 @@ export function shortcutRegistrations(): ShortcutRegistration[] {
 export function unregisterGarnishShortcuts(): void {
   globalShortcut.unregisterAll();
   registrations = [];
+  warnedAboutConflict = false;
 }

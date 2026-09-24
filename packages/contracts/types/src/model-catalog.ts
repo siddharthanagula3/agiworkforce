@@ -29,6 +29,7 @@ export interface ProviderOffering {
   category: ProviderOfferingCategory;
   identityStatus: 'exact' | 'unresolved';
   quotaProbeProtocol?: 'chat' | 'image-sync' | 'video-async';
+  quotaChatImageInput?: boolean;
   quotaImageSize?: string;
   quotaThinkingRequired?: boolean;
 }
@@ -586,6 +587,9 @@ export interface ModelMetadata {
   inputModalities?: Array<'text' | 'image' | 'audio' | 'video' | 'pdf'>;
   contextWindow?: number;
   maxOutputTokens?: number;
+  responseBudgetFloorTokens?: number;
+  transientSameRouteRetries?: number;
+  webSearchToolOfferPolicy?: 'required_only';
   inputCost: number;
   outputCost: number;
   capabilities: ModelCapabilities;

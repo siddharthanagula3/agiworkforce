@@ -177,7 +177,7 @@ function CodeView({ content }: { content: string }) {
         aria-label={copyFailed ? 'Copy failed' : copied ? 'Copied' : 'Copy code'}
         onClick={handleCopy}
         className={cn(
-          'absolute top-2 right-2 z-10 h-7 w-7',
+          'absolute top-2 right-2 z-[var(--z-control)] h-7 w-7',
           'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
           copied && 'text-[var(--chat-accent-secondary)]',
           copyFailed && 'text-[var(--chat-destructive-text)]',
@@ -189,7 +189,7 @@ function CodeView({ content }: { content: string }) {
       {copyFailed && (
         <div
           role="status"
-          className="absolute top-10 right-2 z-10 rounded border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-[12px] text-[var(--chat-destructive-text)]"
+          className="absolute top-10 right-2 z-[var(--z-control)] rounded-compact border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-2 py-1 text-caption text-[var(--chat-destructive-text)]"
         >
           Copy failed, clipboard unavailable
         </div>
@@ -216,14 +216,14 @@ function CodeView({ content }: { content: string }) {
 
         {hiddenLineCount > 0 && (
           <div className="flex items-center gap-3 border-t border-[var(--chat-border)] px-4 py-2">
-            <span className="text-[12px] text-[var(--chat-text-muted)]">
+            <span className="text-caption text-[var(--chat-text-muted)]">
               {hiddenLineCount.toLocaleString()} more {hiddenLineCount === 1 ? 'line' : 'lines'} not
               shown
             </span>
             <button
               type="button"
               onClick={() => setVisibleLines((n) => n + CODE_VIEW_LINE_WINDOW)}
-              className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+              className="rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-caption text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
             >
               Show {Math.min(hiddenLineCount, CODE_VIEW_LINE_WINDOW).toLocaleString()} more
             </button>
@@ -265,14 +265,14 @@ function DropdownMenu({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={close} aria-hidden />
+          <div className="fixed inset-0 z-[var(--z-control)]" onClick={close} aria-hidden />
           <div
             ref={panelRef}
             role="menu"
             aria-label="Artifact options"
             className={cn(
-              'absolute right-0 top-full mt-1 z-20 min-w-[140px]',
-              'rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]',
+              'absolute right-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[140px]',
+              'rounded-md border border-[var(--chat-border)]',
               'bg-[var(--chat-surface-elevated)] shadow-lg',
               'py-1',
             )}
@@ -608,7 +608,7 @@ export function ArtifactPanel({
             >
               <ChevronLeft size={13} />
             </Button>
-            <span className="px-1 text-[12px] font-mono tabular-nums text-[var(--chat-text-secondary)]">
+            <span className="px-1 text-caption font-mono tabular-nums text-[var(--chat-text-secondary)]">
               v{currentVersionIndex + 1}/{sortedVersions.length}
             </span>
             <Button
@@ -782,7 +782,7 @@ export function ArtifactPanel({
           <div className="flex h-full flex-col" data-testid="artifact-panel-html-preview">
             <div className="flex items-center gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5">
               <Globe size={12} className="text-[var(--chat-text-muted)]" />
-              <span className="text-[12px] text-[var(--chat-text-muted)]">HTML preview</span>
+              <span className="text-caption text-[var(--chat-text-muted)]">HTML preview</span>
               <div className="flex-1" />
               <Button
                 variant="ghost"
@@ -808,7 +808,7 @@ export function ArtifactPanel({
               <p
                 role="note"
                 data-testid="artifact-preview-scripts-blocked"
-                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
+                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-caption text-[var(--chat-text-muted)]"
               >
                 {SCRIPTS_BLOCKED_NOTICE}
               </p>
@@ -819,7 +819,7 @@ export function ArtifactPanel({
               <p
                 role="note"
                 data-testid="artifact-preview-render-error"
-                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
+                className="border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5 text-caption text-[var(--chat-text-muted)]"
               >
                 {htmlPreviewError}
               </p>
@@ -924,7 +924,7 @@ export function ArtifactPanel({
                 variant="ghost"
                 size="sm"
                 onClick={handleDownload}
-                className="ml-auto h-6 shrink-0 px-2 text-[12px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                className="ml-auto h-6 shrink-0 px-2 text-caption text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
               >
                 Download instead
               </Button>

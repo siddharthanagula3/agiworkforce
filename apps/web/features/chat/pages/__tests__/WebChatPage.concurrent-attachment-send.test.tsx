@@ -8,11 +8,20 @@ type ComposerOnSend = (
   meta?: Record<string, unknown>,
 ) => false | void | typeof SEND_GUARD_BLOCKED;
 
+type UploadAttempt = {
+  id: string;
+  content: string;
+  files: File[];
+  statuses: Array<{ phase: string; error?: string }>;
+};
+
 const mocks = vi.hoisted(() => ({
   composerOnSend: null as ComposerOnSend | null,
   composerDroppedFiles: null as File[] | null,
   composerConversationId: null as string | null,
   composerPrefillText: undefined as string | undefined,
+  composerUploadAttempt: null as UploadAttempt | null,
+  retryAttachmentUpload: null as ((index: number) => void) | null,
   sendMessage: vi.fn(async (_content: string, ..._rest: unknown[]) => true),
   createConversation: vi.fn(async () => ({
     id: 'real-conversation-id',
@@ -57,8 +66,10 @@ vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
   getCsrfToken: async () => 'fixture-csrf-token',
 }));
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: async () => ({ browserReplyReady: true }),
+  readAutonomousToolApprovalsAllowed: async () => false,
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));
 
@@ -116,11 +127,15 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
     droppedFiles: File[] | null;
     conversationId?: string | null;
     prefillText?: string;
+    attachmentUploadAttempt?: UploadAttempt | null;
+    onRetryAttachmentUpload?: (index: number) => void;
   }) => {
     mocks.composerOnSend = props.onSend;
     mocks.composerDroppedFiles = props.droppedFiles;
     mocks.composerConversationId = props.conversationId ?? null;
     mocks.composerPrefillText = props.prefillText;
+    mocks.composerUploadAttempt = props.attachmentUploadAttempt ?? null;
+    mocks.retryAttachmentUpload = props.onRetryAttachmentUpload ?? null;
     return null;
   },
   SEND_GUARD_BLOCKED: 'guard-blocked',
@@ -222,7 +237,10 @@ vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
   UpgradeConfirmDialog: () => null,
 }));
 vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
-vi.mock('../../components/ConversationTitleMenu', () => ({ ConversationTitleMenu: () => null }));
+vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/ConversationTitleMenu')>()),
+  ConversationTitleMenu: () => null,
+}));
 vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
 vi.mock('../../components/work-session/WorkSessionPanel', () => ({
   hasWorkSession: () => false,
@@ -265,6 +283,8 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     mocks.composerDroppedFiles = null;
     mocks.composerConversationId = null;
     mocks.composerPrefillText = undefined;
+    mocks.composerUploadAttempt = null;
+    mocks.retryAttachmentUpload = null;
     mocks.uploadResolvers = [];
     mocks.sendMessage.mockClear();
     mocks.createConversation.mockClear();
@@ -344,19 +364,68 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     expect(mocks.toastError).not.toHaveBeenCalled();
   });
 
-  it('forwards the composer disabled connector ids to sendMessage', async () => {
+  it('keeps a failed file visible with its phase and retries the original turn', async () => {
+    mocks.uploadChatAttachments.mockImplementationOnce(
+      async (
+        _files: File[],
+        options?: { onStatus?: (status: Record<string, unknown>) => void },
+      ) => {
+        options?.onStatus?.({
+          index: 0,
+          fileName: 'notes.txt',
+          phase: 'uploading',
+        });
+        options?.onStatus?.({
+          index: 0,
+          fileName: 'notes.txt',
+          phase: 'failed',
+          error: 'Storage unavailable',
+        });
+        throw new Error('Storage unavailable');
+      },
+    );
+    render(<WebChatPage />);
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+
+    const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    act(() => {
+      mocks.composerOnSend!(FIRST_MESSAGE, [file], undefined, {});
+    });
+
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt?.statuses[0]).toEqual({
+        phase: 'failed',
+        error: 'Storage unavailable',
+      }),
+    );
+    expect(mocks.composerDroppedFiles).toBeNull();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+
+    mocks.uploadChatAttachments.mockResolvedValueOnce([]);
+    act(() => {
+      mocks.retryAttachmentUpload?.(0);
+    });
+
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.sendMessage.mock.calls[0]![0]).toBe(FIRST_MESSAGE);
+    expect(mocks.composerUploadAttempt).toBeNull();
+  });
+
+  it('forwards the composer connector state to sendMessage', async () => {
     render(<WebChatPage />);
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     act(() => {
       mocks.composerOnSend!('Check my calendar', undefined, undefined, {
         disabledConnectorIds: ['gmail', 'notion'],
+        connectorToolsEnabled: false,
       });
     });
 
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     expect(mocks.sendMessage.mock.calls[0]![1]).toMatchObject({
       disabledConnectorIds: ['gmail', 'notion'],
+      connectorToolsEnabled: false,
     });
   });
 });

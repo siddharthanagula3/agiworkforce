@@ -90,7 +90,7 @@ const FileTypeIconComponent = ({ filename, className }: FileTypeIconProps) => {
       <span
         className={cn(
           'pointer-events-none absolute inset-x-0 bottom-[1.5px] text-center font-semibold uppercase leading-none',
-          'text-[12px] tracking-tight',
+          'text-caption tracking-tight',
           entry.accent,
         )}
       >

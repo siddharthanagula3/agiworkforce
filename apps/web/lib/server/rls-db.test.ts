@@ -102,7 +102,7 @@ import {
   newTraceId,
   runWithTraceContext,
 } from '@/lib/observability/trace-context';
-import { getCurrentUserRlsDb, getUserScopedDb } from './rls-db';
+import { getCurrentUserRlsDb, getUserScopedDb, getVerifiedBearerUserScopedDb } from './rls-db';
 
 function withTrace<R>(fn: () => Promise<R>): Promise<R> {
   return runWithTraceContext({ traceId: newTraceId(), spanId: newSpanId(), sampled: true }, fn);
@@ -224,6 +224,47 @@ describe('getUserScopedDb with an API-key principal', () => {
     } finally {
       vi.mocked(resolveActiveOrganizationId).mockResolvedValue(null);
     }
+  });
+});
+
+describe('getVerifiedBearerUserScopedDb', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reuses an already verified principal without verifying the bearer token again', async () => {
+    const token = 'eyJhbGciOiJIUzI1NiJ9.verified-session.sig';
+    const request = new NextRequest('https://example.test/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    const scoped = await getVerifiedBearerUserScopedDb(request, {
+      userId: 'user_verified',
+      token,
+    });
+
+    expect(scoped.userId).toBe('user_verified');
+    expect(rlsWithUser).toHaveBeenCalledWith(token);
+    expect(mockVerifyToken).not.toHaveBeenCalled();
+    expect(mockVerifyKey).not.toHaveBeenCalled();
+  });
+
+  it('rejects a principal whose verified token is not the request bearer', async () => {
+    const request = new NextRequest('https://example.test/api/llm/v1/chat/completions', {
+      method: 'POST',
+      headers: { authorization: 'Bearer request-token' },
+    });
+
+    const error = await capture(
+      getVerifiedBearerUserScopedDb(request, {
+        userId: 'user_verified',
+        token: 'different-token',
+      }),
+    );
+
+    expect(isAppError(error) && error.statusCode).toBe(401);
+    expect(rlsWithUser).not.toHaveBeenCalled();
   });
 });
 

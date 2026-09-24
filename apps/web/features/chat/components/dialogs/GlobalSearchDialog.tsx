@@ -39,6 +39,7 @@ import {
   SquareTerminal,
 } from 'lucide-react';
 import {
+  globalSearchResultHref,
   globalSearchService,
   type SearchResult,
   type SearchFilters,
@@ -62,7 +63,7 @@ interface GlobalSearchDialogProps {
 const EMPTY_SHORTCUT_IDS: string[] = [];
 
 const FOOTER_KEY_CLASS =
-  'rounded border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:border-gray-500 dark:bg-gray-600 dark:text-gray-100';
+  'rounded-compact border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-xs font-semibold text-gray-800 dark:border-gray-500 dark:bg-gray-600 dark:text-gray-100';
 
 const RESULT_TYPE_LABELS: Partial<Record<SearchResult['type'], string>> = {
   project: 'Project',
@@ -248,27 +249,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
   const handleResultClick = (result: SearchResult) => {
     onOpenChange(false);
-
-    if (result.href) {
-      router.push(result.href);
-      return;
-    }
-
-    if (result.type === 'project') {
-      router.push(`/chat/projects/${result.sessionId}`);
-      return;
-    }
-
-    if (result.type === 'file') {
-      router.push('/chat/library');
-      return;
-    }
-
-    if (result.messageId) {
-      router.push(`/chat/${result.sessionId}?highlightMessage=${result.messageId}`);
-    } else {
-      router.push(`/chat/${result.sessionId}`);
-    }
+    router.push(globalSearchResultHref(result));
   };
 
   const handleClearFilters = () => {
@@ -529,7 +510,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                       type="checkbox"
                       checked={includeArchived}
                       onChange={(e) => setIncludeArchived(e.target.checked)}
-                      className="rounded"
+                      className="rounded-compact"
                     />
                     <span className="text-sm">Include archived conversations</span>
                   </label>
@@ -589,7 +570,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                           <Clock className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           {search.resultCount > 0 && (
-                            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[12px]">
+                            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-caption">
                               {search.resultCount}
                             </Badge>
                           )}
@@ -617,7 +598,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                           <span className="max-w-[150px] truncate">{search.query}</span>
                           <Badge
                             variant="outline"
-                            className="ml-1 border-primary/20 px-1.5 py-0 text-[12px] text-primary/70"
+                            className="ml-1 border-primary/20 px-1.5 py-0 text-caption text-primary/70"
                           >
                             {search.searchCount} searches
                           </Badge>
@@ -709,7 +690,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
 
                     {/* Badges */}
                     <div className="mt-2 flex items-center gap-2">
-                      <Badge variant="outline" className="px-1.5 py-0 text-[12px]">
+                      <Badge variant="outline" className="px-1.5 py-0 text-caption">
                         {RESULT_TYPE_LABELS[result.type] ?? result.role}
                       </Badge>
                     </div>

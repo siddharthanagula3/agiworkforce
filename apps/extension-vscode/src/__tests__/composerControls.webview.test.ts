@@ -127,7 +127,12 @@ describe('compact composer controls', () => {
     ).find((node) => node.textContent?.startsWith('Plan mode')) as HTMLElement | undefined;
     plan?.click();
 
-    expect(postMessage).toHaveBeenLastCalledWith({ type: 'setMode', payload: { mode: 'plan' } });
+    expect(postMessage).toHaveBeenLastCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'setMode',
+      payload: { mode: 'plan' },
+    });
     expect(document.getElementById('controlsPopover')?.classList.contains('open')).toBe(false);
   });
 

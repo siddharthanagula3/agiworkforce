@@ -16,7 +16,6 @@ import 'server-only';
  * access and never inherits a flagship price.
  */
 
-import { randomUUID } from 'node:crypto';
 import {
   extractCandidateMemoryFacts,
   extractMemoryFactsWithModel,
@@ -36,13 +35,17 @@ import {
   markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
+import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 export const MODEL_MEMORY_EXTRACTION_ENV = 'AGI_MODEL_MEMORY_EXTRACTION';
 
 export const MEMORY_EXTRACTION_QUOTA_FEATURE = 'memory_extraction';
+
+const MEMORY_EXTRACTION_NAMESPACE = 'memory-extraction';
 
 /** Matches the pattern path's own `slice(0, 5)`, so the flag cannot widen the write. */
 export const MAX_AUTO_MEMORY_FACTS = 5;
@@ -76,7 +79,12 @@ export interface ModelAutoMemoryExtractionInput {
   userId: string;
   organizationId: string | null;
   planTier: string;
-  requestId?: string;
+  /**
+   * The turn this extraction reads. It is the chat request's own idempotency
+   * key, so a retried or resumed turn reaches the same reservation instead of
+   * being charged for the extraction a second time.
+   */
+  requestId: string;
 }
 
 function patternFacts(message: string): string[] {
@@ -109,7 +117,8 @@ export async function extractAutoMemoryFactsWithModel(
     );
     return patternFacts(input.message);
   }
-  const wireMode = resolveWireMode(route.provider);
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  const wireMode = resolveWireMode(dispatchProvider);
 
   let reservation;
   try {
@@ -117,11 +126,18 @@ export async function extractAutoMemoryFactsWithModel(
       db: input.db,
       userId: input.userId,
       organizationId: input.organizationId,
-      idempotencyKey: `memory-extraction:${input.requestId ?? randomUUID()}`,
+      idempotencyKey: managedUsageIdempotencyKey({
+        namespace: MEMORY_EXTRACTION_NAMESPACE,
+        identity: {
+          kind: MEMORY_EXTRACTION_QUOTA_FEATURE,
+          userId: input.userId,
+          requestId: input.requestId,
+        },
+      }),
       requestHash: fingerprintManagedUsageRequest({
         kind: MEMORY_EXTRACTION_QUOTA_FEATURE,
         userId: input.userId,
-        requestId: input.requestId ?? null,
+        requestId: input.requestId,
         provider: route.provider,
         model: route.modelKey,
       }),
@@ -170,11 +186,11 @@ export async function extractAutoMemoryFactsWithModel(
           temperature: 0,
           stream: false,
         });
-        const adapter = buildServerProviderAdapter(route.provider);
+        const adapter = buildServerProviderAdapter(dispatchProvider);
         const response = await drainToLlmResponse(
           adapter.stream(chatRequest, signal),
           route.modelKey,
-          (chunk) => toGenericUpstreamError(route.provider, chunk),
+          (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
           wireMode,
         );
 

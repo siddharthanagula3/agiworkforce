@@ -10,7 +10,7 @@ expression: terminal.backend()
 "                                                                                    "
 "                                                                                    "
 "                                                                                    "
-"  ┌ Agents  2 agent(s) ──────────────────────────────────────────────────────────┐  "
+"  ┌ Agents  2 agents ────────────────────────────────────────────────────────────┐  "
 "  │/ type to filter agents...                                                    │  "
 "  │──────────────────────────────────────────────────────────────────────────────│  "
 "  │   researcher          Search and synthesize technical material wi…  [project]│  "

@@ -77,6 +77,37 @@ test.describe('chat sidebar drawer', () => {
     expect(focus.insideDrawer, 'focus stayed outside the open drawer').toBe(true);
   });
 
+  test('primary drawer actions stay inside the phone viewport', async ({ page }) => {
+    await openChat(page);
+
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: MOBILE_VIEWPORT.height });
+      await page.getByRole('button', { name: TRIGGER_NAME }).click();
+      await page.waitForTimeout(SETTLE_MS);
+
+      const drawer = page.getByTestId(DRAWER_TEST_ID);
+      await expect(drawer).toBeVisible();
+      const actions = [
+        drawer.getByRole('button', { name: 'New chat', exact: true }),
+        drawer.getByRole('button', { name: 'AGI Code', exact: true }),
+        drawer.getByRole('button', { name: /^Search/ }),
+      ];
+
+      for (const action of actions) {
+        await expect(action).toBeVisible();
+        const box = await action.boundingBox();
+        expect(box, 'a primary drawer action has no rendered box').not.toBeNull();
+        expect(box!.x, 'a primary drawer action starts offscreen').toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width, 'a primary drawer action ends offscreen').toBeLessThanOrEqual(
+          width,
+        );
+      }
+
+      await page.keyboard.press('Escape');
+      await expect(drawer).toHaveCount(0);
+    }
+  });
+
   test('Escape closes the drawer and returns focus to the trigger', async ({ page }) => {
     await openChat(page);
 
@@ -140,7 +171,7 @@ test.describe('chat sidebar drawer', () => {
     ).toBeVisible();
 
     await row.hover();
-    await row.getByRole('button', { name: 'Conversation actions' }).click();
+    await row.getByRole('button', { name: /^More options for / }).click();
     await page.waitForTimeout(SETTLE_MS);
 
     const menu = page.locator('[role="menu"]');

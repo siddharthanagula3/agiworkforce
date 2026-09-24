@@ -4,12 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
+  Check,
   Clock,
   FileText,
   Download,
   AlertCircle,
   RefreshCw,
   Copy,
+  TriangleAlert,
   ThumbsUp,
   ThumbsDown,
   Volume2,
@@ -55,7 +57,7 @@ import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import { PerformanceChip } from './PerformanceChip';
 import { ReportFlagButton } from './ReportFlagButton';
-import { copyToClipboard } from '@/lib/clipboard';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
@@ -63,7 +65,7 @@ import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-p
 import {
   hasMessageStreamError,
   getMessageStreamErrorCode,
-  getMessageStreamErrorMessage,
+  streamFailureNoticeText,
 } from '@/src/features/chat/utils/messageStreamError';
 import { offersModelSwitch } from '@/services/apiErrors';
 import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
@@ -317,6 +319,7 @@ export const MessageBubble = memo(function MessageBubble({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const reducedMotion = useReducedMotion();
   const themeColors = useThemeColors();
+  const { status: copyStatus, copy } = useCopyAction();
 
   const appMode = useChatAppModeStore((s) => s.appMode);
   const handleStopImageGeneration = useCallback(() => {
@@ -524,7 +527,7 @@ export const MessageBubble = memo(function MessageBubble({
     actions.push({
       key: 'copy',
       label: 'Copy Message',
-      run: () => void copyToClipboard(message.content),
+      run: () => void copy(message.content),
     });
     if (isAssistant && message.content.trim()) {
       actions.push({ key: 'export', label: 'Export Message\u2026', run: handleShowExport });
@@ -543,6 +546,7 @@ export const MessageBubble = memo(function MessageBubble({
     isAssistant,
     message.id,
     message.content,
+    copy,
     onEditMessage,
     onRetryMessage,
     onDeleteMessage,
@@ -620,7 +624,7 @@ export const MessageBubble = memo(function MessageBubble({
       }
       switch (actionName) {
         case 'copy':
-          copyToClipboard(message.content);
+          void copy(message.content);
           break;
         case 'retry':
           onRetryMessage?.(message.id);
@@ -642,6 +646,7 @@ export const MessageBubble = memo(function MessageBubble({
       message.id,
       message.content,
       message.toolCalls,
+      copy,
       setAccessibilityTool,
       onRetryMessage,
       confirmDeleteMessage,
@@ -1044,8 +1049,8 @@ export const MessageBubble = memo(function MessageBubble({
                 accessibilityRole={onRetryMessage ? 'button' : 'text'}
                 accessibilityLabel={
                   onRetryMessage
-                    ? 'This response may be incomplete. Tap to regenerate.'
-                    : 'This response may be incomplete.'
+                    ? `${streamFailureNoticeText(message)} Tap to try again.`
+                    : streamFailureNoticeText(message)
                 }
                 style={{
                   flexDirection: 'row',
@@ -1063,9 +1068,7 @@ export const MessageBubble = memo(function MessageBubble({
               >
                 <AlertCircle size={13} color={themeColors.agentError} />
                 <Text style={{ fontSize: 12, color: themeColors.textSecondary }}>
-                  {getMessageStreamErrorMessage(message)
-                    ? `Response may be incomplete: ${getMessageStreamErrorMessage(message)}`
-                    : 'Response may be incomplete'}
+                  {streamFailureNoticeText(message)}
                 </Text>
                 {onRetryMessage && (
                   <>
@@ -1144,10 +1147,16 @@ export const MessageBubble = memo(function MessageBubble({
           accessibilityLabel="Message actions"
         >
           <MessageActionButton
-            label="Copy"
-            icon={Copy}
-            onPress={() => copyToClipboard(message.content)}
-            color={themeColors.textMuted}
+            label={copyControlLabel(copyStatus, 'Copy')}
+            icon={copyStatus === 'copied' ? Check : copyStatus === 'failed' ? TriangleAlert : Copy}
+            onPress={() => void copy(message.content)}
+            color={
+              copyStatus === 'copied'
+                ? themeColors.agentSuccess
+                : copyStatus === 'failed'
+                  ? themeColors.agentError
+                  : themeColors.textMuted
+            }
           />
           {/* Read aloud, reuses the on-device TTS service the voice companion
               already uses. Toggles, so a long answer can be stopped without

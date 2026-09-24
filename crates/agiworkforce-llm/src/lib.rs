@@ -29,17 +29,21 @@ pub mod events;
 pub mod serialize;
 pub mod spec;
 pub mod speech;
+pub mod stop;
 pub mod stream;
 pub mod watchdog;
 pub mod wire;
 
 pub use assembler::{INVALID_TOOL_ARGS_MARKER, ToolCallAssembler, parse_tool_arguments_json};
 pub use decode::Utf8StreamDecoder;
-pub use error::{LlmError, PaywallNotice, classify_error_response, parse_paywall_body};
+pub use error::{
+    LlmError, PaywallNotice, StreamFailureDetail, classify_error_response, parse_paywall_body,
+};
 pub use events::{ChatOutcome, StreamEvent, Usage};
 pub use serialize::OllamaRequestOpts;
 pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
 pub use speech::{TranscriptionRequest, TranscriptionResponseFormat};
+pub use stop::GenerationStop;
 pub use stream::{
     AnthropicThinking, ChatRequest, ToolChoice, build_anthropic_request_body,
     build_gemini_request_body, build_ollama_request_body, build_openai_compat_request_body,

@@ -56,6 +56,7 @@ const FreeQuotaObservationSchema = z.object({
 export const FreeQuotaInventorySchema = z
   .object({
     observedOn: z.string().date(),
+    issuer: z.string().min(1),
     source: z.string().min(1),
     evidenceUrl: z.string().url(),
     reportedEligible: z.number().int().nonnegative(),

@@ -38,7 +38,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
   return (
     <div className="flex flex-col gap-1 px-5 py-4">
       <span
-        className="text-[12px] font-medium uppercase tracking-[0.1em]"
+        className="text-caption font-medium uppercase tracking-[0.1em]"
         style={{ color: 'var(--text-3)' }}
       >
         {label}
@@ -47,7 +47,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
         {value}
       </span>
       {note ? (
-        <span className="text-[12px]" style={{ color: 'var(--text-3)' }}>
+        <span className="text-caption" style={{ color: 'var(--text-3)' }}>
           {note}
         </span>
       ) : null}
@@ -77,7 +77,7 @@ function Sparkline({ days }: { days: UsageDayRow[] }) {
             minWidth: 2,
             height: `${Math.max(2, (day.costCents / peak) * 100)}%`,
             background: 'var(--text-3)',
-            borderRadius: 1,
+            borderRadius: 'var(--corner-detail)',
           }}
         />
       ))}
@@ -189,7 +189,7 @@ export function WorkspaceUsageAnalytics() {
     return (
       <div
         role="status"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         Loading workspace usage…
       </div>
@@ -198,7 +198,7 @@ export function WorkspaceUsageAnalytics() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load your workspace usage
         </p>
@@ -219,7 +219,7 @@ export function WorkspaceUsageAnalytics() {
 
   if (data === null) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           You do not administer this workspace
         </p>

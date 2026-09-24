@@ -73,7 +73,7 @@ describe('support ticket routes', () => {
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
     mocks.listTickets.mockResolvedValue([TICKET]);
-    mocks.openTicket.mockResolvedValue(TICKET);
+    mocks.openTicket.mockResolvedValue({ ticket: TICKET, staffNotified: true });
     mocks.readTicket.mockResolvedValue({ ticket: TICKET, replies: [] });
     mocks.normalizeDiagnostics.mockReturnValue(null);
   });
@@ -87,13 +87,23 @@ describe('support ticket routes', () => {
     expect(mocks.listTickets).toHaveBeenCalledWith('user_1');
   });
 
-  it('answers 201 with the created ticket', async () => {
+  it('answers 201 with the created ticket and whether the support team was told', async () => {
     const response = await createTicketRoute(
       post({ subject: 'Invoice doubled', message: 'twice what it should be' }) as never,
     );
 
     expect(response.status).toBe(201);
-    await expect(response.json()).resolves.toEqual({ ticket: TICKET });
+    await expect(response.json()).resolves.toEqual({ ticket: TICKET, staffNotified: true });
+  });
+
+  it('says so when the support team was not told', async () => {
+    mocks.openTicket.mockResolvedValue({ ticket: TICKET, staffNotified: false });
+
+    const response = await createTicketRoute(
+      post({ subject: 'Invoice doubled', message: 'twice what it should be' }) as never,
+    );
+
+    await expect(response.json()).resolves.toEqual({ ticket: TICKET, staffNotified: false });
   });
 
   it('refuses a body with no message before it reaches the service', async () => {
@@ -168,6 +178,16 @@ describe('support ticket routes', () => {
     expect(mocks.moveTicket).not.toHaveBeenCalled();
     expect(mocks.replyToTicket).not.toHaveBeenCalled();
   });
+
+  it.each(['open', 'in_progress', 'resolved'])(
+    'leaves %s to the support team rather than letting the customer set it',
+    async (status) => {
+      const response = await patchTicketRoute(patch({ status }) as never, context as never);
+
+      expect(response.status).toBe(400);
+      expect(mocks.moveTicket).not.toHaveBeenCalled();
+    },
+  );
 
   it('moves a ticket when the patch carries a status alone', async () => {
     mocks.moveTicket.mockResolvedValue({ ...TICKET, status: 'closed' });

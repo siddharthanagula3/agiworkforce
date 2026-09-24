@@ -46,7 +46,9 @@ export function UsageWarningBanner({
           {warning.headline}
         </p>
         {warning.resetLabel ? (
-          <p className="truncate text-[12px] text-[var(--chat-text-muted)]">{warning.resetLabel}</p>
+          <p className="truncate text-caption text-[var(--chat-text-muted)]">
+            {warning.resetLabel}
+          </p>
         ) : null}
       </div>
 

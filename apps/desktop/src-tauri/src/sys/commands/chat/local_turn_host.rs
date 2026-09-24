@@ -34,7 +34,7 @@ use agiworkforce_agent_core::{
     PreparedCall, ResultBlock, RunawayTracker, StreamEvent, ToolClass, TurnEvent, TurnHost,
     TurnParams, TurnPhase,
 };
-use agiworkforce_llm::{ChatOutcome, ToolCall as CoreToolCall, Usage as CoreUsage};
+use agiworkforce_llm::{ChatOutcome, GenerationStop, ToolCall as CoreToolCall, Usage as CoreUsage};
 
 use super::*;
 use crate::core::llm::llm_router::{RouteCandidate, RouteOutcome};
@@ -517,6 +517,7 @@ impl LocalChatTurnHost {
                 tool_calls: Vec::new(),
                 usage: CoreUsage::default(),
                 stop_reason: None,
+                stop: None,
             },
             via_subscription: false,
         }
@@ -565,6 +566,11 @@ fn chat_outcome_from_route(
                 .unwrap_or(0),
         },
         stop_reason: outcome.response.finish_reason.clone(),
+        stop: outcome
+            .response
+            .finish_reason
+            .as_deref()
+            .map(GenerationStop::openai_finish_reason),
     };
     (chat, normalized)
 }

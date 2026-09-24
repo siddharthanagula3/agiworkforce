@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { ConversationTitleMenu } from '../ConversationTitleMenu';
+import { ConversationTitleMenu, ConversationTitlePlaceholder } from '../ConversationTitleMenu';
 
 beforeAll(() => {
   if (!HTMLElement.prototype.scrollIntoView) {
@@ -153,6 +153,206 @@ describe('ConversationTitleMenu', () => {
     const input = await screen.findByRole('textbox', { name: /rename conversation/i });
     await user.type(input, '{Enter}');
     expect(onRename).not.toHaveBeenCalled();
+  });
+
+  it('keeps the title slot busy while the conversation is still loading', () => {
+    render(<ConversationTitlePlaceholder />);
+    const slot = screen.getByRole('status', { name: /loading conversation title/i });
+    expect(slot).toHaveAttribute('aria-busy', 'true');
+    expect(slot).toHaveClass('min-w-0', 'flex-1');
+    expect(screen.queryByRole('button', { name: /conversation options/i })).toBeNull();
+  });
+
+  it.each([
+    ['combining marks', 'Café déjà vu, Ünïcödé'],
+    ['non-latin script', '会議のまとめ / Итоги встречи'],
+    ['right to left', 'ملخص الاجتماع'],
+    ['emoji with a skin-tone modifier', '🚀 Launch plan 👩🏽‍💻 v2 🇯🇵'],
+  ])('renders a title with %s without mangling it', (_case, title) => {
+    render(
+      <ConversationTitleMenu
+        title={title}
+        projects={projects}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: /conversation options/i });
+    expect(trigger.textContent).toContain(title);
+  });
+
+  it('round-trips an emoji title through rename without splitting the grapheme', async () => {
+    const onRename = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConversationTitleMenu
+        title="Old"
+        projects={projects}
+        onRename={onRename}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByText('Rename'));
+    const input = await screen.findByRole('textbox', { name: /rename conversation/i });
+    await user.clear(input);
+    await user.paste('👩🏽‍💻 Ünïcödé plan');
+    await user.type(input, '{Enter}');
+
+    expect(onRename).toHaveBeenCalledWith('👩🏽‍💻 Ünïcödé plan');
+  });
+
+  it('commits the draft when the input loses focus', async () => {
+    const onRename = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConversationTitleMenu
+        title="Old title"
+        projects={projects}
+        onRename={onRename}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByText('Rename'));
+    const input = await screen.findByRole('textbox', { name: /rename conversation/i });
+    await user.clear(input);
+    await user.type(input, 'Committed on blur');
+    await user.tab();
+
+    expect(onRename).toHaveBeenCalledWith('Committed on blur');
+  });
+
+  it('Escape abandons the draft and leaves the title untouched', async () => {
+    const onRename = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConversationTitleMenu
+        title="Old title"
+        projects={projects}
+        onRename={onRename}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByText('Rename'));
+    const input = await screen.findByRole('textbox', { name: /rename conversation/i });
+    await user.clear(input);
+    await user.type(input, 'Abandoned{Escape}');
+
+    expect(onRename).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /conversation options/i }).textContent).toContain(
+        'Old title',
+      ),
+    );
+    expect(onRename).not.toHaveBeenCalled();
+  });
+
+  it('shows the new title before the server answers and restores it when the save fails', async () => {
+    let settle: (accepted: boolean) => void = () => {};
+    const onRename = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ConversationTitleMenu
+        title="Old title"
+        projects={projects}
+        onRename={onRename}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByText('Rename'));
+    const input = await screen.findByRole('textbox', { name: /rename conversation/i });
+    await user.clear(input);
+    await user.type(input, 'Renamed in flight{Enter}');
+
+    const trigger = await screen.findByRole('button', { name: /conversation options/i });
+    expect(trigger.textContent).toContain('Renamed in flight');
+
+    settle(false);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /conversation options/i }).textContent).toContain(
+        'Old title',
+      ),
+    );
+    expect(screen.getByRole('button', { name: /conversation options/i }).textContent).not.toContain(
+      'Renamed in flight',
+    );
+  });
+
+  it('restores the title when the save throws instead of answering', async () => {
+    let fail: (reason: Error) => void = () => {};
+    const onRename = vi.fn(
+      () =>
+        new Promise<boolean>((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ConversationTitleMenu
+        title="Old title"
+        projects={projects}
+        onRename={onRename}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByText('Rename'));
+    const input = await screen.findByRole('textbox', { name: /rename conversation/i });
+    await user.clear(input);
+    await user.type(input, 'Renamed in flight{Enter}');
+    expect(
+      (await screen.findByRole('button', { name: /conversation options/i })).textContent,
+    ).toContain('Renamed in flight');
+
+    fail(new Error('the request never landed'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /conversation options/i }).textContent).toContain(
+        'Old title',
+      ),
+    );
+  });
+
+  it('keeps the optimistic title until the store catches up, then follows the store', async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn(async () => true);
+    const { rerender } = render(
+      <ConversationTitleMenu
+        title="Old title"
+        projects={projects}
+        onRename={onRename}
+        onDelete={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /conversation options/i }));
+    await user.click(await screen.findByText('Rename'));
+    const input = await screen.findByRole('textbox', { name: /rename conversation/i });
+    await user.clear(input);
+    await user.type(input, 'Renamed{Enter}');
+    expect(
+      (await screen.findByRole('button', { name: /conversation options/i })).textContent,
+    ).toContain('Renamed');
+
+    rerender(
+      <ConversationTitleMenu
+        title="Server chosen title"
+        projects={projects}
+        onRename={onRename}
+        onDelete={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /conversation options/i }).textContent).toContain(
+        'Server chosen title',
+      ),
+    );
   });
 
   it('Delete calls onDelete', async () => {

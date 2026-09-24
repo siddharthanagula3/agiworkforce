@@ -58,7 +58,9 @@ describe('WaitlistModal', () => {
     expect(screen.queryByText(/discuss enterprise access/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
-    expect(screen.getByText(/discuss enterprise access/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/discuss enterprise access/i, undefined, { timeout: 5_000 }),
+    ).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('textbox', { name: /email address/i }), {
       target: { value: '  Visitor@Example.COM ' },
@@ -82,7 +84,7 @@ describe('WaitlistModal', () => {
     });
   });
 
-  it('closes from its visible close control', () => {
+  it('closes from its visible close control', async () => {
     render(
       <WaitlistModalProvider>
         <WaitlistTrigger label="Team access" />
@@ -90,7 +92,7 @@ describe('WaitlistModal', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /team access/i }));
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /close waitlist dialog/i }));
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -104,7 +106,7 @@ describe('WaitlistModal', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /email address/i }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: /email address/i }), {
       target: { value: 'not-an-email' },
     });
     fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
@@ -126,7 +128,7 @@ describe('WaitlistModal', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /email address/i }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: /email address/i }), {
       target: { value: 'visitor@example.com' },
     });
     grantRequiredConsent();
@@ -146,7 +148,7 @@ describe('WaitlistModal', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /email address/i }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: /email address/i }), {
       target: { value: 'visitor@example.com' },
     });
     fireEvent.click(screen.getByRole('button', { name: /^join waitlist$/i }));
@@ -155,7 +157,7 @@ describe('WaitlistModal', () => {
     expect(mockJoinPublicWaitlist).not.toHaveBeenCalled();
   });
 
-  it('renders both consent purposes unticked, and requires only the necessary one', () => {
+  it('renders both consent purposes unticked, and requires only the necessary one', async () => {
     render(
       <WaitlistModalProvider>
         <WaitlistTrigger label="Join Cloud waitlist" />
@@ -163,7 +165,7 @@ describe('WaitlistModal', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
 
-    const boxes = screen.getAllByRole('checkbox');
+    const boxes = await screen.findAllByRole('checkbox');
     expect(boxes).toHaveLength(2);
     for (const box of boxes) expect(box).not.toBeChecked();
   });
@@ -178,7 +180,7 @@ describe('WaitlistModal', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /request cloud/i }));
-    fireEvent.change(screen.getByRole('textbox', { name: /email address/i }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: /email address/i }), {
       target: { value: 'visitor@example.com' },
     });
     grantRequiredConsent();

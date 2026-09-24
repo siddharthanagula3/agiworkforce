@@ -1,4 +1,3 @@
-
 const mockStore = new Map<string, string>();
 jest.mock('../lib/mmkv', () => ({
   mmkvStorage: {
@@ -45,5 +44,19 @@ describe('draftStore', () => {
     expect(() => setDraft(undefined, 'x')).not.toThrow();
     expect(() => clearDraft(undefined, LOCAL_PROVENANCE)).not.toThrow();
     expect(mockStore.size).toBe(0);
+  });
+});
+
+describe('a draft the OS interrupts', () => {
+  it('is already on disk when the process is killed mid sentence', () => {
+    setDraft('conv-1', 'half a thoug', { scope: 'local' });
+    setDraft('conv-1', 'half a thought', { scope: 'local' });
+
+    jest.resetModules();
+    const reloaded =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../src/features/chat/draftStore') as typeof import('../src/features/chat/draftStore');
+
+    expect(reloaded.getDraft('conv-1', { scope: 'local' })).toBe('half a thought');
   });
 });

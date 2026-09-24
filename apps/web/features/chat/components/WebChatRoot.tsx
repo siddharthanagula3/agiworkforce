@@ -11,7 +11,13 @@ const WebChatPage = dynamic(() => import('@features/chat/pages/WebChatPage'), {
   loading: () => <ChatLoadingSkeleton />,
 });
 
-export function WebChatRoot({ initialWorkMode }: { initialWorkMode?: ComposerWorkMode }) {
+export function WebChatRoot({
+  compact = false,
+  initialWorkMode,
+}: {
+  compact?: boolean;
+  initialWorkMode?: ComposerWorkMode;
+}) {
   useNewChatEntry();
-  return <WebChatPage initialWorkMode={initialWorkMode} />;
+  return <WebChatPage compact={compact} initialWorkMode={initialWorkMode} />;
 }

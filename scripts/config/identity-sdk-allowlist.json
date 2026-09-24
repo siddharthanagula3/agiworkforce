@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "entries": [
     {
-      "path": "apps/web/app/layout.tsx",
-      "reason": "Mounts the provider's React context around the app. The port covers what the product asks of a provider, not the provider's own component tree, so the mount is part of a swap rather than a leak the port can absorb."
+      "path": "apps/web/lib/identity/provider.tsx",
+      "reason": "Mounts the provider's React context only around routes that use browser identity. The port covers what the product asks of a provider, not the provider's own component tree, so the mount is part of a swap rather than a leak the port can absorb."
     },
     {
       "path": "apps/web/features/auth/identityAuthAdapter.tsx",

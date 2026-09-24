@@ -138,6 +138,19 @@ async function handleAddMember(request: NextRequest) {
 
       await expirePendingInvitations(tx, organizationId);
 
+      // Nothing here authorizes the TARGET account. The caller's org-admin role
+      // says they may add members; it does not say this person agreed to join.
+      // A verified domain is the one case where the organization already owns
+      // the address, matching what SCIM provisioning requires. Every other add
+      // goes through the invitation the invitee redeems, because otherwise
+      // knowing an email is enough to bind that account into your tenant. The
+      // check runs before the lookup so the refusal cannot say whether an account exists.
+      if (!(await organizationOwnsEmailDomain(tx, organizationId, email))) {
+        throw createError.validation(
+          'That address is not on a domain this organization has verified, so it cannot be added directly. Send an invitation instead: POST /api/settings/team/invitations returns a link you deliver yourself. No email was sent.',
+        );
+      }
+
       const [targetProfile] = await getNeonDb().query<
         Pick<ProfileRow, 'id' | 'email' | 'display_name' | 'avatar_url'>
       >(
@@ -164,18 +177,6 @@ async function handleAddMember(request: NextRequest) {
 
       if (existing) {
         throw createError.conflict('This user is already a member of the organization');
-      }
-
-      // Nothing here authorizes the TARGET account. The caller's org-admin role
-      // says they may add members; it does not say this person agreed to join.
-      // A verified domain is the one case where the organization already owns
-      // the address, matching what SCIM provisioning requires. Every other add
-      // goes through the invitation the invitee redeems, because otherwise
-      // knowing an email is enough to bind that account into your tenant.
-      if (!(await organizationOwnsEmailDomain(tx, organizationId, targetProfile.email ?? email))) {
-        throw createError.validation(
-          'That account is not on a domain this organization has verified, so it cannot be added directly. Send an invitation instead: POST /api/settings/team/invitations returns a link you deliver yourself. No email was sent.',
-        );
       }
 
       const [created] = await tx.query<MemberWithProfile>(

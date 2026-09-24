@@ -21,6 +21,7 @@ import FeatureFlagsPanel from '../components/FeatureFlagsPanel';
 import ModelRolloutPanel from '../components/ModelRolloutPanel';
 import RoutingHealthPanel from '../components/RoutingHealthPanel';
 import ServiceHealthPanel from '../components/ServiceHealthPanel';
+import SupportTicketQueuePanel from '../components/SupportTicketQueuePanel';
 import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
 import { formatCents, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 import { helpHref } from '@/lib/support/help-entry-points';
@@ -449,6 +450,8 @@ export function OperatorDashboardPage() {
       {tab === 'privacy' ? <PrivacyRequestsPanel /> : null}
 
       {tab === 'support' ? <SupportHandoffQueuePanel /> : null}
+
+      {tab === 'support' ? <SupportTicketQueuePanel /> : null}
 
       {tab === 'jobs' ? <BackgroundJobsPanel /> : null}
 

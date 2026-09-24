@@ -48,6 +48,33 @@ test('clean source passes', () => {
   assert.equal(code, 0);
 });
 
+test('rejects mixed icon families in one production file', () => {
+  const { code, out } = check(
+    `import { Plus } from '@agiworkforce/icons';\nimport { X } from 'lucide-react';\nexport const A = () => <><Plus /><X /></>;\n`,
+  );
+  assert.equal(code, 1);
+  assert.match(out, /mixed-icon-families/);
+
+  const singleFamily = check(
+    `import { Plus, X } from '@agiworkforce/icons';\nexport const A = () => <><Plus /><X /></>;\n`,
+  );
+  assert.equal(singleFamily.code, 0);
+});
+
+test('requires generated semantic color utilities in production source', () => {
+  const verbose = check(
+    `export const A = () => <p className="text-[hsl(var(--foreground))]">ok</p>;\n`,
+  );
+  assert.equal(verbose.code, 1);
+  assert.match(verbose.out, /verbose-theme-utility/);
+
+  const semantic = check(`export const A = () => <p className="text-foreground">ok</p>;\n`);
+  assert.equal(semantic.code, 0);
+
+  const commented = check(`// text-[hsl(var(--foreground))]\nexport const A = () => null;\n`);
+  assert.equal(commented.code, 0);
+});
+
 test('flags a raw palette utility', () => {
   const { code, out } = check(`export const A = () => <p className="bg-amber-500">x</p>;\n`);
   assert.equal(code, 1);
@@ -66,7 +93,7 @@ test('flags an arbitrary colour literal but not a tokenised arbitrary value', ()
   assert.equal(bad.code, 1);
   assert.match(bad.out, /arbitrary-color/);
 
-  const good = check(`export const A = () => <p className="bg-[hsl(var(--background))]">x</p>;\n`);
+  const good = check(`export const A = () => <p className="bg-[var(--custom-surface)]">x</p>;\n`);
   assert.equal(good.code, 0, 'token consumption through an arbitrary value is not hardcoding');
 });
 
@@ -78,12 +105,16 @@ test('flags an opacity-diluted foreground token', () => {
   assert.match(out, /opacity-diluted-text/);
 });
 
-test('flags type below the legibility floor and allows the floor itself', () => {
+test('flags type below the legibility floor and requires a semantic role at the floor', () => {
   const bad = check(`export const A = () => <p className="text-[11px]">x</p>;\n`);
   assert.equal(bad.code, 1);
   assert.match(bad.out, /tiny-type/);
 
-  const good = check(`export const A = () => <p className="text-[12px]">x</p>;\n`);
+  const literalFloor = check(`export const A = () => <p className="text-[12px]">x</p>;\n`);
+  assert.equal(literalFloor.code, 1);
+  assert.match(literalFloor.out, /literal-caption-size/);
+
+  const good = check(`export const A = () => <p className="text-caption">x</p>;\n`);
   assert.equal(good.code, 0);
 });
 
@@ -111,6 +142,59 @@ test('flags an inline fontSize below the floor', () => {
   const { code, out } = check(`export const A = () => <p style={{ fontSize: 9 }}>x</p>;\n`);
   assert.equal(code, 1);
   assert.match(out, /tiny-type-inline/);
+});
+
+test('requires inline spacing to consume the shared spacing ladder', () => {
+  const bad = check(
+    `export const A = () => <div style={{ padding: '14px 20px', gap: 8 }}>x</div>;\n`,
+  );
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /inline-spacing-literal/);
+  assert.match(bad.out, /padding: '14px 20px'/);
+  assert.match(bad.out, /gap: 8/);
+
+  const good = check(
+    `const qrOptions = { margin: 1, width: 200 };\nexport const A = () => <div data-margin={qrOptions.margin} style={{ padding: 'var(--space-4) var(--space-5)', gap: 'var(--space-2)' }}>x</div>;\n`,
+  );
+  assert.equal(good.code, 0);
+});
+
+test('requires radii to consume the shared corner ladder', () => {
+  const bad = runGuard(
+    seedFixture({
+      source: `export const A = () => <div className="rounded rounded-[10px]" style={{ borderRadius: 10 }} />;\n`,
+      stylesheet: '.card { border-radius: 14px; }\n',
+    }),
+  );
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /bare-radius-utility/);
+  assert.match(bad.out, /literal-radius-utility/);
+  assert.match(bad.out, /inline-radius-literal/);
+  assert.match(bad.out, /literal-radius-css/);
+
+  const good = runGuard(
+    seedFixture({
+      source: `export const A = () => <div className="rounded-menu" style={{ borderRadius: 'var(--corner-menu)' }} />;\n`,
+      stylesheet:
+        '.card { border-radius: var(--corner-surface); }\n.circle { border-radius: 50%; }\n.mockup { border-radius: calc(var(--u) * 10); }\n',
+    }),
+  );
+  assert.equal(good.code, 0);
+});
+
+test('requires transition utilities to consume the shared motion ladder', () => {
+  const bad = check(
+    `export const A = () => <div className="transition duration-200 duration-[350ms] ease-in-out" />;\n`,
+  );
+  assert.equal(bad.code, 1);
+  assert.match(bad.out, /raw-duration-utility/);
+  assert.match(bad.out, /literal-duration-utility/);
+  assert.match(bad.out, /raw-easing-utility/);
+
+  const good = check(
+    `export const A = () => <div className="transition duration-quick ease-standard" />;\n`,
+  );
+  assert.equal(good.code, 0);
 });
 
 test('flags an affordance that only appears on hover', () => {
@@ -152,11 +236,16 @@ test('a baselined violation passes but a second identical one fails', () => {
 });
 
 test('flags a bare stacking rung and allows a token rung', () => {
-  const bad = check(`export const A = () => <div className="fixed z-[9999]" />;\n`);
-  assert.equal(bad.code, 1);
-  assert.match(bad.out, /arbitrary-z-index/);
+  for (const [className, rule] of [
+    ['z-50', 'raw-z-index-utility'],
+    ['z-[9999]', 'arbitrary-z-index'],
+  ]) {
+    const bad = check(`export const A = () => <div className="fixed ${className}" />;\n`);
+    assert.equal(bad.code, 1);
+    assert.match(bad.out, new RegExp(rule));
+  }
 
-  const good = check(`export const A = () => <div className="fixed z-[var(--z-modal,300)]" />;\n`);
+  const good = check(`export const A = () => <div className="fixed z-[var(--z-modal)]" />;\n`);
   assert.equal(good.code, 0);
 });
 

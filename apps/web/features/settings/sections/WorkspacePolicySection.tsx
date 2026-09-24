@@ -23,7 +23,7 @@ const cardStyle = {
 } as const;
 
 const headerStyle = {
-  padding: '14px 20px',
+  padding: 'var(--space-4) var(--space-5)',
   borderBottom: '1px solid var(--settings-border)',
 } as const;
 
@@ -31,8 +31,8 @@ const rowStyle = {
   display: 'flex',
   alignItems: 'flex-start',
   justifyContent: 'space-between',
-  gap: 16,
-  padding: '12px 20px',
+  gap: 'var(--space-4)',
+  padding: 'var(--space-3) var(--space-5)',
   borderBottom: '1px solid var(--settings-border)',
 } as const;
 
@@ -43,7 +43,7 @@ const buttonStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 12px',
+  padding: 'var(--space-1) var(--space-3)',
   cursor: 'pointer',
 } as const;
 
@@ -54,7 +54,7 @@ const fieldInputStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '4px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 const MAX_MONTHLY_SPEND_CAP_CENTS = 100_000_000;
@@ -164,9 +164,13 @@ function Row({
     <div style={rowStyle}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>{title}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{description}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+          {description}
+        </div>
       </div>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>{control}</div>
+      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        {control}
+      </div>
     </div>
   );
 }
@@ -207,7 +211,7 @@ export function WorkspacePolicySection() {
   if (query.isLoading) {
     return (
       <section style={cardStyle}>
-        <div style={{ padding: '20px', fontSize: 13, color: 'var(--text-3)' }}>
+        <div style={{ padding: 'var(--space-5)', fontSize: 13, color: 'var(--text-3)' }}>
           Loading workspace policy…
         </div>
       </section>
@@ -217,7 +221,7 @@ export function WorkspacePolicySection() {
   if (query.isError) {
     return (
       <section style={cardStyle}>
-        <div style={{ padding: '20px', display: 'grid', gap: 10 }}>
+        <div style={{ padding: 'var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
           <div style={{ fontSize: 13, color: 'var(--text-1)' }}>
             Workspace policy could not be loaded.
           </div>
@@ -276,13 +280,13 @@ export function WorkspacePolicySection() {
   return (
     <section style={cardStyle}>
       <header style={headerStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           <ShieldCheck size={15} aria-hidden="true" />
           <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
             Workspace policy
           </h3>
         </div>
-        <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+        <p style={{ margin: 'var(--space-2) 0 0', fontSize: 12, color: 'var(--text-3)' }}>
           {overview.configured
             ? 'These rules bind every member of this workspace. Personal accounts are unaffected.'
             : 'This workspace has no policy yet, so nothing is restricted. The values below are what your first save would apply.'}
@@ -290,7 +294,9 @@ export function WorkspacePolicySection() {
       </header>
 
       {!overview.canManagePolicy ? (
-        <div style={{ padding: '10px 20px', fontSize: 12, color: 'var(--text-3)' }}>
+        <div
+          style={{ padding: 'var(--space-3) var(--space-5)', fontSize: 12, color: 'var(--text-3)' }}
+        >
           Only an owner or admin can change these. You are a {overview.currentUserRole}.
         </div>
       ) : null}
@@ -312,21 +318,32 @@ export function WorkspacePolicySection() {
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>
           Allowed privacy modes
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 10px' }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-3)',
+            margin: 'var(--space-1) 0 var(--space-3)',
+          }}
+        >
           A mode that is not allowed here is refused server-side, on every surface.
         </div>
-        <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
           {PRIVACY_MODES.map((mode) => (
             <label
               key={mode.value}
-              style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 }}
+              style={{
+                display: 'flex',
+                gap: 'var(--space-2)',
+                alignItems: 'flex-start',
+                fontSize: 12,
+              }}
             >
               <input
                 type="checkbox"
                 checked={draft.allowedPrivacyModes.includes(mode.value)}
                 disabled={!canEdit}
                 onChange={(event) => togglePrivacyMode(mode.value, event.target.checked)}
-                style={{ marginTop: 2 }}
+                style={{ marginTop: 'var(--space-1)' }}
               />
               <span>
                 <span style={{ color: 'var(--text-1)', fontWeight: 500 }}>{mode.label}</span>
@@ -374,14 +391,23 @@ export function WorkspacePolicySection() {
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>
           Apps that may reach the cloud
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 10px' }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-3)',
+            margin: 'var(--space-1) 0 var(--space-3)',
+          }}
+        >
           Which clients your members may sign in to and sync from. This reads the app&apos;s own
           identifier, so treat it as a deployment setting rather than a security boundary, the
           privacy-mode rules above are what bind regardless of client.
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           {SYNC_SURFACES.map((surface) => (
-            <label key={surface.value} style={{ display: 'flex', gap: 6, fontSize: 12 }}>
+            <label
+              key={surface.value}
+              style={{ display: 'flex', gap: 'var(--space-2)', fontSize: 12 }}
+            >
               <input
                 type="checkbox"
                 checked={draft.chatSyncSurfaces.includes(surface.value)}
@@ -392,7 +418,10 @@ export function WorkspacePolicySection() {
             </label>
           ))}
           {DEVELOPER_SURFACES.map((surface) => (
-            <label key={surface.key} style={{ display: 'flex', gap: 6, fontSize: 12 }}>
+            <label
+              key={surface.key}
+              style={{ display: 'flex', gap: 'var(--space-2)', fontSize: 12 }}
+            >
               <input
                 type="checkbox"
                 checked={Boolean(draft[surface.key])}
@@ -500,8 +529,8 @@ export function WorkspacePolicySection() {
       {draft.retentionEnforced && !overview.policy.retentionEnforced ? (
         <div
           style={{
-            margin: '0 20px 4px',
-            padding: '10px 12px',
+            margin: '0 var(--space-5) var(--space-1)',
+            padding: 'var(--space-3) var(--space-3)',
             border: '1px solid currentColor',
             borderRadius: 'var(--radius-md)',
             color: 'var(--settings-destructive-text)',
@@ -603,14 +632,26 @@ export function WorkspacePolicySection() {
 
       <div style={{ ...rowStyle, display: 'block' }}>
         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>IP allow list</div>
-        <div style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 10px' }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text-3)',
+            margin: 'var(--space-1) 0 var(--space-3)',
+          }}
+        >
           {draft.ipAllowList.length === 0
             ? 'Empty. Members may sign in to this workspace from any address.'
             : 'Members may only sign in to this workspace from one of these addresses or blocks.'}
         </div>
         {draft.ipAllowList.length > 0 ? (
           <ul
-            style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, display: 'grid', gap: 6 }}
+            style={{
+              listStyle: 'none',
+              margin: '0 0 var(--space-3)',
+              padding: 0,
+              display: 'grid',
+              gap: 'var(--space-2)',
+            }}
           >
             {draft.ipAllowList.map((entry) => (
               <li
@@ -619,7 +660,7 @@ export function WorkspacePolicySection() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 8,
+                  gap: 'var(--space-2)',
                   fontSize: 12,
                 }}
               >
@@ -629,7 +670,7 @@ export function WorkspacePolicySection() {
                   disabled={!canEdit}
                   onClick={() => removeIpAllowListEntry(entry)}
                   aria-label={`Remove ${entry} from the allow list`}
-                  style={{ ...buttonStyle, padding: '2px 8px' }}
+                  style={{ ...buttonStyle, padding: 'var(--space-1) var(--space-2)' }}
                 >
                   Remove
                 </button>
@@ -637,7 +678,7 @@ export function WorkspacePolicySection() {
             ))}
           </ul>
         ) : null}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
           <div>
             <input
               type="text"
@@ -657,13 +698,17 @@ export function WorkspacePolicySection() {
             {ipAllowListInputError ? (
               <div
                 role="alert"
-                style={{ fontSize: 12, color: 'var(--settings-destructive-text)', marginTop: 4 }}
+                style={{
+                  fontSize: 12,
+                  color: 'var(--settings-destructive-text)',
+                  marginTop: 'var(--space-1)',
+                }}
               >
                 {ipAllowListInputError}
               </div>
             ) : null}
             {!ipAllowListInputError && ipAllowListFull ? (
-              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                 The allow list holds at most {MAX_IP_ALLOW_LIST_ENTRIES} entries.
               </div>
             ) : null}
@@ -686,11 +731,11 @@ export function WorkspacePolicySection() {
 
       <div
         style={{
-          padding: '12px 20px',
+          padding: 'var(--space-3) var(--space-5)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 12,
+          gap: 'var(--space-3)',
         }}
       >
         <div

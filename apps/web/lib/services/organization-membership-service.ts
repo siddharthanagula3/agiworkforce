@@ -92,7 +92,7 @@ export async function leaveOrganization(
           );
           if (Number(memberCount?.count ?? 0) <= 1) {
             throw createError.conflict(
-              'You are the sole member of this workspace. Leaving is not available for a sole owner; delete the workspace from Settings > Organization instead.',
+              'You are the sole member of this workspace. Leaving is not available for a sole owner; delete the workspace from Settings, Workspace instead.',
             );
           }
           throw createError.conflict(

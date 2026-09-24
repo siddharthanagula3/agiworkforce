@@ -1,0 +1,29 @@
+{
+  "_description": "Every place this server refuses a caller because its build is older than the contract it answers. scripts/check-client-version-compatibility.mjs fails when a refusal appears that is not listed here, when an entry names a site that no longer refuses anything, or when a refusal does not name the version it needs. A forced update is a security or correctness decision taken once, not a release habit, so the list is short and every entry says what it refuses and what the caller does about it.",
+  "refusals": [
+    {
+      "file": "apps/web/lib/api-gateway-policy.ts",
+      "trigger": "createError.clientUpdateRequired",
+      "refuses": "A caller that names an API contract version below the advertised floor. A caller that names no version at all is served, because the builds in the field predate the header.",
+      "remedy": "The sentence names the contract version the caller sent and the one this deployment needs, and the advertisement carries latest, minimumSupported and unsupportedBelow so a client can decide before it is refused."
+    },
+    {
+      "file": "apps/web/app/api/chat/sync/route.ts",
+      "trigger": "createError.clientUpdateRequired",
+      "refuses": "A sync push or pull whose declared protocol version is under the floor the shared contract sets, checked before the batch is parsed so the caller reads a sentence rather than a field list.",
+      "remedy": "The sentence names the protocol the caller speaks and the one chat sync now needs, so the client knows which release to take rather than retrying forever."
+    },
+    {
+      "file": "apps/web/app/api/memory/sync/route.ts",
+      "trigger": "createError.clientUpdateRequired",
+      "refuses": "A memory sync exchange whose declared protocol version is under the floor the shared contract sets.",
+      "remedy": "The sentence names the protocol the caller speaks and the one memory sync now needs, so the client knows which release to take rather than retrying forever."
+    },
+    {
+      "file": "apps/web/app/api/uploads/presign/route.ts",
+      "trigger": "protocol upgrade code",
+      "refuses": "A project source upload from a client that sends no content checksum. Version 1 of that exchange authorized a storage key and nothing about its content, so honouring it would hand back an unbound upload url.",
+      "remedy": "The body carries requiredUploadProtocolVersion beside the sentence, and the upgrade is one field the client already computes for registration."
+    }
+  ]
+}

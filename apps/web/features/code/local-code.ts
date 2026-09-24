@@ -95,8 +95,25 @@ export function localTurnFailureSentence(failure: DeveloperTurnFailure): string 
   if (failure.code === 'provider_rate_limited' && provider) {
     return `${provider} is rate limiting this computer. Wait a moment and send it again.`;
   }
+  if (failure.code === 'free_allowance_exhausted') {
+    return "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on this account. It reopens on the provider's own schedule, so send it again later.";
+  }
+  if (failure.code === 'usage_limit_reached') {
+    return 'This account has reached a usage limit its plan sets. Open Usage to see when it resets, then send it again.';
+  }
   if (failure.code === 'provider_unavailable' && provider) {
     return `${provider} could not be reached from this computer.`;
+  }
+  if (failure.code === 'stream_interrupted') {
+    return provider
+      ? `${provider} stopped part way through the response. Send it again to get the rest.`
+      : 'The response stopped part way through. Send it again to get the rest.';
+  }
+  if (failure.code === 'output_limit_reached') {
+    return "The answer reached this model's maximum length and stopped there. Ask for a shorter answer, or split the request.";
+  }
+  if (failure.code === 'refused_by_safety') {
+    return 'The safety system stopped this response. Rephrase the request and send it again.';
   }
   if (failure.code === 'network') {
     return 'This computer could not reach the network.';

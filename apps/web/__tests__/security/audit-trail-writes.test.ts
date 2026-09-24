@@ -195,6 +195,24 @@ describe('recordAuditEvent, writes a real security_audit_logs row', () => {
     expect(row.severity).toBe('warning');
     expect(row.details['outcome']).toBe('denied');
   });
+
+  it('persists device-link initiation with a non-secret device reference', async () => {
+    await recordAuditEvent({
+      userId: 'user_actor',
+      eventType: 'device_authorization_initiated',
+      endpoint: '/api/device/link',
+      detail: { resourceType: 'device_authorization', subjectRef: 'device-generated-id' },
+    });
+
+    const row = decodeAuditRow(auditParams());
+    expect(row).toMatchObject({
+      userId: 'user_actor',
+      eventType: 'device_authorization_initiated',
+      endpoint: '/api/device/link',
+      details: { resourceType: 'device_authorization', subjectRef: 'device-generated-id' },
+    });
+    expect(JSON.stringify(row)).not.toMatch(/link_code|user_code|verify_url|qr_code_url/);
+  });
 });
 
 describe('recordAuditEvent, enterprise dual-write', () => {

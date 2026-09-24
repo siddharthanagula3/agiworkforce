@@ -5,7 +5,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getProviderOffering } from '@agiworkforce/types';
 import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -13,24 +12,12 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
+import type { ChatMessageRow } from '@/lib/server/neon-chat';
 import { CreateMessageSchema } from '@/lib/validations/chat';
-import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { buildPage, clampPageSize, decodeKeysetCursor, keysetSql } from '@/lib/identity/pagination';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { resolveSavedMessageSourceUrls } from './lib/resolve-source-urls';
-import { scheduleConversationTitleGeneration } from './lib/generate-title';
-import { scheduleArtifactIndexing } from './lib/index-artifacts';
-import {
-  assertParentInConversation,
-  conversationIsUnbranched,
-  INSERT_MESSAGE_SQL,
-  isHttpError,
-  lockConversationThread,
-  resolveParentId,
-  setActiveLeaf,
-  stampLinearParents,
-} from './lib/message-thread';
+import { persistConversationMessage } from './lib/persist-message';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -52,37 +39,6 @@ async function assertConversationReadable(
     [scope.conversationId, scope.userId, scope.organizationId],
   );
   if (!conversation) throw createError.notFound('Conversation not found');
-}
-
-const PG_UNDEFINED_COLUMN = '42703';
-
-/**
- * Set once, by the first user message, and never cleared. Absent until 0268 is
- * applied, and a send must not fail on a column the database does not have yet.
- */
-async function markConversationActivated(
-  db: Awaited<ReturnType<typeof getUserScopedDb>>['db'],
-  scope: { conversationId: string; userId: string; organizationId: string | null },
-): Promise<boolean | null> {
-  try {
-    const updated = await db.execute(
-      `update web_conversations
-          set activated_at = now()
-        where id = $1
-          and user_id = $2
-          and organization_id is not distinct from $3
-          and activated_at is null`,
-      [scope.conversationId, scope.userId, scope.organizationId],
-    );
-    return updated > 0;
-  } catch (error) {
-    if ((error as { code?: string } | null)?.code !== PG_UNDEFINED_COLUMN) throw error;
-    logger.warn(
-      { conversationId: scope.conversationId },
-      '[chat] web_conversations.activated_at is missing (migration 0268 not applied?)',
-    );
-    return null;
-  }
 }
 
 /**
@@ -176,154 +132,30 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     parentId,
   } = validationResult.data;
 
-  const [conversation] = await db.query<{
-    id: string;
-    model: string | null;
-    active_leaf_message_id: string | null;
-  }>(
-    `
-      select id, model, active_leaf_message_id
-      from web_conversations
-      where id = $1
-        and user_id = $2
-        and organization_id is not distinct from $3
-        and deleted_at is null
-      limit 1
-    `,
-    [conversationId, userId, organizationId],
-  );
-
-  if (!conversation) {
-    throw createError.notFound('Conversation not found');
-  }
-
   // All web callers pass skipLlm: true (streaming is handled by /api/llm/v1/chat/completions).
   // The skipLlm=false LLM-inline path was removed as it had zero production callers.
   if (!skipLlm) {
     logger.warn({ conversationId }, 'skipLlm=false is no longer supported; treating as true');
   }
 
-  const activeLeafMessageId = conversation.active_leaf_message_id ?? null;
-  const threadScope = { conversationId, userId, organizationId };
-  const storedMetadata = await resolveSavedMessageSourceUrls(
-    normalizeMessageMetadata(metadata) ?? {},
-  );
-  const insertParams = (parent: string | null): unknown[] => [
-    clientMessageId ?? null,
-    conversationId,
-    role,
-    content.trim(),
-    role === 'assistant' ? (model ?? null) : null,
-    JSON.stringify(storedMetadata),
-    parent,
-  ];
-
-  let message: ChatMessageRow | undefined;
-  try {
-    // A conversation nobody has branched, written to by a client that names no
-    // parent, takes the same single statement it always has. Only a write that
-    // is part of a tree pays for the row lock.
-    if (parentId === undefined && activeLeafMessageId === null) {
-      [message] = await db.query<ChatMessageRow>(INSERT_MESSAGE_SQL, insertParams(null));
-    } else {
-      message = await db.transaction(async (tx) => {
-        const lockedLeafMessageId = await lockConversationThread(tx, threadScope);
-        if (parentId !== undefined && parentId !== null) {
-          await assertParentInConversation(tx, conversationId, parentId);
-        }
-        // Before the insert, so the rows that already exist are chained and the
-        // new one is left wherever the caller put it. Gated on the tree rather
-        // than the leaf: deleting a root the reader was sitting on puts the leaf
-        // back to null without undoing a single branch, and converting again
-        // there would fold the sibling roots into one line.
-        if (lockedLeafMessageId === null && (await conversationIsUnbranched(tx, conversationId))) {
-          await stampLinearParents(tx, conversationId);
-        }
-
-        const [inserted] = await tx.query<ChatMessageRow>(
-          INSERT_MESSAGE_SQL,
-          insertParams(resolveParentId(parentId, lockedLeafMessageId)),
-        );
-        if (!inserted) {
-          throw createError.validation('Message id belongs to another conversation');
-        }
-
-        await setActiveLeaf(tx, threadScope, inserted.id);
-        return inserted;
-      });
-    }
-  } catch (error) {
-    if (isHttpError(error)) throw error;
-    logger.error({ error }, 'Failed to save message');
-    throw createError.internal('Failed to save message');
-  }
-
-  // Index any artifacts this assistant message produces, so the gallery can
-  // list them without this (or any other) device having opened the
-  // conversation. Metadata only, the content stays in the message and is
-  // re-derived on demand. Fire-and-forget: the index is a discovery aid, so it
-  // must never delay or fail saving the message.
-  if (role === 'assistant' && message?.id) {
-    scheduleArtifactIndexing({
-      db,
-      userId,
-      conversationId,
-      messageId: message.id,
-      content: content.trim(),
-    });
-  }
-
-  // Auto-title conversation from first user message. Two stages: an
-  // immediate character truncation (below, synchronous, the row must never
-  // sit blank), then a short LLM-generated title that replaces it in the
-  // background once ready (agentic-modes-gap-06). Generation is fire-and-forget
-  // so a slow or failing provider can never delay or break this response.
-  if (role === 'user' && message?.id) {
-    const activated = await markConversationActivated(db, {
-      conversationId,
-      userId,
-      organizationId,
-    });
-    let isFirstUserMessage = activated === true;
-    if (activated === null) {
-      const [row] = await db.query<{ count: string }>(
-        'select count(*)::text as count from web_messages where conversation_id = $1 and deleted_at is null',
-        [conversationId],
-      );
-      isFirstUserMessage = Number(row?.count ?? 0) <= 1;
-    }
-
-    if (isFirstUserMessage) {
-      // First message - immediate truncated title
-      const truncatedTitle = content.slice(0, 50) + (content.length > 50 ? '...' : '');
-      await db.execute(
-        `update web_conversations
-            set title = $1, updated_at = now()
-          where id = $2
-            and user_id = $3
-            and organization_id is not distinct from $4`,
-        [truncatedTitle, conversationId, userId, organizationId],
-      );
-
-      if (!getProviderOffering(conversation.model ?? ''))
-        scheduleConversationTitleGeneration({
-          db,
-          conversationId,
-          userId,
-          organizationId,
-          content,
-          expectedCurrentTitle: truncatedTitle,
-        });
-    }
-  }
+  const message = await persistConversationMessage({
+    db,
+    scope: { conversationId, userId, organizationId },
+    message: {
+      ...(clientMessageId ? { id: clientMessageId } : {}),
+      content,
+      metadata,
+      model,
+      role,
+      ...(parentId !== undefined ? { parentId } : {}),
+    },
+  });
 
   return NextResponse.json({
     // Normalize the RETURNING row's Date timestamps to ISO before validating, or
     // the wire schema throws a ZodError (created_at "expected string, received
     // Date") -> 400 -> the client's "Couldn't save your message" toast.
-    message: message
-      ? ManagedCloudMessageWireSchema.parse(withIsoTimestamps([message])[0])
-      : undefined,
+    message: ManagedCloudMessageWireSchema.parse(withIsoTimestamps([message])[0]),
   });
 }
 

@@ -24,7 +24,7 @@ export function CitationPill({ citation, className }: CitationPillProps) {
       aria-label={`Open citation: ${fullTitle}`}
       className={cn(
         'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full',
-        'bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)] text-[12px]',
+        'bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)] text-caption',
         'hover:bg-[var(--chat-surface-overlay)] cursor-pointer transition-colors',
         className,
       )}
@@ -36,7 +36,7 @@ export function CitationPill({ citation, className }: CitationPillProps) {
           aria-hidden
           width={12}
           height={12}
-          className="rounded-[2px] shrink-0 object-contain"
+          className="rounded-detail shrink-0 object-contain"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = 'none';
           }}

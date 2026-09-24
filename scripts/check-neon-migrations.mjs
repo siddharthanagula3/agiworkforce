@@ -527,6 +527,121 @@ export function quotingErrors(displayPath, sql) {
   return errors;
 }
 
+export function topLevelStatements(sql) {
+  const statements = [];
+  let current = '';
+  let index = 0;
+  while (index < sql.length) {
+    const character = sql[index];
+
+    if (character === '-' && sql[index + 1] === '-') {
+      const newline = sql.indexOf('\n', index);
+      index = newline === -1 ? sql.length : newline + 1;
+      current += ' ';
+      continue;
+    }
+
+    if (character === '/' && sql[index + 1] === '*') {
+      const close = sql.indexOf('*/', index + 2);
+      index = close === -1 ? sql.length : close + 2;
+      current += ' ';
+      continue;
+    }
+
+    if (character === '$') {
+      const tag = DOLLAR_TAG.exec(sql.slice(index))?.[0];
+      if (tag) {
+        const close = sql.indexOf(tag, index + tag.length);
+        index = close === -1 ? sql.length : close + tag.length;
+        current += ' $body$ ';
+        continue;
+      }
+    }
+
+    if (character === "'" || character === '"') {
+      const close = skipDelimited(sql, index, character);
+      index = close === -1 ? sql.length : close;
+      current += ` ${character}${character} `;
+      continue;
+    }
+
+    if (character === ';') {
+      statements.push(current);
+      current = '';
+      index += 1;
+      continue;
+    }
+
+    current += character;
+    index += 1;
+  }
+  statements.push(current);
+  return statements
+    .map((statement) => statement.replace(/\s+/g, ' ').trim().toLowerCase())
+    .filter((statement) => statement.length > 0);
+}
+
+const TRANSACTION_OPEN = /^(?:begin|start transaction)(?: (?:work|transaction|isolation .*))?$/;
+const TRANSACTION_CLOSE = /^(?:commit|end)(?: (?:work|transaction))?$/;
+
+/**
+ * Migrations that commit in stages. Each is checksummed in every ledger that
+ * applied it, so its body cannot change; the set may shrink, never grow.
+ */
+export const STAGED_COMMIT_BASELINE = new Map([
+  [
+    '0182_managed_usage_microusd_ledger.sql',
+    'moves the credit ledger to microUSD in six blocks, each committed before the next begins',
+  ],
+  [
+    '0243_billing_contract_term_ordering.sql',
+    'adds the term ordering constraint NOT VALID and validates it in a second commit',
+  ],
+  [
+    '0281_managed_usage_overage_classification.sql',
+    'classifies overage requests, then backfills requests and ledger rows, in three commits',
+  ],
+]);
+
+export function transactionControlErrors(filename, sql) {
+  const statements = topLevelStatements(sql);
+  const opens = statements.flatMap((statement, at) =>
+    TRANSACTION_OPEN.test(statement) ? [at] : [],
+  );
+  const closes = statements.flatMap((statement, at) =>
+    TRANSACTION_CLOSE.test(statement) ? [at] : [],
+  );
+  const runnerOwnsTransaction = opens.length === 0 && closes.length === 0;
+  const oneEnclosingBlock =
+    opens.length === 1 &&
+    closes.length === 1 &&
+    opens[0] === 0 &&
+    closes[0] === statements.length - 1;
+  const atomic = runnerOwnsTransaction || oneEnclosingBlock;
+
+  if (STAGED_COMMIT_BASELINE.has(filename)) {
+    return atomic
+      ? [
+          `STAGED_COMMIT_BASELINE names ${filename}, which now applies in one transaction. ` +
+            `Remove it from the set.`,
+        ]
+      : [];
+  }
+  if (atomic) return [];
+
+  const shape =
+    opens.length > 1 || closes.length > 1
+      ? `${Math.max(opens.length, closes.length)} transaction blocks`
+      : 'a statement outside its BEGIN ... COMMIT';
+  return [
+    `${MIGRATIONS_DIR}/${filename} has ${shape}. The runner applies a migration inside one ` +
+      `transaction and writes its ledger row after the last statement; a COMMIT part way through ` +
+      `ends that transaction early, so a later failure leaves the earlier part applied and no ` +
+      `ledger row saying so. Keep every statement inside one BEGIN ... COMMIT, leave transaction ` +
+      `control to the runner, or split the stages into consecutive migrations.`,
+  ];
+}
+
 function checkDownMigrations(root, upFilenames, errors) {
   const downDir = path.join(root, DOWN_MIGRATIONS_DIR);
   const downFilenames = fs.existsSync(downDir)
@@ -650,6 +765,16 @@ function checkNeonMigrations(root) {
       errors.push(...quotingErrors(`${MIGRATIONS_DIR}/${filename}`, sql));
       errors.push(...destructiveMarkerErrors(filename, sql));
       errors.push(...expandContractErrors(filename, sql));
+      errors.push(...transactionControlErrors(filename, sql));
+    }
+
+    for (const filename of STAGED_COMMIT_BASELINE.keys()) {
+      if (!sources.has(filename)) {
+        errors.push(
+          `STAGED_COMMIT_BASELINE names ${filename}, which ${MIGRATIONS_DIR} no longer contains. ` +
+            `Remove it from the set.`,
+        );
+      }
     }
 
     for (const filename of UNMARKED_DESTRUCTIVE_BASELINE) {

@@ -137,6 +137,11 @@ async function* failedGenerator(): AsyncGenerator<Uint8Array> {
   yield encoder.encode('data: [DONE]\n\n');
 }
 
+async function* silentGenerator(): AsyncGenerator<Uint8Array> {
+  const encoder = new TextEncoder();
+  yield encoder.encode('data: [DONE]\n\n');
+}
+
 async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
   const encoder = new TextEncoder();
   yield encoder.encode(
@@ -588,6 +593,38 @@ describe('managed agent stream', () => {
     await reader.cancel();
 
     expect(onTerminal).toHaveBeenCalledWith('cancelled');
+  });
+
+  it('records a run that produced nothing as an unfinished turn, not a completed one', async () => {
+    persistenceMocks.execute.mockClear();
+    const persistable = {
+      ...processed,
+      requestId: 'request-silent-fixture',
+      conversationId: '0190a000-0000-7000-8000-000000000007',
+      assistantMessageId: '0190a000-0000-7000-8000-000000000008',
+      conversationIsTemporary: false,
+    } as ProcessedRequest;
+
+    await readAll(
+      buildManagedAgentStream({
+        generator: silentGenerator(),
+        processed: persistable,
+        usage: createObservedProviderUsage(),
+        completionReason: 'tool_loop_completed',
+        cancellationReason: 'client_cancelled_tool_loop',
+        userId: 'user-fixture',
+      }),
+    );
+
+    const call = persistenceMocks.execute.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_messages'),
+    );
+    expect(call).toBeDefined();
+    const metadata = JSON.parse(String((call?.[1] as unknown[] | undefined)?.[7])) as Record<
+      string,
+      unknown
+    >;
+    expect(metadata['truncated']).toBe(true);
   });
 
   it('persists validated cards for a detached turn and caps them before metadata serialization', async () => {

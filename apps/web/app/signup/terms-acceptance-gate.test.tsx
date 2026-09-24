@@ -111,4 +111,59 @@ describe('/signup agreement', () => {
     );
     expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBe(POLICY_LAST_UPDATED.terms);
   });
+
+  it('does not leave an acceptance marker behind after signup initiation fails', async () => {
+    window.localStorage.setItem(TERMS_GATE_STORAGE_KEY, POLICY_LAST_UPDATED.terms);
+    signUpState.create.mockResolvedValue({
+      error: { errors: [{ code: 'form_identifier_exists' }] },
+    });
+    renderSignup();
+
+    await userEvent.type(screen.getByLabelText('Email address'), 'existing@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(signUpState.create).toHaveBeenCalled());
+    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+  });
+
+  it('recovers from a rejected email signup request without claiming agreement was recorded', async () => {
+    signUpState.create.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderSignup();
+
+    await userEvent.type(screen.getByLabelText('Email address'), 'person@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(
+      await screen.findByText(
+        'We could not reach the server. Check your connection and try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
+  it('clears the signup marker when a provider handoff is refused', async () => {
+    signUpState.sso.mockResolvedValue({
+      error: { errors: [{ code: 'oauth_access_denied' }] },
+    });
+    renderSignup();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() => expect(signUpState.sso).toHaveBeenCalled());
+    await waitFor(() => expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull());
+  });
+
+  it('clears the signup marker and offers a retry when the provider handoff throws', async () => {
+    signUpState.sso.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderSignup();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() => expect(window.localStorage.getItem(TERMS_GATE_STORAGE_KEY)).toBeNull());
+    expect(
+      screen.getByText('We could not reach the server. Check your connection and try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeEnabled();
+  });
 });

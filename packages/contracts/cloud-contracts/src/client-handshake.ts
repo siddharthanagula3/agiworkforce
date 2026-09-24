@@ -7,7 +7,7 @@
 
 import type { SourceSurface } from '@agiworkforce/types';
 
-import { CLIENT_VERSION_HEADER } from './me';
+import { CLIENT_VERSION_HEADER } from './header-names';
 
 export const SURFACE_REQUEST_HEADER = 'x-agi-surface';
 export const CLIENT_NAME_REQUEST_HEADER = 'x-client';

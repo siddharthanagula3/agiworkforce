@@ -65,7 +65,7 @@ const FREE_CAPACITY_UNAVAILABLE_CODE = 'free_capacity_unavailable';
 const FREE_CAPACITY_UNAVAILABLE_STATUS = 429;
 const FREE_CAPACITY_UNAVAILABLE_TYPE = 'insufficient_quota';
 const FREE_CAPACITY_UNAVAILABLE_MESSAGE =
-  'No free capacity right now. Try again shortly, upgrade your plan, or use your own provider key.';
+  'No free capacity right now. Try again shortly, or use your own provider key. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.';
 const RETRY_AFTER_HEADER = 'Retry-After';
 const ROUTE_ID_SEPARATOR = '/';
 const BYOK_HREF = '/byok';

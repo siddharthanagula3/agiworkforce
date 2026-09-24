@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -15,10 +15,65 @@ vi.mock('@/lib/services/org-entitlements', () => ({
   resolveOrganizationEntitlementPlan: vi.fn(async () => entitlement.plan),
 }));
 
+import { X509Certificate } from 'node:crypto';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { readWorkspacePosture, type PostureSignal } from '../workspace-posture-service';
+import { AUDIT_STREAM_CONTINUITY_ALERT_MINUTES } from '../audit-streaming-service';
+import {
+  CERTIFICATE_ATTENTION_DAYS,
+  MIN_RECOMMENDED_OWNERS,
+  readWorkspacePosture,
+  type PostureSignal,
+} from '../workspace-posture-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+
+/**
+ * A self-signed certificate, as an identity provider publishes it inside its
+ * SAML metadata: base64 DER, public half only. Every expiry assertion below
+ * moves the clock relative to this certificate's own notAfter rather than
+ * naming a date, so the fixture never expires out from under the suite.
+ */
+const IDP_CERTIFICATE_DER =
+  'MIIDFzCCAf+gAwIBAgIUV9/JaOgVPSBHmRF1JBs96f3TXycwDQYJKoZIhvcNAQELBQAwGzEZMBcGA1UEAwwQaWRw' +
+  'LmV4YW1wbGUudGVzdDAeFw0yNjA5MjExNjU4MjlaFw0zNjA5MTgxNjU4MjlaMBsxGTAXBgNVBAMMEGlkcC5leGFt' +
+  'cGxlLnRlc3QwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC/L/EwTJX3X6T+2H74tBO/iC0TSYo7902e' +
+  'iVUgzZpDsQMlpLRcnx7ULlYz9vfEzBJ9UjdZFsa69iAt5OEAuqZpXN9uZmbehsjsCQe7j12sHZcfNSii49PvHRTl' +
+  'WWCROqRdA/RzUBnqU3jWXIR5T9jpr1pPXiI2W4JI41KC7jBTMw0VGIMidj/dio8fDKH5D2K7LOWwjd1NCovRw4Y4' +
+  'IdejcDnpxEQl/NYxlCOAZl1oquiG3+mwaMuZRVHTjC0mFX4Yh2XO7cUlwb8MWuVpQZ/OPQCQNc3SR3D8L+KKDCn8' +
+  'YE73a6Pqt36XWwuy5OLERixYMtJekllKmaviUcasKhgHAgMBAAGjUzBRMB0GA1UdDgQWBBQXds4mcYI4flmx5IRK' +
+  'vtWLgCrqoTAfBgNVHSMEGDAWgBQXds4mcYI4flmx5IRKvtWLgCrqoTAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3' +
+  'DQEBCwUAA4IBAQAQ55Z/GOJ37eQxSnEAqBTLSPhfIGXhvdiv0jaERswlATvvar4tbYZ5a4lBVdG+Uve7bwbKPpOe' +
+  'FE/HZ7lLQMFgskwIXxuw4s3QpEdQWrP8gqyZzbYVgcdypTTHEtvUkP2ABNkrfbf+58MpUaa+2ZzdFFPkKjeFY6bN' +
+  'Yvg7gHN2hOtPdcoZyPYGcPWmjFX4DEOODAAqa1c/5zULMnvmAUJFx1Wrg9HcXy5IG0+0jd1ZkyYoaa1/zCRTh7Wa' +
+  'jaQ5I2irkpElal9fYvQefIwGktWpmw4EvM4eiTjzei5pnWV2iwFXCcQkJABnNi1dB0zAHol5eO8bVz34nrecBh1/' +
+  'ed08';
+
+const CERTIFICATE_EXPIRES_AT = new Date(
+  new X509Certificate(Buffer.from(IDP_CERTIFICATE_DER, 'base64')).validTo,
+).getTime();
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function samlMetadata(certificate: string): string {
+  return [
+    '<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata">',
+    '<md:IDPSSODescriptor><md:KeyDescriptor use="signing"><ds:KeyInfo>',
+    `<ds:X509Data><ds:X509Certificate>${certificate}</ds:X509Certificate></ds:X509Data>`,
+    '</ds:KeyInfo></md:KeyDescriptor></md:IDPSSODescriptor></md:EntityDescriptor>',
+  ].join('');
+}
+
+function samlConnection(metadataXml: string | null) {
+  return {
+    domain: 'acme.test',
+    provider_type: 'saml',
+    is_active: true,
+    domain_verified_at: '2026-08-01T00:00:00.000Z',
+    clerk_connection_id: 'conn_1',
+    metadata_xml: metadataXml,
+  };
+}
 
 interface Fixture {
   roles?: { role: string; count: number }[];
@@ -29,6 +84,7 @@ interface Fixture {
     is_active: boolean;
     domain_verified_at: string | null;
     clerk_connection_id: string | null;
+    metadata_xml?: string | null;
   }[];
   directory?: { provider: string; is_active: boolean; last_sync_at: string | null }[];
   scimTokens?: number;
@@ -43,6 +99,7 @@ interface Fixture {
   connectorRules?: [number, number, boolean] | null;
   spendLimit?: { cap: number; enforcement: string } | null;
   auditDestination?: { enabled: boolean; failures: number } | null;
+  streamBacklog?: { buffered: number; oldestUndeliveredAt: string } | null;
   policyRow?: Record<string, unknown> | null;
   org?: { name: string | null; licensed_seats: number | null; seats_consumed: number | null };
   encryptionKey?: Record<string, unknown> | null;
@@ -82,7 +139,9 @@ function harness(fixture: Fixture = {}) {
       );
     }
     if (text.includes('from public.organization_invitations')) return count(fixture.invitations);
-    if (text.includes('from public.sso_connections')) return fixture.sso ?? [];
+    if (text.includes('from public.sso_connections')) {
+      return (fixture.sso ?? []).map((row) => ({ metadata_xml: null, ...row }));
+    }
     if (text.includes('from public.directory_sync_connections')) return fixture.directory ?? [];
     if (text.includes('from public.scim_tokens')) return count(fixture.scimTokens);
     if (text.includes('from public.scim_provisioned_users')) return count(fixture.scimUsers);
@@ -97,6 +156,18 @@ function harness(fixture: Fixture = {}) {
     if (text.includes('from public.organization_audit_destinations')) {
       const a = fixture.auditDestination;
       if (a === undefined || a === null) return [];
+      if (text.includes('count(e.id)')) {
+        const backlog = fixture.streamBacklog;
+        if (!backlog) return [];
+        return [
+          {
+            organization_id: ORG,
+            buffered: backlog.buffered,
+            oldest_undelivered_at: backlog.oldestUndeliveredAt,
+            consecutive_failures: a.failures,
+          },
+        ];
+      }
       return [{ enabled: a.enabled, consecutive_failures: a.failures, last_delivered_at: null }];
     }
     if (text.includes('from public.organization_spend_limits')) {
@@ -284,6 +355,42 @@ describe('readWorkspacePosture', () => {
     expect(s.enforcement).toBe('enforced');
   });
 
+  it('does not call a silent receiver healthy just because nothing errored', async () => {
+    // A receiver that accepts the connection and files nothing leaves the
+    // failure counter at zero while the trail stops being current.
+    const h = harness({
+      auditDestination: { enabled: true, failures: 0 },
+      streamBacklog: {
+        buffered: 240,
+        oldestUndeliveredAt: new Date(
+          Date.now() - (AUDIT_STREAM_CONTINUITY_ALERT_MINUTES + 5) * 60_000,
+        ).toISOString(),
+      },
+    });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'siem');
+
+    expect(s.state).toBe('attention');
+    expect(s.value).toMatch(/^Behind by /);
+    expect(s.detail).toContain('240 events are held');
+    expect(s.detail).toMatch(/Nothing is lost/);
+  });
+
+  it('leaves a destination inside the alerting window as delivering', async () => {
+    const h = harness({
+      auditDestination: { enabled: true, failures: 0 },
+      streamBacklog: {
+        buffered: 3,
+        oldestUndeliveredAt: new Date(
+          Date.now() - (AUDIT_STREAM_CONTINUITY_ALERT_MINUTES - 5) * 60_000,
+        ).toISOString(),
+      },
+    });
+    const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'siem');
+
+    expect(s.value).toBe('Delivering');
+    expect(s.state).toBe('ok');
+  });
+
   it('does not call a notify-only spend cap an enforced control', async () => {
     // notify reports a crossing and refuses nothing. Badging it as enforced
     // would tell a finance owner their budget binds when it does not.
@@ -450,6 +557,10 @@ describe('readWorkspacePosture', () => {
 
   it('drops recommendations once the workspace has satisfied them', async () => {
     const h = harness({
+      roles: [
+        { role: 'owner', count: 2 },
+        { role: 'member', count: 3 },
+      ],
       policyRow: {
         organization_id: ORG,
         default_privacy_mode: 'managed',
@@ -492,6 +603,156 @@ describe('readWorkspacePosture', () => {
       expect(s.detail.length).toBeGreaterThan(20);
       expect(s.label.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('readWorkspacePosture, who can administer the workspace', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    entitlement.plan = 'team';
+  });
+
+  it('flags a workspace that only one account can administer', async () => {
+    const h = harness({
+      roles: [
+        { role: 'owner', count: 1 },
+        { role: 'admin', count: 4 },
+        { role: 'member', count: 20 },
+      ],
+    });
+    const posture = await readWorkspacePosture(h.db, ORG);
+    const owners = signal(posture.groups, 'owners');
+
+    expect(owners.value).toBe('1 owner');
+    expect(owners.state).toBe('attention');
+    expect(owners.enforcement).toBe('enforced');
+    expect(posture.recommendations.map((r) => r.id)).toContain('second-owner');
+  });
+
+  it('does not let admins stand in for the missing owner', async () => {
+    // The row this replaced added owners and admins together, so four admins
+    // made a single-owner workspace read as five accounts deep.
+    const h = harness({
+      roles: [
+        { role: 'owner', count: 1 },
+        { role: 'admin', count: 4 },
+      ],
+    });
+    const posture = await readWorkspacePosture(h.db, ORG);
+
+    expect(signal(posture.groups, 'members').detail).toContain('1 owner and 4 admins');
+    expect(signal(posture.groups, 'owners').state).toBe('attention');
+  });
+
+  it('is satisfied once a second owner exists', async () => {
+    const h = harness({
+      roles: [
+        { role: 'owner', count: MIN_RECOMMENDED_OWNERS },
+        { role: 'member', count: 1 },
+      ],
+    });
+    const posture = await readWorkspacePosture(h.db, ORG);
+
+    expect(signal(posture.groups, 'owners').state).toBe('ok');
+    expect(posture.recommendations.map((r) => r.id)).not.toContain('second-owner');
+  });
+
+  it('says plainly when no account holds the role at all', async () => {
+    const h = harness({ roles: [{ role: 'member', count: 3 }] });
+    const owners = signal((await readWorkspacePosture(h.db, ORG)).groups, 'owners');
+
+    expect(owners.value).toBe('None');
+    expect(owners.state).toBe('attention');
+  });
+});
+
+describe('readWorkspacePosture, identity provider certificate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    entitlement.plan = 'team';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function certificateSignalAt(offsetMs: number, metadataXml: string | null) {
+    vi.useFakeTimers();
+    vi.setSystemTime(CERTIFICATE_EXPIRES_AT + offsetMs);
+    const h = harness({ sso: [samlConnection(metadataXml)] });
+    return signal((await readWorkspacePosture(h.db, ORG)).groups, 'sso-certificate');
+  }
+
+  it('reads the expiry out of the metadata the workspace uploaded', async () => {
+    const certificate = await certificateSignalAt(-400 * DAY_MS, samlMetadata(IDP_CERTIFICATE_DER));
+
+    expect(certificate.value).toMatch(/^Valid until /);
+    expect(certificate.state).toBe('ok');
+    expect(certificate.enforcement).toBe('enforced');
+  });
+
+  it('asks for attention before the expiry stops sign-in, not after', async () => {
+    const certificate = await certificateSignalAt(
+      -(CERTIFICATE_ATTENTION_DAYS - 1) * DAY_MS,
+      samlMetadata(IDP_CERTIFICATE_DER),
+    );
+
+    expect(certificate.value).toMatch(/^Expires /);
+    expect(certificate.state).toBe('attention');
+    expect(certificate.detail).toMatch(/every member at once/);
+  });
+
+  it('reports an expired certificate as the sign-in outage it is', async () => {
+    const certificate = await certificateSignalAt(DAY_MS, samlMetadata(IDP_CERTIFICATE_DER));
+
+    expect(certificate.value).toMatch(/^Expired /);
+    expect(certificate.state).toBe('attention');
+    expect(certificate.detail).toMatch(/fails for every member/);
+  });
+
+  it('takes the earliest expiry when the metadata carries more than one certificate', async () => {
+    const twoCertificates = samlMetadata(IDP_CERTIFICATE_DER).replace(
+      '</ds:X509Data>',
+      `<ds:X509Certificate>${IDP_CERTIFICATE_DER}</ds:X509Certificate></ds:X509Data>`,
+    );
+    const certificate = await certificateSignalAt(DAY_MS, twoCertificates);
+
+    expect(certificate.value).toMatch(/^Expired /);
+  });
+
+  it('does not claim to have checked a connection configured from a metadata URL', async () => {
+    const certificate = await certificateSignalAt(-400 * DAY_MS, null);
+
+    expect(certificate.value).toBe('Not verified');
+    expect(certificate.state).toBe('attention');
+    expect(certificate.enforcement).toBe('unconfigured');
+  });
+
+  it('does not invent a certificate requirement for an OIDC connection', async () => {
+    const h = harness({
+      sso: [
+        {
+          domain: 'acme.test',
+          provider_type: 'oidc',
+          is_active: true,
+          domain_verified_at: '2026-08-01T00:00:00.000Z',
+          clerk_connection_id: 'conn_1',
+        },
+      ],
+    });
+    const certificate = signal((await readWorkspacePosture(h.db, ORG)).groups, 'sso-certificate');
+
+    expect(certificate.value).toBe('Not applicable');
+    expect(certificate.state).toBe('ok');
+  });
+
+  it('does not read a certificate out of a connection that is switched off', async () => {
+    const h = harness({
+      sso: [{ ...samlConnection(samlMetadata(IDP_CERTIFICATE_DER)), is_active: false }],
+    });
+    const certificate = signal((await readWorkspacePosture(h.db, ORG)).groups, 'sso-certificate');
+
+    expect(certificate.value).toBe('Not applicable');
   });
 });
 

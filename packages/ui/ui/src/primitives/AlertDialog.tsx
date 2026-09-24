@@ -20,7 +20,7 @@ function AlertDialogOverlay({ className, ref, ...props }: AlertDialogOverlayProp
   return (
     <AlertDialogPrimitive.Overlay
       className={cn(
-        'fixed inset-0 z-[var(--z-modal,300)] bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'fixed inset-0 z-[var(--z-modal)] bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         className,
       )}
       {...props}
@@ -90,7 +90,7 @@ function AlertDialogContent({ className, ref, opener, ...props }: AlertDialogCon
           // while Cancel and Send sat at y=462-502, and a wheel over the dialog
           // moved nothing. Scrolling the content keeps every control reachable;
           // the x axis stays hidden so the rounded corners still clip.
-          'fixed left-[50%] top-[50%] z-[var(--z-modal,300)] grid w-[min(96vw,36rem)] max-h-[calc(100vh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-border/70 bg-background/95 p-6 shadow-[0_32px_120px_-32px_rgba(0,0,0,0.65)] backdrop-blur-xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
+          'fixed left-[50%] top-[50%] z-[var(--z-modal)] grid w-[min(96vw,36rem)] max-h-[calc(100dvh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-border/70 bg-background/95 p-6 shadow-[0_32px_120px_-32px_rgba(0,0,0,0.65)] backdrop-blur-xl duration-quick data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
           className,
         )}
         {...props}

@@ -104,9 +104,11 @@ const DEFINITION_COLUMNS = `key, description, kill_switch, variants, default_var
 
 let cachedDefinitions: { definitions: readonly FlagDefinition[]; expiresAtMs: number } | null =
   null;
+let inFlightDefinitions: Promise<readonly FlagDefinition[]> | null = null;
 
 export function resetFlagDefinitionCache(): void {
   cachedDefinitions = null;
+  inFlightDefinitions = null;
 }
 
 export async function listFlagDefinitions(
@@ -135,6 +137,15 @@ export async function getActiveFlagDefinitions(
   if (cachedDefinitions && cachedDefinitions.expiresAtMs > nowMs) {
     return cachedDefinitions.definitions;
   }
+  // One read per expiry, taken with no await before it: concurrent requests
+  // share it instead of each querying the table at once.
+  inFlightDefinitions ??= readActiveFlagDefinitions(nowMs).finally(() => {
+    inFlightDefinitions = null;
+  });
+  return inFlightDefinitions;
+}
+
+async function readActiveFlagDefinitions(nowMs: number): Promise<readonly FlagDefinition[]> {
   try {
     const definitions = await listFlagDefinitions();
     cachedDefinitions = { definitions, expiresAtMs: nowMs + DEFINITION_CACHE_TTL_MS };

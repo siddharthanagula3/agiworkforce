@@ -32,25 +32,6 @@ type ModelCapabilities = Pick<
   | 'search'
 >;
 
-interface ModelInputTokenPricingTier {
-  thresholdTokens: number;
-  inputPerMillion: number;
-  outputPerMillion: number;
-  cachedInputPerMillion?: number;
-  cachedWritePerMillion?: number;
-  cachedWrite1hPerMillion?: number;
-}
-
-interface ModelPricing {
-  basis: 'base';
-  inputPerMillion: number;
-  outputPerMillion: number;
-  cachedInputPerMillion?: number;
-  cachedWritePerMillion?: number;
-  cachedWrite1hPerMillion?: number;
-  inputTokenPricingTiers: ModelInputTokenPricingTier[];
-}
-
 export type ModelAvailabilityStatus = { state: 'available' } | ProviderAvailabilitySignal;
 
 export interface ModelLifecycle {
@@ -66,7 +47,6 @@ export interface ModelEntry {
   category: 'chat' | 'code' | 'reasoning' | 'image' | 'video' | 'other';
   contextWindow: number | null;
   maxOutputTokens: number | null;
-  pricing: ModelPricing;
   capabilities: ModelCapabilities;
   speed: string | null;
   quality: string | null;
@@ -127,26 +107,6 @@ function toModelEntry(
     category: toCategory(raw.modelType),
     contextWindow: raw.contextWindow ?? null,
     maxOutputTokens: raw.maxOutputTokens ?? null,
-    pricing: {
-      basis: 'base',
-      inputPerMillion: raw.inputCost,
-      outputPerMillion: raw.outputCost,
-      ...(raw.cached_input === undefined ? {} : { cachedInputPerMillion: raw.cached_input }),
-      ...(raw.cached_write === undefined ? {} : { cachedWritePerMillion: raw.cached_write }),
-      ...(raw.cached_write_1h === undefined
-        ? {}
-        : { cachedWrite1hPerMillion: raw.cached_write_1h }),
-      inputTokenPricingTiers: (raw.inputTokenPricingTiers ?? []).map((tier) => ({
-        thresholdTokens: tier.thresholdTokens,
-        inputPerMillion: tier.inputCost,
-        outputPerMillion: tier.outputCost,
-        ...(tier.cached_input === undefined ? {} : { cachedInputPerMillion: tier.cached_input }),
-        ...(tier.cached_write === undefined ? {} : { cachedWritePerMillion: tier.cached_write }),
-        ...(tier.cached_write_1h === undefined
-          ? {}
-          : { cachedWrite1hPerMillion: tier.cached_write_1h }),
-      })),
-    },
     capabilities: {
       vision: caps.vision,
       tools: caps.tools,

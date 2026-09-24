@@ -447,6 +447,99 @@ export async function type(
   );
 }
 
+/**
+ * Page-side: the signature of the element keystrokes would land on. Focus is
+ * followed into shadow roots and same-origin frames; a frame that cannot be
+ * read (a payment or sign-in iframe) answers null, which the gate treats as
+ * an unidentified field rather than as an ordinary one.
+ */
+export const FOCUSED_FIELD_SIGNATURE_JS = `((doc) => {
+  const signatureOf = ${ELEMENT_SIGNATURE_JS};
+  let el = doc.activeElement;
+  for (let depth = 0; el && depth < 32; depth += 1) {
+    if (el.shadowRoot && el.shadowRoot.activeElement) {
+      el = el.shadowRoot.activeElement;
+      continue;
+    }
+    if (el.localName === 'iframe' || el.localName === 'frame') {
+      let inner = null;
+      try {
+        inner = el.contentDocument ? el.contentDocument.activeElement : null;
+      } catch (e) {
+        inner = null;
+      }
+      if (!inner) return null;
+      el = inner;
+      continue;
+    }
+    break;
+  }
+  if (!el || el.localName === 'body' || el.localName === 'html') return null;
+  if (el.localName === 'object' || el.localName === 'embed') return null;
+  return signatureOf(el);
+})`;
+
+/**
+ * The signature of whatever currently holds focus, in the same shape an indexed
+ * element carries. A `type` with no index lands on this element, so the approval
+ * gate has to read it before the keystrokes rather than after.
+ */
+export async function getFocusedFieldSignature(
+  tabId: number,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  return withDebugger(
+    tabId,
+    async () => {
+      const evalResult = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.evaluate',
+        {
+          expression: `(${FOCUSED_FIELD_SIGNATURE_JS})(document)`,
+          returnByValue: true,
+        },
+        signal,
+      );
+      if (evalResult.exceptionDetails) return null;
+      const value = evalResult.result.value;
+      return typeof value === 'string' && value.length > 0 ? value : null;
+    },
+    signal,
+  );
+}
+
+/** Page offset, read so a scroll can be settled against a change it caused. */
+export async function readScrollPosition(
+  tabId: number,
+  signal?: AbortSignal,
+): Promise<{ x: number; y: number } | null> {
+  return withDebugger(
+    tabId,
+    async () => {
+      const evalResult = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.evaluate',
+        {
+          expression: `JSON.stringify({ x: Math.round(window.scrollX), y: Math.round(window.scrollY) })`,
+          returnByValue: true,
+        },
+        signal,
+      );
+      if (evalResult.exceptionDetails) return null;
+      const value = evalResult.result.value;
+      if (typeof value !== 'string') return null;
+      try {
+        const parsed = JSON.parse(value) as { x?: unknown; y?: unknown };
+        if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return null;
+        return { x: parsed.x, y: parsed.y };
+      } catch {
+        return null;
+      }
+    },
+    signal,
+  );
+}
+
 export async function getPageContent(tabId: number, signal?: AbortSignal): Promise<string> {
   return withDebugger(
     tabId,

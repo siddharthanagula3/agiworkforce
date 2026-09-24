@@ -65,6 +65,7 @@
     "untitled": "عنصر منشور",
     "publishedOn": "نُشر في {{date}}",
     "sharedFrom": "تمت المشاركة من AGI",
+    "sharedWithWorkspace": "تمت المشاركة مع مساحة عملك",
     "renderFailed": "تعذّر عرض هذا العنصر: {{error}}",
     "svgUnavailable": "لا يحتوي ملف SVG هذا على أي محتوى يمكن عرضه بأمان."
   },

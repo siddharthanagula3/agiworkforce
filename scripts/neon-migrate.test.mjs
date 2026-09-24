@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   MIGRATION_RUNNER_VERSION,
+  applyMigrations,
   expectedTablesAfter,
   inspectMigrationState,
   ledgerDigest,
@@ -291,4 +292,83 @@ test('route-table extraction reads the first CTE of a WITH RECURSIVE as an alias
 
 test('every literal route relation is owned by the canonical migration chain', () => {
   assert.deepEqual(missingRouteTableMigrations(process.cwd()), []);
+});
+
+function applyDatabase(failingStatement) {
+  const statements = [];
+  const ledger = [];
+  const client = {
+    async query(statement, params = []) {
+      statements.push(statement.replace(/\s+/g, ' ').trim());
+      if (statement.includes('to_regclass')) {
+        return { rows: [{ relation: 'public.schema_migrations' }] };
+      }
+      if (/^\s*SELECT sequence, filename/i.test(statement)) return { rows: [...ledger] };
+      if (/^\s*INSERT INTO public\.schema_migrations/i.test(statement)) {
+        const [sequence, filename, checksum] = params;
+        ledger.push({ sequence, filename, checksum });
+        return { rows: [] };
+      }
+      if (failingStatement && statement.includes(failingStatement)) {
+        throw new Error('relation "public.absent" does not exist');
+      }
+      return { rows: [] };
+    },
+  };
+  return { client, statements };
+}
+
+const applyProbe = [
+  {
+    sequence: 1,
+    filename: '0001_probe_first.sql',
+    checksum: 'a'.repeat(64),
+    sql: 'alter table public.absent add column note text;',
+  },
+  {
+    sequence: 2,
+    filename: '0002_probe_second.sql',
+    checksum: 'b'.repeat(64),
+    sql: 'create table public.probe_second (id int);',
+  },
+];
+
+test('a failing migration is rolled back, records nothing and stops the run', async () => {
+  const database = applyDatabase('public.absent');
+
+  await assert.rejects(applyMigrations(database.client, applyProbe, { target: 'ci' }), (error) => {
+    assert.equal(error.name, 'MigrationContractError');
+    assert.match(error.message, /0001_probe_first\.sql failed/);
+    return true;
+  });
+
+  const failedAt = database.statements.findIndex((sent) => sent.includes('public.absent'));
+  assert.deepEqual(database.statements.slice(failedAt - 3, failedAt + 2), [
+    'BEGIN',
+    "SET LOCAL lock_timeout = '10s'",
+    "SET LOCAL statement_timeout = '120s'",
+    'alter table public.absent add column note text;',
+    'ROLLBACK',
+  ]);
+  assert.equal(
+    database.statements.some((sent) => /^INSERT INTO public\.schema_migrations/i.test(sent)),
+    false,
+  );
+  assert.equal(
+    database.statements.some((sent) => sent.includes('probe_second')),
+    false,
+  );
+  assert.match(database.statements.at(-1), /pg_advisory_unlock/);
+});
+
+test('an applied migration writes its ledger row inside its own transaction', async () => {
+  const database = applyDatabase(null);
+
+  const result = await applyMigrations(database.client, applyProbe.slice(1), { target: 'ci' });
+
+  assert.equal(result.appliedNow.length, 1);
+  const applied = database.statements.findIndex((sent) => sent.includes('probe_second'));
+  assert.equal(database.statements[applied - 3], 'BEGIN');
+  assert.match(database.statements[applied + 1], /^INSERT INTO public\.schema_migrations/);
+  assert.equal(database.statements[applied + 2], 'COMMIT');
 });

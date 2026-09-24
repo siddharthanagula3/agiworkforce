@@ -190,9 +190,26 @@ export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderA
         return;
       }
 
-      const watched = withStreamIdleWatchdog(translateGeminiStream(parseGeminiStream(res.body)));
-      for await (const chunk of watched) {
-        yield chunk;
+      // A body that dies after the headers must end the turn as a classified
+      // failure, the same as every other adapter, never as an escaped throw.
+      try {
+        const watched = withStreamIdleWatchdog(translateGeminiStream(parseGeminiStream(res.body)));
+        for await (const chunk of watched) {
+          yield chunk;
+        }
+      } catch (err) {
+        const classified = classifyError(err);
+        yield {
+          type: 'error',
+          message: classified.message,
+          retryable: classified.retryable,
+          ...(classified.status !== undefined ? { code: String(classified.status) } : {}),
+          ...(classified.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: classified.retryAfterSeconds }
+            : {}),
+          classification: toStreamErrorClassification(classified),
+        };
+        yield { type: 'stop', reason: 'error' };
       }
     },
   };

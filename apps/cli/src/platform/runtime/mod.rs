@@ -1,4 +1,6 @@
 pub mod advisor;
+pub mod architecture;
+pub mod change_reason;
 pub mod git;
 pub mod git_tools;
 pub mod session;

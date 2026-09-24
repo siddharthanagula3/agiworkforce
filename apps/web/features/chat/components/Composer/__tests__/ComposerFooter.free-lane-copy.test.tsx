@@ -153,6 +153,7 @@ describe('ComposerFooter · locked model slot copy', () => {
     const slot = lockedSlot();
     expect(slot).toHaveTextContent(LOCKED_MODEL_NAME);
     expect(slot).toHaveAttribute('aria-label', TRIAL_COPY);
+    expect(slot).toHaveClass('pointer-coarse:min-h-11');
   });
 
   it('describes the community lane once the free-lane copy is switched on', () => {

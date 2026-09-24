@@ -11,6 +11,7 @@ import {
 import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
 import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
+import type { SessionBinding } from '../../protocol/webviewMessages';
 
 export function escapeHtml(value: string): string {
   return value
@@ -51,7 +52,10 @@ export function getWebviewContent(
   tier?: string,
   showOnboarding = false,
   initialFollowUpBehavior: ComposerFollowUpBehavior = 'queue',
+  binding: SessionBinding = { origin: 'chat', epoch: 0 },
 ): string {
+  const bindingOrigin = escapeHtml(binding.origin);
+  const bindingEpoch = Math.max(0, Math.trunc(binding.epoch));
   const cspSource = webview.cspSource;
   const modelOptionsHtml = getModelPickerOptionsForTier(tier)
     .map((option) => {
@@ -611,6 +615,23 @@ export function getWebviewContent(
       font-size: 12px;
       line-height: 1.5;
     }
+    .approval-card__verdict {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .approval-card__risk {
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-secondary);
+    }
+    .approval-card__risk--medium { color: var(--warning); border-color: var(--warning-border); }
+    .approval-card__risk--high { color: var(--error); border-color: var(--error-border); }
+    .approval-card__undo { color: var(--text-secondary); }
     .approval-card__detail {
       margin: 8px 0 0;
       padding: 8px 10px;
@@ -2466,7 +2487,7 @@ export function getWebviewContent(
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -2506,7 +2527,18 @@ export function getWebviewContent(
   <script nonce="${nonce}" src="${renderJsUri}"></script>
 
   <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: '${bindingOrigin}', epoch: ${bindingEpoch} };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -4100,11 +4132,23 @@ export function getWebviewContent(
     var sessionsSource = 'local';
     var sessionsRows = [];
     var sessionsUnavailable = null;
+    var sessionsLoading = false;
     var accountSignedIn = false;
 
     function renderSessionsRows() {
       if (!sessionsSheetList) return;
       sessionsSheetList.replaceChildren();
+      sessionsSheetList.setAttribute('aria-busy', String(sessionsLoading));
+      if (sessionsLoading) {
+        var loading = document.createElement('div');
+        loading.className = 'sessions-sheet-empty';
+        loading.setAttribute('role', 'status');
+        loading.textContent = sessionsSource === 'local'
+          ? 'Loading developer sessions…'
+          : 'Loading cloud chats…';
+        sessionsSheetList.appendChild(loading);
+        return;
+      }
       var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
         .trim()
         .toLowerCase();
@@ -4179,6 +4223,8 @@ export function getWebviewContent(
       sessionsSource = source;
       sessionsRows = [];
       sessionsUnavailable = null;
+      sessionsLoading = true;
+      if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
       renderSessionsRows();
@@ -4561,6 +4607,32 @@ export function getWebviewContent(
       expired: 'The turn ended before this was answered.',
     };
 
+    // The host already decided how risky the call is and whether it can be
+    // taken back. Both are said in words: a reader who cannot see the colour
+    // of the chip, or is reading the card aloud, gets the same answer.
+    var APPROVAL_RISK_WORDS = {
+      low: 'Low risk',
+      medium: 'Medium risk',
+      high: 'High risk',
+    };
+
+    function describeApprovalVerdict(payload) {
+      var risk = APPROVAL_RISK_WORDS[payload.riskLevel];
+      var stated = typeof payload.reversible === 'boolean';
+      if (!risk && !stated) return null;
+      var undo = stated
+        ? payload.reversible
+          ? 'Can be undone'
+          : 'Cannot be undone'
+        : '';
+      var riskWords = risk || 'Risk not rated';
+      return {
+        risk: riskWords,
+        undo: undo,
+        spoken: undo ? riskWords + ', ' + undo + '.' : riskWords + '.',
+      };
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -4584,6 +4656,25 @@ export function getWebviewContent(
       summary.className = 'approval-card__summary';
       summary.textContent = payload.summary;
       card.appendChild(summary);
+
+      var verdict = describeApprovalVerdict(payload);
+      if (verdict) {
+        var verdictEl = document.createElement('div');
+        verdictEl.className = 'approval-card__verdict';
+        var riskEl = document.createElement('span');
+        riskEl.className =
+          'approval-card__risk approval-card__risk--' + (payload.riskLevel || 'unrated');
+        riskEl.textContent = verdict.risk;
+        verdictEl.appendChild(riskEl);
+        if (verdict.undo) {
+          var undoEl = document.createElement('span');
+          undoEl.className = 'approval-card__undo';
+          undoEl.textContent = verdict.undo;
+          verdictEl.appendChild(undoEl);
+        }
+        card.appendChild(verdictEl);
+        card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
 
       if (payload.detail) {
         var detail = document.createElement('pre');
@@ -4920,6 +5011,11 @@ export function getWebviewContent(
     window.addEventListener('message', (event) => {
       const msg = event.data;
 
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
+
       if (msg.type === 'turnStarted') {
         removeTyping();
         showTyping();
@@ -5134,6 +5230,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'sessionsList') {
         if (msg.payload.source === sessionsSource) {
+          sessionsLoading = false;
           sessionsRows = msg.payload.rows || [];
           sessionsUnavailable = msg.payload.unavailable || null;
           if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;

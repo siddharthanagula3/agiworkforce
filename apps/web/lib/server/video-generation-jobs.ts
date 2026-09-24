@@ -924,6 +924,7 @@ export async function finalizeVideoGenerationJob(input: {
   assetId?: string;
   publicError?: string;
   actualCostCents?: number;
+  undeliveredProviderCostCents?: number;
 }): Promise<VideoGenerationJob | null> {
   const job = await queryJob(
     input.db,
@@ -952,6 +953,25 @@ export async function finalizeVideoGenerationJob(input: {
       actualCostCents: job.actualCostCents ?? 0,
       sourceRef: `video_job:${job.id}`,
       taskOutcome: 'delivered',
+      taskRef: `video_job:${job.id}`,
+      usage: {
+        operation: 'video',
+        durationSecs: job.durationSecs,
+        resolution: job.resolution,
+        sourceSurface: job.sourceSurface,
+      },
+    });
+  }
+
+  const undeliveredCostCents = input.undeliveredProviderCostCents ?? 0;
+  if (job && input.outcome === 'failed' && job.status === 'failed' && undeliveredCostCents > 0) {
+    await recordSettledProviderCost({
+      userId: job.userId,
+      provider: job.provider,
+      model: job.model,
+      actualCostCents: undeliveredCostCents,
+      sourceRef: `video_job:${job.id}`,
+      taskOutcome: 'undelivered',
       taskRef: `video_job:${job.id}`,
       usage: {
         operation: 'video',

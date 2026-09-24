@@ -31,14 +31,11 @@ async function openPrivacySettings(page: Page): Promise<Locator> {
 }
 
 function consentToggle(dialog: Locator, title: string): Locator {
-  return dialog
-    .getByRole('heading', { name: title, exact: true })
-    .locator('xpath=../..')
-    .getByRole('button');
+  return dialog.getByRole('switch', { name: title, exact: true });
 }
 
 function collectionRow(dialog: Locator, label: string): Locator {
-  return dialog.getByText(`${label}:`, { exact: true }).locator('xpath=../..');
+  return dialog.getByRole('listitem').filter({ hasText: `${label}:` });
 }
 
 async function readStoredConsent(page: Page): Promise<string | null> {
@@ -100,6 +97,8 @@ test.describe('GDPR privacy controls', () => {
 
     await consentToggle(dialog, 'Enable Analytics').click();
 
+    await expect(consentToggle(dialog, 'Enable Analytics')).toHaveAttribute('aria-checked', 'true');
+    await expect(consentToggle(dialog, 'Error Reporting')).toHaveAttribute('aria-checked', 'false');
     await expect(collectionRow(dialog, 'Usage Events')).toHaveText(/^✓/);
     await expect(collectionRow(dialog, 'Error Logs')).toHaveText(/^○/);
     await expect(dialog.getByText(/Consent version: /)).toBeVisible();

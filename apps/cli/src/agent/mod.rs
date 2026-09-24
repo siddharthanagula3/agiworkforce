@@ -276,6 +276,9 @@ pub struct TurnResult {
     /// completions are priced independently before they are aggregated here.
     pub cost_usd: f64,
     pub via_subscription: bool,
+    /// Present when the answer is real but the provider cut it short. Every
+    /// surface states it beside the text; nothing about the answer is dropped.
+    pub incomplete: Option<crate::errors::IncompleteTurnCause>,
 }
 
 #[derive(Debug, Clone)]
@@ -925,6 +928,28 @@ impl AgentSession {
         let context = self.activate_rules_for_paths(&paths);
         if !context.is_empty() {
             self.messages.push(Message::text("system", context));
+        }
+    }
+
+    /// The directory this session's turns and tools run in.
+    pub(crate) fn workspace_root(&self) -> Option<PathBuf> {
+        self.managed_session
+            .as_ref()
+            .and_then(|session| session.workspace_root.clone())
+            .or_else(|| std::env::current_dir().ok())
+    }
+
+    /// Give the model the instruction files `workspace_root` holds now when
+    /// they are not the ones the conversation last delivered. Returns whether
+    /// anything was delivered.
+    pub(crate) fn refresh_instructions_in(&mut self, workspace_root: &Path) -> bool {
+        let current = compaction::load_instructions(workspace_root);
+        match prompt::instruction_refresh(&self.messages, current.as_deref()) {
+            Some(refresh) => {
+                self.messages.push(Message::text("system", refresh));
+                true
+            }
+            None => false,
         }
     }
 
@@ -2027,7 +2052,7 @@ mod tests {
     #[test]
     fn test_build_tool_definitions_count() {
         let defs = build_tool_definitions();
-        assert_eq!(defs.len(), 61);
+        assert_eq!(defs.len(), 62);
         assert!(defs.iter().any(|definition| definition.name == "skill"));
         assert!(defs.iter().any(|definition| definition.name == "agent"));
         assert!(defs
@@ -3395,5 +3420,166 @@ mod tests {
             default_session.session_persistence_enabled(),
             "restoring the policy must restore persistence for later sessions"
         );
+    }
+
+    fn git_in(dir: &Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .expect("git available");
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// `main` asks for tabs and `feature` for spaces, in the one file both
+    /// branches keep their instructions in.
+    fn checkout_whose_branches_disagree(dir: &Path) {
+        git_in(dir, &["init", "-q", "-b", "main"]);
+        git_in(dir, &["config", "user.email", "test@example.invalid"]);
+        git_in(dir, &["config", "user.name", "Test"]);
+        git_in(dir, &["config", "core.autocrlf", "false"]);
+        git_in(dir, &["config", "commit.gpgsign", "false"]);
+        std::fs::write(dir.join("AGENTS.md"), "Indent with tabs.\n").unwrap();
+        git_in(dir, &["add", "AGENTS.md"]);
+        git_in(dir, &["commit", "-q", "-m", "main rules"]);
+        git_in(dir, &["checkout", "-q", "-b", "feature"]);
+        std::fs::write(dir.join("AGENTS.md"), "Indent with spaces.\n").unwrap();
+        git_in(dir, &["commit", "-q", "-am", "feature rules"]);
+        git_in(dir, &["checkout", "-q", "main"]);
+    }
+
+    fn last_system_message(session: &AgentSession) -> String {
+        session
+            .messages
+            .iter()
+            .rev()
+            .find(|message| message.role == "system")
+            .map(Message::text_content)
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn a_branch_checkout_that_changes_the_instruction_files_reaches_the_next_turn() {
+        let dir = tempfile::tempdir().unwrap();
+        checkout_whose_branches_disagree(dir.path());
+        let mut session = AgentSession::new("fixture-model", &test_context(), None);
+
+        assert!(session.refresh_instructions_in(dir.path()));
+        assert!(last_system_message(&session).contains("Indent with tabs."));
+        let settled = session.messages.len();
+        assert!(!session.refresh_instructions_in(dir.path()));
+        assert_eq!(
+            session.messages.len(),
+            settled,
+            "unchanged instructions were delivered twice"
+        );
+
+        git_in(dir.path(), &["checkout", "-q", "feature"]);
+        assert!(session.refresh_instructions_in(dir.path()));
+        let delivered = last_system_message(&session);
+        assert!(delivered.contains("Indent with spaces."), "{delivered}");
+        assert!(!delivered.contains("Indent with tabs."), "{delivered}");
+        assert!(!session.refresh_instructions_in(dir.path()));
+    }
+
+    #[test]
+    fn moving_to_another_worktree_delivers_that_worktrees_instructions() {
+        let root = tempfile::tempdir().unwrap();
+        let main = root.path().join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        checkout_whose_branches_disagree(&main);
+        let linked = root.path().join("linked");
+        git_in(
+            &main,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                linked.to_str().expect("path"),
+                "feature",
+            ],
+        );
+        let mut session = AgentSession::new("fixture-model", &test_context(), None);
+
+        assert!(session.refresh_instructions_in(&main));
+        assert!(last_system_message(&session).contains("Indent with tabs."));
+        assert!(session.refresh_instructions_in(&linked));
+        assert!(last_system_message(&session).contains("Indent with spaces."));
+        assert!(session.refresh_instructions_in(&main));
+        assert!(last_system_message(&session).contains("Indent with tabs."));
+    }
+
+    #[test]
+    fn edited_added_and_removed_instruction_files_each_reach_the_conversation() {
+        let dir = tempfile::tempdir().unwrap();
+        checkout_whose_branches_disagree(dir.path());
+        let mut session = AgentSession::new("fixture-model", &test_context(), None);
+        assert!(session.refresh_instructions_in(dir.path()));
+
+        std::fs::write(dir.path().join("AGENTS.md"), "Indent with two spaces.\n").unwrap();
+        assert!(session.refresh_instructions_in(dir.path()));
+        assert!(last_system_message(&session).contains("Indent with two spaces."));
+
+        let package = dir.path().join("packages").join("ui");
+        std::fs::create_dir_all(&package).unwrap();
+        std::fs::write(package.join("AGENTS.md"), "Components are functions.\n").unwrap();
+        assert!(session.refresh_instructions_in(&package));
+        let nested = last_system_message(&session);
+        assert!(nested.contains("Indent with two spaces."), "{nested}");
+        assert!(nested.contains("Components are functions."), "{nested}");
+
+        std::fs::remove_file(package.join("AGENTS.md")).unwrap();
+        std::fs::remove_file(dir.path().join("AGENTS.md")).unwrap();
+        assert!(session.refresh_instructions_in(&package));
+        let removed = last_system_message(&session);
+        assert!(
+            removed.contains("no longer apply") && !removed.contains("Indent with"),
+            "{removed}"
+        );
+        assert!(!session.refresh_instructions_in(&package));
+    }
+
+    #[test]
+    fn a_resumed_transcript_is_given_instructions_that_changed_while_it_was_away() {
+        let dir = tempfile::tempdir().unwrap();
+        checkout_whose_branches_disagree(dir.path());
+        let as_stored = compaction::load_instructions(dir.path()).expect("instructions");
+        let mut session = AgentSession::new("fixture-model", &test_context(), None);
+        session.messages = vec![
+            Message::text(
+                "system",
+                prompt::build_system_prompt(&test_context(), None, Some(&as_stored), "", "", ""),
+            ),
+            Message::text("user", "earlier turn"),
+            Message::text("assistant", "earlier answer"),
+        ];
+
+        assert!(
+            !session.refresh_instructions_in(dir.path()),
+            "a transcript that already holds the current files was given them again"
+        );
+        git_in(dir.path(), &["checkout", "-q", "feature"]);
+        assert!(session.refresh_instructions_in(dir.path()));
+        assert!(last_system_message(&session).contains("Indent with spaces."));
+    }
+
+    #[test]
+    fn a_reviewed_continuation_is_never_handed_the_workspace_instructions() {
+        let dir = tempfile::tempdir().unwrap();
+        checkout_whose_branches_disagree(dir.path());
+        let mut session = AgentSession::new("fixture-model", &test_context(), None);
+        session.messages = vec![Message::text(
+            "system",
+            prompt::build_reviewed_continuation_system_prompt("managed", "managed_cloud"),
+        )];
+
+        assert!(!session.refresh_instructions_in(dir.path()));
+        git_in(dir.path(), &["checkout", "-q", "feature"]);
+        assert!(!session.refresh_instructions_in(dir.path()));
+        assert_eq!(session.messages.len(), 1);
     }
 }

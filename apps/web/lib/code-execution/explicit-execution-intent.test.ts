@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXPLICIT_EXECUTION_INTENT_PHRASES,
   detectExplicitCodeExecutionIntent,
+  hasExplicitCodeExecutionOptOut,
   hasExplicitCodeExecutionIntent,
 } from './explicit-execution-intent';
 
@@ -83,6 +84,17 @@ describe('detectExplicitCodeExecutionIntent', () => {
   it('does not match a phrase inside a longer word', () => {
     expect(detectExplicitCodeExecutionIntent('the runtime of the codebase')).toBeNull();
     expect(detectExplicitCodeExecutionIntent('sumatra is a city')).toBeNull();
+  });
+
+  it('does not turn a direct instruction not to execute into a run directive', () => {
+    for (const text of [
+      'Now reply exactly. Do not search the web or run code.',
+      "Don't execute the script; just explain it.",
+      'Answer without running Python in the sandbox.',
+    ]) {
+      expect(hasExplicitCodeExecutionOptOut(text)).toBe(true);
+      expect(detectExplicitCodeExecutionIntent(text)).toBeNull();
+    }
   });
 
   it('treats a request for a code fence or diagram as formatting, not a run', () => {

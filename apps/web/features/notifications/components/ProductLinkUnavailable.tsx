@@ -41,7 +41,7 @@ export function productLinkUnavailableCopy(
     case 'unauthorized':
       return {
         title: 'You don’t have access to this',
-        body: `This ${noun} belongs to a different account. Sign in with the account the link was meant for, or ask its owner to share it with you.`,
+        body: `This ${noun} is not available to the account and workspace you are signed in to. Switch to the workspace the link was meant for, sign in with the account it was shared with, or ask its owner to share it with you.`,
       };
     case 'not_found':
       return {
@@ -70,7 +70,7 @@ export function ProductLinkUnavailable({
       <p className="text-sm leading-relaxed text-[var(--chat-text-secondary)]">{body}</p>
       <Link
         href={back.href}
-        className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-[var(--chat-surface-hover)] px-4 text-sm font-medium text-[var(--chat-text-primary)] outline-none transition-colors hover:bg-[var(--chat-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] pointer-coarse:min-h-11"
+        className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-[var(--chat-surface-hover)] px-4 text-sm font-medium text-[var(--chat-text-primary)] outline-none transition-colors hover:bg-[var(--chat-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
       >
         {back.label}
       </Link>

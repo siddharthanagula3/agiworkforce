@@ -16,10 +16,14 @@ const { appMenuTemplate } = await import('../appMenu');
 function actions() {
   return {
     newChat: vi.fn(),
+    newWindow: vi.fn(),
+    openConversationInNewWindow: vi.fn(),
+    hasFocusedConversation: vi.fn(() => true),
     toggleQuickAsk: vi.fn(),
     captureScreenshot: vi.fn(),
     openSettings: vi.fn(),
     openLogs: vi.fn(),
+    copyDiagnostics: vi.fn(),
     openSupport: vi.fn(),
     checkForUpdates: vi.fn(),
     sendHostCommand: vi.fn(),
@@ -194,5 +198,60 @@ describe('the application menu', () => {
 
     expect(close).toBeDefined();
     expect(close?.accelerator).toBe(contractAccelerator('host-close-window'));
+  });
+
+  it('hands full screen, minimize and zoom to the platform rather than reimplementing them', () => {
+    const { menu } = template();
+    const view = submenu(menu, 'View').map((entry) => entry.role);
+    const windowItems = submenu(menu, 'Window').map((entry) => entry.role);
+
+    expect(view).toContain('togglefullscreen');
+    expect(windowItems).toContain('minimize');
+    expect(windowItems).toContain('zoom');
+  });
+
+  it('puts a support report on the clipboard from the Help menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Help', 'Copy Diagnostics').click as () => void)();
+
+    expect(spies.copyDiagnostics).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens a second window from the Window menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Window', 'New Window').click as () => void)();
+
+    expect(spies.newWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers moving the conversation out only while the front window is on one', () => {
+    const onConversation = actions();
+    const onSomethingElse = { ...actions(), hasFocusedConversation: vi.fn(() => false) };
+
+    expect(
+      item(
+        appMenuTemplate(onConversation, ACCELERATORS),
+        'Window',
+        'Move Conversation to New Window',
+      ).enabled,
+    ).toBe(true);
+    expect(
+      item(
+        appMenuTemplate(onSomethingElse, ACCELERATORS),
+        'Window',
+        'Move Conversation to New Window',
+      ).enabled,
+    ).toBe(false);
+
+    (
+      item(
+        appMenuTemplate(onConversation, ACCELERATORS),
+        'Window',
+        'Move Conversation to New Window',
+      ).click as () => void
+    )();
+    expect(onConversation.openConversationInNewWindow).toHaveBeenCalledTimes(1);
   });
 });

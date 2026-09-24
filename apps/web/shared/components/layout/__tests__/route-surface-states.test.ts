@@ -133,6 +133,17 @@ describe('every route segment answers loading, failure and a missing address', (
     expect(silent.map(rel)).toEqual([]);
   });
 
+  it('delegates every route wait to the canonical loading component', () => {
+    const divergent = loadingFiles.filter((file) => {
+      const text = source(file);
+      return (
+        !text.includes("from '@shared/components/RouteLoading'") || !text.includes('<RouteLoading ')
+      );
+    });
+
+    expect(divergent.map(rel)).toEqual([]);
+  });
+
   it('follows the delegation rather than accepting any imported component as an answer', () => {
     expect(
       announcesAWait(

@@ -115,7 +115,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex items-center gap-1 rounded-full bg-warning-fill/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-warning-text"
+        className="inline-flex items-center gap-1 rounded-full bg-warning-fill/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-warning-text"
       >
         <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
         {presentation.statusLabel}
@@ -127,7 +127,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-danger"
+        className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-danger"
       >
         <AlertTriangle className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
@@ -139,7 +139,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
+        className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
       >
         <ShieldCheck className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
@@ -150,7 +150,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
     <span
       role="status"
       aria-live="polite"
-      className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-[12px] font-medium uppercase tracking-wide text-zinc-300"
+      className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-zinc-300"
     >
       <Clock className="h-3 w-3" aria-hidden />
       {presentation.statusLabel}
@@ -187,7 +187,7 @@ export function GeneratedFileCard({
       data-testid="generated-file-card"
       data-generated-file-id={presentation.generatedFileId ?? undefined}
       className={cn(
-        'flex h-full flex-col gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)]',
+        'flex h-full flex-col gap-3 rounded-md border border-[var(--chat-border)]',
         'bg-[var(--chat-surface-elevated)] p-3',
         className,
       )}
@@ -220,7 +220,7 @@ export function GeneratedFileCard({
             </span>
             <StatusBadge presentation={presentation} />
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--chat-text-muted)]">
+          <div className="flex flex-wrap items-center gap-2 text-caption text-[var(--chat-text-muted)]">
             <span>{presentation.kindLabel}</span>
             {previewFailed ? <span>· Preview unavailable</span> : null}
             {presentation.byteCountLabel ? <span>· {presentation.byteCountLabel}</span> : null}
@@ -234,18 +234,18 @@ export function GeneratedFileCard({
             presentation.sourceSurfaceLabel) && (
             <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
               {presentation.privacyShortLabel ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-caption font-medium text-[var(--chat-text-secondary)]">
                   <Lock className="h-3 w-3" aria-hidden />
                   {presentation.privacyShortLabel}
                 </span>
               ) : null}
               {presentation.providerLabel ? (
-                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]">
+                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-caption font-medium text-[var(--chat-text-secondary)]">
                   {presentation.providerLabel}
                 </span>
               ) : null}
               {presentation.sourceSurfaceLabel ? (
-                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[12px] font-medium text-[var(--chat-text-secondary)]">
+                <span className="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-caption font-medium text-[var(--chat-text-secondary)]">
                   {presentation.sourceSurfaceLabel}
                 </span>
               ) : null}
@@ -294,7 +294,7 @@ export function GeneratedFileCard({
             <button
               type="button"
               onClick={onOpenSourceSession}
-              className="ml-auto text-[12px] font-medium text-[var(--chat-text-muted)] underline-offset-2 hover:text-[var(--chat-text-secondary)] hover:underline"
+              className="ml-auto text-caption font-medium text-[var(--chat-text-muted)] underline-offset-2 hover:text-[var(--chat-text-secondary)] hover:underline"
             >
               {presentation.sourceSessionLabel}
             </button>

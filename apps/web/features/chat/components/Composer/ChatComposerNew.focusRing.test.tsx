@@ -55,7 +55,7 @@ describe('composer focus ring', () => {
 
     expect(box()).toHaveClass(
       'border-[var(--chat-border-strong)]',
-      'shadow-md',
+      'shadow-e2',
       'ring-2',
       'ring-[var(--chat-focus-ring)]',
     );

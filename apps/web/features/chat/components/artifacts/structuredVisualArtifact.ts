@@ -24,25 +24,25 @@ const TARGETS: Readonly<Record<StructuredVisualKind, StructuredVisualArtifactTar
     artifactType: 'mermaid',
     fenceLanguage: 'mermaid',
     directive:
-      'Answer with a Mermaid diagram in a single ```mermaid code block, and keep the labels short enough to read at panel width.',
+      'Answer with a Mermaid diagram in a single ```mermaid code block. Put %% @artifact on the first line, and keep the labels short enough to read at panel width.',
   },
   chart: {
     artifactType: 'svg',
     fenceLanguage: 'svg',
     directive:
-      'Answer with one self-contained ```svg code block plotting the data, with axis labels, tick values and a legend. Use currentColor for text and strokes so it reads in both themes.',
+      'Answer with one self-contained ```svg code block plotting the data. Put <!-- @artifact --> on the first line, include axis labels, tick values and a legend, and use currentColor for text and strokes so it reads in both themes.',
   },
   vector: {
     artifactType: 'svg',
     fenceLanguage: 'svg',
     directive:
-      'Answer with one self-contained ```svg code block. Use currentColor for text and strokes so it reads in both themes.',
+      'Answer with one self-contained ```svg code block. Put <!-- @artifact --> on the first line, and use currentColor for text and strokes so it reads in both themes.',
   },
   interactive: {
     artifactType: 'html',
     fenceLanguage: 'html',
     directive:
-      'Answer with one self-contained ```html code block. Inline every style and script, and load nothing from the network.',
+      'Answer with one self-contained ```html code block. Put <!-- @artifact --> on the first line, inline every style and script, and load nothing from the network.',
   },
 };
 

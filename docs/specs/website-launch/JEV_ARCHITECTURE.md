@@ -2,7 +2,7 @@
 
 Status: Discovery; product pilot not executed
 Owner: Website launch preparation
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 Canonical existing proposal: [Jev Auto routing](../jev-auto-routing/spec.md).
 It is proposed architecture, not implemented product behavior. The developer helper
@@ -13,6 +13,14 @@ Current evidence: helper returned typed choices from synthetic task metadata usi
 587 input and 122 output tokens. No end-to-end product latency, quality or cost benefit measured.
 Current official choice documentation retrieved from https://docs.typesafe.ai/primitives/choice.md.
 Full endpoint, limits, pricing, legal terms and rollout eligibility still require current verification.
+
+The current official documentation and public implementation/review survey are
+recorded in
+[Jev and TypeSafe AI: public evidence and AGI Workforce fit](../../research/jev-typesafe-public-evidence-2026-09-21.md).
+The evidence reinforces the existing boundary: evaluate bounded semantic choices,
+scores and booleans; keep authorization, arithmetic, policy and execution in code.
+Public browser and voice-browser builds inform the later Desktop voice phase but
+do not qualify a full-desktop integration or change the website-first sequence.
 
 Candidate work must compare existing behavior, deterministic improvement and advisory Jev,
 with held-out minimized cases. No private history sent. Permissions, billing and execution remain

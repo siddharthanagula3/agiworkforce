@@ -31,6 +31,7 @@ import {
   isStaleCloudAccountOperation,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 
 export default function CloudAccountScreen() {
   const colors = useThemeColors();
@@ -181,66 +182,58 @@ export default function CloudAccountScreen() {
   const handleDeleteAccount = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
-    Alert.alert(
-      'Delete Account',
-      'This permanently deletes your AGI Cloud account and all cloud data (chats, projects, ' +
-        'memory, artifacts) within 24 hours. This cannot be undone, and you will be signed out ' +
-        'on this device. Export your Cloud data above first if you want to keep a copy.\n\n' +
-        'On-device Local Mode data stays on this device, remove it separately from ' +
-        'Settings → Data Controls if you want a full wipe.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: () => {
-            if (!isCloudAccountEpochCurrent(account)) {
+    Alert.alert(DELETE_ACCOUNT_CONFIRMATION.title, DELETE_ACCOUNT_CONFIRMATION.message, [
+      { text: DELETE_ACCOUNT_CONFIRMATION.cancelLabel, style: 'cancel' },
+      {
+        text: DELETE_ACCOUNT_CONFIRMATION.confirmLabel,
+        style: 'destructive',
+        onPress: () => {
+          if (!isCloudAccountEpochCurrent(account)) {
+            Alert.alert(
+              'Account changed',
+              'This deletion confirmation is no longer valid. Open it again for the current account.',
+            );
+            return;
+          }
+          setDeleting(true);
+          api
+            .delete<{ message?: string }>('/api/user/delete-account')
+            .then(async (res) => {
+              if (!isCloudAccountEpochCurrent(account)) {
+                Alert.alert(
+                  'Account changed',
+                  'The active account changed before deletion completed. No action was applied to the new account.',
+                );
+                return;
+              }
+              await signOut().catch(() => {});
               Alert.alert(
-                'Account changed',
-                'This deletion confirmation is no longer valid. Open it again for the current account.',
+                'Account deletion scheduled',
+                res?.message ??
+                  'Your account and all cloud data will be permanently deleted within 24 hours.',
               );
-              return;
-            }
-            setDeleting(true);
-            api
-              .delete<{ message?: string }>('/api/user/delete-account')
-              .then(async (res) => {
-                if (!isCloudAccountEpochCurrent(account)) {
-                  Alert.alert(
-                    'Account changed',
-                    'The active account changed before deletion completed. No action was applied to the new account.',
-                  );
-                  return;
-                }
-                await signOut().catch(() => {});
+            })
+            .catch((err: unknown) => {
+              if (!isCloudAccountEpochCurrent(account)) {
                 Alert.alert(
-                  'Account deletion scheduled',
-                  res?.message ??
-                    'Your account and all cloud data will be permanently deleted within 24 hours.',
+                  'Account changed',
+                  'The deletion request did not apply to the current account.',
                 );
-              })
-              .catch((err: unknown) => {
-                if (!isCloudAccountEpochCurrent(account)) {
-                  Alert.alert(
-                    'Account changed',
-                    'The deletion request did not apply to the current account.',
-                  );
-                  return;
-                }
-                const is401 = err instanceof Error && err.message.includes('401');
-                Alert.alert(
-                  'Could not delete account',
-                  is401
-                    ? 'Your session expired. Please sign in again and retry.'
-                    : 'We could not delete your account. Check your connection and try again, ' +
-                        'or contact support@agiworkforce.com.',
-                );
-              })
-              .finally(() => setDeleting(false));
-          },
+                return;
+              }
+              const is401 = err instanceof Error && err.message.includes('401');
+              Alert.alert(
+                'Could not delete account',
+                is401
+                  ? 'Your session expired. Please sign in again and retry.'
+                  : 'We could not delete your account. Check your connection and try again, ' +
+                      'or contact support@agiworkforce.com.',
+              );
+            })
+            .finally(() => setDeleting(false));
         },
-      ],
-    );
+      },
+    ]);
   }, [captureVisibleAccount, signOut]);
 
   return (

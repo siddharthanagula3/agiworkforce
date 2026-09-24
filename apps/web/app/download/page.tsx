@@ -68,7 +68,7 @@ const RELEASE_CHECKS: { title: string; body: string }[] = [
   },
   {
     title: 'Notarized and stapled before upload',
-    body: 'Every app and every DMG is validated with stapler; a missing ticket is stapled and validated again. Only then are the installers uploaded to the draft release.',
+    body: 'The release workflow validates each app and disk image with stapler, staples a missing ticket and validates again, and only then uploads the installers to a draft release.',
   },
   {
     title: 'CLI checksums carry a Sigstore signature',
@@ -79,7 +79,7 @@ const RELEASE_CHECKS: { title: string; body: string }[] = [
 export const metadata = buildMetadata({
   title: 'Download AGI: verified installers and signatures',
   description:
-    'Every AGI installer is signed inside its release workflow and checked against that signature before publication. See live Desktop and CLI availability, what each release publishes, and how to verify a download yourself.',
+    'See live Desktop and CLI download availability, the release verification gates, and how to check an available installer or archive yourself.',
   path: '/download',
 });
 
@@ -96,10 +96,10 @@ export default function DownloadPage() {
                 We check the signature <em className="agi-ds-accent">before you download.</em>
               </h1>
               <Prose size="lg">
-                Desktop installers are signed with a Developer ID, notarized, and re-verified in the
-                same workflow run. CLI archives ship a checksum file signed with Sigstore, verified
-                before the release exists. This page then asks the release API again on load, so a
-                platform gets a control only once the API confirms a published asset for it.
+                When a Desktop installer is published, its workflow requires Developer ID signing,
+                notarization, and verification before upload. The CLI workflow signs its checksum
+                file with Sigstore. This page asks the release API on load, so a download control
+                appears only for a confirmed published asset.
               </Prose>
               <ButtonRow>
                 <Button href="#desktop-downloads">Check the installers</Button>
@@ -170,7 +170,7 @@ export default function DownloadPage() {
             <div className="agi-lp-heading">
               <Eyebrow>Release contents</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-download-contents-title">
-                Each release publishes the same set of files.
+                What each release channel is built to publish.
               </h2>
             </div>
             <Ledger
@@ -178,7 +178,7 @@ export default function DownloadPage() {
               rows={[
                 {
                   label: 'AGI Desktop · macOS',
-                  value: 'One notarized .dmg per architecture, Apple silicon and Intel',
+                  value: 'When available, one notarized .dmg per architecture, Apple silicon and Intel',
                 },
                 {
                   label: 'agi CLI',

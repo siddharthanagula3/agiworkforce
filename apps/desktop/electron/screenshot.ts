@@ -10,6 +10,7 @@ import {
 } from 'electron';
 import { focusPageComposer } from './composerFocus';
 import { pickSourceForDisplay } from './garnishCore';
+import { physicalCaptureSize } from './runtime/computerUseProtocol';
 import { hideQuickAsk, isQuickAskVisible } from './quickAsk';
 
 const HIDE_SETTLE_MS = 300;
@@ -47,6 +48,16 @@ function warnIfScreenCaptureBlocked(): void {
   });
 }
 
+// Every app can read the clipboard, so the capture stays there only as long
+// as the paste needs it; an empty or image clipboard must not keep the screen.
+function takeCaptureBackFromClipboard(priorText: string): void {
+  if (priorText !== '') {
+    clipboard.writeText(priorText);
+    return;
+  }
+  clipboard.clear();
+}
+
 export async function captureToChat(mainWindow: BrowserWindow | null): Promise<void> {
   if (capturing) return;
   capturing = true;
@@ -54,6 +65,8 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
   const priorText = await clipboard.readText();
   const quickAskWasVisible = isQuickAskVisible();
   const mainWasVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
+  let captureOnClipboard = false;
+  let leftForTheUserToPaste = false;
 
   try {
     warnIfScreenCaptureBlocked();
@@ -65,10 +78,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: {
-        width: Math.round(display.size.width * display.scaleFactor),
-        height: Math.round(display.size.height * display.scaleFactor),
-      },
+      thumbnailSize: physicalCaptureSize(display),
     });
 
     const source = pickSourceForDisplay(sources, display.id);
@@ -87,8 +97,10 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
         'image/png': new Blob([new Uint8Array(source.thumbnail.toPNG())], { type: 'image/png' }),
       }),
     ]);
+    captureOnClipboard = true;
 
     if (!mainWindow || mainWindow.isDestroyed()) {
+      leftForTheUserToPaste = true;
       notify('Screenshot copied', 'The chat window is closed, so the image is on your clipboard.');
       return;
     }
@@ -104,21 +116,23 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     if (await focusPageComposer(mainWindow)) {
       mainWindow.webContents.paste();
     } else {
+      leftForTheUserToPaste = true;
       notify(
         'Screenshot copied to clipboard',
         'The chat composer was not ready, so the image was not attached. Press paste in the composer to add it.',
       );
       return;
     }
-
-    if (priorText !== '') {
-      await delay(CLIPBOARD_RESTORE_MS);
-      await clipboard.writeText(priorText);
-    }
   } catch (error) {
     console.error('[screenshot] capture failed:', error);
     notify('Screenshot failed', 'The screen could not be captured.');
   } finally {
+    // In `finally` so a throw between the write and the paste cannot be the
+    // one path that leaves the screen on the clipboard.
+    if (captureOnClipboard && !leftForTheUserToPaste) {
+      await delay(CLIPBOARD_RESTORE_MS);
+      takeCaptureBackFromClipboard(priorText);
+    }
     if (mainWasVisible && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show();
     }

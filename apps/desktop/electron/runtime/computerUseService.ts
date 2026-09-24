@@ -12,8 +12,11 @@ import {
   chooseCaptureDisplay,
   describeDisplays,
   frameHelperLines,
+  physicalCaptureSize,
   readHelperReply,
 } from './computerUseProtocol';
+import { FRAME_SAMPLE_WIDTH, frameDiffers, frameLuma } from './computerUseLoop';
+import { recordDesktopEvent } from './desktopTelemetryService';
 
 /**
  * Desktop computer use: what is on the screen, and the mouse and keyboard.
@@ -68,6 +71,19 @@ interface CaptureFrame {
 }
 
 let lastFrame: CaptureFrame | null = null;
+let lastFrameLuma: Uint8Array | null = null;
+let screenChanges = 0;
+
+/** How many screenshots so far showed the screen had moved since the one before. */
+export function screenChangesSeen(): number {
+  return screenChanges;
+}
+
+function noteFrame(image: Electron.NativeImage): void {
+  const luma = frameLuma(image.resize({ width: FRAME_SAMPLE_WIDTH, quality: 'good' }).toBitmap());
+  if (frameDiffers(lastFrameLuma, luma)) screenChanges += 1;
+  lastFrameLuma = luma;
+}
 
 function helperSourcePath(): string {
   return path.join(__dirname, '..', 'native', 'macos', 'agi-input.swift');
@@ -167,12 +183,14 @@ export function isComputerUseTakenOver(): boolean {
 export function takeOverComputerUse(): { takenOver: true } {
   takenOver = true;
   stopComputerUseHelper();
+  recordDesktopEvent({ domain: 'desktop_control', outcome: 'refused', cause: 'cancelled' });
   return { takenOver: true };
 }
 
 export function handBackComputerUse(): { takenOver: false } {
   takenOver = false;
   lastFrame = null;
+  recordDesktopEvent({ domain: 'desktop_control', outcome: 'ok' });
   return { takenOver: false };
 }
 
@@ -297,10 +315,7 @@ function encode(image: Electron.NativeImage): {
 async function captureDisplay(display: Electron.Display): Promise<Electron.NativeImage> {
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
-    thumbnailSize: {
-      width: Math.round(display.size.width * display.scaleFactor),
-      height: Math.round(display.size.height * display.scaleFactor),
-    },
+    thumbnailSize: physicalCaptureSize(display),
   });
   const source =
     sources.find((entry) => entry.display_id === String(display.id)) ??
@@ -324,6 +339,7 @@ export async function captureScreen(displayId?: number): Promise<ScreenCapture> 
       ? full
       : full.resize({ width: frameWidth, quality: 'good' });
   const size = resized.getSize();
+  noteFrame(resized);
   lastFrame = {
     displayId: display.id,
     bounds: display.bounds,

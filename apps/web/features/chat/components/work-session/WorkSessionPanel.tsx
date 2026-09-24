@@ -167,7 +167,7 @@ function DockSection({
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium marker:hidden">
         <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <span>{label}</span>
-        <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[12px] text-muted-foreground">
+        <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
           {count}
         </span>
         <ChevronRight
@@ -192,7 +192,7 @@ function DockSection({
 function ContextMark({ item }: { item: TaskDockContextItem }) {
   const className = 'h-3.5 w-3.5 text-muted-foreground';
   if (item.kind === 'connector') {
-    return <span className="text-[12px] font-semibold text-muted-foreground">{item.mark}</span>;
+    return <span className="text-caption font-semibold text-muted-foreground">{item.mark}</span>;
   }
   if (item.kind === 'skill') return <Sparkles className={className} aria-hidden="true" />;
   if (item.kind === 'project') return <Puzzle className={className} aria-hidden="true" />;
@@ -260,7 +260,7 @@ export function WorkSessionToggleButton({
     >
       <PanelRight className="h-4 w-4" aria-hidden="true" />
       {badgeCount > 0 && !open && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
           {badgeCount > 99 ? '99+' : badgeCount}
         </span>
       )}
@@ -298,7 +298,7 @@ function TaskDockProgressSection({
         <StatusIcon status={summary.status === 'idle' ? 'pending' : summary.status} />
         <span>{TASK_DOCK_PROGRESS_LABEL}</span>
         {summary.steps.length > 0 && (
-          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[12px] text-muted-foreground">
+          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-caption text-muted-foreground">
             {completed}/{summary.steps.length}
           </span>
         )}
@@ -336,7 +336,7 @@ function TaskDockProgressSection({
                 <div className="min-w-0 flex-1">
                   <p className="text-xs leading-relaxed text-foreground">{step.label}</p>
                   {step.detail && (
-                    <p className="mt-0.5 line-clamp-2 text-[12px] text-muted-foreground">
+                    <p className="mt-0.5 line-clamp-2 text-caption text-muted-foreground">
                       {step.detail}
                     </p>
                   )}
@@ -476,7 +476,7 @@ export function WorkSessionPanel({
       <div className="space-y-3 px-3 pb-4">
         {summary.sources.map((group) => (
           <div key={group.id}>
-            <p className="truncate px-1 pb-1 text-[12px] text-muted-foreground">{group.label}</p>
+            <p className="truncate px-1 pb-1 text-caption text-muted-foreground">{group.label}</p>
             <ul className="space-y-1">
               {group.sources.map((source) => (
                 <li key={source.id}>
@@ -496,7 +496,7 @@ export function WorkSessionPanel({
                       <span className="line-clamp-2 block text-xs font-medium leading-snug text-foreground">
                         {source.title}
                       </span>
-                      <span className="block truncate text-[12px] text-muted-foreground">
+                      <span className="block truncate text-caption text-muted-foreground">
                         {source.host}
                       </span>
                     </span>
@@ -527,7 +527,7 @@ export function WorkSessionPanel({
               />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium text-foreground">{output.name}</p>
-                <p className="truncate text-[12px] text-muted-foreground">
+                <p className="truncate text-caption text-muted-foreground">
                   {output.mimeType || output.kind
                     ? [
                         formatDeliverableTypeLine({
@@ -549,7 +549,7 @@ export function WorkSessionPanel({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-7 px-2 text-[12px]"
+                  className="h-7 px-2 text-caption"
                   onClick={() => openOutput(output)}
                   aria-label={`${TASK_DOCK_OPEN_ACTION} ${output.name}`}
                 >
@@ -560,7 +560,7 @@ export function WorkSessionPanel({
                 <Button
                   type="button"
                   size="sm"
-                  className="h-7 gap-1 px-2 text-[12px]"
+                  className="h-7 gap-1 px-2 text-caption"
                   onClick={() => void downloadOutput(output)}
                   aria-label={`${TASK_DOCK_DOWNLOAD_ACTION} ${output.name}`}
                 >
@@ -586,14 +586,14 @@ export function WorkSessionPanel({
         {summary.context.map((item) => (
           <li key={item.id} className="flex items-start gap-2">
             <span
-              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted"
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-compact bg-muted"
               aria-hidden="true"
             >
               <ContextMark item={item} />
             </span>
             <div className="min-w-0 flex-1">
               <p className="break-words text-xs text-foreground">{item.label}</p>
-              {item.detail && <p className="text-[12px] text-muted-foreground">{item.detail}</p>}
+              {item.detail && <p className="text-caption text-muted-foreground">{item.detail}</p>}
             </div>
           </li>
         ))}
@@ -604,7 +604,7 @@ export function WorkSessionPanel({
   return (
     <>
       <div
-        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden"
+        className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm md:hidden"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -614,8 +614,8 @@ export function WorkSessionPanel({
         aria-modal={isModalOverlay ? true : undefined}
         tabIndex={isModalOverlay ? -1 : undefined}
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 flex max-h-[85vh] w-full flex-col rounded-t-2xl border-t border-border/30 bg-card/95 outline-none backdrop-blur-xl',
-          'animate-in slide-in-from-bottom duration-300 motion-reduce:animate-none',
+          'fixed inset-x-0 bottom-0 z-[var(--z-panel)] flex max-h-[85vh] w-full flex-col rounded-t-2xl border-t border-border/30 bg-card/95 outline-none backdrop-blur-xl',
+          'animate-in slide-in-from-bottom duration-moved motion-reduce:animate-none',
           'md:relative md:inset-auto md:z-auto md:max-h-none md:w-[380px] md:min-w-[280px] md:shrink md:rounded-none md:border-l md:border-t-0',
           'md:animate-in md:slide-in-from-right',
         )}
@@ -627,7 +627,7 @@ export function WorkSessionPanel({
             <h2 className="truncate text-sm font-semibold text-foreground" title={dockTitle}>
               {dockTitle}
             </h2>
-            {agiWork && <p className="text-[12px] text-muted-foreground">{AGI_WORK_LABEL}</p>}
+            {agiWork && <p className="text-caption text-muted-foreground">{AGI_WORK_LABEL}</p>}
           </div>
           <Button
             ref={closeButtonRef}

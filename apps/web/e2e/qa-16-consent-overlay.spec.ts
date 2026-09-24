@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { signIn } from './qa-capability-harness';
 
 /**
- * The consent banner is fixed to the bottom at z-50 and its card takes pointer
+ * The consent banner is fixed to the bottom at z-[var(--z-dropdown)] and its card takes pointer
  * events. Once a conversation starts the composer moves to the bottom, under
  * it: measured at 1440x900, the stop button sat at y=789 inside a card
  * spanning y=737-900, and every click on it landed on "Necessary only"

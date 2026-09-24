@@ -55,7 +55,7 @@ export function DownloadCard({ artifact, onClick, onDownload }: DownloadCardProp
         <span className="truncate text-sm font-medium text-[var(--chat-text-primary)]">
           {artifact.title ?? 'Untitled artifact'}
         </span>
-        <span className="text-[12px] text-[var(--chat-text-muted)]">{getTypeLabel(artifact)}</span>
+        <span className="text-caption text-[var(--chat-text-muted)]">{getTypeLabel(artifact)}</span>
       </div>
     </>
   );
@@ -73,7 +73,7 @@ export function DownloadCard({ artifact, onClick, onDownload }: DownloadCardProp
           type="button"
           onClick={onClick}
           aria-label={`Open ${artifact.title ?? 'Untitled artifact'}`}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-md transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-md transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
         >
           {content}
         </button>

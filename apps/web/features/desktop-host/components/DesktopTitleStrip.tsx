@@ -24,7 +24,7 @@ export function DesktopTitleStrip() {
     <div
       data-app-header=""
       aria-hidden="true"
-      className="fixed inset-x-0 top-0 -z-10 h-[var(--agi-window-title-strip)]"
+      className="fixed inset-x-0 top-0 z-[var(--z-behind)] h-[var(--agi-window-title-strip)]"
     />
   );
 }

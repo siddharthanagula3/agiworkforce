@@ -11,6 +11,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import modelRegistry from '@agiworkforce/types/models.json';
 
 export const metadata = buildMetadata({
   title: 'Legal',
@@ -19,14 +20,17 @@ export const metadata = buildMetadata({
   path: '/legal',
 });
 
-const REVISED: Readonly<Record<string, string>> = Object.fromEntries(
-  (Object.keys(CANONICAL_POLICY_ROUTES) as (keyof typeof CANONICAL_POLICY_ROUTES)[])
-    .filter((key) => key in POLICY_LAST_UPDATED)
-    .map((key) => [
-      CANONICAL_POLICY_ROUTES[key],
-      POLICY_LAST_UPDATED[key as keyof typeof POLICY_LAST_UPDATED],
-    ]),
-);
+const REVISED: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(
+    (Object.keys(CANONICAL_POLICY_ROUTES) as (keyof typeof CANONICAL_POLICY_ROUTES)[])
+      .filter((key) => key in POLICY_LAST_UPDATED)
+      .map((key) => [
+        CANONICAL_POLICY_ROUTES[key],
+        POLICY_LAST_UPDATED[key as keyof typeof POLICY_LAST_UPDATED],
+      ]),
+  ),
+  [CANONICAL_POLICY_ROUTES.modelLicenses]: modelRegistry.lastUpdated,
+};
 
 const DOCS: { href: string; label: string; body: string }[] = [
   {
@@ -163,9 +167,9 @@ export default function LegalPage() {
             </h2>
             <Ledger caption="Legal documents" rows={docRows()} />
             <Prose size="sm">
-              Dates come from the same constant each document prints at the top of itself, so this
-              column cannot claim a revision the document does not. Where a document carries no date
-              in that constant, no revision is shown.
+              Dates come from the same source each document prints at the top of itself, so this
+              column cannot claim a revision the document does not. Where a document carries no
+              date, no revision is shown.
             </Prose>
           </Stack>
         </Section>

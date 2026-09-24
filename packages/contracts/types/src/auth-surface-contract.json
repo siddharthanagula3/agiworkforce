@@ -16,13 +16,7 @@
       "logSuspiciousActivity"
     ],
     "why": "a sign-in nobody recorded cannot be disputed, revoked or explained afterwards",
-    "defects": [
-      {
-        "route": "apps/web/app/api/device/link/route.ts",
-        "why": "linking mints the pairing code the approval consumes, so a trail that starts at approval cannot say which device asked",
-        "fix": "add an entry for device/link/route.ts to UNAUDITED_MUTATING_ROUTES in apps/web/lib/services/audit-coverage/registry.ts with reason no_governed_state, or record the code it mints"
-      }
-    ]
+    "defects": []
   },
   "session": {
     "module": "apps/web/lib/api-auth.ts",
@@ -45,18 +39,7 @@
     ],
     "match": "(?:^|_)(?:token|secret|password|api_key|private_key)$",
     "safe": "_hash$|_enc$|^encrypted_",
-    "defects": [
-      {
-        "column": "device_authorization_codes.access_token",
-        "why": "a bearer token in a plain text column is a bearer token in every backup and every replica of that backup",
-        "fix": "drop the column; every statement in apps/web/app/api/device and apps/web/app/api/auth/device writes NULL to it, so nothing reads a value from it"
-      },
-      {
-        "column": "device_authorization_codes.refresh_token",
-        "why": "the refresh half of the same pair, and the one that does not expire in minutes",
-        "fix": "drop the column in the same migration as access_token"
-      }
-    ]
+    "defects": []
   },
   "analytics": {
     "vocabulary": "packages/contracts/types/src/product-analytics.ts",

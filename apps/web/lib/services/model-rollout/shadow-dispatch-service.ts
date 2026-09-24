@@ -13,6 +13,7 @@ import { getKeyValueStore } from '@/lib/server/key-value';
 import { recordProviderCostEvent } from '@/lib/services/cogs-ledger-service';
 import { recordShadowRouteOutcome } from '@/lib/services/free-lane/runtime-state-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
@@ -151,9 +152,10 @@ export async function dispatchShadowRequest(
   });
 
   const startedAtMs = Date.now();
+  const dispatchProvider = dispatchProviderForSelectedRoute(shadow);
   try {
     const response = await drainToLlmResponse(
-      buildServerProviderAdapter(shadow.provider).stream(
+      buildServerProviderAdapter(dispatchProvider).stream(
         openAIWireRequestToChatRequest({
           model: shadow.providerModelId,
           messages: mirroredMessages(input.messages),
@@ -163,8 +165,8 @@ export async function dispatchShadowRequest(
         AbortSignal.timeout(SHADOW_TIMEOUT_MS),
       ),
       shadow.modelKey,
-      (chunk) => toGenericUpstreamError(shadow.provider, chunk),
-      resolveWireMode(shadow.provider),
+      (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
+      resolveWireMode(dispatchProvider),
     );
     const durationMs = Date.now() - startedAtMs;
     const providerCostCents = LLMCostCalculator.calculateCost(

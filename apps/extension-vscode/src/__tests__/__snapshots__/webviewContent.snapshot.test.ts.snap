@@ -558,6 +558,23 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       font-size: 12px;
       line-height: 1.5;
     }
+    .approval-card__verdict {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .approval-card__risk {
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-secondary);
+    }
+    .approval-card__risk--medium { color: var(--warning); border-color: var(--warning-border); }
+    .approval-card__risk--high { color: var(--error); border-color: var(--error-border); }
+    .approval-card__undo { color: var(--text-secondary); }
     .approval-card__detail {
       margin: 8px 0 0;
       padding: 8px 10px;
@@ -2497,7 +2514,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -2537,7 +2554,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: 'chat', epoch: 0 };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -4131,11 +4159,23 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     var sessionsSource = 'local';
     var sessionsRows = [];
     var sessionsUnavailable = null;
+    var sessionsLoading = false;
     var accountSignedIn = false;
 
     function renderSessionsRows() {
       if (!sessionsSheetList) return;
       sessionsSheetList.replaceChildren();
+      sessionsSheetList.setAttribute('aria-busy', String(sessionsLoading));
+      if (sessionsLoading) {
+        var loading = document.createElement('div');
+        loading.className = 'sessions-sheet-empty';
+        loading.setAttribute('role', 'status');
+        loading.textContent = sessionsSource === 'local'
+          ? 'Loading developer sessions…'
+          : 'Loading cloud chats…';
+        sessionsSheetList.appendChild(loading);
+        return;
+      }
       var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
         .trim()
         .toLowerCase();
@@ -4210,6 +4250,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       sessionsSource = source;
       sessionsRows = [];
       sessionsUnavailable = null;
+      sessionsLoading = true;
+      if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
       renderSessionsRows();
@@ -4592,6 +4634,32 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       expired: 'The turn ended before this was answered.',
     };
 
+    // The host already decided how risky the call is and whether it can be
+    // taken back. Both are said in words: a reader who cannot see the colour
+    // of the chip, or is reading the card aloud, gets the same answer.
+    var APPROVAL_RISK_WORDS = {
+      low: 'Low risk',
+      medium: 'Medium risk',
+      high: 'High risk',
+    };
+
+    function describeApprovalVerdict(payload) {
+      var risk = APPROVAL_RISK_WORDS[payload.riskLevel];
+      var stated = typeof payload.reversible === 'boolean';
+      if (!risk && !stated) return null;
+      var undo = stated
+        ? payload.reversible
+          ? 'Can be undone'
+          : 'Cannot be undone'
+        : '';
+      var riskWords = risk || 'Risk not rated';
+      return {
+        risk: riskWords,
+        undo: undo,
+        spoken: undo ? riskWords + ', ' + undo + '.' : riskWords + '.',
+      };
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -4615,6 +4683,25 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       summary.className = 'approval-card__summary';
       summary.textContent = payload.summary;
       card.appendChild(summary);
+
+      var verdict = describeApprovalVerdict(payload);
+      if (verdict) {
+        var verdictEl = document.createElement('div');
+        verdictEl.className = 'approval-card__verdict';
+        var riskEl = document.createElement('span');
+        riskEl.className =
+          'approval-card__risk approval-card__risk--' + (payload.riskLevel || 'unrated');
+        riskEl.textContent = verdict.risk;
+        verdictEl.appendChild(riskEl);
+        if (verdict.undo) {
+          var undoEl = document.createElement('span');
+          undoEl.className = 'approval-card__undo';
+          undoEl.textContent = verdict.undo;
+          verdictEl.appendChild(undoEl);
+        }
+        card.appendChild(verdictEl);
+        card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
 
       if (payload.detail) {
         var detail = document.createElement('pre');
@@ -4951,6 +5038,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     window.addEventListener('message', (event) => {
       const msg = event.data;
 
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
+
       if (msg.type === 'turnStarted') {
         removeTyping();
         showTyping();
@@ -5165,6 +5257,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'sessionsList') {
         if (msg.payload.source === sessionsSource) {
+          sessionsLoading = false;
           sessionsRows = msg.payload.rows || [];
           sessionsUnavailable = msg.payload.unavailable || null;
           if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;
@@ -6684,6 +6777,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       font-size: 12px;
       line-height: 1.5;
     }
+    .approval-card__verdict {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .approval-card__risk {
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-secondary);
+    }
+    .approval-card__risk--medium { color: var(--warning); border-color: var(--warning-border); }
+    .approval-card__risk--high { color: var(--error); border-color: var(--error-border); }
+    .approval-card__undo { color: var(--text-secondary); }
     .approval-card__detail {
       margin: 8px 0 0;
       padding: 8px 10px;
@@ -8623,7 +8733,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -8663,7 +8773,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: 'chat', epoch: 0 };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -10257,11 +10378,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     var sessionsSource = 'local';
     var sessionsRows = [];
     var sessionsUnavailable = null;
+    var sessionsLoading = false;
     var accountSignedIn = false;
 
     function renderSessionsRows() {
       if (!sessionsSheetList) return;
       sessionsSheetList.replaceChildren();
+      sessionsSheetList.setAttribute('aria-busy', String(sessionsLoading));
+      if (sessionsLoading) {
+        var loading = document.createElement('div');
+        loading.className = 'sessions-sheet-empty';
+        loading.setAttribute('role', 'status');
+        loading.textContent = sessionsSource === 'local'
+          ? 'Loading developer sessions…'
+          : 'Loading cloud chats…';
+        sessionsSheetList.appendChild(loading);
+        return;
+      }
       var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
         .trim()
         .toLowerCase();
@@ -10336,6 +10469,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       sessionsSource = source;
       sessionsRows = [];
       sessionsUnavailable = null;
+      sessionsLoading = true;
+      if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
       renderSessionsRows();
@@ -10718,6 +10853,32 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       expired: 'The turn ended before this was answered.',
     };
 
+    // The host already decided how risky the call is and whether it can be
+    // taken back. Both are said in words: a reader who cannot see the colour
+    // of the chip, or is reading the card aloud, gets the same answer.
+    var APPROVAL_RISK_WORDS = {
+      low: 'Low risk',
+      medium: 'Medium risk',
+      high: 'High risk',
+    };
+
+    function describeApprovalVerdict(payload) {
+      var risk = APPROVAL_RISK_WORDS[payload.riskLevel];
+      var stated = typeof payload.reversible === 'boolean';
+      if (!risk && !stated) return null;
+      var undo = stated
+        ? payload.reversible
+          ? 'Can be undone'
+          : 'Cannot be undone'
+        : '';
+      var riskWords = risk || 'Risk not rated';
+      return {
+        risk: riskWords,
+        undo: undo,
+        spoken: undo ? riskWords + ', ' + undo + '.' : riskWords + '.',
+      };
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -10741,6 +10902,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       summary.className = 'approval-card__summary';
       summary.textContent = payload.summary;
       card.appendChild(summary);
+
+      var verdict = describeApprovalVerdict(payload);
+      if (verdict) {
+        var verdictEl = document.createElement('div');
+        verdictEl.className = 'approval-card__verdict';
+        var riskEl = document.createElement('span');
+        riskEl.className =
+          'approval-card__risk approval-card__risk--' + (payload.riskLevel || 'unrated');
+        riskEl.textContent = verdict.risk;
+        verdictEl.appendChild(riskEl);
+        if (verdict.undo) {
+          var undoEl = document.createElement('span');
+          undoEl.className = 'approval-card__undo';
+          undoEl.textContent = verdict.undo;
+          verdictEl.appendChild(undoEl);
+        }
+        card.appendChild(verdictEl);
+        card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
 
       if (payload.detail) {
         var detail = document.createElement('pre');
@@ -11077,6 +11257,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     window.addEventListener('message', (event) => {
       const msg = event.data;
 
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
+
       if (msg.type === 'turnStarted') {
         removeTyping();
         showTyping();
@@ -11291,6 +11476,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'sessionsList') {
         if (msg.payload.source === sessionsSource) {
+          sessionsLoading = false;
           sessionsRows = msg.payload.rows || [];
           sessionsUnavailable = msg.payload.unavailable || null;
           if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;
@@ -12810,6 +12996,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       font-size: 12px;
       line-height: 1.5;
     }
+    .approval-card__verdict {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .approval-card__risk {
+      padding: 1px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-secondary);
+    }
+    .approval-card__risk--medium { color: var(--warning); border-color: var(--warning-border); }
+    .approval-card__risk--high { color: var(--error); border-color: var(--error-border); }
+    .approval-card__undo { color: var(--text-secondary); }
     .approval-card__detail {
       margin: 8px 0 0;
       padding: 8px 10px;
@@ -14749,7 +14952,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace files and symbols"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
@@ -14789,7 +14992,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    const vscode = acquireVsCodeApi();
+    const vscodeHost = acquireVsCodeApi();
+    const sessionBinding = { origin: 'chat', epoch: 0 };
+    const vscode = {
+      postMessage: function(message) {
+        return vscodeHost.postMessage(Object.assign({}, message, {
+          origin: sessionBinding.origin,
+          epoch: sessionBinding.epoch
+        }));
+      },
+      getState: function() { return vscodeHost.getState(); },
+      setState: function(state) { return vscodeHost.setState(state); }
+    };
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
@@ -16383,11 +16597,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     var sessionsSource = 'local';
     var sessionsRows = [];
     var sessionsUnavailable = null;
+    var sessionsLoading = false;
     var accountSignedIn = false;
 
     function renderSessionsRows() {
       if (!sessionsSheetList) return;
       sessionsSheetList.replaceChildren();
+      sessionsSheetList.setAttribute('aria-busy', String(sessionsLoading));
+      if (sessionsLoading) {
+        var loading = document.createElement('div');
+        loading.className = 'sessions-sheet-empty';
+        loading.setAttribute('role', 'status');
+        loading.textContent = sessionsSource === 'local'
+          ? 'Loading developer sessions…'
+          : 'Loading cloud chats…';
+        sessionsSheetList.appendChild(loading);
+        return;
+      }
       var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
         .trim()
         .toLowerCase();
@@ -16462,6 +16688,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       sessionsSource = source;
       sessionsRows = [];
       sessionsUnavailable = null;
+      sessionsLoading = true;
+      if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
       renderSessionsRows();
@@ -16844,6 +17072,32 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       expired: 'The turn ended before this was answered.',
     };
 
+    // The host already decided how risky the call is and whether it can be
+    // taken back. Both are said in words: a reader who cannot see the colour
+    // of the chip, or is reading the card aloud, gets the same answer.
+    var APPROVAL_RISK_WORDS = {
+      low: 'Low risk',
+      medium: 'Medium risk',
+      high: 'High risk',
+    };
+
+    function describeApprovalVerdict(payload) {
+      var risk = APPROVAL_RISK_WORDS[payload.riskLevel];
+      var stated = typeof payload.reversible === 'boolean';
+      if (!risk && !stated) return null;
+      var undo = stated
+        ? payload.reversible
+          ? 'Can be undone'
+          : 'Cannot be undone'
+        : '';
+      var riskWords = risk || 'Risk not rated';
+      return {
+        risk: riskWords,
+        undo: undo,
+        spoken: undo ? riskWords + ', ' + undo + '.' : riskWords + '.',
+      };
+    }
+
     function renderApprovalCard(payload) {
       hideEmptyState();
       var card = document.createElement('section');
@@ -16867,6 +17121,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       summary.className = 'approval-card__summary';
       summary.textContent = payload.summary;
       card.appendChild(summary);
+
+      var verdict = describeApprovalVerdict(payload);
+      if (verdict) {
+        var verdictEl = document.createElement('div');
+        verdictEl.className = 'approval-card__verdict';
+        var riskEl = document.createElement('span');
+        riskEl.className =
+          'approval-card__risk approval-card__risk--' + (payload.riskLevel || 'unrated');
+        riskEl.textContent = verdict.risk;
+        verdictEl.appendChild(riskEl);
+        if (verdict.undo) {
+          var undoEl = document.createElement('span');
+          undoEl.className = 'approval-card__undo';
+          undoEl.textContent = verdict.undo;
+          verdictEl.appendChild(undoEl);
+        }
+        card.appendChild(verdictEl);
+        card.setAttribute('aria-label', 'Approval needed, ' + verdict.spoken + ' ' + payload.summary);
+      }
 
       if (payload.detail) {
         var detail = document.createElement('pre');
@@ -17203,6 +17476,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     window.addEventListener('message', (event) => {
       const msg = event.data;
 
+      if (msg.type === 'sessionBinding') {
+        sessionBinding.epoch = msg.payload.epoch;
+        return;
+      }
+
       if (msg.type === 'turnStarted') {
         removeTyping();
         showTyping();
@@ -17417,6 +17695,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'sessionsList') {
         if (msg.payload.source === sessionsSource) {
+          sessionsLoading = false;
           sessionsRows = msg.payload.rows || [];
           sessionsUnavailable = msg.payload.unavailable || null;
           if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;

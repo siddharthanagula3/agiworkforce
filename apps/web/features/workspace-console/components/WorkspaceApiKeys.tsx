@@ -27,7 +27,7 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 const secondaryButtonClass =
@@ -149,14 +149,14 @@ export function WorkspaceApiKeys() {
 
   if (isPending) {
     return (
-      <div role="status" style={{ ...cardStyle, padding: 20 }}>
+      <div role="status" style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <Spinner size="sm" />
       </div>
     );
   }
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load workspace API keys
         </p>

@@ -34,9 +34,12 @@ import { normalizeModelId } from '../constants/llm';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils';
 import {
+  EMPTY_TURN_FAILURE_CODE,
+  EMPTY_TURN_FAILURE_MESSAGE,
+  cloudFailureProjection,
   createCloudStreamDeltaSink,
+  emptyTurnFailureProjection,
   hasRenderableCloudMessageOutput,
-  type CloudStreamMessageProjection,
 } from './cloudStreamDeltas';
 import { CloudToolApprovalRegistry, toPersistedCloudApprovalProjection } from './cloudToolApproval';
 import { uploadDesktopCloudAttachments } from '../services/desktopCloudAttachments';
@@ -61,17 +64,6 @@ interface ActiveWebTurn {
   sink: ReturnType<typeof createCloudStreamDeltaSink>;
   settled: boolean;
   runReference?: ManagedCloudAgentRunReference;
-}
-
-function failedMessageProjection(
-  projection: CloudStreamMessageProjection,
-  message: string,
-): CloudStreamMessageProjection {
-  return {
-    ...projection,
-    finishReason: 'error',
-    streamError: { message },
-  };
 }
 
 function mapConversation(cloud: CloudConversation): Conversation {
@@ -289,7 +281,6 @@ export class WebRuntime implements ChatRuntime {
           const assistantContent = sink.getAccumulatedContent();
           const hasRenderableOutput = hasRenderableCloudMessageOutput(assistantContent, projection);
           if (!sink.isSuspended() && !hasRenderableOutput && !streamError) {
-            const failureMessage = 'AGI Cloud completed without returning a response.';
             const agentActivity = sink.getAgentActivity();
             const failedMetadata = {
               ...(agentActivity
@@ -297,12 +288,12 @@ export class WebRuntime implements ChatRuntime {
                     agentActivity: finishAgentActivityLocally(agentActivity, {
                       status: 'failed',
                       completedAtMs: Date.now(),
-                      error: failureMessage,
+                      error: EMPTY_TURN_FAILURE_MESSAGE,
                     }),
                   }
                 : {}),
               ...(runReference ? { cloudAgentRun: runReference } : {}),
-              ...failedMessageProjection(projection, failureMessage),
+              ...emptyTurnFailureProjection(projection),
             };
             await persistence.saveMessage(conversationId, {
               id: assistantMessageId,
@@ -313,7 +304,8 @@ export class WebRuntime implements ChatRuntime {
             });
             this.emit({
               type: 'error',
-              error: `${failureMessage} Please retry.`,
+              error: EMPTY_TURN_FAILURE_MESSAGE,
+              code: EMPTY_TURN_FAILURE_CODE,
             });
             return;
           }
@@ -350,7 +342,7 @@ export class WebRuntime implements ChatRuntime {
             return;
           }
           settleTurn();
-          const projection = failedMessageProjection(sink.getMessageProjection(), err.message);
+          const projection = cloudFailureProjection(sink.getMessageProjection(), err.message);
           const agentActivity = sink.getAgentActivity();
           void persistence
             .saveMessage(conversationId, {
@@ -458,7 +450,6 @@ export class WebRuntime implements ChatRuntime {
           !outcome.suspended &&
           !hasRenderableCloudMessageOutput(outcome.content, outcome.messageProjection) &&
           !outcome.streamError;
-        const failureMessage = 'AGI Cloud completed without returning a response.';
         const metadata = {
           ...(outcome.agentActivity
             ? {
@@ -466,7 +457,7 @@ export class WebRuntime implements ChatRuntime {
                   ? finishAgentActivityLocally(outcome.agentActivity, {
                       status: 'failed',
                       completedAtMs: Date.now(),
-                      error: failureMessage,
+                      error: EMPTY_TURN_FAILURE_MESSAGE,
                     })
                   : outcome.agentActivity,
               }
@@ -476,7 +467,7 @@ export class WebRuntime implements ChatRuntime {
             ? toPersistedCloudApprovalProjection(outcome.pendingProjection)
             : null,
           ...(emptyTerminal
-            ? failedMessageProjection(outcome.messageProjection, failureMessage)
+            ? emptyTurnFailureProjection(outcome.messageProjection)
             : outcome.messageProjection),
         };
         await persistence.saveMessage(conversationId, {
@@ -489,7 +480,8 @@ export class WebRuntime implements ChatRuntime {
         if (emptyTerminal) {
           this.emit({
             type: 'error',
-            error: `${failureMessage} Please retry.`,
+            error: EMPTY_TURN_FAILURE_MESSAGE,
+            code: EMPTY_TURN_FAILURE_CODE,
           });
           return;
         }

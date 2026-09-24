@@ -191,6 +191,93 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
     expect(await screen.findByText(/3 backup codes remaining/i)).toBeInTheDocument();
   });
 
+  async function reachBackupCodes() {
+    const user = userEvent.setup();
+    render(<TwoFactorEnrollmentPanel />);
+    service.get2FAStatus.mockResolvedValue(enabledStatus());
+    await user.click(await screen.findByRole('button', { name: /set up authenticator app/i }));
+    await user.type(await screen.findByLabelText(/Enter the 6-digit code from the app/i), '123456');
+    await user.click(screen.getByRole('button', { name: /verify and enable/i }));
+    await screen.findByRole('list', { name: /Backup codes/i });
+    return user;
+  }
+
+  it('explains before dismissal that the codes are shown once and each works once', async () => {
+    await reachBackupCodes();
+
+    expect(screen.getByText(/These are shown once/i)).toBeVisible();
+    expect(screen.getByText(/Each code works a single time/i)).toBeVisible();
+  });
+
+  it('copies every code to the clipboard in one action', async () => {
+    const writeText = vi.fn(async () => undefined);
+    const user = await reachBackupCodes();
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+
+    await user.click(screen.getByRole('button', { name: /Copy codes/i }));
+
+    expect(writeText).toHaveBeenCalledWith(BACKUP_CODES.join('\n'));
+  });
+
+  it('downloads every code as a text file', async () => {
+    const createObjectURL = vi.fn((_blob: Blob) => 'blob:backup-codes');
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      const user = await reachBackupCodes();
+
+      await user.click(screen.getByRole('button', { name: /Download codes/i }));
+
+      const blob = createObjectURL.mock.calls[0]![0];
+      const text = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsText(blob);
+      });
+      expect(text).toBe(`${BACKUP_CODES.join('\n')}\n`);
+      expect(click).toHaveBeenCalledOnce();
+    } finally {
+      click.mockRestore();
+      URL.createObjectURL = original.create;
+      URL.revokeObjectURL = original.revoke;
+    }
+  });
+
+  it('prints the codes on a page of their own', async () => {
+    const printDocument = document.implementation.createHTMLDocument('print');
+    const print = vi.fn();
+    const open = vi.fn(() => ({ document: printDocument, print }) as unknown as Window);
+    vi.stubGlobal('open', open);
+    const user = await reachBackupCodes();
+
+    await user.click(screen.getByRole('button', { name: /Print codes/i }));
+
+    expect(open).toHaveBeenCalledOnce();
+    expect(printDocument.title).toBe('AGI Workforce backup codes');
+    expect([...printDocument.querySelectorAll('li')].map((item) => item.textContent)).toEqual(
+      BACKUP_CODES,
+    );
+    expect(print).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/blocked the print window/i)).toBeNull();
+  });
+
+  it('says so when the browser blocks the print window instead of doing nothing', async () => {
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => null),
+    );
+    const user = await reachBackupCodes();
+
+    await user.click(screen.getByRole('button', { name: /Print codes/i }));
+
+    const notice = await screen.findByText(/blocked the print window/i);
+    expect(notice.closest('[role="alert"]')).toHaveTextContent(
+      /download or copy the codes instead/i,
+    );
+  });
+
   it('regenerates backup codes only after the route has been satisfied with a proof', async () => {
     const user = userEvent.setup();
     service.get2FAStatus.mockResolvedValue(enabledStatus());

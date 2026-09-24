@@ -11,6 +11,7 @@ import { clearCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore, _resetRuntimeRefs } from '@features/chat/stores/voice-input-store';
 import { DICTATION_STATUS } from '@features/chat/lib/dictation-machine';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 
 const TRANSCRIPT = 'ship the dictation bar';
 
@@ -89,6 +90,7 @@ function mount() {
 describe('useDictation', () => {
   beforeEach(() => {
     useSettingsStore.setState({ dictationEnabled: true });
+    useBillingStore.setState({ disabledFeatures: [] });
     _resetRuntimeRefs();
     clearCsrfToken();
     useVoiceInputStore.setState({
@@ -128,6 +130,46 @@ describe('useDictation', () => {
     });
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
     expect(result.current.isActive).toBe(false);
+  });
+
+  it('refuses to record while the server holds dictation off, and says so', () => {
+    useBillingStore.setState({ disabledFeatures: [{ capability: 'dictation', reason: null }] });
+    const { result } = mount();
+
+    act(() => result.current.start());
+
+    expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+    expect(result.current.status).toBe(DICTATION_STATUS.error);
+    expect(result.current.error).toBe(
+      'Dictation is temporarily switched off while we investigate a problem with it.',
+    );
+  });
+
+  it('names the reason when the switch closes only this version', () => {
+    useBillingStore.setState({
+      disabledFeatures: [
+        { capability: 'dictation', reason: 'Recordings from this version arrive silent.' },
+      ],
+    });
+    const { result } = mount();
+
+    act(() => result.current.start());
+
+    expect(result.current.error).toBe(
+      'Dictation is switched off for this version. Recordings from this version arrive silent.',
+    );
+  });
+
+  it('records normally when another capability is switched off', async () => {
+    useBillingStore.setState({ disabledFeatures: [{ capability: 'screen_share', reason: null }] });
+    const { result } = mount();
+
+    await act(async () => {
+      result.current.start();
+    });
+
+    expect(result.current.status).toBe(DICTATION_STATUS.recording);
+    expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalledOnce();
   });
 
   it('releases a pending microphone grant after dictation is disabled', async () => {

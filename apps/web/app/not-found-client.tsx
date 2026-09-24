@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, ButtonRow } from '@/features/marketing/components/system';
+import { Button, ButtonRow } from '@/features/marketing/components/system/Button';
 import { useHomeHref } from '@/features/desktop-host/hooks/use-home-href';
 
 export function NotFoundActions() {

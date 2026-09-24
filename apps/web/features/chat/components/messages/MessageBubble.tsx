@@ -103,6 +103,7 @@ import {
   type BranchItem,
 } from '@agiworkforce/unified-chat';
 import {
+  hasUnavailableWebSearch,
   isLocalPlaceholderActivityEntry,
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
@@ -110,14 +111,14 @@ import {
 const MarkdownContent = dynamic(
   () => import('@agiworkforce/unified-chat').then((mod) => mod.MarkdownContent),
   {
-    loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
+    loading: () => <div className="h-4 w-32 animate-pulse rounded-compact bg-muted" />,
   },
 );
 
 const StreamingMarkdownContent = dynamic(
   () => import('@agiworkforce/unified-chat').then((mod) => mod.StreamingMarkdownContent),
   {
-    loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" />,
+    loading: () => <div className="h-4 w-32 animate-pulse rounded-compact bg-muted" />,
   },
 );
 
@@ -129,7 +130,9 @@ import {
   removeArtifactBlocks,
 } from '../../utils/artifact-detector';
 import {
+  EXPLICIT_ARTIFACT_DERIVATION_POLICY,
   extractTrailingUnclosedBlock,
+  isExplicitlyRenderableArtifact,
   isRenderableArtifact,
   resolveOriginPrivacyMode,
 } from '@agiworkforce/artifacts';
@@ -167,7 +170,7 @@ import {
   type ResearchPlanOptions,
 } from '../research/ResearchActivity';
 import {
-  renumberCitationMarkersFromTrailingList,
+  reconcileCitationMarkersFromSourceList,
   stripTrailingSourceList,
   stripTrailingCitationOnlyBlock,
 } from '../../lib/researchReportSources';
@@ -261,6 +264,20 @@ export const messageBubbleVariants: Variants = {
     transition: { duration: 0.18, ease: 'easeOut' },
   },
 };
+
+const MESSAGE_ENTRANCE_CACHE_LIMIT = 20_000;
+const animatedMessageKeys = new Set<string>();
+
+export function consumeMessageEntranceAnimation(key: string): boolean {
+  if (animatedMessageKeys.has(key)) return false;
+  animatedMessageKeys.add(key);
+  while (animatedMessageKeys.size > MESSAGE_ENTRANCE_CACHE_LIMIT) {
+    const oldest = animatedMessageKeys.values().next().value;
+    if (oldest === undefined) break;
+    animatedMessageKeys.delete(oldest);
+  }
+  return true;
+}
 
 interface Attachment {
   id: string;
@@ -407,6 +424,7 @@ interface Message {
   reactions?: Array<{ type: string; userId: string }>;
   attachments?: Attachment[];
   metadata?: {
+    artifactDerivation?: StoreMessageMetadata['artifactDerivation'];
     /** Trust-boundary labels persisted with the turn (Local/BYOK handoff evidence). */
     privacyMode?: StoreMessageMetadata['privacyMode'];
     providerMode?: StoreMessageMetadata['providerMode'];
@@ -886,12 +904,14 @@ const MessageBubbleComponent = function MessageBubble({
 
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
+  const removeArtifact = useArtifactsStore((state) => state.removeArtifact);
   const upsertArtifact = useArtifactsStore((state) => state.upsertArtifact);
   // Stamp artifacts with the active conversation id (the SAME source the
   // Artifacts panel filters by). message.sessionId is often unset, so relying
   // on it left artifacts with conversationId=undefined → filtered out of every
   // panel. Falls back to message.sessionId when there's no active conversation.
   const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const animateEntrance = useRef(consumeMessageEntranceAnimation(message.id)).current;
   const isAgiWorkTurn = useChatStore(
     selectIsAgiWorkConversation(message.sessionId ?? activeConversationId),
   );
@@ -1020,6 +1040,7 @@ const MessageBubbleComponent = function MessageBubble({
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
+  const artifactDerivationPolicy = message.metadata?.artifactDerivation;
   const messageCodeBlocks = useMemo(
     () => (isUser ? [] : extractCodeBlocks(message.content)),
     [isUser, message.content],
@@ -1035,8 +1056,50 @@ const MessageBubbleComponent = function MessageBubble({
         messageId: message.id,
       },
       messageCodeBlocks,
+      artifactDerivationPolicy,
     );
-  }, [message.content, isUser, artifactConversationId, message.id, messageCodeBlocks]);
+  }, [
+    message.content,
+    isUser,
+    artifactConversationId,
+    message.id,
+    messageCodeBlocks,
+    artifactDerivationPolicy,
+  ]);
+  const legacyDerivedArtifactIds = useMemo(() => {
+    if (isUser || artifactDerivationPolicy !== EXPLICIT_ARTIFACT_DERIVATION_POLICY) {
+      return new Set<string>();
+    }
+    return new Set(
+      extractArtifacts(
+        message.content,
+        {
+          conversationId: artifactConversationId,
+          messageId: message.id,
+        },
+        messageCodeBlocks,
+      ).map((artifact) => artifact.id),
+    );
+  }, [
+    isUser,
+    artifactDerivationPolicy,
+    message.content,
+    artifactConversationId,
+    message.id,
+    messageCodeBlocks,
+  ]);
+  const explicitDerivedArtifactIds = useMemo(
+    () => new Set(extractedArtifacts.map((artifact) => artifact.id)),
+    [extractedArtifacts],
+  );
+  const visibleExistingArtifacts = useMemo(
+    () =>
+      existingArtifacts.filter(
+        (artifact) =>
+          !legacyDerivedArtifactIds.has(artifact.id) || explicitDerivedArtifactIds.has(artifact.id),
+      ),
+    [existingArtifacts, legacyDerivedArtifactIds, explicitDerivedArtifactIds],
+  );
 
   // Live artifact streaming (Claude parity): while this assistant message is
   // still streaming and its buffer ends in an UNCLOSED renderable fence, parse
@@ -1054,9 +1117,14 @@ const MessageBubbleComponent = function MessageBubble({
   const trailingArtifactBlock = useMemo(() => {
     if (isUser) return null;
     const block = extractTrailingUnclosedBlock(message.content, messageCodeBlocks);
-    if (!block || !isRenderableArtifact(block.language, block.content)) return null;
+    if (!block) return null;
+    const renderable =
+      artifactDerivationPolicy === EXPLICIT_ARTIFACT_DERIVATION_POLICY
+        ? isExplicitlyRenderableArtifact(block.language, block.content)
+        : isRenderableArtifact(block.language, block.content);
+    if (!renderable) return null;
     return block;
-  }, [isUser, message.content, messageCodeBlocks]);
+  }, [isUser, message.content, messageCodeBlocks, artifactDerivationPolicy]);
 
   // What the transcript hides while it is being written: only meaningful for a
   // turn that is actually streaming.
@@ -1232,7 +1300,8 @@ const MessageBubbleComponent = function MessageBubble({
   ]);
 
   const artifacts = useMemo(() => {
-    const baseArtifacts = existingArtifacts.length > 0 ? existingArtifacts : extractedArtifacts;
+    const baseArtifacts =
+      visibleExistingArtifacts.length > 0 ? visibleExistingArtifacts : extractedArtifacts;
     // Dedupe by id: the upsert effect below writes generated-file artifacts
     // into the artifacts store, so on the next render they ALSO arrive via
     // existingArtifacts, without this they would render twice. Persisted
@@ -1256,7 +1325,7 @@ const MessageBubbleComponent = function MessageBubble({
       };
     }
     return merged;
-  }, [existingArtifacts, extractedArtifacts, generatedFileArtifacts]);
+  }, [visibleExistingArtifacts, extractedArtifacts, generatedFileArtifacts]);
 
   // Generated files rendered through the EXISTING attachment grid: images get
   // the thumbnail + ImageLightbox path; descriptors without a successfully
@@ -1329,7 +1398,25 @@ const MessageBubbleComponent = function MessageBubble({
   }, [onRegenerate, message.id]);
 
   useEffect(() => {
-    if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
+    if (artifactDerivationPolicy !== EXPLICIT_ARTIFACT_DERIVATION_POLICY) return;
+    for (const artifact of existingArtifacts) {
+      if (
+        legacyDerivedArtifactIds.has(artifact.id) &&
+        !explicitDerivedArtifactIds.has(artifact.id)
+      ) {
+        removeArtifact(artifact.id);
+      }
+    }
+  }, [
+    artifactDerivationPolicy,
+    existingArtifacts,
+    legacyDerivedArtifactIds,
+    explicitDerivedArtifactIds,
+    removeArtifact,
+  ]);
+
+  useEffect(() => {
+    if (isUser || visibleExistingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
     extractedArtifacts.forEach((artifact) =>
       addArtifactForMessage(message.id, artifact, artifactConversationId),
     );
@@ -1337,7 +1424,7 @@ const MessageBubbleComponent = function MessageBubble({
     message.id,
     artifactConversationId,
     isUser,
-    existingArtifacts.length,
+    visibleExistingArtifacts.length,
     extractedArtifacts,
     addArtifactForMessage,
   ]);
@@ -1372,31 +1459,38 @@ const MessageBubbleComponent = function MessageBubble({
     [isUser, metadataSearchResults, metadataCitations],
   );
 
-  const cleanedContent = useMemo(() => {
+  const { cleanedContent, canLinkNumericCitations } = useMemo(() => {
     // While an artifact block is streaming into the panel, hide the growing
     // raw fence from the chat body (a compact "Writing…" chip renders instead)
     //, mirroring how completed artifact blocks are stripped below.
     const base = streamingBlock
       ? message.content.slice(0, streamingBlock.startIndex).trimEnd()
       : message.content;
-    const stripped = artifacts.length === 0 ? base : removeArtifactBlocks(base, artifacts);
-    const renumbered = isUser
-      ? stripped
-      : renumberCitationMarkersFromTrailingList(stripped, citationsByMarker);
+    const stripped =
+      artifacts.length === 0
+        ? base
+        : removeArtifactBlocks(base, artifacts, artifactDerivationPolicy);
+    const reconciled = isUser
+      ? { markdown: stripped, canLinkNumericCitations: true }
+      : reconcileCitationMarkersFromSourceList(stripped, citationsByMarker);
     const withoutDuplicateSources =
       message.metadata?.research || searchSources.length > 0
-        ? stripTrailingSourceList(renumbered)
-        : renumbered;
+        ? stripTrailingSourceList(reconciled.markdown)
+        : reconciled.markdown;
     const withoutCitationTail = isUser
       ? withoutDuplicateSources
       : stripTrailingCitationOnlyBlock(withoutDuplicateSources);
     // AUDIT-FIX BUG-31: non-artifact languages get the same "don't hand the
     // renderer a half-open fence" treatment the artifact path already gets.
-    return closeUnterminatedFence(withoutCitationTail);
+    return {
+      cleanedContent: closeUnterminatedFence(withoutCitationTail),
+      canLinkNumericCitations: reconciled.canLinkNumericCitations,
+    };
   }, [
     message.content,
     artifacts,
     streamingBlock,
+    artifactDerivationPolicy,
     message.metadata?.research,
     isUser,
     searchSources.length,
@@ -1580,8 +1674,13 @@ const MessageBubbleComponent = function MessageBubble({
   // These feed the "Searched the web" step's result count and the compact
   // Sources control at the end of the answer.
   const { cited: citedSources, more: moreSources } = useMemo(
-    () => orderSourcesByCitation(cleanedContent, citationsByMarker, searchSources),
-    [cleanedContent, citationsByMarker, searchSources],
+    () =>
+      orderSourcesByCitation(
+        cleanedContent,
+        canLinkNumericCitations ? citationsByMarker : [],
+        searchSources,
+      ),
+    [cleanedContent, canLinkNumericCitations, citationsByMarker, searchSources],
   );
 
   const turnAttemptedSearch = useMemo(() => {
@@ -1621,6 +1720,7 @@ const MessageBubbleComponent = function MessageBubble({
     if (rendersResearchPlan(message.metadata?.research)) return null;
     if (hasStreamError({ metadata: message.metadata })) return null;
     if (message.metadata?.webSearchAskedInText !== true) return null;
+    if (hasUnavailableWebSearch(canonicalActivity)) return null;
     if (message.metadata?.tools?.some((tool) => tool.status === 'awaiting_approval')) return null;
     if (!turnAttemptedSearch) return turnRanAnyTool ? null : 'not-invoked';
     return searchSources.length > 0 ? null : 'no-results';
@@ -1628,6 +1728,7 @@ const MessageBubbleComponent = function MessageBubble({
     isUser,
     message.isStreaming,
     message.metadata,
+    canonicalActivity,
     turnAttemptedSearch,
     turnRanAnyTool,
     producedNoVisibleOutput,
@@ -1675,7 +1776,7 @@ const MessageBubbleComponent = function MessageBubble({
       data-role={isUser ? 'user' : 'assistant'}
       data-message-id={message.id}
       variants={messageBubbleVariants}
-      initial={prefersReducedMotion ? false : 'hidden'}
+      initial={prefersReducedMotion || !animateEntrance ? false : 'hidden'}
       animate="visible"
       transition={
         prefersReducedMotion ? { duration: 0, delay: 0 } : { delay: animationIndex * 0.06 }
@@ -1721,7 +1822,7 @@ const MessageBubbleComponent = function MessageBubble({
                 />
               )}
               {isUser && message.metadata?.isPasted && (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <span className="rounded-compact bg-muted px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                   pasted
                 </span>
               )}
@@ -1978,7 +2079,12 @@ const MessageBubbleComponent = function MessageBubble({
                       citations={citationsByMarker}
                     />
                   ) : (
-                    <MarkdownContent content={cleanedContent} citations={citationsByMarker} />
+                    <MarkdownContent
+                      content={cleanedContent}
+                      citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                      linkifyNumericCitations={canLinkNumericCitations}
+                      literalHtml={isUser}
+                    />
                   );
                   return formatCardType ? (
                     <MessageFormatCard
@@ -2095,7 +2201,7 @@ const MessageBubbleComponent = function MessageBubble({
                         key={attachment.id}
                         type="button"
                         onClick={() => setLightboxAttachment(attachment)}
-                        className="group relative basis-full overflow-hidden rounded-lg border border-border/50 bg-muted/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        className="group relative basis-full overflow-hidden rounded-lg border border-border/50 bg-muted/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                         aria-label={`View ${attachment.name} full size`}
                         title={attachment.name}
                       >
@@ -2114,7 +2220,7 @@ const MessageBubbleComponent = function MessageBubble({
                       key={attachment.id}
                       type="button"
                       onClick={() => setLightboxAttachment(attachment)}
-                      className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border/50 bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="group relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border/50 bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                       aria-label={`View ${attachment.name} full size`}
                       title={attachment.name}
                     >
@@ -2166,7 +2272,7 @@ const MessageBubbleComponent = function MessageBubble({
                           chip read as a placeholder. Only rendered when the
                           byte count is actually known. */}
                       {typeof attachment.size === 'number' && attachment.size > 0 && (
-                        <span className="text-[12px] text-muted-foreground">
+                        <span className="text-caption text-muted-foreground">
                           {formatBytes(attachment.size)}
                         </span>
                       )}
@@ -2430,7 +2536,7 @@ const MessageBubbleComponent = function MessageBubble({
                         className={cn(
                           'absolute right-2 top-2 flex h-8 w-8 items-center justify-center',
                           'rounded-full bg-black/55 text-white hover:bg-black/75',
-                          'opacity-0 transition-opacity duration-150',
+                          'opacity-0 transition-opacity duration-quick',
                           'group-hover:opacity-100 group-focus-within:opacity-100',
                           'focus-visible:opacity-100 motion-reduce:opacity-100',
                         )}
@@ -2470,7 +2576,7 @@ const MessageBubbleComponent = function MessageBubble({
                       key={`thinking-step-${stepIndex}-${step.slice(0, 20)}`}
                       className="flex gap-2 text-xs text-muted-foreground"
                     >
-                      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-[12px] font-semibold text-primary">
+                      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-caption font-semibold text-primary">
                         {stepIndex + 1}
                       </span>
                       <span>{step}</span>
@@ -2517,7 +2623,7 @@ const MessageBubbleComponent = function MessageBubble({
                             <AvatarImage src={collab.employeeAvatar} />
                           )}
                         <AvatarFallback
-                          className="text-[12px] font-semibold text-white"
+                          className="text-caption font-semibold text-white"
                           style={{
                             backgroundColor:
                               collab.employeeAvatar &&
@@ -2535,7 +2641,7 @@ const MessageBubbleComponent = function MessageBubble({
                       </Avatar>
                       <span className="text-xs font-medium">{collab.employeeName}</span>
                       {collab.messageType && (
-                        <Badge variant="secondary" className="h-4 text-[12px]">
+                        <Badge variant="secondary" className="h-4 text-caption">
                           {collab.messageType}
                         </Badge>
                       )}
@@ -2552,7 +2658,7 @@ const MessageBubbleComponent = function MessageBubble({
           {!isUser && !message.isStreaming && modelEscalation && (
             <p
               data-testid="model-escalation-receipt"
-              className="mt-1.5 text-[12px] leading-4 text-[var(--chat-text-muted)]"
+              className="mt-1.5 text-caption leading-4 text-[var(--chat-text-muted)]"
             >
               {modelEscalation.line}
             </p>
@@ -2562,7 +2668,7 @@ const MessageBubbleComponent = function MessageBubble({
             <div
               role="status"
               data-testid="fallback-reason-notice"
-              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
+              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-caption text-[var(--chat-text-muted)]"
             >
               <CircleAlert className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="flex-1">{fallbackNotice}</span>
@@ -2570,7 +2676,7 @@ const MessageBubbleComponent = function MessageBubble({
                 type="button"
                 onClick={() => setFallbackNoticeDismissed(true)}
                 aria-label="Dismiss model substitution notice"
-                className="shrink-0 rounded underline-offset-2 hover:underline"
+                className="shrink-0 rounded-compact underline-offset-2 hover:underline"
               >
                 Dismiss
               </button>
@@ -2581,7 +2687,7 @@ const MessageBubbleComponent = function MessageBubble({
             <div
               role="status"
               data-testid="inline-transport-notice"
-              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
+              className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-caption text-[var(--chat-text-muted)]"
             >
               <CircleAlert className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="flex-1">
@@ -2598,7 +2704,7 @@ const MessageBubbleComponent = function MessageBubble({
               <div
                 role="status"
                 data-testid="secret-redaction-notice"
-                className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-[12px] text-[var(--chat-text-muted)]"
+                className="mt-1.5 flex items-start gap-2 rounded-md border border-border/60 bg-muted/40 px-2 py-1.5 text-caption text-[var(--chat-text-muted)]"
               >
                 <CircleAlert className="mt-[1px] h-3 w-3 shrink-0" aria-hidden="true" />
                 <span className="flex-1">{secretRedactionNotice}</span>
@@ -2606,7 +2712,7 @@ const MessageBubbleComponent = function MessageBubble({
                   type="button"
                   onClick={() => setSecretRedactionNoticeDismissed(true)}
                   aria-label="Dismiss secret redaction notice"
-                  className="shrink-0 rounded underline-offset-2 hover:underline"
+                  className="shrink-0 rounded-compact underline-offset-2 hover:underline"
                 >
                   Dismiss
                 </button>
@@ -2848,7 +2954,7 @@ const MessageBubbleComponent = function MessageBubble({
                               Try again
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuLabel className="text-[12px] font-normal text-[var(--chat-text-muted)]">
+                            <DropdownMenuLabel className="text-caption font-normal text-[var(--chat-text-muted)]">
                               Try again with
                             </DropdownMenuLabel>
                             {regenerateModelOptions.map((option) => (
@@ -2917,7 +3023,7 @@ const MessageBubbleComponent = function MessageBubble({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align={isUser ? 'end' : 'start'}>
-                        <DropdownMenuLabel className="text-[12px] font-normal text-[var(--chat-text-muted)]">
+                        <DropdownMenuLabel className="text-caption font-normal text-[var(--chat-text-muted)]">
                           <span className="block">
                             Sent at{' '}
                             <time
@@ -3038,7 +3144,7 @@ const MessageBubbleComponent = function MessageBubble({
               {!isUser && answeredByChipLabel && (
                 <span
                   data-testid="message-answered-by"
-                  className="max-w-full truncate text-[12px] leading-tight text-[var(--chat-text-muted)] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+                  className="max-w-full truncate text-caption leading-tight text-[var(--chat-text-muted)] opacity-0 transition-opacity duration-quick group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
                 >
                   {answeredByChipLabel}
                 </span>

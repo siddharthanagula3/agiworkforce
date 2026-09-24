@@ -19,6 +19,7 @@ import {
   storedBytes,
   MAX_RESUMABLE_UPLOAD_BYTES,
   RESUMABLE_PART_SIZE_BYTES,
+  type ResumableUploadTarget,
 } from '../resumable-upload';
 
 export const runtime = 'nodejs';
@@ -74,6 +75,38 @@ function queryInput(request: NextRequest): { assetId: string | null; mimeType: s
   return { assetId: params.get('assetId'), mimeType: params.get('mimeType') };
 }
 
+/**
+ * A session the host no longer holds is the ordinary end of an upload that was
+ * cancelled, abandoned or swept away, not a fault. The pending listing is read
+ * only after a call has already failed, so a healthy upload never pays for it
+ * and a storage outage is still reported as one.
+ */
+async function sessionIsClosed(target: ResumableUploadTarget, uploadId: string): Promise<boolean> {
+  const pending = await target.store
+    .listPendingMultipartUploads(target.bucket, target.key)
+    .catch(() => null);
+  return pending !== null && !pending.some((upload) => upload.uploadId === uploadId);
+}
+
+function uploadNoLongerOpen(): never {
+  throw createError
+    .notFound('This upload is no longer open. Start it again to finish the file.')
+    .asUserSafe();
+}
+
+async function onOpenSession<T>(
+  target: ResumableUploadTarget,
+  uploadId: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (await sessionIsClosed(target, uploadId)) uploadNoLongerOpen();
+    throw error;
+  }
+}
+
 async function handleListParts(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   const session = await resolveSession(request, context, queryInput(request));
 
@@ -81,11 +114,13 @@ async function handleListParts(request: NextRequest, context: RouteContext): Pro
   if (rateLimitResponse) return rateLimitResponse;
 
   const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
-  const parts = await target.store.listUploadedParts({
-    bucket: target.bucket,
-    key: target.key,
-    uploadId: session.uploadId,
-  });
+  const parts = await onOpenSession(target, session.uploadId, () =>
+    target.store.listUploadedParts({
+      bucket: target.bucket,
+      key: target.key,
+      uploadId: session.uploadId,
+    }),
+  );
 
   return NextResponse.json({
     uploadId: session.uploadId,
@@ -117,14 +152,16 @@ async function handleUploadPart(
   await refuseUnsafeUpload(body, session.mimeType, { leadsObject: partNumber === FIRST_PART });
 
   const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
-  const part = await target.store.uploadPart({
-    bucket: target.bucket,
-    key: target.key,
-    uploadId: session.uploadId,
-    partNumber,
-    body,
-    checksumSha256: objectChecksum(body),
-  });
+  const part = await onOpenSession(target, session.uploadId, () =>
+    target.store.uploadPart({
+      bucket: target.bucket,
+      key: target.key,
+      uploadId: session.uploadId,
+      partNumber,
+      body,
+      checksumSha256: objectChecksum(body),
+    }),
+  );
 
   return NextResponse.json({ part });
 }
@@ -171,7 +208,9 @@ async function handleCompleteUpload(
 
   const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
   const handle = { bucket: target.bucket, key: target.key, uploadId: session.uploadId };
-  const parts: UploadedPart[] = await target.store.listUploadedParts(handle);
+  const parts: UploadedPart[] = await onOpenSession(target, session.uploadId, () =>
+    target.store.listUploadedParts(handle),
+  );
   if (parts.length === 0) {
     throw createError.validation('No part of this upload has been stored yet.');
   }
@@ -181,7 +220,9 @@ async function handleCompleteUpload(
     throw createError.validation('The upload is larger than the limit for a single file.');
   }
 
-  await target.store.completeMultipartUpload({ ...handle, parts });
+  await onOpenSession(target, session.uploadId, () =>
+    target.store.completeMultipartUpload({ ...handle, parts }),
+  );
   await inspectAssembledObject(target, parsed.data.fileName, session.mimeType);
 
   const id = await upsertVideoMediaAsset(
@@ -218,11 +259,15 @@ async function handleAbortUpload(
   if (rateLimitResponse) return rateLimitResponse;
 
   const target = resumableUploadTarget(session.userId, session.assetId, session.mimeType);
-  await target.store.abortMultipartUpload({
-    bucket: target.bucket,
-    key: target.key,
-    uploadId: session.uploadId,
-  });
+  try {
+    await target.store.abortMultipartUpload({
+      bucket: target.bucket,
+      key: target.key,
+      uploadId: session.uploadId,
+    });
+  } catch (error) {
+    if (!(await sessionIsClosed(target, session.uploadId))) throw error;
+  }
 
   return NextResponse.json({ aborted: true });
 }

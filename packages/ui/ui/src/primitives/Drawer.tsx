@@ -31,7 +31,7 @@ function DrawerOverlay({ className, ref, ...props }: DrawerOverlayProps) {
   return (
     <DrawerPrimitive.Overlay
       ref={ref}
-      className={cn('fixed inset-0 z-50 bg-black/80', className)}
+      className={cn('fixed inset-0 z-[var(--z-modal)] bg-black/80', className)}
       {...props}
     />
   );
@@ -51,7 +51,7 @@ function DrawerContent({ className, children, ref, ...props }: DrawerContentProp
       <DrawerPrimitive.Content
         ref={ref}
         className={cn(
-          'fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background',
+          'fixed inset-x-0 bottom-0 z-[var(--z-modal)] mt-24 flex h-auto flex-col rounded-t-menu border bg-background',
           className,
         )}
         {...props}

@@ -2,12 +2,18 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 
-import { getProviderComputePricing, normalizeBillingPlanTier } from '@agiworkforce/types';
+import {
+  FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD,
+  getProviderComputePricing,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import { getKeyValueStore } from '@/lib/server/key-value';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import { recordInfrastructureCostEvent } from '@/lib/services/cogs-ledger-service';
 import {
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
@@ -128,7 +134,7 @@ export function sandboxComputeCostCents(elapsedMs: number, microusdPerSecond: nu
  * It survives in the session record, so it holds only serialisable fields and
  * the scoped connection is rebuilt at settlement.
  */
-export interface SandboxComputeReservationRecord {
+interface SandboxComputeReservationBase {
   idempotencyKey: string;
   requestHash: string;
   leaseToken: string;
@@ -136,6 +142,12 @@ export interface SandboxComputeReservationRecord {
   provider: string;
   model: string;
 }
+
+export type SandboxComputeReservationRecord = SandboxComputeReservationBase &
+  (
+    | { fundingSource?: 'managed' }
+    | { fundingSource: 'platform-free'; quotaKey: string; settlementKey: string }
+  );
 
 export type SandboxComputeReservationOutcome =
   | { outcome: 'reserved'; reservation: SandboxComputeReservationRecord }
@@ -166,10 +178,9 @@ function reservationFailure(error: unknown): ManagedUsageRequestError {
 }
 
 /**
- * Holds the sandbox's whole admitted lifetime against the account's credit and
- * usage caps BEFORE the sandbox exists. Provisioning is fail-closed here for
- * the same reason it is fail-closed on an unresolvable rate: seconds that
- * could not be reserved are seconds nobody agreed to pay for.
+ * Holds the whole admitted lifetime before provisioning: against managed
+ * credits on paid tiers, or against the platform-funded allowance on Free.
+ * Unreserved compute is always refused.
  */
 export async function reserveSandboxComputeInterval(
   input: SandboxComputeReservationInput,
@@ -178,6 +189,51 @@ export async function reserveSandboxComputeInterval(
   const estimatedCostMicrousd = Math.ceil(ttlSeconds * Math.max(0, input.microusdPerSecond));
   const model = input.templateId?.trim() || E2B_COMPUTE_PROVIDER_ID;
   try {
+    if (input.planTier === 'free') {
+      const store = getKeyValueStore();
+      if (!store) {
+        throw new ManagedUsageRequestError(
+          'Free sandbox capacity is temporarily unavailable.',
+          503,
+          'sandbox_quota_unavailable',
+        );
+      }
+      const now = new Date();
+      const day = now.toISOString().slice(0, 10);
+      const quotaKey = `agi:sandbox:free:${input.userId}:${day}`;
+      const settlementKey = `agi:sandbox:free:settled:${randomUUID()}`;
+      const retentionSeconds = 3 * 24 * 60 * 60;
+      await store.set(quotaKey, 0, { onlyIfAbsent: true, ttlSeconds: retentionSeconds });
+      const total = await store.increment(quotaKey, estimatedCostMicrousd);
+      if (total > FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD) {
+        await store.increment(quotaKey, -estimatedCostMicrousd);
+        throw new ManagedUsageRequestError(
+          'The Free sandbox allowance is used for today. Try again tomorrow.',
+          429,
+          'free_sandbox_allowance_exhausted',
+        );
+      }
+      return {
+        outcome: 'reserved',
+        reservation: {
+          fundingSource: 'platform-free',
+          idempotencyKey: `agi.e2b.free.${randomUUID()}`,
+          requestHash: fingerprintManagedUsageRequest({
+            operation: SANDBOX_COMPUTE_OPERATION,
+            template: model,
+            conversationId: input.conversationId ?? null,
+            codeSessionId: input.codeSessionId ?? null,
+            ttlSeconds,
+          }),
+          leaseToken: '',
+          estimatedCostMicrousd,
+          provider: E2B_COMPUTE_PROVIDER_ID,
+          model,
+          quotaKey,
+          settlementKey,
+        },
+      };
+    }
     const reservation = await reserveManagedUsageRequest({
       db: sandboxScopedDb(input.userId),
       userId: input.userId,
@@ -225,9 +281,7 @@ export async function reserveSandboxComputeInterval(
 }
 
 /**
- * Gives back a reservation whose sandbox never ran. The ledger releases the
- * whole hold, so an account that was refused a sandbox by provisioning keeps
- * the credit the reservation was holding.
+ * Gives back a reservation whose sandbox never ran.
  */
 export async function releaseSandboxComputeReservation(input: {
   userId: string;
@@ -235,6 +289,18 @@ export async function releaseSandboxComputeReservation(input: {
   reason: string;
 }): Promise<void> {
   try {
+    if (input.reservation.fundingSource === 'platform-free') {
+      const store = getKeyValueStore();
+      if (!store) throw new Error('Free sandbox quota store unavailable');
+      const firstSettlement = await store.set(input.reservation.settlementKey, true, {
+        onlyIfAbsent: true,
+        ttlSeconds: 3 * 24 * 60 * 60,
+      });
+      if (firstSettlement) {
+        await store.increment(input.reservation.quotaKey, -input.reservation.estimatedCostMicrousd);
+      }
+      return;
+    }
     await finalizeManagedUsageRequest({
       db: sandboxScopedDb(input.userId),
       userId: input.userId,
@@ -344,6 +410,32 @@ export async function meterSandboxComputeInterval(
   // credit that was never reserved.
   const costMicrousd = Math.min(metered, reservation.estimatedCostMicrousd);
   try {
+    if (reservation.fundingSource === 'platform-free') {
+      const store = getKeyValueStore();
+      if (!store) throw new Error('Free sandbox quota store unavailable');
+      const firstSettlement = await store.set(reservation.settlementKey, true, {
+        onlyIfAbsent: true,
+        ttlSeconds: 3 * 24 * 60 * 60,
+      });
+      if (!firstSettlement) return costMicrousd;
+      const refundMicrousd = reservation.estimatedCostMicrousd - costMicrousd;
+      if (refundMicrousd > 0) await store.increment(reservation.quotaKey, -refundMicrousd);
+      await recordInfrastructureCostEvent({
+        userId: interval.userId,
+        capability: 'code_compute',
+        provider: E2B_COMPUTE_PROVIDER_ID,
+        units: elapsedMs / (60 * MILLISECONDS_PER_SECOND),
+        sourceRef: reservation.idempotencyKey,
+        providerEstimatedCostMicrousd: costMicrousd,
+        customerCanonicalMicrousd: 0,
+        metadata: {
+          sandbox_id: interval.sandboxId,
+          close_reason: interval.reason,
+          funding_source: 'platform-free',
+        },
+      });
+      return costMicrousd;
+    }
     // Metering runs from sandbox teardown and from the reclaim sweep, neither of
     // which carries a request connection, so the scope comes from the interval's
     // own owner.

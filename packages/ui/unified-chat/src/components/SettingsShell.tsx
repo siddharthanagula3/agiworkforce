@@ -93,7 +93,7 @@ function SectionPlaceholder({ title, body }: { title: string; body: string }) {
       <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{body}</p>
       <p className="text-xs italic text-[var(--chat-text-muted)]">
         This section is the shared shell. Host apps can supply concrete content via the
-        <code className="mx-1 rounded bg-[var(--chat-surface-hover)] px-1 py-0.5 text-[12px]">
+        <code className="mx-1 rounded-compact bg-[var(--chat-surface-hover)] px-1 py-0.5 text-caption">
           render
         </code>
         function on the matching SettingsSection.
@@ -159,13 +159,13 @@ export function SettingsShell({
       role="dialog"
       aria-modal="true"
       aria-label="Settings"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) closeSettings();
       }}
     >
       <div
-        className="flex h-[80vh] max-h-[640px] w-[min(880px,92vw)] overflow-hidden rounded-2xl border bg-[var(--chat-surface-elevated)] shadow-2xl"
+        className="flex h-[80vh] max-h-[640px] w-[min(880px,92vw)] overflow-hidden rounded-2xl border bg-[var(--chat-surface-elevated)] shadow-e4"
         style={{
           borderColor: 'var(--chat-border)',
         }}
@@ -187,7 +187,7 @@ export function SettingsShell({
               aria-current={section.id === navId ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                 section.id === navId
                   ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)]'
                   : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
@@ -209,7 +209,7 @@ export function SettingsShell({
             type="button"
             aria-label="Close settings"
             onClick={closeSettings}
-            className="absolute right-3 top-3 z-10 flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+            className="absolute right-3 top-3 z-[var(--z-control)] flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
           >
             <X size={16} strokeWidth={1.75} />
           </button>

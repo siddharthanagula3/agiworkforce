@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { getModelReasoning } from '@agiworkforce/types';
 
 import { signIn } from './qa-capability-harness';
 
@@ -64,6 +65,54 @@ test.describe('chat surface layout', () => {
     expect(box!.top).toBeGreaterThanOrEqual(0);
     expect(box!.bottom).toBeLessThanOrEqual(box!.viewport);
     await expect(page.getByRole('textbox', { name: 'Search models' })).toBeInViewport();
+  });
+
+  test('phone composer keeps model and reasoning controls separate', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/chat');
+    await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 20000 });
+
+    const catalogueResponse = await page.request.get('/api/models/catalogue');
+    expect(catalogueResponse.ok()).toBe(true);
+    const catalogue = (await catalogueResponse.json()) as {
+      models: {
+        id: string;
+        displayName: string;
+        admitted: boolean;
+        availability: string;
+        temporarilyUnavailable: boolean;
+        requiresEnvironment: string | null;
+      }[];
+    };
+    const candidate = catalogue.models.find((entry) => {
+      const reasoning = getModelReasoning(entry.id);
+      return (
+        entry.admitted &&
+        entry.availability === 'live' &&
+        !entry.temporarilyUnavailable &&
+        !entry.requiresEnvironment &&
+        reasoning.capable &&
+        reasoning.control !== 'none' &&
+        (reasoning.supportedEfforts?.length ?? 0) > 0
+      );
+    });
+    expect(candidate, 'the QA plan has no selectable reasoning model').toBeDefined();
+
+    const model = page.getByRole('button', { name: 'Change model' });
+    const reasoning = page.getByRole('button', { name: /^Reasoning effort:/ });
+    await expect(model).toBeVisible();
+    await model.click();
+    await page.getByRole('button', { name: /All models/ }).click();
+    await page.getByRole('textbox', { name: 'Search models' }).fill(candidate!.displayName);
+    await page.getByRole('option', { name: candidate!.displayName, exact: true }).click();
+    await expect(reasoning).toBeVisible();
+
+    const modelBox = await model.boundingBox();
+    const reasoningBox = await reasoning.boundingBox();
+    expect(modelBox).not.toBeNull();
+    expect(reasoningBox).not.toBeNull();
+    expect(modelBox!.x + modelBox!.width).toBeLessThanOrEqual(reasoningBox!.x);
+    expect(reasoningBox!.x + reasoningBox!.width).toBeLessThanOrEqual(360);
   });
 
   test('the sidebar conversation list stays usable on a short viewport', async ({ page }) => {

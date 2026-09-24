@@ -103,7 +103,7 @@ export function WorkspaceServicePrincipals() {
 
   if (isPending) {
     return (
-      <div role="status" style={{ ...cardStyle, padding: 20 }}>
+      <div role="status" style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <Spinner size="sm" />
       </div>
     );
@@ -111,7 +111,7 @@ export function WorkspaceServicePrincipals() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load service principals
         </p>

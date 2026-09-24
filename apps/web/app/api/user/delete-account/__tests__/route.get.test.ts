@@ -87,7 +87,28 @@ describe('GET /api/user/delete-account', () => {
       canCancel: false,
       requestedAt: null,
       scheduledFor: null,
+      status: 'pending',
+      statusReason: 'Deletion has been requested and has not started.',
     });
+  });
+
+  /**
+   * The audit row has carried this outcome since deletion was built. Returning
+   * it is what turns "something is scheduled" into a receipt the account holder
+   * can read, including when a hold is what is really holding it up.
+   */
+  it('hands back the same outcome the deletion trail records', async () => {
+    const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    mockQuery.mockResolvedValue([
+      { deletion_requested_at: scheduledFor, deletion_scheduled_for: scheduledFor },
+    ]);
+
+    const body = await (await GET(statusRequest())).json();
+
+    expect(body.status).toBe('pending');
+    expect(body.statusReason).toBe(
+      `Deletion is scheduled for ${scheduledFor} and has not started.`,
+    );
   });
 
   it('reports pending and cancellable while the grace window is open', async () => {

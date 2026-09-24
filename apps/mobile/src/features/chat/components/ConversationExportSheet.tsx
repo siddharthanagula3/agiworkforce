@@ -1,11 +1,10 @@
-
 import React, { useCallback, useState } from 'react';
 import { View, Pressable, ActivityIndicator, Alert, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FileText, File, Hash, Copy, CheckCircle2, X } from 'lucide-react-native';
+import { FileText, File, Hash, Copy, CheckCircle2, TriangleAlert, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
-import { copyToClipboard } from '@/lib/clipboard';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {
   exportConversationToPDF,
   exportConversationToText,
@@ -67,11 +66,10 @@ export function ConversationExportSheet({
   const { colors } = useTheme();
 
   const [loadingKey, setLoadingKey] = useState<ExportOptionKey | null>(null);
-  const [copiedKey, setCopiedKey] = useState<'copy' | null>(null);
+  const { status: copyStatus, copy } = useCopyAction();
 
   const handleClose = useCallback(() => {
     setLoadingKey(null);
-    setCopiedKey(null);
     onClose();
   }, [onClose]);
 
@@ -85,12 +83,7 @@ export function ConversationExportSheet({
 
       if (key === 'copy') {
         const md = formatConversationAsMarkdown(filtered, title);
-        const success = await copyToClipboard(md);
-        if (success) {
-          setCopiedKey('copy');
-          setTimeout(() => setCopiedKey(null), 2000);
-        }
-        handleClose();
+        if (await copy(md)) handleClose();
         return;
       }
 
@@ -117,7 +110,7 @@ export function ConversationExportSheet({
         setLoadingKey(null);
       }
     },
-    [messages, title, handleClose],
+    [messages, title, copy, handleClose],
   );
 
   return (
@@ -177,15 +170,22 @@ export function ConversationExportSheet({
             <View style={{ paddingTop: 8, paddingBottom: 16 }}>
               {EXPORT_OPTIONS.map((option, index) => {
                 const isLoading = loadingKey === option.key;
-                const isCopied = option.key === 'copy' && copiedKey === 'copy';
+                const isCopied = option.key === 'copy' && copyStatus === 'copied';
+                const copyFailed = option.key === 'copy' && copyStatus === 'failed';
                 const isDisabled = loadingKey !== null;
 
-                const IconComponent = isCopied ? CheckCircle2 : option.Icon;
+                const IconComponent = isCopied
+                  ? CheckCircle2
+                  : copyFailed
+                    ? TriangleAlert
+                    : option.Icon;
                 const iconColor = isCopied
                   ? colors.agentSuccess
-                  : isDisabled
-                    ? colors.textMuted
-                    : colors.teal;
+                  : copyFailed
+                    ? colors.agentError
+                    : isDisabled
+                      ? colors.textMuted
+                      : colors.teal;
 
                 return (
                   <Pressable
@@ -194,7 +194,11 @@ export function ConversationExportSheet({
                       if (!isDisabled) handleExport(option.key);
                     }}
                     disabled={isDisabled}
-                    accessibilityLabel={option.label}
+                    accessibilityLabel={
+                      option.key === 'copy'
+                        ? copyControlLabel(copyStatus, option.label)
+                        : option.label
+                    }
                     accessibilityRole="button"
                   >
                     {({ pressed }) => (
@@ -220,7 +224,9 @@ export function ConversationExportSheet({
                             borderRadius: 8,
                             backgroundColor: isCopied
                               ? colors.successSurface
-                              : colors.accentSurface,
+                              : copyFailed
+                                ? colors.dangerSurface
+                                : colors.accentSurface,
                             alignItems: 'center',
                             justifyContent: 'center',
                           }}
@@ -238,10 +244,16 @@ export function ConversationExportSheet({
                             style={{
                               fontSize: 14,
                               fontWeight: '500',
-                              color: isCopied ? colors.agentSuccess : colors.textPrimary,
+                              color: isCopied
+                                ? colors.agentSuccess
+                                : copyFailed
+                                  ? colors.agentError
+                                  : colors.textPrimary,
                             }}
                           >
-                            {isCopied ? 'Copied!' : option.label}
+                            {option.key === 'copy'
+                              ? copyControlLabel(copyStatus, option.label)
+                              : option.label}
                           </Text>
                           <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
                             {option.description}

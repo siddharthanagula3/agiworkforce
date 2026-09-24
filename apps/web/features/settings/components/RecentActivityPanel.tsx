@@ -45,7 +45,7 @@ const headingStyle: React.CSSProperties = {
   fontSize: 15,
   fontWeight: 600,
   color: 'var(--text-1)',
-  margin: '0 0 12px',
+  margin: '0 0 var(--space-3)',
 };
 
 function formatWhen(createdAt: string): string {
@@ -67,19 +67,33 @@ export function RecentActivityPanel() {
   return (
     <div data-testid="recent-activity-panel">
       <h2 style={headingStyle}>{PANEL_TITLE}</h2>
-      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-3)', lineHeight: 1.55 }}>
+      <p
+        style={{
+          margin: '0 0 var(--space-3)',
+          fontSize: 12,
+          color: 'var(--text-3)',
+          lineHeight: 1.55,
+        }}
+      >
         {PANEL_EXPLANATION}
       </p>
 
       {isPending ? (
-        <div role="status" style={{ padding: '8px 0', fontSize: 13, color: 'var(--text-3)' }}>
+        <div
+          role="status"
+          style={{ padding: 'var(--space-2) 0', fontSize: 13, color: 'var(--text-3)' }}
+        >
           Loading recent activity…
         </div>
       ) : error ? (
         <div>
           <p
             role="alert"
-            style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--chat-destructive-text)' }}
+            style={{
+              margin: '0 0 var(--space-3)',
+              fontSize: 13,
+              color: 'var(--chat-destructive-text)',
+            }}
           >
             Recent activity could not be loaded.
           </p>
@@ -88,7 +102,7 @@ export function RecentActivityPanel() {
             onClick={() => void refetch()}
             style={{
               minHeight: 32,
-              padding: '0 12px',
+              padding: '0 var(--space-3)',
               fontSize: 13,
               color: 'var(--text-1)',
               background: 'transparent',
@@ -111,7 +125,7 @@ export function RecentActivityPanel() {
               key={group.id}
               className="grid grid-cols-1 items-start gap-1 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-baseline sm:gap-4"
               style={{
-                padding: '10px 0',
+                padding: 'var(--space-3) 0',
                 borderTop: '1px solid var(--settings-border)',
               }}
             >

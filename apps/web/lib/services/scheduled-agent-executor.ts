@@ -80,6 +80,7 @@ import {
 import { webSearchBackendConfigured, webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import type {
   ScheduleTask,
   ScheduledExecutionResult,
@@ -472,10 +473,16 @@ async function runScheduledToolLoop(input: {
 async function runScheduledCompletion(input: {
   prompt: string;
   systemPrompt: string;
-  route: { provider: string; providerModelId: string; modelKey: string };
+  route: {
+    provider: string;
+    providerModelId: string;
+    modelKey: string;
+    routeId: string;
+  };
   signal: AbortSignal;
 }): Promise<ScheduledCompletion> {
-  const adapter = buildServerProviderAdapter(input.route.provider);
+  const dispatchProvider = dispatchProviderForSelectedRoute(input.route);
+  const adapter = buildServerProviderAdapter(dispatchProvider);
   const chatRequest = openAIWireRequestToChatRequest({
     model: input.route.providerModelId,
     messages: [
@@ -485,11 +492,11 @@ async function runScheduledCompletion(input: {
     max_tokens: MAX_OUTPUT_TOKENS,
     stream: false,
   });
-  const wireMode = resolveWireMode(input.route.provider);
+  const wireMode = resolveWireMode(dispatchProvider);
   const response = await drainToLlmResponse(
     adapter.stream(chatRequest, input.signal),
     input.route.modelKey,
-    (chunk) => toGenericUpstreamError(input.route.provider, chunk),
+    (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
     wireMode,
   );
   return {
@@ -561,6 +568,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');
   }
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const resolvedSlot = getSlotForModel(route.modelKey);
   const isFlagshipRoute =
     resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
@@ -570,12 +578,12 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     userId: scope.userId,
     organizationId: scope.organizationId,
     planTier: subscriptionTier,
-    provider: route.provider,
+    provider: dispatchProvider,
     model: route.modelKey,
   });
   const toolLoopRunnable =
     classifyToolLoopInputs(plan.mcpTools, plan.tools).shouldRun &&
-    Boolean(ADAPTER_PROVIDERS[route.provider]);
+    Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
   const projectContext = task.projectId
     ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
     : null;
@@ -637,7 +645,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
             prompt,
             systemPrompt,
             plan,
-            route,
+            route: { ...route, provider: dispatchProvider },
             subscriptionTier,
             isFlagship: isFlagshipRoute,
             estimatedCostMicrousd,

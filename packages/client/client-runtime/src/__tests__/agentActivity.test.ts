@@ -3,6 +3,7 @@ import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protoco
 import {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
+  hasUnavailableWebSearch,
   isLocalPlaceholderActivityEntry,
   startAgentActivityLocally,
 } from '../agentActivity';
@@ -704,15 +705,28 @@ describe('tool failure summaries', () => {
 });
 
 describe('unavailable tool notices', () => {
-  function endWithError(output: string) {
+  it('identifies only a refused web search in saved activity', () => {
+    expect(
+      hasUnavailableWebSearch({
+        entries: [{ kind: 'tool', category: 'web-search', unavailable: true }],
+      }),
+    ).toBe(true);
+    expect(
+      hasUnavailableWebSearch({
+        entries: [{ kind: 'tool', category: 'web-search', status: 'failed' }],
+      }),
+    ).toBe(false);
+    expect(hasUnavailableWebSearch({ entries: [null, { unavailable: true }] })).toBe(false);
+  });
+  function endWithError(output: string, webSearch = false) {
     let state = applyAgentActivityEvent(
       undefined,
       envelope(0, {
         type: 'tool-execution-start',
         toolCallId: 'call-unavailable',
-        name: 'execute_code',
-        category: 'code-execution',
-        summary: 'Running code',
+        name: webSearch ? 'web_search' : 'execute_code',
+        category: webSearch ? 'web-search' : 'code-execution',
+        summary: webSearch ? 'Searching the web' : 'Running code',
         input: {},
       }),
     );
@@ -721,7 +735,7 @@ describe('unavailable tool notices', () => {
       envelope(1, {
         type: 'tool-execution-end',
         toolCallId: 'call-unavailable',
-        name: 'execute_code',
+        name: webSearch ? 'web_search' : 'execute_code',
         output,
         isError: true,
         elapsedMs: 5,
@@ -764,6 +778,30 @@ describe('unavailable tool notices', () => {
     const entry = endWithError('Tool write_file is not available.');
     expect(entry.unavailable).toBe(true);
     expect(entry.summary).toBe('write_file was not available for this request.');
+  });
+
+  it('shows the exhausted search allowance instead of claiming a search ran', () => {
+    const entry = endWithError(
+      'Web search is unavailable on this account right now: it has used its 20 included searches in the last 30 days. No further searches will run.',
+      true,
+    );
+    expect(entry).toMatchObject({
+      status: 'failed',
+      unavailable: true,
+      summary: 'Web search unavailable: 20 included searches used in the last 30 days.',
+    });
+  });
+
+  it('shows a search-credit refusal without claiming a search ran', () => {
+    const entry = endWithError(
+      'Web search is unavailable on this account right now: this search is charged and the account has no credits left for it. No further searches will run.',
+      true,
+    );
+    expect(entry).toMatchObject({
+      status: 'failed',
+      unavailable: true,
+      summary: 'Web search unavailable: no search credits remain on this account.',
+    });
   });
 
   it('leaves a genuine tool failure styled as a failure', () => {

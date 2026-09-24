@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { storeLocalProjectKnowledgeUpload } from '@/lib/server/project-knowledge-object-storage';
 import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
@@ -49,8 +50,9 @@ async function handleLocalProjectKnowledgeUpload(request: NextRequest): Promise<
   try {
     await storeLocalProjectKnowledgeUpload({ token, userId, contentType, data });
   } catch (error) {
+    logger.error({ error }, 'Local project knowledge upload could not be stored');
     throw createError.validation(
-      error instanceof Error ? error.message : 'Invalid local upload request',
+      'This upload could not be stored. Ask for a new upload link and add the file again.',
     );
   }
   return new NextResponse(null, { status: 204 });

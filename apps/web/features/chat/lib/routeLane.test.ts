@@ -5,7 +5,13 @@ import {
   ROUTE_LANES,
 } from '@/lib/services/free-lane/plan';
 
-import { CHAT_ROUTE_LANES, ROUTE_LANE_HEADER, isFreeRouteLane, readRouteLane } from './routeLane';
+import {
+  CHAT_ROUTE_LANES,
+  ROUTE_LANE_HEADER,
+  isFreeRouteLane,
+  readPersistedRouteLane,
+  readRouteLane,
+} from './routeLane';
 
 describe('route lane wire vocabulary', () => {
   it('names the same header the response builders set', () => {
@@ -40,5 +46,14 @@ describe('isFreeRouteLane', () => {
     expect(isFreeRouteLane(ROUTE_LANES.free)).toBe(true);
     expect(isFreeRouteLane(ROUTE_LANES.managed)).toBe(false);
     expect(isFreeRouteLane(undefined)).toBe(false);
+  });
+});
+
+describe('readPersistedRouteLane', () => {
+  it('reads the canonical field and older explicit route attribution', () => {
+    expect(readPersistedRouteLane({ routeLane: 'free' })).toBe('free');
+    expect(readPersistedRouteLane({ requestedRoute: { lane: 'free' } })).toBe('free');
+    expect(readPersistedRouteLane({ requestedRoute: { lane: 'unexpected' } })).toBeUndefined();
+    expect(readPersistedRouteLane({})).toBeUndefined();
   });
 });

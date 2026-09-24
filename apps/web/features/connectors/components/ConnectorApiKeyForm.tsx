@@ -93,8 +93,7 @@ export function ConnectorApiKeyForm({
     fetch(credentialsPath(connectorId), { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
         const body = (await response.json().catch(() => null)) as
-          | (CredentialSpecView & ErrorBody)
-          | null;
+          (CredentialSpecView & ErrorBody) | null;
         if (!response.ok || !body) throw new Error(errorMessage(body, LOAD_FAILED_COPY));
         if (!cancelled) setSpec(body);
       })
@@ -183,7 +182,7 @@ export function ConnectorApiKeyForm({
         {shown.length > 0 ? (
           <ul className="flex flex-wrap gap-1.5">
             {shown.map((toolName) => (
-              <li key={toolName} className="rounded-md bg-muted px-2 py-1 text-[12px]">
+              <li key={toolName} className="rounded-md bg-muted px-2 py-1 text-caption">
                 {toolName}
               </li>
             ))}

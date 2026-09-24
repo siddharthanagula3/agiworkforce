@@ -6,12 +6,13 @@ import { Config } from '../../platform/config';
 import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
 import { shouldShowOnboarding } from '../onboarding/onboardingState';
 import { getWebviewContent, getNonce } from './webviewContent';
-import { parseWebviewMessage } from '../../protocol/webviewMessages';
+import { parseBoundWebviewMessage } from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
 import { type ChatTurn } from '../chat/retry';
 import { AttentionState } from './attentionBadge';
+import { markInUse } from '../../core/startupWork';
 
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
 export type {
@@ -56,6 +57,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ): void {
+    markInUse('chat-view');
     this._view = webviewView;
 
     webviewView.webview.options = {
@@ -79,13 +81,23 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       resolveTierSync(this._extensionContext),
       shouldShowOnboarding(this._extensionContext.globalState),
       Config.composerFollowUpBehavior(),
+      {
+        origin: SidebarProvider.viewId.replace(/\./gu, '-'),
+        epoch: this._stateManager.conversationEpoch(),
+      },
     );
 
     this._messageListener?.dispose();
     this._messageListener = webviewView.webview.onDidReceiveMessage(async (msg) => {
-      const parsed = parseWebviewMessage(msg);
+      const parsed = parseBoundWebviewMessage(msg, {
+        origin: SidebarProvider.viewId.replace(/\./gu, '-'),
+        epoch: this._stateManager.conversationEpoch(),
+      });
       if (parsed === undefined) {
-        console.warn('[AGI Workforce] dropping malformed webview message', msg);
+        console.warn(
+          '[AGI Workforce] dropping a webview message that is malformed or belongs to a replaced conversation',
+          msg,
+        );
         return;
       }
       await this._stateManager.handleMessage(
@@ -163,6 +175,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       payload: { text, references, submit: true },
     };
     void this._deliverComposerDraft();
+  }
+
+  public activeThreadId(): string | undefined {
+    return this._stateManager.activeThreadId();
   }
 
   public chatTranscript(): readonly ChatTurn[] {

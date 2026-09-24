@@ -6,12 +6,16 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./client-request": "./src/client-request.ts",
     "./me": "./src/me.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "typesVersions": {
     "*": {
+      "client-request": [
+        "./src/client-request.ts"
+      ],
       "me": [
         "./src/me.ts"
       ],

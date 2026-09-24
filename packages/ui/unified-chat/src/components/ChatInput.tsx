@@ -339,6 +339,7 @@ export function ChatInput({
     panelRef: scopePanelRef,
     triggerRef: scopeTriggerRef,
     itemSelector: 'input, [role="option"]',
+    autoFocusFirstItem: false,
   });
 
   const handlePickProject = useCallback(
@@ -1015,7 +1016,7 @@ export function ChatInput({
           data-testid="composer-skill-suggestions"
           className="mb-2 flex flex-wrap items-center gap-1.5"
         >
-          <span className="text-[12px] text-[var(--chat-text-secondary)]">
+          <span className="text-caption text-[var(--chat-text-secondary)]">
             {t('composer.suggestedSkills', 'Suggested skills')}
           </span>
           {visibleSkillSuggestions.map((suggestion) => (
@@ -1054,7 +1055,7 @@ export function ChatInput({
               ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_var(--chat-focus-ring)]'
               : 'border-[var(--chat-border)]',
         )}
-        style={{ borderRadius: 16 }}
+        style={{ borderRadius: 'var(--corner-panel)' }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -1064,7 +1065,7 @@ export function ChatInput({
           <div
             role="status"
             aria-live="polite"
-            className="px-3 pt-2 text-[12px] text-[var(--chat-destructive-text)]"
+            className="px-3 pt-2 text-caption text-[var(--chat-destructive-text)]"
           >
             {attachmentError}
           </div>
@@ -1078,7 +1079,7 @@ export function ChatInput({
                 type="button"
                 onClick={() => setSelectedSkill(null)}
                 aria-label={`Remove ${selectedSkill.name} skill`}
-                className="rounded p-1.5 hover:bg-[var(--chat-accent-primary)]/10"
+                className="rounded-compact p-1.5 hover:bg-[var(--chat-accent-primary)]/10"
               >
                 <X size={12} aria-hidden="true" />
               </button>
@@ -1102,7 +1103,7 @@ export function ChatInput({
                       alt={file.name}
                       width={20}
                       height={20}
-                      className="h-5 w-5 rounded object-cover"
+                      className="h-5 w-5 rounded-compact object-cover"
                     />
                   ) : null}
                   {file.name}
@@ -1221,8 +1222,8 @@ export function ChatInput({
                     aria-expanded={attachmentMenuOpen}
                     className={cn(
                       'relative flex h-9 w-9 items-center justify-center rounded-full',
-                      'transition-colors duration-150',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                      'transition-colors duration-quick',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                       attachedFiles.length > 0 || attachmentMenuOpen
                         ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                         : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
@@ -1230,7 +1231,7 @@ export function ChatInput({
                   >
                     <Plus size={18} />
                     {attachedFiles.length > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[12px] font-bold text-[var(--chat-accent-on-primary)]">
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-caption font-bold text-[var(--chat-accent-on-primary)]">
                         {attachedFiles.length}
                       </span>
                     )}
@@ -1343,8 +1344,8 @@ export function ChatInput({
                     disabled={voiceIsDisabled}
                     className={cn(
                       'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-                      'transition-colors duration-150',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                      'transition-colors duration-quick',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                       voiceState === 'listening'
                         ? 'text-[var(--chat-accent-primary-text)] hover:bg-[var(--chat-accent-primary)]/10'
                         : voiceIsBusy
@@ -1451,7 +1452,7 @@ export function ChatInput({
               ref={scopePanelRef}
               role="listbox"
               aria-label={t('composer.projectOrFolder', 'Project or folder')}
-              className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl"
+              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl"
             >
               {!canUseAgiWork && (
                 <p

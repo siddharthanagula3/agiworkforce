@@ -89,7 +89,7 @@ export function SecuritySection() {
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <div>
         <h1
           style={{
@@ -97,7 +97,7 @@ export function SecuritySection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Security
@@ -139,10 +139,17 @@ export function SecuritySection() {
           border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
-          padding: '16px 20px',
+          padding: 'var(--space-4) var(--space-5)',
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-2)',
+            marginBottom: 'var(--space-1)',
+          }}
+        >
           Current account boundary
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
@@ -159,10 +166,17 @@ export function SecuritySection() {
           border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
-          padding: '16px 20px',
+          padding: 'var(--space-4) var(--space-5)',
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-2)',
+            marginBottom: 'var(--space-1)',
+          }}
+        >
           Trusted contact · Not configured
         </div>
         <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>

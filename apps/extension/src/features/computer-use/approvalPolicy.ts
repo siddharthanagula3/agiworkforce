@@ -4,6 +4,7 @@ export type AlwaysAskReason =
   | 'download'
   | 'upload'
   | 'sensitive_input'
+  | 'unidentified_input'
   | 'sensitive_site'
   | 'authorization'
   | 'permission_change';
@@ -240,6 +241,10 @@ export function approvalRequirement(input: ActionApprovalInput): ActionApprovalR
   if (acts && isPermissionChangePage(input.pageUrl)) {
     return { alwaysAsk: true, reason: 'permission_change' };
   }
+  // Typing lands on whatever holds focus. With no signature for that element
+  // there is nothing to compare against the sensitive-field patterns, so the
+  // gate cannot clear it.
+  if (toolName === 'type' && !target) return { alwaysAsk: true, reason: 'unidentified_input' };
   return ASK_NOT_REQUIRED;
 }
 
@@ -259,6 +264,8 @@ export function describeApprovalReason(requirement: ActionApprovalRequirement): 
       return 'This opens a file upload. Uploads always need your approval.';
     case 'sensitive_input':
       return 'This field looks like it holds a password, payment or identity detail.';
+    case 'unidentified_input':
+      return 'The field this would type into could not be identified, so it may be a password or payment field.';
     case 'sensitive_site':
       return requirement.siteClass
         ? `This is ${SITE_CLASS_LABEL[requirement.siteClass]}, so every step needs your approval.`

@@ -3,12 +3,16 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const fetchPreferenceNamespace = vi.hoisted(() => vi.fn());
-vi.mock('@/app/settings/_lib/preferences-client', () => ({ fetchPreferenceNamespace }));
+const readAutonomousToolApprovalsAllowed = vi.hoisted(() => vi.fn());
+vi.mock('@/app/settings/_lib/preferences-client', () => ({
+  fetchPreferenceNamespace,
+  readAutonomousToolApprovalsAllowed,
+}));
 
 import { AgiWorkAutonomyNotice } from '../AgiWorkAutonomyNotice';
 import { useUIStore } from '@shared/stores/layout-store';
 
-const NOTICE = /Read-only actions run without asking/;
+const NOTICE = /Some tools run without asking/;
 
 function autoApproves() {
   fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'auto_approve_read_only' });
@@ -18,6 +22,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useUIStore.setState({ agiWorkAutonomyNoticeDismissed: false });
   fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'ask_every_time' });
+  readAutonomousToolApprovalsAllowed.mockResolvedValue(true);
 });
 
 // Claude Cowork keeps a standing disclosure above the composer naming exactly
@@ -28,7 +33,23 @@ describe('AGI Work autonomy disclosure', () => {
     render(<AgiWorkAutonomyNotice active onReviewApprovals={vi.fn()} />);
 
     expect(await screen.findByText(NOTICE)).toBeInTheDocument();
-    expect(screen.getByText(NOTICE).textContent).toContain('including your connectors');
+    expect(screen.getByText(NOTICE).textContent).toContain('workspace restrictions still apply');
+  });
+
+  it('discloses the website Skip approvals default', async () => {
+    fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'autonomous' });
+    render(<AgiWorkAutonomyNotice active onReviewApprovals={vi.fn()} />);
+
+    expect(await screen.findByText(NOTICE)).toBeInTheDocument();
+  });
+
+  it('does not claim automatic approval when the workspace blocks Skip approvals', async () => {
+    fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'autonomous' });
+    readAutonomousToolApprovalsAllowed.mockResolvedValue(false);
+    render(<AgiWorkAutonomyNotice active onReviewApprovals={vi.fn()} />);
+
+    await waitFor(() => expect(readAutonomousToolApprovalsAllowed).toHaveBeenCalled());
+    expect(screen.queryByText(NOTICE)).toBeNull();
   });
 
   it('stays silent in Chat mode', async () => {

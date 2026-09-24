@@ -110,6 +110,7 @@ const ARTIFACT_LANGUAGE = 'html';
 const ARTIFACT_TITLE = 'Streaming artifact probe';
 const ARTIFACT_BODY_MARKER = 'Artifact body written while the answer streams';
 const ARTIFACT_SOURCE = [
+  '<!-- @artifact -->',
   '<!DOCTYPE html>',
   '<html>',
   `  <head><title>${ARTIFACT_TITLE}</title></head>`,
@@ -694,6 +695,26 @@ test.describe('streaming markdown', () => {
     expect(streamedHtml, 'the streamed message rendered nothing to compare').toContain(
       PARITY_MARKER,
     );
+    const transcriptColors = await assistantProse(page).evaluate((prose) => {
+      const inlineCode = prose.querySelector<HTMLElement>('code:not(pre code)');
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--chat-text-primary)';
+      probe.style.backgroundColor = 'var(--chat-surface-hover)';
+      document.body.appendChild(probe);
+      const expected = getComputedStyle(probe);
+      const measured = {
+        body: getComputedStyle(prose).color,
+        code: inlineCode ? getComputedStyle(inlineCode).color : null,
+        codeBackground: inlineCode ? getComputedStyle(inlineCode).backgroundColor : null,
+        expectedBody: expected.color,
+        expectedCodeBackground: expected.backgroundColor,
+      };
+      probe.remove();
+      return measured;
+    });
+    expect(transcriptColors.body).toBe(transcriptColors.expectedBody);
+    expect(transcriptColors.code).toBe(transcriptColors.expectedBody);
+    expect(transcriptColors.codeBackground).toBe(transcriptColors.expectedCodeBackground);
 
     await page.goto(conversationUrl, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle', { timeout: LOAD_TIMEOUT_MS }).catch(() => undefined);

@@ -12,6 +12,7 @@ import {
   COMPOSER_EDITOR_MODES,
   COMPOSER_EDITOR_QUERY_PARAM,
 } from '@features/chat/lib/composer-editor-gate';
+import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import { ChatComposerNew } from './ChatComposerNew';
 
 /**
@@ -33,6 +34,14 @@ const { editorHandle, editorProps } = vi.hoisted(() => ({
     isEmpty: vi.fn(() => true),
   },
   editorProps: { current: null as ComposerEditorProps | null },
+}));
+
+const { preloadTranscriptMarkdown } = vi.hoisted(() => ({
+  preloadTranscriptMarkdown: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@features/chat/lib/preload-transcript-markdown', () => ({
+  preloadTranscriptMarkdown,
 }));
 
 vi.mock('@agiworkforce/unified-chat/composer-editor', async (importOriginal) => {
@@ -105,7 +114,8 @@ vi.mock('./VoiceInputButton', () => ({
   ),
 }));
 
-vi.mock('@features/chat/hooks/use-dictation', () => ({
+vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@features/chat/hooks/use-dictation')>()),
   useDictation: ({ onInsert }: { onInsert: (text: string) => void }) => ({
     status: 'idle',
     isActive: false,
@@ -200,6 +210,14 @@ describe('editor arm · the composer mounts it', () => {
     expect(screen.getByRole('textbox', { name: /message input/i })).not.toBeNull();
     expect(document.querySelector('textarea')).toBeNull();
   });
+
+  it('warms the transcript renderer when the user arms the composer', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    fireEvent.focus(screen.getByRole('textbox', { name: /message input/i }));
+
+    expect(preloadTranscriptMarkdown).toHaveBeenCalledOnce();
+  });
 });
 
 /**
@@ -291,12 +309,19 @@ describe('editor arm · external message writers', () => {
   });
 
   it('routes a dictated transcript through appendText', () => {
-    render(<ChatComposerNew onSend={vi.fn()} />);
+    const microphone = useMicrophoneNoticeStore.getState();
+    microphone.askForMicrophone('earlier-dictation', () => undefined);
+    microphone.acknowledge();
+    try {
+      render(<ChatComposerNew onSend={vi.fn()} />);
 
-    type('already typed');
-    fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
+      type('already typed');
+      fireEvent.click(screen.getByRole('button', { name: 'Dictate' }));
 
-    expect(editorHandle.appendText).toHaveBeenCalledWith(` ${TRANSCRIPT}`);
+      expect(editorHandle.appendText).toHaveBeenCalledWith(` ${TRANSCRIPT}`);
+    } finally {
+      useMicrophoneNoticeStore.setState({ request: null, acknowledgedThisSession: null });
+    }
   });
 
   it('clears the editor when the message is sent', () => {

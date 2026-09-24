@@ -193,7 +193,7 @@ function GeneratingCard({
     >
       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-foreground/[0.02] via-transparent to-foreground/[0.04]" />
 
-      <div className="relative z-10 flex flex-col items-center gap-2.5">
+      <div className="relative z-[var(--z-control)] flex flex-col items-center gap-2.5">
         <Spinner aria-hidden="true" className="h-10 w-10 text-primary/60" />
         <span className="text-sm font-medium text-foreground">Generating image</span>
         {modelLabel && (
@@ -225,6 +225,7 @@ interface ShareModalProps {
 }
 
 export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: ShareModalProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [copied, setCopied] = useState(false);
   const [copyFailed, setCopyFailed] = useState(false);
   const title = prompt.length > 40 ? prompt.slice(0, 40) + '...' : prompt;
@@ -260,18 +261,12 @@ export function ShareModal({ imageUrl, prompt, onClose, mediaKind = 'image' }: S
     [imageUrl, mediaKind],
   );
 
-  // Close on Escape
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [onClose]);
+  useDialogKeyboard({ open: true, onClose, panelRef });
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      ref={panelRef}
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
       role="dialog"
       aria-modal="true"
@@ -532,7 +527,7 @@ function EditPanel({
     <>
       {/* Mobile backdrop */}
       <div
-        className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm sm:hidden"
+        className="fixed inset-0 z-[var(--z-overlay)] bg-black/50 backdrop-blur-sm sm:hidden"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -546,9 +541,9 @@ function EditPanel({
         className={cn(
           'flex flex-col border-l border-border/30',
           'bg-card/95 backdrop-blur-xl',
-          'fixed inset-y-0 right-0 z-[95] w-full',
+          'fixed inset-y-0 right-0 z-[var(--z-overlay-panel)] w-full',
           'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:shrink-0',
-          'animate-in slide-in-from-right duration-300',
+          'animate-in slide-in-from-right duration-moved',
         )}
       >
         {/* Header */}
@@ -591,7 +586,7 @@ function EditPanel({
                   ref={aspectMenuRef}
                   role="menu"
                   aria-label="Aspect ratio"
-                  className="absolute right-0 top-full z-50 mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+                  className="absolute right-0 top-full z-[var(--z-dropdown)] mt-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
                 >
                   {aspectOptions.map((opt) => (
                     <button
@@ -666,7 +661,7 @@ function EditPanel({
         </div>
 
         <div className="border-t border-border/30 p-3 space-y-2">
-          <p className="px-1 text-[12px] leading-snug text-muted-foreground">
+          <p className="px-1 text-caption leading-snug text-muted-foreground">
             {supportsEdit
               ? 'Describing a change edits the image above. Attach a mask to redraw only part of it.'
               : 'Describing a change generates a new image from the updated description. The image above is not modified.'}
@@ -874,7 +869,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
 
         {/* Overlay controls - always visible on mobile, hover on desktop */}
         {!imgError && (
-          <div className="absolute inset-0 flex flex-col justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-200">
+          <div className="absolute inset-0 flex flex-col justify-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity duration-quick">
             {/* Gradient scrim */}
             <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
 
@@ -941,7 +936,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
               ref={morePanelRef}
               role="menu"
               aria-label="More actions"
-              className="absolute bottom-full left-0 z-50 mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
+              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 w-40 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl"
             >
               <button
                 type="button"
@@ -972,7 +967,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
         </div>
 
         {modelLabel && (
-          <span className="ml-auto truncate pr-1 text-[12px] text-muted-foreground">
+          <span className="ml-auto truncate pr-1 text-caption text-muted-foreground">
             Generated with {modelLabel}
           </span>
         )}

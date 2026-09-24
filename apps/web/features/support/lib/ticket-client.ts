@@ -85,10 +85,15 @@ export async function readSupportTicket(ticketId: string): Promise<SupportTicket
   return asThread(payload);
 }
 
+export interface OpenedSupportTicket {
+  ticket: SupportTicket;
+  staffNotified: boolean;
+}
+
 export async function openSupportTicket(input: {
   subject: string;
   message: string;
-}): Promise<SupportTicket> {
+}): Promise<OpenedSupportTicket> {
   // Build, environment, platform and the last few failures, collected rather
   // than asked for. The route re-validates and re-redacts whatever this sends.
   const payload = await mutate(
@@ -97,7 +102,10 @@ export async function openSupportTicket(input: {
     { ...input, diagnostics: collectDiagnostics({ surface: 'web' }) },
     'That ticket was not raised.',
   );
-  return payload['ticket'] as SupportTicket;
+  return {
+    ticket: payload['ticket'] as SupportTicket,
+    staffNotified: payload['staffNotified'] === true,
+  };
 }
 
 export async function replyToSupportTicket(

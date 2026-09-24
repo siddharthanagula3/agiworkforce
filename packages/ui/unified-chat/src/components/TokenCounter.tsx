@@ -100,7 +100,7 @@ export const TokenCounter = ({
             {(showWarning || showDanger) && (
               <span
                 className={cn(
-                  'ml-0.5 rounded px-1 py-0.5 text-[12px] font-semibold',
+                  'ml-0.5 rounded-compact px-1 py-0.5 text-caption font-semibold',
                   showWarning && 'bg-warning/20 text-warning',
                   showDanger && 'bg-destructive/20 text-danger',
                 )}
@@ -146,11 +146,11 @@ export const TokenCounter = ({
           {inputTokens > 0 || outputTokens > 0 ? (
             <>
               <div
-                className="absolute h-full bg-blue-500 transition-all duration-300"
+                className="absolute h-full bg-blue-500 transition-all duration-moved"
                 style={{ width: `${(inputTokens / maxTokens) * 100}%` }}
               />
               <div
-                className="absolute h-full bg-green-500 transition-all duration-300"
+                className="absolute h-full bg-green-500 transition-all duration-moved"
                 style={{
                   left: `${(inputTokens / maxTokens) * 100}%`,
                   width: `${(outputTokens / maxTokens) * 100}%`,
@@ -159,7 +159,7 @@ export const TokenCounter = ({
             </>
           ) : (
             <div
-              className={cn('h-full transition-all duration-300', barColor)}
+              className={cn('h-full transition-all duration-moved', barColor)}
               style={{ width: `${percentage}%` }}
             />
           )}
@@ -170,7 +170,7 @@ export const TokenCounter = ({
             />
           )}
         </div>
-        <div className="flex items-center justify-between text-[12px] text-muted-foreground">
+        <div className="flex items-center justify-between text-caption text-muted-foreground">
           <span>{percentage.toFixed(1)}% used</span>
           {(inputTokens > 0 || outputTokens > 0) && (
             <span className="flex items-center gap-2">
@@ -248,7 +248,7 @@ export const TokenCounter = ({
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded bg-warning/20 px-1.5 py-0.5 text-[12px] font-medium transition-colors hover:bg-warning/30"
+                    className="ml-auto flex items-center gap-1 rounded-compact bg-warning/20 px-1.5 py-0.5 text-caption font-medium transition-colors hover:bg-warning/30"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact
@@ -267,7 +267,7 @@ export const TokenCounter = ({
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded bg-destructive/20 px-1.5 py-0.5 text-[12px] font-medium transition-colors hover:bg-destructive/30"
+                    className="ml-auto flex items-center gap-1 rounded-compact bg-destructive/20 px-1.5 py-0.5 text-caption font-medium transition-colors hover:bg-destructive/30"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact now

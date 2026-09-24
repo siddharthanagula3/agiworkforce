@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import QueryRuntimeProvider from '../QueryRuntimeProvider';
 
 const TITLE = 'Pricing: what each plan and each route costs';
 const DESCRIPTION =
@@ -44,5 +45,5 @@ export const metadata: Metadata = {
 };
 
 export default function PricingLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return <QueryRuntimeProvider>{children}</QueryRuntimeProvider>;
 }

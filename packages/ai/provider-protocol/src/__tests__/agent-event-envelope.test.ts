@@ -80,6 +80,45 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
     expect(agentEventToStreamChunk(streamChunkToAgentEvent(chunk)!)).toEqual(chunk);
   });
 
+  it('carries the id a reader quotes to support, in both directions', () => {
+    const chunk: StreamChunk = {
+      type: 'error',
+      message: 'upstream disconnected',
+      code: 'stream_disconnected',
+      retryable: true,
+      retryAfterSeconds: 2,
+      requestId: 'req_7f3a',
+    };
+    const event = streamChunkToAgentEvent(chunk);
+
+    // The terminal and the editor read this envelope and never the web wire,
+    // so an id dropped here is an id those two surfaces can never show.
+    expect(event).toMatchObject({ type: 'error', requestId: 'req_7f3a' });
+    expect(agentEventToStreamChunk(event!)).toEqual(chunk);
+  });
+
+  it('invents no id for a failure that arrived without one', () => {
+    const chunk: StreamChunk = { type: 'error', message: 'upstream disconnected' };
+    const event = streamChunkToAgentEvent(chunk);
+
+    expect(event).toEqual({
+      type: 'error',
+      message: 'upstream disconnected',
+      code: undefined,
+      retryable: undefined,
+      retryAfterSeconds: undefined,
+      requestId: undefined,
+    });
+    expect(agentEventToStreamChunk(event!)).toEqual({
+      type: 'error',
+      message: 'upstream disconnected',
+      code: undefined,
+      retryable: undefined,
+      retryAfterSeconds: undefined,
+      requestId: undefined,
+    });
+  });
+
   describe('failure classification does not cross this envelope yet', () => {
     const CLASSIFIED_ERROR_CHUNK: StreamChunk = {
       type: 'error',
@@ -103,6 +142,7 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
         code: 'unsupported_input',
         retryable: false,
         retryAfterSeconds: undefined,
+        requestId: undefined,
       });
       // Flip this to a preservation assertion when `AgentEventError` gains the
       // field in crates/agiworkforce-protocol/src/agent_events.rs and the
@@ -131,6 +171,7 @@ describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
         code: 'unsupported_input',
         retryable: false,
         retryAfterSeconds: undefined,
+        requestId: undefined,
       });
     });
   });

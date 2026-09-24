@@ -105,6 +105,20 @@ async function handleResend(
     'Organization invitation resent',
   );
 
+  await recordAuditEvent({
+    userId,
+    eventType: 'member_invited',
+    request,
+    organizationId,
+    detail: {
+      resourceType: 'organization_invitation',
+      resourceId: invitationId,
+      organizationId,
+      role: invitation.role,
+      reason: 'invitation_resent',
+    },
+  });
+
   return NextResponse.json({
     invitation: formatInvitation(invitation),
     inviteToken: token,

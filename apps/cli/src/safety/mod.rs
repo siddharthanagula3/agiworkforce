@@ -88,15 +88,17 @@ fn classify_command_at_depth(command: &str, depth: usize) -> CommandSafety {
         if DC.contains(&base_cmd) {
             return CommandSafety::Dangerous;
         }
-        // Otherwise, subshell/backtick can hide arbitrary commands inside
-        // otherwise-safe expressions. Mark as Unknown to force prompt.
-        return CommandSafety::Unknown;
-    }
-    if trimmed.contains("$((") {
-        // Arithmetic expansion is safe, but `$((...))` is hard to distinguish from
-        // `$(...` above, so the `$(` check already catches it. This is a no-op guard.
+        // A substitution can hide any command, so this line never reaches `Safe`;
+        // what is written in plain sight still escalates it.
+        return escalate(CommandSafety::Unknown, classify_segments(trimmed, depth));
     }
 
+    classify_segments(trimmed, depth)
+}
+
+/// Classify a command line by its visible segments. The caller has already
+/// decided what a substitution on the line costs.
+fn classify_segments(trimmed: &str, depth: usize) -> CommandSafety {
     // Split on pipe, semicolon, and && to get individual segments.
     let segments = split_segments(trimmed);
 
@@ -1154,6 +1156,40 @@ mod tests {
             classify_command("sed -n 1,$p file.txt"),
             CommandSafety::Safe
         );
+    }
+
+    /// The way a user frees a busy port is to find out what holds it and then
+    /// signal it. Finding out is read-only; signalling is never something the
+    /// agent does without being asked, whichever spelling it reaches for.
+    #[test]
+    fn freeing_a_busy_port_is_never_auto_approved_but_finding_out_what_holds_it_is() {
+        for reading in [
+            "lsof -i :3000",
+            "lsof -ti:3000",
+            "netstat -anp tcp",
+            "ss -ltnp",
+            "ps aux",
+        ] {
+            assert_eq!(
+                classify_command(reading),
+                CommandSafety::Safe,
+                "{reading} asks the user before reporting what holds a port"
+            );
+        }
+        for signalling in [
+            "kill -9 4321",
+            "kill $(lsof -ti:3000)",
+            "killall node",
+            "pkill -f 'next dev'",
+            "sh -c \"kill -9 $(lsof -ti:3000)\"",
+            "lsof -ti:3000 | xargs kill -9",
+        ] {
+            assert_eq!(
+                classify_command(signalling),
+                CommandSafety::Dangerous,
+                "{signalling} would end a process the user never named"
+            );
+        }
     }
 
     #[test]

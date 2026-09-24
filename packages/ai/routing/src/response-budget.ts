@@ -43,6 +43,7 @@ export interface ResponseBudgetInput {
   apiResponseFormat?: 'json_object' | null;
   requestedMaxOutputTokens?: number;
   modelMaxOutputTokens?: number;
+  modelMinimumOutputTokens?: number;
   semanticAssessment?: SemanticResponseAssessment | null;
 }
 
@@ -180,9 +181,13 @@ function outputTokenBudget(
   depth: AnswerDepth,
   requestedMaxOutputTokens: number | undefined,
   modelMaxOutputTokens: number | undefined,
+  modelMinimumOutputTokens: number | undefined,
 ): number {
   const limits = [
-    RESPONSE_OUTPUT_TOKEN_CEILINGS[depth],
+    Math.max(
+      RESPONSE_OUTPUT_TOKEN_CEILINGS[depth],
+      positiveInteger(modelMinimumOutputTokens) ?? 1,
+    ),
     positiveInteger(requestedMaxOutputTokens),
     positiveInteger(modelMaxOutputTokens),
   ].filter((value): value is number => value !== null);
@@ -288,6 +293,7 @@ export function planResponseBudget(input: ResponseBudgetInput): ResponseBudgetPl
       depth,
       input.requestedMaxOutputTokens,
       input.modelMaxOutputTokens,
+      input.modelMinimumOutputTokens,
     ),
     explanationRequired,
     clarification,

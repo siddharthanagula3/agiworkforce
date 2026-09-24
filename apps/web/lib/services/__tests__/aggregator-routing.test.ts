@@ -25,6 +25,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
 import {
   canFailoverToOpenRouter,
   dispatchProviderForRoute,
+  dispatchProviderForSelectedRoute,
   failoverMappedModelIds,
   isManagedOpenRouterRoute,
   mappedModelIds,
@@ -108,6 +109,21 @@ describe('aggregator routing', () => {
     const zhipuModelId = requireCatalogModel((candidate) => candidate.provider === 'zhipu').id;
     expect(dispatchProviderForRoute(`open_router/${zhipuModelId}`)).toBe('openrouter');
     expect(dispatchProviderForRoute(`zhipu/${zhipuModelId}`)).toBe('zhipu');
+    expect(
+      dispatchProviderForSelectedRoute({
+        routeId: `open_router/${zhipuModelId}`,
+        provider: 'open_router',
+      }),
+    ).toBe('openrouter');
+  });
+
+  it('keeps the selected provider when a synthetic route is not in the registry', () => {
+    expect(
+      dispatchProviderForSelectedRoute({
+        routeId: 'fixture-unknown/fixture-model',
+        provider: 'fixture-provider',
+      }),
+    ).toBe('fixture-provider');
   });
 
   it('keeps MiniMax off the managed OpenRouter route until its terms are reviewed', () => {

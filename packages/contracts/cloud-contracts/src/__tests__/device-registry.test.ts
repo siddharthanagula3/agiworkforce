@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEVICE_HEARTBEAT_INTERVAL_MS,
+  DEVICE_NAME_MAX_LENGTH,
   DEVICE_ONLINE_WINDOW_MS,
+  DEVICE_OPERATING_SYSTEMS,
   DEVICE_SLEEPING_WINDOW_MS,
+  DEVICE_SURFACES,
   DeviceHeartbeatRequestSchema,
+  DeviceRenameRequestSchema,
   deviceArchitecture,
+  deviceDisplayName,
   deviceOperatingSystem,
   devicePresence,
+  generatedDeviceName,
+  isDeviceNameReset,
 } from '../device-registry';
 
 const NOW = Date.parse('2026-09-17T12:00:00.000Z');
@@ -78,5 +85,47 @@ describe('platform normalisation', () => {
     expect(deviceArchitecture('aarch64')).toBe('arm64');
     expect(deviceArchitecture('x86_64')).toBe('x64');
     expect(deviceArchitecture('riscv64')).toBe('other');
+  });
+});
+
+describe('renaming a device, and taking it back', () => {
+  it('accepts a chosen name and refuses one that says nothing', () => {
+    expect(DeviceRenameRequestSchema.safeParse({ name: 'Studio Mac' }).success).toBe(true);
+    expect(DeviceRenameRequestSchema.safeParse({ name: '   ' }).success).toBe(false);
+    expect(
+      DeviceRenameRequestSchema.safeParse({ name: 'x'.repeat(DEVICE_NAME_MAX_LENGTH + 1) }).success,
+    ).toBe(false);
+  });
+
+  it('carries a way back to the name nobody chose', () => {
+    const parsed = DeviceRenameRequestSchema.safeParse({ name: null });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(isDeviceNameReset(parsed.data)).toBe(true);
+    expect(isDeviceNameReset({ name: 'Studio Mac' })).toBe(false);
+  });
+
+  it('generates a readable name for every surface on every operating system', () => {
+    const seen = new Set<string>();
+    for (const surface of DEVICE_SURFACES) {
+      for (const os of DEVICE_OPERATING_SYSTEMS) {
+        const generated = generatedDeviceName({ surface, os });
+        expect(generated.trim(), `${surface}/${os}`).toBe(generated);
+        expect(generated.length, `${surface}/${os}`).toBeGreaterThan(0);
+        expect(generated.length, `${surface}/${os}`).toBeLessThanOrEqual(DEVICE_NAME_MAX_LENGTH);
+        expect(DeviceRenameRequestSchema.safeParse({ name: generated }).success).toBe(true);
+        seen.add(generated);
+      }
+    }
+    expect(seen.size).toBe(DEVICE_SURFACES.length * DEVICE_OPERATING_SYSTEMS.length);
+  });
+
+  it('shows the generated name wherever no name was kept', () => {
+    const device = { surface: 'desktop', os: 'macos' } as const;
+    const generated = generatedDeviceName(device);
+    for (const stored of [null, undefined, '', '   ']) {
+      expect(deviceDisplayName(stored, device), JSON.stringify(stored)).toBe(generated);
+    }
+    expect(deviceDisplayName('Studio Mac', device)).toBe('Studio Mac');
   });
 });

@@ -328,6 +328,7 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     sel.id = 'fixture-six-level';
     render(<ComposerFooter />);
     expect(effortTrigger()).toHaveTextContent('Medium');
+    expect(effortTrigger()).toHaveClass('pointer-coarse:min-h-11');
     expect(effortSlider()).toHaveAttribute('min', '0');
     expect(effortSlider()).toHaveAttribute('max', '5');
     expect(effortLevel()).toBe('Medium');

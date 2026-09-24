@@ -189,4 +189,112 @@ describe('projectPersistedMessageMetadata', () => {
       MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
     );
   });
+
+  it('keeps route provenance when oversized optional metadata is dropped', () => {
+    const projected = projectPersistedMessageMetadata({
+      routeLane: 'free',
+      unknownFutureKey: { blob: 'z'.repeat(500_000) },
+    });
+
+    expect(projected?.['routeLane']).toBe('free');
+    expect(projected?.[METADATA_TRUNCATED_KEY]).toBe(true);
+  });
+
+  it('keeps a completed search step after bounding its oversized source snippets', () => {
+    const activity = {
+      schemaVersion: 1,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      lastSequence: 5,
+      status: 'completed',
+      startedAtMs: 1,
+      updatedAtMs: 2,
+      completedAtMs: 2,
+      entries: [
+        {
+          kind: 'tool',
+          id: 'tool:search-1',
+          toolCallId: 'search-1',
+          name: 'web_search',
+          category: 'web-search',
+          summary: 'Searching the web',
+          status: 'completed',
+          startedAtMs: 1,
+          completedAtMs: 2,
+          query: 'official IANA example domains page',
+          sources: Array.from({ length: 5 }, (_, index) => ({
+            url: `https://example.com/${index}`,
+            title: `Result ${index}`,
+            snippet: 'x'.repeat(1_000),
+          })),
+        },
+      ],
+    };
+
+    const projected = projectPersistedMessageMetadata({ agentActivity: activity });
+    const storedActivity = projected?.['agentActivity'] as typeof activity;
+
+    expect(storedActivity.status).toBe('completed');
+    expect(storedActivity.entries).toHaveLength(1);
+    expect(storedActivity.entries[0]).toMatchObject({
+      kind: 'tool',
+      category: 'web-search',
+      status: 'completed',
+      query: 'official IANA example domains page',
+    });
+    expect(storedActivity.entries[0]?.sources).toHaveLength(5);
+    expect(JSON.stringify(storedActivity)).not.toContain('x'.repeat(1_000));
+    expect(projected?.[METADATA_TRUNCATED_KEY]).toBe(true);
+    expect(managedCloudMetadataLength(projected)).toBeLessThanOrEqual(
+      MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
+    );
+    expect(activity.entries[0]?.sources[0]?.snippet).toHaveLength(1_000);
+  });
+
+  it('keeps the approval identity when one tool entry exceeds the activity budget', () => {
+    const projected = projectPersistedMessageMetadata({
+      agentActivity: {
+        schemaVersion: 1,
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        lastSequence: 5,
+        status: 'awaiting-approval',
+        startedAtMs: 1,
+        updatedAtMs: 2,
+        entries: [
+          {
+            kind: 'tool',
+            id: 'tool:search-1',
+            toolCallId: 'search-1',
+            name: 'web_search',
+            category: 'web-search',
+            summary: 'Review Web Search action',
+            status: 'awaiting-approval',
+            startedAtMs: 1,
+            approval: { id: 'approval-1', riskLevel: 'low' },
+            input: { query: 'q'.repeat(1_000) },
+            sources: Array.from({ length: 6 }, (_, index) => ({
+              url: `https://example.com/${index}${'u'.repeat(500)}`,
+              title: 't'.repeat(500),
+              snippet: 's'.repeat(1_000),
+            })),
+            files: Array.from({ length: 8 }, (_, index) => ({
+              path: `/tmp/${index}${'p'.repeat(500)}`,
+              change: 'modified',
+            })),
+          },
+        ],
+      },
+    });
+    const activity = projected?.['agentActivity'] as {
+      entries: Array<{ toolCallId: string; approval: { id: string } }>;
+    };
+
+    expect(activity.entries).toHaveLength(1);
+    expect(activity.entries[0]?.toolCallId).toBe('search-1');
+    expect(activity.entries[0]?.approval.id).toBe('approval-1');
+    expect(managedCloudMetadataLength(projected)).toBeLessThanOrEqual(
+      MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
+    );
+  });
 });

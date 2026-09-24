@@ -146,4 +146,42 @@ describe('conversation optimistic concurrency', () => {
     expect(response.status).toBe(400);
     expect(updateCall()).toBeUndefined();
   });
+
+  it('does not overwrite a newer draft with an older tab’s write', async () => {
+    const expectedDraftRevision = '2026-08-02T00:00:00.000Z';
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (/update web_conversations/.test(sql)) {
+        return /draft_updated_at is not distinct from/i.test(sql) ? [] : [{ id: CONVERSATION_ID }];
+      }
+      return [
+        {
+          id: CONVERSATION_ID,
+          draft: 'newer text from another tab',
+          draft_updated_at: '2026-08-02T00:00:01.000Z',
+        },
+      ];
+    });
+
+    const response = await PUT(
+      put({ draft: 'older text', draftUpdatedAt: expectedDraftRevision }),
+      context,
+    );
+
+    expect(response.status).toBe(409);
+    expect(updateCall()?.[0]).toMatch(/draft_updated_at is not distinct from/i);
+    expect(updateCall()?.[1]).toContain(expectedDraftRevision);
+  });
+
+  it('returns the next draft revision without changing the conversation version', async () => {
+    const nextDraftRevision = '2026-08-02T00:00:01.000Z';
+    mocks.query.mockResolvedValue([{ id: CONVERSATION_ID, draft_updated_at: nextDraftRevision }]);
+
+    const response = await PUT(put({ draft: 'current text', draftUpdatedAt: null }), context);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ saved: true, draftUpdatedAt: nextDraftRevision });
+    expect(updateCall()?.[1]).toContain(null);
+    expect(updateCall()?.[0]).not.toContain('server_version');
+    expect(updateCall()?.[0]).not.toContain('updated_at = now()');
+  });
 });

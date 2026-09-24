@@ -96,6 +96,10 @@
       "serves": "submitted_to_platform",
       "reason": "A share or artifact its owner published to the open web, looked up by the public token anyone already holds."
     },
+    "apps/web/app/api/models/free-quota/attestation/route.ts": {
+      "serves": "platform_only",
+      "reason": "The operator's own record that the QwenCloud console's free quota only switch is on, bound to the platform key; it reads and writes no customer data."
+    },
     "apps/web/app/api/operator/route.ts": {
       "serves": "submitted_to_platform",
       "reason": "Feedback and screenshots members sent to us through the feedback form, plus the platform's own sign-up and cost registers."
@@ -119,6 +123,14 @@
     "apps/web/app/api/support/handoff/agent/queue/route.ts": {
       "serves": "submitted_to_platform",
       "reason": "The queue of members waiting for a human, each entry raised by the member in it."
+    },
+    "apps/web/app/api/support/staff/tickets/[ticketId]/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "A ticket a member raised with support in Settings, Help, its replies, and the operator reply that answers it."
+    },
+    "apps/web/app/api/support/staff/tickets/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The tickets members raised with support in Settings, Help that are waiting on the support team."
     },
     "apps/web/app/api/support/tickets/[ticketId]/escalate/route.ts": {
       "serves": "submitted_to_platform",

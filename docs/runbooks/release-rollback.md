@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-18
+Last updated: 2026-09-21
 
 Until 2026-09-18 the only rollback in this repository was a step inside the job
 that deployed. It fired on `failure()` of the same run, which covers exactly one
@@ -100,6 +100,30 @@ The rollback path needs `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` and
 `AGI_DATABASE_URL`. That is the same set the deploy job already holds, and no
 new secret was introduced. The `production-web` environment gates the acting
 job; the weekly drill runs without that gate because `--drill` cannot act.
+
+## Mobile: what can be stopped, and how fast
+
+A shipped mobile binary cannot be rolled back: the store decides what a phone
+runs, and a fix to native code waits for a new binary and its review. Each kind
+of mobile incident therefore has its own lever, and the fastest one that reaches
+the fault is the one to pull.
+
+| The fault is in                         | Lever                                                                                                                                                                                                                        | Reaches the phone                  |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| The server the app talks to             | The web rollback above; the app has no server of its own                                                                                                                                                                     | On its next request                |
+| One capability, on every build          | Its kill switch (`apps/web/lib/feature-flags/kill-switches.ts`), evaluated on the server for every surface                                                                                                                   | On its next request                |
+| One capability, on some builds          | A version disable (`apps/web/lib/feature-flags/version-disable.ts`): the same switch with a version range and a surface list, carrying the sentence the reader is shown and the incident reference support will be asked for | On its next request                |
+| The app's JavaScript                    | An over-the-air update through `expo-updates` (`apps/mobile/app.config.js`); the fingerprint runtime version keeps it off binaries whose native code differs                                                                 | On its next launch after the fetch |
+| The app's native code                   | A new binary through the store, and the store's staged rollout controls for the one already out                                                                                                                              | After store review                 |
+| A whole build that must stop being used | Raising the minimum supported contract version, which answers that build with `CLIENT_UPDATE_REQUIRED`                                                                                                                       | On its next request, see below     |
+
+The last row is weaker on mobile than anywhere else. The server refuses the
+build, but `apps/mobile/services/api.ts` does not recognise the refusal: the
+reader sees the generic request failure instead of being told to update. It
+is a recorded gap in `scripts/check-client-handshake-coverage.mjs`, so a
+forced update stops a broken build from being used without telling its reader
+why. Prefer a version disable, which the server answers as an ordinary
+capability refusal carrying its sentence, until that gap is closed.
 
 ## Open gaps
 

@@ -444,6 +444,21 @@ function handleNativeMessageRoute(
 }
 
 /**
+ * Whether the client speaks a different revision of this protocol, and which
+ * side is behind. Null when the versions agree, which is every ordinary call.
+ */
+export function protocolMismatch(body: Record<string, unknown>): string | null {
+  const version = body['version'];
+  if (typeof version !== 'number' || !Number.isInteger(version)) {
+    return 'The client did not say which version of the desktop bridge it speaks.';
+  }
+  if (version === LOCAL_CLIENT_PROTOCOL_VERSION) return null;
+  return version > LOCAL_CLIENT_PROTOCOL_VERSION
+    ? 'This app is older than the program asking it to drive the browser. Update AGI Cloud, then try again.'
+    : 'The program asking this app to drive the browser is older than the app. Update it, then try again.';
+}
+
+/**
  * One page command from another program on this machine. The shell decides:
  * the renderer's own gate runs here, scoped to the client's name.
  */
@@ -451,6 +466,21 @@ async function handleLocalClientCommandRoute(
   response: ServerResponse,
   body: Record<string, unknown>,
 ): Promise<void> {
+  const mismatch = protocolMismatch(body);
+  if (mismatch) {
+    // Answered before the command is read, and never run: the two sides do not
+    // agree on what the arguments mean, so acting on them is the one outcome
+    // worse than refusing. The envelope carries this app's own version so the
+    // client can say which side is behind, and the sentence says it too,
+    // because "malformed" sent a user looking for a typo in their command.
+    sendJson(response, 409, {
+      version: LOCAL_CLIENT_PROTOCOL_VERSION,
+      ok: false,
+      error: mismatch,
+    });
+    return;
+  }
+
   const parsed = parseLocalClientCommand(body);
   if (!parsed) {
     sendJson(response, 400, {
@@ -605,10 +635,25 @@ export async function startBrowserBridge(dependencies: BridgeDependencies): Prom
   });
   instance.keepAliveTimeout = 0;
 
+  // A second app on this Mac holding the port is the ordinary way this fails,
+  // and it is not a fault in this app: the two would otherwise take turns
+  // owning the bridge file and the extension would talk to whichever won the
+  // last race. This one stands down, leaves the running bridge's file alone,
+  // and says what to do about it.
   await new Promise<void>((resolve, reject) => {
-    instance.once('error', reject);
+    instance.once('error', (error: NodeJS.ErrnoException) => {
+      instance.close();
+      reject(
+        error.code === 'EADDRINUSE'
+          ? new BrowserBridgeError(
+              `Another app on this computer is already using the browser bridge on port ${port}. Quit it, then reopen this app to pair a browser here.`,
+              'not-paired',
+            )
+          : error,
+      );
+    });
     instance.listen(port, BROWSER_BRIDGE_LOOPBACK_ADDRESS, () => {
-      instance.removeListener('error', reject);
+      instance.removeAllListeners('error');
       resolve();
     });
   });

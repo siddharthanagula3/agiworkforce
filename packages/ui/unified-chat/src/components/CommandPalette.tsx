@@ -155,7 +155,7 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center pt-[15vh]"
       aria-modal="true"
       role="dialog"
       aria-label="Command palette"
@@ -170,7 +170,7 @@ export function CommandPalette() {
       {/* Command box */}
       <div
         className={cn(
-          'relative z-10 w-full max-w-lg overflow-hidden rounded-xl',
+          'relative z-[var(--z-control)] w-full max-w-lg overflow-hidden rounded-xl',
           'bg-[var(--chat-surface-base)] border border-[var(--chat-border)]',
           'shadow-xl',
         )}
@@ -213,12 +213,12 @@ export function CommandPalette() {
                   'aria-selected:bg-[var(--chat-surface-hover)]',
                 )}
               >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[var(--chat-radius-sm)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)]">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)]">
                   {cmd.icon}
                 </span>
                 <span className="flex-1">{cmd.label}</span>
                 {cmd.shortcut && (
-                  <kbd className="shrink-0 rounded-[var(--chat-radius-sm)] bg-[var(--chat-surface-elevated)] px-1.5 py-0.5 font-mono text-[12px] text-[var(--chat-text-muted)]">
+                  <kbd className="shrink-0 rounded-sm bg-[var(--chat-surface-elevated)] px-1.5 py-0.5 font-mono text-caption text-[var(--chat-text-muted)]">
                     {cmd.shortcut}
                   </kbd>
                 )}
@@ -228,16 +228,16 @@ export function CommandPalette() {
 
           {/* Footer hint */}
           <div className="border-t border-[var(--chat-border)] px-3.5 py-2">
-            <p className="text-[12px] text-[var(--chat-text-muted)]">
-              <kbd className="rounded bg-[var(--chat-surface-elevated)] px-1 py-0.5 font-mono">
+            <p className="text-caption text-[var(--chat-text-muted)]">
+              <kbd className="rounded-compact bg-[var(--chat-surface-elevated)] px-1 py-0.5 font-mono">
                 ↑↓
               </kbd>{' '}
               navigate{'  '}
-              <kbd className="rounded bg-[var(--chat-surface-elevated)] px-1 py-0.5 font-mono">
+              <kbd className="rounded-compact bg-[var(--chat-surface-elevated)] px-1 py-0.5 font-mono">
                 ↵
               </kbd>{' '}
               select{'  '}
-              <kbd className="rounded bg-[var(--chat-surface-elevated)] px-1 py-0.5 font-mono">
+              <kbd className="rounded-compact bg-[var(--chat-surface-elevated)] px-1 py-0.5 font-mono">
                 esc
               </kbd>{' '}
               close

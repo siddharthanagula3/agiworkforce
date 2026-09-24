@@ -6,6 +6,14 @@ export const MessageSquare = createIcon(
   <path d="M4.5 3h15L21 4.5v10l-1.5 1.5H8l-5 5V4.5z" />,
 );
 
+export const MessageSquareText = createIcon(
+  'MessageSquareText',
+  <>
+    <path d="M4.5 3h15L21 4.5v10l-1.5 1.5H8l-5 5V4.5z" />
+    <path d="M7 8h10M7 12h7" />
+  </>,
+);
+
 export const TerminalSquare = createIcon(
   'TerminalSquare',
   <>

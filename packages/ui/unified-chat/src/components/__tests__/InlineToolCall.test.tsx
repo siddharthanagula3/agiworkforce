@@ -356,6 +356,29 @@ describe('InlineToolCall, badge icon mode', () => {
     expect(container.querySelector('[data-result-label]')).toBeNull();
   });
 
+  it('keeps the completion label and trailing action on the header row', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="b6-complete"
+        label="Searching the web"
+        status="success"
+        kind="web-search"
+        iconStyle="badge"
+        completionLabel="Done"
+        trailingAction={<button type="button">Copy</button>}
+        body={<pre>Search request</pre>}
+      />,
+    );
+    const bar = screen.getByRole('button', { name: 'Searching the web, Done' });
+    const copy = screen.getByRole('button', { name: 'Copy' });
+    expect(bar.textContent).toContain('Done');
+    expect(bar.querySelector('[data-badge-kind="glyph"]')).not.toBeNull();
+    expect(bar.nextElementSibling?.contains(copy)).toBe(true);
+    expect(container.querySelector('[data-result-label]')).toBeNull();
+    fireEvent.click(copy);
+    expect(bar.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('uses iconLetter override when provided', () => {
     const { container } = render(
       <InlineToolCall id="b7" label="Custom" status="success" iconStyle="badge" iconLetter="X" />,

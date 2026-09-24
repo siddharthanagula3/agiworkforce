@@ -9,6 +9,11 @@ beforeEach(() => {
 });
 
 describe('ProjectGallery, enhanced create UX', () => {
+  it('gives the shared project search a stable accessible name', () => {
+    render(<ProjectGallery />);
+    expect(screen.getByRole('searchbox', { name: 'Search projects' })).toBeDefined();
+  });
+
   it('opens the create form when New is clicked', async () => {
     render(<ProjectGallery />);
     await userEvent.click(screen.getByRole('button', { name: /new/i }));

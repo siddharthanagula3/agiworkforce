@@ -9,10 +9,11 @@ import type {
 } from './types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import type { StreamErrorInfo } from './continue-generation';
 
 export interface CloudMessageProjection {
   finishReason?: string;
-  streamError?: { message: string; code?: string; retryable?: boolean };
+  streamError?: StreamErrorInfo;
   thinking?: string;
   toolCalls?: ToolCall[];
   webSearchResults?: WebSearchResult[];
@@ -311,7 +312,7 @@ type StreamEventPayload =
   | {
       type: 'done';
       finishReason?: string;
-      streamError?: { message: string; code?: string; retryable?: boolean };
+      streamError?: StreamErrorInfo;
       usage?: CloudMessageProjection['usage'];
     }
   | {

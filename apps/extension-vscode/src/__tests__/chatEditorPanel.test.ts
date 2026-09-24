@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { activate } from '../extension';
@@ -55,6 +54,19 @@ describe('agi-workforce.openChatInEditor', () => {
   let handlers: Map<string, (...args: unknown[]) => unknown>;
   let panelCreations: Array<{ viewType: string; title: string }>;
   let panels: PanelHarness[];
+
+  /** What the webview stamps on every message it posts back. */
+  function bindingOf(harness: PanelHarness): { origin: string; epoch: number } {
+    const html = harness.panel.webview.html;
+    const found = /const sessionBinding = \{ origin: '([^']+)', epoch: (\d+) \}/u.exec(html);
+    if (found === null) throw new Error('the panel webview carries no session binding');
+    return { origin: found[1]!, epoch: Number(found[2]) };
+  }
+
+  async function post(harness: PanelHarness, message: object): Promise<void> {
+    await harness.receiveMessage?.({ ...message, ...bindingOf(harness) });
+  }
+
   let originalRegister: typeof vscode.commands.registerCommand;
   let originalCreatePanel: typeof vscode.window.createWebviewPanel;
 
@@ -210,10 +222,33 @@ describe('agi-workforce.openChatInEditor', () => {
     open();
     open();
 
-    await panels[0]!.receiveMessage?.({ type: 'newChat' });
+    await post(panels[0]!, { type: 'newChat' });
 
     expect(panels[0]!.postMessage).toHaveBeenCalledWith({ type: 'conversationCleared' });
     expect(panels[1]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
+  });
+
+  it('drops a message the webview wrote against a conversation that has been replaced', async () => {
+    handlers.get('agi-workforce.openChatInEditor')!();
+    const stale = bindingOf(panels[0]!);
+
+    await post(panels[0]!, { type: 'newChat' });
+    panels[0]!.postMessage.mockClear();
+    await panels[0]!.receiveMessage?.({ type: 'clearConversation', ...stale });
+
+    expect(panels[0]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
+  });
+
+  it('drops a message stamped by another chat tab', async () => {
+    const open = handlers.get('agi-workforce.openChatInEditor')!;
+    open();
+    open();
+    const other = bindingOf(panels[1]!);
+
+    panels[0]!.postMessage.mockClear();
+    await panels[0]!.receiveMessage?.({ type: 'clearConversation', ...other });
+
+    expect(panels[0]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
   });
 
   it('does not interfere with sidebar webview registration', () => {
@@ -236,7 +271,7 @@ describe('agi-workforce.openChatInEditor', () => {
 
     handlers.get('agi-workforce.openChatInEditor')!();
     expect(panels[0]!.receiveMessage).toBeDefined();
-    await panels[0]!.receiveMessage!({
+    await post(panels[0]!, {
       type: 'proposeDiff',
       payload: { code: 'const x = 1;', language: 'typescript' },
     });

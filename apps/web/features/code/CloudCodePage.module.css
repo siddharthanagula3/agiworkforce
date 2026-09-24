@@ -524,7 +524,7 @@ svg + .menuRowLabel {
   align-self: flex-end;
   max-width: 75%;
   padding: 10px 14px;
-  border-radius: 18px;
+  border-radius: var(--corner-panel);
   background: var(--chat-user-bubble-bg);
   color: var(--chat-text-primary);
   font-size: 15px;
@@ -567,7 +567,7 @@ svg + .menuRowLabel {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  transition: transform 140ms ease;
+  transition: transform var(--duration-quick) var(--curve-standard);
 }
 
 .activityChevronOpen {
@@ -797,7 +797,7 @@ svg + .menuRowLabel {
   min-height: 28px;
   padding: 0 10px;
   border: 1px solid var(--chat-border-strong);
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   background: transparent;
   color: var(--chat-text-secondary);
   font: inherit;
@@ -862,13 +862,13 @@ svg + .menuRowLabel {
 .usageBarTrack {
   overflow: hidden;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   background: var(--chat-surface-hover);
 }
 
 .usageBarFill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   background: var(--chat-accent-primary);
 }
 

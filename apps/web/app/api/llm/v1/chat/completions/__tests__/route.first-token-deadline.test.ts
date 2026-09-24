@@ -146,7 +146,10 @@ const managedUsageMocks = vi.hoisted(() => ({
   delivered: vi.fn(() => Promise.resolve()),
 }));
 const rlsMocks = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: rlsMocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: rlsMocks.getUserScopedDb,
+  getVerifiedBearerUserScopedDb: rlsMocks.getUserScopedDb,
+}));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
   reserveManagedUsageRequest: managedUsageMocks.reserve,

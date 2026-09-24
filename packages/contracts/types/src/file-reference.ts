@@ -30,8 +30,13 @@ import type { SourceSurface } from './suite-contracts';
  */
 export const MAX_FILE_TEXT_CHARS = 200_000;
 
-/** How the platform came to hold this file. */
-export const FILE_ORIGINS = ['upload', 'generated', 'connector', 'import'] as const;
+/**
+ * How the platform came to hold this file. `share` is a file another app handed
+ * to us through the operating system's share sheet, which is not an upload: the
+ * user never opened our picker, so nothing about our own UI can be assumed and
+ * the file arrives with whatever name and type the sending app chose.
+ */
+export const FILE_ORIGINS = ['upload', 'share', 'generated', 'connector', 'import'] as const;
 export type FileOrigin = (typeof FILE_ORIGINS)[number];
 
 /** Where the bytes actually are, which decides who can fetch them. */

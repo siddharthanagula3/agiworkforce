@@ -2,28 +2,37 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 ## Bootstrap Rule
 
-AGI should not burn founder money on unmanaged cloud usage. Local and BYOK can launch first because users bring their own compute or provider key. Managed compute and managed credits are in public alpha and open by default (founder decision, 2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. The ability to meter cost, prevent abuse, and survive refunds and disputes must keep pace with public usage but no longer gates access.
+AGI should not burn founder money on unmanaged cloud usage. Local and BYOK can
+launch first because users bring their own compute or provider key. Managed Free
+compute is in public alpha and enabled for signed-in Free users (founder
+decision, 2026-06-27); `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an
+incident-response kill-switch only. Paid upgrades remain waitlist/access-code
+gated until the founder opens purchasing. The ability to meter cost, prevent
+abuse, and survive refunds and disputes must keep pace with Free usage and must
+pass the paid-launch gate before self-serve paid acquisition opens.
 
 ## Launch Posture
 
-| Area          | Current posture                                                                                                                                       |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local         | Core differentiation. Free to use where technically available.                                                                                        |
-| BYOK          | Explicit provider trust boundary. User pays provider directly.                                                                                        |
-| Managed cloud | Public alpha, open by default (2026-06-27); subscription/entitlement-gated, not waitlist-gated. Env kill-switch only.                                 |
-| Mobile v1     | Small on-device Local LLMs + Cloud public alpha (open by default). No Mobile BYOK in v1.                                                              |
-| Web           | Subscription-backed account/chat state through Neon. No Web BYOK. Cloud is public alpha, open by default (subscription/entitlement-gated).            |
-| Desktop       | Managed-cloud-only Electron shell. It accepts no provider keys or local-model route; account state is Neon-backed and subscription/entitlement-gated. |
-| CLI/VS Code   | Developer/workspace scoped; no silent global chat sync.                                                                                               |
-| Chrome        | Cloud-only. Eligible Managed Cloud chats automatically mirror to the shared signed-in account conversation history; browser-task state remains local. |
+| Area          | Current posture                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local         | Core differentiation. Free to use where technically available.                                                                                                                             |
+| BYOK          | Explicit provider trust boundary. User pays provider directly.                                                                                                                             |
+| Managed cloud | Free public alpha is enabled for signed-in users. Paid plan acquisition remains waitlist/access-code gated; existing paid entitlements continue to resolve normally. Env kill-switch only. |
+| Mobile v1     | Small on-device Local LLMs plus signed-in Managed Free public alpha. Paid upgrades remain gated. No Mobile BYOK in v1.                                                                     |
+| Web           | Account/chat state through Neon. No Web BYOK. Managed Free is available after sign-in; paid upgrade acquisition remains waitlist/access-code gated.                                        |
+| Desktop       | Electron Cloud chat consumes the shared account entitlement; Desktop Code uses the host-owned developer runtime shared with CLI/VS Code. The two trust domains remain separate.            |
+| CLI/VS Code   | Developer/workspace scoped and entitled through the same account; local credentials stay in the shared host credential broker, with no silent global chat sync.                            |
+| Chrome        | Cloud-only. Eligible Managed Cloud chats automatically mirror to the shared signed-in account conversation history; browser-task state remains local.                                      |
 
 ## Managed Credit Requirements
 
-Managed cloud is open by default in public alpha (2026-06-27), so these controls must keep pace with public usage rather than gate access. They remain required GA-hardening work, build and prove them as usage scales:
+Managed Free is open in public alpha (2026-06-27), so these controls must keep
+pace with Free usage rather than block it. They are also paid-launch gates:
+self-serve paid upgrades do not open until the founder accepts the evidence.
 
 - usage ledger,
 - provider price table,
@@ -38,12 +47,33 @@ Managed cloud is open by default in public alpha (2026-06-27), so these controls
 
 ## Payment Guidance
 
-Cards and Stripe are acceptable for low-risk subscriptions and waitlist capture, but managed top-ups can attract fraud, disputes, stolen-card abuse, and margin loss. For enterprise managed credits, prefer invoice/ACH/wire and signed order forms before card top-ups.
+Cards and Stripe are acceptable for low-risk subscriptions and waitlist capture,
+but the presence of working checkout code does not open paid purchasing. A
+valid access code or founder-opened acquisition gate is required until the paid
+waitlist is retired. Managed top-ups can attract fraud, disputes, stolen-card
+abuse, and margin loss. For enterprise managed credits, prefer invoice/ACH/wire
+and signed order forms before card top-ups.
 
-## Subscription Ownership Across Web and Store
+## Paid Acquisition Gate
+
+- Free users can use the enabled Free managed routes without a waitlist code.
+- Existing paid accounts keep their canonical entitlements across all surfaces.
+- A Free user cannot start a new paid subscription or upgrade merely because a
+  checkout route exists. The acquisition policy must return an access-code or
+  waitlist decision before checkout.
+- Access codes authorize acquisition, not a second subscription owner or a
+  surface-specific entitlement.
+- When the founder opens self-serve upgrades, one policy switch and its audited
+  rollout state replace the waitlist decision; clients do not fork the rule.
+
+## Subscription Ownership Across The Suite
 
 One user has one `subscriptions` row and exactly one billing owner: Stripe (web),
 Apple, or Google. The row must never carry identifiers from two channels at once.
+That one effective entitlement applies across Web, Mobile, Desktop, Chrome, CLI,
+and VS Code; no surface creates an additional product subscription. Local and
+BYOK execution may remain available without managed usage, but any account plan
+gate, allowance, or paid feature reads the same canonical entitlement.
 `apps/web/lib/server/subscription-billing-owner.ts` reads that as `unverified` and
 fails every billing action closed, and store renewal notifications skip a row that
 also holds a Stripe subscription id.

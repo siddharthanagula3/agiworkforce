@@ -194,7 +194,7 @@ function PlanIcon({ tier }: { tier: string }) {
         width: 48,
         height: 48,
         borderRadius: '50%',
-        background: isPaid ? 'var(--chat-accent-primary, #c8892a)' : 'var(--bg-hover)',
+        background: isPaid ? 'var(--chat-accent-primary)' : 'var(--bg-hover)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -213,7 +213,7 @@ function SectionHeader({ title }: { title: string }) {
   return (
     <div
       style={{
-        padding: '14px 20px',
+        padding: 'var(--space-4) var(--space-5)',
         borderBottom: '1px solid var(--settings-border)',
         fontSize: 13,
         fontWeight: 600,
@@ -232,7 +232,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 16,
+        gap: 'var(--space-4)',
         minHeight: 32,
       }}
     >
@@ -520,24 +520,24 @@ export function BillingSection() {
 
   if (!billingInitialized || billingLoading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
         <span role="status" aria-live="polite" className="sr-only">
           Loading your billing account…
         </span>
         <div aria-hidden="true" className="flex items-center gap-4">
           <div className="h-12 w-12 shrink-0 animate-pulse rounded-full bg-foreground/10" />
           <div className="flex flex-col gap-2">
-            <div className="h-4 w-40 animate-pulse rounded bg-foreground/10" />
-            <div className="h-3 w-56 animate-pulse rounded bg-foreground/[0.07]" />
+            <div className="h-4 w-40 animate-pulse rounded-compact bg-foreground/10" />
+            <div className="h-3 w-56 animate-pulse rounded-compact bg-foreground/[0.07]" />
           </div>
         </div>
         <div
           aria-hidden="true"
-          className="h-20 w-full animate-pulse rounded bg-foreground/[0.07]"
+          className="h-20 w-full animate-pulse rounded-compact bg-foreground/[0.07]"
         />
         <div
           aria-hidden="true"
-          className="h-20 w-full animate-pulse rounded bg-foreground/[0.07]"
+          className="h-20 w-full animate-pulse rounded-compact bg-foreground/[0.07]"
         />
       </div>
     );
@@ -550,7 +550,7 @@ export function BillingSection() {
   // "We could not read your plan" is the honest thing to say when we could not.
   if (billingUnauthenticated && !subscription) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
         <p
           role="alert"
@@ -562,7 +562,11 @@ export function BillingSection() {
         <button
           type="button"
           onClick={() => void refreshUser()}
-          style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 'var(--radius-md)' }}
+          style={{
+            alignSelf: 'flex-start',
+            padding: 'var(--space-2) var(--space-4)',
+            borderRadius: 'var(--radius-md)',
+          }}
         >
           Try again
         </button>
@@ -572,7 +576,7 @@ export function BillingSection() {
 
   if (billingError && !subscription) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
         <p
           role="alert"
@@ -583,7 +587,11 @@ export function BillingSection() {
         <button
           type="button"
           onClick={() => void refreshUser()}
-          style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 'var(--radius-md)' }}
+          style={{
+            alignSelf: 'flex-start',
+            padding: 'var(--space-2) var(--space-4)',
+            borderRadius: 'var(--radius-md)',
+          }}
         >
           Try again
         </button>
@@ -600,7 +608,7 @@ export function BillingSection() {
   // Usage panel correctly reading Basic from its own request.
   if (!subscription) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
         <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
         <p
           role="alert"
@@ -611,7 +619,11 @@ export function BillingSection() {
         <button
           type="button"
           onClick={() => void refreshUser()}
-          style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 'var(--radius-md)' }}
+          style={{
+            alignSelf: 'flex-start',
+            padding: 'var(--space-2) var(--space-4)',
+            borderRadius: 'var(--radius-md)',
+          }}
         >
           Try again
         </button>
@@ -620,7 +632,7 @@ export function BillingSection() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
         <h1
           style={{
@@ -628,7 +640,7 @@ export function BillingSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Billing
@@ -647,13 +659,13 @@ export function BillingSection() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
-            padding: '14px 0',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
             flexWrap: 'wrap',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
             <PlanIcon tier={tier} />
             <div>
               <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
@@ -662,7 +674,7 @@ export function BillingSection() {
                     "Max_15x plan" instead of "Max 15x". */}
                 {isFreeTier ? 'Free plan' : `${planLabel ?? subscription?.display_name ?? ''} plan`}
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                 {isFreeTier
                   ? 'Try AGI'
                   : (badgeText ?? humanizeStatus(subscription?.status ?? 'none'))}
@@ -674,11 +686,11 @@ export function BillingSection() {
               href="/upgrade"
               style={{
                 flexShrink: 0,
-                padding: '7px 14px',
-                background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary, #c8892a)',
+                padding: 'var(--space-2) var(--space-4)',
+                background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary)',
                 border: 'none',
                 borderRadius: 'var(--radius)',
-                color: isFreeTier ? 'var(--bg-base, #09090b)' : 'var(--chat-accent-on-primary)',
+                color: isFreeTier ? 'var(--bg-base)' : 'var(--chat-accent-on-primary)',
                 fontSize: 13,
                 fontWeight: 600,
                 textDecoration: 'none',
@@ -702,8 +714,8 @@ export function BillingSection() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 12,
-              padding: '14px 0',
+              gap: 'var(--space-3)',
+              padding: 'var(--space-4) 0',
               borderBottom: '1px solid var(--settings-border)',
             }}
           >
@@ -723,7 +735,7 @@ export function BillingSection() {
               <div
                 role="alert"
                 style={{
-                  padding: '10px 12px',
+                  padding: 'var(--space-3) var(--space-3)',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--settings-destructive-text)',
                   color: 'var(--settings-destructive-text)',
@@ -765,7 +777,14 @@ export function BillingSection() {
         )}
 
         {!isFreeTier && (isStoreBilled || hasStripeBilling) ? (
-          <div style={{ padding: '14px 0', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div
+            style={{
+              padding: 'var(--space-4) 0',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 'var(--space-2)',
+            }}
+          >
             {/* A store-owned subscription cannot be managed in the Stripe portal.
                 send the user to the store that actually holds it. */}
             {!isFreeTier && isStoreBilled && (
@@ -774,7 +793,7 @@ export function BillingSection() {
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
-                  padding: '7px 14px',
+                  padding: 'var(--space-2) var(--space-4)',
                   background: 'transparent',
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius)',
@@ -792,7 +811,7 @@ export function BillingSection() {
                 onClick={() => void openPortal()}
                 disabled={portalPending}
                 style={{
-                  padding: '7px 14px',
+                  padding: 'var(--space-2) var(--space-4)',
                   background: 'transparent',
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius)',
@@ -810,7 +829,7 @@ export function BillingSection() {
                 onClick={() => void openPortal('cancel')}
                 disabled={portalPending}
                 style={{
-                  padding: '7px 14px',
+                  padding: 'var(--space-2) var(--space-4)',
                   background: 'transparent',
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius)',
@@ -829,7 +848,7 @@ export function BillingSection() {
             role="alert"
             style={{
               margin: 0,
-              padding: '0 0 14px',
+              padding: '0 0 var(--space-4)',
               fontSize: 13,
               color: 'var(--settings-destructive-text)',
             }}
@@ -843,7 +862,14 @@ export function BillingSection() {
           is held by Apple or Google and is not readable or editable here) */}
       {hasStripeBilling && (
         <div>
-          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+          <p
+            style={{
+              margin: '0 0 var(--space-2)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text-2)',
+            }}
+          >
             Payment
           </p>
           {paymentMethods.status === 'loading' || paymentMethods.status === 'idle' ? (
@@ -851,26 +877,26 @@ export function BillingSection() {
               aria-hidden="true"
               className="flex items-center gap-3 border-b border-[var(--settings-border)] py-3.5"
             >
-              <div className="h-6 w-9 shrink-0 animate-pulse rounded bg-foreground/10" />
-              <div className="h-3 w-40 animate-pulse rounded bg-foreground/[0.07]" />
+              <div className="h-6 w-9 shrink-0 animate-pulse rounded-compact bg-foreground/10" />
+              <div className="h-3 w-40 animate-pulse rounded-compact bg-foreground/[0.07]" />
             </div>
           ) : (
             <div
               style={{
-                padding: '14px 0',
+                padding: 'var(--space-4) 0',
                 borderBottom: '1px solid var(--settings-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 16,
+                gap: 'var(--space-4)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <div
                   style={{
                     width: 36,
                     height: 24,
-                    borderRadius: 4,
+                    borderRadius: 'var(--corner-compact)',
                     background: 'var(--bg-hover)',
                     border: '1px solid var(--settings-border)',
                     display: 'flex',
@@ -901,7 +927,7 @@ export function BillingSection() {
                 onClick={() => void openPortal()}
                 disabled={portalPending}
                 style={{
-                  padding: '6px 14px',
+                  padding: 'var(--space-2) var(--space-4)',
                   background: 'transparent',
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius-md)',
@@ -925,7 +951,7 @@ export function BillingSection() {
               role="alert"
               style={{
                 margin: 0,
-                padding: '8px 0 0',
+                padding: 'var(--space-2) 0 0',
                 color: 'var(--settings-destructive-text)',
                 fontSize: 13,
               }}
@@ -941,22 +967,29 @@ export function BillingSection() {
 
       {canBuyTopUps && (
         <div id="top-up">
-          <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+          <p
+            style={{
+              margin: '0 0 var(--space-2)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text-2)',
+            }}
+          >
             Usage top-up
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
                 {TOP_UP_UNITS_PER_USD} credits for every $1
               </div>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-3)' }}>
+              <p style={{ margin: 'var(--space-1) 0 0', fontSize: 13, color: 'var(--text-3)' }}>
                 Minimum ${MIN_TOP_UP_AMOUNT_USD}; self-serve maximum ${MAX_TOP_UP_AMOUNT_USD}.
                 Top-ups add managed-usage balance and do not change your plan or renewal date.
                 Unused purchased balance carries across renewals for up to 12 months.
               </p>
             </div>
 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
               {TOP_UP_PRESET_AMOUNTS_USD.map((amount) => (
                 <button
                   key={amount}
@@ -964,11 +997,11 @@ export function BillingSection() {
                   aria-pressed={topUpAmountUsd === amount}
                   onClick={() => setTopUpAmountUsd(amount)}
                   style={{
-                    padding: '7px 12px',
+                    padding: 'var(--space-2) var(--space-3)',
                     borderRadius: 'var(--radius-md)',
                     border: `1px solid ${
                       topUpAmountUsd === amount
-                        ? 'var(--chat-accent-primary, #c8892a)'
+                        ? 'var(--chat-accent-primary)'
                         : 'var(--settings-border)'
                     }`,
                     background: topUpAmountUsd === amount ? 'rgba(200,137,42,0.12)' : 'transparent',
@@ -986,11 +1019,11 @@ export function BillingSection() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 16,
+                gap: 'var(--space-4)',
                 flexWrap: 'wrap',
               }}
             >
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 <span style={{ fontSize: 13, color: 'var(--text-3)' }}>Custom amount</span>
                 <span style={{ color: 'var(--text-2)' }}>$</span>
                 <input
@@ -1003,7 +1036,7 @@ export function BillingSection() {
                   onChange={(event) => setTopUpAmountUsd(Number(event.target.value))}
                   style={{
                     width: 92,
-                    padding: '7px 9px',
+                    padding: 'var(--space-2) var(--space-2)',
                     borderRadius: 'var(--radius-md)',
                     border: '1px solid var(--settings-border)',
                     background: 'var(--bg-base)',
@@ -1016,10 +1049,10 @@ export function BillingSection() {
                 onClick={() => void buyTopUp()}
                 disabled={topUpPending || selectedTopUpUnits === null}
                 style={{
-                  padding: '8px 14px',
+                  padding: 'var(--space-2) var(--space-4)',
                   border: 0,
                   borderRadius: 'var(--radius-md)',
-                  background: 'var(--chat-accent-primary, #c8892a)',
+                  background: 'var(--chat-accent-primary)',
                   color: 'var(--chat-accent-on-primary)',
                   fontSize: 13,
                   fontWeight: 600,
@@ -1056,8 +1089,8 @@ export function BillingSection() {
                 display: 'flex',
                 alignItems: 'flex-start',
                 justifyContent: 'space-between',
-                gap: 16,
-                paddingTop: 16,
+                gap: 'var(--space-4)',
+                paddingTop: 'var(--space-4)',
                 borderTop: '1px solid var(--settings-border)',
                 flexWrap: 'wrap',
               }}
@@ -1069,7 +1102,7 @@ export function BillingSection() {
                 >
                   Keep going after a usage limit
                 </label>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+                <p style={{ margin: 'var(--space-1) 0 0', fontSize: 12, color: 'var(--text-3)' }}>
                   {overageAvailableCents > 0
                     ? `Spend your credits when a usage limit stops you. ${formatCredits(overageAvailableCents)} available.`
                     : 'Spend your credits when a usage limit stops you. Buy credits above to use this.'}
@@ -1078,7 +1111,7 @@ export function BillingSection() {
                   <p
                     role="alert"
                     style={{
-                      margin: '6px 0 0',
+                      margin: 'var(--space-2) 0 0',
                       fontSize: 12,
                       color: 'var(--settings-destructive-text)',
                     }}
@@ -1097,8 +1130,8 @@ export function BillingSection() {
                 style={{
                   width: 18,
                   height: 18,
-                  marginTop: 2,
-                  accentColor: 'var(--chat-accent-primary, #c8892a)',
+                  marginTop: 'var(--space-1)',
+                  accentColor: 'var(--chat-accent-primary)',
                   cursor: overagePending ? 'wait' : 'pointer',
                 }}
               />
@@ -1127,14 +1160,14 @@ export function BillingSection() {
                 <tr
                   style={{
                     borderBottom: '1px solid var(--settings-border)',
-                    background: 'var(--bg-hover, rgba(255,255,255,0.03))',
+                    background: 'var(--bg-hover)',
                   }}
                 >
                   {['Date', 'Description', 'Amount'].map((col) => (
                     <th
                       key={col}
                       style={{
-                        padding: '10px 16px',
+                        padding: 'var(--space-3) var(--space-4)',
                         textAlign: col === 'Amount' ? 'right' : 'left',
                         fontSize: 12,
                         fontWeight: 700,
@@ -1164,14 +1197,16 @@ export function BillingSection() {
                     >
                       <td
                         style={{
-                          padding: '12px 16px',
+                          padding: 'var(--space-3) var(--space-4)',
                           color: 'var(--text-1)',
                           whiteSpace: 'nowrap',
                         }}
                       >
                         {formatIsoDate(entry.created_at)}
                       </td>
-                      <td style={{ padding: '12px 16px', color: 'var(--text-2)' }}>
+                      <td
+                        style={{ padding: 'var(--space-3) var(--space-4)', color: 'var(--text-2)' }}
+                      >
                         {entry.label ||
                           entry.description ||
                           CREDIT_TRANSACTION_LABELS[entry.transaction_type] ||
@@ -1179,7 +1214,7 @@ export function BillingSection() {
                       </td>
                       <td
                         style={{
-                          padding: '12px 16px',
+                          padding: 'var(--space-3) var(--space-4)',
                           textAlign: 'right',
                           color: cents < 0 ? 'var(--text-2)' : 'var(--text-1)',
                           fontFamily: 'var(--mono)',
@@ -1198,7 +1233,7 @@ export function BillingSection() {
           <div
             role="alert"
             style={{
-              padding: '16px 20px',
+              padding: 'var(--space-4) var(--space-5)',
               color: 'var(--settings-destructive-text)',
               fontSize: 13,
             }}
@@ -1209,7 +1244,7 @@ export function BillingSection() {
             </button>
           </div>
         ) : (
-          <div style={{ padding: '16px 20px' }}>
+          <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
             <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
               {creditHistory.status === 'loading' || creditHistory.status === 'idle'
                 ? 'Loading credit history…'
@@ -1221,13 +1256,20 @@ export function BillingSection() {
 
       {/* Invoices table */}
       <div>
-        <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+        <p
+          style={{
+            margin: '0 0 var(--space-2)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-2)',
+          }}
+        >
           Invoices
         </p>
         {invoices.status === 'loading' || invoices.status === 'idle' ? (
           <div aria-hidden="true" className="flex flex-col gap-2 py-1">
             {[0, 1, 2].map((row) => (
-              <div key={row} className="h-8 w-full animate-pulse rounded bg-foreground/[0.07]" />
+              <div key={row} className="h-8 w-full animate-pulse rounded-compact bg-foreground/[0.07]" />
             ))}
           </div>
         ) : invoices.status === 'ready' && invoices.items.length > 0 ? (
@@ -1237,14 +1279,14 @@ export function BillingSection() {
                 <tr
                   style={{
                     borderBottom: '1px solid var(--settings-border)',
-                    background: 'var(--bg-hover, rgba(255,255,255,0.03))',
+                    background: 'var(--bg-hover)',
                   }}
                 >
                   {['Date', 'Total', 'Status', ''].map((col, i) => (
                     <th
                       key={col || `col-${i}`}
                       style={{
-                        padding: '10px 16px',
+                        padding: 'var(--space-3) var(--space-4)',
                         textAlign: i === 3 ? 'right' : 'left',
                         fontSize: 12,
                         fontWeight: 700,
@@ -1271,13 +1313,17 @@ export function BillingSection() {
                     }}
                   >
                     <td
-                      style={{ padding: '12px 16px', color: 'var(--text-1)', whiteSpace: 'nowrap' }}
+                      style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        color: 'var(--text-1)',
+                        whiteSpace: 'nowrap',
+                      }}
                     >
                       {formatIsoDate(inv.created_at)}
                     </td>
                     <td
                       style={{
-                        padding: '12px 16px',
+                        padding: 'var(--space-3) var(--space-4)',
                         color: 'var(--text-2)',
                         fontFamily: 'var(--mono)',
                         whiteSpace: 'nowrap',
@@ -1287,14 +1333,20 @@ export function BillingSection() {
                     </td>
                     <td
                       style={{
-                        padding: '12px 16px',
+                        padding: 'var(--space-3) var(--space-4)',
                         color: 'var(--text-3)',
                         textTransform: 'capitalize',
                       }}
                     >
                       {inv.status}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <td
+                      style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        textAlign: 'right',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {inv.hosted_invoice_url ? (
                         <a
                           href={inv.hosted_invoice_url}

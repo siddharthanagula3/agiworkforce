@@ -264,6 +264,11 @@ describe('DELETE /api/user/delete-account', () => {
     expect(mockEraseUserAccountData).toHaveBeenCalledWith('user_deleting');
     expect(mockDeleteUser).toHaveBeenCalledWith('user_deleting');
     expect(auditDetail()).toMatchObject({ status: 'complete' });
+    // The holder reads a plain sentence; store and hold counts stay in the audit row.
+    expect(body.status).toBe('complete');
+    expect(body.statusReason).toBe('Everything in your account has been deleted.');
+    expect(String(auditDetail()['reason'])).toMatch(/stores cleared/);
+    expect(body.statusReason).not.toMatch(/store|hold/i);
   });
 
   it('records a legal hold as blocked rather than as a deletion that happened', async () => {

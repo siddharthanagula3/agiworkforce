@@ -87,7 +87,7 @@
     --chat-accent-primary-contrast: var(--chat-accent-on-secondary);
     --chat-accent-secondary: #21808d;
     --chat-accent-secondary-soft: rgba(33, 128, 141, 0.15);
-    --chat-focus-ring: rgba(33, 128, 141, 0.25);
+    --chat-focus-ring: var(--focus-ring);
     --chat-user-bubble-bg: #f0eeeb;
     --chat-thinking-text: #6b6560;
     --chat-thinking-line: rgba(26, 25, 21, 0.08);
@@ -178,7 +178,7 @@
     --chat-accent-primary-contrast: var(--chat-accent-on-secondary);
     --chat-accent-secondary: #21808d;
     --chat-accent-secondary-soft: rgba(33, 128, 141, 0.15);
-    --chat-focus-ring: rgba(33, 128, 141, 0.25);
+    --chat-focus-ring: var(--focus-ring);
     --chat-user-bubble-bg: hsl(var(--neutral-3));
     --chat-thinking-text: hsl(var(--neutral-fg-2));
     --chat-thinking-line: rgba(255, 255, 255, 0.1);
@@ -262,7 +262,7 @@
     --chat-accent-primary-contrast: var(--chat-accent-on-secondary);
     --chat-accent-secondary: #0a6ed1;
     --chat-accent-secondary-soft: rgba(11, 132, 255, 0.12);
-    --chat-focus-ring: rgba(11, 132, 255, 0.3);
+    --chat-focus-ring: var(--focus-ring);
     --chat-user-bubble-bg: #f4f4f4;
     --chat-thinking-text: #5d5d5d;
     --chat-thinking-line: rgba(0, 0, 0, 0.08);
@@ -347,7 +347,7 @@
   overflow-x: auto;
   padding: 0.75rem;
   border: 1px solid var(--chat-border);
-  border-radius: 8px;
+  border-radius: var(--corner-field);
   background: var(--chat-code-bg);
   font-size: 13px;
 }

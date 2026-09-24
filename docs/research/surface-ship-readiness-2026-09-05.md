@@ -1,8 +1,12 @@
 # Surface ship readiness, 2026-09-05
 
-Status: Current
+Status: Historical repository snapshot
 Owner: Fable (architect)
 Last updated: 2026-09-05
+
+This is a read-only September 5 source audit, not current release readiness.
+Use current code, release workflows, launch ledgers, and live evidence for any
+ship decision.
 
 Method: read-only audit of CI workflow files, package/build scripts, manifests, and source under each `apps/*` directory. No builds, servers, or test suites were run. Claims are grounded in code and configuration, not in `docs/product`, `docs/specs`, or prior QA notes, which this repo treats as stale by rule. Where a claim rests on GitHub Actions secrets or repository variables, this only confirms the workflow requires and validates them, not that a real value is populated, since that cannot be checked from the repo.
 

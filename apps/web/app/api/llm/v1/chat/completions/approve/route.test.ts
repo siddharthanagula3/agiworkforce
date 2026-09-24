@@ -326,6 +326,39 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
     expect(checkpointMocks.complete).not.toHaveBeenCalled();
   });
 
+  it('revalidates a legacy Free approval without treating injected tools as paid API add-ons', async () => {
+    mockRunAuthGate.mockResolvedValue({
+      ok: true,
+      userId: 'user-1',
+      token: 'tok',
+      subscription: { plan_tier: 'free' },
+    });
+    checkpointMocks.claim.mockResolvedValue({
+      ...claimedCheckpoint,
+      checkpoint: {
+        ...claimedCheckpoint.checkpoint,
+        request: {
+          model: 'claude-test',
+          stream: true,
+          web_search: true,
+          tools: [{ type: 'function', function: { name: 'skill', parameters: {} } }],
+          tool_choice: 'auto',
+        },
+      },
+    });
+
+    const response = await POST(makeRequest(resumeBody()));
+    await response.text();
+
+    const syntheticBody = (await (
+      mockProcessRequest.mock.calls[0]![0] as NextRequest
+    ).json()) as Record<string, unknown>;
+    expect(response.status).toBe(200);
+    expect(syntheticBody).toMatchObject({ web_search: true, stream: true });
+    expect(syntheticBody).not.toHaveProperty('tools');
+    expect(syntheticBody).not.toHaveProperty('tool_choice');
+  });
+
   it('forwards steering guidance to the durable continuation without leaking it into request validation', async () => {
     const response = await POST(
       makeRequest({ ...resumeBody(), guidance: '  Only touch the docs repo.  ' }),

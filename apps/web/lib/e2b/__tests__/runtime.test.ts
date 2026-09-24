@@ -107,6 +107,7 @@ interface TestSession {
   templateId?: string;
   extraHosts?: readonly string[];
   computeMicrousdPerSecond?: number;
+  computeReservation?: typeof COMPUTE_RESERVATION;
 }
 
 const sessions = new Map<string, TestSession>();
@@ -138,6 +139,9 @@ const staticKill = vi.fn(async (sandboxId?: string) => {
   return true;
 });
 const staticPause = vi.fn(async () => true);
+const staticGetInfo = vi.fn(async (): Promise<{ state: 'running' | 'paused' }> => ({
+  state: 'running',
+}));
 
 interface ListedSandbox {
   metadata: Record<string, string>;
@@ -215,7 +219,14 @@ function makeSandboxInstance(sandboxId: string) {
 }
 
 vi.mock('@e2b/code-interpreter', () => ({
-  Sandbox: { create, connect, kill: staticKill, pause: staticPause, list: staticList },
+  Sandbox: {
+    create,
+    connect,
+    kill: staticKill,
+    pause: staticPause,
+    getInfo: staticGetInfo,
+    list: staticList,
+  },
 }));
 
 const invalidateCachedProviderProxyAccess = vi.fn(async (_sessionId: string) => {});
@@ -1109,12 +1120,15 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     resolveEffectiveSubscription.mockResolvedValue({ plan_tier: 'pro' });
   });
 
-  it('refuses managed sandboxes to tiers that are not entitled to them', async () => {
+  it('admits bounded Free sandboxes but refuses non-managed trust boundaries and unknown tiers', async () => {
     const { getE2BExecutor } = await import('../runtime');
-    for (const tier of ['free', 'byok', 'local-only', 'not-a-tier']) {
+    expect(await getE2BExecutor(scope('conv-free', 'user-free', 'free'))).not.toBeNull();
+    const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
+    expect(opts.timeoutMs).toBe(getPlanSandboxTtlMs('free'));
+    for (const tier of ['byok', 'local-only', 'not-a-tier']) {
       expect(await getE2BExecutor(scope(`conv-${tier}`, `user-${tier}`, tier))).toBeNull();
     }
-    expect(create).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('applies the plan sandbox lifetime to conversation-scoped sandboxes', async () => {
@@ -1136,6 +1150,7 @@ describe('pauseE2BSession / killE2BSession', () => {
   beforeEach(() => {
     sessions.clear();
     vi.clearAllMocks();
+    listedSandboxes = [];
   });
 
   it('pauseE2BSession pauses by sandbox ID without connecting', async () => {
@@ -1146,17 +1161,158 @@ describe('pauseE2BSession / killE2BSession', () => {
     expect(connect).not.toHaveBeenCalled();
   });
 
+  it('uses the same recovery path for the live executor pause at turn end', async () => {
+    const sessionScope = scope('conv-live-pause', 'user-live-pause', 'free');
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(sessionScope);
+    const sandboxId = sessions.get(scopeKey(sessionScope))?.sandboxId;
+    expect(sandboxId).toBeTruthy();
+    staticPause.mockRejectedValueOnce(new Error('pause failed'));
+    staticPause.mockRejectedValueOnce(new Error('pause retry failed'));
+
+    await executor!.pause!();
+
+    expect(staticGetInfo).toHaveBeenCalledWith(sandboxId);
+    expect(staticKill).toHaveBeenCalledWith(sandboxId);
+    expect(sessions.has(scopeKey(sessionScope))).toBe(false);
+  });
+
   it('meters the open compute interval when a sandbox is paused', async () => {
     sessions.set(scopeKey(scope('conv-meter')), {
       sandboxId: 'sbx-meter',
       contexts: {},
       activeSinceMs: Date.now() - 120_000,
+      computeReservation: COMPUTE_RESERVATION,
     });
     const { pauseE2BSession } = await import('../runtime');
     await pauseE2BSession(scope('conv-meter'));
     expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
       expect.objectContaining({ sandboxId: 'sbx-meter', userId: 'user-1', reason: 'pause' }),
     );
+    expect(sessions.get(scopeKey(scope('conv-meter')))?.computeReservation).toBeUndefined();
+  });
+
+  it('reserves and meters a new active interval when a paused Free sandbox resumes', async () => {
+    const sessionScope = scope('conv-resume', 'user-resume', 'free');
+    const { getE2BExecutor } = await import('../runtime');
+    const first = await getE2BExecutor(sessionScope);
+    expect(first).not.toBeNull();
+    await first!.pause!();
+    expect(sessions.get(scopeKey(sessionScope))?.computeReservation).toBeUndefined();
+
+    const second = await getE2BExecutor(sessionScope);
+    expect(second).not.toBeNull();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
+    await second!.pause!();
+    expect(meterSandboxComputeInterval).toHaveBeenCalledTimes(2);
+    expect(sessions.get(scopeKey(sessionScope))?.computeReservation).toBeUndefined();
+  });
+
+  it('does not reuse a settled hold from a previously stored paused session', async () => {
+    const sessionScope = scope('conv-legacy', 'user-legacy', 'free');
+    sessions.set(scopeKey(sessionScope), {
+      sandboxId: 'sbx-legacy',
+      contexts: {},
+      computeReservation: COMPUTE_RESERVATION,
+    });
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor(sessionScope);
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledWith('sbx-legacy', expect.any(Object));
+  });
+
+  it('releases a fresh resume hold before reserving a replacement sandbox', async () => {
+    const sessionScope = scope('conv-resume-failed', 'user-resume-failed', 'free');
+    sessions.set(scopeKey(sessionScope), { sandboxId: 'sbx-unreachable', contexts: {} });
+    connect.mockRejectedValueOnce(new Error('sandbox expired'));
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(sessionScope);
+
+    expect(executor).not.toBeNull();
+    expect(releaseSandboxComputeReservation).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'sandbox_resume_failed' }),
+    );
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
+  });
+
+  it('settles a pause that succeeded despite a provider response error', async () => {
+    sessions.set(scopeKey(scope('conv-paused')), {
+      sandboxId: 'sbx-paused',
+      contexts: {},
+      activeSinceMs: Date.now() - 120_000,
+    });
+    staticPause.mockRejectedValueOnce(new Error('response lost'));
+    staticGetInfo.mockResolvedValueOnce({ state: 'paused' });
+
+    const { pauseE2BSession } = await import('../runtime');
+    await pauseE2BSession(scope('conv-paused'));
+
+    expect(staticGetInfo).toHaveBeenCalledWith('sbx-paused');
+    expect(staticPause).toHaveBeenCalledTimes(1);
+    expect(staticKill).not.toHaveBeenCalled();
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-paused', reason: 'pause' }),
+    );
+    expect(sessions.get(scopeKey(scope('conv-paused')))?.activeSinceMs).toBeUndefined();
+  });
+
+  it('retries a failed pause once while preserving the sandbox session', async () => {
+    sessions.set(scopeKey(scope('conv-retry')), {
+      sandboxId: 'sbx-retry',
+      contexts: {},
+      activeSinceMs: Date.now() - 120_000,
+    });
+    staticPause.mockRejectedValueOnce(new Error('temporary pause failure'));
+
+    const { pauseE2BSession } = await import('../runtime');
+    await pauseE2BSession(scope('conv-retry'));
+
+    expect(staticPause).toHaveBeenCalledTimes(2);
+    expect(staticKill).not.toHaveBeenCalled();
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-retry', reason: 'pause' }),
+    );
+    expect(sessions.get(scopeKey(scope('conv-retry')))?.activeSinceMs).toBeUndefined();
+  });
+
+  it('releases a sandbox after repeated pause failure so it cannot hold the only Free slot', async () => {
+    sessions.set(scopeKey(scope('conv-release')), {
+      sandboxId: 'sbx-release',
+      contexts: {},
+      activeSinceMs: Date.now() - 120_000,
+    });
+    staticPause.mockRejectedValueOnce(new Error('pause failed'));
+    staticPause.mockRejectedValueOnce(new Error('pause retry failed'));
+
+    const { pauseE2BSession } = await import('../runtime');
+    await pauseE2BSession(scope('conv-release'));
+
+    expect(staticKill).toHaveBeenCalledWith('sbx-release');
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-release', reason: 'kill' }),
+    );
+    expect(sessions.has(scopeKey(scope('conv-release')))).toBe(false);
+  });
+
+  it('keeps the interval and mapping when neither pause nor kill can be confirmed', async () => {
+    const original = {
+      sandboxId: 'sbx-uncertain',
+      contexts: {},
+      activeSinceMs: Date.now() - 120_000,
+    };
+    sessions.set(scopeKey(scope('conv-uncertain')), original);
+    staticPause.mockRejectedValueOnce(new Error('pause failed'));
+    staticPause.mockRejectedValueOnce(new Error('pause retry failed'));
+    staticKill.mockRejectedValueOnce(new Error('kill failed'));
+
+    const { pauseE2BSession } = await import('../runtime');
+    await pauseE2BSession(scope('conv-uncertain'));
+
+    expect(meterSandboxComputeInterval).not.toHaveBeenCalled();
+    expect(sessions.get(scopeKey(scope('conv-uncertain')))).toEqual(original);
   });
 
   it('does not meter a session with no open interval', async () => {
@@ -1366,5 +1522,83 @@ describe('stopping a Code session without taking its workspace away', () => {
     await revokeE2BSessionCredentials(CODE_SCOPE as never);
 
     expect(sessions.get(scopeKey(CODE_SCOPE))?.sandboxId).toBe('sbx-stop');
+  });
+});
+
+describe('getE2BExecutor, one hold per admitted sandbox lifetime', () => {
+  beforeEach(() => {
+    sessions.clear();
+    listedSandboxes = [];
+    vi.clearAllMocks();
+  });
+
+  it('holds the lifetime once for a sandbox every later turn resumes', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-resume', 'user-resume');
+
+    await getE2BExecutor(conversation);
+    await getE2BExecutor(conversation);
+    await getE2BExecutor(conversation);
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(sessions.get(scopeKey(conversation))?.computeReservation).toEqual(COMPUTE_RESERVATION);
+  });
+
+  it('settles the one hold the sandbox was admitted under when it is torn down', async () => {
+    const { getE2BExecutor, killE2BSession } = await import('../runtime');
+    const conversation = scope('conv-settle', 'user-settle');
+
+    await getE2BExecutor(conversation);
+    await getE2BExecutor(conversation);
+    await killE2BSession(conversation as never);
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(meterSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ reservation: COMPUTE_RESERVATION }),
+    );
+  });
+
+  it('admits a replacement sandbox on its own hold when the old one is gone', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-replace', 'user-replace');
+
+    await getE2BExecutor(conversation);
+    connect.mockRejectedValueOnce(new Error('sandbox is gone'));
+    await getE2BExecutor(conversation);
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
+    expect(meterSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a replacement sandbox the account cannot pay for', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-replace-broke', 'user-replace-broke');
+    const causes: string[] = [];
+
+    await getE2BExecutor(conversation);
+    connect.mockRejectedValueOnce(new Error('sandbox is gone'));
+    reserveSandboxComputeInterval.mockResolvedValueOnce({
+      outcome: 'refused',
+      error: { status: 402, code: 'insufficient_credits' },
+    } as never);
+
+    await expect(getE2BExecutor(conversation, (cause) => causes.push(cause))).resolves.toBeNull();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(causes).toEqual(['over-quota']);
+  });
+
+  it('gives two conversations two holds', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor(scope('conv-first', 'user-both'));
+    await getE2BExecutor(scope('conv-second', 'user-both'));
+
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(2);
   });
 });

@@ -115,6 +115,7 @@ describe('useChatStream managed server selections', () => {
       await result.current.sendMessage('Check my email', {
         conversationId: CONVERSATION_ID,
         disabledConnectorIds: ['gmail', 'notion'],
+        connectorToolsEnabled: false,
       });
     });
 
@@ -123,8 +124,10 @@ describe('useChatStream managed server selections', () => {
       .mock.calls.find(([url]) => String(url).includes('/api/llm/v1/chat/completions'));
     const request = JSON.parse(String(completionCall?.[1]?.body)) as {
       disabled_connector_ids?: string[];
+      connector_tools_enabled?: boolean;
     };
     expect(request.disabled_connector_ids).toEqual(['gmail', 'notion']);
+    expect(request.connector_tools_enabled).toBe(false);
   });
 
   it('omits disabled_connector_ids when nothing is disabled', async () => {

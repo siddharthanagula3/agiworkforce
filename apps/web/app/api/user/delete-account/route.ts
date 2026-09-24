@@ -17,6 +17,7 @@ import {
   accountErasureProgress,
   resolveDeletionStatus,
   scheduledDeletionProgress,
+  type DeletionOutcome,
 } from '@/lib/services/deletion-manifest';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
@@ -25,6 +26,24 @@ import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subsc
 import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { getIdentityProvider } from '@/lib/server/identity';
+
+/**
+ * What the account holder is told. The audit row keeps the full reason; a count
+ * of legal holds or of internal stores is not theirs to read, and whether a hold
+ * may be disclosed at all is a legal question this route must not answer.
+ */
+function deletionReceiptReason(outcome: DeletionOutcome): string {
+  switch (outcome.status) {
+    case 'pending':
+      return outcome.reason;
+    case 'partial':
+      return 'Deletion has started and is not finished. It is retried automatically until everything is gone.';
+    case 'blocked':
+      return `Some of your data has to be kept for a legal reason, so nothing was deleted. Write to ${CONTACT_EMAIL} to find out more.`;
+    case 'complete':
+      return 'Everything in your account has been deleted.';
+  }
+}
 
 export const runtime = 'nodejs';
 
@@ -170,6 +189,10 @@ async function handleGet(request: NextRequest) {
   const scheduledFor = row?.deletion_scheduled_for ?? null;
   const pending = scheduledFor !== null;
   const canCancel = pending && new Date(scheduledFor).getTime() > Date.now();
+  // The same outcome the audit row carries. Until it was returned here the
+  // account holder could see that a deletion existed and never what it had
+  // reached, which is the one question a receipt answers.
+  const outcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
 
   return NextResponse.json(
     {
@@ -177,6 +200,8 @@ async function handleGet(request: NextRequest) {
       canCancel,
       requestedAt: pending ? (row?.deletion_requested_at ?? null) : null,
       scheduledFor,
+      status: outcome.status,
+      statusReason: deletionReceiptReason(outcome),
     },
     { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
   );
@@ -344,7 +369,11 @@ async function handleDelete(request: NextRequest) {
       });
 
       return NextResponse.json(
-        { message: 'Account deleted successfully.' },
+        {
+          message: 'Account deleted successfully.',
+          status: outcome.status,
+          statusReason: deletionReceiptReason(outcome),
+        },
         { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
       );
     }
@@ -369,6 +398,8 @@ async function handleDelete(request: NextRequest) {
       {
         message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. Sign back in and cancel from Settings > Account any time before then to keep your account.`,
         scheduledFor,
+        status: scheduledOutcome.status,
+        statusReason: deletionReceiptReason(scheduledOutcome),
       },
       { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
     );

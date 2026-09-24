@@ -10,6 +10,7 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   fingerprintManagedUsageRequest,
   finalizeManagedUsageRequest,
@@ -118,6 +119,7 @@ export async function generateFollowUpSuggestions(
     );
     return [];
   }
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
 
   const userContent = buildSourceContent(input);
   const chatRequest = openAIWireRequestToChatRequest({
@@ -165,10 +167,10 @@ export async function generateFollowUpSuggestions(
     let response;
     try {
       response = await drainToLlmResponse(
-        buildServerProviderAdapter(route.provider).stream(chatRequest, controller.signal),
+        buildServerProviderAdapter(dispatchProvider).stream(chatRequest, controller.signal),
         route.modelKey,
-        (chunk) => toGenericUpstreamError(route.provider, chunk),
-        resolveWireMode(route.provider),
+        (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
+        resolveWireMode(dispatchProvider),
       );
     } finally {
       input.signal?.removeEventListener('abort', abort);

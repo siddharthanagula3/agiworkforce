@@ -19,6 +19,10 @@ import {
 } from '@agiworkforce/unified-chat';
 import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { registerChatStoreStateReader } from './stores/chat/chatStoreRef';
+import {
+  installClientFailureReporting,
+  resetClientFailureReporting,
+} from './services/clientFailureReporting';
 import { useUnifiedAuthStore } from './stores/auth';
 import { isElectronHost, isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
@@ -661,6 +665,9 @@ const DesktopShell = () => {
     };
 
     trackAction('app_loaded');
+
+    installClientFailureReporting();
+    registerCleanup(() => resetClientFailureReporting());
 
     void runStartupStep('Sync manager', async () => {
       initializeSyncManager();

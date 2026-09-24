@@ -267,6 +267,7 @@ export interface AutoRoutingRequest {
    * once it costs more than `PREFERRED_ROUTE_COST_CEILING_MULTIPLE` times it.
    */
   preferredRouteId?: string | null;
+  requiredRouteId?: string | null;
   /**
    * Live health for the candidate routes, when the caller has a snapshot.
    *
@@ -449,6 +450,7 @@ export interface UnavailableAutoRoute {
     | 'runtime_profile_unavailable'
     | 'runtime_profile_mismatch'
     | 'explicit_model_ineligible'
+    | 'explicit_route_ineligible'
     | 'mandatory_capability_unavailable'
     | 'trust_mode_not_permitted'
     | 'no_eligible_route';
@@ -1611,6 +1613,17 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
   }
 
   const alias = policy.aliases[requestedSelection];
+  if (alias && request.requiredRouteId) {
+    return {
+      status: 'unavailable',
+      code: 'explicit_route_ineligible',
+      requestedSelection,
+      requestedProfile: null,
+      effectiveProfile: null,
+      taskType: request.taskType,
+      reasons: ['A provider route can only be pinned with an explicit model selection'],
+    };
+  }
   if (!alias) {
     if (!registry.models[requestedSelection]) {
       return {
@@ -1628,6 +1641,34 @@ export function resolveAutoRoute(request: AutoRoutingRequest): AutoRouteDecision
     // the alias, carrying the unmodified request, where it does.
     const { excludedProviders: _autoRoutingExclusion, ...namedSelectionRequest } = request;
     const eligibility = evaluateEligibility(requestedSelection, task, namedSelectionRequest);
+    if (request.requiredRouteId) {
+      const pinned = eligibility.rankedRoutes.find(
+        (candidate) => candidate.routeId === request.requiredRouteId,
+      );
+      if (!pinned || !pinned.healthy || !pinned.hasCredential) {
+        return {
+          status: 'unavailable',
+          code: 'explicit_route_ineligible',
+          requestedSelection,
+          requestedProfile: null,
+          effectiveProfile: null,
+          taskType: request.taskType,
+          reasons: [
+            ...eligibility.reasons,
+            `The selected provider route is not available for ${requestedSelection}`,
+          ],
+        };
+      }
+      return selectedDecision(
+        request,
+        requestedSelection,
+        null,
+        null,
+        requestedSelection,
+        { ...eligibility, routeId: pinned.routeId, route: pinned.route, rankedRoutes: [pinned] },
+        'explicit',
+      );
+    }
     if (eligibility.route) {
       return selectedDecision(
         request,

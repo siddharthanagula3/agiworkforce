@@ -15,10 +15,13 @@ const key = 'fixture-credential';
 const now = Date.UTC(2026, 8, 19);
 const offerings = getProviderOfferings();
 const offeringFor = (protocol: string) =>
-  Object.entries(offerings).find(([, entry]) => entry.quotaProbeProtocol === protocol)![0];
+  Object.entries(offerings).find(
+    ([, entry]) => entry.provider === 'qwen' && entry.quotaProbeProtocol === protocol,
+  )![0];
 const chat = offeringFor('chat');
 const image = Object.entries(offerings).find(
-  ([, entry]) => entry.quotaProbeProtocol === 'image-sync' && !entry.quotaImageSize,
+  ([, entry]) =>
+    entry.provider === 'qwen' && entry.quotaProbeProtocol === 'image-sync' && !entry.quotaImageSize,
 )![0];
 const video = offeringFor('video-async');
 
@@ -238,6 +241,27 @@ describe('selected free stream', () => {
       stream: true,
       stream_options: { include_usage: true },
     });
+  });
+  it('sends image parts only through a catalogued vision quota offering', async () => {
+    const vision = Object.entries(offerings).find(
+      ([, entry]) => entry.provider === 'qwen' && entry.quotaChatImageInput,
+    )![0];
+    const transport = vi.fn().mockResolvedValue(new Response('data: [DONE]\n\n'));
+    const messages = [
+      {
+        role: 'user' as const,
+        content: [
+          { type: 'text' as const, text: 'Describe this image' },
+          { type: 'image_url' as const, image_url: { url: 'data:image/png;base64,aW1hZ2U=' } },
+        ],
+      },
+    ];
+    await streamQwenQuotaChat(vision, key, policy, { messages }, transport);
+    expect(JSON.parse(transport.mock.calls[0]![1].body).messages).toEqual(messages);
+    await expect(streamQwenQuotaChat(chat, key, policy, { messages }, transport)).rejects.toThrow(
+      'does not accept image input',
+    );
+    expect(transport).toHaveBeenCalledOnce();
   });
   it('uses catalog-specific image dimensions and the actual user prompt', async () => {
     const custom = Object.entries(offerings).find(([, entry]) => entry.quotaImageSize)![0];

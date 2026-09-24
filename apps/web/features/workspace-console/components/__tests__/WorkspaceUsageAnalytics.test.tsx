@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceUsageAnalytics } from '../WorkspaceUsageAnalytics';
 
@@ -55,6 +55,55 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
       screen.getByText(/Local and BYOK activity is not included in these managed cloud totals/),
     ).toBeInTheDocument();
     expect(screen.queryByText(/never reaches our infrastructure/)).not.toBeInTheDocument();
+  });
+
+  it('breaks spend down per member for an administrator', () => {
+    mocks.query.mockReturnValue({
+      data: {
+        currentUserRole: 'admin',
+        usage: {
+          ...usage(0),
+          totals: { requests: 7, costCents: 1_250, inputTokens: 900, outputTokens: 300 },
+          byMember: [
+            {
+              key: 'ada@example.com',
+              requests: 5,
+              inputTokens: 600,
+              outputTokens: 200,
+              costCents: 1_000,
+            },
+            {
+              key: 'alan@example.com',
+              requests: 2,
+              inputTokens: 300,
+              outputTokens: 100,
+              costCents: 250,
+            },
+          ],
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+    render(<WorkspaceUsageAnalytics />);
+
+    const byMember = screen.getByRole('region', { name: 'By member' });
+    const rows = within(byMember).getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining('ada@example.com'),
+      expect.stringContaining('alan@example.com'),
+    ]);
+    expect(rows[0]).toHaveTextContent('$10.00');
+    expect(rows[1]).toHaveTextContent('$2.50');
+  });
+
+  it('tells someone who does not administer the workspace why there is no breakdown', () => {
+    mocks.query.mockReturnValue({ data: null, isPending: false, isError: false });
+    render(<WorkspaceUsageAnalytics />);
+
+    expect(screen.getByText('You do not administer this workspace')).toBeVisible();
+    expect(screen.getByText(/Per-member spend is limited to owners and admins/)).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'By member' })).toBeNull();
   });
 
   it('exports the exact displayed window through the reviewed workspace endpoint', () => {

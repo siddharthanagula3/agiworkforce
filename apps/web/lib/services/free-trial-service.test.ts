@@ -30,8 +30,6 @@ import {
 import { LLMCostCalculator } from './llm-cost-calculator';
 
 const FIVE_HOUR_OLDEST = '2026-07-22T12:00:00.000Z';
-const WEEKLY_OLDEST = '2026-07-18T12:00:00.000Z';
-const ACCOUNT_PERIOD_END = '2026-08-10T08:30:00.000Z';
 const TIERED_MODEL = (() => {
   const candidate = listCanonicalModels().find(
     (model) => (model.inputTokenPricingTiers?.length ?? 0) > 0,
@@ -62,43 +60,10 @@ const ANTHROPIC_CHAT_MODEL = (() => {
   return candidate;
 })();
 
-type UsageSnapshot = {
-  fiveHourUsedMicrousd?: number;
-  weeklyUsedMicrousd?: number;
-  monthlyUsedMicrousd?: number;
-  fiveHourOldestAt?: string | null;
-  weeklyOldestAt?: string | null;
-  accountPeriodEnd?: string;
-};
-
-function usageRow(input: UsageSnapshot = {}) {
-  return {
-    five_hour_used_microusd: input.fiveHourUsedMicrousd ?? 0,
-    weekly_used_microusd: input.weeklyUsedMicrousd ?? 0,
-    monthly_used_microusd: input.monthlyUsedMicrousd ?? 0,
-    five_hour_oldest_at: input.fiveHourOldestAt ?? null,
-    weekly_oldest_at: input.weeklyOldestAt ?? null,
-    account_period_end: input.accountPeriodEnd ?? ACCOUNT_PERIOD_END,
-  };
-}
-
 function mockSettledReservation(row: Record<string, unknown> | null) {
   tx.query.mockImplementation(async (sql: string) =>
     sql.includes('from public.free_daily_usage_reservations') && row ? [row] : [],
   );
-}
-
-function mockAvailableQuota(input: UsageSnapshot = {}) {
-  tx.query.mockImplementation(async (sql: string) => {
-    if (sql.includes('from public.free_daily_usage_reservations') && sql.includes('request_id')) {
-      return [];
-    }
-    if (sql.includes('for update') && sql.includes('website_auto_economy_trial_usage')) {
-      return [{ user_id: 'user-1' }];
-    }
-    if (sql.includes('five_hour_used_microusd')) return [usageRow(input)];
-    return [];
-  });
 }
 
 describe('free trial service', () => {
@@ -110,7 +75,7 @@ describe('free trial service', () => {
     );
   });
 
-  it('uses private 5-hour, rolling-week, and account-month limits with no daily cap', () => {
+  it('retains the legacy settlement policy for reservations created before Free became unmetered', () => {
     expect(FREE_TRIAL_INTERNAL_USAGE_POLICY).toEqual({
       unitMicrousd: 5_000,
       fiveHourBudgetMicrousd: 25_000,
@@ -121,56 +86,12 @@ describe('free trial service', () => {
     });
   });
 
-  it('returns separate public percentages and resets without private operands', async () => {
-    tx.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('five_hour_used_microusd')) {
-        return [
-          usageRow({
-            fiveHourUsedMicrousd: 15_000,
-            weeklyUsedMicrousd: 30_000,
-            monthlyUsedMicrousd: 50_000,
-            fiveHourOldestAt: FIVE_HOUR_OLDEST,
-            weeklyOldestAt: WEEKLY_OLDEST,
-          }),
-        ];
-      }
-      return [];
-    });
-
+  it('reports no account usage for Free access without reading the legacy ledger', async () => {
     const snapshot = await getFreeTrialPublicUsage(scopedRead, 'user-1');
 
     expect(snapshot).toEqual({
-      usagePercentage: 50,
-      resetAt: ACCOUNT_PERIOD_END,
-      sessionUsagePercentage: 60,
-      sessionResetAt: '2026-07-22T17:00:00.000Z',
-      weeklyUsagePercentage: 40,
-      weeklyResetAt: '2026-07-25T12:00:00.000Z',
-      hasUsageRemaining: true,
-      fiveHourUsedMicrousd: 15_000,
-      weeklyUsedMicrousd: 30_000,
-      monthlyUsedMicrousd: 50_000,
-    });
-    expect(JSON.stringify(snapshot)).not.toMatch(/budget|cost|reserved/i);
-    // The snapshot reads only the connection it was handed, never the
-    // schema-owner pool that bypasses row-level security.
-    expect(db.query).not.toHaveBeenCalled();
-    expect(tx.query).toHaveBeenCalledWith(expect.stringContaining('five_hour_used_microusd'), [
-      'user-1',
-      FREE_TRIAL_INTERNAL_USAGE_POLICY.fiveHourWindowHours,
-      FREE_TRIAL_INTERNAL_USAGE_POLICY.weeklyWindowHours,
-    ]);
-  });
-
-  it('returns an unused account-month snapshot when no reservation exists', async () => {
-    tx.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('five_hour_used_microusd')) return [usageRow()];
-      return [];
-    });
-
-    await expect(getFreeTrialPublicUsage(scopedRead, 'user-1')).resolves.toEqual({
       usagePercentage: 0,
-      resetAt: ACCOUNT_PERIOD_END,
+      resetAt: null,
       sessionUsagePercentage: 0,
       sessionResetAt: null,
       weeklyUsagePercentage: 0,
@@ -180,15 +101,11 @@ describe('free trial service', () => {
       weeklyUsedMicrousd: 0,
       monthlyUsedMicrousd: 0,
     });
+    expect(db.query).not.toHaveBeenCalled();
+    expect(tx.query).not.toHaveBeenCalled();
   });
 
-  it('atomically reserves only the smallest remaining rolling allowance', async () => {
-    mockAvailableQuota({
-      fiveHourUsedMicrousd: 10_000,
-      weeklyUsedMicrousd: 65_000,
-      monthlyUsedMicrousd: 30_000,
-    });
-
+  it('starts Free access without creating or checking an account-level usage reservation', async () => {
     await expect(
       beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-1' }),
     ).resolves.toEqual({
@@ -197,54 +114,49 @@ describe('free trial service', () => {
         kind: 'free_trial',
         userId: 'user-1',
         requestId: 'request-1',
-        reservedMicrousd: 10_000,
+        reservedMicrousd: Number.MAX_SAFE_INTEGER,
+        unmetered: true,
       },
     });
 
-    expect(tx.query).toHaveBeenCalledWith(
-      expect.stringMatching(/website_auto_economy_trial_usage[\s\S]*for update/i),
-      ['user-1'],
-    );
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(/insert into public\.free_daily_usage_reservations/i),
-      ['user-1', 'request-1', 10_000],
-    );
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(tx.query).not.toHaveBeenCalled();
+    expect(tx.execute).not.toHaveBeenCalled();
   });
 
-  it.each([
-    { fiveHourUsedMicrousd: 25_000 },
-    { weeklyUsedMicrousd: 75_000 },
-    { monthlyUsedMicrousd: 100_000 },
-  ])('fails closed when any Free window is exhausted: %o', async (snapshot) => {
-    mockAvailableQuota(snapshot);
-
-    await expect(
-      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-blocked' }),
-    ).resolves.toEqual({ ok: false, code: 'budget_reached' });
-    expect(tx.execute).not.toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.free_daily_usage_reservations'),
-      expect.anything(),
-    );
+  it('does not apply the legacy output budget to unmetered Free access', () => {
+    expect(
+      fitFreeTrialOutputBudget({
+        reservation: {
+          kind: 'free_trial',
+          userId: 'user-1',
+          requestId: 'request-unmetered',
+          reservedMicrousd: Number.MAX_SAFE_INTEGER,
+          unmetered: true,
+        },
+        provider: FREE_CHAT_MODEL.provider,
+        model: FREE_CHAT_MODEL.id,
+        estimatedInputTokens: 1_000,
+        requestedMaxOutputTokens: 8_192,
+      }),
+    ).toEqual({ ok: true, maxOutputTokens: 8_192 });
   });
 
-  it('rejects a replayed request id before provider egress', async () => {
-    tx.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('website_auto_economy_trial_usage')) return [{ user_id: 'user-1' }];
-      if (sql.includes('free_daily_usage_reservations')) {
-        return [
-          {
-            window_started_at: FIVE_HOUR_OLDEST,
-            reserved_microusd: 5_000,
-            settled_at: null,
-          },
-        ];
-      }
-      return [];
+  it('settles unmetered Free access without writing account usage', async () => {
+    await settleFreeTrialRequest({
+      reservation: {
+        kind: 'free_trial',
+        userId: 'user-1',
+        requestId: 'request-unmetered',
+        reservedMicrousd: Number.MAX_SAFE_INTEGER,
+        unmetered: true,
+      },
+      outcome: 'completed',
+      usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
     });
 
-    await expect(
-      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-replay' }),
-    ).resolves.toEqual({ ok: false, code: 'budget_reached' });
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(tx.execute).not.toHaveBeenCalled();
   });
 
   it('caps one provider response to the private amount reserved for it', () => {

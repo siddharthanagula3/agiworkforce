@@ -28,6 +28,42 @@ const SINK_ALTERNATION = USER_VISIBLE_SINKS.map((s) => s.replace('.', '\\.')).jo
  */
 const RAW_TO_SINK = new RegExp(`^(?:${SINK_ALTERNATION})$`);
 
+/**
+ * The other shape a raw exception reaches a reader in: not a call at all, but
+ * a field on a result object the transcript renders. A tool result carrying
+ * `isError` is shown as a card with its `content` verbatim, so a driver
+ * message, an internal hostname or a stack fragment lands in the conversation
+ * the same way a `setError` would. The walker only visited call expressions,
+ * which is why the baseline read clean while this class of leak existed.
+ */
+const USER_VISIBLE_RESULT_FIELDS = new Set(['content', 'message', 'text', 'summary', 'detail']);
+const RESULT_IS_ERROR_MARKER = 'isError';
+
+/**
+ * Only the interpolated form. `content: err.message` on a narrowed
+ * `ConnectorCredentialError` is copy this repo wrote and a reader is meant to
+ * read; `content: `Tool ${name} failed: ${err.message}`` is prose wrapped
+ * around whatever an SDK, driver or sandbox threw, which is the shape that put
+ * stack fragments and absolute paths in a transcript. Flagging both would
+ * price the check out of the build for no leak found.
+ */
+function interpolatesIntoProse(node) {
+  if (ts.isTemplateExpression(node)) return true;
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    return true;
+  }
+  return false;
+}
+
+function declaresErrorMarker(objectLiteral) {
+  return objectLiteral.properties.some(
+    (property) =>
+      property.name !== undefined &&
+      ts.isIdentifier(property.name) &&
+      property.name.text === RESULT_IS_ERROR_MARKER,
+  );
+}
+
 function callName(expression, sourceFile) {
   if (ts.isIdentifier(expression)) return expression.text;
   if (ts.isPropertyAccessExpression(expression)) return expression.getText(sourceFile);
@@ -65,19 +101,30 @@ export function findRawErrorSinks(source, file) {
   );
   const results = [];
 
+  function record(node) {
+    const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
+    results.push({
+      file,
+      line,
+      text: node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 120),
+    });
+  }
+
   function visit(node) {
+    if (ts.isObjectLiteralExpression(node) && declaresErrorMarker(node)) {
+      for (const property of node.properties) {
+        if (!ts.isPropertyAssignment(property)) continue;
+        if (!ts.isIdentifier(property.name)) continue;
+        if (!USER_VISIBLE_RESULT_FIELDS.has(property.name.text)) continue;
+        if (!interpolatesIntoProse(property.initializer)) continue;
+        if (containsUnsanitizedMessage(property.initializer, sourceFile)) record(property);
+      }
+    }
     if (ts.isCallExpression(node) && isUserVisibleSink(node.expression, sourceFile)) {
       const rawArgument = node.arguments.find((argument) =>
         containsUnsanitizedMessage(argument, sourceFile),
       );
-      if (rawArgument) {
-        const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-        results.push({
-          file,
-          line,
-          text: node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 120),
-        });
-      }
+      if (rawArgument) record(node);
     }
     ts.forEachChild(node, visit);
   }

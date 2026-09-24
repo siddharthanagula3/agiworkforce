@@ -86,12 +86,8 @@ export async function getManagedUsageSummary(
     ROLLING_WEEKLY_WINDOW_HOURS,
   );
 
-  // Free states its usage as a meter and a reset time, never as a credit
-  // figure. The allowance is a company COGS ceiling that was never disclosed,
-  // and a credit number publishes it twice over: the ceiling directly, and the
-  // spend against it, from which the ceiling divides straight back out. Free
-  // keeps the percentages and resets below, which is what a Free account is
-  // told it has.
+  // Free has no account-level usage allowance. Provider-wide capacity remains
+  // operational state, not a customer credit balance.
   const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(planTier);
   const credits: ManagedUsageCredits | null = planAllowance
     ? {

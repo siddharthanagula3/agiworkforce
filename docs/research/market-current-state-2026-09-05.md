@@ -1,8 +1,13 @@
 # Market current state: chat, coding agents, gateways, free inference, enterprise
 
-Status: Current
+Status: Historical snapshot
 Owner: Fable (architect)
 Last updated: 2026-09-05
+
+Superseded for ChatGPT and Claude application behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. Market, pricing, and provider
+claims below remain dated September 5 observations and require fresh checks
+before product or spending decisions.
 
 ## Method and grading
 

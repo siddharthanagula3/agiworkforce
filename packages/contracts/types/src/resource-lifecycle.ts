@@ -40,11 +40,19 @@ export const DEFAULT_RESOURCE_VISIBILITY: ResourceVisibility = 'private';
 export const RESOURCE_LIFECYCLE_STATES = ['active', 'archived', 'soft_deleted', 'purged'] as const;
 export type ResourceLifecycleState = (typeof RESOURCE_LIFECYCLE_STATES)[number];
 
+/**
+ * `share` hands this resource to someone; `administer` changes who may hand it
+ * to anyone, which is the strictly stronger act. Without its own verb, editing
+ * a resource's own access list had no permission to ask for and was decided by
+ * workspace ownership instead, so a resource owner could not be told apart from
+ * an administrator who happened to reach it.
+ */
 export const RESOURCE_PERMISSIONS = [
   'view',
   'comment',
   'edit',
   'share',
+  'administer',
   'transfer',
   'delete',
 ] as const;
@@ -209,7 +217,7 @@ export function holdBlocksTransition(next: ResourceLifecycleState): boolean {
 }
 
 const ROLE_PERMISSIONS: Readonly<Record<ResourceRole, readonly ResourcePermission[]>> = {
-  owner: ['view', 'comment', 'edit', 'share', 'transfer', 'delete'],
+  owner: ['view', 'comment', 'edit', 'share', 'administer', 'transfer', 'delete'],
   editor: ['view', 'comment', 'edit'],
   commenter: ['view', 'comment'],
   viewer: ['view'],

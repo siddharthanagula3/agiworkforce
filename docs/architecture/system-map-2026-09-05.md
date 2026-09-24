@@ -1,8 +1,15 @@
 # System map, 2026-09-05
 
-Status: Current
+Status: Historical repository snapshot; superseded for current architecture
 Owner: Fable (architect)
-Last updated: 2026-09-05
+Last updated: 2026-09-22
+
+This map records the repository as inspected on September 5. Use
+`ARCHITECTURE.md`, `docs/architecture/overview.md`, current generated
+registries, and implementation for present ownership. The September 21
+rebaseline additionally defines one Account Cloud continuity domain, one Host
+Developer continuity domain, and an explicit handoff between them; those
+contracts supersede any broader or narrower synchronization inference below.
 
 Verified from code and configuration, not from prose. Where
 `docs/agent-context/repo-map.json` and its generated module summaries were

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload } from '@agiworkforce/icons';
+import { MAX_CHAT_ATTACHMENT_COUNT } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
 
 interface DragDropOverlayProps {
@@ -15,7 +16,7 @@ interface DragDropOverlayProps {
 export function DragDropOverlay({
   onDrop,
   accept,
-  maxFiles = 10,
+  maxFiles = MAX_CHAT_ATTACHMENT_COUNT,
   className,
 }: DragDropOverlayProps) {
   const [isDragging, setIsDragging] = useState(false);
@@ -62,8 +63,10 @@ export function DragDropOverlay({
           )
         : files;
 
+      // Every dropped file goes to the attachment hook, which owns the limit
+      // and names what it refused; truncating here dropped the extras silently.
       if (filtered.length > 0) {
-        onDrop(filtered.slice(0, maxFiles));
+        onDrop(filtered);
       }
     };
 
@@ -78,7 +81,7 @@ export function DragDropOverlay({
       window.removeEventListener('dragover', handleDragOver);
       window.removeEventListener('drop', handleDrop);
     };
-  }, [accept, maxFiles, onDrop]);
+  }, [accept, onDrop]);
 
   void dragCounter;
 
@@ -90,7 +93,7 @@ export function DragDropOverlay({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className={cn(
-            'fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm',
+            'fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm',
             className,
           )}
         >
@@ -99,7 +102,7 @@ export function DragDropOverlay({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.85, opacity: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-primary bg-card/90 p-12 shadow-2xl"
+            className="relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-primary bg-card/90 p-12 shadow-e4"
           >
             {/* Corner accents */}
             <div className="absolute left-4 top-4 h-8 w-8 rounded-tl-xl border-l-2 border-t-2 border-primary" />

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-20
+Last updated: 2026-09-21
 
 This is the summary /trust points at. It states what the repository can prove
 about recovering the product, and names what it cannot. Nothing here is a
@@ -88,21 +88,27 @@ repository cannot show.
 does not, the cell says `no recorded drill`, which is a statement about
 evidence, not a claim that recovery would fail.
 
-| id                    | What is lost while it is down                               | What the code does                                                                 | Recovery step                                                                 | Who can do it      | Rehearsed                                                     |
-| --------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------- |
-| `database`            | Everything; no conversation, account or setting is readable | Readiness fails closed and `api/health` reports the database check                 | Neon point-in-time restore inside the project history window                  | Platform lead      | `scripts/db-restore-drill.mjs`, human run                     |
-| `key_value`           | Rate limits, reservations and cached reads                  | Rate limiting and cached reads fail closed rather than serving unlimited           | Re-provision Upstash, or set `AGI_KV_REDIS_URL` to any Redis-compatible store | Platform lead      | no recorded drill                                             |
-| `identity`            | Sign-in; existing sessions continue until they expire       | The proxy refuses session routes rather than authenticating without an azp binding | Vendor recovery; no product-side step exists                                  | Vendor             | no recorded drill                                             |
-| `billing`             | Checkout, portal and payment method changes                 | Checkout and portal refuse; existing entitlements keep serving from the ledger     | Vendor recovery; the ledger needs no repair afterwards                        | Vendor             | no recorded drill                                             |
-| `object_storage`      | Upload and download of files and media                      | Uploads and downloads refuse; nothing else in a conversation is blocked            | Point the adapter at the replica bucket, once one is provisioned              | Platform lead      | no recorded drill                                             |
-| `artifacts`           | The separate renderer origin                                | Artifacts render in a same-origin frame with the narrower policy                   | Restore the static origin, or leave the degraded frame in place               | Platform lead      | no recorded drill                                             |
-| `observability`       | Traces and metrics export                                   | Spans are dropped and the request is served; nothing waits on the exporter         | Restore the OTLP endpoint; dropped spans are not recoverable                  | Platform lead      | no recorded drill                                             |
-| `code_execution`      | Running code in a sandbox                                   | Code execution refuses and the turn says so; the conversation continues            | Vendor recovery, or raise the quota                                           | Platform lead      | no recorded drill                                             |
-| `model_providers`     | One provider's models, not the product                      | Routing fails over to another provider for the same model family                   | None needed; routing treats every provider as able to fail                    | Automatic          | no recorded drill                                             |
-| `local_llm`           | Local inference on one operator device                      | The surface offers the cloud models instead and says the local one is not there    | Reinstall the runtime on that device                                          | The device's owner | no recorded drill                                             |
-| `context_engine`      | Context assembly for a turn                                 | It throws into the turn that asked, which is answered as a failed turn             | Redeploy; it is in process and has no configuration of its own                | Platform lead      | no recorded drill                                             |
-| `transactional_email` | Outbound email                                              | The send is queued on the email queue and retried to its dead letter               | Restore the vendor, then drain the dead letter                                | Platform lead      | no recorded drill                                             |
-| Serving               | The deployment itself                                       | Degraded mode per capability, rendered on /status                                  | Roll back to the previous production deployment                               | Platform lead      | `.github/workflows/db-restore-drill.yml` weekly, resolve only |
+| id                    | What is lost while it is down                               | What the code does                                                                         | Recovery step                                                                 | Who can do it       | Rehearsed                                                     |
+| --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------- |
+| `database`            | Everything; no conversation, account or setting is readable | Readiness fails closed and `api/health` reports the database check                         | Neon point-in-time restore inside the project history window                  | Platform lead       | `scripts/db-restore-drill.mjs`, human run                     |
+| `key_value`           | Rate limits, reservations and cached reads                  | Rate limiting and cached reads fail closed rather than serving unlimited                   | Re-provision Upstash, or set `AGI_KV_REDIS_URL` to any Redis-compatible store | Platform lead       | no recorded drill                                             |
+| `identity`            | Sign-in; existing sessions continue until they expire       | The proxy refuses session routes rather than authenticating without an azp binding         | Vendor recovery; no product-side step exists                                  | Vendor              | no recorded drill                                             |
+| `billing`             | Checkout, portal and payment method changes                 | Checkout and portal refuse; existing entitlements keep serving from the ledger             | Vendor recovery; the ledger needs no repair afterwards                        | Vendor              | no recorded drill                                             |
+| `object_storage`      | Upload and download of files and media                      | Uploads and downloads refuse; nothing else in a conversation is blocked                    | Point the adapter at the replica bucket, once one is provisioned              | Platform lead       | no recorded drill                                             |
+| `artifacts`           | The separate renderer origin                                | Artifacts render in a same-origin frame with the narrower policy                           | Restore the static origin, or leave the degraded frame in place               | Platform lead       | no recorded drill                                             |
+| `observability`       | Traces and metrics export                                   | Spans are dropped and the request is served; nothing waits on the exporter                 | Restore the OTLP endpoint; dropped spans are not recoverable                  | Platform lead       | no recorded drill                                             |
+| `code_execution`      | Running code in a sandbox                                   | Code execution refuses and the turn says so; the conversation continues                    | Vendor recovery, or raise the quota                                           | Platform lead       | no recorded drill                                             |
+| `model_providers`     | One provider's models, not the product                      | Routing fails over to another provider for the same model family                           | None needed; routing treats every provider as able to fail                    | Automatic           | no recorded drill                                             |
+| `local_llm`           | Local inference on one operator device                      | The surface offers the cloud models instead and says the local one is not there            | Reinstall the runtime on that device                                          | The device's owner  | no recorded drill                                             |
+| `context_engine`      | Context assembly for a turn                                 | It throws into the turn that asked, which is answered as a failed turn                     | Redeploy; it is in process and has no configuration of its own                | Platform lead       | no recorded drill                                             |
+| `transactional_email` | Outbound email                                              | The send is queued on the email queue and retried to its dead letter                       | Restore the vendor, then drain the dead letter                                | Platform lead       | no recorded drill                                             |
+| `web_search`          | Web search inside a turn                                    | The search tool answers unavailable and the turn is told to answer without it              | Vendor recovery, or declare a second provider in `web-search-providers.json`  | Platform lead       | no recorded drill                                             |
+| `push_delivery`       | Device push notifications                                   | The notification stays in the in-app inbox and the email channel still sends               | Vendor recovery; nothing is lost from the inbox                               | Vendor              | no recorded drill                                             |
+| `signaling`           | Pairing a device and remote or browser actions              | A remote or browser action is refused at admission rather than held                        | Redeploy the pairing service; it is promoted on its own                       | Platform lead       | no recorded drill                                             |
+| `paired_browser`      | Browser actions on one reader's device                      | A browser action is refused and says the browser was not reachable                         | Reopen the browser and its extension on that device                           | The device's owner  | no recorded drill                                             |
+| `connector_providers` | One connector's tools                                       | The connector tool refuses; a revoked grant is dropped and the reader is told to reconnect | Provider recovery, then the reader reconnects if the grant was revoked        | Vendor, then reader | no recorded drill                                             |
+| `marketing_analytics` | Page analytics on public pages                              | The public pages render without it; nothing signed in is affected                          | None needed                                                                   | Automatic           | no recorded drill                                             |
+| Serving               | The deployment itself                                       | Degraded mode per capability, rendered on /status                                          | Roll back to the previous production deployment                               | Platform lead       | `.github/workflows/db-restore-drill.yml` weekly, resolve only |
 
 ### RPO and RTO
 
@@ -116,6 +122,47 @@ so a published number can be chosen against it rather than invented.
 | Object RPO   | not stated       | One hour, and longer for a burst above 200 new objects or 200 deletions per run     |
 | Object RTO   | not stated       | Unmeasured. The replica exists; no drill reads from it                              |
 | Serving RTO  | not stated       | A rollback resolves in one workflow run; the drill resolves without acting          |
+
+## Backup behaviour by synced object
+
+One row per type in `SYNC_OBJECT_TYPES`
+(`packages/contracts/types/src/sync/object-semantics.ts`), the registry that
+decides where each type's bytes may live and how its deletion travels. The
+`Bytes` and `Deletion` cells repeat that registry's `payload` and `deletion`
+values, and `scripts/check-dr-recovery-table.mjs` fails when a type has no row,
+when a row names a type the registry does not declare, or when either cell
+disagrees with the registry, so this table cannot describe a type the code has
+since moved.
+
+Every row of every type is a Postgres row, so every type is recovered by the
+same mechanism: Neon point-in-time restore inside the project's history window.
+What differs is what a restore cannot reach, and what it does to a deletion made
+after the recovery point.
+
+| type               | Bytes             | Deletion           | What a restore cannot reach                                                 | A deletion made after the recovery point                                                      |
+| ------------------ | ----------------- | ------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `conversation`     | `cloud`           | `tombstone`        | Nothing beyond the database; attached files are replicated objects          | Comes back live; an erased account's conversations are re-erased by the erasure ledger replay |
+| `message`          | `cloud`           | `tombstone`        | Nothing beyond the database; attached files are replicated objects          | Comes back live; an erased account's messages are re-erased by the erasure ledger replay      |
+| `artifact`         | `cloud-or-device` | `tombstone`        | A copy held only on a device; the product copies device bytes nowhere       | Comes back live; an erased account's artifacts are re-erased by the erasure ledger replay     |
+| `project`          | `cloud`           | `tombstone`        | Nothing beyond the database; knowledge files are replicated objects         | Comes back live; an erased account's projects are re-erased by the erasure ledger replay      |
+| `project-metadata` | `cloud`           | `tombstone`        | Nothing beyond the database                                                 | Comes back live with its project                                                              |
+| `memory`           | `cloud`           | `tombstone`        | Nothing beyond the database                                                 | Comes back live; an erased account's memories are re-erased by the erasure ledger replay      |
+| `memory-controls`  | `cloud`           | `document-replace` | Nothing beyond the database                                                 | The document returns to its state at the recovery point                                       |
+| `settings`         | `cloud`           | `document-replace` | Nothing beyond the database                                                 | The document returns to its state at the recovery point                                       |
+| `task`             | `cloud`           | `tombstone`        | Nothing beyond the database                                                 | Comes back live                                                                               |
+| `notification`     | `cloud`           | `server-expiry`    | Nothing beyond the database                                                 | Comes back until the server expires it again                                                  |
+| `connector`        | `cloud`           | `hard-delete`      | The grant at the provider, which may have been revoked since                | The connection comes back; a revoked grant fails on use and the reader is told to reconnect   |
+| `skill`            | `cloud-or-device` | `tombstone`        | A skill installed only on a device; the product copies device bytes nowhere | Comes back live                                                                               |
+| `device`           | `cloud`           | `server-expiry`    | The device itself, which is not in the database                             | Comes back until the server expires it again                                                  |
+
+Two things follow from the last column and are stated rather than covered.
+A deletion a reader made after the recovery point is undone by a restore for
+every `tombstone` type: the only deletions replayed after a restore are account
+erasures, through `replayErasureTombstones`
+(`apps/web/lib/server/erasure-tombstones.ts`), because the erasure ledger is the
+only deletion record kept outside the Postgres timeline. And bytes that live
+only on a device are outside every mechanism in this document; recovering them
+is recovering that device.
 
 ## Vendor recovery is not product recovery
 

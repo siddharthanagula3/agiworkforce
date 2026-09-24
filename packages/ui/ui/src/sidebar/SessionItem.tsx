@@ -38,7 +38,7 @@ function ProjectFlyoutIcon({ project }: { project: SidebarProject }) {
 }
 
 const ROW_FOCUS_RING =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]';
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]';
 
 export interface SessionItemHandlers {
   onSelect: (id: string) => void;
@@ -160,7 +160,7 @@ function SessionItemBase({
       )}
       <span
         className={cn(
-          'truncate text-sm text-[hsl(var(--foreground))]',
+          'truncate text-sm text-foreground',
           session.unread ? 'font-semibold' : 'font-medium',
         )}
       >
@@ -176,7 +176,7 @@ function SessionItemBase({
     : undefined;
 
   const rowClassName = cn(
-    'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left',
+    'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left pointer-coarse:h-11',
     ROW_FOCUS_RING,
   );
 
@@ -202,9 +202,9 @@ function SessionItemBase({
           }}
           onClick={(e) => e.stopPropagation()}
           className={cn(
-            'w-full rounded-md border bg-[hsl(var(--background))] px-2 py-1 text-sm',
-            'border-[hsl(var(--border))] text-[hsl(var(--foreground))]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]',
+            'w-full rounded-md border bg-background px-2 py-1 text-sm',
+            'border-border text-foreground',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
           )}
         />
       </div>
@@ -215,8 +215,8 @@ function SessionItemBase({
     <div
       className={cn(
         'group relative mb-1 rounded-lg transition-colors',
-        isActive ? 'bg-[hsl(var(--accent))]' : 'hover:bg-[hsl(var(--accent))]',
-        isKeyboardFocused && 'ring-2 ring-[hsl(var(--ring))] ring-offset-1',
+        isActive ? 'bg-accent' : 'hover:bg-accent',
+        isKeyboardFocused && 'ring-2 ring-[var(--focus-ring)] ring-offset-1',
         session.incognito && 'ring-1 ring-purple-500/20',
       )}
     >
@@ -271,7 +271,7 @@ function SessionItemBase({
                 onOpenCustomInstructions(session.id);
               }}
               className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-md text-amber-500 hover:bg-[hsl(var(--muted))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                'flex h-7 w-7 items-center justify-center rounded-md text-amber-500 hover:bg-muted pointer-coarse:h-11 pointer-coarse:w-11',
                 ROW_FOCUS_RING,
               )}
             >
@@ -292,7 +292,7 @@ function SessionItemBase({
                   toggle();
                 }}
                 className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                  'flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11',
                   ROW_FOCUS_RING,
                 )}
               >

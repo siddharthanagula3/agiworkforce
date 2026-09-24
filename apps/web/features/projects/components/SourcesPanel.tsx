@@ -13,6 +13,7 @@ import {
   uploadProjectKnowledgeFile,
 } from '../services/project-knowledge-upload';
 import { toUserMessage } from '@/lib/user-error-message';
+import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -177,6 +178,12 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   }, [files, sortOrder, typeFilter]);
 
   const isUploading = uploadState.status === 'uploading';
+  const uploadingFileName = uploadState.status === 'uploading' ? uploadState.fileName : null;
+
+  useEffect(() => {
+    if (!uploadingFileName) return;
+    return beginActiveUpload(uploadingFileName);
+  }, [uploadingFileName]);
 
   return (
     <div data-testid="sources-panel">
@@ -185,9 +192,9 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
       {uploadState.status === 'uploading' && (
         <div
           style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 8,
+            marginBottom: 'var(--space-3)',
+            padding: 'var(--space-2) var(--space-3)',
+            borderRadius: 'var(--corner-field)',
             border: '1px solid var(--agi-rule)',
             background: 'var(--agi-bg-2)',
             fontSize: 12,
@@ -201,9 +208,9 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
       {uploadState.status === 'error' && (
         <div
           style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 8,
+            marginBottom: 'var(--space-3)',
+            padding: 'var(--space-2) var(--space-3)',
+            borderRadius: 'var(--corner-field)',
             border: '1px solid rgba(239,68,68,0.3)',
             background: 'rgba(239,68,68,0.08)',
             fontSize: 12,
@@ -211,7 +218,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 8,
+            gap: 'var(--space-2)',
           }}
         >
           <span>{uploadState.message}</span>
@@ -241,7 +248,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             fontSize: 12,
             color: 'var(--agi-ink-2)',
             textAlign: 'center',
-            padding: '40px 0',
+            padding: 'var(--space-7) 0',
           }}
         >
           Loading...
@@ -255,8 +262,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 10,
-            padding: '40px 0',
+            gap: 'var(--space-3)',
+            padding: 'var(--space-7) 0',
           }}
         >
           <p style={{ fontSize: 12, color: 'var(--agi-ink-2)', textAlign: 'center', margin: 0 }}>
@@ -267,8 +274,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             data-testid="sources-retry"
             onClick={() => setRetryToken((token) => token + 1)}
             style={{
-              padding: '6px 16px',
-              borderRadius: 9999,
+              padding: 'var(--space-2) var(--space-4)',
+              borderRadius: 'var(--corner-pill)',
               border: '1px solid var(--agi-rule-strong)',
               background: 'transparent',
               color: 'var(--agi-ink-2)',
@@ -291,7 +298,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             flexDirection: 'column',
             alignItems: 'center',
             textAlign: 'center',
-            padding: '48px 24px',
+            padding: 'var(--space-7) var(--space-5)',
           }}
         >
           {/* Source-type icon row */}
@@ -299,8 +306,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 12,
-              marginBottom: 20,
+              gap: 'var(--space-3)',
+              marginBottom: 'var(--space-5)',
             }}
           >
             <SourceTypeIcon>
@@ -320,7 +327,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
               fontSize: 20,
               fontWeight: 600,
               color: 'var(--agi-ink)',
-              margin: '0 0 10px',
+              margin: '0 0 var(--space-3)',
             }}
           >
             Give AGI more context
@@ -329,7 +336,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             style={{
               fontSize: 13,
               color: 'var(--agi-ink-2)',
-              margin: '0 0 24px',
+              margin: '0 0 var(--space-5)',
               maxWidth: 400,
               lineHeight: 1.6,
             }}
@@ -345,8 +352,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
               onClick={() => setAddSourcesOpen(true)}
               data-testid="sources-add-btn"
               style={{
-                padding: '10px 22px',
-                borderRadius: 9999,
+                padding: 'var(--space-3) var(--space-5)',
+                borderRadius: 'var(--corner-pill)',
                 border: 'none',
                 background: 'var(--chat-accent-primary)',
                 color: 'var(--chat-accent-on-primary)',
@@ -377,12 +384,12 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: 14,
-              gap: 8,
+              marginBottom: 'var(--space-4)',
+              gap: 'var(--space-2)',
             }}
           >
             {/* Left: file count + "Add sources" */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <span style={{ fontSize: 12, color: 'var(--agi-ink-2)' }}>
                 {files.length} {files.length === 1 ? 'source' : 'sources'}
               </span>
@@ -392,8 +399,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                   onClick={() => setAddSourcesOpen(true)}
                   data-testid="sources-add-btn-inline"
                   style={{
-                    padding: '4px 12px',
-                    borderRadius: 9999,
+                    padding: 'var(--space-1) var(--space-3)',
+                    borderRadius: 'var(--corner-pill)',
                     border: '1px solid var(--color-primary)',
                     background: 'transparent',
                     color: 'var(--color-primary)',
@@ -408,15 +415,15 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             </div>
 
             {/* Right: sort + filter selects */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
                 aria-label="Filter sources by type"
                 data-testid="sources-type-filter"
                 style={{
-                  padding: '4px 8px',
-                  borderRadius: 8,
+                  padding: 'var(--space-1) var(--space-2)',
+                  borderRadius: 'var(--corner-field)',
                   border: '1px solid var(--agi-rule-strong)',
                   background: 'var(--agi-bg-2)',
                   color: 'var(--agi-ink)',
@@ -438,8 +445,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                 aria-label="Sort sources"
                 data-testid="sources-sort"
                 style={{
-                  padding: '4px 8px',
-                  borderRadius: 8,
+                  padding: 'var(--space-1) var(--space-2)',
+                  borderRadius: 'var(--corner-field)',
                   border: '1px solid var(--agi-rule-strong)',
                   background: 'var(--agi-bg-2)',
                   color: 'var(--agi-ink)',
@@ -461,14 +468,20 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                 fontSize: 12,
                 color: 'var(--agi-ink-2)',
                 textAlign: 'center',
-                padding: '24px 0',
+                padding: 'var(--space-5) 0',
               }}
             >
               No sources match the current filter.
             </p>
           ) : (
             <ul
-              style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 0, margin: 0 }}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--space-2)',
+                padding: 0,
+                margin: 0,
+              }}
               data-testid="sources-file-list"
             >
               {displayedFiles.map((file) => (
@@ -477,11 +490,11 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                   style={{
                     listStyle: 'none',
                     border: '1px solid var(--agi-rule)',
-                    borderRadius: 12,
-                    padding: '10px 14px',
+                    borderRadius: 'var(--corner-surface)',
+                    padding: 'var(--space-3) var(--space-4)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 10,
+                    gap: 'var(--space-3)',
                     cursor: 'pointer',
                   }}
                   onClick={() => {
@@ -541,7 +554,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                         border: 'none',
                         cursor: 'pointer',
                         color: 'var(--agi-ink-2)',
-                        padding: 4,
+                        padding: 'var(--space-1)',
                         display: 'flex',
                         alignItems: 'center',
                       }}
@@ -602,7 +615,7 @@ function SourceTypeIcon({ children }: { children: React.ReactNode }) {
       style={{
         width: 44,
         height: 44,
-        borderRadius: 12,
+        borderRadius: 'var(--corner-surface)',
         border: '1px solid var(--agi-rule-strong)',
         background: 'var(--agi-bg-2)',
         display: 'flex',
@@ -634,10 +647,10 @@ function DropOverlay({ onDrop }: { onDrop: (file: File) => void }) {
         if (file) onDrop(file);
       }}
       style={{
-        marginTop: 8,
+        marginTop: 'var(--space-2)',
         border: `1px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule)'}`,
-        borderRadius: 8,
-        padding: '8px 12px',
+        borderRadius: 'var(--corner-field)',
+        padding: 'var(--space-2) var(--space-3)',
         textAlign: 'center',
         fontSize: 12,
         color: 'var(--agi-ink-2)',

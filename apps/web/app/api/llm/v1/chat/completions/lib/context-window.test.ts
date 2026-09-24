@@ -3,14 +3,17 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 const TEST_MODEL = 'context-window-test-model';
+const WIDE_TEST_MODEL = 'context-window-test-model-wide';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
   return {
     ...actual,
-    getModelMetadataById: vi.fn((id?: string) =>
-      id === TEST_MODEL ? { id: TEST_MODEL, contextWindow: 500, provider: 'openai' } : undefined,
-    ),
+    getModelMetadataById: vi.fn((id?: string) => {
+      if (id === TEST_MODEL) return { id, contextWindow: 500, provider: 'openai' };
+      if (id === WIDE_TEST_MODEL) return { id, contextWindow: 500_000, provider: 'openai' };
+      return undefined;
+    }),
   };
 });
 
@@ -53,6 +56,18 @@ describe('planContextTrim', () => {
     expect(plan!.droppedIndices).toEqual([...plan!.droppedIndices].sort((a, b) => a - b));
     expect(plan!.droppedIndices).not.toContain(messages.length - 1);
     expect(plan!.droppedIndices.every((index) => index < messages.length - 1)).toBe(true);
+  });
+
+  /**
+   * Changing model mid-conversation changes how much of it still fits. The
+   * limit is read from the model this turn asks for, so the same history is
+   * trimmed for the narrow one and carried whole by the wide one.
+   */
+  it('measures the same conversation against whichever model this turn asks for', () => {
+    const messages = buildMessages();
+
+    expect(planContextTrim(messages, TEST_MODEL, 256)?.droppedIndices.length).toBeGreaterThan(0);
+    expect(planContextTrim(messages, WIDE_TEST_MODEL, 256)).toBeNull();
   });
 
   it('keeps a tool message attached to the group it trails', () => {

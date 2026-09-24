@@ -239,7 +239,7 @@ pub fn handle_load(arg: &str, session: &mut AgentSession) {
 pub fn handle_history() {
     let mut showed_any = false;
 
-    match crate::runtime::session_control::list_managed_sessions() {
+    match crate::runtime::session_control::list_active_managed_sessions() {
         Ok(summaries) if !summaries.is_empty() => {
             eprintln!("{}", ts::accent_header("Managed Sessions:"));
             for (index, summary) in summaries.iter().take(20).enumerate() {
@@ -672,7 +672,7 @@ pub(super) fn handle_sessions(arg: &str) {
     let sub_arg = sub_parts.get(1).map(|s| s.trim()).unwrap_or_default();
 
     match sub_cmd {
-        "" | "list" => match crate::runtime::session_control::list_managed_sessions() {
+        "" | "list" => match crate::runtime::session_control::list_active_managed_sessions() {
             Ok(list) if !list.is_empty() => {
                 eprintln!("{}", ts::accent_header("Managed Sessions:"));
                 if let Ok(dir) = crate::runtime::session_control::managed_session_dir() {
@@ -1089,49 +1089,46 @@ mod branch_tests {
     }
 }
 
-pub(super) fn handle_diff() {
-    match std::process::Command::new("git")
-        .args(["diff", "--stat"])
-        .output()
-    {
-        Ok(stat_output) => {
-            let stat = String::from_utf8_lossy(&stat_output.stdout);
-            if stat.trim().is_empty() {
-                output::print_info("No uncommitted changes.");
-                return;
-            }
-            eprintln!("{}", ts::accent_header("Git diff summary:"));
-            eprintln!("{}", sanitize_terminal_text(&stat));
+pub(super) fn handle_diff(arg: &str) {
+    let read = match crate::runtime::git::diff_for_command(arg) {
+        Ok(read) => read,
+        Err(message) => {
+            output::print_warn(&message);
+            return;
+        }
+    };
+    if read.diff.is_empty() {
+        output::print_info(&read.summary());
+        return;
+    }
+    let summary = sanitize_terminal_text(&read.summary()).into_owned();
+    let mut summary_lines = summary.lines();
+    if let Some(heading) = summary_lines.next() {
+        eprintln!("{}", ts::accent_header(heading));
+    }
+    for line in summary_lines {
+        eprintln!("{line}");
+    }
 
-            match std::process::Command::new("git").args(["diff"]).output() {
-                Ok(diff_output) => {
-                    let diff = String::from_utf8_lossy(&diff_output.stdout);
-                    let lines: Vec<&str> = diff.lines().collect();
-                    let max_lines = 100;
-                    for line in lines.iter().take(max_lines) {
-                        if line.starts_with('+') && !line.starts_with("+++") {
-                            eprintln!("{}", ts::addition(*line));
-                        } else if line.starts_with('-') && !line.starts_with("---") {
-                            eprintln!("{}", ts::deletion(*line));
-                        } else if line.starts_with("@@") {
-                            eprintln!("{}", ts::accent(*line));
-                        } else {
-                            eprintln!("{}", sanitize_terminal_text(line));
-                        }
-                    }
-                    if lines.len() > max_lines {
-                        eprintln!(
-                            "{}",
-                            format!("... ({} more lines)", lines.len() - max_lines).dimmed()
-                        );
-                    }
-                }
-                Err(e) => output::print_error(&format!("Failed to run git diff: {}", e)),
-            }
+    let lines: Vec<&str> = read.text.lines().collect();
+    let max_lines = 100;
+    for line in lines.iter().take(max_lines) {
+        let line = sanitize_terminal_text(line);
+        if line.starts_with('+') && !line.starts_with("+++") {
+            eprintln!("{}", ts::addition(line.as_ref()));
+        } else if line.starts_with('-') && !line.starts_with("---") {
+            eprintln!("{}", ts::deletion(line.as_ref()));
+        } else if line.starts_with("@@") {
+            eprintln!("{}", ts::accent(line.as_ref()));
+        } else {
+            eprintln!("{line}");
         }
-        Err(_) => {
-            output::print_warn("git not found or not in a git repository.");
-        }
+    }
+    if lines.len() > max_lines {
+        eprintln!(
+            "{}",
+            format!("... ({} more lines)", lines.len() - max_lines).dimmed()
+        );
     }
 }
 
@@ -1347,6 +1344,9 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
             &cost,
             0,
             false,
+            // `/raw json` re-renders a message already in history; the turn
+            // that produced it is gone, so nothing here can claim it was cut.
+            None,
         );
         serde_json::to_string_pretty(&value)
             .unwrap_or_else(|e| format!("Failed to render JSON: {e}"))

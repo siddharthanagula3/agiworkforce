@@ -69,7 +69,8 @@ jest.mock('../services/complianceLedger', () => ({
   mmkvConsentLedger: { getNamedProviderConsent: jest.fn().mockReturnValue(null) },
 }));
 
-import { exportAllUserData } from '../services/dsarExport';
+import { hasAiGeneratedMarker } from '@agiworkforce/compliance';
+import { buildMarkedTranscript, exportAllUserData } from '../services/dsarExport';
 import { buildLocalDataExportSnapshot } from '../src/features/settings/data-controls/localDataSnapshot';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
@@ -181,5 +182,46 @@ describe('DSAR export local stores', () => {
       'file:///cache/dsar_exports/agi_data_export.json',
       expect.objectContaining({ mimeType: 'application/json' }),
     );
+  });
+});
+
+/**
+ * The Article 50 legal screen tells a reader their on-device data export marks
+ * each chat transcript as AI generated. The marker comes from a shared package
+ * behind a guarded require, so one that stopped loading would leave the claim
+ * false and nothing else red.
+ */
+describe('the transcript the on-device data export writes', () => {
+  const transcript = buildMarkedTranscript([
+    {
+      role: 'user',
+      content: 'Summarise this.',
+      provider: null,
+      model: null,
+      created_at: '2026-09-21T10:00:00.000Z',
+    },
+    {
+      role: 'assistant',
+      content: 'Here is the summary.',
+      provider: 'fixture-provider',
+      model: 'fixture-model',
+      created_at: '2026-09-21T10:00:05.000Z',
+    },
+  ]);
+
+  it('carries the machine readable AI generated marker the legal screen names', () => {
+    expect(hasAiGeneratedMarker(transcript)).toBe(true);
+    expect(transcript).toMatch(/<meta\s+name="agi:ai-generated"/);
+    expect(transcript).toContain('agi:ai-generated:c2pa-claim');
+  });
+
+  it('names the provider and model that wrote the last answer', () => {
+    expect(transcript).toContain('fixture-provider');
+    expect(transcript).toContain('fixture-model');
+  });
+
+  it('keeps the conversation readable inside the marker', () => {
+    expect(transcript).toContain('You: Summarise this.');
+    expect(transcript).toContain('AGI: Here is the summary.');
   });
 });

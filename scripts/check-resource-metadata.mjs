@@ -108,9 +108,10 @@ export function readTableColumns(repoRoot = REPO_ROOT) {
     )) {
       const columns = ensure(match[1]);
       for (const column of match[2].matchAll(
-        /add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/g,
+        /\b(add|drop)\s+column\s+(?:if\s+(?:not\s+)?exists\s+)?([a-z_][a-z0-9_]*)/g,
       )) {
-        columns.add(column[1]);
+        if (column[1] === 'add') columns.add(column[2]);
+        else columns.delete(column[2]);
       }
     }
   }

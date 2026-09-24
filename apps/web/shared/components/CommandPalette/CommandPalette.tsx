@@ -8,14 +8,17 @@ import {
   ChevronRight,
   CreditCard,
   DollarSign,
+  ListChecks,
+  MessageSquare,
   Monitor,
   Moon,
   Search,
   Settings,
+  SquarePen,
   Sun,
+  TerminalSquare,
   X,
 } from 'lucide-react';
-import { ListChecks, MessageSquare, SquarePen, TerminalSquare } from '@agiworkforce/icons';
 import { cn } from '@shared/utils/cn';
 import {
   Dialog,
@@ -44,6 +47,12 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { useTranslation } from 'react-i18next';
 import { CODE_COPY, CODE_ROUTES } from '@/features/code/code-surface';
+import {
+  globalSearchResultHref,
+  globalSearchService,
+  type SearchResult,
+} from '@/features/chat/services/global-search-service';
+import { useSession } from '@/lib/identity/client';
 
 export interface CommandOption {
   id: string;
@@ -255,7 +264,12 @@ interface Props {
 export function CommandPalette({ open, onOpenChange }: Props) {
   const [query, setQuery] = useState('');
   const [activeSubMenu, setActiveSubMenu] = useState<ActiveSubMenu>(null);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const { userId } = useSession();
   const currentModelId = useModelStore((state) => state.selectedModelId);
   const setSelectedModelId = useModelStore((state) => state.setSelectedModelId);
 
@@ -278,16 +292,69 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   const activeCommands = activeSubMenu === 'model' ? modelCommands : topCommands;
 
+  useEffect(() => {
+    const normalizedQuery = query.trim();
+    if (!open || activeSubMenu || normalizedQuery.length < 2 || !userId) {
+      setSearchResults([]);
+      setIsSearching(false);
+      setSearchError(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setIsSearching(true);
+      setSearchError(false);
+      void globalSearchService
+        .search(
+          userId,
+          { query: normalizedQuery, limit: 10 },
+          { trackSearch: false, signal: controller.signal },
+        )
+        .then(({ results }) => {
+          if (!controller.signal.aborted) setSearchResults(results);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setSearchResults([]);
+            setSearchError(true);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setIsSearching(false);
+        });
+    }, 200);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [activeSubMenu, open, query, userId]);
+
+  const searchCommands = useMemo<CommandOption[]>(
+    () =>
+      searchResults.map((result, index) => ({
+        id: `search-${result.type}-${result.sessionId}-${result.messageId ?? index}`,
+        title: result.sessionTitle || 'Untitled chat',
+        subtitle: result.matchedText,
+        group: 'Search results',
+        icon: result.type === 'project' ? ListChecks : MessageSquare,
+        action: () => router.push(globalSearchResultHref(result)),
+      })),
+    [router, searchResults],
+  );
+
   const filtered = useMemo(() => {
     if (!query.trim()) return activeCommands;
     const q = query.toLowerCase();
-    return activeCommands.filter(
+    const localMatches = activeCommands.filter(
       (c) =>
         c.title.toLowerCase().includes(q) ||
         c.subtitle?.toLowerCase().includes(q) ||
         c.group.toLowerCase().includes(q),
     );
-  }, [query, activeCommands]);
+    return activeSubMenu ? localMatches : [...searchCommands, ...localMatches];
+  }, [query, activeCommands, activeSubMenu, searchCommands]);
 
   const groups = useMemo(() => groupCommands(filtered), [filtered]);
 
@@ -408,51 +475,73 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           role="listbox"
           aria-label="Commands"
         >
-          {filtered.length === 0 ? (
-            <p className="text-center text-sm text-muted-foreground py-8">No commands found.</p>
+          {isSearching && filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground" role="status">
+              Searching conversations…
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {searchError
+                ? 'Conversation search is temporarily unavailable.'
+                : 'No commands found.'}
+            </p>
           ) : (
-            Object.entries(groups).map(([group, items]) => (
-              <div key={group}>
-                <p className="px-4 py-1.5 text-[12px] font-semibold text-muted-foreground">
-                  {group}
-                </p>
-                {items.map((cmd) => {
-                  const optionProps = getOptionProps(cmd);
-                  const isSelected = optionProps['aria-selected'];
-                  const Icon = cmd.icon;
-                  return (
-                    <button
-                      key={cmd.id}
-                      {...optionProps}
-                      onClick={() => execute(cmd)}
-                      className={cn(
-                        'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-                        isSelected
-                          ? 'bg-accent text-accent-foreground'
-                          : 'text-foreground hover:bg-accent/60',
-                      )}
-                      type="button"
-                    >
-                      <Icon className="w-4 h-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      <div className="flex-1 min-w-0">
-                        <span className="font-medium">{cmd.title}</span>
-                        {cmd.subtitle && (
-                          <span className="ml-2 text-xs text-muted-foreground truncate">
-                            {cmd.subtitle}
-                          </span>
+            <>
+              {Object.entries(groups).map(([group, items]) => (
+                <div key={group}>
+                  <p className="px-4 py-1.5 text-caption font-semibold text-muted-foreground">
+                    {group}
+                  </p>
+                  {items.map((cmd) => {
+                    const optionProps = getOptionProps(cmd);
+                    const isSelected = optionProps['aria-selected'];
+                    const Icon = cmd.icon;
+                    return (
+                      <button
+                        key={cmd.id}
+                        {...optionProps}
+                        onClick={() => execute(cmd)}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                          isSelected
+                            ? 'bg-accent text-accent-foreground'
+                            : 'text-foreground hover:bg-accent/60',
                         )}
-                      </div>
-                      {cmd.hasSubMenu && (
-                        <ChevronRight
-                          className="w-3.5 h-3.5 text-muted-foreground shrink-0"
+                        type="button"
+                      >
+                        <Icon
+                          className="w-4 h-4 shrink-0 text-muted-foreground"
                           aria-hidden="true"
                         />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ))
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{cmd.title}</span>
+                          {cmd.subtitle && (
+                            <span className="ml-2 text-xs text-muted-foreground truncate">
+                              {cmd.subtitle}
+                            </span>
+                          )}
+                        </div>
+                        {cmd.hasSubMenu && (
+                          <ChevronRight
+                            className="w-3.5 h-3.5 text-muted-foreground shrink-0"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+              {isSearching ? (
+                <p className="px-4 py-2 text-xs text-muted-foreground" role="status">
+                  Searching conversations…
+                </p>
+              ) : searchError ? (
+                <p className="px-4 py-2 text-xs text-muted-foreground" role="status">
+                  Conversation search is temporarily unavailable.
+                </p>
+              ) : null}
+            </>
           )}
         </div>
       </DialogContent>

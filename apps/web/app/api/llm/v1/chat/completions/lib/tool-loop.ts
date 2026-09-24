@@ -50,6 +50,8 @@
 
 import 'server-only';
 
+import { createHash } from 'node:crypto';
+
 import {
   beginOperation,
   nextAttempt as nextOperationAttempt,
@@ -76,8 +78,10 @@ import type {
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
+  getModelMetadataById,
   isAutoModeModelId,
   isBrowserCommand,
+  resolveMaxOutputTokens,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -102,11 +106,28 @@ import {
   recordCapabilityObservation,
   TOOL_CALLING_CAPABILITY,
 } from '@/lib/services/free-lane/capability-health-service';
-import { mapClassifiedUpstreamError } from './upstream-error-copy';
-import type { FailoverStepContext } from './managed-failover';
+import {
+  FREE_USAGE_LIMIT_REACHED_MESSAGE,
+  mapClassifiedUpstreamError,
+  streamErrorFrame,
+  toolFailureMessage,
+} from './upstream-error-copy';
+import {
+  classifyEmptyTurn,
+  isBlockedFinishReason,
+  isCancelledFinishReason,
+  isEmptyTurnOutput,
+  isMaxOutputFinishReason,
+} from './turn-completeness';
+import {
+  FIRST_PROVIDER_STEP,
+  isFreePostToolSameRouteRetryEligible,
+  type FailoverStepContext,
+} from './managed-failover';
 import {
   buildServingRouteId,
   buildToolLoopStream,
+  type ProviderStreamShape,
   type ToolLoopStepSink,
 } from './tool-loop-anthropic';
 import {
@@ -124,9 +145,17 @@ import {
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
 import { stageTurnAttachments } from '@/lib/e2b/attachment-staging';
-import { isExecutionTool, routeExecutionTool, capOutput } from '@/lib/e2b/execution-tools';
+import {
+  EXECUTE_CODE_TOOL,
+  isExecutionTool,
+  routeExecutionTool,
+  capOutput,
+} from '@/lib/e2b/execution-tools';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
-import { isCloudCodeExecutionEnabled } from '@/lib/server/code-execution-policy';
+import {
+  resolveCloudCodeExecutionPolicy,
+  type CloudCodeExecutionPolicy,
+} from '@/lib/server/code-execution-policy';
 import {
   DEVICE_STEP_TTL_MINUTES,
   DeviceStepRefused,
@@ -211,7 +240,9 @@ import {
   WEB_SEARCH_FREE_MAX_RESULTS,
   WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN,
   WEB_SEARCH_MAX_CALLS_PER_TURN,
+  WEB_SEARCH_MAX_QUERY_LENGTH,
   WEB_SEARCH_MAX_RESULTS,
+  WEB_SEARCH_TOOL,
   webSearchResultsToFetchedSources,
   resolveRoutingRedirectUrls,
   isBareDomainTitle,
@@ -289,7 +320,7 @@ import {
 import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
-import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service';
+import { applyFreeTrialProviderBudget, isFreePlanTier } from '@/lib/services/free-trial-service';
 import {
   reserveManagedUsageProviderStep,
   ManagedUsageRequestError,
@@ -314,6 +345,7 @@ const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000)
 // teardown; it is a safety boundary, not restart-safe background execution.
 
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
+const MAX_RETRY_HELD_PROVIDER_CHARS = 64 * 1024;
 const MAX_TOOL_CALLS_PER_STEP = 32;
 
 const MAX_PARALLEL_TOOL_CALLS = 4;
@@ -503,6 +535,7 @@ export interface ProviderStreamError {
   message: string;
   code?: string;
   retryable?: boolean;
+  retryAfterSeconds?: number;
 }
 
 export interface ToolLoopProviderStepResult {
@@ -521,6 +554,7 @@ export interface ToolLoopProviderStepResult {
   thinkingBlocks: ThinkingBlock[];
   canonicalText: string;
   usage: ObservedProviderUsage;
+  providerTrace?: ProviderStreamShape;
 }
 
 export interface ToolLoopProviderExecution {
@@ -550,6 +584,7 @@ interface E2BExecutorResolution {
 export interface ToolLoopToolResult {
   content: string;
   isError: boolean;
+  searchOutcome?: 'no_results';
   /**
    * The tool was never runnable for this turn rather than invoked and failing.
    * The governor withdraws such a tool so the model cannot retry it all turn.
@@ -808,7 +843,7 @@ function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): st
   return offeredTools.find((t) => t.qualifiedName === toolName)?.serverLabel;
 }
 
-function canonicalStopReason(finishReason: string | null): AgentEventStopReason {
+function canonicalStopReason(finishReason: string): AgentEventStopReason {
   if (finishReason === 'length' || finishReason === 'max_tokens') return 'max-tokens';
   if (finishReason === 'content_filter' || finishReason === 'refusal') return 'refusal';
   if (finishReason === 'cancelled' || finishReason === 'cancel') return 'cancelled';
@@ -816,24 +851,48 @@ function canonicalStopReason(finishReason: string | null): AgentEventStopReason 
   return 'end-turn';
 }
 
-const BLOCKED_FINISH_REASONS: ReadonlySet<string> = new Set(['refusal', 'content_filter']);
-const CANCELLED_FINISH_REASONS: ReadonlySet<string> = new Set(['cancelled', 'cancel']);
-
-function isBlockedFinishReason(finishReason: string | null): boolean {
-  return finishReason !== null && BLOCKED_FINISH_REASONS.has(finishReason);
-}
-
-function isCancelledFinishReason(finishReason: string | null): boolean {
-  return finishReason !== null && CANCELLED_FINISH_REASONS.has(finishReason);
+/**
+ * The answer with the thinking taken out. A model that spends a turn reasoning
+ * inside `<thinking>` tags and never writes an answer produced raw content but
+ * showed the reader nothing, and counting that as an answer passed it off as a
+ * finished turn.
+ */
+function publicTextOf(result: ToolLoopProviderStepResult): string {
+  const projector = createPublicTextDeltaProjector();
+  return projector.push(result.textContent) + projector.flush();
 }
 
 function isEmptyProviderStep(result: ToolLoopProviderStepResult): boolean {
-  return (
-    result.pendingToolCalls.length === 0 &&
-    result.textContent.trim().length === 0 &&
-    result.publicTextTail.trim().length === 0 &&
-    result.generatedFileRefs.length === 0
-  );
+  return isEmptyTurnOutput({
+    text: publicTextOf(result),
+    toolCalls: result.pendingToolCalls.length,
+    generatedFiles: result.generatedFileRefs.length,
+  });
+}
+
+function parseTextualCodeCall(text: string): { code: string; language: string } | null {
+  const candidate = text.trim();
+  if (candidate.length > MAX_RETRY_HELD_PROVIDER_CHARS) return null;
+  const outer = /^<tool_call>\s*([a-z_]+)\s+([\s\S]*?)\s*<\/tool_call>$/.exec(candidate);
+  if (!outer || outer[1] !== EXECUTE_CODE_TOOL) return null;
+  let remaining = outer[2] ?? '';
+  const args: Record<string, string> = {};
+  const pair = /^\s*<arg_key>([^<]+)<\/arg_key>\s*<arg_value>([\s\S]*?)<\/arg_value>/;
+  while (remaining.trim()) {
+    const match = pair.exec(remaining);
+    if (!match) return null;
+    const key = match[1]?.trim();
+    if ((key !== 'code' && key !== 'language') || Object.hasOwn(args, key)) return null;
+    args[key] = match[2] ?? '';
+    remaining = remaining.slice(match[0].length);
+  }
+  const code = args['code'];
+  const language = args['language'];
+  return code?.trim() && language?.trim() && language.length <= 32 ? { code, language } : null;
+}
+
+function spentTheTurnThinking(result: ToolLoopProviderStepResult): boolean {
+  return result.textContent.trim().length > 0 && publicTextOf(result).trim().length === 0;
 }
 
 function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
@@ -1296,7 +1355,7 @@ export function withToolTimeout(
       (err: unknown) => {
         clearTimeout(timer);
         resolve({
-          content: `Tool ${toolName} failed: ${err instanceof Error ? err.message : String(err)}`,
+          content: toolFailureMessage(toolName, err),
           isError: true,
         });
       },
@@ -1426,6 +1485,7 @@ export interface CollectedProviderLine {
   line: SseLine;
   publicTextDelta?: string;
   reasoningDelta?: string;
+  toolCallDelta?: boolean;
   serverToolStart?: ServerToolStartSignal;
   serverToolResults?: ServerToolResultSignal[];
   /**
@@ -1577,6 +1637,7 @@ export async function collectProviderStream(
         // kept for classification and never forwarded: the loop speaks for the
         // failure in its own words once the step has ended.
         const streamErrorDelta = event?.choices?.[0]?.delta?.x_stream_error;
+        const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (streamErrorDelta && typeof streamErrorDelta === 'object') {
           const errorObj = streamErrorDelta as Record<string, unknown>;
           providerError = {
@@ -1585,12 +1646,18 @@ export async function collectProviderStream(
             ...(typeof errorObj['retryable'] === 'boolean'
               ? { retryable: errorObj['retryable'] }
               : {}),
+            ...(typeof errorObj['retryAfterSeconds'] === 'number' &&
+            Number.isFinite(errorObj['retryAfterSeconds']) &&
+            errorObj['retryAfterSeconds'] >= 0
+              ? { retryAfterSeconds: errorObj['retryAfterSeconds'] }
+              : {}),
           };
         } else {
           pushLine({
             line: raw + '\n\n',
             publicTextDelta,
             reasoningDelta,
+            toolCallDelta: Array.isArray(toolCallDeltas) && toolCallDeltas.length > 0,
             serverToolStart,
             serverToolResults,
             searchActivity: serverToolStart !== undefined || Array.isArray(searchResultsContent),
@@ -1598,7 +1665,6 @@ export async function collectProviderStream(
         }
         frameOpen = false;
 
-        const toolCallDeltas: unknown[] | undefined = event?.choices?.[0]?.delta?.tool_calls;
         if (Array.isArray(toolCallDeltas)) {
           for (const tc of toolCallDeltas) {
             if (typeof tc !== 'object' || tc === null) continue;
@@ -1930,6 +1996,9 @@ async function runMcpTool(
       content: formatWebSearchResultForModel(enrichedAfterCap, executionContext?.sourcePositionFor),
       isError: !enrichedAfterCap.ok,
       sources: webSearchResultsToFetchedSources(enrichedAfterCap),
+      ...(enrichedAfterCap.ok && enrichedAfterCap.results.length === 0
+        ? { searchOutcome: 'no_results' as const }
+        : {}),
     };
   }
 
@@ -1949,16 +2018,26 @@ async function runMcpTool(
     // the request body, a client-side check alone would be a preference the
     // caller could decline to honour. The model is told plainly so it explains
     // rather than retrying the same call.
-    if (
-      executionContext?.userId &&
-      !(await isCloudCodeExecutionEnabled(
-        callerScopedDb(executionContext, executionContext.userId),
-        executionContext.userId,
-      ))
-    ) {
+    let codeExecutionPolicy: CloudCodeExecutionPolicy = {
+      allowed: true,
+    };
+    if (executionContext?.userId) {
+      try {
+        codeExecutionPolicy = await resolveCloudCodeExecutionPolicy(
+          callerScopedDb(executionContext, executionContext.userId),
+          executionContext.userId,
+        );
+      } catch (error) {
+        logger.warn({ error }, '[tool-loop] code execution policy adapter unavailable');
+        codeExecutionPolicy = { allowed: false, reason: 'unavailable' };
+      }
+    }
+    if (!codeExecutionPolicy.allowed) {
       return {
         content:
-          'Cloud code execution is turned off for this account. Tell the user it is off and that they can turn it back on in Settings › Capabilities; do not try another execution tool.',
+          codeExecutionPolicy.reason === 'disabled'
+            ? 'Cloud code execution is turned off for this account. Tell the user it is off and that they can turn it back on in Settings › Capabilities; do not try another execution tool.'
+            : 'Cloud code execution could not be started because the account setting is temporarily unavailable. Tell the user to retry later; do not try another execution tool.',
         isError: true,
         unavailable: true,
         unavailableFamily: 'execution',
@@ -1973,7 +2052,11 @@ async function runMcpTool(
       cause,
     );
     return {
-      content: result.ok ? result.output || '(no output)' : (result.error ?? 'Execution error'),
+      content: result.ok
+        ? result.output || '(no output)'
+        : toolCall.qualifiedName === EXECUTE_CODE_TOOL && !result.unavailable
+          ? `Notebook cell failed. No process exit code is available for a notebook cell. An exception traceback is a cell error, not stderr.\n${result.error ?? 'Execution error'}`
+          : (result.error ?? 'Execution error'),
       isError: !result.ok,
       pngResults: result.pngResults,
       ...(result.unavailable ? { unavailable: true, unavailableFamily: 'execution' as const } : {}),
@@ -2556,6 +2639,12 @@ export async function* runToolLoop(
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
+  const serverOwnedSearchCallId = (step: number): string =>
+    `call_agisearch_${createHash('sha256').update(`${turnId}:${step}`).digest('hex').slice(0, 24)}`;
+  const adaptedCodeCallId = (step: number): string =>
+    `call_agicode_${createHash('sha256').update(`${turnId}:${step}`).digest('hex').slice(0, 24)}`;
+  const isServerOwnedSearchCall = (call: PendingToolCall, step: number): boolean =>
+    isWebSearchTool(call.qualifiedName) && call.id === serverOwnedSearchCallId(step);
   const sessionId = options.eventSessionId ?? processed.conversationId ?? turnId;
   const eventStream = createAgentEventStreamEmitter({
     sessionId,
@@ -2745,6 +2834,10 @@ export async function* runToolLoop(
 
   let servingProcessed: ProcessedRequest = processed;
   let emptyResponseRotationUsed = false;
+  let freePostToolEmptyRetryUsed = false;
+  let freePostToolAvailabilityRetryUsed = false;
+  const sameRouteEmptyRetryConfigured =
+    (getModelMetadataById(processed.requestedModel)?.transientSameRouteRetries ?? 0) > 0;
   let servedRouteId: string | undefined;
   const toolCapabilityEvidence = emptyToolCapabilityEvidence();
 
@@ -2754,8 +2847,9 @@ export async function* runToolLoop(
     onLine?: (entry: CollectedProviderLine) => void,
   ): Promise<ToolLoopProviderStepResult> {
     let rootQuotaExhaustedError: unknown | undefined;
-    let liveLinesReachedClient = false;
+    let releasedLinesToClient = false;
     let attempt = 0;
+    let outputLimitRetryTokens: number | undefined;
     let identity = beginOperation({ requestId: operationRequestId, parentTaskId: taskId });
     for (;;) {
       const attemptProcessed = servingProcessed;
@@ -2764,9 +2858,39 @@ export async function* runToolLoop(
         model: attemptProcessed.llmRequest.model,
         effort: attemptProcessed.llmRequest.effort,
         thinking: attemptProcessed.llmRequest.thinking,
+        ...(outputLimitRetryTokens !== undefined ? { max_tokens: outputLimitRetryTokens } : {}),
       };
       const attemptStartedAtMs = now();
       let firstProviderLineAtMs: number | undefined;
+      let visibleProviderOutputReachedClient = false;
+      // Hold an eligible first attempt's pre-answer trace so a reported failure or empty stop can rotate unseen.
+      let holdLeadingLines =
+        attempt === 0 &&
+        (((sameRouteEmptyRetryConfigured || options.failover) && step === FIRST_PROVIDER_STEP) ||
+          ((processed.freeLane || processed.freeTrial) &&
+            step > FIRST_PROVIDER_STEP &&
+            !freePostToolEmptyRetryUsed));
+      const heldLeadingLines: CollectedProviderLine[] = [];
+      let heldLeadingChars = 0;
+      const releaseLine = (entry: CollectedProviderLine): void => {
+        releasedLinesToClient = true;
+        if (
+          entry.publicTextDelta ||
+          entry.reasoningDelta ||
+          entry.toolCallDelta ||
+          entry.serverToolStart ||
+          (entry.serverToolResults?.length ?? 0) > 0 ||
+          entry.searchActivity
+        ) {
+          visibleProviderOutputReachedClient = true;
+        }
+        onLine?.(entry);
+      };
+      const releaseHeldLines = (): void => {
+        holdLeadingLines = false;
+        for (const entry of heldLeadingLines) releaseLine(entry);
+        heldLeadingLines.length = 0;
+      };
       const executeProviderStep = async (): Promise<ToolLoopProviderStepResult> => {
         const stepUsage = createObservedProviderUsage();
         const stepSink: ToolLoopStepSink = {
@@ -2794,19 +2918,48 @@ export async function* runToolLoop(
                 firstProviderLineAtMs = now();
                 markFirstToken();
               }
-              liveLinesReachedClient = true;
-              onLine?.(entry);
+              if (holdLeadingLines) {
+                if (heldLeadingChars + entry.line.length > MAX_RETRY_HELD_PROVIDER_CHARS) {
+                  releaseHeldLines();
+                } else {
+                  heldLeadingLines.push(entry);
+                  heldLeadingChars += entry.line.length;
+                  if (
+                    entry.publicTextDelta?.trim() ||
+                    entry.toolCallDelta ||
+                    entry.serverToolStart ||
+                    (entry.serverToolResults?.length ?? 0) > 0 ||
+                    entry.searchActivity
+                  ) {
+                    releaseHeldLines();
+                  }
+                  return;
+                }
+              }
+              releaseLine(entry);
             });
           },
           streamDeadlineMs,
           options.signal,
           nestedDeadlineMs(PROVIDER_FIRST_TOKEN_DEADLINE_MS, streamDeadlineMs, 0),
         );
+        if (collected.providerError) {
+          const { message, code, retryAfterSeconds } = collected.providerError;
+          const classification = isBlockedFinishReason(collected.finishReason)
+            ? classifyEmptyTurn({ finishReason: collected.finishReason })
+            : stepSink.providerErrorClassification;
+          throw Object.assign(new Error(message || 'Provider stream failed.'), {
+            ...(code && /^\d{3}$/.test(code) ? { status: Number(code) } : {}),
+            ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+            ...(classification ? { classification } : {}),
+          });
+        }
         return {
           ...collected,
           thinkingBlocks: stepSink.thinkingBlocks,
           canonicalText: stepSink.text,
           usage: stepUsage,
+          providerTrace: stepSink.providerTrace,
         };
       };
       try {
@@ -2820,24 +2973,122 @@ export async function* runToolLoop(
               execute: executeProviderStep,
             })
           : await executeProviderStep();
-        // Unlike the exception path below, this does not gate on
-        // `liveLinesReachedClient`: every step's raw provider frames stream
-        // live regardless of finish reason (the same mechanism a normal
-        // multi-step tool call already relies on), so that flag is true by
-        // the time any step completes. `isEmptyProviderStep` is the correct
-        // safety check here -- it verifies directly that nothing visible
-        // (text, a tool call, an artifact) reached the client this step.
+        // Empty output is classified by the actual step result, including a
+        // first-attempt trace still held for a bounded same-route retry.
+        const emptyProviderStep = isEmptyProviderStep(result);
+        if (emptyProviderStep) {
+          logger.warn(
+            {
+              event: 'llm_empty_provider_trace',
+              request_id: operationRequestId,
+              operation_id: identity.operationId,
+              attempt_id: identity.attemptId,
+              step,
+              attempt: attempt + 1,
+              provider: attemptProcessed.provider,
+              model: attemptRequest.model,
+              finishReason: result.finishReason,
+              requestedMaxOutputTokens: attemptRequest.max_tokens,
+              observedOutputTokens: result.usage.outputTokens,
+              observedReasoningTokens: result.usage.reasoningTokens,
+              collectedTextChars: result.textContent.length,
+              canonicalTextChars: result.canonicalText.length,
+              publicTextChars: publicTextOf(result).length,
+              providerTrace: result.providerTrace ?? null,
+            },
+            '[tool-loop] empty provider step stream shape',
+          );
+        }
+        const currentOutputTokens = attemptRequest.max_tokens;
+        const expandedOutputTokens =
+          typeof currentOutputTokens === 'number' && Number.isSafeInteger(currentOutputTokens)
+            ? Math.min(resolveMaxOutputTokens(processed.requestedModel), currentOutputTokens * 2)
+            : undefined;
+        const canExpandPostToolOutput =
+          attempt === 0 &&
+          processed.chatSurface === 'web' &&
+          processed.chatRequest.max_tokens === undefined &&
+          processed.chatRequest.max_completion_tokens === undefined &&
+          isMaxOutputFinishReason(result.finishReason) &&
+          !releasedLinesToClient &&
+          typeof currentOutputTokens === 'number' &&
+          expandedOutputTokens !== undefined &&
+          expandedOutputTokens > currentOutputTokens;
+        if (
+          !freePostToolEmptyRetryUsed &&
+          (processed.freeLane || processed.freeTrial) &&
+          step > FIRST_PROVIDER_STEP &&
+          emptyProviderStep &&
+          (result.finishReason === 'stop' || canExpandPostToolOutput) &&
+          !result.providerError &&
+          !visibleProviderOutputReachedClient
+        ) {
+          freePostToolEmptyRetryUsed = true;
+          if (canExpandPostToolOutput) outputLimitRetryTokens = expandedOutputTokens;
+          logger.warn(
+            {
+              requestId: processed.requestId,
+              provider: attemptProcessed.provider,
+              model: attemptRequest.model,
+              step,
+              originalOutputTokens: currentOutputTokens,
+              retryOutputTokens: outputLimitRetryTokens,
+            },
+            '[tool-loop] retrying one empty Free continuation after a completed tool call',
+          );
+          attempt += 1;
+          identity = nextOperationAttempt(identity);
+          continue;
+        }
+        const cleanEmptySameRouteRetry =
+          sameRouteEmptyRetryConfigured &&
+          step === FIRST_PROVIDER_STEP &&
+          result.finishReason === 'stop' &&
+          !result.providerError &&
+          !visibleProviderOutputReachedClient &&
+          result.canonicalText.trim().length === 0;
+        if (
+          attempt === 0 &&
+          step === FIRST_PROVIDER_STEP &&
+          processed.chatSurface === 'web' &&
+          sameRouteEmptyRetryConfigured &&
+          processed.chatRequest.max_tokens === undefined &&
+          processed.chatRequest.max_completion_tokens === undefined &&
+          emptyProviderStep &&
+          isMaxOutputFinishReason(result.finishReason) &&
+          !result.providerError &&
+          !visibleProviderOutputReachedClient &&
+          typeof currentOutputTokens === 'number' &&
+          expandedOutputTokens !== undefined &&
+          expandedOutputTokens > currentOutputTokens
+        ) {
+          outputLimitRetryTokens = expandedOutputTokens;
+          logger.warn(
+            {
+              requestId: processed.requestId,
+              provider: attemptProcessed.provider,
+              model: attemptRequest.model,
+              step,
+              originalOutputTokens: currentOutputTokens,
+              retryOutputTokens: expandedOutputTokens,
+            },
+            '[tool-loop] retrying one pre-answer output-limit stop with a larger Free response budget',
+          );
+          attempt += 1;
+          identity = nextOperationAttempt(identity);
+          continue;
+        }
         if (
           !emptyResponseRotationUsed &&
           options.failover &&
-          isAutoModeModelId(processed.requestedModel) &&
-          isEmptyProviderStep(result) &&
+          emptyProviderStep &&
           !isCancelledFinishReason(result.finishReason) &&
-          !isBlockedFinishReason(result.finishReason)
+          !isBlockedFinishReason(result.finishReason) &&
+          (isAutoModeModelId(processed.requestedModel) || cleanEmptySameRouteRetry)
         ) {
           const rotated = options.failover.next(
             new EmptyProviderResponseError(result.finishReason),
-            { step },
+            { step, ...(cleanEmptySameRouteRetry ? { sameRouteRetrySafe: true } : {}) },
           );
           if (rotated) {
             emptyResponseRotationUsed = true;
@@ -2847,6 +3098,7 @@ export async function* runToolLoop(
             continue;
           }
         }
+        if (holdLeadingLines) releaseHeldLines();
         servedRouteId =
           recordProviderStepSuccess({
             processed,
@@ -2862,7 +3114,7 @@ export async function* runToolLoop(
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof SharedProviderStreamDeadlineError) throw err;
-        if (liveLinesReachedClient) throw err;
+        if (releasedLinesToClient) throw err;
         const classified = classifyError(err);
         recordProviderStepFailure({
           attemptProcessed,
@@ -2875,7 +3127,34 @@ export async function* runToolLoop(
         if (!rootQuotaExhaustedError && classified.category === 'quota_exhausted') {
           rootQuotaExhaustedError = err;
         }
-        const nextAttempt = options.failover?.next(err, { step });
+        if (
+          !freePostToolAvailabilityRetryUsed &&
+          attempt === 0 &&
+          step > FIRST_PROVIDER_STEP &&
+          processed.chatSurface === 'web' &&
+          (processed.freeLane || processed.freeTrial) &&
+          !options.signal?.aborted &&
+          isFreePostToolSameRouteRetryEligible(err)
+        ) {
+          freePostToolAvailabilityRetryUsed = true;
+          logger.warn(
+            {
+              requestId: processed.requestId,
+              provider: attemptProcessed.provider,
+              model: attemptRequest.model,
+              step,
+              code: classified.code,
+            },
+            '[tool-loop] retrying one transient Free continuation after a completed tool call',
+          );
+          attempt += 1;
+          identity = nextOperationAttempt(identity);
+          continue;
+        }
+        const nextAttempt = options.failover?.next(err, {
+          step,
+          sameRouteRetrySafe: step === FIRST_PROVIDER_STEP,
+        });
         if (!nextAttempt) {
           throw rootQuotaExhaustedError && classified.category !== 'quota_exhausted'
             ? rootQuotaExhaustedError
@@ -2888,8 +3167,13 @@ export async function* runToolLoop(
     }
   }
 
+  // Whether answer text has reached the reader, which decides whether a later
+  // transport failure is an interruption or a model that was never reached.
+  let publicTextEmitted = false;
+
   async function* emitProviderLine(entry: CollectedProviderLine): AsyncGenerator<Uint8Array> {
     yield encoder.encode(await enrichServerSearchResultsLine(entry.line));
+    if (entry.publicTextDelta) publicTextEmitted = true;
     if (entry.reasoningDelta) {
       yield encoder.encode(
         eventStream.emit({ type: 'reasoning-delta', delta: entry.reasoningDelta }),
@@ -2990,8 +3274,18 @@ export async function* runToolLoop(
     });
   const searchRequired = processed.searchRequirement?.required === true;
   const searchOnlyAskedFor = processed.searchEnforcement?.mode === 'nudge';
+  const freeWebSearchMustFailClosed =
+    processed.chatSurface === 'web' &&
+    searchRequired &&
+    getModelMetadataById(processed.requestedModel)?.webSearchToolOfferPolicy === 'required_only';
+  const serverOwnedSearchQuery = redactSecrets(lastUserTurnText(processed.chatRequest?.messages))
+    .slice(0, WEB_SEARCH_MAX_QUERY_LENGTH)
+    .trim();
   let searchObserved = false;
   let searchRetryUsed = false;
+  let serverSearchWithoutSources = false;
+  let serverSearchUnavailable = false;
+  let requiredSearchNoResults = false;
   function searchRetryEligible(): boolean {
     return searchRequired && searchOnlyAskedFor && !searchRetryUsed && !searchObserved;
   }
@@ -3204,7 +3498,8 @@ export async function* runToolLoop(
                     SEARCH_BOUND_WINDOW_DAYS,
                   )
                 : searchUnaffordableMessage(),
-            isError: false,
+            isError: true,
+            unavailable: true,
           },
         };
       }
@@ -3225,7 +3520,9 @@ export async function* runToolLoop(
     }
 
     if (reserved.outcome === 'refused') {
-      return { refusal: { content: searchUnaffordableMessage(), isError: false } };
+      return {
+        refusal: { content: searchUnaffordableMessage(), isError: true, unavailable: true },
+      };
     }
     searchChargeCentsByOrdinal.set(callOrdinal, decision.chargeCents);
     return { reservation: reserved.outcome === 'reserved' ? reserved.reservation : null };
@@ -3407,6 +3704,35 @@ export async function* runToolLoop(
     yield encoder.encode(sseDone());
   }
 
+  async function* failRequiredTool(
+    code: 'web_search_not_performed' | 'web_search_no_sources' | 'code_execution_not_performed',
+    message: string,
+    retryable: boolean,
+  ): AsyncGenerator<Uint8Array> {
+    const streamError = { code, message, retryable };
+    yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
+    yield encoder.encode(
+      sseData({
+        choices: [{ delta: { x_stream_error: streamError }, index: 0 }],
+        model: responseModel,
+      }),
+    );
+    yield* flushTerminal('error');
+  }
+
+  async function* finishNoResultSearch(): AsyncGenerator<Uint8Array> {
+    const answer = 'I searched the web, but found no results for that query.';
+    publicTextEmitted = true;
+    yield encoder.encode(
+      sseData({ choices: [{ index: 0, delta: { content: answer } }], model: responseModel }),
+    );
+    yield encoder.encode(eventStream.emit({ type: 'text-delta', delta: answer }));
+    yield encoder.encode(
+      sseData({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], model: responseModel }),
+    );
+    yield* flushTerminal('end-turn');
+  }
+
   /**
    * Only a turn the model itself finished is evidence. A cancelled or errored
    * turn was cut short by us or by the provider, and a turn that never offered a
@@ -3443,8 +3769,10 @@ export async function* runToolLoop(
 
     const toolStartedAt = new Map<string, number>();
     for (const tc of calls) {
-      if (tc.argsMalformed) toolCapabilityEvidence.malformedCalls += 1;
-      else toolCapabilityEvidence.wellFormedCalls += 1;
+      if (!isServerOwnedSearchCall(tc, suspendContext.completedSteps)) {
+        if (tc.argsMalformed) toolCapabilityEvidence.malformedCalls += 1;
+        else toolCapabilityEvidence.wellFormedCalls += 1;
+      }
       if (isExecutionTool(tc.qualifiedName)) executionToolCalled = true;
       yield encoder.encode(toolStatusEvent(tc.qualifiedName, 'running', responseModel, tc.args));
       const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
@@ -3466,19 +3794,7 @@ export async function* runToolLoop(
       );
     }
 
-    const results: {
-      tc: PendingToolCall;
-      content: string;
-      isError: boolean;
-      unavailable?: boolean;
-      unavailableFamily?: 'execution';
-      source?: FetchedSource;
-      sources?: FetchedSource[];
-      pngResults?: string[];
-      generatedFiles?: GeneratedFileWire[];
-      interactiveCard?: InteractiveCard;
-      inputRequired?: McpInputRequiredState;
-    }[] = [];
+    const results: Array<{ tc: PendingToolCall } & ToolLoopToolResult> = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
       const resumeInput = suspendContext.resumeInput?.get(tc.id);
@@ -3680,6 +3996,8 @@ export async function* runToolLoop(
       isError,
       source,
       sources,
+      searchOutcome,
+      unavailable,
       generatedFiles,
       interactiveCard,
       inputRequired,
@@ -3774,6 +4092,19 @@ export async function* runToolLoop(
         ...(source ? [source] : []),
         ...(sources ?? []),
       ]);
+      if (
+        searchRequired &&
+        searchOutcome === 'no_results' &&
+        (isServerOwnedSearchCall(tc, suspendContext.completedSteps) ||
+          (suspendContext.completedSteps === FIRST_PROVIDER_STEP && calls.length === 1))
+      ) {
+        requiredSearchNoResults = true;
+      }
+      if (isServerOwnedSearchCall(tc, suspendContext.completedSteps)) {
+        serverSearchUnavailable = unavailable === true;
+        serverSearchWithoutSources =
+          canonicalSources.length === 0 && !requiredSearchNoResults && !serverSearchUnavailable;
+      }
       if (canonicalSources.length > 0) {
         const queryValue = isWebSearchTool(tc.qualifiedName)
           ? tc.args['query']
@@ -4076,6 +4407,7 @@ export async function* runToolLoop(
       const approvalById = new Map(resumeApprovals.map((a) => [a.toolCallId, a.decision] as const));
 
       const toRun: PendingToolCall[] = [];
+      let requiredSearchCouldNotRun = false;
       for (const p of pending) {
         if (alreadyResolved.has(p.id)) continue;
         const deviceResult = resumeDeviceByCallId.get(p.id);
@@ -4168,6 +4500,9 @@ export async function* runToolLoop(
           );
         }
         if (decision === 'approved' && connectorPermissions.isDenied(p.qualifiedName)) {
+          if (searchRequired && isWebSearchTool(p.qualifiedName)) {
+            requiredSearchCouldNotRun = true;
+          }
           logger.warn(
             { tool: p.qualifiedName, requestId: processed.requestId },
             '[tool-loop] approval rejected: tool is blocked by the user permission store',
@@ -4191,6 +4526,9 @@ export async function* runToolLoop(
         ) {
           toRun.push(p);
         } else if (decision === 'approved') {
+          if (searchRequired && isWebSearchTool(p.qualifiedName)) {
+            requiredSearchCouldNotRun = true;
+          }
           const content = await applyToolResultSecretPolicy(
             options.userId,
             p.qualifiedName,
@@ -4205,6 +4543,9 @@ export async function* runToolLoop(
             tool_call_id: p.id,
           });
         } else {
+          if (searchRequired && isWebSearchTool(p.qualifiedName)) {
+            requiredSearchCouldNotRun = true;
+          }
           const content = await applyToolResultSecretPolicy(
             options.userId,
             p.qualifiedName,
@@ -4221,6 +4562,15 @@ export async function* runToolLoop(
         }
       }
 
+      if (requiredSearchCouldNotRun) {
+        yield* failRequiredTool(
+          'web_search_not_performed',
+          'Web search was not approved or available, so this answer could not be verified.',
+          false,
+        );
+        return;
+      }
+
       if (toRun.length > 0) {
         if (await shouldStopForCancellation()) {
           yield* flushTerminal('cancelled');
@@ -4231,6 +4581,26 @@ export async function* runToolLoop(
           resumeInput: resumeInputByCallId,
         });
         if (suspendedForInput) return;
+        if (serverSearchUnavailable) {
+          yield* failRequiredTool(
+            'web_search_not_performed',
+            'Web search is unavailable on this account right now, so this answer could not be verified.',
+            false,
+          );
+          return;
+        }
+        if (requiredSearchNoResults) {
+          yield* finishNoResultSearch();
+          return;
+        }
+        if (serverSearchWithoutSources) {
+          yield* failRequiredTool(
+            'web_search_no_sources',
+            'Web search returned no usable sources, so this answer could not be verified.',
+            true,
+          );
+          return;
+        }
       }
 
       // The guidance turn must land after every tool result: providers reject a
@@ -4379,8 +4749,7 @@ export async function* runToolLoop(
           yield encoder.encode(
             eventStream.emit({
               type: 'error',
-              message:
-                'You have reached the current free usage limit. Upgrade your plan, or switch to Local or BYOK to keep going.',
+              message: FREE_USAGE_LIMIT_REACHED_MESSAGE,
               code: 'free_trial_token_budget_reached',
               retryable: false,
             }),
@@ -4428,14 +4797,18 @@ export async function* runToolLoop(
         );
       }
       let providerStep: ToolLoopProviderStepResult;
-      // A turn whose search can only be asked for, never required, is the one
-      // case where the step's own output has to be held back: if the model
-      // answers from memory the answer is discarded and re-asked, and text
-      // already on the wire cannot be taken back. The hold ends at the first
-      // sign of a search, so a step that does search streams from that point.
-      const holdUntilSearchSeen = searchRetryEligible() && !searchObserved;
+      const holdForRequiredFreeExecution =
+        processed.chatSurface === 'web' &&
+        (processed.freeLane || processed.freeTrial || isFreePlanTier(processed.subscriptionTier)) &&
+        executionRequirement.required &&
+        !executionToolCalled &&
+        stepTools?.some((tool) => functionToolName(tool) === EXECUTE_CODE_TOOL);
+      const holdUntilSearchSeen =
+        !searchObserved && (searchRetryEligible() || freeWebSearchMustFailClosed);
       const heldProviderLines: CollectedProviderLine[] = [];
-      let releasedProviderLines = !holdUntilSearchSeen;
+      let heldProviderChars = 0;
+      let heldProviderOverflow = false;
+      let releasedProviderLines = !holdUntilSearchSeen && !holdForRequiredFreeExecution;
       try {
         const liveLines = createLiveLineQueue<CollectedProviderLine>();
         const stepPromise = runProviderStepWithFailover(step, stepRequest, (entry) =>
@@ -4488,7 +4861,18 @@ export async function* runToolLoop(
             }
           }
           if (!releasedProviderLines) {
-            heldProviderLines.push(entry);
+            if (!holdForRequiredFreeExecution) {
+              heldProviderLines.push(entry);
+            } else if (!heldProviderOverflow) {
+              heldProviderChars += entry.line.length;
+              if (heldProviderChars > MAX_RETRY_HELD_PROVIDER_CHARS) {
+                heldProviderOverflow = true;
+                heldProviderLines.length = 0;
+              } else {
+                heldProviderLines.push(entry);
+              }
+            }
+            if (holdForRequiredFreeExecution || heldProviderOverflow) continue;
             if (!searchObserved) continue;
             releasedProviderLines = true;
             for (const held of heldProviderLines) yield* emitProviderLine(held);
@@ -4529,12 +4913,9 @@ export async function* runToolLoop(
             : classifyError(err);
         const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
           requestedModel: processed.requestedModel,
+          answerStarted: publicTextEmitted,
         });
-        const streamError = {
-          message: mappedUpstream.message,
-          code: mappedUpstream.code,
-          retryable: classified.retryable,
-        };
+        const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
         logger.error(
           {
             provider: servingProcessed.provider,
@@ -4567,6 +4948,91 @@ export async function* runToolLoop(
         return;
       }
 
+      if (holdForRequiredFreeExecution && heldProviderOverflow) {
+        yield* failRequiredTool(
+          'code_execution_not_performed',
+          'The selected free model produced an oversized tool request, so code was not run. Try again or choose another free model.',
+          true,
+        );
+        return;
+      }
+
+      if (
+        holdForRequiredFreeExecution &&
+        providerStep.pendingToolCalls.length === 0 &&
+        !providerStep.providerError &&
+        !isCancelledFinishReason(providerStep.finishReason) &&
+        !isEmptyProviderStep(providerStep)
+      ) {
+        const adaptedCall =
+          providerStep.finishReason === 'stop'
+            ? parseTextualCodeCall(publicTextOf(providerStep))
+            : null;
+        if (!adaptedCall) {
+          yield* failRequiredTool(
+            'code_execution_not_performed',
+            'The selected free model did not call the sandbox, so code was not run. Try again or choose another free model.',
+            true,
+          );
+          return;
+        }
+        heldProviderLines.length = 0;
+        toolCapabilityEvidence.malformedCalls += 1;
+        providerStep = {
+          ...providerStep,
+          finishReason: 'tool_calls',
+          pendingToolCalls: [
+            {
+              id: adaptedCodeCallId(step),
+              qualifiedName: EXECUTE_CODE_TOOL,
+              args: adaptedCall,
+            },
+          ],
+          textContent: '',
+          publicTextTail: '',
+          canonicalText: '',
+        };
+        logger.info(
+          { provider: servingProcessed.provider, model: servingProcessed.llmRequest.model, step },
+          '[tool-loop] Free model emitted a textual execution call; adapting through the offered sandbox tool',
+        );
+      }
+
+      if (
+        !searchObserved &&
+        freeWebSearchMustFailClosed &&
+        serverOwnedSearchQuery &&
+        stepTools?.some((tool) => isWebSearchTool(functionToolName(tool))) &&
+        providerStep.finishReason !== 'tool_calls' &&
+        providerStep.pendingToolCalls.length === 0 &&
+        !providerStep.providerError &&
+        !isCancelledFinishReason(providerStep.finishReason) &&
+        !isBlockedFinishReason(providerStep.finishReason) &&
+        !isEmptyProviderStep(providerStep)
+      ) {
+        heldProviderLines.length = 0;
+        searchRetryUsed = true;
+        toolCapabilityEvidence.requiredToolsMissed += 1;
+        providerStep = {
+          ...providerStep,
+          finishReason: 'tool_calls',
+          pendingToolCalls: [
+            {
+              id: serverOwnedSearchCallId(step),
+              qualifiedName: WEB_SEARCH_TOOL,
+              args: { query: serverOwnedSearchQuery },
+            },
+          ],
+          textContent: '',
+          publicTextTail: '',
+          canonicalText: '',
+        };
+        logger.info(
+          { provider: servingProcessed.provider, model: servingProcessed.llmRequest.model, step },
+          '[tool-loop] Free Web route omitted required tool call; running server-owned search',
+        );
+      }
+
       const { finishReason, pendingToolCalls, textContent, publicTextTail } = providerStep;
 
       if (!releasedProviderLines) {
@@ -4585,6 +5051,32 @@ export async function* runToolLoop(
             '[tool-loop] required search was not invoked; discarding the answer and asking once more',
           );
           continue;
+        }
+        if (
+          !stillWorking &&
+          freeWebSearchMustFailClosed &&
+          !searchObserved &&
+          !providerStep.providerError &&
+          !isCancelledFinishReason(finishReason) &&
+          !isBlockedFinishReason(finishReason) &&
+          !isEmptyProviderStep(providerStep)
+        ) {
+          logger.warn(
+            {
+              provider: servingProcessed.provider,
+              model: servingProcessed.llmRequest.model,
+              step,
+              requestId: processed.requestId,
+              searchRequiredSource: processed.searchRequirement?.source,
+            },
+            '[tool-loop] Free Web required search ended without a live search',
+          );
+          yield* failRequiredTool(
+            'web_search_not_performed',
+            'Web search did not run, so this answer could not be verified with live sources.',
+            true,
+          );
+          return;
         }
         releasedProviderLines = true;
         for (const held of heldProviderLines) yield* emitProviderLine(held);
@@ -4658,23 +5150,11 @@ export async function* runToolLoop(
       if (finishReason !== 'tool_calls' || pendingToolCalls.length === 0) {
         if (isEmptyProviderStep(providerStep) && !isCancelledFinishReason(finishReason)) {
           const blocked = isBlockedFinishReason(finishReason);
-          const classified: ClassifiedError = blocked
-            ? {
-                category: 'content_blocked',
-                code: 'content_blocked',
-                retryable: false,
-                fallbackable: true,
-                message: 'The model blocked this response before returning any content.',
-              }
-            : providerStep.providerError?.message
-              ? classifyError(new Error(providerStep.providerError.message))
-              : {
-                  category: 'empty_response',
-                  code: 'empty_response',
-                  retryable: false,
-                  fallbackable: true,
-                  message: 'The model finished without returning a response.',
-                };
+          const classified: ClassifiedError = classifyEmptyTurn({
+            finishReason,
+            providerError: providerStep.providerError,
+            reasoningReceived: spentTheTurnThinking(providerStep),
+          });
           logger.warn(
             {
               provider: servingProcessed.provider,
@@ -4688,11 +5168,7 @@ export async function* runToolLoop(
           const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
             requestedModel: processed.requestedModel,
           });
-          const streamError = {
-            message: mappedUpstream.message,
-            code: mappedUpstream.code,
-            retryable: classified.retryable,
-          };
+          const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
           yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
           yield encoder.encode(
             sseData({
@@ -4701,6 +5177,66 @@ export async function* runToolLoop(
             }),
           );
           yield* flushTerminal(blocked ? 'refusal' : 'error');
+          return;
+        }
+        // The step produced something to keep AND the stream reported a
+        // failure. The partial answer stays on the wire, but the turn is not a
+        // finished one: reporting only the answer let an interrupted
+        // generation read as complete.
+        if (providerStep.providerError && !isCancelledFinishReason(finishReason)) {
+          const classified = classifyEmptyTurn({
+            finishReason,
+            providerError: providerStep.providerError,
+            reasoningReceived: spentTheTurnThinking(providerStep),
+          });
+          const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
+            requestedModel: processed.requestedModel,
+          });
+          const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
+          logger.warn(
+            {
+              provider: servingProcessed.provider,
+              model: servingProcessed.llmRequest.model,
+              step,
+              finishReason,
+              code: classified.code,
+            },
+            '[tool-loop] provider step reported a failure after delivering part of the answer',
+          );
+          yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
+          yield encoder.encode(
+            sseData({
+              choices: [{ delta: { x_stream_error: streamError }, index: 0 }],
+              model: responseModel,
+            }),
+          );
+          yield* flushTerminal('error');
+          return;
+        }
+        if (finishReason === null) {
+          const classified = classifyEmptyTurn({ finishReason });
+          const mappedUpstream = mapClassifiedUpstreamError(classified, servingProcessed.provider, {
+            requestedModel: processed.requestedModel,
+            answerStarted: publicTextOf(providerStep).trim().length > 0,
+          });
+          const streamError = streamErrorFrame(mappedUpstream, classified.retryable);
+          logger.warn(
+            {
+              provider: servingProcessed.provider,
+              model: servingProcessed.llmRequest.model,
+              step,
+              code: classified.code,
+            },
+            '[tool-loop] provider step ended without a terminal signal',
+          );
+          yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
+          yield encoder.encode(
+            sseData({
+              choices: [{ delta: { x_stream_error: streamError }, index: 0 }],
+              model: responseModel,
+            }),
+          );
+          yield* flushTerminal('error');
           return;
         }
         yield* flushTerminal(canonicalStopReason(finishReason));
@@ -4795,9 +5331,38 @@ export async function* runToolLoop(
         });
       }
 
+      if (blockedCalls.some(({ tc }) => isServerOwnedSearchCall(tc, step))) {
+        yield* failRequiredTool(
+          'web_search_not_performed',
+          'Web search was blocked by permissions, so this answer could not be verified.',
+          false,
+        );
+        return;
+      }
+
       if (autoRunCalls.length > 0) {
         yield* runAndStreamToolCalls(autoRunCalls, { completedSteps: step });
         if (suspendedForInput) return;
+        if (serverSearchUnavailable) {
+          yield* failRequiredTool(
+            'web_search_not_performed',
+            'Web search is unavailable on this account right now, so this answer could not be verified.',
+            false,
+          );
+          return;
+        }
+        if (requiredSearchNoResults) {
+          yield* finishNoResultSearch();
+          return;
+        }
+        if (serverSearchWithoutSources) {
+          yield* failRequiredTool(
+            'web_search_no_sources',
+            'Web search returned no usable sources, so this answer could not be verified.',
+            true,
+          );
+          return;
+        }
         if (toolGovernor.capReached() && toolGovernor.claimCapAnnouncement()) {
           logger.warn(
             {
